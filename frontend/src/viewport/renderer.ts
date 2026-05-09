@@ -206,6 +206,8 @@ export class ViewportRenderer {
   private height = 0;
   private animFrameId = 0;
   private deviceLost = false;
+  // Set to true by dispose(); guards against async init() completing after cleanup
+  private disposed = false;
 
   // Mouse interaction
   private isDragging = false;
@@ -262,9 +264,17 @@ export class ViewportRenderer {
     if (!ViewportRenderer.isSupported()) return false;
 
     const adapter = await navigator.gpu.requestAdapter();
-    if (!adapter) return false;
+    if (this.disposed || !adapter) return false;
 
     this.device = await adapter.requestDevice();
+    // React StrictMode may call dispose() while awaiting the device.
+    // If that happened, release the device and bail out to avoid a
+    // stale renderer starting a render loop against a reconfigured canvas.
+    if (this.disposed) {
+      this.device.destroy();
+      return false;
+    }
+
     this.device.lost.then((info) => {
       console.warn('[Renderer] WebGPU device lost:', info.message);
       this.deviceLost = true;
@@ -522,6 +532,8 @@ export class ViewportRenderer {
 
   /** Dispose all GPU resources. */
   dispose(): void {
+    // Mark as disposed first so any in-flight async init() bails out.
+    this.disposed = true;
     this.stop();
     this.disposeMeshes(this.meshes);
     this.disposeMeshes(this.laneLineMeshes);
@@ -529,6 +541,10 @@ export class ViewportRenderer {
     this.depthTexture?.destroy();
     this.gridUniformBuffer?.destroy();
     this.basicUniformBuffer?.destroy();
+    // Release the canvas from this device so a subsequent renderer can
+    // configure it cleanly without a device-mismatch error.
+    this.context?.unconfigure();
+    this.device?.destroy();
   }
 
   /** Helper to destroy mesh buffers. */
@@ -542,7 +558,7 @@ export class ViewportRenderer {
   // --- Private ---
 
   private renderFrame(): void {
-    if (this.deviceLost) return;
+    if (this.deviceLost || this.disposed) return;
 
     let texture: GPUTexture;
     try {
@@ -633,7 +649,12 @@ export class ViewportRenderer {
     }
 
     pass.end();
-    this.device.queue.submit([encoder.finish()]);
+    try {
+      this.device.queue.submit([encoder.finish()]);
+    } catch {
+      // Transient D3D swap-chain / device-context mismatch; skip frame.
+      // This can occur during resize or when the window moves between monitors.
+    }
   }
 
   private computeViewProj(): Float32Array {
