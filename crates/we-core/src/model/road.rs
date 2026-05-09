@@ -44,17 +44,11 @@ impl Road {
         }
     }
 
-    /// Create a road from a centerline geometry with default lanes.
-    ///
-    /// Generates a single lane section with:
-    /// - center lane (id=0, type=None)
-    /// - left driving lane (id=1, width=3.5m)
-    /// - right driving lane (id=-1, width=3.5m)
-    pub fn from_centerline(id: impl Into<String>, plan_view: Vec<Geometry>) -> Self {
+    /// Create a road from a centerline geometry with a custom lane width.
+    pub fn from_centerline_with_width(id: impl Into<String>, plan_view: Vec<Geometry>, lane_width: f64) -> Self {
         let total_length: f64 = plan_view.iter().map(|geo| geo.length).sum();
         let mut road = Self::new(id, total_length);
         road.plan_view = plan_view;
-        // Create default lane section at s=0
         let section = LaneSection {
             s: 0.0,
             single_side: false,
@@ -67,7 +61,7 @@ impl Road {
                 link: None,
                 width: vec![LaneWidth {
                     s_offset: 0.0,
-                    a: 3.5,
+                    a: lane_width,
                     b: 0.0,
                     c: 0.0,
                     d: 0.0,
@@ -93,7 +87,7 @@ impl Road {
                 link: None,
                 width: vec![LaneWidth {
                     s_offset: 0.0,
-                    a: 3.5,
+                    a: lane_width,
                     b: 0.0,
                     c: 0.0,
                     d: 0.0,
@@ -104,6 +98,11 @@ impl Road {
         };
         road.lane_sections.push(section);
         road
+    }
+
+    /// Create a road from a centerline geometry with default 3.5m lane width.
+    pub fn from_centerline(id: impl Into<String>, plan_view: Vec<Geometry>) -> Self {
+        Self::from_centerline_with_width(id, plan_view, 3.5)
     }
 }
 
@@ -644,6 +643,19 @@ mod tests {
         assert_eq!(section.right[0].lane_type, LaneType::Driving);
         assert!((section.left[0].width[0].a - 3.5).abs() < f64::EPSILON);
         assert!((section.right[0].width[0].a - 3.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_road_from_centerline_custom_width() {
+        let plan_view = vec![Geometry {
+            s: 0.0, x: 0.0, y: 0.0, hdg: 0.0, length: 50.0,
+            geo_type: GeometryType::Line,
+        }];
+        let road = Road::from_centerline_with_width("road-w", plan_view, 4.0);
+        assert_eq!(road.id, "road-w");
+        let section = &road.lane_sections[0];
+        assert!((section.left[0].width[0].a - 4.0).abs() < f64::EPSILON);
+        assert!((section.right[0].width[0].a - 4.0).abs() < f64::EPSILON);
     }
 
     #[test]

@@ -229,6 +229,11 @@ impl Renderer {
         }
         render_pass.set_pipeline(&self.pipelines.basic);
         render_pass.set_bind_group(0, &self.basic_bind_group, &[]);
+        // TODO: Each mesh currently requires a separate write_buffer for its model
+        // uniform. For better performance with many meshes, consider using wgpu's
+        // dynamic uniform buffer offset feature (BufferUsages::UNIFORM with
+        // dynamic offsets) to batch all uniforms in a single buffer and switch
+        // offsets per draw call. This avoids per-mesh CPU→GPU sync overhead.
         for mesh in meshes {
             self.gpu.queue.write_buffer(
                 &self.basic_uniform_buffer,

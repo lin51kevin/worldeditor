@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { MenuBar } from './components/MenuBar';
 import { Toolbar } from './components/Toolbar';
 import { LayerPanel } from './components/LayerPanel';
@@ -87,6 +88,7 @@ export function App() {
   const showRightPanel = !layout.rightCollapsed && (!!selectedRoadId || !!selectedJunctionId);
 
   return (
+    <ErrorBoundary t={(key, fallback) => t(key) || fallback}>
     <div className="app-container">
       {/* Full-bleed viewport as base layer */}
       <div className="canvas-viewport">
@@ -155,5 +157,6 @@ export function App() {
       <StatusBar />
       <CommandPalette />
     </div>
+    </ErrorBoundary>
   );
 }

@@ -135,6 +135,7 @@ fn parse_road(start: &BytesStart, reader: &mut Reader<&[u8]>) -> Result<Road, Op
                 b"bridge" => road.bridges.push(parse_bridge(e, reader)?),
                 b"tunnel" => road.tunnels.push(parse_tunnel(e, reader)?),
                 b"signals" => road.signals = parse_signals(reader)?,
+                b"objects" => road.objects = parse_objects(reader)?,
                 _ => skip_element(reader, e.name().as_ref())?,
             },
             Ok(Event::Empty(ref e)) => match e.name().as_ref() {
@@ -1098,6 +1099,125 @@ fn parse_signal_elem_attrs(e: &BytesStart) -> Result<Signal, OpenDriveError> {
     Ok(signal)
 }
 
+// ── Objects ──────────────────────────────────────────
+
+/// Parse a `<objects>` block and return all contained road objects.
+fn parse_objects(reader: &mut Reader<&[u8]>) -> Result<Vec<RoadObject>, OpenDriveError> {
+    let mut objects = Vec::new();
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) if e.name().as_ref() == b"roadObject" => {
+                objects.push(parse_road_object_elem(e, reader)?);
+            }
+            Ok(Event::Empty(ref e)) if e.name().as_ref() == b"roadObject" => {
+                objects.push(parse_road_object_attrs(e)?);
+            }
+            Ok(Event::End(ref e)) if e.name().as_ref() == b"objects" => break,
+            Ok(Event::Eof) => {
+                return Err(OpenDriveError::InvalidStructure(
+                    "Unexpected EOF in objects".into(),
+                ));
+            }
+            Err(e) => return Err(OpenDriveError::XmlError(e)),
+            _ => {}
+        }
+    }
+
+    Ok(objects)
+}
+
+/// Parse a `<roadObject …>…</roadObject>` element.
+fn parse_road_object_elem(
+    start: &BytesStart,
+    reader: &mut Reader<&[u8]>,
+) -> Result<RoadObject, OpenDriveError> {
+    let mut obj = parse_road_object_attrs(start)?;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e) | Event::Empty(ref e))
+                if e.name().as_ref() == b"validity" =>
+            {
+                let mut from_lane = i32::MIN;
+                let mut to_lane = i32::MAX;
+                for attr in e.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"fromLane" => from_lane = attr_str(&attr)?.parse().unwrap_or(i32::MIN),
+                        b"toLane" => to_lane = attr_str(&attr)?.parse().unwrap_or(i32::MAX),
+                        _ => {}
+                    }
+                }
+                obj.validity = Some(Validity { from_lane, to_lane });
+            }
+            Ok(Event::End(ref e)) if e.name().as_ref() == b"roadObject" => break,
+            Ok(Event::Eof) => {
+                return Err(OpenDriveError::InvalidStructure(
+                    "Unexpected EOF in roadObject element".into(),
+                ));
+            }
+            Err(e) => return Err(OpenDriveError::XmlError(e)),
+            _ => {}
+        }
+    }
+    Ok(obj)
+}
+
+/// Parse attributes from a `<roadObject …>` tag.
+///
+/// Note: OpenDRIVE uses road-local coordinates (s/t/zOffset/hdg). We store
+/// them as Point3D (x=s, y=t, z=zOffset) as a simplified representation.
+/// Full s→XY conversion should be done by the consuming code.
+fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError> {
+    let mut obj = RoadObject {
+        id: String::new(),
+        object_type: ObjectType::Custom(String::new()),
+        name: String::new(),
+        position: Point3D::new(0.0, 0.0, 0.0),
+        orientation: 0.0,
+        width: 0.0,
+        height: 0.0,
+        validity: None,
+    };
+
+    for attr in e.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"id" => obj.id = attr_str(&attr)?,
+            b"name" => obj.name = attr_str(&attr)?,
+            b"type" => obj.object_type = parse_object_type(&attr_str(&attr)?),
+            b"s" => obj.position.x = parse_f64(&attr)?, // simplified: x = s
+            b"t" => obj.position.y = parse_f64(&attr)?, // simplified: y = t
+            b"zOffset" => obj.position.z = parse_f64(&attr)?,
+            b"orientation" => {
+                // "none" -> 0.0, "+" -> 0.0, "-" -> 180.0
+                let v = attr_str(&attr)?;
+                obj.orientation = match v.as_str() {
+                    "-" => 180.0,
+                    _ => 0.0,
+                };
+            }
+            b"width" => obj.width = parse_f64(&attr)?,
+            b"height" => obj.height = parse_f64(&attr)?,
+            // hdg, pitch, roll, length — not stored in current model but accepted
+            _ => {}
+        }
+    }
+
+    Ok(obj)
+}
+
+fn parse_object_type(s: &str) -> ObjectType {
+    match s {
+        "barrier" => ObjectType::Barrier,
+        "guardrail" => ObjectType::Guardrail,
+        "sign" | "signal" => ObjectType::Sign,
+        "curb" => ObjectType::Curb,
+        "wall" => ObjectType::Wall,
+        "pole" | "pillar" => ObjectType::Pillar,
+        "trafficCone" | "cone" => ObjectType::TrafficCone,
+        _ => ObjectType::Custom(s.to_string()),
+    }
+}
+
 // ── Utilities ────────────────────────────────────────
 
 fn attr_str(attr: &quick_xml::events::attributes::Attribute) -> Result<String, OpenDriveError> {
@@ -1290,5 +1410,86 @@ mod tests {
         assert_eq!(sig.signal_type, "1010203800001413");
         assert_eq!(sig.value.as_deref(), Some("30"));
         assert_eq!(sig.orientation, "-");
+    }
+
+    #[test]
+    fn test_parse_objects_self_closing() {
+        let xml = r#"<?xml version="1.0"?>
+<OpenDRIVE>
+  <road name="test" length="100" id="1" junction="-1">
+    <planView>
+      <geometry s="0" x="0" y="0" hdg="0" length="100">
+        <line/>
+      </geometry>
+    </planView>
+    <lanes>
+      <laneSection s="0">
+        <center><lane id="0" type="none" level="false"/></center>
+      </laneSection>
+    </lanes>
+    <objects>
+      <roadObject id="1" name="pole" s="10.0" t="-3.5" zOffset="0.0" type="pole"
+                   orientation="none" length="0.1" width="0.1" height="2.0" hdg="0.0"/>
+      <roadObject id="2" name="barrier" s="50.0" t="2.0" zOffset="0.0" type="barrier"
+                   orientation="-" width="0.5" height="1.0"/>
+    </objects>
+  </road>
+</OpenDRIVE>"#;
+
+        let project = parse(xml).expect("parse should succeed");
+        let road = &project.roads[0];
+        assert_eq!(road.objects.len(), 2);
+
+        let obj0 = &road.objects[0];
+        assert_eq!(obj0.id, "1");
+        assert_eq!(obj0.name, "pole");
+        assert_eq!(obj0.object_type, ObjectType::Pillar);
+        assert!((obj0.position.x - 10.0).abs() < 1e-6);
+        assert!((obj0.position.y - (-3.5)).abs() < 1e-6);
+        assert!((obj0.position.z).abs() < 1e-6);
+        assert!((obj0.width - 0.1).abs() < 1e-6);
+        assert!((obj0.height - 2.0).abs() < 1e-6);
+        assert!((obj0.orientation).abs() < 1e-6);
+        assert!(obj0.validity.is_none());
+
+        let obj1 = &road.objects[1];
+        assert_eq!(obj1.id, "2");
+        assert_eq!(obj1.object_type, ObjectType::Barrier);
+        assert!((obj1.orientation - 180.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_parse_objects_with_validity() {
+        let xml = r#"<?xml version="1.0"?>
+<OpenDRIVE>
+  <road name="test" length="100" id="1" junction="-1">
+    <planView>
+      <geometry s="0" x="0" y="0" hdg="0" length="100">
+        <line/>
+      </geometry>
+    </planView>
+    <lanes>
+      <laneSection s="0">
+        <center><lane id="0" type="none" level="false"/></center>
+      </laneSection>
+    </lanes>
+    <objects>
+      <roadObject id="1" name="guard" s="20.0" t="0.0" zOffset="0.0" type="guardrail"
+                   orientation="none" width="0.3" height="0.8">
+        <validity fromLane="-2" toLane="2"/>
+      </roadObject>
+    </objects>
+  </road>
+</OpenDRIVE>"#;
+
+        let project = parse(xml).expect("parse should succeed");
+        let road = &project.roads[0];
+        assert_eq!(road.objects.len(), 1);
+        let obj = &road.objects[0];
+        assert_eq!(obj.object_type, ObjectType::Guardrail);
+        assert!((obj.position.x - 20.0).abs() < 1e-6);
+        let val = obj.validity.as_ref().unwrap();
+        assert_eq!(val.from_lane, -2);
+        assert_eq!(val.to_lane, 2);
     }
 }
