@@ -1,0 +1,876 @@
+//! Lane-level commands: lane CRUD, section operations, profiles.
+
+use we_core::model::*;
+
+use crate::{Command, EditorError};
+
+use super::{find_lane_mut, find_road_mut};
+
+// ── AddLaneSection ───────────────────────────────────
+
+/// Add a lane section to a road.
+#[derive(Debug, Clone)]
+pub struct AddLaneSection {
+    pub road_id: String,
+    pub section: LaneSection,
+}
+
+impl AddLaneSection {
+    pub fn new(road_id: impl Into<String>, section: LaneSection) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section,
+        }
+    }
+}
+
+impl Command for AddLaneSection {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        road.lane_sections.push(self.section.clone());
+        road.lane_sections
+            .sort_by(|a, b| a.s.partial_cmp(&b.s).unwrap_or(std::cmp::Ordering::Equal));
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        road.lane_sections
+            .retain(|s| (s.s - self.section.s).abs() > f64::EPSILON);
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Add Lane Section"
+    }
+}
+
+// ── AddLane ────────────────────────────────────────────
+
+/// Which side of the road to add the lane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaneSide {
+    Left,
+    Right,
+}
+
+/// Add a lane to a lane section.
+#[derive(Debug, Clone)]
+pub struct AddLane {
+    pub road_id: String,
+    pub section_s: f64,
+    pub side: LaneSide,
+    pub lane: Lane,
+}
+
+impl AddLane {
+    pub fn new(road_id: impl Into<String>, section_s: f64, side: LaneSide, lane: Lane) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section_s,
+            side,
+            lane,
+        }
+    }
+}
+
+impl Command for AddLane {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        let section = road
+            .lane_sections
+            .iter_mut()
+            .find(|s| (s.s - self.section_s).abs() < 1e-9)
+            .ok_or_else(|| {
+                EditorError::OperationFailed(format!(
+                    "Lane section at s={} not found",
+                    self.section_s
+                ))
+            })?;
+        match self.side {
+            LaneSide::Left => {
+                section.left.push(self.lane.clone());
+                section.left.sort_by_key(|l| l.id);
+            }
+            LaneSide::Right => {
+                section.right.push(self.lane.clone());
+                section.right.sort_by_key(|l| l.id);
+            }
+        }
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        let section = road
+            .lane_sections
+            .iter_mut()
+            .find(|s| (s.s - self.section_s).abs() < 1e-9)
+            .ok_or_else(|| {
+                EditorError::OperationFailed(format!(
+                    "Lane section at s={} not found",
+                    self.section_s
+                ))
+            })?;
+        match self.side {
+            LaneSide::Left => {
+                section.left.retain(|l| l.id != self.lane.id);
+            }
+            LaneSide::Right => {
+                section.right.retain(|l| l.id != self.lane.id);
+            }
+        }
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Add Lane"
+    }
+}
+
+// ── DeleteLane ─────────────────────────────────────────
+
+/// Delete a lane from a lane section.
+#[derive(Debug, Clone)]
+pub struct DeleteLane {
+    pub road_id: String,
+    pub section_s: f64,
+    pub lane_id: i32,
+    pub snapshot: Option<Lane>,
+}
+
+impl DeleteLane {
+    pub fn new(road_id: impl Into<String>, section_s: f64, lane_id: i32) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section_s,
+            lane_id,
+            snapshot: None,
+        }
+    }
+
+    pub fn with_snapshot(
+        road_id: impl Into<String>,
+        section_s: f64,
+        lane_id: i32,
+        lane: Lane,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section_s,
+            lane_id,
+            snapshot: Some(lane),
+        }
+    }
+}
+
+impl Command for DeleteLane {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        let section = road
+            .lane_sections
+            .iter_mut()
+            .find(|s| (s.s - self.section_s).abs() < 1e-9)
+            .ok_or_else(|| {
+                EditorError::OperationFailed(format!(
+                    "Lane section at s={} not found",
+                    self.section_s
+                ))
+            })?;
+        if self.lane_id > 0 {
+            if !section.left.iter().any(|l| l.id == self.lane_id) {
+                return Err(EditorError::OperationFailed(format!(
+                    "Lane {} not found on left side",
+                    self.lane_id
+                )));
+            }
+            section.left.retain(|l| l.id != self.lane_id);
+        } else if self.lane_id < 0 {
+            if !section.right.iter().any(|l| l.id == self.lane_id) {
+                return Err(EditorError::OperationFailed(format!(
+                    "Lane {} not found on right side",
+                    self.lane_id
+                )));
+            }
+            section.right.retain(|l| l.id != self.lane_id);
+        } else {
+            if !section.center.iter().any(|l| l.id == self.lane_id) {
+                return Err(EditorError::OperationFailed(
+                    "Center lane not found".into(),
+                ));
+            }
+            section.center.retain(|l| l.id != self.lane_id);
+        }
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let lane = self
+            .snapshot
+            .as_ref()
+            .ok_or_else(|| EditorError::OperationFailed("Cannot undo: no lane snapshot".into()))?;
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        let section = road
+            .lane_sections
+            .iter_mut()
+            .find(|s| (s.s - self.section_s).abs() < 1e-9)
+            .ok_or_else(|| {
+                EditorError::OperationFailed(format!(
+                    "Lane section at s={} not found",
+                    self.section_s
+                ))
+            })?;
+        if lane.id > 0 {
+            section.left.push(lane.clone());
+            section.left.sort_by_key(|l| l.id);
+        } else if lane.id < 0 {
+            section.right.push(lane.clone());
+            section.right.sort_by_key(|l| l.id);
+        } else {
+            section.center.push(lane.clone());
+        }
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Delete Lane"
+    }
+}
+
+// ── UpdateLaneType ─────────────────────────────────────
+
+/// Update the type of a lane.
+#[derive(Debug, Clone)]
+pub struct UpdateLaneType {
+    pub road_id: String,
+    pub section_s: f64,
+    pub lane_id: i32,
+    pub new_type: LaneType,
+    pub old_type: LaneType,
+}
+
+impl UpdateLaneType {
+    pub fn new(
+        road_id: impl Into<String>,
+        section_s: f64,
+        lane_id: i32,
+        old_type: LaneType,
+        new_type: LaneType,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section_s,
+            lane_id,
+            new_type,
+            old_type,
+        }
+    }
+}
+
+impl Command for UpdateLaneType {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let lane = find_lane_mut(&mut p, &self.road_id, self.section_s, self.lane_id)?;
+        lane.lane_type = self.new_type;
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let lane = find_lane_mut(&mut p, &self.road_id, self.section_s, self.lane_id)?;
+        lane.lane_type = self.old_type;
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Update Lane Type"
+    }
+}
+
+// ── UpdateLaneWidth ────────────────────────────────────
+
+/// Update lane width polynomial coefficients.
+#[derive(Debug, Clone)]
+pub struct UpdateLaneWidth {
+    pub road_id: String,
+    pub section_s: f64,
+    pub lane_id: i32,
+    pub new_widths: Vec<LaneWidth>,
+    pub old_widths: Vec<LaneWidth>,
+}
+
+impl UpdateLaneWidth {
+    pub fn new(
+        road_id: impl Into<String>,
+        section_s: f64,
+        lane_id: i32,
+        old_widths: Vec<LaneWidth>,
+        new_widths: Vec<LaneWidth>,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section_s,
+            lane_id,
+            new_widths,
+            old_widths,
+        }
+    }
+}
+
+impl Command for UpdateLaneWidth {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let lane = find_lane_mut(&mut p, &self.road_id, self.section_s, self.lane_id)?;
+        lane.width = self.new_widths.clone();
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let lane = find_lane_mut(&mut p, &self.road_id, self.section_s, self.lane_id)?;
+        lane.width = self.old_widths.clone();
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Update Lane Width"
+    }
+}
+
+// ── SplitLaneSection ─────────────────────────────────
+
+/// Split a lane section at a given s position.
+///
+/// The original section is shortened to end at `split_s`, and a new section
+/// is created from `split_s` inheriting the same lane configuration.
+/// Lane widths are recalculated to maintain continuity.
+#[derive(Debug, Clone)]
+pub struct SplitLaneSection {
+    pub road_id: String,
+    pub section_s: f64,
+    pub split_s: f64,
+    /// Snapshot of original sections for undo.
+    pub old_sections: Vec<LaneSection>,
+}
+
+impl SplitLaneSection {
+    pub fn new(
+        road_id: impl Into<String>,
+        section_s: f64,
+        split_s: f64,
+        old_sections: Vec<LaneSection>,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section_s,
+            split_s,
+            old_sections,
+        }
+    }
+}
+
+/// Re-evaluate a list of lane width polynomials at a new s-offset origin.
+fn rebase_lane_widths(widths: &[LaneWidth], ds: f64) -> Vec<LaneWidth> {
+    if widths.is_empty() {
+        return Vec::new();
+    }
+    let mut active_idx = 0;
+    for (i, w) in widths.iter().enumerate() {
+        if w.s_offset <= ds + 1e-9 {
+            active_idx = i;
+        }
+    }
+    let active = &widths[active_idx];
+    let local_ds = ds - active.s_offset;
+    let new_a = active.a + active.b * local_ds + active.c * local_ds * local_ds
+        + active.d * local_ds * local_ds * local_ds;
+    let new_b = active.b + 2.0 * active.c * local_ds + 3.0 * active.d * local_ds * local_ds;
+    let new_c = active.c + 3.0 * active.d * local_ds;
+    let new_d = active.d;
+
+    let mut result = vec![LaneWidth {
+        s_offset: 0.0,
+        a: new_a,
+        b: new_b,
+        c: new_c,
+        d: new_d,
+    }];
+
+    for w in widths.iter() {
+        if w.s_offset > ds + 1e-9 {
+            result.push(LaneWidth {
+                s_offset: w.s_offset - ds,
+                a: w.a,
+                b: w.b,
+                c: w.c,
+                d: w.d,
+            });
+        }
+    }
+
+    result
+}
+
+/// Clone lanes with rebased widths for a new section starting at ds.
+fn clone_lanes_rebased(lanes: &[Lane], ds: f64) -> Vec<Lane> {
+    lanes
+        .iter()
+        .map(|lane| Lane {
+            id: lane.id,
+            lane_type: lane.lane_type,
+            level: lane.level,
+            render_hidden: lane.render_hidden,
+            link: lane.link.clone(),
+            width: rebase_lane_widths(&lane.width, ds),
+            borders: lane.borders.clone(),
+            road_marks: lane
+                .road_marks
+                .iter()
+                .filter(|rm| rm.s_offset >= ds - 1e-9)
+                .map(|rm| RoadMark {
+                    s_offset: (rm.s_offset - ds).max(0.0),
+                    ..rm.clone()
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+impl Command for SplitLaneSection {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+
+        let section_idx = road
+            .lane_sections
+            .iter()
+            .position(|s| (s.s - self.section_s).abs() < 1e-9)
+            .ok_or_else(|| {
+                EditorError::OperationFailed(format!(
+                    "Lane section at s={} not found",
+                    self.section_s
+                ))
+            })?;
+
+        let ds = self.split_s - self.section_s;
+        if ds <= 1e-6 {
+            return Err(EditorError::OperationFailed(
+                "Split point too close to section start".into(),
+            ));
+        }
+
+        let section_end = if section_idx + 1 < road.lane_sections.len() {
+            road.lane_sections[section_idx + 1].s
+        } else {
+            road.length
+        };
+        if self.split_s >= section_end - 1e-6 {
+            return Err(EditorError::OperationFailed(
+                "Split point at or beyond section end".into(),
+            ));
+        }
+
+        let section = &road.lane_sections[section_idx];
+        let new_section = LaneSection {
+            s: self.split_s,
+            single_side: section.single_side,
+            render_hidden: section.render_hidden,
+            left: clone_lanes_rebased(&section.left, ds),
+            center: clone_lanes_rebased(&section.center, ds),
+            right: clone_lanes_rebased(&section.right, ds),
+        };
+
+        road.lane_sections.insert(section_idx + 1, new_section);
+        road.lane_sections
+            .sort_by(|a, b| a.s.partial_cmp(&b.s).unwrap_or(std::cmp::Ordering::Equal));
+
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        road.lane_sections = self.old_sections.clone();
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Split Lane Section"
+    }
+}
+
+// ── MergeLaneSections ────────────────────────────────
+
+/// Merge a lane section with its successor.
+#[derive(Debug, Clone)]
+pub struct MergeLaneSections {
+    pub road_id: String,
+    pub section_s: f64,
+    /// Snapshot of all sections for undo.
+    pub old_sections: Vec<LaneSection>,
+}
+
+impl MergeLaneSections {
+    pub fn new(
+        road_id: impl Into<String>,
+        section_s: f64,
+        old_sections: Vec<LaneSection>,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section_s,
+            old_sections,
+        }
+    }
+}
+
+impl Command for MergeLaneSections {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+
+        let section_idx = road
+            .lane_sections
+            .iter()
+            .position(|s| (s.s - self.section_s).abs() < 1e-9)
+            .ok_or_else(|| {
+                EditorError::OperationFailed(format!(
+                    "Lane section at s={} not found",
+                    self.section_s
+                ))
+            })?;
+
+        if section_idx + 1 >= road.lane_sections.len() {
+            return Err(EditorError::OperationFailed(
+                "No successor section to merge with".into(),
+            ));
+        }
+
+        road.lane_sections.remove(section_idx + 1);
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        road.lane_sections = self.old_sections.clone();
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Merge Lane Sections"
+    }
+}
+
+// ── DeleteLaneSection ────────────────────────────────
+
+/// Remove a lane section from a road.
+#[derive(Debug, Clone)]
+pub struct DeleteLaneSection {
+    pub road_id: String,
+    pub section_s: f64,
+    /// Snapshot for undo.
+    pub snapshot: Option<LaneSection>,
+}
+
+impl DeleteLaneSection {
+    pub fn new(road_id: impl Into<String>, section_s: f64) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section_s,
+            snapshot: None,
+        }
+    }
+
+    pub fn with_snapshot(
+        road_id: impl Into<String>,
+        section_s: f64,
+        section: LaneSection,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section_s,
+            snapshot: Some(section),
+        }
+    }
+}
+
+impl Command for DeleteLaneSection {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+
+        if road.lane_sections.len() <= 1 {
+            return Err(EditorError::OperationFailed(
+                "Cannot delete: road must have at least one lane section".into(),
+            ));
+        }
+
+        let count_before = road.lane_sections.len();
+        road.lane_sections
+            .retain(|s| (s.s - self.section_s).abs() >= 1e-9);
+
+        if road.lane_sections.len() == count_before {
+            return Err(EditorError::OperationFailed(format!(
+                "Lane section at s={} not found",
+                self.section_s
+            )));
+        }
+
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let section = self.snapshot.as_ref().ok_or_else(|| {
+            EditorError::OperationFailed("Cannot undo: no section snapshot".into())
+        })?;
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        road.lane_sections.push(section.clone());
+        road.lane_sections
+            .sort_by(|a, b| a.s.partial_cmp(&b.s).unwrap_or(std::cmp::Ordering::Equal));
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Delete Lane Section"
+    }
+}
+
+// ── SetLaneLink ──────────────────────────────────────
+
+/// Set the predecessor/successor link for a lane.
+#[derive(Debug, Clone)]
+pub struct SetLaneLink {
+    pub road_id: String,
+    pub section_s: f64,
+    pub lane_id: i32,
+    pub new_link: Option<LaneLink>,
+    pub old_link: Option<LaneLink>,
+}
+
+impl SetLaneLink {
+    pub fn new(
+        road_id: impl Into<String>,
+        section_s: f64,
+        lane_id: i32,
+        old_link: Option<LaneLink>,
+        new_link: Option<LaneLink>,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section_s,
+            lane_id,
+            new_link,
+            old_link,
+        }
+    }
+}
+
+impl Command for SetLaneLink {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let lane = find_lane_mut(&mut p, &self.road_id, self.section_s, self.lane_id)?;
+        lane.link = self.new_link.clone();
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let lane = find_lane_mut(&mut p, &self.road_id, self.section_s, self.lane_id)?;
+        lane.link = self.old_link.clone();
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Set Lane Link"
+    }
+}
+
+// ── SetLaneRoadMark ──────────────────────────────────
+
+/// Replace road marks for a lane.
+#[derive(Debug, Clone)]
+pub struct SetLaneRoadMark {
+    pub road_id: String,
+    pub section_s: f64,
+    pub lane_id: i32,
+    pub new_marks: Vec<RoadMark>,
+    pub old_marks: Vec<RoadMark>,
+}
+
+impl SetLaneRoadMark {
+    pub fn new(
+        road_id: impl Into<String>,
+        section_s: f64,
+        lane_id: i32,
+        old_marks: Vec<RoadMark>,
+        new_marks: Vec<RoadMark>,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            section_s,
+            lane_id,
+            new_marks,
+            old_marks,
+        }
+    }
+}
+
+impl Command for SetLaneRoadMark {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let lane = find_lane_mut(&mut p, &self.road_id, self.section_s, self.lane_id)?;
+        lane.road_marks = self.new_marks.clone();
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let lane = find_lane_mut(&mut p, &self.road_id, self.section_s, self.lane_id)?;
+        lane.road_marks = self.old_marks.clone();
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Set Lane Road Mark"
+    }
+}
+
+// ── SetLaneOffset ────────────────────────────────────
+
+/// Set lane offset polynomials for a road.
+#[derive(Debug, Clone)]
+pub struct SetLaneOffset {
+    pub road_id: String,
+    pub new_offsets: Vec<LaneOffset>,
+    pub old_offsets: Vec<LaneOffset>,
+}
+
+impl SetLaneOffset {
+    pub fn new(
+        road_id: impl Into<String>,
+        old_offsets: Vec<LaneOffset>,
+        new_offsets: Vec<LaneOffset>,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            new_offsets,
+            old_offsets,
+        }
+    }
+}
+
+impl Command for SetLaneOffset {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        road.lane_offsets = self.new_offsets.clone();
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        road.lane_offsets = self.old_offsets.clone();
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Set Lane Offset"
+    }
+}
+
+// ── SetSuperelevation ────────────────────────────────
+
+/// Set superelevation profile for a road.
+#[derive(Debug, Clone)]
+pub struct SetSuperelevation {
+    pub road_id: String,
+    pub new_profile: Vec<Superelevation>,
+    pub old_profile: Vec<Superelevation>,
+}
+
+impl SetSuperelevation {
+    pub fn new(
+        road_id: impl Into<String>,
+        old_profile: Vec<Superelevation>,
+        new_profile: Vec<Superelevation>,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            new_profile,
+            old_profile,
+        }
+    }
+}
+
+impl Command for SetSuperelevation {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        road.lateral_profile.superelevations = self.new_profile.clone();
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        road.lateral_profile.superelevations = self.old_profile.clone();
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Set Superelevation"
+    }
+}
+
+// ── SetCrossfall ─────────────────────────────────────
+
+/// Set crossfall profile for a road.
+#[derive(Debug, Clone)]
+pub struct SetCrossfall {
+    pub road_id: String,
+    pub new_profile: Vec<Crossfall>,
+    pub old_profile: Vec<Crossfall>,
+}
+
+impl SetCrossfall {
+    pub fn new(
+        road_id: impl Into<String>,
+        old_profile: Vec<Crossfall>,
+        new_profile: Vec<Crossfall>,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            new_profile,
+            old_profile,
+        }
+    }
+}
+
+impl Command for SetCrossfall {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        road.lateral_profile.crossfalls = self.new_profile.clone();
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        let road = find_road_mut(&mut p, &self.road_id)?;
+        road.lateral_profile.crossfalls = self.old_profile.clone();
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Set Crossfall"
+    }
+}
