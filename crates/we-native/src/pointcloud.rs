@@ -6,6 +6,12 @@
 /// Phase 3: Implement with `las` crate + memory-mapped I/O.
 pub struct PointCloudLoader;
 
+impl Default for PointCloudLoader {
+    fn default() -> Self {
+        Self
+    }
+}
+
 impl PointCloudLoader {
     pub fn new() -> Self {
         Self

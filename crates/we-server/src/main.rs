@@ -10,6 +10,7 @@ use tower_http::cors::CorsLayer;
 use we_server::{api, auth, storage, ws};
 
 #[derive(Clone)]
+#[allow(dead_code)]
 struct AppState {
     pool: sqlx::PgPool,
     storage: storage::LocalStorage,
@@ -99,7 +100,7 @@ async fn login_handler(
     let token = state
         .auth_service
         .generate_token("user_id")
-        .map_err(|e| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_e| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(axum::Json(serde_json::json!({
         "token": token
     })))

@@ -127,6 +127,7 @@ pub struct PluginContext {
     /// Register a command with the editor
     pub register_command: Box<dyn Fn(String, Command) + Send + Sync>,
     /// Register a renderer
+    #[allow(clippy::type_complexity)]
     pub register_renderer: Box<dyn Fn(&dyn RenderPlugin) + Send + Sync>,
     /// Register a menu item
     pub register_menu_item: Box<dyn Fn(MenuItem) + Send + Sync>,

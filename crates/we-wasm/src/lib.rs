@@ -3,6 +3,7 @@
 //! Exports we-core + we-service functions to JavaScript via wasm-bindgen.
 
 use wasm_bindgen::prelude::*;
+use we_service::editor::Command;
 
 // Set up better panic messages in the browser console.
 #[wasm_bindgen(start)]
@@ -268,22 +269,20 @@ pub fn generate_lane_line_vertices(
             }
 
             // Center lane road mark at offset 0 (the center dividing line)
-            if let Some(center_lane) = section.center.first() {
-                if !center_lane.render_hidden {
-                    if let Some(rm) = center_lane.road_marks.first() {
-                        if rm.mark_type != RoadMarkType::None {
-                            let lc = mark_color(rm.color);
-                            let lw = if rm.width > 0.0 { rm.width as f32 } else { 0.15 };
-                            let dashed = is_dashed(rm.mark_type);
-                            let verts = gen_road_mark_line(
-                                &section_pts, &road.elevation_profile,
-                                section.s, &road.lane_offsets, &|_| 0.0, lw, lc, dashed,
-                                &evaluate_elevation, &eval_lane_offset, &offset_point,
-                            );
-                            for v in &verts { all_floats.extend_from_slice(v); }
-                        }
-                    }
-                }
+            if let Some(center_lane) = section.center.first()
+                && !center_lane.render_hidden
+                && let Some(rm) = center_lane.road_marks.first()
+                && rm.mark_type != RoadMarkType::None
+            {
+                let lc = mark_color(rm.color);
+                let lw = if rm.width > 0.0 { rm.width as f32 } else { 0.15 };
+                let dashed = is_dashed(rm.mark_type);
+                let verts = gen_road_mark_line(
+                    &section_pts, &road.elevation_profile,
+                    section.s, &road.lane_offsets, &|_| 0.0, lw, lc, dashed,
+                    &evaluate_elevation, &eval_lane_offset, &offset_point,
+                );
+                for v in &verts { all_floats.extend_from_slice(v); }
             }
 
             // Right lane outer boundaries (inner → outer, accumulating offset)
@@ -291,24 +290,23 @@ pub fn generate_lane_line_vertices(
             right_sorted.sort_by_key(|l| l.id.abs());
             let mut right_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
             for lane in &right_sorted {
-                if !lane.render_hidden {
-                    if let Some(rm) = lane.road_marks.first() {
-                        if rm.mark_type != RoadMarkType::None {
-                            let lc = mark_color(rm.color);
-                            let lw = if rm.width > 0.0 { rm.width as f32 } else { 0.15 };
-                            let dashed = is_dashed(rm.mark_type);
-                            let mut boundary_widths = right_prev_widths.clone();
-                            boundary_widths.push(&lane.width);
-                            let verts = gen_road_mark_line(
-                                &section_pts, &road.elevation_profile,
-                                section.s, &road.lane_offsets,
-                                &|ds| -sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
-                                lw, lc, dashed,
-                                &evaluate_elevation, &eval_lane_offset, &offset_point,
-                            );
-                            for v in &verts { all_floats.extend_from_slice(v); }
-                        }
-                    }
+                if !lane.render_hidden
+                    && let Some(rm) = lane.road_marks.first()
+                    && rm.mark_type != RoadMarkType::None
+                {
+                    let lc = mark_color(rm.color);
+                    let lw = if rm.width > 0.0 { rm.width as f32 } else { 0.15 };
+                    let dashed = is_dashed(rm.mark_type);
+                    let mut boundary_widths = right_prev_widths.clone();
+                    boundary_widths.push(&lane.width);
+                    let verts = gen_road_mark_line(
+                        &section_pts, &road.elevation_profile,
+                        section.s, &road.lane_offsets,
+                        &|ds| -sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
+                        lw, lc, dashed,
+                        &evaluate_elevation, &eval_lane_offset, &offset_point,
+                    );
+                    for v in &verts { all_floats.extend_from_slice(v); }
                 }
                 right_prev_widths.push(&lane.width);
             }
@@ -318,24 +316,23 @@ pub fn generate_lane_line_vertices(
             left_sorted.sort_by_key(|l| l.id);
             let mut left_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
             for lane in &left_sorted {
-                if !lane.render_hidden {
-                    if let Some(rm) = lane.road_marks.first() {
-                        if rm.mark_type != RoadMarkType::None {
-                            let lc = mark_color(rm.color);
-                            let lw = if rm.width > 0.0 { rm.width as f32 } else { 0.15 };
-                            let dashed = is_dashed(rm.mark_type);
-                            let mut boundary_widths = left_prev_widths.clone();
-                            boundary_widths.push(&lane.width);
-                            let verts = gen_road_mark_line(
-                                &section_pts, &road.elevation_profile,
-                                section.s, &road.lane_offsets,
-                                &|ds| sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
-                                lw, lc, dashed,
-                                &evaluate_elevation, &eval_lane_offset, &offset_point,
-                            );
-                            for v in &verts { all_floats.extend_from_slice(v); }
-                        }
-                    }
+                if !lane.render_hidden
+                    && let Some(rm) = lane.road_marks.first()
+                    && rm.mark_type != RoadMarkType::None
+                {
+                    let lc = mark_color(rm.color);
+                    let lw = if rm.width > 0.0 { rm.width as f32 } else { 0.15 };
+                    let dashed = is_dashed(rm.mark_type);
+                    let mut boundary_widths = left_prev_widths.clone();
+                    boundary_widths.push(&lane.width);
+                    let verts = gen_road_mark_line(
+                        &section_pts, &road.elevation_profile,
+                        section.s, &road.lane_offsets,
+                        &|ds| sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
+                        lw, lc, dashed,
+                        &evaluate_elevation, &eval_lane_offset, &offset_point,
+                    );
+                    for v in &verts { all_floats.extend_from_slice(v); }
                 }
                 left_prev_widths.push(&lane.width);
             }
@@ -488,6 +485,7 @@ fn eval_lane_offset(offsets: &[we_core::model::LaneOffset], s: f64) -> f64 {
 }
 
 /// Generate a colored triangle strip for one lane.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn gen_lane_strip(
     ref_pts: &[&we_core::geometry::eval::RefLinePoint],
     widths: &[we_core::model::LaneWidth],
@@ -591,6 +589,7 @@ fn gen_default_ribbon(
 /// Generate a road marking line as a thin triangle strip at a lateral offset.
 ///
 /// For dashed marks, segments are skipped every `dash_len + gap_len` meters.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn gen_road_mark_line(
     ref_pts: &[&we_core::geometry::eval::RefLinePoint],
     elevations: &[we_core::model::Elevation],
@@ -965,6 +964,7 @@ fn build_junction_polygon_points(
     dedup
 }
 
+#[allow(clippy::type_complexity)]
 fn append_road_boundary_points(
     road: &we_core::model::Road,
     s: f64,
@@ -1149,6 +1149,438 @@ pub fn generate_road_mesh_from_json(road_json: &str, sample_step: f64) -> Result
         "count": vertices.len()
     });
     serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── Spline editing operations ────────────────────────
+
+/// Convert a road (as JSON) to an editable spline (as JSON).
+///
+/// `sample_step`: distance between intermediate sample points (0 = no intermediates).
+#[wasm_bindgen]
+pub fn road_to_spline(road_json: &str, sample_step: f64) -> Result<String, JsError> {
+    let road: we_core::model::Road =
+        serde_json::from_str(road_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let spline = we_core::spline::road_to_spline(&road, sample_step);
+    serde_json::to_string(&spline).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Convert an editable spline (as JSON) back to OpenDRIVE geometry segments (as JSON).
+#[wasm_bindgen]
+pub fn spline_to_geometries(spline_json: &str) -> Result<String, JsError> {
+    let spline: we_core::spline::EditableSpline =
+        serde_json::from_str(spline_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let geos = we_core::spline::spline_to_geometries(&spline);
+    serde_json::to_string(&geos).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Move a knot in a spline and return the updated spline as JSON.
+///
+/// `spline_json`: the current spline state.
+/// `knot_index`: index of the knot to move.
+/// `new_x, new_y, new_z`: new position for the knot.
+#[wasm_bindgen]
+pub fn move_spline_knot(
+    spline_json: &str,
+    knot_index: usize,
+    new_x: f64,
+    new_y: f64,
+    new_z: f64,
+) -> Result<String, JsError> {
+    let mut spline: we_core::spline::EditableSpline =
+        serde_json::from_str(spline_json).map_err(|e| JsError::new(&e.to_string()))?;
+    if knot_index >= spline.knots.len() {
+        return Err(JsError::new(&format!(
+            "Knot index {} out of range ({})",
+            knot_index,
+            spline.knots.len()
+        )));
+    }
+    spline.move_knot(knot_index, [new_x, new_y, new_z]);
+    serde_json::to_string(&spline).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Pick the closest knot to a point.
+///
+/// Returns JSON: `{ "index": number, "distance": number }` or `null` if none within threshold.
+#[wasm_bindgen]
+pub fn pick_spline_knot(
+    spline_json: &str,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Result<JsValue, JsError> {
+    let spline: we_core::spline::EditableSpline =
+        serde_json::from_str(spline_json).map_err(|e| JsError::new(&e.to_string()))?;
+    match we_core::spline::pick_knot(&spline, x, y, threshold) {
+        Some((idx, dist)) => {
+            let result = serde_json::json!({ "index": idx, "distance": dist });
+            serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+        }
+        None => Ok(JsValue::NULL),
+    }
+}
+
+/// Compute soft selection factors for a given knot.
+///
+/// Returns JSON array of `[index, factor]` pairs.
+#[wasm_bindgen]
+pub fn compute_soft_selection(
+    spline_json: &str,
+    selected_index: usize,
+    radius: f64,
+    falloff_type: &str,
+) -> Result<String, JsError> {
+    let spline: we_core::spline::EditableSpline =
+        serde_json::from_str(spline_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let falloff = match falloff_type {
+        "linear" => we_core::spline::FalloffType::Linear,
+        "smooth" => we_core::spline::FalloffType::Smooth,
+        _ => we_core::spline::FalloffType::Gaussian,
+    };
+    let config = we_core::spline::SoftSelectionConfig {
+        radius,
+        falloff,
+        gaussian_k: 3.0,
+    };
+    let factors = we_core::spline::collect_soft_selection(&spline, selected_index, &config);
+    serde_json::to_string(&factors).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── Lane editing operations ──────────────────────────
+
+/// Sample a lane boundary polyline as JSON.
+///
+/// Returns JSON array of `{ x, y, z, s, t }` points.
+#[wasm_bindgen]
+pub fn sample_lane_boundary(
+    road_json: &str,
+    section_s: f64,
+    lane_id: i32,
+    step: f64,
+) -> Result<String, JsError> {
+    let road: we_core::model::Road =
+        serde_json::from_str(road_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let points = we_core::lane_ops::sample_lane_boundary(&road, section_s, lane_id, step);
+    serde_json::to_string(&points).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Compute total road width (left, right) at a given s position.
+///
+/// Returns JSON: `{ "left": number, "right": number }`.
+#[wasm_bindgen]
+pub fn compute_road_width(road_json: &str, s: f64) -> Result<JsValue, JsError> {
+    let road: we_core::model::Road =
+        serde_json::from_str(road_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    // Find the active lane section at s
+    let section = road
+        .lane_sections
+        .iter()
+        .rev()
+        .find(|sec| sec.s <= s + 1e-9);
+
+    match section {
+        Some(sec) => {
+            let ds = s - sec.s;
+            let (left, right) = we_core::lane_ops::compute_road_width_at(sec, ds);
+            let result = serde_json::json!({ "left": left, "right": right });
+            serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+        }
+        None => Ok(JsValue::NULL),
+    }
+}
+
+/// Generate a default lane section as JSON.
+///
+/// Creates symmetric layout with `n_lanes` per side at `lane_width` meters.
+#[wasm_bindgen]
+pub fn generate_default_lane_section(
+    s: f64,
+    n_lanes_per_side: u32,
+    lane_width: f64,
+    with_shoulder: bool,
+) -> Result<String, JsError> {
+    let section = we_core::lane_ops::generate_default_lane_section(
+        s,
+        n_lanes_per_side,
+        lane_width,
+        with_shoulder,
+    );
+    serde_json::to_string(&section).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── Junction Area ────────────────────────────────────
+
+/// Compute the boundary area of a junction from its connecting roads.
+///
+/// Returns JSON with `{ id, center, boundary, area }` or null if
+/// the junction has insufficient connections.
+#[wasm_bindgen]
+pub fn compute_junction_area(
+    project_json: &str,
+    junction_id: &str,
+) -> Result<JsValue, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let junction = project
+        .junctions
+        .iter()
+        .find(|j| j.id == junction_id)
+        .ok_or_else(|| JsError::new(&format!("Junction '{}' not found", junction_id)))?;
+    match we_core::junction_area::compute_junction_area(&project, junction) {
+        Some(area) => {
+            serde_wasm_bindgen::to_value(&area).map_err(|e| JsError::new(&e.to_string()))
+        }
+        None => Ok(JsValue::NULL),
+    }
+}
+
+/// Test if a point is inside a junction's computed area.
+#[wasm_bindgen]
+pub fn point_in_junction(
+    project_json: &str,
+    junction_id: &str,
+    x: f64,
+    y: f64,
+) -> Result<bool, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let junction = project
+        .junctions
+        .iter()
+        .find(|j| j.id == junction_id)
+        .ok_or_else(|| JsError::new(&format!("Junction '{}' not found", junction_id)))?;
+    match we_core::junction_area::compute_junction_area(&project, junction) {
+        Some(area) => Ok(we_core::junction_area::point_in_junction_area(&area, x, y)),
+        None => Ok(false),
+    }
+}
+
+// ── Spatial Index ────────────────────────────────────
+
+/// Query elements near a point using a spatial index.
+///
+/// Returns JSON array of `{ id, kind, aabb }`.
+#[wasm_bindgen]
+pub fn spatial_query_point(
+    project_json: &str,
+    x: f64,
+    y: f64,
+    radius: f64,
+) -> Result<JsValue, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let idx = we_core::spatial_index::SpatialIndex::build(&project, 100.0);
+    let results = idx.query_point(x, y, radius);
+    let out: Vec<serde_json::Value> = results
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "id": r.id,
+                "kind": format!("{:?}", r.kind),
+                "aabb": {
+                    "min_x": r.aabb.min_x,
+                    "min_y": r.aabb.min_y,
+                    "max_x": r.aabb.max_x,
+                    "max_y": r.aabb.max_y,
+                }
+            })
+        })
+        .collect();
+    serde_wasm_bindgen::to_value(&out).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── Transform Operations ─────────────────────────────
+
+/// Translate a road by (dx, dy, dz) and return the modified project JSON.
+#[wasm_bindgen]
+pub fn translate_road(
+    project_json: &str,
+    road_id: &str,
+    dx: f64,
+    dy: f64,
+    dz: f64,
+) -> Result<String, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let cmd = we_service::commands::TranslateRoad::new(road_id, dx, dy, dz);
+    let result = cmd
+        .execute(&project)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Rotate a road around a pivot point and return the modified project JSON.
+#[wasm_bindgen]
+pub fn rotate_road(
+    project_json: &str,
+    road_id: &str,
+    pivot_x: f64,
+    pivot_y: f64,
+    angle_rad: f64,
+) -> Result<String, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let cmd = we_service::commands::RotateRoad::new(road_id, [pivot_x, pivot_y], angle_rad);
+    let result = cmd
+        .execute(&project)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── Elevation Editing ────────────────────────────────
+
+/// Query the elevation and grade at a station on a road.
+///
+/// Returns JSON `{ elevation, grade, grade_pct }`.
+#[wasm_bindgen]
+pub fn query_elevation(road_json: &str, s: f64) -> Result<JsValue, JsError> {
+    let road: we_core::model::Road =
+        serde_json::from_str(road_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let result = we_core::elevation::query_elevation_at(&road, s);
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Add an elevation point to a road and return the modified project.
+#[wasm_bindgen]
+pub fn add_elevation_point(
+    project_json: &str,
+    road_id: &str,
+    s: f64,
+    height: f64,
+) -> Result<String, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let old_profile = project
+        .roads
+        .iter()
+        .find(|r| r.id == road_id)
+        .map(|r| r.elevation_profile.clone())
+        .unwrap_or_default();
+    let cmd = we_service::commands::AddElevationPoint::new(road_id, s, height, old_profile);
+    let result = cmd
+        .execute(&project)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Delete an elevation point from a road and return the modified project.
+#[wasm_bindgen]
+pub fn delete_elevation_point(
+    project_json: &str,
+    road_id: &str,
+    s: f64,
+    tolerance: f64,
+) -> Result<String, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let old_profile = project
+        .roads
+        .iter()
+        .find(|r| r.id == road_id)
+        .map(|r| r.elevation_profile.clone())
+        .unwrap_or_default();
+    let cmd = we_service::commands::DeleteElevationPoint::new(road_id, s, tolerance, old_profile);
+    let result = cmd
+        .execute(&project)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Smooth a road's elevation profile.
+#[wasm_bindgen]
+pub fn smooth_elevation(
+    project_json: &str,
+    road_id: &str,
+    iterations: u32,
+) -> Result<String, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let old_profile = project
+        .roads
+        .iter()
+        .find(|r| r.id == road_id)
+        .map(|r| r.elevation_profile.clone())
+        .unwrap_or_default();
+    let cmd = we_service::commands::SmoothElevation::new(road_id, iterations, old_profile);
+    let result = cmd
+        .execute(&project)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── Snapping ─────────────────────────────────────────
+
+/// Snap a point to the nearest grid/endpoint/etc.
+///
+/// Returns JSON `{ x, y, snapped, snap_type, target_id }`.
+#[wasm_bindgen]
+pub fn snap_point(
+    project_json: &str,
+    x: f64,
+    y: f64,
+    config_json: &str,
+    exclude_road_id: Option<String>,
+) -> Result<JsValue, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let config: we_core::snapping::SnapConfig =
+        serde_json::from_str(config_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let result = we_core::snapping::snap_point(
+        x,
+        y,
+        &config,
+        &project,
+        exclude_road_id.as_deref(),
+    );
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── Measurement ──────────────────────────────────────
+
+/// Measure the distance between two 3D points.
+///
+/// Returns JSON `{ straight, horizontal, vertical }`.
+#[wasm_bindgen]
+pub fn measure_distance(
+    x1: f64, y1: f64, z1: f64,
+    x2: f64, y2: f64, z2: f64,
+) -> Result<JsValue, JsError> {
+    let result = we_core::measurement::measure_distance(x1, y1, z1, x2, y2, z2);
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Measure the angle at a vertex (p2) formed by p1-p2-p3.
+///
+/// Returns JSON `{ radians, degrees }`.
+#[wasm_bindgen]
+pub fn measure_angle(
+    x1: f64, y1: f64,
+    x2: f64, y2: f64,
+    x3: f64, y3: f64,
+) -> Result<JsValue, JsError> {
+    let result = we_core::measurement::measure_angle(x1, y1, x2, y2, x3, y3);
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Measure the area and perimeter of a polygon.
+///
+/// `points_json` is a JSON array of `[x, y]` pairs.
+/// Returns JSON `{ area, perimeter }`.
+#[wasm_bindgen]
+pub fn measure_area(points_json: &str) -> Result<JsValue, JsError> {
+    let points: Vec<[f64; 2]> =
+        serde_json::from_str(points_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let result = we_core::measurement::measure_polygon_area(&points);
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Measure the arc length along a road between two stations.
+#[wasm_bindgen]
+pub fn measure_road_length(road_json: &str, s_start: f64, s_end: f64) -> Result<f64, JsError> {
+    let road: we_core::model::Road =
+        serde_json::from_str(road_json).map_err(|e| JsError::new(&e.to_string()))?;
+    Ok(we_core::measurement::measure_road_length(&road, s_start, s_end))
 }
 
 #[cfg(test)]

@@ -28,6 +28,7 @@ impl Default for SignalRenderConfig {
 }
 
 /// Signal rendering data ready for GPU upload.
+#[derive(Debug, Default)]
 pub struct SignalRenderData {
     /// Billboard vertices for icon rendering.
     pub billboard_vertices: Vec<ColorVertex>,
@@ -37,20 +38,10 @@ pub struct SignalRenderData {
     pub transforms: Vec<[[f32; 4]; 4]>,
 }
 
-impl Default for SignalRenderData {
-    fn default() -> Self {
-        Self {
-            billboard_vertices: Vec::new(),
-            mesh_vertices: Vec::new(),
-            transforms: Vec::new(),
-        }
-    }
-}
-
 /// Generate billboard vertices for a signal icon at a world position.
 pub fn generate_signal_billboard(
     position: &Point3D,
-    orientation: f64,
+    _orientation: f64,
     width: f32,
     height: f32,
     color: [f32; 4],

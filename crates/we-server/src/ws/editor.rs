@@ -9,7 +9,7 @@ use axum::{
 };
 use uuid::Uuid;
 
-pub async fn editor_ws_handler(Path(project_id): Path<Uuid>, ws: WebSocketUpgrade) -> Response {
+pub async fn editor_ws_handler(Path(_project_id): Path<Uuid>, ws: WebSocketUpgrade) -> Response {
     ws.on_upgrade(move |socket| async move {
         // TODO: implement WebSocket handling
         drop(socket);

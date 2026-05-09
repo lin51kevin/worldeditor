@@ -86,7 +86,7 @@ impl<B: StorageBackend> FileService<B> {
 
 async fn upload_file(
     State((pool, storage)): State<(sqlx::PgPool, impl StorageBackend)>,
-    Path(project_id): Path<Uuid>,
+    Path(_project_id): Path<Uuid>,
     // TODO: implement multipart extraction
 ) -> Result<Json<File>> {
     let _service = FileService::new(storage, pool);

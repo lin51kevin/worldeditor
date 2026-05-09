@@ -170,7 +170,7 @@ fn generate_default_ribbon(
     elevations: &[we_core::model::Elevation],
     half_width: f64,
     alpha: f32,
-    z_offset: f32,
+    _z_offset: f32,
 ) -> Vec<ColorVertex> {
     let color = [0.35, 0.35, 0.38, alpha]; // asphalt
     let mut verts = Vec::new();

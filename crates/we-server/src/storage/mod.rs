@@ -25,7 +25,7 @@ impl LocalStorage {
 
 #[async_trait]
 impl StorageBackend for LocalStorage {
-    async fn put(&self, name: &str, data: &[u8]) -> Result<String, Box<dyn StdError>> {
+    async fn put(&self, _name: &str, data: &[u8]) -> Result<String, Box<dyn StdError>> {
         let key = uuid::Uuid::new_v4().to_string();
         let path = self.base_path.join(&key);
         tokio::fs::write(&path, data).await?;

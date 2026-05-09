@@ -195,7 +195,7 @@ pub fn generate_zebra_crossing(
 
     let half_span = (span_width / 2.0) as f32;
     let half_road = (road_width / 2.0) as f32;
-    let half_stripe = (stripe_width / 2.0) as f32;
+    let _half_stripe = (stripe_width / 2.0) as f32;
 
     // Number of stripes across the road
     let stripe_count = (road_width / stripe_width) as i32;
@@ -316,7 +316,7 @@ pub fn generate_arrow(
     match arrow_type {
         0 => {
             // Forward arrow
-            let points = vec![
+            let points = [
                 [0.0, -0.5, 0.0],   // bottom center
                 [-0.25, -0.2, 0.0], // bottom left
                 [0.25, -0.2, 0.0],  // bottom right
@@ -325,7 +325,7 @@ pub fn generate_arrow(
                 [0.0, 0.6, 0.0],    // tip
             ];
 
-            let triangles = vec![
+            let triangles = [
                 (0, 1, 3), // shaft left
                 (0, 3, 4), // shaft center
                 (0, 4, 2), // shaft right
@@ -372,7 +372,7 @@ pub fn generate_road_markings(
 
     for marking in markings {
         let color = marking_color(&marking.color);
-        let height = marking.height as f32;
+        let _height = marking.height as f32;
 
         match marking.mark_type {
             RoadMarkType::Solid => {

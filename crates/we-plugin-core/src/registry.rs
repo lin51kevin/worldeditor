@@ -57,7 +57,7 @@ impl PluginRegistry {
                     if manifest.validate().is_ok() {
                         let plugin_dir = manifest_path
                             .parent()
-                            .unwrap_or(&Path::new("."))
+                            .unwrap_or(Path::new("."))
                             .to_path_buf();
                         let resolved = ResolvedManifest::resolve(manifest, plugin_dir);
                         let id = resolved.manifest.id.clone();
@@ -164,7 +164,7 @@ impl PluginRegistry {
         self.check_dependencies(&resolved.manifest)?;
 
         // Load the plugin instance (placeholder - actual WASM loading would go here)
-        let instance = self.create_instance(&resolved)?;
+        let instance = self.create_instance(resolved)?;
 
         // Initialize the plugin
         let mut plugin = LoadedPlugin {
