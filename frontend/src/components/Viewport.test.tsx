@@ -19,6 +19,9 @@ const rendererMocks = vi.hoisted(() => ({
   uploadHighlightVertices: vi.fn(),
   clearHighlight: vi.fn(),
   unprojectToGround: vi.fn(),
+  setScaleChangeCallback: vi.fn(),
+  setClearColor: vi.fn(),
+  setGridColor: vi.fn(),
 }));
 
 vi.mock('../services', () => ({
@@ -45,6 +48,9 @@ vi.mock('../viewport/renderer', () => ({
       uploadHighlightVertices: rendererMocks.uploadHighlightVertices,
       clearHighlight: rendererMocks.clearHighlight,
       unprojectToGround: rendererMocks.unprojectToGround,
+      setScaleChangeCallback: rendererMocks.setScaleChangeCallback,
+      setClearColor: rendererMocks.setClearColor,
+      setGridColor: rendererMocks.setGridColor,
     })),
     { isSupported: rendererMocks.isSupported },
   ),
@@ -166,5 +172,39 @@ describe('Viewport', () => {
 
     expect(resizeObserver.disconnect).toHaveBeenCalledTimes(1);
     expect(rendererMocks.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs an error but does not crash when generateRoadVertices rejects', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const platform = createPlatformMock();
+    (platform.generateRoadVertices as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('WASM not ready'));
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    render(<Viewport />);
+
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+    await waitFor(() => expect(platform.generateRoadVertices).toHaveBeenCalled());
+    await waitFor(() => expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[Viewport] Failed to generate road mesh:',
+      expect.any(Error),
+    ));
+
+    expect(rendererMocks.uploadRoadVertices).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('does not upload vertices when project has no roads', async () => {
+    const platform = createPlatformMock(new Float32Array([]));
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    render(<Viewport />);
+
+    await waitFor(() => expect(platform.generateRoadVertices).toHaveBeenCalled());
+    // uploadRoadVertices is still called — but with an empty array; renderer is responsible for no-op
+    await waitFor(() => expect(rendererMocks.uploadRoadVertices).toHaveBeenCalledWith(new Float32Array([])));
   });
 });

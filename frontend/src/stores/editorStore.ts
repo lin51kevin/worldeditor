@@ -11,6 +11,10 @@ interface EditorState {
   // Cursor position (world coordinates)
   cursorWorldPos: { x: number; y: number };
 
+  // Viewport scale info, updated by renderer on data load / camera change
+  gridSpacing: number;   // world units per grid cell (auto-derived from data extent)
+  viewportMpp: number;   // meters per screen pixel (camera-dependent)
+
   // Undo/Redo stacks
   undoStack: Project[];
   redoStack: Project[];
@@ -31,6 +35,7 @@ interface EditorState {
   updateLaneType: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, laneType: string) => void;
   updateLaneWidth: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, width: LaneWidth) => void;
   setCursorWorldPos: (pos: { x: number; y: number }) => void;
+  setViewportInfo: (info: { gridSpacing: number; mpp: number }) => void;
   markDirty: () => void;
   markClean: () => void;
   reset: () => void;
@@ -90,6 +95,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedRoadId: null,
   selectedObjectType: null,
   cursorWorldPos: { x: 0, y: 0 },
+  gridSpacing: 10.0,
+  viewportMpp: 0.1,
   undoStack: [],
   redoStack: [],
 
@@ -245,10 +252,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     })),
 
   setCursorWorldPos: (pos) => set({ cursorWorldPos: pos }),
+  setViewportInfo: ({ gridSpacing, mpp }) => set({ gridSpacing, viewportMpp: mpp }),
 
   markDirty: () => set({ isDirty: true }),
   markClean: () => set({ isDirty: false }),
-  reset: () => set({ project: initialProject, isDirty: false, selectedRoadId: null, undoStack: [], redoStack: [], cursorWorldPos: { x: 0, y: 0 } }),
+  reset: () => set({ project: initialProject, isDirty: false, selectedRoadId: null, undoStack: [], redoStack: [], cursorWorldPos: { x: 0, y: 0 }, gridSpacing: 10.0, viewportMpp: 0.1 }),
 
   undo: () =>
     set((state) => {

@@ -12,7 +12,7 @@ struct Uniforms {
   camera_pos: vec3<f32>,
   grid_scale: f32,
   grid_color: vec3<f32>,
-  _pad: f32,
+  cam_dist: f32,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -49,8 +49,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   let line = min(grid.x, grid.y);
   let alpha = 1.0 - min(line, 1.0);
   let dist = length(in.world_pos.xy - uniforms.camera_pos.xy);
-  let fade_start = uniforms.grid_scale * 50.0;
-  let fade_end = uniforms.grid_scale * 150.0;
+  let fade_radius = uniforms.cam_dist * 2.0;
+  let fade_start = fade_radius * 0.4;
+  let fade_end = fade_radius;
   let fade = 1.0 - smoothstep(fade_start, fade_end, dist);
   let axis_width = 0.02 * scale;
   var color = uniforms.grid_color;
@@ -187,6 +188,31 @@ export class ViewportRenderer {
 
   // Last uploaded vertex data (needed for zoomToFit re-trigger)
   private lastVertexData: Float32Array | null = null;
+
+  // Grid spacing in world units (1 cell = gridSpacing meters), auto-set from data extent
+  private gridSpacing = 10.0;
+
+  // Callback invoked after data load or camera changes
+  private onScaleChange: ((info: { gridSpacing: number; mpp: number }) => void) | null = null;
+
+  /** Register a callback invoked on data load or camera change with grid info. */
+  setScaleChangeCallback(cb: (info: { gridSpacing: number; mpp: number }) => void): void {
+    this.onScaleChange = cb;
+    this.reportScale();
+  }
+
+  /** Compute current meters-per-pixel (perspective approximation at target distance). */
+  private getMetersPerPixel(): number {
+    const [px, py, pz] = this.camera.position;
+    const [tx, ty, tz] = this.camera.target;
+    const camDist = Math.sqrt((px - tx) ** 2 + (py - ty) ** 2 + (pz - tz) ** 2);
+    const halfWorldWidth = camDist * Math.tan(this.camera.fovY / 2);
+    return (halfWorldWidth * 2) / Math.max(1, this.width);
+  }
+
+  private reportScale(): void {
+    this.onScaleChange?.({ gridSpacing: this.gridSpacing, mpp: this.getMetersPerPixel() });
+  }
 
   /** Check if WebGPU is available. */
   static isSupported(): boolean {
@@ -417,12 +443,16 @@ export class ViewportRenderer {
     const extentZ = maxZ - minZ;
     const maxExtent = Math.max(extentX, extentY, extentZ, 1);
 
+    // Derive a nice grid spacing from the data extent (~10 divisions)
+    this.gridSpacing = niceNumber(Math.max(maxExtent / 10, 0.5));
+
     // Place camera above the center, looking down at 45° angle
     const dist = maxExtent * 0.8;
     this.camera.target = [cx, cy, cz];
     this.camera.position = [cx, cy - dist * 0.5, cz + dist];
     this.camera.near = Math.max(0.1, maxExtent * 0.001);
     this.camera.far = Math.max(100000, maxExtent * 10);
+    this.reportScale();
   }
 
   /** Resize the viewport. */
@@ -436,6 +466,7 @@ export class ViewportRenderer {
 
   /** Start the render loop. */
   start(): void {
+    this.reportScale();
     const loop = () => {
       this.renderFrame();
       this.animFrameId = requestAnimationFrame(loop);
@@ -495,9 +526,11 @@ export class ViewportRenderer {
       (this.camera.position[1] - this.camera.target[1]) ** 2 +
       (this.camera.position[2] - this.camera.target[2]) ** 2,
     );
-    const gridScale = Math.max(1, Math.pow(10, Math.floor(Math.log10(camDist))) / 10);
+    // Grid scale from data extent (nice number, auto-computed in fitToVertices)
+    const gridScale = this.gridSpacing;
     gridData[19] = gridScale;
     gridData.set(this.gridColor, 20);
+    gridData[23] = camDist; // cam_dist for fade radius calculation
     this.device.queue.writeBuffer(this.gridUniformBuffer, 0, gridData);
 
     // Update basic uniforms (128 bytes: mat4x4 view_proj + mat4x4 model)
@@ -816,19 +849,24 @@ export class ViewportRenderer {
       ty + r * Math.sin(phi) * Math.sin(theta),
       tz + r * Math.cos(phi),
     ];
+    this.reportScale();
   }
 
   private zoom(factor: number): void {
+    const MIN_CAM_DIST = 2.0;    // zoom limit: ~1m visible scale
+    const MAX_CAM_DIST = 2000.0; // zoom limit: ~1000m visible scale
     const [px, py, pz] = this.camera.position;
     const [tx, ty, tz] = this.camera.target;
     const dx = tx - px, dy = ty - py, dz = tz - pz;
-    const dist = Math.max(0.1, Math.sqrt(dx * dx + dy * dy + dz * dz) * factor);
-    const norm = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const currentDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const dist = Math.min(MAX_CAM_DIST, Math.max(MIN_CAM_DIST, currentDist * factor));
+    const norm = currentDist;
     this.camera.position = [
       tx - (dx / norm) * dist,
       ty - (dy / norm) * dist,
       tz - (dz / norm) * dist,
     ];
+    this.reportScale();
   }
 
   private pan(dx: number, dy: number): void {
@@ -841,6 +879,7 @@ export class ViewportRenderer {
     const speed = dist * 0.5;
     this.camera.position = [px + dx * speed, py + dy * speed, pz];
     this.camera.target = [tx + dx * speed, ty + dy * speed, tz];
+    this.reportScale();
   }
 }
 
@@ -935,4 +974,18 @@ function transformPoint(m: Float32Array, p: [number, number, number]): [number, 
     (m[1]! * p[0] + m[5]! * p[1] + m[9]! * p[2] + m[13]!) / w,
     (m[2]! * p[0] + m[6]! * p[1] + m[10]! * p[2] + m[14]!) / w,
   ];
+}
+
+/**
+ * Round x up to the nearest "nice" number in the 1-2-5 sequence.
+ * e.g. niceNumber(75) → 100, niceNumber(3) → 5, niceNumber(450) → 500
+ */
+function niceNumber(x: number): number {
+  if (x <= 0) return 1;
+  const exp = Math.pow(10, Math.floor(Math.log10(x)));
+  const frac = x / exp;
+  if (frac <= 1) return exp;
+  if (frac <= 2) return 2 * exp;
+  if (frac <= 5) return 5 * exp;
+  return 10 * exp;
 }

@@ -145,6 +145,9 @@ export function Viewport() {
       if (ok) {
         setStatus('ready');
         renderer.start();
+        renderer.setScaleChangeCallback((info) => {
+          useEditorStore.getState().setViewportInfo(info);
+        });
       } else {
         setStatus('unsupported');
       }
