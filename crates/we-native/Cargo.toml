@@ -1,0 +1,18 @@
+[package]
+name = "we-native"
+description = "WorldEditor native-only features — GDAL, large point clouds, FBX FFI"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+we-core = { workspace = true }
+we-io = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+
+# Native-only dependencies (will not compile to WASM)
+# gdal = "0.17"        # uncomment when ready
+# las = "0.9"          # uncomment when ready
+
+[dev-dependencies]
