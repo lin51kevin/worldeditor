@@ -437,54 +437,39 @@ pub struct Tunnel {
 // Traffic Signals
 // ============================================================================
 
-/// Traffic signal types based on OpenDRIVE and common road implementations.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SignalType {
-    /// Standard traffic light (1,000,001)
-    StandardTrafficLight,
-    /// Pedestrian walking traffic light (1,000,002)
-    WalkingTrafficLight,
-    /// Directional traffic light (1,000,011)
-    DirectionalTrafficLight { subtype: DirectionalSubType },
-    /// Bicycle traffic light (1,000,013)
-    BicycleTrafficLight,
-    /// U-turn traffic light (2,000,011)
-    TurnUTrafficLight,
-    /// Speed limit sign (1010203800001413)
-    SpeedLimit,
-    /// Speed limit removal sign (1010203900001613)
-    SpeedLimitRemoval,
-    /// Single light variant
-    SingleLight,
-    /// Indicate signs
-    Indicate,
-    /// Prohibit signs
-    Prohibit,
-    /// Warning signs
-    Warn,
-    /// Custom type with string identifier
-    Custom(String),
-}
-
-/// Subtype for directional traffic lights.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DirectionalSubType {
-    Left = 10,
-    Right = 20,
-    Forward = 30,
-}
-
-/// A traffic signal element.
+/// A traffic signal element as parsed from OpenDRIVE `<signal>`.
+///
+/// Positions are stored in road-local coordinates (s along reference line,
+/// t lateral offset) rather than pre-computed world-space XYZ, so the WASM
+/// vertex generators can evaluate the road geometry on demand.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Signal {
+    /// OpenDRIVE signal id.
     pub id: String,
-    pub signal_type: SignalType,
+    /// Human-readable name.
     pub name: String,
-    pub position: Point3D,
-    pub orientation: f64,
+    /// s-coordinate along the road reference line (m).
+    pub s: f64,
+    /// Lateral offset from the reference line, positive = left (m).
+    pub t: f64,
+    /// Height above the road surface (m).
+    pub z_offset: f64,
+    /// Additional heading offset relative to the road direction (rad).
+    pub h_offset: f64,
+    /// Width of the signal (m); also used as scale for paint marks.
+    pub width: f64,
+    /// Height/length of the signal (m).
+    pub height: f64,
+    /// Raw `type` attribute string (e.g., `"Graphics"`, `"1010203800001413"`).
+    pub signal_type: String,
+    /// Raw `subtype` attribute string (e.g., `"StraightAheadArrow"`, `"none"`).
+    pub signal_subtype: String,
+    /// Optional value field (e.g., `"30"` for a speed-limit sign).
     pub value: Option<String>,
+    /// Orientation along road: `"+"` forward, `"-"` backward, `"none"` both.
+    pub orientation: String,
+    /// Whether this signal is dynamic (e.g., a traffic light).
     pub is_dynamic: bool,
-    pub subtype: Option<i32>,
 }
 
 /// 3D point with optional id reference.
@@ -727,30 +712,30 @@ mod tests {
     fn test_signal_serialization() {
         let signal = Signal {
             id: "signal-1".to_string(),
-            signal_type: SignalType::DirectionalTrafficLight {
-                subtype: DirectionalSubType::Left,
-            },
             name: "Turn Signal".to_string(),
-            position: Point3D::new_with_id(1.0, 2.0, 3.0, Some("point-1".to_string())),
-            orientation: 90.0,
+            s: 20.0,
+            t: -1.5,
+            z_offset: 0.0,
+            h_offset: 1.5708,
+            width: 3.0,
+            height: 0.0,
+            signal_type: "Graphics".to_string(),
+            signal_subtype: "LeftTurnArrow".to_string(),
             value: Some("30".to_string()),
-            is_dynamic: true,
-            subtype: Some(10),
+            orientation: "+".to_string(),
+            is_dynamic: false,
         };
 
         let json = serde_json::to_string(&signal).unwrap();
         let deserialized: Signal = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.id, "signal-1");
-        assert_eq!(deserialized.signal_type, signal.signal_type);
+        assert_eq!(deserialized.signal_type, "Graphics");
+        assert_eq!(deserialized.signal_subtype, "LeftTurnArrow");
         assert_eq!(deserialized.name, "Turn Signal");
-        assert!((deserialized.position.x - 1.0).abs() < f64::EPSILON);
-        assert!((deserialized.position.y - 2.0).abs() < f64::EPSILON);
-        assert!((deserialized.position.z - 3.0).abs() < f64::EPSILON);
-        assert_eq!(deserialized.position.id.as_deref(), Some("point-1"));
-        assert!((deserialized.orientation - 90.0).abs() < f64::EPSILON);
+        assert!((deserialized.s - 20.0).abs() < f64::EPSILON);
+        assert!((deserialized.t - -1.5).abs() < f64::EPSILON);
         assert_eq!(deserialized.value.as_deref(), Some("30"));
-        assert!(deserialized.is_dynamic);
-        assert_eq!(deserialized.subtype, Some(10));
+        assert!(!deserialized.is_dynamic);
     }
 
     #[test]

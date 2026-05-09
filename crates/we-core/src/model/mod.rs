@@ -6,9 +6,9 @@
 pub(crate) mod road;
 
 pub use road::{
-    DirectionalSubType, Elevation, Geometry, GeometryType, Lane, LaneLink, LaneSection, LaneType,
-    LaneWidth, LinkElement, LinkElementType, ObjectType, ParamPoly3Range, Point3D, Road, RoadLink,
-    RoadMark, RoadMarkColor, RoadMarkType, RoadMarkWeight, RoadObject, Signal, SignalType, Validity,
+    Elevation, Geometry, GeometryType, Lane, LaneLink, LaneSection, LaneType, LaneWidth,
+    LinkElement, LinkElementType, ObjectType, ParamPoly3Range, Point3D, Road, RoadLink, RoadMark,
+    RoadMarkColor, RoadMarkType, RoadMarkWeight, RoadObject, Signal, Validity,
 };
 
 use serde::{Deserialize, Serialize};
