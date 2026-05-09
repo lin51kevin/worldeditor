@@ -4,7 +4,7 @@
 //! Supports instanced rendering for multiple identical signals.
 
 use crate::vertex::ColorVertex;
-use we_core::model::{DirectionalSubType, Point3D, Signal, SignalType};
+use we_core::model::{Point3D, Signal};
 
 /// Configuration for signal rendering.
 #[derive(Debug, Clone)]
@@ -93,43 +93,34 @@ pub fn generate_signal_billboard(
     vertices
 }
 
-/// Convert Signal to SignalType for texture path determination.
+/// Derive a texture/icon path from the signal's raw type string.
+///
+/// Maps known OpenDRIVE type codes to texture file names.
 pub fn signal_type_to_icon_path(signal: &Signal) -> String {
-    match &signal.signal_type {
-        SignalType::StandardTrafficLight => "StandardTrafficLight.png".to_string(),
-        SignalType::WalkingTrafficLight => "WalkingTrafficLight.png".to_string(),
-        SignalType::DirectionalTrafficLight { subtype } => match subtype {
-            DirectionalSubType::Left => "TurnLeftTrafficLight.png".to_string(),
-            DirectionalSubType::Right => "TurnRightTrafficLight.png".to_string(),
-            DirectionalSubType::Forward => "ForwardTrafficLight.png".to_string(),
-        },
-        SignalType::BicycleTrafficLight => "BikingTrafficLight.png".to_string(),
-        SignalType::TurnUTrafficLight => "TurnUTrafficLight.png".to_string(),
-        SignalType::SpeedLimit => {
-            format!("speedlimit_{}.png", signal.value.as_deref().unwrap_or("30"))
-        }
-        SignalType::SpeedLimitRemoval => format!(
+    match signal.signal_type.as_str() {
+        "1000001" => "StandardTrafficLight.png".to_string(),
+        "1000002" => "WalkingTrafficLight.png".to_string(),
+        "1000013" => "BikingTrafficLight.png".to_string(),
+        "1010203800001413" => format!(
+            "speedlimit_{}.png",
+            signal.value.as_deref().unwrap_or("30")
+        ),
+        "1010203900001613" => format!(
             "removespeedlimit_{}.png",
             signal.value.as_deref().unwrap_or("30")
         ),
-        SignalType::SingleLight => format!("trafficLights/light/{}.png", signal.name),
-        SignalType::Indicate => format!("Signs/indicate/{}.png", signal.name),
-        SignalType::Prohibit => format!("Signs/prohibit/{}.png", signal.name),
-        SignalType::Warn => format!("Signs/warn/{}.png", signal.name),
-        SignalType::Custom(type_str) => format!("Signs/{}.png", type_str),
+        "Graphics" => format!("paint/{}.png", signal.signal_subtype),
+        other => format!("Signs/{}.png", other),
     }
 }
 
-/// Default signal colors for different signal types.
+/// Default billboard color for a signal based on its type string.
 pub fn signal_default_color(signal: &Signal) -> [f32; 4] {
-    match &signal.signal_type {
-        SignalType::SpeedLimit | SignalType::SpeedLimitRemoval => [0.0, 0.0, 0.0, 1.0], // Black for speed signs
-        SignalType::StandardTrafficLight => [0.2, 0.8, 0.2, 1.0],                       // Greenish
-        SignalType::WalkingTrafficLight => [0.2, 0.8, 0.2, 1.0],
-        SignalType::DirectionalTrafficLight { .. } => [0.2, 0.8, 0.2, 1.0],
-        SignalType::BicycleTrafficLight => [0.2, 0.8, 0.2, 1.0],
-        SignalType::TurnUTrafficLight => [0.2, 0.8, 0.2, 1.0],
-        _ => [1.0, 1.0, 1.0, 1.0], // White for generic
+    match signal.signal_type.as_str() {
+        "Graphics" => [1.0, 1.0, 1.0, 0.95],         // white paint mark
+        "1010203800001413" | "1010203900001613" => [0.0, 0.0, 0.0, 1.0], // black text
+        s if s.starts_with("1000") => [0.2, 0.8, 0.2, 1.0], // green traffic lights
+        _ => [1.0, 1.0, 1.0, 1.0],
     }
 }
 
@@ -149,24 +140,26 @@ pub fn build_signal_transform(position: &Point3D, orientation: f64, scale: f32) 
 }
 
 /// Generate render data for all signals on a road.
-pub fn generate_signal_render_data(signals: &[Signal], icon_size: f32) -> SignalRenderData {
+///
+/// Signals are positioned using the `world_position` helper; callers that have
+/// pre-computed world coordinates should pass the position directly via
+/// [`generate_signal_billboard`].
+pub fn generate_signal_render_data(
+    signals: &[Signal],
+    icon_size: f32,
+    get_world_pos: impl Fn(&Signal) -> Option<Point3D>,
+) -> SignalRenderData {
     let mut data = SignalRenderData::default();
 
     for signal in signals {
+        let Some(pos) = get_world_pos(signal) else {
+            continue;
+        };
         let color = signal_default_color(signal);
-        let vertices = generate_signal_billboard(
-            &signal.position,
-            signal.orientation,
-            icon_size,
-            icon_size,
-            color,
-        );
+        let vertices =
+            generate_signal_billboard(&pos, signal.h_offset, icon_size, icon_size, color);
         data.billboard_vertices.extend(vertices);
-        data.transforms.push(build_signal_transform(
-            &signal.position,
-            signal.orientation,
-            1.0,
-        ));
+        data.transforms.push(build_signal_transform(&pos, signal.h_offset, 1.0));
     }
 
     data
@@ -176,6 +169,24 @@ pub fn generate_signal_render_data(signals: &[Signal], icon_size: f32) -> Signal
 mod tests {
     use super::*;
 
+    fn make_signal(signal_type: &str, signal_subtype: &str) -> Signal {
+        Signal {
+            id: "1".to_string(),
+            name: "test".to_string(),
+            s: 0.0,
+            t: 0.0,
+            z_offset: 0.0,
+            h_offset: 0.0,
+            width: 1.0,
+            height: 2.0,
+            signal_type: signal_type.to_string(),
+            signal_subtype: signal_subtype.to_string(),
+            value: None,
+            orientation: "+".to_string(),
+            is_dynamic: false,
+        }
+    }
+
     #[test]
     fn test_signal_billboard_generation() {
         let position = Point3D::new(0.0, 0.0, 5.0);
@@ -184,19 +195,32 @@ mod tests {
     }
 
     #[test]
-    fn test_signal_type_icon_path() {
-        let signal = Signal {
-            id: "1".to_string(),
-            signal_type: SignalType::StandardTrafficLight,
-            name: "test".to_string(),
-            position: Point3D::new(0.0, 0.0, 0.0),
-            orientation: 0.0,
-            value: None,
-            is_dynamic: true,
-            subtype: None,
-        };
+    fn test_signal_type_icon_path_traffic_light() {
+        let signal = make_signal("1000001", "none");
         let path = signal_type_to_icon_path(&signal);
         assert_eq!(path, "StandardTrafficLight.png");
+    }
+
+    #[test]
+    fn test_signal_type_icon_path_speed_limit() {
+        let mut signal = make_signal("1010203800001413", "none");
+        signal.value = Some("60".to_string());
+        let path = signal_type_to_icon_path(&signal);
+        assert_eq!(path, "speedlimit_60.png");
+    }
+
+    #[test]
+    fn test_signal_type_icon_path_graphics() {
+        let signal = make_signal("Graphics", "StraightAheadArrow");
+        let path = signal_type_to_icon_path(&signal);
+        assert_eq!(path, "paint/StraightAheadArrow.png");
+    }
+
+    #[test]
+    fn test_signal_default_color_paint() {
+        let signal = make_signal("Graphics", "StraightAheadArrow");
+        let color = signal_default_color(&signal);
+        assert_eq!(color, [1.0, 1.0, 1.0, 0.95]);
     }
 
     #[test]
@@ -208,3 +232,5 @@ mod tests {
         assert_eq!(transform[3][2], 5.0);
     }
 }
+
+
