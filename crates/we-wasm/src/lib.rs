@@ -129,8 +129,8 @@ pub fn generate_road_vertices(project_json: &str, sample_step: f64) -> Result<Ve
                 let color = lane_surface_color(lane.lane_type);
                 road_verts.extend(gen_lane_strip(
                     &section_pts, &lane.width, section.s,
-                    &road.elevation_profile, right_offset, false, color,
-                    &evaluate_elevation, &evaluate_lane_width, &offset_point,
+                    &road.elevation_profile, &road.lane_offsets, right_offset, false, color,
+                    &evaluate_elevation, &evaluate_lane_width, &eval_lane_offset, &offset_point,
                 ));
                 right_offset += avg_lane_width(&lane.width, &evaluate_lane_width);
             }
@@ -143,8 +143,8 @@ pub fn generate_road_vertices(project_json: &str, sample_step: f64) -> Result<Ve
                 let color = lane_surface_color(lane.lane_type);
                 road_verts.extend(gen_lane_strip(
                     &section_pts, &lane.width, section.s,
-                    &road.elevation_profile, left_offset, true, color,
-                    &evaluate_elevation, &evaluate_lane_width, &offset_point,
+                    &road.elevation_profile, &road.lane_offsets, left_offset, true, color,
+                    &evaluate_elevation, &evaluate_lane_width, &eval_lane_offset, &offset_point,
                 ));
                 left_offset += avg_lane_width(&lane.width, &evaluate_lane_width);
             }
@@ -281,8 +281,8 @@ pub fn generate_lane_line_vertices(
                         let dashed = is_dashed(rm.mark_type);
                         let verts = gen_road_mark_line(
                             &section_pts, &road.elevation_profile,
-                            0.0, lw, lc, dashed,
-                            &evaluate_elevation, &offset_point,
+                            &road.lane_offsets, 0.0, lw, lc, dashed,
+                            &evaluate_elevation, &eval_lane_offset, &offset_point,
                         );
                         for v in &verts { all_floats.extend_from_slice(v); }
                     }
@@ -302,8 +302,8 @@ pub fn generate_lane_line_vertices(
                         let dashed = is_dashed(rm.mark_type);
                         let verts = gen_road_mark_line(
                             &section_pts, &road.elevation_profile,
-                            -right_offset, lw, lc, dashed,
-                            &evaluate_elevation, &offset_point,
+                            &road.lane_offsets, -right_offset, lw, lc, dashed,
+                            &evaluate_elevation, &eval_lane_offset, &offset_point,
                         );
                         for v in &verts { all_floats.extend_from_slice(v); }
                     }
@@ -323,8 +323,8 @@ pub fn generate_lane_line_vertices(
                         let dashed = is_dashed(rm.mark_type);
                         let verts = gen_road_mark_line(
                             &section_pts, &road.elevation_profile,
-                            left_offset, lw, lc, dashed,
-                            &evaluate_elevation, &offset_point,
+                            &road.lane_offsets, left_offset, lw, lc, dashed,
+                            &evaluate_elevation, &eval_lane_offset, &offset_point,
                         );
                         for v in &verts { all_floats.extend_from_slice(v); }
                     }
@@ -475,17 +475,31 @@ fn avg_lane_width(
     sum / N as f64
 }
 
+/// Evaluate laneOffset polynomial at station `s`.
+///
+/// OpenDRIVE `laneOffset` applies to the whole lane cross-section:
+/// positive values shift all lanes to the left of the reference line.
+fn eval_lane_offset(offsets: &[we_core::model::LaneOffset], s: f64) -> f64 {
+    let Some(entry) = offsets.iter().rev().find(|o| o.s <= s + 1e-9) else {
+        return 0.0;
+    };
+    let ds = (s - entry.s).max(0.0);
+    entry.evaluate(ds)
+}
+
 /// Generate a colored triangle strip for one lane.
 fn gen_lane_strip(
     ref_pts: &[&we_core::geometry::eval::RefLinePoint],
     widths: &[we_core::model::LaneWidth],
     section_s: f64,
     elevations: &[we_core::model::Elevation],
+    lane_offsets: &[we_core::model::LaneOffset],
     inner_offset: f64,
     is_left: bool,
     color: [f32; 4],
     eval_elev: &dyn Fn(&[we_core::model::Elevation], f64) -> f64,
     eval_width: &dyn Fn(&[we_core::model::LaneWidth], f64) -> f64,
+    eval_lane_off: &dyn Fn(&[we_core::model::LaneOffset], f64) -> f64,
     offset_pt: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
 ) -> Vec<[f32; 7]> {
     let mut verts = Vec::new();
@@ -507,15 +521,18 @@ fn gen_lane_strip(
         let z0 = eval_elev(elevations, pt0.s) as f32;
         let z1 = eval_elev(elevations, pt1.s) as f32;
 
+        let lo0 = eval_lane_off(lane_offsets, pt0.s);
+        let lo1 = eval_lane_off(lane_offsets, pt1.s);
+
         let (in0, out0) = if is_left {
-            (inner_offset, inner_offset + w0)
+            (lo0 + inner_offset, lo0 + inner_offset + w0)
         } else {
-            (-inner_offset, -(inner_offset + w0))
+            (lo0 - inner_offset, lo0 - (inner_offset + w0))
         };
         let (in1, out1) = if is_left {
-            (inner_offset, inner_offset + w1)
+            (lo1 + inner_offset, lo1 + inner_offset + w1)
         } else {
-            (-inner_offset, -(inner_offset + w1))
+            (lo1 - inner_offset, lo1 - (inner_offset + w1))
         };
 
         let (ix0, iy0, _) = offset_pt(pt0, in0, 0.0);
@@ -575,11 +592,13 @@ fn gen_default_ribbon(
 fn gen_road_mark_line(
     ref_pts: &[&we_core::geometry::eval::RefLinePoint],
     elevations: &[we_core::model::Elevation],
+    lane_offsets: &[we_core::model::LaneOffset],
     lateral_offset: f64,
     line_width: f32,
     color: [f32; 4],
     is_dashed: bool,
     eval_elev: &dyn Fn(&[we_core::model::Elevation], f64) -> f64,
+    eval_lane_off: &dyn Fn(&[we_core::model::LaneOffset], f64) -> f64,
     offset_pt: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
 ) -> Vec<[f32; 7]> {
     let mut verts = Vec::new();
@@ -603,13 +622,18 @@ fn gen_road_mark_line(
         let z0 = eval_elev(elevations, pt0.s) as f32 + z_lift;
         let z1 = eval_elev(elevations, pt1.s) as f32 + z_lift;
 
-        // Center points at lateral_offset, then expand ±half_w using reference heading
-        let (cx0, cy0, _) = offset_pt(pt0, lateral_offset, 0.0);
-        let (cx1, cy1, _) = offset_pt(pt1, lateral_offset, 0.0);
-        let (lx0, ly0, _) = offset_pt(pt0, lateral_offset + half_w, 0.0);
-        let (rx0, ry0, _) = offset_pt(pt0, lateral_offset - half_w, 0.0);
-        let (lx1, ly1, _) = offset_pt(pt1, lateral_offset + half_w, 0.0);
-        let (rx1, ry1, _) = offset_pt(pt1, lateral_offset - half_w, 0.0);
+        let lo0 = eval_lane_off(lane_offsets, pt0.s);
+        let lo1 = eval_lane_off(lane_offsets, pt1.s);
+        let t0 = lo0 + lateral_offset;
+        let t1 = lo1 + lateral_offset;
+
+        // Center points at lane-offset-adjusted lateral position, then expand ±half_w
+        let (cx0, cy0, _) = offset_pt(pt0, t0, 0.0);
+        let (cx1, cy1, _) = offset_pt(pt1, t1, 0.0);
+        let (lx0, ly0, _) = offset_pt(pt0, t0 + half_w, 0.0);
+        let (rx0, ry0, _) = offset_pt(pt0, t0 - half_w, 0.0);
+        let (lx1, ly1, _) = offset_pt(pt1, t1 + half_w, 0.0);
+        let (rx1, ry1, _) = offset_pt(pt1, t1 - half_w, 0.0);
 
         // Suppress unused center coords (used only for readability)
         let _ = (cx0, cy0, cx1, cy1);
