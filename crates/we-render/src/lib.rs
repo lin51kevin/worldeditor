@@ -19,6 +19,40 @@ pub use renderer::{LaneLineMesh, RenderMesh, Renderer};
 pub use road_mesh::{generate_road_lane_lines, generate_road_mesh};
 pub use vertex::{ColorVertex, LineVertex};
 
+#[cfg(test)]
+pub mod test_helpers {
+    /// Try to create a headless GPU device for testing.
+    /// Returns None if no GPU/compute device is found (CI environments).
+    pub fn get_test_device() -> Option<wgpu::Device> {
+        let _ = env_logger::builder().is_test(true).try_init();
+        pollster::block_on(async {
+            let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+                backends: wgpu::Backends::all(),
+                ..Default::default()
+            });
+            let adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: None,
+                    force_fallback_adapter: true,
+                })
+                .await?;
+            let (device, _) = adapter
+                .request_device(
+                    &wgpu::DeviceDescriptor {
+                        label: Some("test-device"),
+                        required_features: wgpu::Features::empty(),
+                        ..Default::default()
+                    },
+                    None,
+                )
+                .await
+                .ok()?;
+            Some(device)
+        })
+    }
+}
+
 /// Renderer configuration.
 pub struct RendererConfig {
     pub width: u32,

@@ -3,6 +3,12 @@
  *
  * Renders OpenDRIVE road geometry on a <canvas> element using the WebGPU API.
  * This is the browser-native renderer that mirrors the Rust we-render crate.
+ *
+ * TODO(#6): Migrate data generation to we-wasm pipeline.
+ *   - Vertex generation (road mesh, lane lines, junctions) should move to
+ *     we-wasm's generate_road_mesh_from_json() and related WASM functions.
+ *   - This file should focus on GPU rendering only, receiving pre-built vertex buffers.
+ *   - See crates/we-wasm/src/lib.rs for the progressive WASM data pipeline.
  */
 
 // WGSL shaders (same logic as crates/we-render/src/shaders/)

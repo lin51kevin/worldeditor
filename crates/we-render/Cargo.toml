@@ -12,7 +12,13 @@ nalgebra = { workspace = true }
 log = { workspace = true }
 glam = "0.29"
 
+[features]
+default = []
+gpu-tests = []  # Enable GPU-dependent tests (requires display/compute device)
+
 [dev-dependencies]
+pollster = "0.3"
+env_logger = "0.11"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

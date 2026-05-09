@@ -1098,6 +1098,59 @@ pub fn pick_road_at_point(
     }
 }
 
+/// Generate road mesh data as JSON from a single road's geometry.
+///
+/// Progressive WASM data pipeline (#6): validates that we-core geometry types
+/// can be deserialized from JSON, mesh-generated, and returned as JSON vertices.
+/// Returns a JSON object with "vertices" (array of [x,y,z,r,g,b,a]) and "count".
+///
+/// Input JSON: serialized `we_core::model::Road`.
+/// Output JSON: `{ "vertices": [[x,y,z,r,g,b,a], ...], "count": N }`
+#[wasm_bindgen]
+pub fn generate_road_mesh_from_json(road_json: &str, sample_step: f64) -> Result<String, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point, sample_road_reference_line};
+    use we_core::model::Road;
+
+    let road: Road =
+        serde_json::from_str(road_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    if road.render_hidden {
+        return Ok(r#"{"vertices":[],"count":0}"#.to_string());
+    }
+
+    let ref_pts = sample_road_reference_line(&road, sample_step);
+    if ref_pts.len() < 2 {
+        return Ok(r#"{"vertices":[],"count":0}"#.to_string());
+    }
+
+    // Generate a simple ribbon mesh (same as gen_default_ribbon)
+    let half_width = 3.5;
+    let color = [0.35_f32, 0.35, 0.38, 1.0];
+    let mut vertices: Vec<[f64; 7]> = Vec::new();
+
+    for i in 0..ref_pts.len() - 1 {
+        let pt0 = &ref_pts[i];
+        let pt1 = &ref_pts[i + 1];
+        let z0 = evaluate_elevation(&road.elevation_profile, pt0.s);
+        let z1 = evaluate_elevation(&road.elevation_profile, pt1.s);
+        let (lx0, ly0, _) = offset_point(pt0, half_width, 0.0);
+        let (rx0, ry0, _) = offset_point(pt0, -half_width, 0.0);
+        let (lx1, ly1, _) = offset_point(pt1, half_width, 0.0);
+        let (rx1, ry1, _) = offset_point(pt1, -half_width, 0.0);
+
+        for v in &[[lx0, ly0, z0], [rx0, ry0, z0], [lx1, ly1, z1],
+                   [rx0, ry0, z0], [rx1, ry1, z1], [lx1, ly1, z1]] {
+            vertices.push([v[0], v[1], v[2], color[0] as f64, color[1] as f64, color[2] as f64, color[3] as f64]);
+        }
+    }
+
+    let result = serde_json::json!({
+        "vertices": vertices,
+        "count": vertices.len()
+    });
+    serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
