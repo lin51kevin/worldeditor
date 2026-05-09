@@ -1,0 +1,25 @@
+.viewport {
+  position: absolute;
+  inset: 0;
+  background: var(--color-viewport-bg);
+  overflow: hidden;
+}
+
+.viewport-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.viewport-overlay {
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.viewport-label {
+  font-size: 11px;
+  color: var(--color-viewport-label);
+}
