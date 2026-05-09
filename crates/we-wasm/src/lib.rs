@@ -895,6 +895,9 @@ fn build_junction_polygon_points(
         } else {
             connecting.length
         };
+        let Some(connecting_pt) = road_point_at_s(&connecting.plan_view, connecting_s) else {
+            continue;
+        };
         append_road_boundary_points(
             connecting,
             connecting_s,
@@ -904,19 +907,24 @@ fn build_junction_polygon_points(
             &offset_point,
         );
 
-        // Keep incoming-road endpoint selection consistent with the
-        // connection's contact point.
+        // Incoming road endpoint is not described by connection.contactPoint.
+        // Choose start/end by nearest distance to connecting-road contact point.
         let Some(incoming) = project.roads.iter().find(|r| r.id == conn.incoming_road) else {
             continue;
         };
         if incoming.render_hidden {
             continue;
         }
-        let incoming_s = if conn.contact_point == we_core::model::ContactPoint::Start {
-            0.0
-        } else {
-            incoming.length
+        let Some(in_start) = road_point_at_s(&incoming.plan_view, 0.0) else {
+            continue;
         };
+        let Some(in_end) = road_point_at_s(&incoming.plan_view, incoming.length) else {
+            continue;
+        };
+        let ds_start =
+            (in_start.x - connecting_pt.x).powi(2) + (in_start.y - connecting_pt.y).powi(2);
+        let ds_end = (in_end.x - connecting_pt.x).powi(2) + (in_end.y - connecting_pt.y).powi(2);
+        let incoming_s = if ds_start <= ds_end { 0.0 } else { incoming.length };
         append_road_boundary_points(
             incoming,
             incoming_s,
