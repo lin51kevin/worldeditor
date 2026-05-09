@@ -11,7 +11,7 @@ const EE: f64 = 0.006_693_421_622_965_943; // Krasovsky eccentricity squared
 
 /// Check if a coordinate is inside China (rough bounds).
 pub fn is_in_china(lat: f64, lon: f64) -> bool {
-    lon >= 72.004 && lon <= 137.8347 && lat >= 0.8293 && lat <= 55.8271
+    (72.004..=137.8347).contains(&lon) && (0.8293..=55.8271).contains(&lat)
 }
 
 /// Convert WGS84 to GCJ-02.

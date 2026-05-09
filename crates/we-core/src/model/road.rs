@@ -248,7 +248,7 @@ pub struct RoadMark {
 }
 
 /// Road mark type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RoadMarkType {
     Solid,
     Broken,
@@ -260,18 +260,14 @@ pub enum RoadMarkType {
     StopLine,
     Grass,
     Custom,
+    #[default]
     None,
 }
 
-impl Default for RoadMarkType {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
 /// Road mark color.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RoadMarkColor {
+    #[default]
     Standard,
     White,
     Yellow,
@@ -282,23 +278,12 @@ pub enum RoadMarkColor {
     Violet,
 }
 
-impl Default for RoadMarkColor {
-    fn default() -> Self {
-        Self::Standard
-    }
-}
-
 /// Road mark weight.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RoadMarkWeight {
+    #[default]
     Standard,
     Bold,
-}
-
-impl Default for RoadMarkWeight {
-    fn default() -> Self {
-        Self::Standard
-    }
 }
 
 /// Width polynomial entry for a lane.
@@ -312,7 +297,7 @@ pub struct LaneWidth {
 }
 
 /// Lane type as defined in OpenDRIVE.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LaneType {
     Driving,
     Shoulder,
@@ -339,13 +324,8 @@ pub enum LaneType {
     Special2,
     Special3,
     RoadWorks,
+    #[default]
     None,
-}
-
-impl Default for LaneType {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 // ============================================================================
