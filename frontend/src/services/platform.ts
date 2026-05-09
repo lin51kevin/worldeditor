@@ -169,6 +169,47 @@ export interface UtmCoord {
   alt: number;
 }
 
+export interface ElevationQueryResult {
+  elevation: number;
+  grade: number;
+  grade_pct: number;
+}
+
+export interface SnapConfig {
+  grid_enabled: boolean;
+  grid_size: number;
+  endpoint_enabled: boolean;
+  endpoint_threshold: number;
+  midpoint_enabled: boolean;
+  perpendicular_enabled: boolean;
+}
+
+export type SnapType = 'None' | 'Grid' | 'Endpoint' | 'Midpoint' | 'Perpendicular';
+
+export interface SnapResult {
+  x: number;
+  y: number;
+  snapped: boolean;
+  snap_type: SnapType;
+  target_id: string | null;
+}
+
+export interface DistanceMeasurement {
+  straight: number;
+  horizontal: number;
+  vertical: number;
+}
+
+export interface AngleMeasurement {
+  radians: number;
+  degrees: number;
+}
+
+export interface AreaMeasurement {
+  area: number;
+  perimeter: number;
+}
+
 export interface PlatformService {
   /** Parse an OpenDRIVE XML string into a Project. */
   parseOpenDrive(xml: string): Promise<Project>;
@@ -223,4 +264,45 @@ export interface PlatformService {
 
   /** Find the closest junction to a world-space point. Returns junction ID or null. */
   pickJunctionAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null>;
+
+  /** Query elevation and grade at a station on a road. */
+  queryElevation(road: Road, s: number): Promise<ElevationQueryResult>;
+
+  /** Add an elevation point and return the updated project. */
+  addElevationPoint(project: Project, roadId: string, s: number, height: number): Promise<Project>;
+
+  /** Delete an elevation point and return the updated project. */
+  deleteElevationPoint(project: Project, roadId: string, s: number, tolerance: number): Promise<Project>;
+
+  /** Smooth elevation profile and return the updated project. */
+  smoothElevation(project: Project, roadId: string, iterations: number): Promise<Project>;
+
+  /** Snap a point according to current snap configuration. */
+  snapPoint(project: Project, x: number, y: number, config: SnapConfig, excludeRoadId?: string): Promise<SnapResult>;
+
+  /** Measure 3D distance between two points. */
+  measureDistance(
+    x1: number,
+    y1: number,
+    z1: number,
+    x2: number,
+    y2: number,
+    z2: number,
+  ): Promise<DistanceMeasurement>;
+
+  /** Measure angle at vertex point p2 in 2D. */
+  measureAngle(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    x3: number,
+    y3: number,
+  ): Promise<AngleMeasurement>;
+
+  /** Measure polygon area from points. */
+  measureArea(points: Array<[number, number]>): Promise<AreaMeasurement>;
+
+  /** Measure road arc length between two stations. */
+  measureRoadLength(road: Road, sStart: number, sEnd: number): Promise<number>;
 }

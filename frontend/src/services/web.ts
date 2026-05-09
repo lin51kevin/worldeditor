@@ -138,4 +138,83 @@ export class WebPlatformService implements PlatformService {
     const result = wasm.pick_junction_at_point(JSON.stringify(project), x, y, threshold);
     return result as string | null;
   }
+
+  async queryElevation(road: import('./platform').Road, s: number): Promise<import('./platform').ElevationQueryResult> {
+    const wasm = await this.getWasm();
+    const result = await (wasm as any).query_elevation(JSON.stringify(road), s);
+    return result as import('./platform').ElevationQueryResult;
+  }
+
+  async addElevationPoint(project: Project, roadId: string, s: number, height: number): Promise<Project> {
+    const wasm = await this.getWasm();
+    const json = await (wasm as any).add_elevation_point(JSON.stringify(project), roadId, s, height);
+    return JSON.parse(json) as Project;
+  }
+
+  async deleteElevationPoint(project: Project, roadId: string, s: number, tolerance: number): Promise<Project> {
+    const wasm = await this.getWasm();
+    const json = await (wasm as any).delete_elevation_point(JSON.stringify(project), roadId, s, tolerance);
+    return JSON.parse(json) as Project;
+  }
+
+  async smoothElevation(project: Project, roadId: string, iterations: number): Promise<Project> {
+    const wasm = await this.getWasm();
+    const json = await (wasm as any).smooth_elevation(JSON.stringify(project), roadId, iterations);
+    return JSON.parse(json) as Project;
+  }
+
+  async snapPoint(
+    project: Project,
+    x: number,
+    y: number,
+    config: import('./platform').SnapConfig,
+    excludeRoadId?: string,
+  ): Promise<import('./platform').SnapResult> {
+    const wasm = await this.getWasm();
+    const result = await (wasm as any).snap_point(
+      JSON.stringify(project),
+      x,
+      y,
+      JSON.stringify(config),
+      excludeRoadId,
+    );
+    return result as import('./platform').SnapResult;
+  }
+
+  async measureDistance(
+    x1: number,
+    y1: number,
+    z1: number,
+    x2: number,
+    y2: number,
+    z2: number,
+  ): Promise<import('./platform').DistanceMeasurement> {
+    const wasm = await this.getWasm();
+    const result = await (wasm as any).measure_distance(x1, y1, z1, x2, y2, z2);
+    return result as import('./platform').DistanceMeasurement;
+  }
+
+  async measureAngle(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    x3: number,
+    y3: number,
+  ): Promise<import('./platform').AngleMeasurement> {
+    const wasm = await this.getWasm();
+    const result = await (wasm as any).measure_angle(x1, y1, x2, y2, x3, y3);
+    return result as import('./platform').AngleMeasurement;
+  }
+
+  async measureArea(points: Array<[number, number]>): Promise<import('./platform').AreaMeasurement> {
+    const wasm = await this.getWasm();
+    const result = await (wasm as any).measure_area(JSON.stringify(points));
+    return result as import('./platform').AreaMeasurement;
+  }
+
+  async measureRoadLength(road: import('./platform').Road, sStart: number, sEnd: number): Promise<number> {
+    const wasm = await this.getWasm();
+    return (wasm as any).measure_road_length(JSON.stringify(road), sStart, sEnd) as number;
+  }
 }
