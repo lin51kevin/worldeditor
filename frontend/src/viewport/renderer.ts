@@ -185,6 +185,7 @@ export class ViewportRenderer {
   private gridBindGroup!: GPUBindGroup;
   private gridUniformBuffer!: GPUBuffer;
   private basicPipeline!: GPURenderPipeline;
+  private highlightPipeline!: GPURenderPipeline;
   private basicBindGroup!: GPUBindGroup;
   private basicUniformBuffer!: GPUBuffer;
 
@@ -630,7 +631,7 @@ export class ViewportRenderer {
 
     // Draw selection highlight (on top of road surface, below markings)
     if (this.highlightMeshes.length > 0) {
-      pass.setPipeline(this.basicPipeline);
+      pass.setPipeline(this.highlightPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
       for (const mesh of this.highlightMeshes) {
         pass.setVertexBuffer(0, mesh.vertexBuffer);
@@ -778,6 +779,40 @@ export class ViewportRenderer {
         format: 'depth32float',
         depthWriteEnabled: true,
         depthCompare: 'less',
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+
+    // Highlight is drawn after road surface; disable depth writes and allow
+    // equal-depth fragments so coplanar highlights remain visible.
+    this.highlightPipeline = this.device.createRenderPipeline({
+      layout: this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+      vertex: {
+        module: shader,
+        entryPoint: 'vs_main',
+        buffers: [{
+          arrayStride: 28, // 7 * 4 bytes
+          attributes: [
+            { shaderLocation: 0, offset: 0, format: 'float32x3' },  // position
+            { shaderLocation: 1, offset: 12, format: 'float32x4' }, // color
+          ],
+        }],
+      },
+      fragment: {
+        module: shader,
+        entryPoint: 'fs_main',
+        targets: [{
+          format: this.format,
+          blend: {
+            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+          },
+        }],
+      },
+      depthStencil: {
+        format: 'depth32float',
+        depthWriteEnabled: false,
+        depthCompare: 'less-equal',
       },
       primitive: { topology: 'triangle-list' },
     });
