@@ -1,0 +1,25 @@
+[package]
+name = "we-io"
+description = "WorldEditor I/O abstraction layer — platform-agnostic file system traits"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+we-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", features = ["fs", "io-util"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Storage", "Window"] }
+wasm-bindgen = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
