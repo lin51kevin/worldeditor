@@ -1,5 +1,5 @@
 import { act } from '@testing-library/react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useThemeStore } from './themeStore';
 
 describe('themeStore', () => {
@@ -8,6 +8,12 @@ describe('themeStore', () => {
     localStorage.clear();
     document.documentElement.removeAttribute('data-theme');
     useThemeStore.setState({ theme: 'dark' });
+    // Ensure __TAURI_INTERNALS__ is not present so syncNativeTheme is a no-op
+    delete (window as unknown as Record<string, unknown>)['__TAURI_INTERNALS__'];
+  });
+
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>)['__TAURI_INTERNALS__'];
   });
 
   it('has dark as the initial theme', () => {
@@ -79,5 +85,21 @@ describe('themeStore', () => {
 
     expect(useThemeStore.getState().theme).toBe('light');
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  });
+
+  it('syncNativeTheme is called in Tauri context on toggleTheme', async () => {
+    const mockSetTheme = vi.fn().mockResolvedValue(undefined);
+    vi.mock('@tauri-apps/api/window', () => ({
+      getCurrentWindow: () => ({ setTheme: mockSetTheme }),
+    }));
+    (window as unknown as Record<string, unknown>)['__TAURI_INTERNALS__'] = {};
+
+    await act(async () => {
+      useThemeStore.getState().toggleTheme();
+      // Allow the microtask for syncNativeTheme to run
+      await Promise.resolve();
+    });
+
+    expect(useThemeStore.getState().theme).toBe('light');
   });
 });

@@ -8,6 +8,20 @@ interface ThemeState {
   initTheme: () => void;
 }
 
+function isTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+async function syncNativeTheme(theme: Theme): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    await getCurrentWindow().setTheme(theme);
+  } catch {
+    // Non-critical: native title bar theme sync failure should not break the app
+  }
+}
+
 export const useThemeStore = create<ThemeState>((set) => ({
   theme: 'dark',
 
@@ -16,6 +30,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
     const theme = saved ?? 'dark';
     document.documentElement.setAttribute('data-theme', theme);
     set({ theme });
+    void syncNativeTheme(theme);
   },
 
   toggleTheme: () =>
@@ -23,6 +38,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
       const next: Theme = state.theme === 'dark' ? 'light' : 'dark';
       localStorage.setItem('we-theme', next);
       document.documentElement.setAttribute('data-theme', next);
+      void syncNativeTheme(next);
       return { theme: next };
     }),
 }));

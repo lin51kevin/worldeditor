@@ -1,9 +1,12 @@
 {
   "identifier": "default",
   "description": "Default capabilities for WorldEditor",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
+    "core:window:allow-set-theme",
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",
