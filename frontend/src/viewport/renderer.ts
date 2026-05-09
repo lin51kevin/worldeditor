@@ -239,6 +239,14 @@ export class ViewportRenderer {
   // Grid spacing in world units (1 cell = gridSpacing meters), auto-set from data extent
   private gridSpacing = 10.0;
 
+  // Pre-allocated uniform buffers (avoid per-frame GC)
+  private gridUniformData = new Float32Array(24);
+  private basicUniformData = new Float32Array(32);
+
+  // Matrix inverse cache (avoid redundant inversion on static camera)
+  private cachedViewProj: Float32Array | null = null;
+  private cachedInverseViewProj: Float32Array | null = null;
+
   // Callback invoked after data load or camera changes
   private onScaleChange: ((info: { gridSpacing: number; mpp: number }) => void) | null = null;
 
@@ -418,7 +426,14 @@ export class ViewportRenderer {
     const ndcY = 1 - (screenY / this.height) * 2;
 
     const viewProj = this.computeViewProj();
-    const inv = invertMatrix4(viewProj);
+    // Use cached inverse if viewProj hasn't changed
+    if (!this.cachedViewProj || !arraysEqual(this.cachedViewProj, viewProj)) {
+      this.cachedViewProj = new Float32Array(viewProj);
+      const inv = invertMatrix4(viewProj);
+      if (!inv) return null;
+      this.cachedInverseViewProj = inv;
+    }
+    const inv = this.cachedInverseViewProj;
     if (!inv) return null;
 
     // Near and far points in world space
@@ -578,7 +593,7 @@ export class ViewportRenderer {
     const viewProj = this.computeViewProj();
 
     // Update grid uniforms (96 bytes: mat4x4 + vec3 + f32 + vec3 + f32)
-    const gridData = new Float32Array(24);
+    const gridData = this.gridUniformData;
     gridData.set(viewProj, 0);
     gridData.set(this.camera.position, 16);
     // Auto-scale grid based on camera distance
@@ -595,7 +610,7 @@ export class ViewportRenderer {
     this.device.queue.writeBuffer(this.gridUniformBuffer, 0, gridData);
 
     // Update basic uniforms (128 bytes: mat4x4 view_proj + mat4x4 model)
-    const basicData = new Float32Array(32);
+    const basicData = this.basicUniformData;
     basicData.set(viewProj, 0);
     // Identity model matrix
     basicData[16] = 1; basicData[21] = 1; basicData[26] = 1; basicData[31] = 1;
@@ -1072,6 +1087,13 @@ function multiplyMatrices(a: Float32Array, b: Float32Array): Float32Array {
 }
 
 /** Invert a column-major 4x4 matrix. Returns null if singular. */
+function arraysEqual(a: Float32Array, b: Float32Array): boolean {
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 function invertMatrix4(m: Float32Array): Float32Array | null {
   const inv = new Float32Array(16);
   inv[0] = m[5]! * m[10]! * m[15]! - m[5]! * m[11]! * m[14]! - m[9]! * m[6]! * m[15]! + m[9]! * m[7]! * m[14]! + m[13]! * m[6]! * m[11]! - m[13]! * m[7]! * m[10]!;
