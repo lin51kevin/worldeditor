@@ -10,13 +10,14 @@
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-full);
+  border-radius: var(--floating-radius);
   padding: 0 var(--space-4);
   gap: var(--space-1);
   user-select: none;
   z-index: var(--z-toolbar);
   box-shadow: var(--glass-shadow);
   max-width: calc(100vw - 48px);
+  cursor: move;
 }
 
 .toolbar-group {
@@ -84,4 +85,12 @@
 
 .toolbar-title {
   display: none;
+}
+
+.tb-dim-label {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  padding: 2px 0;
 }

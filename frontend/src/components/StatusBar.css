@@ -4,7 +4,7 @@
   left: 12px;
   right: 12px;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   pointer-events: none;
   font-size: 11px;
@@ -22,7 +22,7 @@
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-full);
+  border-radius: var(--floating-radius);
   padding: 2px 10px;
   font-size: 10px;
   color: var(--color-text-secondary);

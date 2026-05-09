@@ -143,8 +143,8 @@ describe('Toolbar', () => {
   it('renders dimension toggle buttons', () => {
     render(<Toolbar />);
 
-    expect(screen.getByRole('button', { name: '3D视图' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '2D视图' })).toBeInTheDocument();
+    expect(screen.getByTitle('3D视图')).toBeInTheDocument();
+    expect(screen.getByTitle('2D视图')).toBeInTheDocument();
   });
 
   it('renders grid and axis toggles', () => {
@@ -234,7 +234,7 @@ describe('Toolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: '路口' }));
     fireEvent.click(screen.getByRole('button', { name: '草图' }));
     fireEvent.click(screen.getByRole('button', { name: '线图' }));
-    fireEvent.click(screen.getByRole('button', { name: '2D视图' }));
+    fireEvent.click(screen.getByTitle('2D视图'));
     fireEvent.click(screen.getByRole('button', { name: '网格' }));
     fireEvent.click(screen.getByRole('button', { name: '坐标轴' }));
 
