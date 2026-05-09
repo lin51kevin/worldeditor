@@ -9,6 +9,31 @@ import { getPlatformService } from '../services';
 import { showContextMenu } from '../services/contextMenu';
 import './Viewport.css';
 
+const DRAG_THRESHOLD_SQ = 9;
+
+/** Concatenate two Float32Arrays into a single new array. */
+function mergeFloat32Arrays(a: Float32Array, b: Float32Array): Float32Array {
+  if (b.length === 0) return a;
+  if (a.length === 0) return b;
+  const merged = new Float32Array(a.length + b.length);
+  merged.set(a, 0);
+  merged.set(b, a.length);
+  return merged;
+}
+
+interface MouseGestureState {
+  button: number;
+  startX: number;
+  startY: number;
+  dragged: boolean;
+}
+
+function exceededDragThreshold(startX: number, startY: number, clientX: number, clientY: number): boolean {
+  const dx = clientX - startX;
+  const dy = clientY - startY;
+  return dx * dx + dy * dy > DRAG_THRESHOLD_SQ;
+}
+
 export function Viewport() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ViewportRenderer | null>(null);
@@ -18,8 +43,7 @@ export function Viewport() {
   const { showGrid, showAxis, dimension } = useEditorViewStore();
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
-  // Track mouse drag to distinguish click from drag
-  const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
+  const mouseGestureRef = useRef<MouseGestureState | null>(null);
 
   // Regenerate road mesh when project changes
   const updateMesh = useCallback(async () => {
@@ -28,8 +52,22 @@ export function Viewport() {
 
     try {
       const service = await getPlatformService();
-      const vertices = await service.generateRoadVertices(project, 2.0);
-      renderer.uploadRoadVertices(vertices);
+
+      // Generate road surfaces and junction surfaces in parallel
+      const [roadVerts, junctionVerts, laneLineVerts, centerLineVerts] = await Promise.all([
+        service.generateRoadVertices(project, 2.0),
+        service.generateJunctionVertices(project),
+        service.generateLaneLineVertices(project, 2.0),
+        service.generateCenterLineVertices(project, 2.0),
+      ]);
+
+      // Merge road surfaces + junction surfaces into one upload
+      const surfaceVerts = mergeFloat32Arrays(roadVerts, junctionVerts);
+      renderer.uploadRoadVertices(surfaceVerts);
+
+      // Merge lane boundary lines + reference centerlines into lane line upload
+      const lineVerts = mergeFloat32Arrays(laneLineVerts, centerLineVerts);
+      renderer.uploadLaneLineVertices(lineVerts);
     } catch (err) {
       console.error('[Viewport] Failed to generate road mesh:', err);
     }
@@ -179,6 +217,10 @@ export function Viewport() {
 
   // Handle mouse move for world coordinates (unproject to ground plane)
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const gesture = mouseGestureRef.current;
+    if (gesture && !gesture.dragged && exceededDragThreshold(gesture.startX, gesture.startY, e.clientX, e.clientY)) {
+      gesture.dragged = true;
+    }
     const canvas = canvasRef.current;
     const renderer = rendererRef.current;
     if (!canvas || !renderer) return;
@@ -192,17 +234,20 @@ export function Viewport() {
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button === 0) {
-      mouseDownPos.current = { x: e.clientX, y: e.clientY };
-    }
+    mouseGestureRef.current = {
+      button: e.button,
+      startX: e.clientX,
+      startY: e.clientY,
+      dragged: false,
+    };
   }, []);
 
   const handleClick = useCallback(async (e: React.MouseEvent) => {
-    // Only treat as click if mouse didn't move much (not a drag)
-    if (mouseDownPos.current) {
-      const dx = e.clientX - mouseDownPos.current.x;
-      const dy = e.clientY - mouseDownPos.current.y;
-      if (dx * dx + dy * dy > 9) return; // 3px threshold
+    const gesture = mouseGestureRef.current;
+    mouseGestureRef.current = null;
+    if (!gesture || gesture.button !== 0) return;
+    if (gesture.dragged || exceededDragThreshold(gesture.startX, gesture.startY, e.clientX, e.clientY)) {
+      return;
     }
 
     const canvas = canvasRef.current;
@@ -227,6 +272,15 @@ export function Viewport() {
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    const gesture = mouseGestureRef.current;
+    mouseGestureRef.current = null;
+    if (
+      gesture &&
+      gesture.button === 2 &&
+      (gesture.dragged || exceededDragThreshold(gesture.startX, gesture.startY, e.clientX, e.clientY))
+    ) {
+      return;
+    }
     showContextMenu(e.clientX, e.clientY, 'viewport');
   }, []);
 

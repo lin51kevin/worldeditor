@@ -1,7 +1,8 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GisCoord, PlatformService, Project, UtmCoord } from '../services/platform';
 import { getPlatformService } from '../services';
+import { showContextMenu } from '../services/contextMenu';
 import { useEditorStore } from '../stores/editorStore';
 import { Viewport } from './Viewport';
 
@@ -10,6 +11,7 @@ const rendererMocks = vi.hoisted(() => ({
   init: vi.fn(),
   start: vi.fn(),
   uploadRoadVertices: vi.fn(),
+  uploadLaneLineVertices: vi.fn(),
   resize: vi.fn(),
   dispose: vi.fn(),
   setShowGrid: vi.fn(),
@@ -28,6 +30,10 @@ vi.mock('../services', () => ({
   getPlatformService: vi.fn(),
 }));
 
+vi.mock('../services/contextMenu', () => ({
+  showContextMenu: vi.fn(),
+}));
+
 vi.mock('../viewport/viewportEvents', () => ({
   onViewportEvent: vi.fn(() => () => {}),
   emitViewportEvent: vi.fn(),
@@ -39,6 +45,7 @@ vi.mock('../viewport/renderer', () => ({
       init: rendererMocks.init,
       start: rendererMocks.start,
       uploadRoadVertices: rendererMocks.uploadRoadVertices,
+      uploadLaneLineVertices: rendererMocks.uploadLaneLineVertices,
       resize: rendererMocks.resize,
       dispose: rendererMocks.dispose,
       setShowGrid: rendererMocks.setShowGrid,
@@ -96,6 +103,9 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     utmToGeo: vi.fn().mockResolvedValue(makeCoord()),
     generateRoadVertices: vi.fn().mockResolvedValue(vertices),
     generateSingleRoadVertices: vi.fn().mockResolvedValue(new Float32Array()),
+    generateJunctionVertices: vi.fn().mockResolvedValue(new Float32Array()),
+    generateLaneLineVertices: vi.fn().mockResolvedValue(new Float32Array()),
+    generateCenterLineVertices: vi.fn().mockResolvedValue(new Float32Array()),
     pickRoadAtPoint: vi.fn().mockResolvedValue(null),
   };
 }
@@ -206,5 +216,80 @@ describe('Viewport', () => {
     await waitFor(() => expect(platform.generateRoadVertices).toHaveBeenCalled());
     // uploadRoadVertices is still called — but with an empty array; renderer is responsible for no-op
     await waitFor(() => expect(rendererMocks.uploadRoadVertices).toHaveBeenCalledWith(new Float32Array([])));
+  });
+
+  it('selects a road on plain left click', async () => {
+    const platform = createPlatformMock();
+    (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    rendererMocks.unprojectToGround.mockReturnValue({ x: 10, y: 20 });
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    render(<Viewport />);
+
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+    const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+
+    fireEvent.mouseDown(canvas, { button: 0, clientX: 24, clientY: 32 });
+    fireEvent.click(canvas, { button: 0, clientX: 24, clientY: 32 });
+
+    await waitFor(() => expect(platform.pickRoadAtPoint).toHaveBeenCalledWith(makeProject(), 10, 20, 5.0));
+    expect(useEditorStore.getState().selectedRoadId).toBe('road-1');
+  });
+
+  it('does not select a road after a modified left-button drag', async () => {
+    const platform = createPlatformMock();
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    rendererMocks.unprojectToGround.mockReturnValue({ x: 10, y: 20 });
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    render(<Viewport />);
+
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+    const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+
+    fireEvent.mouseDown(canvas, { button: 0, clientX: 24, clientY: 32, ctrlKey: true });
+    fireEvent.mouseMove(canvas, { buttons: 1, clientX: 40, clientY: 52, ctrlKey: true });
+    fireEvent.click(canvas, { button: 0, clientX: 40, clientY: 52, ctrlKey: true });
+
+    expect(platform.pickRoadAtPoint).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().selectedRoadId).toBeNull();
+  });
+
+  it('shows the viewport context menu on a plain right click', async () => {
+    const platform = createPlatformMock();
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    render(<Viewport />);
+
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+    const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+
+    fireEvent.mouseDown(canvas, { button: 2, clientX: 60, clientY: 80 });
+    fireEvent.contextMenu(canvas, { button: 2, clientX: 60, clientY: 80 });
+
+    expect(showContextMenu).toHaveBeenCalledWith(60, 80, 'viewport');
+  });
+
+  it('suppresses the viewport context menu after a right-button drag', async () => {
+    const platform = createPlatformMock();
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    render(<Viewport />);
+
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+    const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+
+    fireEvent.mouseDown(canvas, { button: 2, clientX: 60, clientY: 80 });
+    fireEvent.mouseMove(canvas, { buttons: 2, clientX: 84, clientY: 108 });
+    fireEvent.contextMenu(canvas, { button: 2, clientX: 84, clientY: 108 });
+
+    expect(showContextMenu).not.toHaveBeenCalled();
   });
 });
