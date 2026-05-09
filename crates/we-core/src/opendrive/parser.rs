@@ -134,6 +134,7 @@ fn parse_road(start: &BytesStart, reader: &mut Reader<&[u8]>) -> Result<Road, Op
                 b"lateralProfile" => road.lateral_profile = parse_lateral_profile(reader)?,
                 b"bridge" => road.bridges.push(parse_bridge(e, reader)?),
                 b"tunnel" => road.tunnels.push(parse_tunnel(e, reader)?),
+                b"signals" => road.signals = parse_signals(reader)?,
                 _ => skip_element(reader, e.name().as_ref())?,
             },
             Ok(Event::Empty(ref e)) => match e.name().as_ref() {
@@ -997,6 +998,104 @@ fn parse_tunnel(start: &BytesStart, reader: &mut Reader<&[u8]>) -> Result<Tunnel
     Ok(tunnel)
 }
 
+// ── Signals ──────────────────────────────────────────
+
+/// Parse a `<signals>` block and return all contained signals.
+fn parse_signals(reader: &mut Reader<&[u8]>) -> Result<Vec<Signal>, OpenDriveError> {
+    let mut signals = Vec::new();
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) if e.name().as_ref() == b"signal" => {
+                signals.push(parse_signal_elem(e, reader)?);
+            }
+            Ok(Event::Empty(ref e)) if e.name().as_ref() == b"signal" => {
+                signals.push(parse_signal_elem_attrs(e)?);
+            }
+            Ok(Event::End(ref e)) if e.name().as_ref() == b"signals" => break,
+            Ok(Event::Eof) => {
+                return Err(OpenDriveError::InvalidStructure(
+                    "Unexpected EOF in signals".into(),
+                ));
+            }
+            Err(e) => return Err(OpenDriveError::XmlError(e)),
+            _ => {}
+        }
+    }
+
+    Ok(signals)
+}
+
+/// Parse a `<signal …>…</signal>` element (has child elements).
+///
+/// Reads the attributes, then consumes children (e.g. `<validity>`) until the
+/// closing `</signal>` tag.
+fn parse_signal_elem(
+    start: &BytesStart,
+    reader: &mut Reader<&[u8]>,
+) -> Result<Signal, OpenDriveError> {
+    let signal = parse_signal_elem_attrs(start)?;
+    // consume any child elements until </signal>
+    loop {
+        match reader.read_event() {
+            Ok(Event::End(ref e)) if e.name().as_ref() == b"signal" => break,
+            Ok(Event::Eof) => {
+                return Err(OpenDriveError::InvalidStructure(
+                    "Unexpected EOF in signal element".into(),
+                ));
+            }
+            Err(e) => return Err(OpenDriveError::XmlError(e)),
+            _ => {}
+        }
+    }
+    Ok(signal)
+}
+
+/// Parse all attributes from a `<signal …>` or `<signal …/>` start/empty tag.
+fn parse_signal_elem_attrs(e: &BytesStart) -> Result<Signal, OpenDriveError> {
+    let mut signal = Signal {
+        id: String::new(),
+        name: String::new(),
+        s: 0.0,
+        t: 0.0,
+        z_offset: 0.0,
+        h_offset: 0.0,
+        width: 0.0,
+        height: 0.0,
+        signal_type: String::new(),
+        signal_subtype: String::new(),
+        value: None,
+        orientation: "none".to_string(),
+        is_dynamic: false,
+    };
+
+    for attr in e.attributes().flatten() {
+        match attr.key.as_ref() {
+            b"id" => signal.id = attr_str(&attr)?,
+            b"name" => signal.name = attr_str(&attr)?,
+            b"s" => signal.s = parse_f64(&attr)?,
+            b"t" => signal.t = parse_f64(&attr)?,
+            b"zOffset" => signal.z_offset = parse_f64(&attr)?,
+            b"hOffset" => signal.h_offset = parse_f64(&attr)?,
+            b"width" => signal.width = parse_f64(&attr)?,
+            b"height" => signal.height = parse_f64(&attr)?,
+            b"type" => signal.signal_type = attr_str(&attr)?,
+            b"subtype" => signal.signal_subtype = attr_str(&attr)?,
+            b"value" => {
+                let v = attr_str(&attr)?;
+                if !v.is_empty() {
+                    signal.value = Some(v);
+                }
+            }
+            b"orientation" => signal.orientation = attr_str(&attr)?,
+            b"dynamic" => signal.is_dynamic = attr_str(&attr)?.eq_ignore_ascii_case("yes"),
+            _ => {}
+        }
+    }
+
+    Ok(signal)
+}
+
 // ── Utilities ────────────────────────────────────────
 
 fn attr_str(attr: &quick_xml::events::attributes::Attribute) -> Result<String, OpenDriveError> {
@@ -1119,5 +1218,75 @@ mod tests {
         assert_eq!(lane.road_marks.len(), 1);
         assert_eq!(lane.road_marks[0].mark_type, RoadMarkType::Broken);
         assert_eq!(lane.road_marks[0].color, RoadMarkColor::Yellow);
+    }
+
+    #[test]
+    fn test_parse_signals_self_closing() {
+        let xml = r#"<?xml version="1.0"?>
+<OpenDRIVE>
+  <road name="test" length="100" id="1" junction="-1">
+    <planView>
+      <geometry s="0" x="0" y="0" hdg="0" length="100">
+        <line/>
+      </geometry>
+    </planView>
+    <lanes>
+      <laneSection s="0">
+        <center><lane id="0" type="none" level="false"/></center>
+      </laneSection>
+    </lanes>
+    <signals>
+      <signal s="30" t="0" id="sig1" name="arrow" zOffset="0" hOffset="3.14159"
+              type="Graphics" subtype="StraightAheadArrow" dynamic="no"
+              orientation="+" width="3" height="0"/>
+    </signals>
+  </road>
+</OpenDRIVE>"#;
+
+        let project = parse(xml).expect("parse should succeed");
+        assert_eq!(project.roads[0].signals.len(), 1);
+        let sig = &project.roads[0].signals[0];
+        assert_eq!(sig.id, "sig1");
+        assert!((sig.s - 30.0).abs() < 1e-6);
+        assert_eq!(sig.signal_type, "Graphics");
+        assert_eq!(sig.signal_subtype, "StraightAheadArrow");
+        assert!((sig.h_offset - std::f64::consts::PI).abs() < 1e-4);
+        assert!((sig.width - 3.0).abs() < 1e-6);
+        assert!(!sig.is_dynamic);
+    }
+
+    #[test]
+    fn test_parse_signals_with_children() {
+        let xml = r#"<?xml version="1.0"?>
+<OpenDRIVE>
+  <road name="test" length="100" id="2" junction="-1">
+    <planView>
+      <geometry s="0" x="0" y="0" hdg="0" length="100">
+        <line/>
+      </geometry>
+    </planView>
+    <lanes>
+      <laneSection s="0">
+        <center><lane id="0" type="none" level="false"/></center>
+      </laneSection>
+    </lanes>
+    <signals>
+      <signal s="50" t="-2" id="sig2" name="speed" zOffset="3" hOffset="0"
+              type="1010203800001413" subtype="none" dynamic="no"
+              orientation="-" width="0.6" height="0.6" value="30">
+        <validity fromLane="-1" toLane="-1"/>
+      </signal>
+    </signals>
+  </road>
+</OpenDRIVE>"#;
+
+        let project = parse(xml).expect("parse should succeed");
+        assert_eq!(project.roads[0].signals.len(), 1);
+        let sig = &project.roads[0].signals[0];
+        assert_eq!(sig.id, "sig2");
+        assert!((sig.s - 50.0).abs() < 1e-6);
+        assert_eq!(sig.signal_type, "1010203800001413");
+        assert_eq!(sig.value.as_deref(), Some("30"));
+        assert_eq!(sig.orientation, "-");
     }
 }
