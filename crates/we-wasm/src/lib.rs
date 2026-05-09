@@ -625,6 +625,203 @@ fn gen_road_mark_line(
     verts
 }
 
+/// Generate signal paint mark vertices from a project JSON. Returns Float32Array.
+///
+/// Each vertex is 7 floats: [x, y, z, r, g, b, a].
+///
+/// For `type="Graphics"` signals (road paint arrows), the corresponding arrow
+/// polygon is triangulated and placed on the road surface using the signal's
+/// s/t position and h_offset heading.
+///
+/// For other signal types (vertical signs), a small colored diamond marker is
+/// placed at the signal position slightly above the road surface.
+#[wasm_bindgen]
+pub fn generate_signal_paint_vertices(
+    project_json: &str,
+    _sample_step: f64,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point};
+    use we_core::model::Project;
+
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut all_floats = Vec::new();
+
+    for road in &project.roads {
+        if road.signals.is_empty() {
+            continue;
+        }
+
+        for signal in &road.signals {
+            // Evaluate road reference line at signal.s
+            let Some(ref_pt) = road_point_at_s(&road.plan_view, signal.s) else {
+                continue;
+            };
+
+            let z_road = evaluate_elevation(&road.elevation_profile, signal.s) as f32;
+
+            if signal.signal_type == "Graphics" {
+                // Paint arrow on the road surface
+                let (cx, cy, _) = offset_point(&ref_pt, signal.t, 0.0);
+                let heading = ref_pt.hdg + signal.h_offset;
+                let scale = if signal.width > 0.0 { signal.width } else { 3.0 };
+                let z = z_road + 0.02; // 2 cm above road surface
+
+                let tris = arrow_triangles(&signal.signal_subtype, cx as f32, cy as f32, z, heading as f32, scale as f32);
+                all_floats.extend(tris);
+            } else {
+                // Vertical sign: render as a small diamond marker above the road
+                let (mx, my, _) = offset_point(&ref_pt, signal.t, 0.0);
+                let z = z_road + 0.5; // 50 cm above road (approximate pole height)
+                let sz = 0.4f32; // marker half-size
+                let [r, g, b, a] = sign_marker_color(&signal.signal_type);
+
+                // Two triangles forming a diamond (tilted square)
+                //   top  (-y)
+                //  left  (-x)  right (+x)
+                //   bot  (+y)
+                let top = [mx as f32, my as f32 - sz, z + sz];
+                let bot = [mx as f32, my as f32 + sz, z - sz];
+                let lft = [mx as f32 - sz, my as f32, z];
+                let rgt = [mx as f32 + sz, my as f32, z];
+
+                for p in &[top, lft, bot, top, bot, rgt] {
+                    all_floats.extend_from_slice(&[p[0], p[1], p[2], r, g, b, a]);
+                }
+            }
+        }
+    }
+
+    Ok(all_floats)
+}
+
+/// Evaluate road reference position at a given `s` station.
+///
+/// Finds the geometry element that covers `s` and evaluates it.
+fn road_point_at_s(plan_view: &[we_core::model::Geometry], s: f64) -> Option<we_core::geometry::eval::RefLinePoint> {
+    use we_core::geometry::eval::evaluate_geometry;
+
+    if plan_view.is_empty() {
+        return None;
+    }
+
+    // Find the geometry segment that contains s
+    let geo = plan_view
+        .iter()
+        .rev()
+        .find(|g| g.s <= s + 1e-9)
+        .unwrap_or(&plan_view[0]);
+
+    let ds = (s - geo.s).clamp(0.0, geo.length);
+    Some(evaluate_geometry(geo, ds))
+}
+
+/// Build filled triangle geometry for a paint arrow, using a centroid fan.
+///
+/// `subtype` selects the polygon template. The result is a flat list of 7-float
+/// vertex records ready for GPU upload.
+fn arrow_triangles(
+    subtype: &str,
+    cx: f32,
+    cy: f32,
+    z: f32,
+    heading: f32,
+    scale: f32,
+) -> Vec<f32> {
+    // Normalized arrow polygons (local space, y-axis = forward):
+    // Coordinates are pre-scaled to approx. ±0.5 range.
+    // All are closed outlines (last point equals first).
+    let template: &[(f32, f32)] = match subtype {
+        "StraightAheadArrow" => &[
+            (-0.025, -0.5), (-0.025, 0.1), (-0.075, 0.1),
+            (0.0, 0.5), (0.075, 0.1), (0.025, 0.1), (0.025, -0.5),
+        ],
+        "LeftTurnArrow" => &[
+            (0.075, -0.5), (0.075, 0.0), (-0.0583, 0.1333),
+            (-0.0583, -0.0167), (-0.125, 0.2333), (-0.0583, 0.5),
+            (-0.0583, 0.3333), (0.125, 0.15), (0.125, -0.5),
+        ],
+        "RightTurnArrow" => &[
+            (-0.075, -0.5), (-0.075, 0.0), (0.0583, 0.1333),
+            (0.0583, -0.0167), (0.125, 0.2333), (0.0583, 0.5),
+            (0.0583, 0.3333), (-0.125, 0.15), (-0.125, -0.5),
+        ],
+        "UTurnArrow" => &[
+            (0.025, -0.5), (0.025, 0.25), (-0.1, 0.25),
+            (-0.1, -0.1), (-0.2, 0.0), (-0.1, 0.1), (-0.1, 0.45),
+            (0.125, 0.45), (0.125, -0.5),
+        ],
+        "StraightOrLeftTurnArrow" => &[
+            (-0.025, -0.5), (-0.025, 0.1), (-0.075, 0.1),
+            (0.0, 0.5), (0.075, 0.1), (0.025, 0.1),
+            (0.025, 0.0), (0.1, 0.0), (0.1, -0.5),
+        ],
+        "StraightOrRightTurnArrow" => &[
+            (0.025, -0.5), (0.025, 0.1), (0.075, 0.1),
+            (0.0, 0.5), (-0.075, 0.1), (-0.025, 0.1),
+            (-0.025, 0.0), (-0.1, 0.0), (-0.1, -0.5),
+        ],
+        "LeftOrRightTurnArrow" => &[
+            (-0.1, -0.2), (-0.1, 0.0), (0.0, 0.5), (0.1, 0.0),
+            (0.1, -0.2), (0.05, -0.2), (0.05, -0.5),
+            (-0.05, -0.5), (-0.05, -0.2),
+        ],
+        // Fallback: simple upward arrow for unknown subtypes
+        _ => &[
+            (-0.025, -0.5), (-0.025, 0.1), (-0.075, 0.1),
+            (0.0, 0.5), (0.075, 0.1), (0.025, 0.1), (0.025, -0.5),
+        ],
+    };
+
+    // The C# transform: rotate by (heading - pi/2) so y-forward local → road forward
+    // newX = (v.x * cos0 - v.y * sin0) * scale
+    // newY = (v.x * sin0 + v.y * cos0) * scale
+    // where cos0/sin0 encode road forward direction
+    let cos_h = heading.cos();
+    let sin_h = heading.sin();
+
+    let transform = |vx: f32, vy: f32| -> (f32, f32) {
+        // Local space: y = forward → rotate so it aligns with road heading
+        // heading=0 → east, so forward (+y local) should map to east (+x world)
+        // Use: world_x = vx*cos - vy*sin + cx (standard 2D rotation)
+        let wx = (vx * cos_h - vy * sin_h) * scale + cx;
+        let wy = (vx * sin_h + vy * cos_h) * scale + cy;
+        (wx, wy)
+    };
+
+    // Compute centroid for fan triangulation
+    let n = template.len() as f32;
+    let cent_lx: f32 = template.iter().map(|(x, _)| x).sum::<f32>() / n;
+    let cent_ly: f32 = template.iter().map(|(_, y)| y).sum::<f32>() / n;
+    let (ccx, ccy) = transform(cent_lx, cent_ly);
+
+    let [r, g, b, a] = [1.0f32, 1.0, 1.0, 0.95];
+    let mut out = Vec::with_capacity(template.len() * 3 * 7);
+
+    for i in 0..template.len() {
+        let j = (i + 1) % template.len();
+        let (px0, py0) = transform(template[i].0, template[i].1);
+        let (px1, py1) = transform(template[j].0, template[j].1);
+
+        // Triangle: centroid, p0, p1
+        out.extend_from_slice(&[ccx, ccy, z, r, g, b, a]);
+        out.extend_from_slice(&[px0, py0, z, r, g, b, a]);
+        out.extend_from_slice(&[px1, py1, z, r, g, b, a]);
+    }
+
+    out
+}
+
+/// Marker color for vertical sign types.
+fn sign_marker_color(signal_type: &str) -> [f32; 4] {
+    match signal_type {
+        t if t.starts_with("1000") => [0.2, 0.8, 0.2, 0.9], // traffic lights → green
+        "1010203800001413" | "1010203900001613" => [0.9, 0.2, 0.2, 0.9], // speed limit → red
+        _ => [0.8, 0.8, 0.1, 0.9], // generic sign → yellow
+    }
+}
+
 /// Find the closest road to a world-space point.
 ///
 /// Returns the road ID as a string, or null if no road is within the threshold.
