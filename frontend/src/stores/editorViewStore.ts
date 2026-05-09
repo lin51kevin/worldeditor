@@ -38,7 +38,7 @@ const DEFAULT_DISPLAY: DisplaySettings = {
   showRoadMesh: true,
   showLaneLines: true,
   showRoadMarks: true,
-  showReferenceLine: true,
+  showReferenceLine: false,
   showSignals: true,
   showObjects: true,
   colorMode: 'byLaneType',

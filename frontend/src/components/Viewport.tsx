@@ -40,12 +40,12 @@ export function Viewport() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
   const project = useEditorStore((s) => s.project);
   const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
-  const { showGrid, showAxis, dimension } = useEditorViewStore();
+  const { showGrid, showAxis, dimension, display } = useEditorViewStore();
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
 
-  // Regenerate road mesh when project changes
+  // Regenerate road mesh when project or display settings change
   const updateMesh = useCallback(async () => {
     const renderer = rendererRef.current;
     if (!renderer || status !== 'ready' || !project) return;
@@ -53,16 +53,28 @@ export function Viewport() {
     try {
       const service = await getPlatformService();
 
-      // Generate road surfaces and junction surfaces in parallel
-      const [roadVerts, junctionVerts, laneLineVerts, centerLineVerts] = await Promise.all([
-        service.generateRoadVertices(project, 2.0),
-        service.generateJunctionVertices(project),
-        service.generateLaneLineVertices(project, 2.0),
-        service.generateCenterLineVertices(project, 2.0),
-      ]);
+      // Run all needed generators in parallel; use empty fallbacks for disabled layers
+      const centerLineProm = display.showReferenceLine
+        ? service.generateCenterLineVertices(project, 2.0)
+        : Promise.resolve(new Float32Array(0));
+      const signalProm = display.showSignals
+        ? service.generateSignalPaintVertices(project, 2.0)
+        : Promise.resolve(new Float32Array(0));
 
-      // Merge road surfaces + junction surfaces into one upload
-      const surfaceVerts = mergeFloat32Arrays(roadVerts, junctionVerts);
+      const [roadVerts, junctionVerts, laneLineVerts, centerLineVerts, signalVerts] =
+        await Promise.all([
+          service.generateRoadVertices(project, 2.0),
+          service.generateJunctionVertices(project),
+          service.generateLaneLineVertices(project, 2.0),
+          centerLineProm,
+          signalProm,
+        ]);
+
+      // Merge road surfaces + junction surfaces + signal paint marks into one upload
+      const surfaceVerts = mergeFloat32Arrays(
+        mergeFloat32Arrays(roadVerts, junctionVerts),
+        signalVerts,
+      );
       renderer.uploadRoadVertices(surfaceVerts);
 
       // Merge lane boundary lines + reference centerlines into lane line upload
@@ -71,7 +83,7 @@ export function Viewport() {
     } catch (err) {
       console.error('[Viewport] Failed to generate road mesh:', err);
     }
-  }, [project, status]);
+  }, [project, status, display.showReferenceLine, display.showSignals]);
 
   useEffect(() => { updateMesh(); }, [updateMesh]);
 
