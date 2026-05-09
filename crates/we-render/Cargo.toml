@@ -1,0 +1,18 @@
+[package]
+name = "we-render"
+description = "WorldEditor rendering engine — wgpu, WASM compatible via WebGPU"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+we-core = { workspace = true }
+wgpu = { workspace = true }
+bytemuck = { workspace = true }
+nalgebra = { workspace = true }
+log = { workspace = true }
+glam = "0.29"
+
+[dev-dependencies]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
