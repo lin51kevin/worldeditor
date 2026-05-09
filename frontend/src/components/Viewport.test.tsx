@@ -4,6 +4,7 @@ import type { GisCoord, PlatformService, Project, UtmCoord } from '../services/p
 import { getPlatformService } from '../services';
 import { showContextMenu } from '../services/contextMenu';
 import { useEditorStore } from '../stores/editorStore';
+import { DEFAULT_DISPLAY, useEditorViewStore } from '../stores/editorViewStore';
 import { Viewport } from './Viewport';
 
 const rendererMocks = vi.hoisted(() => ({
@@ -82,6 +83,22 @@ function makeProject(): Project {
   };
 }
 
+function makeProjectWithRoad(): Project {
+  return {
+    ...makeProject(),
+    roads: [{
+      id: 'road-1',
+      name: 'Road 1',
+      length: 20,
+      junction_id: null,
+      link: { predecessor: null, successor: null },
+      plan_view: [],
+      elevation_profile: [],
+      lane_sections: [],
+    }],
+  };
+}
+
 function makeCoord(): GisCoord {
   return { lat: 0, lon: 0, alt: 0 };
 }
@@ -141,10 +158,13 @@ describe('Viewport', () => {
         project: makeProject(),
         isDirty: false,
         selectedRoadId: null,
+        selectedJunctionId: null,
         selectedObjectType: null,
+        selectedSceneNode: null,
         undoStack: [],
         redoStack: [],
       });
+      useEditorViewStore.setState({ display: { ...DEFAULT_DISPLAY } });
     });
   });
 
@@ -259,6 +279,36 @@ describe('Viewport', () => {
 
     expect(platform.pickRoadAtPoint).not.toHaveBeenCalled();
     expect(useEditorStore.getState().selectedRoadId).toBeNull();
+  });
+
+  it('uploads red highlight vertices when a road is selected', async () => {
+    const platform = createPlatformMock(new Float32Array([0, 0, 0, 0.1, 0.2, 0.3, 0.4]));
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    act(() => {
+      useEditorStore.setState({
+        project: makeProjectWithRoad(),
+        selectedRoadId: 'road-1',
+        selectedJunctionId: null,
+        selectedObjectType: 'road',
+        selectedSceneNode: { type: 'road', roadId: 'road-1' },
+      });
+    });
+
+    render(<Viewport />);
+
+    await waitFor(() => expect(rendererMocks.uploadHighlightVertices).toHaveBeenCalled());
+    const highlightCalls = (rendererMocks.uploadHighlightVertices as ReturnType<typeof vi.fn>).mock.calls;
+    const highlightVerts = highlightCalls[highlightCalls.length - 1]?.[0] as Float32Array;
+    expect(highlightVerts[0]).toBe(0);
+    expect(highlightVerts[1]).toBe(0);
+    expect(highlightVerts[2]).toBe(0);
+    expect(highlightVerts[3]).toBeCloseTo(0.95);
+    expect(highlightVerts[4]).toBeCloseTo(0.18);
+    expect(highlightVerts[5]).toBeCloseTo(0.18);
+    expect(highlightVerts[6]).toBeCloseTo(0.82);
   });
 
   it('shows the viewport context menu on a plain right click', async () => {

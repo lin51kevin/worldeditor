@@ -94,14 +94,17 @@ pub fn evaluate_geometry_local(geo: &Geometry, ds: f64) -> (f64, f64, f64) {
 }
 
 /// Transform local coordinates to world coordinates using the geometry's origin and heading.
-pub fn local_to_world(geo: &Geometry, local_x: f64, local_y: f64, local_hdg: f64) -> RefLinePoint {
+///
+/// `ds` is the arc-length offset along the reference line from the geometry start.
+/// This should be the true along-path distance, not the Euclidean distance.
+pub fn local_to_world(geo: &Geometry, local_x: f64, local_y: f64, local_hdg: f64, ds: f64) -> RefLinePoint {
     let cos_h = geo.hdg.cos();
     let sin_h = geo.hdg.sin();
     RefLinePoint {
         x: geo.x + local_x * cos_h - local_y * sin_h,
         y: geo.y + local_x * sin_h + local_y * cos_h,
         hdg: geo.hdg + local_hdg,
-        s: geo.s + local_x.hypot(local_y).copysign(local_x), // approximate s from local coords
+        s: geo.s + ds,
     }
 }
 
@@ -461,6 +464,28 @@ mod tests {
         }];
         let z = evaluate_elevation(&elevations, 50.0);
         assert!((z - 15.0).abs() < 1e-9); // 10 + 0.1*50
+    }
+
+    // --- local_to_world s tests ---
+
+    #[test]
+    fn test_local_to_world_line_s_is_exact() {
+        let geo = line_geometry(10.0, 0.0, 0.0, 0.0, 100.0);
+        let (lx, ly, lh) = evaluate_geometry_local(&geo, 50.0);
+        let pt = local_to_world(&geo, lx, ly, lh, 50.0);
+        assert!((pt.s - 60.0).abs() < 1e-9, "s should be geo.s + ds = 60.0, got {}", pt.s);
+    }
+
+    #[test]
+    fn test_local_to_world_arc_s_is_arc_length() {
+        let r = 100.0;
+        let length = std::f64::consts::FRAC_PI_2 * r;
+        let geo = arc_geometry(5.0, 0.0, 0.0, 0.0, length, 1.0 / r);
+        let ds = length / 2.0;
+        let (lx, ly, lh) = evaluate_geometry_local(&geo, ds);
+        let pt = local_to_world(&geo, lx, ly, lh, ds);
+        assert!((pt.s - (5.0 + ds)).abs() < 1e-9,
+            "s should be geo.s + ds, got {}", pt.s);
     }
 
     #[test]

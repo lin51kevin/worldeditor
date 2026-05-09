@@ -7,6 +7,8 @@ pub struct Road {
     pub name: String,
     pub length: f64,
     pub junction_id: Option<String>,
+    #[serde(default)]
+    pub render_hidden: bool,
     pub link: Option<RoadLink>,
     pub plan_view: Vec<Geometry>,
     pub elevation_profile: Vec<Elevation>,
@@ -28,6 +30,7 @@ impl Road {
             name: String::new(),
             length,
             junction_id: None,
+            render_hidden: false,
             link: None,
             plan_view: Vec::new(),
             elevation_profile: Vec::new(),
@@ -55,10 +58,12 @@ impl Road {
         let section = LaneSection {
             s: 0.0,
             single_side: false,
+            render_hidden: false,
             left: vec![Lane {
                 id: 1,
                 lane_type: LaneType::Driving,
                 level: 0,
+                render_hidden: false,
                 link: None,
                 width: vec![LaneWidth {
                     s_offset: 0.0,
@@ -74,6 +79,7 @@ impl Road {
                 id: 0,
                 lane_type: LaneType::None,
                 level: 0,
+                render_hidden: false,
                 link: None,
                 width: vec![],
                 borders: vec![],
@@ -83,6 +89,7 @@ impl Road {
                 id: -1,
                 lane_type: LaneType::Driving,
                 level: 0,
+                render_hidden: false,
                 link: None,
                 width: vec![LaneWidth {
                     s_offset: 0.0,
@@ -190,6 +197,8 @@ impl Elevation {
 pub struct LaneSection {
     pub s: f64,
     pub single_side: bool,
+    #[serde(default)]
+    pub render_hidden: bool,
     pub left: Vec<Lane>,
     pub center: Vec<Lane>,
     pub right: Vec<Lane>,
@@ -201,6 +210,8 @@ pub struct Lane {
     pub id: i32,
     pub lane_type: LaneType,
     pub level: i32,
+    #[serde(default)]
+    pub render_hidden: bool,
     pub link: Option<LaneLink>,
     pub width: Vec<LaneWidth>,
     pub borders: Vec<LaneBorder>,
@@ -800,10 +811,12 @@ mod tests {
         let section = LaneSection {
             s: 5.0,
             single_side: false,
+            render_hidden: false,
             left: vec![Lane {
                 id: 1,
                 lane_type: LaneType::Driving,
                 level: 0,
+                render_hidden: false,
                 link: Some(LaneLink {
                     predecessor: Some(1),
                     successor: Some(1),
@@ -822,6 +835,7 @@ mod tests {
                 id: 0,
                 lane_type: LaneType::None,
                 level: 0,
+                render_hidden: false,
                 link: None,
                 width: vec![],
                 borders: vec![],
@@ -831,6 +845,7 @@ mod tests {
                 id: -1,
                 lane_type: LaneType::Shoulder,
                 level: 1,
+                render_hidden: false,
                 link: Some(LaneLink {
                     predecessor: Some(-1),
                     successor: Some(-1),

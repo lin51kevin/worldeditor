@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Project, Road, Junction, LaneWidth } from '../services/platform';
+import type { LaneSide, SceneNodeSelection } from '../utils/sceneGraph';
 
 interface EditorState {
   // Project state
@@ -8,6 +9,7 @@ interface EditorState {
   selectedRoadId: string | null;
   selectedJunctionId: string | null;
   selectedObjectType: 'road' | 'junction' | null;
+  selectedSceneNode: SceneNodeSelection | null;
 
   // Cursor position (world coordinates)
   cursorWorldPos: { x: number; y: number };
@@ -24,6 +26,8 @@ interface EditorState {
   setProject: (project: Project) => void;
   selectRoad: (id: string | null) => void;
   selectJunction: (id: string | null) => void;
+  selectLaneSection: (roadId: string, sectionIndex: number) => void;
+  selectLane: (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => void;
   addRoad: (road: Road) => void;
   removeRoad: (id: string) => void;
   updateRoad: (id: string, updates: Partial<Pick<Road, 'name' | 'length' | 'junction_id'>>) => void;
@@ -97,6 +101,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedRoadId: null,
   selectedJunctionId: null,
   selectedObjectType: null,
+  selectedSceneNode: null,
   cursorWorldPos: { x: 0, y: 0 },
   gridSpacing: 10.0,
   viewportMpp: 0.1,
@@ -106,10 +111,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setProject: (project) => set({ project, isDirty: false, undoStack: [], redoStack: [] }),
 
   selectRoad: (id) =>
-    set({ selectedRoadId: id, selectedJunctionId: null, selectedObjectType: id ? 'road' : null }),
+    set({
+      selectedRoadId: id,
+      selectedJunctionId: null,
+      selectedObjectType: id ? 'road' : null,
+      selectedSceneNode: id ? { type: 'road', roadId: id } : null,
+    }),
 
   selectJunction: (id) =>
-    set({ selectedJunctionId: id, selectedRoadId: null, selectedObjectType: id ? 'junction' : null }),
+    set({
+      selectedJunctionId: id,
+      selectedRoadId: null,
+      selectedObjectType: id ? 'junction' : null,
+      selectedSceneNode: id ? { type: 'junction', junctionId: id } : null,
+    }),
+
+  selectLaneSection: (roadId, sectionIndex) =>
+    set({
+      selectedRoadId: roadId,
+      selectedJunctionId: null,
+      selectedObjectType: 'road',
+      selectedSceneNode: { type: 'laneSection', roadId, sectionIndex },
+    }),
+
+  selectLane: (roadId, sectionIndex, side, laneId) =>
+    set({
+      selectedRoadId: roadId,
+      selectedJunctionId: null,
+      selectedObjectType: 'road',
+      selectedSceneNode: { type: 'lane', roadId, sectionIndex, side, laneId },
+    }),
 
   addRoad: (road) =>
     set((state) => ({
@@ -127,6 +158,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       },
       isDirty: true,
       selectedRoadId: state.selectedRoadId === id ? null : state.selectedRoadId,
+      selectedSceneNode: state.selectedSceneNode && 'roadId' in state.selectedSceneNode && state.selectedSceneNode.roadId === id
+        ? null
+        : state.selectedSceneNode,
     })),
 
   updateRoad: (id, updates) =>
@@ -262,7 +296,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   markDirty: () => set({ isDirty: true }),
   markClean: () => set({ isDirty: false }),
-  reset: () => set({ project: initialProject, isDirty: false, selectedRoadId: null, selectedJunctionId: null, undoStack: [], redoStack: [], cursorWorldPos: { x: 0, y: 0 }, gridSpacing: 10.0, viewportMpp: 0.1 }),
+  reset: () => set({ project: initialProject, isDirty: false, selectedRoadId: null, selectedJunctionId: null, selectedObjectType: null, selectedSceneNode: null, undoStack: [], redoStack: [], cursorWorldPos: { x: 0, y: 0 }, gridSpacing: 10.0, viewportMpp: 0.1 }),
 
   undo: () =>
     set((state) => {

@@ -1,6 +1,6 @@
 import { act } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useEditorViewStore } from './editorViewStore';
+import { DEFAULT_DISPLAY, useEditorViewStore } from './editorViewStore';
 
 describe('editorViewStore', () => {
   beforeEach(() => {
@@ -10,6 +10,7 @@ describe('editorViewStore', () => {
       showAxis: true,
       editMode: 'select',
       viewMode: 'solid',
+      display: { ...DEFAULT_DISPLAY },
       layout: {
         leftWidth: 260,
         rightWidth: 300,
@@ -145,5 +146,21 @@ describe('editorViewStore', () => {
       useEditorViewStore.getState().toggleOutputPanel();
     });
     expect(useEditorViewStore.getState().layout.outputCollapsed).toBe(false);
+  });
+
+  it('toggles lane section visibility', () => {
+    act(() => {
+      useEditorViewStore.getState().toggleLaneSectionVisibility('r1::section::0');
+    });
+
+    expect(useEditorViewStore.getState().display.hiddenLaneSectionKeys).toEqual(['r1::section::0']);
+  });
+
+  it('toggles lane visibility', () => {
+    act(() => {
+      useEditorViewStore.getState().toggleLaneVisibility('r1', 0, 'left', 2);
+    });
+
+    expect(useEditorViewStore.getState().display.hiddenLaneKeys).toEqual(['r1::section::0::left::2']);
   });
 });

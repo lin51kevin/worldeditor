@@ -126,6 +126,27 @@ fn write_road(writer: &mut Writer<W>, road: &Road) -> Result<(), OpenDriveError>
     write_elevation_profile(writer, &road.elevation_profile)?;
     write_lanes(writer, &road.lane_sections)?;
 
+    if !road.lane_offsets.is_empty() {
+        write_lane_offsets(writer, &road.lane_offsets)?;
+    }
+    if !road.lateral_profile.superelevations.is_empty()
+        || !road.lateral_profile.crossfalls.is_empty()
+    {
+        write_lateral_profile(writer, &road.lateral_profile)?;
+    }
+    if !road.bridges.is_empty() {
+        write_bridges(writer, &road.bridges)?;
+    }
+    if !road.tunnels.is_empty() {
+        write_tunnels(writer, &road.tunnels)?;
+    }
+    if !road.signals.is_empty() {
+        write_signals(writer, &road.signals)?;
+    }
+    if !road.objects.is_empty() {
+        write_objects(writer, &road.objects)?;
+    }
+
     writer
         .write_event(Event::End(BytesEnd::new("road".to_string())))
         .map_err(w_err)?;
@@ -510,6 +531,224 @@ fn lane_type_str(lt: LaneType) -> &'static str {
         LaneType::RoadWorks => "roadWorks",
         LaneType::None => "none",
     }
+}
+
+// ── Lane Offsets ───────────────────────────────────
+
+fn write_lane_offsets(
+    writer: &mut Writer<W>,
+    offsets: &[LaneOffset],
+) -> Result<(), OpenDriveError> {
+    for off in offsets {
+        let attrs = [
+            ("s", f(off.s)),
+            ("a", f(off.a)),
+            ("b", f(off.b)),
+            ("c", f(off.c)),
+            ("d", f(off.d)),
+        ];
+        writer
+            .write_event(Event::Empty(elem_with_attrs("laneOffset", &attrs)))
+            .map_err(w_err)?;
+    }
+    Ok(())
+}
+
+// ── Lateral Profile ─────────────────────────────────
+
+fn write_lateral_profile(
+    writer: &mut Writer<W>,
+    profile: &LateralProfile,
+) -> Result<(), OpenDriveError> {
+    writer
+        .write_event(Event::Start(BytesStart::new("lateralProfile".to_string())))
+        .map_err(w_err)?;
+
+    for sup in &profile.superelevations {
+        let attrs = [
+            ("s", f(sup.s)),
+            ("a", f(sup.a)),
+            ("b", f(sup.b)),
+            ("c", f(sup.c)),
+            ("d", f(sup.d)),
+        ];
+        writer
+            .write_event(Event::Empty(elem_with_attrs("superelevation", &attrs)))
+            .map_err(w_err)?;
+    }
+
+    for cf in &profile.crossfalls {
+        let side_str = match cf.side {
+            CrossfallSide::Both => "both",
+            CrossfallSide::Left => "left",
+            CrossfallSide::Right => "right",
+        };
+        let attrs = [
+            ("s", f(cf.s)),
+            ("a", f(cf.a)),
+            ("b", f(cf.b)),
+            ("c", f(cf.c)),
+            ("d", f(cf.d)),
+            ("side", side_str.to_string()),
+        ];
+        writer
+            .write_event(Event::Empty(elem_with_attrs("crossfall", &attrs)))
+            .map_err(w_err)?;
+    }
+
+    writer
+        .write_event(Event::End(BytesEnd::new("lateralProfile".to_string())))
+        .map_err(w_err)?;
+    Ok(())
+}
+
+// ── Bridges ─────────────────────────────────────────
+
+fn write_bridges(
+    writer: &mut Writer<W>,
+    bridges: &[Bridge],
+) -> Result<(), OpenDriveError> {
+    writer
+        .write_event(Event::Start(BytesStart::new("bridges".to_string())))
+        .map_err(w_err)?;
+
+    for br in bridges {
+        let attrs = [
+            ("id", br.id.clone()),
+            ("s", f(br.s)),
+            ("length", f(br.length)),
+            ("type", br.bridge_type.clone()),
+        ];
+        writer
+            .write_event(Event::Empty(elem_with_attrs("bridge", &attrs)))
+            .map_err(w_err)?;
+    }
+
+    writer
+        .write_event(Event::End(BytesEnd::new("bridges".to_string())))
+        .map_err(w_err)?;
+    Ok(())
+}
+
+// ── Tunnels ─────────────────────────────────────────
+
+fn write_tunnels(
+    writer: &mut Writer<W>,
+    tunnels: &[Tunnel],
+) -> Result<(), OpenDriveError> {
+    writer
+        .write_event(Event::Start(BytesStart::new("tunnels".to_string())))
+        .map_err(w_err)?;
+
+    for tn in tunnels {
+        let attrs = [
+            ("id", tn.id.clone()),
+            ("s", f(tn.s)),
+            ("length", f(tn.length)),
+            ("type", tn.tunnel_type.clone()),
+        ];
+        writer
+            .write_event(Event::Empty(elem_with_attrs("tunnel", &attrs)))
+            .map_err(w_err)?;
+    }
+
+    writer
+        .write_event(Event::End(BytesEnd::new("tunnels".to_string())))
+        .map_err(w_err)?;
+    Ok(())
+}
+
+// ── Signals ─────────────────────────────────────────
+
+fn write_signals(
+    writer: &mut Writer<W>,
+    signals: &[Signal],
+) -> Result<(), OpenDriveError> {
+    writer
+        .write_event(Event::Start(BytesStart::new("signals".to_string())))
+        .map_err(w_err)?;
+
+    for sig in signals {
+        let mut attrs = vec![
+            ("s", f(sig.s)),
+            ("t", f(sig.t)),
+            ("id", sig.id.clone()),
+            ("name", sig.name.clone()),
+            ("dynamic", if sig.is_dynamic { "true" } else { "false" }.to_string()),
+            ("orientation", sig.orientation.clone()),
+            ("zOffset", f(sig.z_offset)),
+            ("hOffset", f(sig.h_offset)),
+            ("type", sig.signal_type.clone()),
+            ("subtype", sig.signal_subtype.clone()),
+            ("width", f(sig.width)),
+            ("height", f(sig.height)),
+        ];
+        if let Some(ref val) = sig.value {
+            attrs.push(("value", val.clone()));
+        }
+        writer
+            .write_event(Event::Empty(elem_with_attrs("signal", &attrs)))
+            .map_err(w_err)?;
+    }
+
+    writer
+        .write_event(Event::End(BytesEnd::new("signals".to_string())))
+        .map_err(w_err)?;
+    Ok(())
+}
+
+// ── Objects ─────────────────────────────────────────
+
+fn write_objects(
+    writer: &mut Writer<W>,
+    objects: &[RoadObject],
+) -> Result<(), OpenDriveError> {
+    writer
+        .write_event(Event::Start(BytesStart::new("objects".to_string())))
+        .map_err(w_err)?;
+
+    writer
+        .write_event(Event::Start(BytesStart::new("roadObjects".to_string())))
+        .map_err(w_err)?;
+
+    for obj in objects {
+        let type_str = match &obj.object_type {
+            ObjectType::Sign => "sign".to_string(),
+            ObjectType::Guardrail => "guardrail".to_string(),
+            ObjectType::Barrier => "barrier".to_string(),
+            ObjectType::Curb => "curb".to_string(),
+            ObjectType::Wall => "wall".to_string(),
+            ObjectType::Pillar => "pillar".to_string(),
+            ObjectType::TrafficCone => "trafficCone".to_string(),
+            ObjectType::Custom(s) => s.clone(),
+        };
+        let mut attrs = vec![
+            ("s", f(obj.position.x)),
+            ("t", f(obj.position.y)),
+            ("zOffset", f(obj.position.z)),
+            ("id", obj.id.clone()),
+            ("name", obj.name.clone()),
+            ("type", type_str),
+            ("hdg", f(obj.orientation)),
+            ("width", f(obj.width)),
+            ("height", f(obj.height)),
+        ];
+        if let Some(ref v) = obj.validity {
+            attrs.push(("validity", format!("{} {}", v.from_lane, v.to_lane)));
+        }
+        writer
+            .write_event(Event::Empty(elem_with_attrs("roadObject", &attrs)))
+            .map_err(w_err)?;
+    }
+
+    writer
+        .write_event(Event::End(BytesEnd::new("roadObjects".to_string())))
+        .map_err(w_err)?;
+
+    writer
+        .write_event(Event::End(BytesEnd::new("objects".to_string())))
+        .map_err(w_err)?;
+    Ok(())
 }
 
 // ── Junction ─────────────────────────────────────────

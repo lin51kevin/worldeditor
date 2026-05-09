@@ -818,11 +818,13 @@ mod tests {
         let section = LaneSection {
             s: 0.0,
             single_side: false,
+            render_hidden: false,
             left: vec![],
             center: vec![Lane {
                 id: 0,
                 lane_type: LaneType::None,
                 level: 0,
+                render_hidden: false,
                 link: None,
                 width: vec![],
                 borders: vec![],
@@ -832,6 +834,7 @@ mod tests {
                 id: -1,
                 lane_type: LaneType::Driving,
                 level: 0,
+                render_hidden: false,
                 link: None,
                 width: vec![LaneWidth {
                     s_offset: 0.0,
@@ -855,6 +858,7 @@ mod tests {
         let section = LaneSection {
             s: 0.0,
             single_side: false,
+            render_hidden: false,
             left: vec![],
             center: vec![],
             right: vec![],
@@ -1113,6 +1117,7 @@ mod tests {
             id: 2,
             lane_type: LaneType::Driving,
             level: 0,
+            render_hidden: false,
             link: None,
             width: vec![LaneWidth {
                 s_offset: 0.0,
@@ -1155,6 +1160,7 @@ mod tests {
             id: -2,
             lane_type: LaneType::Driving,
             level: 0,
+            render_hidden: false,
             link: None,
             width: vec![LaneWidth {
                 s_offset: 0.0,

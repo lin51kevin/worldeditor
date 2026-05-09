@@ -440,6 +440,7 @@ fn parse_lane_section(
     let mut section = LaneSection {
         s: 0.0,
         single_side: false,
+        render_hidden: false,
         left: Vec::new(),
         center: Vec::new(),
         right: Vec::new(),
@@ -508,6 +509,7 @@ fn parse_lane_empty(e: &BytesStart) -> Result<Lane, OpenDriveError> {
         id: 0,
         lane_type: LaneType::None,
         level: 0,
+        render_hidden: false,
         link: None,
         width: Vec::new(),
         borders: Vec::new(),

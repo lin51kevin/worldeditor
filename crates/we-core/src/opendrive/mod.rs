@@ -326,6 +326,7 @@ mod tests {
                 name: String::new(),
                 length: 50.0,
                 junction_id: Some("10".to_string()),
+                render_hidden: false,
                 link: None,
                 plan_view: vec![Geometry {
                     s: 0.0,

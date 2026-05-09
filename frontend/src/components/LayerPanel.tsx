@@ -7,8 +7,12 @@ import {
 } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
+import {
+  makeLaneKey,
+  makeLaneSectionKey,
+  type LaneSide,
+} from '../utils/sceneGraph';
 import { emitViewportEvent } from '../viewport/viewportEvents';
-import type { GeometryType } from '../services/platform';
 import './LayerPanel.css';
 
 interface LayerCategory {
@@ -31,30 +35,35 @@ const DISPLAY_TOGGLES = [
   'showObjects',
 ] as const;
 
-function geoTypeName(gt: GeometryType): string {
-  if (typeof gt === 'string') return gt;
-  return Object.keys(gt)[0] ?? 'Unknown';
-}
-
 /** Check whether the project has any real data loaded (non-empty roads or header name). */
 function hasProjectData(project: { roads: unknown[]; junctions: unknown[]; header: { name: string } }): boolean {
   return project.roads.length > 0 || project.junctions.length > 0 || !!project.header.name;
 }
 
 export function LayerPanel() {
-  const { project, selectedRoadId, selectRoad, selectedJunctionId, selectJunction } = useEditorStore();
+  const {
+    project,
+    selectedSceneNode,
+    selectedJunctionId,
+    selectRoad,
+    selectJunction,
+    selectLaneSection,
+    selectLane,
+  } = useEditorStore();
   const {
     display,
     toggleDisplaySetting,
     setColorMode,
     toggleRoadVisibility: toggleRoadVisibilityInStore,
     toggleJunctionVisibility: toggleJunctionVisibilityInStore,
+    toggleLaneSectionVisibility: toggleLaneSectionVisibilityInStore,
+    toggleLaneVisibility: toggleLaneVisibilityInStore,
   } = useEditorViewStore();
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(
     Object.fromEntries(LAYER_CATEGORIES.map((c) => [c.id, true])),
   );
   const [expandedRoads, setExpandedRoads] = useState<Set<string>>(new Set());
-  const [expandedJunctions, setExpandedJunctions] = useState<Set<string>>(new Set());
+  const [expandedLaneSections, setExpandedLaneSections] = useState<Set<string>>(new Set());
   const [mapInfoCollapsed, setMapInfoCollapsed] = useState(true);
   const [displaySettingsCollapsed, setDisplaySettingsCollapsed] = useState(true);
   const [categoriesCollapsed, setCategoriesCollapsed] = useState(false);
@@ -73,10 +82,10 @@ export function LayerPanel() {
     });
   };
 
-  const toggleJunctionExpand = (junctionId: string) => {
-    setExpandedJunctions((prev) => {
+  const toggleLaneSectionExpand = (sectionKey: string) => {
+    setExpandedLaneSections((prev) => {
       const next = new Set(prev);
-      if (next.has(junctionId)) next.delete(junctionId); else next.add(junctionId);
+      if (next.has(sectionKey)) next.delete(sectionKey); else next.add(sectionKey);
       return next;
     });
   };
@@ -91,8 +100,55 @@ export function LayerPanel() {
     toggleJunctionVisibilityInStore(junctionId);
   };
 
+  const toggleLaneSectionVisibility = (sectionKey: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleLaneSectionVisibilityInStore(sectionKey);
+  };
+
+  const toggleLaneVisibility = (
+    roadId: string,
+    sectionIndex: number,
+    side: LaneSide,
+    laneId: number,
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation();
+    toggleLaneVisibilityInStore(roadId, sectionIndex, side, laneId);
+  };
+
   const isRoadVisible = (roadId: string) => !display.hiddenRoadIds.includes(roadId);
   const isJunctionVisible = (junctionId: string) => !display.hiddenJunctionIds.includes(junctionId);
+  const isLaneSectionVisible = (roadId: string, sectionIndex: number) =>
+    isRoadVisible(roadId) && !display.hiddenLaneSectionKeys.includes(makeLaneSectionKey(roadId, sectionIndex));
+  const isLaneVisible = (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) =>
+    isLaneSectionVisible(roadId, sectionIndex) && !display.hiddenLaneKeys.includes(
+      makeLaneKey(roadId, sectionIndex, side, laneId),
+    );
+
+  const selectRoadChildSection = (roadId: string, sectionIndex: number) => {
+    setExpandedRoads((prev) => new Set(prev).add(roadId));
+    setExpandedLaneSections((prev) => new Set(prev).add(makeLaneSectionKey(roadId, sectionIndex)));
+    selectLaneSection(roadId, sectionIndex);
+  };
+
+  const selectRoadChildLane = (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => {
+    setExpandedRoads((prev) => new Set(prev).add(roadId));
+    setExpandedLaneSections((prev) => new Set(prev).add(makeLaneSectionKey(roadId, sectionIndex)));
+    selectLane(roadId, sectionIndex, side, laneId);
+  };
+
+  const isRoadSelected = (roadId: string) =>
+    selectedSceneNode?.type === 'road' && selectedSceneNode.roadId === roadId;
+  const isLaneSectionSelected = (roadId: string, sectionIndex: number) =>
+    selectedSceneNode?.type === 'laneSection'
+    && selectedSceneNode.roadId === roadId
+    && selectedSceneNode.sectionIndex === sectionIndex;
+  const isLaneSelected = (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) =>
+    selectedSceneNode?.type === 'lane'
+    && selectedSceneNode.roadId === roadId
+    && selectedSceneNode.sectionIndex === sectionIndex
+    && selectedSceneNode.side === side
+    && selectedSceneNode.laneId === laneId;
 
   const handleZoomToRoad = useCallback((roadId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -229,7 +285,7 @@ export function LayerPanel() {
         </div>
 
         {/* Card 2: Unified scene list — Roads first, then Junctions (flat, like C# version) */}
-        <div className="layer-card layer-card-grow">
+        <div className={`layer-card ${!sceneListCollapsed ? 'layer-card-grow' : ''}`}>
           <div
             className="layer-section-toggle"
             onClick={() => setSceneListCollapsed(!sceneListCollapsed)}
@@ -245,7 +301,7 @@ export function LayerPanel() {
             {filteredRoads.map((road) => (
               <div key={`road-${road.id}`} className="road-list-entry">
                 <div
-                  className={`layer-item ${selectedRoadId === road.id ? 'selected' : ''} ${!isRoadVisible(road.id) ? 'layer-item-hidden' : ''}`}
+                  className={`layer-item ${isRoadSelected(road.id) ? 'selected' : ''} ${!isRoadVisible(road.id) ? 'layer-item-hidden' : ''}`}
                   onClick={() => selectRoad(road.id)}
                 >
                   <button
@@ -278,31 +334,81 @@ export function LayerPanel() {
                 </div>
                 {expandedRoads.has(road.id) && (
                   <div className="road-details">
-                    <div className="road-detail-item">{t('layerPanel.length')}: {road.length.toFixed(1)}m</div>
-                    {/* Geometry segments */}
-                    <div className="road-detail-sub-header">{t('layerPanel.geometry')} ({road.plan_view.length})</div>
-                    {road.plan_view.map((geo, i) => (
-                      <div key={i} className="road-detail-item road-detail-indent">
-                        #{i + 1} {geoTypeName(geo.geo_type)} — s={geo.s.toFixed(1)}, L={geo.length.toFixed(1)}m
-                      </div>
-                    ))}
-                    {/* Lane sections */}
-                    <div className="road-detail-sub-header">{t('layerPanel.laneSections')} ({road.lane_sections.length})</div>
                     {road.lane_sections.map((ls, si) => (
-                      <div key={si} className="road-detail-lane-section">
-                        <div className="road-detail-item road-detail-indent">
-                          §{si + 1} (s={ls.s})
+                      <div
+                        key={si}
+                        className={`road-detail-lane-section ${expandedLaneSections.has(makeLaneSectionKey(road.id, si)) ? 'expanded' : ''}`}
+                      >
+                        <div
+                          className={`layer-item layer-item-child layer-item-section ${isLaneSectionSelected(road.id, si) ? 'selected' : ''} ${!isLaneSectionVisible(road.id, si) ? 'layer-item-hidden' : ''}`}
+                          onClick={() => selectRoadChildSection(road.id, si)}
+                        >
+                          <button
+                            className="road-expand"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleLaneSectionExpand(makeLaneSectionKey(road.id, si));
+                            }}
+                          >
+                            {expandedLaneSections.has(makeLaneSectionKey(road.id, si))
+                              ? <ChevronDown size={12} />
+                              : <ChevronRight size={12} />
+                            }
+                          </button>
+                          <span className="layer-name">
+                            {t('layerPanel.laneSection')} #{si + 1}
+                            <span className="road-id"> (s={ls.s.toFixed(1)})</span>
+                          </span>
+                          <button
+                            className={`road-visibility ${isLaneSectionVisible(road.id, si) ? '' : 'off'}`}
+                            onClick={(e) => toggleLaneSectionVisibility(makeLaneSectionKey(road.id, si), e)}
+                            title={isLaneSectionVisible(road.id, si) ? t('layerPanel.hideLaneSection') : t('layerPanel.showLaneSection')}
+                          >
+                            {isLaneSectionVisible(road.id, si) ? <Eye size={12} /> : <EyeOff size={12} />}
+                          </button>
                         </div>
-                        {ls.left.map((lane) => (
-                          <div key={`l${lane.id}`} className="road-detail-item road-detail-indent2">
-                            L{Math.abs(lane.id)}: {lane.lane_type}
+                        {expandedLaneSections.has(makeLaneSectionKey(road.id, si)) && (
+                          <div className="lane-section-children">
+                            {ls.left.map((lane) => (
+                              <div
+                                key={`l${lane.id}`}
+                                className={`layer-item layer-item-child layer-item-lane ${isLaneSelected(road.id, si, 'left', lane.id) ? 'selected' : ''} ${!isLaneVisible(road.id, si, 'left', lane.id) ? 'layer-item-hidden' : ''}`}
+                                onClick={() => selectRoadChildLane(road.id, si, 'left', lane.id)}
+                              >
+                                <span className="layer-name">
+                                  {t('layerPanel.lane')} L{Math.abs(lane.id)}
+                                  <span className="road-id"> ({lane.lane_type})</span>
+                                </span>
+                                <button
+                                  className={`road-visibility ${isLaneVisible(road.id, si, 'left', lane.id) ? '' : 'off'}`}
+                                  onClick={(e) => toggleLaneVisibility(road.id, si, 'left', lane.id, e)}
+                                  title={isLaneVisible(road.id, si, 'left', lane.id) ? t('layerPanel.hideLane') : t('layerPanel.showLane')}
+                                >
+                                  {isLaneVisible(road.id, si, 'left', lane.id) ? <Eye size={12} /> : <EyeOff size={12} />}
+                                </button>
+                              </div>
+                            ))}
+                            {ls.right.map((lane) => (
+                              <div
+                                key={`r${lane.id}`}
+                                className={`layer-item layer-item-child layer-item-lane ${isLaneSelected(road.id, si, 'right', lane.id) ? 'selected' : ''} ${!isLaneVisible(road.id, si, 'right', lane.id) ? 'layer-item-hidden' : ''}`}
+                                onClick={() => selectRoadChildLane(road.id, si, 'right', lane.id)}
+                              >
+                                <span className="layer-name">
+                                  {t('layerPanel.lane')} R{Math.abs(lane.id)}
+                                  <span className="road-id"> ({lane.lane_type})</span>
+                                </span>
+                                <button
+                                  className={`road-visibility ${isLaneVisible(road.id, si, 'right', lane.id) ? '' : 'off'}`}
+                                  onClick={(e) => toggleLaneVisibility(road.id, si, 'right', lane.id, e)}
+                                  title={isLaneVisible(road.id, si, 'right', lane.id) ? t('layerPanel.hideLane') : t('layerPanel.showLane')}
+                                >
+                                  {isLaneVisible(road.id, si, 'right', lane.id) ? <Eye size={12} /> : <EyeOff size={12} />}
+                                </button>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                        {ls.right.map((lane) => (
-                          <div key={`r${lane.id}`} className="road-detail-item road-detail-indent2">
-                            R{Math.abs(lane.id)}: {lane.lane_type}
-                          </div>
-                        ))}
+                        )}
                       </div>
                     ))}
                   </div>
@@ -317,15 +423,7 @@ export function LayerPanel() {
                   className={`layer-item ${selectedJunctionId === junc.id ? 'selected' : ''} ${!isJunctionVisible(junc.id) ? 'layer-item-hidden' : ''}`}
                   onClick={() => selectJunction(junc.id)}
                 >
-                  <button
-                    className="road-expand"
-                    onClick={(e) => { e.stopPropagation(); toggleJunctionExpand(junc.id); }}
-                  >
-                    {expandedJunctions.has(junc.id)
-                      ? <ChevronDown size={12} />
-                      : <ChevronRight size={12} />
-                    }
-                  </button>
+                  <span className="road-expand road-expand-placeholder" />
                   <GitMerge size={12} className="junction-icon" />
                   <span className="layer-name">
                     {junc.name || `Junction(${junc.id})`}
@@ -346,21 +444,6 @@ export function LayerPanel() {
                     {isJunctionVisible(junc.id) ? <Eye size={12} /> : <EyeOff size={12} />}
                   </button>
                 </div>
-                {expandedJunctions.has(junc.id) && (
-                  <div className="road-details">
-                    <div className="road-detail-sub-header">
-                      {t('layerPanel.connections')} ({junc.connections.length})
-                    </div>
-                    {junc.connections.map((conn) => (
-                      <div key={conn.id} className="road-detail-item road-detail-indent">
-                        {t('layerPanel.incoming')}:{conn.incoming_road} → {t('layerPanel.connecting')}:{conn.connecting_road} ({conn.contact_point})
-                        {conn.lane_links.length > 0 && (
-                          <span className="junction-lane-links"> [{conn.lane_links.map((ll) => `${ll.from}→${ll.to}`).join(', ')}]</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
           </div>

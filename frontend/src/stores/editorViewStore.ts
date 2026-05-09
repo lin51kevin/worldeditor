@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { makeLaneKey } from '../utils/sceneGraph';
+import type { LaneSide } from '../utils/sceneGraph';
 
 type ViewDimension = '3d' | '2d';
 
@@ -41,9 +43,11 @@ interface DisplaySettings {
   colorMode: ColorMode;
   hiddenRoadIds: string[];
   hiddenJunctionIds: string[];
+  hiddenLaneSectionKeys: string[];
+  hiddenLaneKeys: string[];
 }
 
-const DEFAULT_DISPLAY: DisplaySettings = {
+export const DEFAULT_DISPLAY: DisplaySettings = {
   showRoadMesh: true,
   showLaneLines: true,
   showRoadMarks: true,
@@ -53,6 +57,8 @@ const DEFAULT_DISPLAY: DisplaySettings = {
   colorMode: 'byLaneType',
   hiddenRoadIds: [],
   hiddenJunctionIds: [],
+  hiddenLaneSectionKeys: [],
+  hiddenLaneKeys: [],
 };
 
 interface EditorViewState {
@@ -87,6 +93,8 @@ interface EditorViewState {
   setColorMode: (mode: ColorMode) => void;
   toggleRoadVisibility: (roadId: string) => void;
   toggleJunctionVisibility: (junctionId: string) => void;
+  toggleLaneSectionVisibility: (sectionKey: string) => void;
+  toggleLaneVisibility: (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => void;
 
   // Panel layout actions
   setLeftWidth: (width: number) => void;
@@ -191,6 +199,27 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
         ? state.display.hiddenJunctionIds.filter((id) => id !== junctionId)
         : [...state.display.hiddenJunctionIds, junctionId];
       const display = { ...state.display, hiddenJunctionIds };
+      saveDisplay(display);
+      return { display };
+    }),
+
+  toggleLaneSectionVisibility: (sectionKey) =>
+    set((state) => {
+      const hiddenLaneSectionKeys = state.display.hiddenLaneSectionKeys.includes(sectionKey)
+        ? state.display.hiddenLaneSectionKeys.filter((key) => key !== sectionKey)
+        : [...state.display.hiddenLaneSectionKeys, sectionKey];
+      const display = { ...state.display, hiddenLaneSectionKeys };
+      saveDisplay(display);
+      return { display };
+    }),
+
+  toggleLaneVisibility: (roadId, sectionIndex, side, laneId) =>
+    set((state) => {
+      const laneKey = makeLaneKey(roadId, sectionIndex, side, laneId);
+      const hiddenLaneKeys = state.display.hiddenLaneKeys.includes(laneKey)
+        ? state.display.hiddenLaneKeys.filter((key) => key !== laneKey)
+        : [...state.display.hiddenLaneKeys, laneKey];
+      const display = { ...state.display, hiddenLaneKeys };
       saveDisplay(display);
       return { display };
     }),

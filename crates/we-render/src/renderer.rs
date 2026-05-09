@@ -120,85 +120,14 @@ impl Renderer {
 
     /// Render a frame to the given texture view.
     pub fn render_frame(&self, target: &wgpu::TextureView, camera: &Camera, meshes: &[RenderMesh]) {
-        let view_proj = self.compute_view_proj(camera);
-
-        // Update grid uniforms
-        self.gpu.queue.write_buffer(
-            &self.grid_uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[GridUniforms {
-                view_proj: mat4_to_array(&view_proj),
-                camera_pos: [
-                    camera.position.x as f32,
-                    camera.position.y as f32,
-                    camera.position.z as f32,
-                ],
-                grid_scale: 10.0,
-            }]),
-        );
-
-        let mut encoder = self
-            .gpu
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("render_encoder"),
-            });
-
+        let view_proj = self.update_grid_uniforms(camera);
+        let mut encoder = self.create_encoder();
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("main_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: target,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.12,
-                            g: 0.12,
-                            b: 0.14,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-
-            // Draw grid
-            render_pass.set_pipeline(&self.pipelines.grid);
-            render_pass.set_bind_group(0, &self.grid_bind_group, &[]);
-            render_pass.draw(0..6, 0..1);
-
-            // Draw meshes
-            if !meshes.is_empty() {
-                render_pass.set_pipeline(&self.pipelines.basic);
-                render_pass.set_bind_group(0, &self.basic_bind_group, &[]);
-
-                for mesh in meshes {
-                    // Update model matrix for each mesh
-                    self.gpu.queue.write_buffer(
-                        &self.basic_uniform_buffer,
-                        0,
-                        bytemuck::cast_slice(&[BasicUniforms {
-                            view_proj: mat4_to_array(&view_proj),
-                            model: mesh.model_matrix,
-                        }]),
-                    );
-                    render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                    render_pass.draw(0..mesh.vertex_count, 0..1);
-                }
-            }
+            let mut render_pass = self.begin_render_pass(&mut encoder, target);
+            self.draw_grid(&mut render_pass);
+            self.draw_meshes(&view_proj, &mut render_pass, meshes);
         }
-
-        self.gpu.queue.submit(std::iter::once(encoder.finish()));
+        self.submit_frame(encoder);
     }
 
     /// Render road meshes with optional lane line overlay.
@@ -209,9 +138,23 @@ impl Renderer {
         meshes: &[RenderMesh],
         lane_line_mesh: Option<&LaneLineMesh>,
     ) {
-        let view_proj = self.compute_view_proj(camera);
+        let view_proj = self.update_grid_uniforms(camera);
+        let mut encoder = self.create_encoder();
+        {
+            let mut render_pass = self.begin_render_pass(&mut encoder, target);
+            self.draw_grid(&mut render_pass);
+            self.draw_meshes(&view_proj, &mut render_pass, meshes);
+            if let Some(ll_mesh) = lane_line_mesh {
+                self.draw_lane_line(&view_proj, &mut render_pass, ll_mesh);
+            }
+        }
+        self.submit_frame(encoder);
+    }
 
-        // Update grid uniforms
+    // ── Internal helpers ───────────────────────────────
+
+    fn update_grid_uniforms(&self, camera: &Camera) -> Matrix4<f32> {
+        let view_proj = self.compute_view_proj(camera);
         self.gpu.queue.write_buffer(
             &self.grid_uniform_buffer,
             0,
@@ -225,84 +168,102 @@ impl Renderer {
                 grid_scale: 10.0,
             }]),
         );
+        view_proj
+    }
 
-        let mut encoder = self
-            .gpu
+    fn create_encoder(&self) -> wgpu::CommandEncoder {
+        self.gpu
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("render_encoder"),
-            });
+            })
+    }
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("main_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: target,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.12,
-                            g: 0.12,
-                            b: 0.14,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
+    fn begin_render_pass<'a>(
+        &'a self,
+        encoder: &'a mut wgpu::CommandEncoder,
+        target: &'a wgpu::TextureView,
+    ) -> wgpu::RenderPass<'a> {
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("main_render_pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.12,
+                        g: 0.12,
+                        b: 0.14,
+                        a: 1.0,
                     }),
-                    stencil_ops: None,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
                 }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        })
+    }
 
-            // Draw grid
-            render_pass.set_pipeline(&self.pipelines.grid);
-            render_pass.set_bind_group(0, &self.grid_bind_group, &[]);
-            render_pass.draw(0..6, 0..1);
+    fn draw_grid(&self, render_pass: &mut wgpu::RenderPass<'_>) {
+        render_pass.set_pipeline(&self.pipelines.grid);
+        render_pass.set_bind_group(0, &self.grid_bind_group, &[]);
+        render_pass.draw(0..6, 0..1);
+    }
 
-            // Draw road meshes (road surface)
-            // Render order: road surface → marking → lane line → object → signal
-            if !meshes.is_empty() {
-                render_pass.set_pipeline(&self.pipelines.basic);
-                render_pass.set_bind_group(0, &self.basic_bind_group, &[]);
-
-                for mesh in meshes {
-                    self.gpu.queue.write_buffer(
-                        &self.basic_uniform_buffer,
-                        0,
-                        bytemuck::cast_slice(&[BasicUniforms {
-                            view_proj: mat4_to_array(&view_proj),
-                            model: mesh.model_matrix,
-                        }]),
-                    );
-                    render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                    render_pass.draw(0..mesh.vertex_count, 0..1);
-                }
-            }
-
-            // Draw lane lines
-            if let Some(ll_mesh) = lane_line_mesh {
-                render_pass.set_pipeline(&self.pipelines.lane_line);
-                render_pass.set_bind_group(0, &self.lane_line_bind_group, &[]);
-                self.gpu.queue.write_buffer(
-                    &self.lane_line_uniform_buffer,
-                    0,
-                    bytemuck::cast_slice(&[LaneLineUniforms {
-                        view_proj: mat4_to_array(&view_proj),
-                        model: ll_mesh.model_matrix,
-                    }]),
-                );
-                render_pass.set_vertex_buffer(0, ll_mesh.vertex_buffer.slice(..));
-                render_pass.draw(0..ll_mesh.vertex_count, 0..1);
-            }
+    fn draw_meshes(
+        &self,
+        view_proj: &Matrix4<f32>,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        meshes: &[RenderMesh],
+    ) {
+        if meshes.is_empty() {
+            return;
         }
+        render_pass.set_pipeline(&self.pipelines.basic);
+        render_pass.set_bind_group(0, &self.basic_bind_group, &[]);
+        for mesh in meshes {
+            self.gpu.queue.write_buffer(
+                &self.basic_uniform_buffer,
+                0,
+                bytemuck::cast_slice(&[BasicUniforms {
+                    view_proj: mat4_to_array(view_proj),
+                    model: mesh.model_matrix,
+                }]),
+            );
+            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            render_pass.draw(0..mesh.vertex_count, 0..1);
+        }
+    }
 
+    fn draw_lane_line(
+        &self,
+        view_proj: &Matrix4<f32>,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        ll_mesh: &LaneLineMesh,
+    ) {
+        render_pass.set_pipeline(&self.pipelines.lane_line);
+        render_pass.set_bind_group(0, &self.lane_line_bind_group, &[]);
+        self.gpu.queue.write_buffer(
+            &self.lane_line_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[LaneLineUniforms {
+                view_proj: mat4_to_array(view_proj),
+                model: ll_mesh.model_matrix,
+            }]),
+        );
+        render_pass.set_vertex_buffer(0, ll_mesh.vertex_buffer.slice(..));
+        render_pass.draw(0..ll_mesh.vertex_count, 0..1);
+    }
+
+    fn submit_frame(&self, encoder: wgpu::CommandEncoder) {
         self.gpu.queue.submit(std::iter::once(encoder.finish()));
     }
 

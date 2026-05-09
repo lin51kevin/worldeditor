@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Project, Road } from '../services/platform';
+import type { LaneSection, Project, Road } from '../services/platform';
 import { useEditorStore } from '../stores/editorStore';
+import { DEFAULT_DISPLAY, useEditorViewStore } from '../stores/editorViewStore';
+import { makeLaneKey, makeLaneSectionKey } from '../utils/sceneGraph';
 import { LayerPanel } from './LayerPanel';
 
 function makeProject(roads: Road[] = []): Project {
@@ -36,6 +38,16 @@ function makeRoad(id: string, name: string): Road {
   };
 }
 
+function makeLaneSection(): LaneSection {
+  return {
+    s: 0,
+    single_side: false,
+    left: [{ id: 2, lane_type: 'Driving', level: false, link: { predecessor: null, successor: null }, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
+    center: [{ id: 0, lane_type: 'None', level: false, link: { predecessor: null, successor: null }, width: [], road_marks: [] }],
+    right: [{ id: -1, lane_type: 'Driving', level: false, link: { predecessor: null, successor: null }, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
+  };
+}
+
 describe('LayerPanel', () => {
   beforeEach(() => {
     act(() => {
@@ -43,10 +55,13 @@ describe('LayerPanel', () => {
         project: makeProject(),
         isDirty: false,
         selectedRoadId: null,
+        selectedJunctionId: null,
         selectedObjectType: null,
+        selectedSceneNode: null,
         undoStack: [],
         redoStack: [],
       });
+      useEditorViewStore.setState({ display: { ...DEFAULT_DISPLAY } });
     });
   });
 
@@ -110,11 +125,54 @@ describe('LayerPanel', () => {
     expect(useEditorStore.getState().selectedRoadId).toBe('r-1');
 
     fireEvent.click(document.querySelector('.road-expand') as HTMLElement);
-    expect(screen.getByText('长度: 120.5m')).toBeInTheDocument();
-    expect(screen.getByText(/几何 \(1\)/)).toBeInTheDocument();
-    expect(screen.getByText(/车道段 \(0\)/)).toBeInTheDocument();
+    expect(screen.queryByText('长度: 120.5m')).not.toBeInTheDocument();
+    expect(screen.queryByText(/几何 \(1\)/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/车道段 \(0\)/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle('隐藏道路'));
     expect(screen.getByTitle('显示道路')).toBeInTheDocument();
+  });
+
+  it('renders lane section and lane child nodes with selection and visibility controls', () => {
+    act(() => {
+      useEditorStore.setState({
+        project: makeProject([makeRoad('r-1', '测试道路')]),
+      });
+      useEditorStore.setState((state) => ({
+        project: {
+          ...state.project,
+          roads: [{ ...state.project.roads[0]!, lane_sections: [makeLaneSection()] }],
+        },
+      }));
+    });
+
+    render(<LayerPanel />);
+
+    fireEvent.click(document.querySelector('.road-expand') as HTMLElement);
+    fireEvent.click(screen.getByText('车道段 #1'));
+    expect(useEditorStore.getState().selectedSceneNode).toEqual({
+      type: 'laneSection',
+      roadId: 'r-1',
+      sectionIndex: 0,
+    });
+
+    fireEvent.click(screen.getByText(/车道 L2/));
+    expect(useEditorStore.getState().selectedSceneNode).toEqual({
+      type: 'lane',
+      roadId: 'r-1',
+      sectionIndex: 0,
+      side: 'left',
+      laneId: 2,
+    });
+
+    fireEvent.click(screen.getAllByTitle('隐藏车道')[0] as HTMLElement);
+    expect(useEditorViewStore.getState().display.hiddenLaneKeys).toEqual([
+      makeLaneKey('r-1', 0, 'left', 2),
+    ]);
+
+    fireEvent.click(screen.getByTitle('隐藏车道段'));
+    expect(useEditorViewStore.getState().display.hiddenLaneSectionKeys).toEqual([
+      makeLaneSectionKey('r-1', 0),
+    ]);
   });
 });

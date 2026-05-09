@@ -132,4 +132,30 @@ describe('editorStore', () => {
       expect(pos.y).toBe(0);
     });
   });
+
+  describe('scene selection', () => {
+    it('should select lane sections while keeping the parent road selected', () => {
+      useEditorStore.getState().selectLaneSection('r1', 2);
+      const state = useEditorStore.getState();
+
+      expect(state.selectedRoadId).toBe('r1');
+      expect(state.selectedSceneNode).toEqual({ type: 'laneSection', roadId: 'r1', sectionIndex: 2 });
+      expect(state.selectedObjectType).toBe('road');
+    });
+
+    it('should select lanes while keeping the parent road selected', () => {
+      useEditorStore.getState().selectLane('r1', 1, 'right', -2);
+      const state = useEditorStore.getState();
+
+      expect(state.selectedRoadId).toBe('r1');
+      expect(state.selectedSceneNode).toEqual({
+        type: 'lane',
+        roadId: 'r1',
+        sectionIndex: 1,
+        side: 'right',
+        laneId: -2,
+      });
+      expect(state.selectedObjectType).toBe('road');
+    });
+  });
 });
