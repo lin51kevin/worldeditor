@@ -1,0 +1,90 @@
+.tool-panel {
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tool-header {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border);
+  text-align: center;
+  user-select: none;
+}
+
+.tool-section-header {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+  text-align: center;
+  user-select: none;
+}
+
+.tool-row {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  gap: 6px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tool-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tool-input {
+  flex: 1;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  padding: 2px 6px;
+  font-size: 11px;
+  border-radius: 2px;
+  text-align: right;
+}
+
+.tool-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tool-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  padding: 5px 10px;
+  cursor: pointer;
+  gap: 8px;
+  font-size: 12px;
+  text-align: left;
+}
+
+.tool-item:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+}
+
+.tool-item.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.tool-icon {
+  font-size: 14px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.tool-name {
+  flex: 1;
+}

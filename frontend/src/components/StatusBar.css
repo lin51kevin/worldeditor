@@ -1,0 +1,30 @@
+.statusbar {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  user-select: none;
+  z-index: var(--z-panel);
+}
+
+.statusbar-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  padding: 2px 10px;
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  box-shadow: var(--shadow-sm);
+}

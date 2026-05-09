@@ -1,0 +1,86 @@
+.cp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 1000);
+  background: var(--color-bg-overlay);
+  display: flex;
+  justify-content: center;
+  padding-top: 15vh;
+}
+
+.cp-container {
+  width: 480px;
+  max-height: 380px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 8px);
+  box-shadow: var(--shadow-dialog, 0 8px 32px rgba(0, 0, 0, 0.4));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cp-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg, 14px);
+  padding: var(--space-5, 12px) var(--space-6, 16px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cp-input::placeholder {
+  color: var(--color-text-muted, #666);
+}
+
+.cp-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: var(--space-2, 4px) 0;
+}
+
+.cp-category {
+  font-size: var(--font-size-xs, 10px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: var(--space-3, 6px) var(--space-6, 16px) var(--space-1, 2px);
+}
+
+.cp-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3, 6px) var(--space-6, 16px);
+  cursor: pointer;
+  transition: background var(--transition-fast, 120ms ease);
+}
+
+.cp-item:hover,
+.cp-item.selected {
+  background: var(--color-menu-hover);
+  color: var(--color-menu-hover-text);
+}
+
+.cp-item-label {
+  font-size: var(--font-size-base, 12px);
+  color: var(--color-text-primary);
+}
+
+.cp-item-shortcut {
+  font-size: var(--font-size-xs, 10px);
+  color: var(--color-text-muted, #888);
+  background: var(--color-bg-tertiary);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 3px);
+  border: 1px solid var(--color-border-subtle, var(--color-border));
+}
+
+.cp-empty {
+  text-align: center;
+  padding: var(--space-6, 16px);
+  color: var(--color-text-muted, #888);
+  font-size: var(--font-size-sm, 11px);
+}

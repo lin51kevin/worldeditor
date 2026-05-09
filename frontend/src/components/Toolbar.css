@@ -1,0 +1,87 @@
+.toolbar {
+  position: absolute;
+  top: calc(var(--menubar-height) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  height: var(--toolbar-height);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  padding: 0 var(--space-4);
+  gap: var(--space-1);
+  user-select: none;
+  z-index: var(--z-toolbar);
+  box-shadow: var(--glass-shadow);
+  max-width: calc(100vw - 48px);
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 1px;
+}
+
+.toolbar-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--color-text-primary);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 2px 6px;
+  min-width: 40px;
+  cursor: pointer;
+  gap: 0;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  background: var(--color-list-hover-bg);
+  border-color: var(--color-border);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.toolbar-btn.toolbar-toggle.active {
+  background: var(--color-accent-light);
+  border-color: var(--color-accent);
+}
+
+.tb-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.toolbar-theme-btn {
+  min-width: 32px;
+  padding: 2px 4px;
+}
+
+.tb-label {
+  display: none;
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--glass-border);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+.toolbar-spacer {
+  display: none;
+}
+
+.toolbar-title {
+  display: none;
+}
