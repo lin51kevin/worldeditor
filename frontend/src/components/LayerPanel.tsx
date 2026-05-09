@@ -115,7 +115,7 @@ export function LayerPanel() {
                 <>
                   <div className="map-info-row">
                     <span className="map-info-label">{t('propertyPanel.name')}</span>
-                    <span className="map-info-value">{header.name || '—'}</span>
+                    <span className="map-info-value">{header.name || project.name || '—'}</span>
                   </div>
                   <div className="map-info-row">
                     <span className="map-info-label">{t('layerPanel.revision')}</span>
@@ -128,7 +128,9 @@ export function LayerPanel() {
                   <div className="map-info-row">
                     <span className="map-info-label">{t('layerPanel.geoReference')}</span>
                     <span className="map-info-value map-info-value-wrap">
-                      {header.geo_reference?.value || t('layerPanel.noGeoRef')}
+                      {header.geo_reference
+                        ? `${header.geo_reference.origin_lat.toFixed(6)}, ${header.geo_reference.origin_long.toFixed(6)}`
+                        : t('layerPanel.noGeoRef')}
                     </span>
                   </div>
                   <div className="map-info-row">

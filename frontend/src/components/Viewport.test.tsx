@@ -106,6 +106,7 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     generateJunctionVertices: vi.fn().mockResolvedValue(new Float32Array()),
     generateLaneLineVertices: vi.fn().mockResolvedValue(new Float32Array()),
     generateCenterLineVertices: vi.fn().mockResolvedValue(new Float32Array()),
+    generateSignalPaintVertices: vi.fn().mockResolvedValue(new Float32Array()),
     pickRoadAtPoint: vi.fn().mockResolvedValue(null),
   };
 }
