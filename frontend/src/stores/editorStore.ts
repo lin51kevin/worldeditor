@@ -6,6 +6,7 @@ interface EditorState {
   project: Project;
   isDirty: boolean;
   selectedRoadId: string | null;
+  selectedJunctionId: string | null;
   selectedObjectType: 'road' | 'junction' | null;
 
   // Cursor position (world coordinates)
@@ -22,6 +23,7 @@ interface EditorState {
   // Actions
   setProject: (project: Project) => void;
   selectRoad: (id: string | null) => void;
+  selectJunction: (id: string | null) => void;
   addRoad: (road: Road) => void;
   removeRoad: (id: string) => void;
   updateRoad: (id: string, updates: Partial<Pick<Road, 'name' | 'length' | 'junction_id'>>) => void;
@@ -93,6 +95,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   project: initialProject,
   isDirty: false,
   selectedRoadId: null,
+  selectedJunctionId: null,
   selectedObjectType: null,
   cursorWorldPos: { x: 0, y: 0 },
   gridSpacing: 10.0,
@@ -103,7 +106,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setProject: (project) => set({ project, isDirty: false, undoStack: [], redoStack: [] }),
 
   selectRoad: (id) =>
-    set({ selectedRoadId: id, selectedObjectType: id ? 'road' : null }),
+    set({ selectedRoadId: id, selectedJunctionId: null, selectedObjectType: id ? 'road' : null }),
+
+  selectJunction: (id) =>
+    set({ selectedJunctionId: id, selectedRoadId: null, selectedObjectType: id ? 'junction' : null }),
 
   addRoad: (road) =>
     set((state) => ({
@@ -256,7 +262,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   markDirty: () => set({ isDirty: true }),
   markClean: () => set({ isDirty: false }),
-  reset: () => set({ project: initialProject, isDirty: false, selectedRoadId: null, undoStack: [], redoStack: [], cursorWorldPos: { x: 0, y: 0 }, gridSpacing: 10.0, viewportMpp: 0.1 }),
+  reset: () => set({ project: initialProject, isDirty: false, selectedRoadId: null, selectedJunctionId: null, undoStack: [], redoStack: [], cursorWorldPos: { x: 0, y: 0 }, gridSpacing: 10.0, viewportMpp: 0.1 }),
 
   undo: () =>
     set((state) => {

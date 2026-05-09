@@ -22,6 +22,28 @@ const DEFAULT_LAYOUT: PanelLayout = {
   outputCollapsed: true,
 };
 
+type ColorMode = 'single' | 'byRoad' | 'byLaneType';
+
+interface DisplaySettings {
+  showRoadMesh: boolean;
+  showLaneLines: boolean;
+  showRoadMarks: boolean;
+  showReferenceLine: boolean;
+  showSignals: boolean;
+  showObjects: boolean;
+  colorMode: ColorMode;
+}
+
+const DEFAULT_DISPLAY: DisplaySettings = {
+  showRoadMesh: true,
+  showLaneLines: true,
+  showRoadMarks: true,
+  showReferenceLine: true,
+  showSignals: true,
+  showObjects: true,
+  colorMode: 'byLaneType',
+};
+
 interface EditorViewState {
   // View dimension
   dimension: ViewDimension;
@@ -36,6 +58,9 @@ interface EditorViewState {
   // View mode (sketch/wire/solid)
   viewMode: 'sketch' | 'wire' | 'solid';
 
+  // Display settings (layer visibility + color mode)
+  display: DisplaySettings;
+
   // Panel layout
   layout: PanelLayout;
 
@@ -45,6 +70,10 @@ interface EditorViewState {
   toggleAxis: () => void;
   setEditMode: (m: 'select' | 'road' | 'lane' | 'junction') => void;
   setViewMode: (m: 'sketch' | 'wire' | 'solid') => void;
+
+  // Display settings actions
+  toggleDisplaySetting: (key: keyof Omit<DisplaySettings, 'colorMode'>) => void;
+  setColorMode: (mode: ColorMode) => void;
 
   // Panel layout actions
   setLeftWidth: (width: number) => void;
@@ -81,12 +110,36 @@ function loadLayout(): PanelLayout {
   return DEFAULT_LAYOUT;
 }
 
+const DISPLAY_STORAGE_KEY = 'we-display-settings';
+
+function saveDisplay(display: DisplaySettings): void {
+  try {
+    localStorage.setItem(DISPLAY_STORAGE_KEY, JSON.stringify(display));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function loadDisplay(): DisplaySettings {
+  try {
+    const saved = localStorage.getItem(DISPLAY_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved) as Partial<DisplaySettings>;
+      return { ...DEFAULT_DISPLAY, ...parsed };
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return DEFAULT_DISPLAY;
+}
+
 export const useEditorViewStore = create<EditorViewState>((set) => ({
   dimension: '3d',
   showGrid: true,
   showAxis: true,
   editMode: 'select',
   viewMode: 'solid',
+  display: loadDisplay(),
   layout: DEFAULT_LAYOUT,
 
   setDimension: (dimension) => set({ dimension }),
@@ -94,6 +147,20 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   toggleAxis: () => set((state) => ({ showAxis: !state.showAxis })),
   setEditMode: (editMode) => set({ editMode }),
   setViewMode: (viewMode) => set({ viewMode }),
+
+  toggleDisplaySetting: (key) =>
+    set((state) => {
+      const display = { ...state.display, [key]: !state.display[key] };
+      saveDisplay(display);
+      return { display };
+    }),
+
+  setColorMode: (mode) =>
+    set((state) => {
+      const display = { ...state.display, colorMode: mode };
+      saveDisplay(display);
+      return { display };
+    }),
 
   setLeftWidth: (width) =>
     set((state) => {
