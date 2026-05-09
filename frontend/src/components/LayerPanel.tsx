@@ -94,7 +94,6 @@ export function LayerPanel() {
 
   const header = project.header;
   const loaded = hasProjectData(project);
-  const totalSceneItems = filteredRoads.length + filteredJunctions.length;
 
   return (
     <div className="layer-panel">
@@ -219,7 +218,7 @@ export function LayerPanel() {
           >
             {sceneListCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
             <span>
-              {t('layerPanel.sceneList')} ({totalSceneItems})
+              {t('layerPanel.sceneList')} ({t('layerPanel.roads')}: {filteredRoads.length}, {t('layerPanel.junctions')}: {filteredJunctions.length})
             </span>
           </div>
           {!sceneListCollapsed && (
