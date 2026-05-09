@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="6" name="SingleRoad" date="2026-05-08" north="100" south="-100" east="200" west="-200">
+    <geoReference originLat="31.23" originLong="121.47" originAlt="0" originHdg="0" />
+  </header>
+  <road id="1" junction="-1" length="100.0" name="MainStreet">
+    <link>
+      <predecessor elementType="road" elementId="0" contactPoint="end" />
+      <successor elementType="junction" elementId="10" />
+    </link>
+    <planView>
+      <geometry hdg="0.0" length="50.0" s="0" x="0.0" y="0.0">
+        <line />
+      </geometry>
+      <geometry hdg="0.0" length="30.0" s="50.0" x="50.0" y="0.0">
+        <arc curvature="0.02" />
+      </geometry>
+      <geometry hdg="0.6" length="20.0" s="80.0" x="78.0" y="8.0">
+        <spiral curvStart="0.02" curvEnd="0.0" />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="0.0" b="0.01" c="0.0" d="0.0" s="0" />
+      <elevation a="1.0" b="0.0" c="-0.001" d="0.0" s="50.0" />
+    </elevationProfile>
+    <lanes>
+      <laneSection s="0" singleSide="0">
+        <left>
+          <lane id="2" level="0" type="sidewalk">
+            <width a="1.5" b="0" c="0" d="0" sOffset="0" />
+          </lane>
+          <lane id="1" level="0" type="driving">
+            <link>
+              <predecessor id="1" />
+              <successor id="1" />
+            </link>
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" sOffset="0" type="broken" weight="standard" width="0.15" />
+          </lane>
+        </left>
+        <center>
+          <lane id="0" level="0" type="none">
+            <roadMark color="yellow" height="0" laneChange="none" material="" sOffset="0" type="solid" weight="standard" width="0.15" />
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="0" type="driving">
+            <link>
+              <predecessor id="-1" />
+              <successor id="-1" />
+            </link>
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" sOffset="0" type="broken" weight="standard" width="0.15" />
+          </lane>
+          <lane id="-2" level="0" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" sOffset="0" type="solid" weight="standard" width="0.15" />
+          </lane>
+        </right>
+      </laneSection>
+      <laneSection s="60.0" singleSide="0">
+        <center>
+          <lane id="0" level="0" type="none" />
+        </center>
+        <right>
+          <lane id="-1" level="0" type="driving">
+            <width a="4.0" b="0" c="0" d="0" sOffset="0" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+</OpenDRIVE>
