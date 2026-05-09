@@ -54,7 +54,7 @@ describe('LayerPanel', () => {
     render(<LayerPanel />);
 
     expect(screen.getByText('导航器')).toBeInTheDocument();
-    expect(screen.getByText(/场景\s*\(0\)/)).toBeInTheDocument();
+    expect(screen.getByText(/场景.*道路.*0.*路口.*0/)).toBeInTheDocument();
   });
 
   it('shows layer categories', () => {
@@ -68,7 +68,7 @@ describe('LayerPanel', () => {
   it('shows empty road list when project has no roads', () => {
     render(<LayerPanel />);
 
-    expect(screen.getByText(/场景\s*\(0\)/)).toBeInTheDocument();
+    expect(screen.getByText(/场景.*道路.*0.*路口.*0/)).toBeInTheDocument();
     expect(screen.queryByText('测试道路')).not.toBeInTheDocument();
   });
 
@@ -79,7 +79,7 @@ describe('LayerPanel', () => {
 
     render(<LayerPanel />);
 
-    expect(screen.getByText(/场景\s*\(1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/场景.*道路.*1.*路口.*0/)).toBeInTheDocument();
     expect(screen.getByText('测试道路')).toBeInTheDocument();
     expect(screen.getByText('(r-1)')).toBeInTheDocument();
   });

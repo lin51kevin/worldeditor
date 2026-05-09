@@ -146,6 +146,8 @@
     "startS": "s",
     "lanes": "车道",
     "sceneList": "场景",
+    "roads": "道路",
+    "junctions": "路口",
     "noMapData": "未加载地图数据"
   },
   "templatePanel": {
