@@ -179,6 +179,15 @@ export interface PlatformService {
   /** Generate vertices for a single road with a custom color. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateSingleRoadVertices(road: Road, sampleStep: number, color: [number, number, number, number]): Promise<Float32Array>;
 
+  /** Generate junction surface mesh vertices. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
+  generateJunctionVertices(project: Project): Promise<Float32Array>;
+
+  /** Generate lane boundary line vertices (solid/dashed road markings). Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
+  generateLaneLineVertices(project: Project, sampleStep: number): Promise<Float32Array>;
+
+  /** Generate reference line (centerline) visualization vertices. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
+  generateCenterLineVertices(project: Project, sampleStep: number): Promise<Float32Array>;
+
   /** Find the closest road to a world-space point. Returns road ID or null. */
   pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null>;
 }

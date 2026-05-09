@@ -96,6 +96,21 @@ export class WebPlatformService implements PlatformService {
     );
   }
 
+  async generateJunctionVertices(project: Project): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_junction_vertices(JSON.stringify(project));
+  }
+
+  async generateLaneLineVertices(project: Project, sampleStep: number): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_lane_line_vertices(JSON.stringify(project), sampleStep);
+  }
+
+  async generateCenterLineVertices(project: Project, sampleStep: number): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_center_line_vertices(JSON.stringify(project), sampleStep);
+  }
+
   async pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null> {
     const wasm = await this.getWasm();
     const result = wasm.pick_road_at_point(JSON.stringify(project), x, y, threshold);
