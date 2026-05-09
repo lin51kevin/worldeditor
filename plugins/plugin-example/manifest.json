@@ -1,0 +1,11 @@
+{
+  "id": "plugin-example",
+  "name": "Example Plugin",
+  "version": "1.0.0",
+  "description": "An example plugin demonstrating the plugin system",
+  "main": "dist/plugin.js",
+  "author": "WorldEditor Team",
+  "license": "MIT",
+  "dependencies": [],
+  "permissions": []
+}
