@@ -1,0 +1,424 @@
+/* ================================================================
+   Design Tokens — WorldEditor Next
+   方案 C「Pro」工程暗色主题 + 亮色变体
+   ================================================================ */
+
+:root {
+  /* ── Colors: Background ── */
+  --color-bg-primary: #1e1e1e;
+  --color-bg-secondary: #252526;
+  --color-bg-tertiary: #2d2d2d;
+  --color-bg-hover: #2a2d2e;
+  --color-bg-card: #2d2d30;
+  --color-bg-input: #2d2d2d;
+  --color-bg-overlay: rgba(0, 0, 0, 0.5);
+
+  /* ── Colors: Border ── */
+  --color-border: #3e3e42;
+  --color-border-subtle: #2d2d30;
+  --color-border-focus: #007acc;
+
+  /* ── Colors: Text ── */
+  --color-text-primary: #cccccc;
+  --color-text-secondary: #969696;
+  --color-text-label: #9d9d9d;
+  --color-text-muted: #6a6a6a;
+  --color-text-disabled: #5a5a5a;
+  --color-text-inverse: #ffffff;
+
+  /* ── Colors: Accent ── */
+  --color-accent: #007acc;
+  --color-accent-hover: #1a8adb;
+  --color-accent-light: #264f78;
+  --color-accent-subtle: #1a3a5c;
+
+  /* ── Colors: Selection & Highlight ── */
+  --color-selection-bg: #37373d;
+  --color-selection-text: #ffffff;
+  --color-list-hover-bg: #2a2d2e;
+  --color-list-active-bg: #37373d;
+  --color-list-focus-bg: #04395e;
+  --color-highlight: #062f4a;
+  --color-match-highlight: #515c6a;
+
+  /* ── Colors: StatusBar ── */
+  --color-statusbar-bg: #252526;
+  --color-statusbar-text: #969696;
+
+  /* ── Colors: Panel Header ── */
+  --color-panel-header-bg: #383838;
+  --color-panel-header-text: #bbbbbb;
+
+  /* ── Colors: Menu ── */
+  --color-menu-bg: #2d2d30;
+  --color-menu-hover: #094771;
+  --color-menu-hover-text: #ffffff;
+
+  /* ── Colors: Semantic ── */
+  --color-danger: #f44747;
+  --color-danger-hover: #d73a3a;
+  --color-warning: #cca700;
+  --color-success: #4ec994;
+  --color-info: #3794ff;
+  --color-error: #f85149;
+
+  /* ── Colors: Viewport ── */
+  --color-viewport-bg: #1a1a1e;
+  --color-viewport-label: rgba(255, 255, 255, 0.4);
+  --color-viewport-clear-r: 0.10;
+  --color-viewport-clear-g: 0.10;
+  --color-viewport-clear-b: 0.12;
+  --color-viewport-grid-r: 0.50;
+  --color-viewport-grid-g: 0.50;
+  --color-viewport-grid-b: 0.50;
+
+  /* ── Spacing ── */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-8: 16px;
+  --space-10: 20px;
+  --space-12: 24px;
+
+  /* ── Border Radius ── */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-dialog: 0 8px 32px rgba(0, 0, 0, 0.5);
+
+  /* ── Typography ── */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-base: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 14px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  /* ── Layout Dimensions ── */
+  --menubar-height: 32px;
+  --toolbar-height: 36px;
+  --statusbar-height: 24px;
+  --floating-panel-width: 260px;
+  --floating-right-width: 300px;
+  --floating-radius: 10px;
+  --output-panel-height: 150px;
+
+  /* ── Glass morphism ── */
+  --glass-bg: rgba(30, 30, 30, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: 12px;
+  --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+
+  /* ── Transitions ── */
+  --transition-fast: 120ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* ── Z-index layers ── */
+  --z-viewport: 0;
+  --z-panel: 20;
+  --z-toolbar: 30;
+  --z-menubar: 40;
+  --z-dropdown: 100;
+  --z-overlay: 200;
+  --z-modal: 300;
+  --z-command-palette: 400;
+}
+
+[data-theme="light"] {
+  /* ── Colors: Background ── */
+  --color-bg-primary: #f3f3f3;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #f0f0f0;
+  --color-bg-hover: #e8e8e8;
+  --color-bg-card: #ffffff;
+  --color-bg-input: #ffffff;
+  --color-bg-overlay: rgba(0, 0, 0, 0.3);
+
+  /* ── Colors: Border ── */
+  --color-border: #d4d4d4;
+  --color-border-subtle: #e5e5e5;
+  --color-border-focus: #0078d4;
+
+  /* ── Colors: Text ── */
+  --color-text-primary: #333333;
+  --color-text-secondary: #616161;
+  --color-text-label: #555555;
+  --color-text-muted: #999999;
+  --color-text-disabled: #a0a0a0;
+  --color-text-inverse: #ffffff;
+
+  /* ── Colors: Accent ── */
+  --color-accent: #0078d4;
+  --color-accent-hover: #106ebe;
+  --color-accent-light: #c4e1f6;
+  --color-accent-subtle: #e8f2fc;
+
+  /* ── Colors: Selection & Highlight ── */
+  --color-selection-bg: #d6ebff;
+  --color-selection-text: #333333;
+  --color-list-hover-bg: #e8e8e8;
+  --color-list-active-bg: #e0e0e0;
+  --color-list-focus-bg: #d6ebff;
+  --color-highlight: #d6ebff;
+  --color-match-highlight: #fdf2ce;
+
+  /* ── Colors: StatusBar ── */
+  --color-statusbar-bg: #f3f3f3;
+  --color-statusbar-text: #616161;
+
+  /* ── Colors: Panel Header ── */
+  --color-panel-header-bg: #e8e8e8;
+  --color-panel-header-text: #333333;
+
+  /* ── Colors: Menu ── */
+  --color-menu-bg: #ffffff;
+  --color-menu-hover: #d6ebff;
+  --color-menu-hover-text: #333333;
+
+  /* ── Colors: Semantic ── */
+  --color-danger: #d32f2f;
+  --color-danger-hover: #b71c1c;
+  --color-warning: #f57f17;
+  --color-success: #2e7d32;
+  --color-info: #1565c0;
+  --color-error: #d32f2f;
+
+  /* ── Colors: Viewport ── */
+  --color-viewport-bg: #e8e8ec;
+  --color-viewport-label: rgba(0, 0, 0, 0.4);
+  --color-viewport-clear-r: 0.91;
+  --color-viewport-clear-g: 0.91;
+  --color-viewport-clear-b: 0.93;
+  --color-viewport-grid-r: 0.58;
+  --color-viewport-grid-g: 0.58;
+  --color-viewport-grid-b: 0.58;
+
+  /* ── Shadows (lighter for light theme) ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-dialog: 0 8px 32px rgba(0, 0, 0, 0.18);
+
+  /* ── Glass morphism (light) ── */
+  --glass-bg: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-bg-hover);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--color-bg-primary);
+}
+
+.app-container {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Full-bleed viewport (base layer) ── */
+.canvas-viewport {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-viewport);
+}
+
+/* ── Floating panel (glass morphism base) ── */
+.floating-left,
+.floating-right,
+.floating-output {
+  position: absolute;
+  z-index: var(--z-panel);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--floating-radius);
+  box-shadow: var(--glass-shadow);
+  overflow: hidden;
+  animation: panel-fade-in 200ms ease-out;
+}
+
+@keyframes panel-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes panel-slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes panel-slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.floating-left {
+  animation-name: panel-slide-left;
+}
+
+.floating-right {
+  animation-name: panel-slide-right;
+}
+
+.floating-left {
+  top: calc(var(--menubar-height) + 12px);
+  left: 12px;
+  width: var(--floating-panel-width);
+  bottom: 36px;
+  max-height: calc(100vh - var(--menubar-height) - 56px);
+  display: flex;
+  flex-direction: column;
+}
+
+.floating-right {
+  top: calc(var(--menubar-height) + 12px);
+  right: 12px;
+  width: var(--floating-right-width);
+  bottom: 36px;
+  max-height: calc(100vh - var(--menubar-height) - 56px);
+  display: flex;
+  flex-direction: column;
+}
+
+.floating-output {
+  left: calc(var(--floating-panel-width) + 28px);
+  right: calc(var(--floating-right-width) + 28px);
+  bottom: 36px;
+  height: var(--output-panel-height);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── (Splitter/fixed panel layout removed — now using floating panels) ── */
+
+.floating-left-divider {
+  height: 1px;
+  background: var(--glass-border);
+  flex-shrink: 0;
+}
+
+/* ── Card component ── */
+.card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  margin: var(--space-4);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--color-border-subtle);
+  transition: background var(--transition-fast);
+}
+
+.card-header:hover {
+  background: var(--color-bg-hover);
+}
+
+.card-header .card-collapse-icon {
+  transition: transform var(--transition-fast);
+}
+
+.card-header.collapsed .card-collapse-icon {
+  transform: rotate(-90deg);
+}
+
+.card-body {
+  padding: var(--space-2) 0;
+}
+
+.card-body.collapsed {
+  display: none;
+}
+
+/* ── Panel header (section title) ── */
+.panel-section-header {
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border);
+  user-select: none;
+}
