@@ -138,6 +138,42 @@ export interface MarkingData {
   color: [number, number, number, number];
 }
 
+export type MouseDragAction = 'pan' | 'orbit';
+
+export function resolveMouseDragAction(
+  button: number,
+  modifiers: Pick<MouseEvent, 'ctrlKey' | 'shiftKey'>,
+): MouseDragAction | null {
+  if (button === 2) return 'orbit';
+  if (button === 1) return 'pan';
+  if (button !== 0) return null;
+  return modifiers.ctrlKey || modifiers.shiftKey ? 'orbit' : 'pan';
+}
+
+function mouseButtonMask(button: number): number {
+  switch (button) {
+    case 0:
+      return 1;
+    case 1:
+      return 4;
+    case 2:
+      return 2;
+    default:
+      return 0;
+  }
+}
+
+export function computeGroundPanOffset(
+  previous: { x: number; y: number } | null,
+  current: { x: number; y: number } | null,
+): { x: number; y: number } | null {
+  if (!previous || !current) return null;
+  return {
+    x: previous.x - current.x,
+    y: previous.y - current.y,
+  };
+}
+
 export class ViewportRenderer {
   private device!: GPUDevice;
   private context!: GPUCanvasContext;
@@ -173,6 +209,8 @@ export class ViewportRenderer {
 
   // Mouse interaction
   private isDragging = false;
+  private activeMouseButton: number | null = null;
+  private activeDragAction: MouseDragAction | null = null;
   private lastMouse: [number, number] = [0, 0];
 
   // Visibility flags for grid/axis
@@ -805,25 +843,37 @@ export class ViewportRenderer {
   }
   private setupMouseControls(canvas: HTMLCanvasElement): void {
     canvas.addEventListener('mousedown', (e) => {
+      const action = resolveMouseDragAction(e.button, e);
+      if (!action) return;
       this.isDragging = true;
+      this.activeMouseButton = e.button;
+      this.activeDragAction = action;
       this.lastMouse = [e.clientX, e.clientY];
     });
 
     canvas.addEventListener('mousemove', (e) => {
-      if (!this.isDragging) return;
-      const dx = (e.clientX - this.lastMouse[0]) * 0.005;
-      const dy = (e.clientY - this.lastMouse[1]) * 0.005;
+      if (!this.isDragging || this.activeMouseButton === null) return;
+      const requiredMask = mouseButtonMask(this.activeMouseButton);
+      if (requiredMask !== 0 && (e.buttons & requiredMask) === 0) {
+        this.stopDragging();
+        return;
+      }
+      const previousMouse = this.lastMouse;
       this.lastMouse = [e.clientX, e.clientY];
 
-      if (e.buttons === 1) {
-        this.orbit(dx, dy); // left button = orbit
-      } else if (e.buttons === 4 || e.buttons === 2) {
-        this.pan(dx * 20, dy * 20); // middle/right = pan
+      const action = resolveMouseDragAction(this.activeMouseButton, e) ?? this.activeDragAction;
+      this.activeDragAction = action;
+      if (action === 'orbit') {
+        const dx = (e.clientX - previousMouse[0]) * 0.005;
+        const dy = (e.clientY - previousMouse[1]) * 0.005;
+        this.orbit(dx, dy);
+      } else if (action === 'pan') {
+        this.pan(canvas, previousMouse, this.lastMouse);
       }
     });
 
-    canvas.addEventListener('mouseup', () => { this.isDragging = false; });
-    canvas.addEventListener('mouseleave', () => { this.isDragging = false; });
+    canvas.addEventListener('mouseup', () => { this.stopDragging(); });
+    canvas.addEventListener('mouseleave', () => { this.stopDragging(); });
 
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
@@ -833,6 +883,12 @@ export class ViewportRenderer {
 
     // Prevent context menu on right-click
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  private stopDragging(): void {
+    this.isDragging = false;
+    this.activeMouseButton = null;
+    this.activeDragAction = null;
   }
 
   private orbit(dx: number, dy: number): void {
@@ -869,17 +925,32 @@ export class ViewportRenderer {
     this.reportScale();
   }
 
-  private pan(dx: number, dy: number): void {
+  private pan(
+    canvas: HTMLCanvasElement,
+    previousMouse: [number, number],
+    currentMouse: [number, number],
+  ): void {
     const [px, py, pz] = this.camera.position;
     const [tx, ty, tz] = this.camera.target;
-    // Scale pan speed with camera distance
-    const dist = Math.sqrt(
-      (px - tx) ** 2 + (py - ty) ** 2 + (pz - tz) ** 2,
-    );
-    const speed = dist * 0.5;
-    this.camera.position = [px + dx * speed, py + dy * speed, pz];
-    this.camera.target = [tx + dx * speed, ty + dy * speed, tz];
+    const previousWorld = this.unprojectClientToGround(canvas, previousMouse);
+    const currentWorld = this.unprojectClientToGround(canvas, currentMouse);
+    const offset = computeGroundPanOffset(previousWorld, currentWorld);
+    if (!offset) return;
+
+    this.camera.position = [px + offset.x, py + offset.y, pz];
+    this.camera.target = [tx + offset.x, ty + offset.y, tz];
     this.reportScale();
+  }
+
+  private unprojectClientToGround(
+    canvas: HTMLCanvasElement,
+    clientPoint: [number, number],
+  ): { x: number; y: number } | null {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const screenX = (clientPoint[0] - rect.left) * (canvas.width / rect.width);
+    const screenY = (clientPoint[1] - rect.top) * (canvas.height / rect.height);
+    return this.unprojectToGround(screenX, screenY);
   }
 }
 
