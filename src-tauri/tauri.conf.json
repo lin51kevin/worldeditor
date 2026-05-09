@@ -1,0 +1,52 @@
+{
+  "productName": "WorldEditor",
+  "version": "0.1.0",
+  "identifier": "com.worldeditor.next",
+  "build": {
+    "frontendDist": "../frontend/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "cd ../frontend && yarn dev",
+    "beforeBuildCommand": "cd ../frontend && yarn build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "WorldEditor",
+        "width": 1400,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "fs": {
+      "scope": {
+        "allow": ["**"],
+        "deny": []
+      }
+    },
+    "dialog": {
+      "all": true
+    },
+    "shell": {
+      "open": true
+    }
+  }
+}
