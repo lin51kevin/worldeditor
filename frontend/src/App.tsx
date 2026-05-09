@@ -1,4 +1,5 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MenuBar } from './components/MenuBar';
 import { Toolbar } from './components/Toolbar';
 import { LayerPanel } from './components/LayerPanel';
@@ -16,6 +17,7 @@ import { useEditorViewStore } from './stores/editorViewStore';
 export function App() {
   const { undo, redo, canUndo, canRedo, selectedRoadId } = useEditorStore();
   const { initTheme } = useThemeStore();
+  const { t, i18n } = useTranslation();
   const {
     layout,
     initLayout,
@@ -28,6 +30,17 @@ export function App() {
     initTheme();
     initLayout();
   }, [initTheme, initLayout]);
+
+  // Sync native window title and document.title with the current language
+  useEffect(() => {
+    const title = t('app.brand');
+    document.title = title;
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+        void getCurrentWindow().setTitle(title);
+      }).catch(() => {/* non-critical */});
+    }
+  }, [t, i18n.language]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
