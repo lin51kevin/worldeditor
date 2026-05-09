@@ -71,7 +71,11 @@
     "switchToLight": "切换到浅色主题",
     "switchToDark": "切换到深色主题",
     "switchToZh": "切换到中文",
-    "switchToEn": "Switch to English"
+    "switchToEn": "Switch to English",
+    "snap": "吸附",
+    "snapTitle": "开关吸附",
+    "measure": "测量",
+    "measureTitle": "测量工具"
   },
   "statusBar": {
     "roads": "道路",
@@ -102,7 +106,10 @@
     "incomingRoad": "入口道路",
     "connectingRoad": "连接道路",
     "contactPoint": "接触点",
-    "laneLinks": "车道链接"
+    "laneLinks": "车道链接",
+    "addPoint": "添加点",
+    "deletePoint": "删除",
+    "smoothElevation": "平滑高程"
   },
   "layerPanel": {
     "header": "导航器",
@@ -119,7 +126,6 @@
     "laneSections": "车道段",
     "lane": "车道",
     "length": "长度",
-
     "layers": "图层分类",
     "mapInfo": "地图信息",
     "revision": "版本",
@@ -206,6 +212,33 @@
     "meters": "米",
     "parseError": "文件解析失败，请检查文件格式是否正确。",
     "openError": "打开文件失败，请重试。"
+  },
+  "snapping": {
+    "enabled": "吸附",
+    "mode": "吸附模式",
+    "grid": "网格吸附",
+    "endpoint": "端点吸附",
+    "midpoint": "中点吸附",
+    "perpendicular": "垂直吸附",
+    "threshold": "吸附阈值",
+    "gridSize": "网格间距",
+    "snappedTo": "已吸附到"
+  },
+  "measurement": {
+    "title": "测量工具",
+    "distance": "距离",
+    "angle": "角度",
+    "area": "面积",
+    "clear": "清除",
+    "straight": "直线距离",
+    "horizontal": "水平距离",
+    "vertical": "垂直距离",
+    "degrees": "角度(度)",
+    "radians": "角度(弧度)",
+    "perimeter": "周长",
+    "clickToMeasure": "在视口中点击以添加测量点",
+    "pointCount": "已添加 {{count}} 个点",
+    "needMorePoints": "还需 {{count}} 个点"
   },
   "commandPalette": {
     "placeholder": "输入命令...",

@@ -70,7 +70,11 @@
     "switchToLight": "Switch to Light Theme",
     "switchToDark": "Switch to Dark Theme",
     "switchToZh": "切换到中文",
-    "switchToEn": "Switch to English"
+    "switchToEn": "Switch to English",
+    "snap": "Snap",
+    "snapTitle": "Toggle Snap",
+    "measure": "Measure",
+    "measureTitle": "Measure Tool"
   },
   "statusBar": {
     "roads": "Roads",
@@ -101,7 +105,10 @@
     "incomingRoad": "Incoming Road",
     "connectingRoad": "Connecting Road",
     "contactPoint": "Contact Point",
-    "laneLinks": "Lane Links"
+    "laneLinks": "Lane Links",
+    "addPoint": "Add Point",
+    "deletePoint": "Delete",
+    "smoothElevation": "Smooth Elevation"
   },
   "layerPanel": {
     "header": "Navigator",
@@ -118,7 +125,6 @@
     "laneSections": "Lane Sections",
     "lane": "Lane",
     "length": "Length",
-
     "layers": "Layers",
     "mapInfo": "Map Info",
     "revision": "Revision",
@@ -205,6 +211,33 @@
     "meters": "meters",
     "parseError": "Failed to parse file. Please check that the file format is valid.",
     "openError": "Failed to open file. Please try again."
+  },
+  "snapping": {
+    "enabled": "Snap",
+    "mode": "Snap Mode",
+    "grid": "Grid Snap",
+    "endpoint": "Endpoint Snap",
+    "midpoint": "Midpoint Snap",
+    "perpendicular": "Perpendicular Snap",
+    "threshold": "Snap Threshold",
+    "gridSize": "Grid Size",
+    "snappedTo": "Snapped to"
+  },
+  "measurement": {
+    "title": "Measure Tool",
+    "distance": "Distance",
+    "angle": "Angle",
+    "area": "Area",
+    "clear": "Clear",
+    "straight": "Straight Distance",
+    "horizontal": "Horizontal Distance",
+    "vertical": "Vertical Distance",
+    "degrees": "Degrees",
+    "radians": "Radians",
+    "perimeter": "Perimeter",
+    "clickToMeasure": "Click in the viewport to add measurement points",
+    "pointCount": "{{count}} point(s) added",
+    "needMorePoints": "Need {{count}} more point(s)"
   },
   "commandPalette": {
     "placeholder": "Type a command...",
