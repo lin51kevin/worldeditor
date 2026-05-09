@@ -1,0 +1,41 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.yarn/cache/
+frontend/.yarn/install-state.gz
+
+# Tauri
+src-tauri/target/
+
+# WASM build output
+crates/we-wasm/pkg/
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+tests/visual/diff/
+tests/visual/actual/
+coverage/
+*.lcov
+frontend/test-results/
+frontend/playwright-report/
+
+# Environment
+.env
+.env.local
+
+#plan
+plan.md
