@@ -131,7 +131,8 @@
 .menubar-shortcut {
   color: var(--color-text-secondary);
   font-size: 11px;
-  margin-left: 24px;
+  margin-left: auto;
+  padding-left: 24px;
 }
 
 .menubar-dropdown-item:hover .menubar-shortcut {
@@ -146,8 +147,16 @@
 
 .menubar-check {
   width: 16px;
-  margin-right: 4px;
+  margin-left: auto;
+  padding-left: 8px;
   color: var(--color-accent);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* When both shortcut and check exist, shortcut takes auto margin */
+.menubar-dropdown-item .menubar-shortcut+.menubar-check {
+  margin-left: 8px;
 }
 
 .menubar-dropdown-item.checked {

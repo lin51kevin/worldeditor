@@ -97,7 +97,9 @@ export function TemplatePanel() {
 
   return (
     <div className="template-panel">
-      <div className="template-header">{t('templatePanel.header')}</div>
+      <div className="template-header">
+        <span>{t('templatePanel.header')}</span>
+      </div>
       <div className="template-grid">
         {ROAD_TEMPLATES.map((tpl) => (
           <div
@@ -108,7 +110,8 @@ export function TemplatePanel() {
             role="button"
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter') handleTemplateClick(tpl.id); }}
-          >            <div className="template-thumb">{tpl.icon}</div>
+          >
+            <div className="template-thumb">{tpl.icon}</div>
             <div className="template-label">{t(tpl.labelKey)}</div>
           </div>
         ))}

@@ -22,8 +22,8 @@
   --color-text-primary: #cccccc;
   --color-text-secondary: #969696;
   --color-text-label: #9d9d9d;
-  --color-text-muted: #6a6a6a;
-  --color-text-disabled: #5a5a5a;
+  --color-text-muted: #8a8a8a;
+  --color-text-disabled: #757575;
   --color-text-inverse: #ffffff;
 
   /* ── Colors: Accent ── */
@@ -228,7 +228,9 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
   overflow: hidden;
@@ -277,7 +279,8 @@ html, body, #root {
 /* ── Floating panel (glass morphism base) ── */
 .floating-left,
 .floating-right,
-.floating-output {
+.floating-output,
+.floating-template {
   position: absolute;
   z-index: var(--z-panel);
   background: var(--glass-bg);
@@ -295,6 +298,7 @@ html, body, #root {
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -306,6 +310,7 @@ html, body, #root {
     opacity: 0;
     transform: translateX(-12px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -317,6 +322,7 @@ html, body, #root {
     opacity: 0;
     transform: translateX(12px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -335,8 +341,8 @@ html, body, #root {
   top: calc(var(--menubar-height) + 12px);
   left: 12px;
   width: var(--floating-panel-width);
-  bottom: 36px;
-  max-height: calc(100vh - var(--menubar-height) - 56px);
+  height: calc(100% - var(--menubar-height) - 12px - 320px);
+  min-height: 200px;
   display: flex;
   flex-direction: column;
 }
@@ -366,6 +372,16 @@ html, body, #root {
   height: 1px;
   background: var(--glass-border);
   flex-shrink: 0;
+}
+
+/* Template panel — standalone floating */
+.floating-template {
+  top: calc(100% - 260px);
+  left: 12px;
+  width: var(--floating-panel-width);
+  display: flex;
+  flex-direction: column;
+  animation-name: panel-slide-left;
 }
 
 /* ── Card component ── */

@@ -8,6 +8,7 @@ import { TemplatePanel } from './components/TemplatePanel';
 import { StatusBar } from './components/StatusBar';
 import { CommandPalette } from './components/CommandPalette';
 import { OutputPanel } from './components/OutputPanel';
+import { FloatingPanel } from './components/FloatingPanel';
 import { useEditorStore } from './stores/editorStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorViewStore } from './stores/editorViewStore';
@@ -85,18 +86,49 @@ export function App() {
 
       {/* Floating left panel */}
       {!layout.leftCollapsed && (
-        <div className="floating-left">
+        <FloatingPanel
+          className="floating-left"
+          dragHandleSelector=".panel-header"
+          defaultWidth={layout.leftWidth}
+          minWidth={180}
+          maxWidth={500}
+          minHeight={200}
+          resizeEdges={['top', 'right', 'bottom', 'left']}
+          storageKey="we-panel-left"
+        >
           <LayerPanel />
-          <div className="floating-left-divider" />
-          <TemplatePanel />
-        </div>
+        </FloatingPanel>
       )}
+
+      {/* Floating template panel */}
+      <FloatingPanel
+        className="floating-template"
+        dragHandleSelector=".template-header"
+        defaultWidth={layout.leftWidth}
+        minWidth={180}
+        maxWidth={500}
+        minHeight={80}
+          resizeEdges={['top', 'right', 'bottom', 'left']}
+          storageKey="we-panel-template"
+      >
+        <TemplatePanel />
+      </FloatingPanel>
 
       {/* Floating right panel — Quick Inspector (only when selected) */}
       {showRightPanel && (
-        <div className="floating-right">
+        <FloatingPanel
+          className="floating-right"
+          dragHandleSelector=".prop-header"
+          defaultWidth={layout.rightWidth}
+          minWidth={220}
+          maxWidth={500}
+          minHeight={200}
+          resizeEdges={['top', 'right', 'bottom', 'left']}
+          anchorHorizontal="right"
+          storageKey="we-panel-right"
+        >
           <PropertyPanel />
-        </div>
+        </FloatingPanel>
       )}
 
       {/* Floating output panel */}

@@ -39,7 +39,6 @@ describe('App', () => {
 
   it('should render the application shell', () => {
     render(<App />);
-    expect(screen.getByText('世界编辑器')).toBeDefined();
     expect(screen.getByText('文件')).toBeDefined();
     expect(screen.getByText('新建')).toBeDefined();
     expect(screen.getByText('打开...')).toBeDefined();

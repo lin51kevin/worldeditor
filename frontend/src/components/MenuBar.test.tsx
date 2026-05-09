@@ -110,10 +110,9 @@ describe('MenuBar', () => {
     vi.mocked(getPlatformService).mockResolvedValue(createPlatformMock().platform);
   });
 
-  it('renders the brand and all top-level menu labels', () => {
+  it('renders all top-level menu labels', () => {
     render(<MenuBar />);
 
-    expect(screen.getByText('世界编辑器')).toBeInTheDocument();
     ['文件', '编辑', '视图', '工具', '关于'].forEach((label) => {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     });

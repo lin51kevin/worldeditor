@@ -6,7 +6,26 @@
   flex: 1;
 }
 
-/* Tab header */
+/* Drag handle header */
+.prop-header {
+  display: flex;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--glass-border);
+  cursor: move;
+  user-select: none;
+  position: relative;
+}
+
+.prop-header-title {
+  flex: 1;
+  text-align: center;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+/* Tab header (kept for potential future multi-tab use) */
 .prop-tabs {
   display: flex;
   border-bottom: 1px solid var(--glass-border);
@@ -31,7 +50,6 @@
 
 .prop-tab.active {
   color: var(--color-text-primary);
-  border-bottom-color: var(--color-accent);
 }
 
 .property-content {

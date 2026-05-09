@@ -33,11 +33,9 @@ export function PropertyPanel() {
 
   return (
     <div className="property-panel">
-      {/* Header */}
-      <div className="prop-tabs">
-        <button className="prop-tab active">
-          {t('propertyPanel.properties')}
-        </button>
+      {/* Drag handle + header */}
+      <div className="prop-header">
+        <span className="prop-header-title">{t('propertyPanel.properties')}</span>
       </div>
 
       {/* Properties content */}

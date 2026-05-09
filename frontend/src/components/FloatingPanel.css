@@ -1,0 +1,91 @@
+/* ── Inner content wrapper — clips content within border-radius ── */
+/* (container uses overflow:visible so handles at -4px are not clipped) */
+.fp-inner {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Resize handles ── */
+.fp-resize-handle {
+    position: absolute;
+    z-index: 10;
+}
+
+/* Top edge */
+.fp-resize-top {
+    top: -4px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    cursor: row-resize;
+}
+
+.fp-resize-top:hover {
+    border-radius: 4px;
+}
+
+/* Right edge */
+.fp-resize-right {
+    top: 0;
+    right: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+}
+
+.fp-resize-right:hover {
+    border-radius: 4px;
+}
+
+/* Left edge */
+.fp-resize-left {
+    top: 0;
+    left: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+}
+
+.fp-resize-left:hover {
+    border-radius: 4px;
+}
+
+/* Bottom edge */
+.fp-resize-bottom {
+    bottom: -4px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    cursor: row-resize;
+}
+
+.fp-resize-bottom:hover {
+    border-radius: 4px;
+}
+
+/* ── Cursor hints on drag-handle areas ── */
+
+/* Layer panel title */
+.floating-left .panel-header {
+    cursor: move;
+    user-select: none;
+    position: relative;
+}
+
+/* Visual feedback: subtle move icon on hover */
+.floating-left .panel-header:hover::after,
+.floating-right .prop-header:hover::after,
+.floating-template .template-header:hover::after {
+    content: '⠷';
+    position: absolute;
+    right: var(--space-3);
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    color: var(--color-text-muted);
+    pointer-events: none;
+}

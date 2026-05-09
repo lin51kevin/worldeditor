@@ -5,6 +5,7 @@ import { useEditorViewStore } from '../stores/editorViewStore';
 import { useThemeStore } from '../stores/themeStore';
 import { emitViewportEvent } from '../viewport/viewportEvents';
 import { getPlatformService } from '../services';
+import { resetAllPanels } from './FloatingPanel';
 import type { Project } from '../services/platform';
 import './MenuBar.css';
 
@@ -59,11 +60,13 @@ function buildMenus(
   onZoomToSelected: () => void,
   onToggleGrid: () => void,
   onToggleAxis: () => void,
+  onResetPanels: () => void,
   onCalculateRoadLength: () => void,
   canUndo: boolean,
   canRedo: boolean,
   showGrid: boolean,
   showAxis: boolean,
+  dimension: string,
   t: (key: string) => string,
 ): Menu[] {
   return [
@@ -92,14 +95,16 @@ function buildMenus(
     {
       label: t('menu.view'),
       items: [
-        { label: t('menu.view3D'), action: onView3D },
-        { label: t('menu.view2D'), action: onView2D },
+        { label: t('menu.view3D'), action: onView3D, checked: dimension === '3d' },
+        { label: t('menu.view2D'), action: onView2D, checked: dimension === '2d' },
         { separator: true, label: '' },
         { label: t('menu.zoomToFit'), shortcut: 'Home', action: onZoomToFit },
         { label: t('menu.zoomToSelected'), shortcut: 'F', action: onZoomToSelected },
         { separator: true, label: '' },
         { label: t('menu.showGrid'), action: onToggleGrid, checked: showGrid },
         { label: t('menu.showAxis'), action: onToggleAxis, checked: showAxis },
+        { separator: true, label: '' },
+        { label: t('menu.resetPanels'), action: onResetPanels },
       ],
     },
     {
@@ -136,6 +141,7 @@ export function MenuBar() {
     toggleGrid,
     toggleAxis,
     setDimension,
+    dimension,
   } = useEditorViewStore();
 
   const { theme, toggleTheme } = useThemeStore();
@@ -270,11 +276,13 @@ export function MenuBar() {
     handleZoomToSelected,
     handleToggleGrid,
     handleToggleAxis,
+    resetAllPanels,
     handleCalculateRoadLength,
     canUndo(),
     canRedo(),
     showGrid,
     showAxis,
+    dimension,
     t,
   );
 
@@ -327,9 +335,8 @@ export function MenuBar() {
 
   return (
     <div className="menubar" ref={menuBarRef}>
-      {/* Left: brand + menus */}
+      {/* Left: menus */}
       <div className="menubar-left">
-        <span className="menubar-brand">{t('app.brand')}</span>
         {menus.map((menu, idx) => (
           <div key={menu.label} className="menubar-item-wrapper">
             <button
@@ -358,11 +365,11 @@ export function MenuBar() {
                       }}
                       disabled={item.disabled}
                     >
+                      <span>{item.label}</span>
+                      {item.shortcut && <span className="menubar-shortcut">{item.shortcut}</span>}
                       {item.checked !== undefined && (
                         <span className="menubar-check">{item.checked ? '✓' : ''}</span>
                       )}
-                      <span>{item.label}</span>
-                      {item.shortcut && <span className="menubar-shortcut">{item.shortcut}</span>}
                     </button>
                   ),
                 )}

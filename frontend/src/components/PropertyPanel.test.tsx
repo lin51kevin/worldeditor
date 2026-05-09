@@ -73,7 +73,7 @@ describe('PropertyPanel', () => {
   it('renders property panel', () => {
     render(<PropertyPanel />);
 
-    expect(screen.getByRole('button', { name: '属性' })).toBeInTheDocument();
+    expect(screen.getByText('属性')).toBeInTheDocument();
   });
 
   it('shows empty state when nothing is selected', () => {

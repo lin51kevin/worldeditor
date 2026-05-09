@@ -29,6 +29,7 @@ export function LayerPanel() {
   const [roadVisibility, setRoadVisibility] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [categoriesCollapsed, setCategoriesCollapsed] = useState(false);
+  const [roadListCollapsed, setRoadListCollapsed] = useState(false);
   const { t } = useTranslation();
 
   const toggleLayerVisibility = (id: string) => {
@@ -76,46 +77,56 @@ export function LayerPanel() {
         />
       </div>
 
-      {/* Layer categories — collapsible */}
-      <div
-        className="layer-section-toggle"
-        onClick={() => setCategoriesCollapsed(!categoriesCollapsed)}
-      >
-        {categoriesCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-        <span>{t('layerPanel.layers') || 'Layers'}</span>
-      </div>
-      {!categoriesCollapsed && (
-        <div className="layer-categories">
-          {LAYER_CATEGORIES.map((cat) => (
-            <div
-              key={cat.id}
-              className={`layer-category ${activeLayer === cat.id ? 'active' : ''}`}
-              onClick={() => setActiveLayer(cat.id)}
-            >
-              <button
-                className={`layer-visibility ${layerVisibility[cat.id] ? 'visible' : 'hidden'}`}
-                onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(cat.id); }}
-                title={layerVisibility[cat.id] ? t('layerPanel.hideLayer') : t('layerPanel.showLayer')}
-              >
-                {layerVisibility[cat.id] ? <Eye size={12} /> : <EyeOff size={12} />}
-              </button>
-              <span className="layer-cat-icon">{cat.icon}</span>
-              <span className="layer-cat-label">{t(cat.labelKey)}</span>
+      <div className="layer-cards">
+        {/* Card 1: Layer categories */}
+        <div className="layer-card">
+          <div
+            className="layer-section-toggle"
+            onClick={() => setCategoriesCollapsed(!categoriesCollapsed)}
+          >
+            {categoriesCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+            <span>{t('layerPanel.layers') || 'Layers'}</span>
+          </div>
+          {!categoriesCollapsed && (
+            <div className="layer-categories">
+              {LAYER_CATEGORIES.map((cat) => (
+                <div
+                  key={cat.id}
+                  className={`layer-category ${activeLayer === cat.id ? 'active' : ''}`}
+                  onClick={() => setActiveLayer(cat.id)}
+                >
+                  <button
+                    className={`layer-visibility ${layerVisibility[cat.id] ? 'visible' : 'hidden'}`}
+                    onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(cat.id); }}
+                    title={layerVisibility[cat.id] ? t('layerPanel.hideLayer') : t('layerPanel.showLayer')}
+                  >
+                    {layerVisibility[cat.id] ? <Eye size={12} /> : <EyeOff size={12} />}
+                  </button>
+                  <span className="layer-cat-icon">{cat.icon}</span>
+                  <span className="layer-cat-label">{t(cat.labelKey)}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      )}
 
-      {/* Road list */}
-      <div className="road-list-container">
-        <div className="road-list-header">
-          {t('layerPanel.roadList')} ({filteredRoads.length}
-          {searchQuery && filteredRoads.length !== project.roads.length
-            ? ` / ${project.roads.length}`
-            : ''
-          })
-        </div>
-        <div className="road-list">
+        {/* Card 2: Road list */}
+        <div className="layer-card layer-card-grow">
+          <div
+            className="layer-section-toggle"
+            onClick={() => setRoadListCollapsed(!roadListCollapsed)}
+          >
+            {roadListCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+            <span>
+              {t('layerPanel.roadList')} ({filteredRoads.length}
+              {searchQuery && filteredRoads.length !== project.roads.length
+                ? ` / ${project.roads.length}`
+                : ''}
+            )
+            </span>
+          </div>
+          {!roadListCollapsed && (
+          <div className="road-list">
           {filteredRoads.map((road) => (
             <div key={road.id} className="road-list-entry">
               <div
@@ -152,6 +163,8 @@ export function LayerPanel() {
               )}
             </div>
           ))}
+          </div>
+          )}
         </div>
       </div>
     </div>
