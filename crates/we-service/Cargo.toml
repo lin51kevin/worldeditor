@@ -1,0 +1,18 @@
+[package]
+name = "we-service"
+description = "WorldEditor business service layer — editor operations, undo/redo"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+we-core = { workspace = true }
+we-io = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
