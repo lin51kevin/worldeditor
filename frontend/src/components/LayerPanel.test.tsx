@@ -53,8 +53,8 @@ describe('LayerPanel', () => {
   it('renders layer panel', () => {
     render(<LayerPanel />);
 
-    expect(screen.getByText('图层')).toBeInTheDocument();
-    expect(screen.getByText(/道路列表\s*\(0\)/)).toBeInTheDocument();
+    expect(screen.getByText('导航器')).toBeInTheDocument();
+    expect(screen.getByText(/场景\s*\(0\)/)).toBeInTheDocument();
   });
 
   it('shows layer categories', () => {
@@ -68,7 +68,7 @@ describe('LayerPanel', () => {
   it('shows empty road list when project has no roads', () => {
     render(<LayerPanel />);
 
-    expect(screen.getByText(/道路列表\s*\(0\)/)).toBeInTheDocument();
+    expect(screen.getByText(/场景\s*\(0\)/)).toBeInTheDocument();
     expect(screen.queryByText('测试道路')).not.toBeInTheDocument();
   });
 
@@ -79,24 +79,24 @@ describe('LayerPanel', () => {
 
     render(<LayerPanel />);
 
-    expect(screen.getByText(/道路列表\s*\(1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/场景\s*\(1\)/)).toBeInTheDocument();
     expect(screen.getByText('测试道路')).toBeInTheDocument();
     expect(screen.getByText('(r-1)')).toBeInTheDocument();
   });
 
-  it('toggles layer visibility and active categories', () => {
+  it('toggles layer visibility via checkbox', () => {
     render(<LayerPanel />);
 
-    const roadCategory = screen.getByText('道路').closest('.layer-category');
-    const vectorCategory = screen.getByText('矢量').closest('.layer-category') as HTMLElement;
-    const vectorToggle = vectorCategory.querySelector('.layer-visibility') as HTMLElement;
+    const vectorLabel = screen.getByText('矢量').closest('label') as HTMLElement;
+    const vectorCheckbox = vectorLabel.querySelector('input[type="checkbox"]') as HTMLInputElement;
 
-    fireEvent.click(screen.getByText('矢量'));
-    expect(screen.getByText('矢量').closest('.layer-category')).toHaveClass('active');
-    expect(roadCategory).not.toHaveClass('active');
+    expect(vectorCheckbox.checked).toBe(true);
 
-    fireEvent.click(vectorToggle);
-    expect(vectorCategory.querySelector('.layer-visibility')).toHaveAttribute('title', '显示图层');
+    fireEvent.click(vectorCheckbox);
+    expect(vectorCheckbox.checked).toBe(false);
+
+    fireEvent.click(vectorCheckbox);
+    expect(vectorCheckbox.checked).toBe(true);
   });
 
   it('selects roads and toggles road details and visibility', () => {
@@ -110,9 +110,9 @@ describe('LayerPanel', () => {
     expect(useEditorStore.getState().selectedRoadId).toBe('r-1');
 
     fireEvent.click(document.querySelector('.road-expand') as HTMLElement);
-    expect(screen.getByText('几何: 1 段数')).toBeInTheDocument();
-    expect(screen.getByText('车道段: 0')).toBeInTheDocument();
     expect(screen.getByText('长度: 120.5m')).toBeInTheDocument();
+    expect(screen.getByText(/几何 \(1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/车道段 \(0\)/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle('隐藏道路'));
     expect(screen.getByTitle('显示道路')).toBeInTheDocument();

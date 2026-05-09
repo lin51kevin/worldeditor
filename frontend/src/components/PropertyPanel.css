@@ -186,3 +186,15 @@
 .property-lane-section {
   margin-bottom: 4px;
 }
+
+.property-junction-connection {
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle, var(--color-border));
+}
+
+.property-junction-connection:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}

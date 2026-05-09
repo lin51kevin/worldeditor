@@ -15,7 +15,7 @@ import { useThemeStore } from './stores/themeStore';
 import { useEditorViewStore } from './stores/editorViewStore';
 
 export function App() {
-  const { undo, redo, canUndo, canRedo, selectedRoadId } = useEditorStore();
+  const { undo, redo, canUndo, canRedo, selectedRoadId, selectedJunctionId } = useEditorStore();
   const { initTheme } = useThemeStore();
   const { t, i18n } = useTranslation();
   const {
@@ -84,7 +84,7 @@ export function App() {
   }, [undo, redo, canUndo, canRedo, toggleLeftPanel, toggleRightPanel, toggleOutputPanel]);
 
   // Show right panel only when something is selected (Quick Inspector behavior)
-  const showRightPanel = !layout.rightCollapsed && !!selectedRoadId;
+  const showRightPanel = !layout.rightCollapsed && (!!selectedRoadId || !!selectedJunctionId);
 
   return (
     <div className="app-container">

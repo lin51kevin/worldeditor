@@ -27,8 +27,9 @@ function CardSection({ title, defaultOpen = true, children }: CardSectionProps) 
 }
 
 export function PropertyPanel() {
-  const { project, selectedRoadId } = useEditorStore();
+  const { project, selectedRoadId, selectedJunctionId } = useEditorStore();
   const selectedRoad = project.roads.find((r) => r.id === selectedRoadId);
+  const selectedJunction = project.junctions.find((j) => j.id === selectedJunctionId);
   const { t } = useTranslation();
 
   return (
@@ -144,6 +145,62 @@ export function PropertyPanel() {
                   <span className="property-label">{t('propertyPanel.elevationSegments')}</span>
                   <span className="property-value">{selectedRoad.elevation_profile.length}</span>
                 </div>
+              </CardSection>
+            </div>
+          ) : selectedJunction ? (
+            <div className="inspector-cards">
+              {/* Junction Properties Card */}
+              <CardSection title={t('propertyPanel.junctionProperties')}>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.id')}</span>
+                  <span className="property-value">{selectedJunction.id}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.name')}</span>
+                  <input
+                    className="property-input"
+                    value={selectedJunction.name || ''}
+                    placeholder="—"
+                    onChange={(e) => useEditorStore.getState().updateJunction(selectedJunction.id, { name: e.target.value })}
+                  />
+                </div>
+              </CardSection>
+
+              {/* Connections Card */}
+              <CardSection title={`${t('propertyPanel.connections')} (${selectedJunction.connections.length})`}>
+                {selectedJunction.connections.map((conn) => (
+                  <div key={conn.id} className="property-junction-connection">
+                    <div className="property-row sub">
+                      <span className="property-label">{t('propertyPanel.connectionId')}</span>
+                      <span className="property-value">{conn.id}</span>
+                    </div>
+                    <div className="property-row sub">
+                      <span className="property-label">{t('propertyPanel.incomingRoad')}</span>
+                      <span className="property-value">{conn.incoming_road}</span>
+                    </div>
+                    <div className="property-row sub">
+                      <span className="property-label">{t('propertyPanel.connectingRoad')}</span>
+                      <span className="property-value">{conn.connecting_road}</span>
+                    </div>
+                    <div className="property-row sub">
+                      <span className="property-label">{t('propertyPanel.contactPoint')}</span>
+                      <span className="property-value">{conn.contact_point}</span>
+                    </div>
+                    {conn.lane_links.length > 0 && (
+                      <div className="property-row sub">
+                        <span className="property-label">{t('propertyPanel.laneLinks')}</span>
+                        <span className="property-value">
+                          {conn.lane_links.map((ll) => `${ll.from}→${ll.to}`).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {selectedJunction.connections.length === 0 && (
+                  <div className="property-row sub">
+                    <span className="property-label">—</span>
+                  </div>
+                )}
               </CardSection>
             </div>
           ) : (
