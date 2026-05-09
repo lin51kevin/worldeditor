@@ -69,7 +69,9 @@
     "axis": "坐标轴",
     "axisTitle": "显示坐标轴",
     "switchToLight": "切换到浅色主题",
-    "switchToDark": "切换到深色主题"
+    "switchToDark": "切换到深色主题",
+    "switchToZh": "切换到中文",
+    "switchToEn": "Switch to English"
   },
   "statusBar": {
     "roads": "道路",
@@ -157,7 +159,9 @@
     "projectName": "输入项目名称:",
     "fileName": "输入文件名:",
     "roadLength": "道路总长度:",
-    "meters": "米"
+    "meters": "米",
+    "parseError": "文件解析失败，请检查文件格式是否正确。",
+    "openError": "打开文件失败，请重试。"
   },
   "commandPalette": {
     "placeholder": "输入命令...",

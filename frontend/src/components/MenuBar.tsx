@@ -145,6 +145,12 @@ export function MenuBar() {
   } = useEditorViewStore();
 
   const { theme, toggleTheme } = useThemeStore();
+  const { i18n } = useTranslation();
+
+  const toggleLanguage = useCallback(() => {
+    const next = i18n.language.startsWith('zh') ? 'en' : 'zh';
+    void i18n.changeLanguage(next);
+  }, [i18n]);
 
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
@@ -160,14 +166,22 @@ export function MenuBar() {
 
   // File: Open
   const handleOpen = useCallback(async () => {
-    const platform = await getPlatformService();
-    const file = await platform.openFile();
-    if (file) {
+    try {
+      const platform = await getPlatformService();
+      const file = await platform.openFile();
+      if (!file) return;
       const proj = await platform.parseOpenDrive(file.content);
+      if (!proj || !Array.isArray(proj.roads)) {
+        alert(t('dialog.parseError'));
+        return;
+      }
       proj.name = file.name;
       setProject(proj);
+    } catch (err) {
+      console.error('[MenuBar] Failed to open file:', err);
+      alert(t('dialog.openError'));
     }
-  }, [setProject]);
+  }, [setProject, t]);
 
   // File: Save
   const handleSave = useCallback(async () => {
@@ -190,14 +204,22 @@ export function MenuBar() {
 
   // Import OpenDRIVE
   const handleImportOpenDrive = useCallback(async () => {
-    const platform = await getPlatformService();
-    const file = await platform.openFile();
-    if (file) {
+    try {
+      const platform = await getPlatformService();
+      const file = await platform.openFile();
+      if (!file) return;
       const proj = await platform.parseOpenDrive(file.content);
+      if (!proj || !Array.isArray(proj.roads)) {
+        alert(t('dialog.parseError'));
+        return;
+      }
       proj.name = file.name;
       setProject(proj);
+    } catch (err) {
+      console.error('[MenuBar] Failed to import OpenDRIVE:', err);
+      alert(t('dialog.parseError'));
     }
-  }, [setProject]);
+  }, [setProject, t]);
 
   // Export OpenDRIVE
   const handleExportOpenDrive = useCallback(async () => {
@@ -235,7 +257,10 @@ export function MenuBar() {
 
   // Zoom to selected
   const handleZoomToSelected = useCallback(() => {
-    emitViewportEvent({ type: 'zoom-to-selected' });
+    const { selectedRoadId } = useEditorStore.getState();
+    if (selectedRoadId) {
+      emitViewportEvent({ type: 'zoom-to-selected', roadId: selectedRoadId });
+    }
   }, []);
 
   // Toggle grid
@@ -386,8 +411,17 @@ export function MenuBar() {
         </span>
       </div>
 
-      {/* Right: theme toggle */}
+      {/* Right: language + theme toggle */}
       <div className="menubar-right">
+        <button
+          className="menubar-icon-btn"
+          onClick={toggleLanguage}
+          title={i18n.language.startsWith('zh') ? t('toolbar.switchToEn') : t('toolbar.switchToZh')}
+        >
+          <span className="menubar-lang-label">
+            {i18n.language.startsWith('zh') ? 'EN' : '中'}
+          </span>
+        </button>
         <button
           className="menubar-icon-btn"
           onClick={toggleTheme}

@@ -254,12 +254,54 @@ describe('MenuBar', () => {
   it('handles keyboard shortcuts for zoom actions by emitting viewport events', () => {
     const emitSpy = vi.mocked(emitViewportEvent);
     emitSpy.mockClear();
+
+    act(() => {
+      useEditorStore.setState({ selectedRoadId: 'r-zoom' });
+    });
+
     render(<MenuBar />);
 
     dispatchWindowKey({ key: 'Home' });
     dispatchWindowKey({ key: 'f' });
 
     expect(emitSpy).toHaveBeenCalledWith({ type: 'zoom-to-fit' });
-    expect(emitSpy).toHaveBeenCalledWith({ type: 'zoom-to-selected' });
+    expect(emitSpy).toHaveBeenCalledWith({ type: 'zoom-to-selected', roadId: 'r-zoom' });
+  });
+
+  it('shows an error alert and does not update the project when parseOpenDrive rejects', async () => {
+    const alertSpy = vi.mocked(window.alert);
+    const platform = createPlatformMock();
+    platform.openFile.mockResolvedValue({ name: 'bad.xodr', content: '<bad />' });
+    platform.parseOpenDrive.mockRejectedValue(new Error('parse failed'));
+    vi.mocked(getPlatformService).mockResolvedValue(platform.platform);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const originalProject = makeProject([makeRoad('original', 10)], 'Original');
+    act(() => { useEditorStore.setState({ project: originalProject }); });
+
+    render(<MenuBar />);
+    fireEvent.click(screen.getByRole('button', { name: '文件' }));
+    fireEvent.click(screen.getByText('打开文件...'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(useEditorStore.getState().project.name).toBe('Original');
+  });
+
+  it('shows a parse error alert when parseOpenDrive returns a non-Project value', async () => {
+    const alertSpy = vi.mocked(window.alert);
+    const platform = createPlatformMock();
+    platform.openFile.mockResolvedValue({ name: 'invalid.xodr', content: '<x/>' });
+    platform.parseOpenDrive.mockResolvedValue(null as unknown as Project);
+    vi.mocked(getPlatformService).mockResolvedValue(platform.platform);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const originalProject = makeProject([], 'OriginalProject');
+    act(() => { useEditorStore.setState({ project: originalProject }); });
+
+    render(<MenuBar />);
+    dispatchWindowKey({ key: 'o', ctrlKey: true });
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(useEditorStore.getState().project.name).toBe('OriginalProject');
   });
 });

@@ -68,7 +68,9 @@
     "axis": "Axis",
     "axisTitle": "Show Axis",
     "switchToLight": "Switch to Light Theme",
-    "switchToDark": "Switch to Dark Theme"
+    "switchToDark": "Switch to Dark Theme",
+    "switchToZh": "切换到中文",
+    "switchToEn": "Switch to English"
   },
   "statusBar": {
     "roads": "Roads",
@@ -156,7 +158,9 @@
     "projectName": "Enter project name:",
     "fileName": "Enter file name:",
     "roadLength": "Total road length:",
-    "meters": "meters"
+    "meters": "meters",
+    "parseError": "Failed to parse file. Please check that the file format is valid.",
+    "openError": "Failed to open file. Please try again."
   },
   "commandPalette": {
     "placeholder": "Type a command...",

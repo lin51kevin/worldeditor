@@ -1,10 +1,25 @@
 /**
  * Tauri desktop platform adapter.
  * Calls Rust backend via Tauri's invoke IPC.
+ * WASM is used for geometry operations (vertex generation, picking) on the
+ * frontend side — the module must be explicitly initialised before first use,
+ * just like in WebPlatformService.
  */
 import type { GisCoord, PlatformService, Project, UtmCoord } from './platform';
 
 export class TauriPlatformService implements PlatformService {
+  private wasmModule: typeof import('../../wasm/pkg') | null = null;
+
+  /** Lazy-initialise the WASM module exactly once. */
+  private async getWasm(): Promise<typeof import('../../wasm/pkg')> {
+    if (!this.wasmModule) {
+      const wasm = await import('../../wasm/pkg');
+      await wasm.default();
+      this.wasmModule = wasm;
+    }
+    return this.wasmModule;
+  }
+
   async parseOpenDrive(xml: string): Promise<Project> {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke('parse_opendrive', { xml });
@@ -69,9 +84,7 @@ export class TauriPlatformService implements PlatformService {
   }
 
   async generateRoadVertices(project: Project, sampleStep: number): Promise<Float32Array> {
-    // In Tauri mode, we use wgpu for rendering natively.
-    // For the WebGPU viewport fallback, generate via WASM.
-    const wasm = await import('../../wasm/pkg');
+    const wasm = await this.getWasm();
     return wasm.generate_road_vertices(JSON.stringify(project), sampleStep);
   }
 
@@ -80,14 +93,14 @@ export class TauriPlatformService implements PlatformService {
     sampleStep: number,
     color: [number, number, number, number],
   ): Promise<Float32Array> {
-    const wasm = await import('../../wasm/pkg');
+    const wasm = await this.getWasm();
     return wasm.generate_single_road_vertices(
       JSON.stringify(road), sampleStep, color[0], color[1], color[2], color[3],
     );
   }
 
   async pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null> {
-    const wasm = await import('../../wasm/pkg');
+    const wasm = await this.getWasm();
     const result = wasm.pick_road_at_point(JSON.stringify(project), x, y, threshold);
     return result as string | null;
   }

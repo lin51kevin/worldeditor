@@ -80,14 +80,22 @@ export function Toolbar() {
   }, [isDirty, reset, t]);
 
   const handleOpen = useCallback(async () => {
-    const platform = await getPlatformService();
-    const file = await platform.openFile();
-    if (file) {
+    try {
+      const platform = await getPlatformService();
+      const file = await platform.openFile();
+      if (!file) return;
       const proj = await platform.parseOpenDrive(file.content);
+      if (!proj || !Array.isArray(proj.roads)) {
+        alert(t('dialog.parseError'));
+        return;
+      }
       proj.name = file.name;
       setProject(proj);
+    } catch (err) {
+      console.error('[Toolbar] Failed to open file:', err);
+      alert(t('dialog.openError'));
     }
-  }, [setProject]);
+  }, [setProject, t]);
 
   const handleSave = useCallback(async () => {
     const platform = await getPlatformService();

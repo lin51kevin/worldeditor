@@ -246,4 +246,42 @@ describe('Toolbar', () => {
   });
 
   // Theme toggle has been moved to MenuBar — tested in MenuBar.test.tsx
+
+  it('shows an error alert and does not update the project when parseOpenDrive rejects', async () => {
+    vi.stubGlobal('alert', vi.fn());
+    const alertSpy = vi.mocked(window.alert);
+    const platform = createPlatformMock();
+    platform.openFile.mockResolvedValue({ name: 'bad.xodr', content: '<bad />' });
+    platform.parseOpenDrive.mockRejectedValue(new Error('parse failed'));
+    vi.mocked(getPlatformService).mockResolvedValue(platform.platform);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const originalProject = makeProject([makeRoad('original')], 'Original');
+    act(() => { useEditorStore.setState({ project: originalProject }); });
+
+    render(<Toolbar />);
+    fireEvent.click(screen.getByRole('button', { name: '打开...' }));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(useEditorStore.getState().project.name).toBe('Original');
+  });
+
+  it('shows a parse error alert when parseOpenDrive returns a non-Project value', async () => {
+    vi.stubGlobal('alert', vi.fn());
+    const alertSpy = vi.mocked(window.alert);
+    const platform = createPlatformMock();
+    platform.openFile.mockResolvedValue({ name: 'invalid.xodr', content: '<x/>' });
+    platform.parseOpenDrive.mockResolvedValue(null as unknown as Project);
+    vi.mocked(getPlatformService).mockResolvedValue(platform.platform);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const originalProject = makeProject([], 'OriginalProject');
+    act(() => { useEditorStore.setState({ project: originalProject }); });
+
+    render(<Toolbar />);
+    fireEvent.click(screen.getByRole('button', { name: '打开...' }));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(useEditorStore.getState().project.name).toBe('OriginalProject');
+  });
 });
