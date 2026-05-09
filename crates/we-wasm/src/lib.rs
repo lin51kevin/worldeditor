@@ -171,7 +171,6 @@ pub fn generate_road_vertices(project_json: &str, sample_step: f64) -> Result<Ve
 /// Junction areas are rendered as semi-transparent lavender polygons.
 #[wasm_bindgen]
 pub fn generate_junction_vertices(project_json: &str) -> Result<Vec<f32>, JsError> {
-    use we_core::geometry::eval::evaluate_elevation;
     use we_core::model::Project;
 
     let project: Project =
@@ -179,55 +178,31 @@ pub fn generate_junction_vertices(project_json: &str) -> Result<Vec<f32>, JsErro
 
     let mut all_floats = Vec::new();
     let color = [0.88f32, 0.85, 0.98, 0.4];
-    let z_offset = -0.1f32;
 
     for junction in &project.junctions {
-        if junction.connections.is_empty() {
-            continue;
-        }
-
-        let mut points: Vec<[f32; 3]> = Vec::new();
-
-        for conn in &junction.connections {
-            if let Some(road) = project.roads.iter().find(|r| r.id == conn.incoming_road) {
-                if let Some(geo) = road.plan_view.first() {
-                    let z = evaluate_elevation(&road.elevation_profile, 0.0) as f32 + z_offset;
-                    points.push([geo.x as f32, geo.y as f32, z]);
-                }
-            }
-            if let Some(road) = project.roads.iter().find(|r| r.id == conn.connecting_road) {
-                if let Some(geo) = road.plan_view.last() {
-                    let end_s = geo.s + geo.length;
-                    let z = evaluate_elevation(&road.elevation_profile, end_s) as f32 + z_offset;
-                    let dx = geo.length as f32 * geo.hdg.cos() as f32;
-                    let dy = geo.length as f32 * geo.hdg.sin() as f32;
-                    points.push([geo.x as f32 + dx, geo.y as f32 + dy, z]);
-                }
-            }
-        }
-
-        if points.len() < 3 {
-            continue;
-        }
-
-        let n = points.len() as f32;
-        let cx: f32 = points.iter().map(|p| p[0]).sum::<f32>() / n;
-        let cy: f32 = points.iter().map(|p| p[1]).sum::<f32>() / n;
-        let cz: f32 = points.iter().map(|p| p[2]).sum::<f32>() / n;
-        let [r, g, b, a] = color;
-
-        for i in 0..points.len() {
-            let j = (i + 1) % points.len();
-            all_floats.extend_from_slice(&[cx, cy, cz, r, g, b, a]);
-            all_floats.extend_from_slice(&[
-                points[i][0], points[i][1], points[i][2], r, g, b, a,
-            ]);
-            all_floats.extend_from_slice(&[
-                points[j][0], points[j][1], points[j][2], r, g, b, a,
-            ]);
-        }
+        append_junction_triangles(&mut all_floats, &project, junction, color);
     }
 
+    Ok(all_floats)
+}
+
+/// Generate highlight mesh vertices for a single junction.
+#[wasm_bindgen]
+pub fn generate_single_junction_vertices(
+    project_json: &str,
+    junction_id: &str,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::model::Project;
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let mut all_floats = Vec::new();
+    if let Some(junction) = project.junctions.iter().find(|j| j.id == junction_id) {
+        append_junction_triangles(&mut all_floats, &project, junction, [r, g, b, a]);
+    }
     Ok(all_floats)
 }
 
@@ -849,6 +824,164 @@ fn sign_marker_color(signal_type: &str) -> [f32; 4] {
         t if t.starts_with("1000") => [0.2, 0.8, 0.2, 0.9], // traffic lights → green
         "1010203800001413" | "1010203900001613" => [0.9, 0.2, 0.2, 0.9], // speed limit → red
         _ => [0.8, 0.8, 0.1, 0.9], // generic sign → yellow
+    }
+}
+
+fn append_junction_triangles(
+    out: &mut Vec<f32>,
+    project: &we_core::model::Project,
+    junction: &we_core::model::Junction,
+    color: [f32; 4],
+) {
+    let points = build_junction_polygon_points(project, junction);
+    if points.len() < 3 {
+        return;
+    }
+    let n = points.len() as f32;
+    let cx: f32 = points.iter().map(|p| p[0]).sum::<f32>() / n;
+    let cy: f32 = points.iter().map(|p| p[1]).sum::<f32>() / n;
+    let cz: f32 = points.iter().map(|p| p[2]).sum::<f32>() / n;
+    let [r, g, b, a] = color;
+    for i in 0..points.len() {
+        let j = (i + 1) % points.len();
+        out.extend_from_slice(&[cx, cy, cz, r, g, b, a]);
+        out.extend_from_slice(&[points[i][0], points[i][1], points[i][2], r, g, b, a]);
+        out.extend_from_slice(&[points[j][0], points[j][1], points[j][2], r, g, b, a]);
+    }
+}
+
+fn build_junction_polygon_points(
+    project: &we_core::model::Project,
+    junction: &we_core::model::Junction,
+) -> Vec<[f32; 3]> {
+    use we_core::geometry::eval::{evaluate_elevation, evaluate_lane_width, offset_point};
+
+    let mut points: Vec<[f32; 3]> = Vec::new();
+    for conn in &junction.connections {
+        for road_id in [&conn.incoming_road, &conn.connecting_road] {
+            let Some(road) = project.roads.iter().find(|r| &r.id == road_id) else {
+                continue;
+            };
+            let s = if conn.contact_point == we_core::model::ContactPoint::Start {
+                0.0
+            } else {
+                road.length
+            };
+            let Some(ref_pt) = road_point_at_s(&road.plan_view, s) else {
+                continue;
+            };
+            let lane_offset = eval_lane_offset(&road.lane_offsets, s);
+            let Some(section) = road
+                .lane_sections
+                .iter()
+                .rev()
+                .find(|ls| ls.s <= s + 1e-9)
+                .or_else(|| road.lane_sections.first())
+            else {
+                continue;
+            };
+            let ds = (s - section.s).max(0.0);
+            let left_width: f64 = section
+                .left
+                .iter()
+                .map(|l| evaluate_lane_width(&l.width, ds))
+                .sum();
+            let right_width: f64 = section
+                .right
+                .iter()
+                .map(|l| evaluate_lane_width(&l.width, ds))
+                .sum();
+            let z = evaluate_elevation(&road.elevation_profile, s) as f32 - 0.1;
+            let (lx, ly, _) = offset_point(&ref_pt, lane_offset + left_width, 0.0);
+            let (rx, ry, _) = offset_point(&ref_pt, lane_offset - right_width, 0.0);
+            points.push([lx as f32, ly as f32, z]);
+            points.push([rx as f32, ry as f32, z]);
+        }
+    }
+
+    if points.len() < 3 {
+        return points;
+    }
+
+    // Deduplicate near-identical points.
+    let mut dedup: Vec<[f32; 3]> = Vec::new();
+    for p in points {
+        if !dedup.iter().any(|q| {
+            let dx = p[0] - q[0];
+            let dy = p[1] - q[1];
+            (dx * dx + dy * dy) < 0.01 // 10cm
+        }) {
+            dedup.push(p);
+        }
+    }
+    if dedup.len() < 3 {
+        return dedup;
+    }
+
+    // Sort by polar angle around centroid to build a stable polygon ring.
+    let cx: f32 = dedup.iter().map(|p| p[0]).sum::<f32>() / dedup.len() as f32;
+    let cy: f32 = dedup.iter().map(|p| p[1]).sum::<f32>() / dedup.len() as f32;
+    dedup.sort_by(|a, b| {
+        let aa = (a[1] - cy).atan2(a[0] - cx);
+        let bb = (b[1] - cy).atan2(b[0] - cx);
+        aa.total_cmp(&bb)
+    });
+    dedup
+}
+
+fn point_in_polygon(x: f64, y: f64, poly: &[[f32; 3]]) -> bool {
+    let mut inside = false;
+    let mut j = poly.len() - 1;
+    for i in 0..poly.len() {
+        let xi = poly[i][0] as f64;
+        let yi = poly[i][1] as f64;
+        let xj = poly[j][0] as f64;
+        let yj = poly[j][1] as f64;
+        let intersect = ((yi > y) != (yj > y))
+            && (x < (xj - xi) * (y - yi) / ((yj - yi).abs().max(1e-12)) + xi);
+        if intersect {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
+/// Find the closest junction to a world-space point.
+#[wasm_bindgen]
+pub fn pick_junction_at_point(
+    project_json: &str,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Result<JsValue, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut best: Option<String> = None;
+    let mut best_dist = threshold;
+
+    for junction in &project.junctions {
+        let poly = build_junction_polygon_points(&project, junction);
+        if poly.len() < 3 {
+            continue;
+        }
+        if point_in_polygon(x, y, &poly) {
+            return Ok(JsValue::from_str(&junction.id));
+        }
+        let cx: f64 = poly.iter().map(|p| p[0] as f64).sum::<f64>() / poly.len() as f64;
+        let cy: f64 = poly.iter().map(|p| p[1] as f64).sum::<f64>() / poly.len() as f64;
+        let dx = cx - x;
+        let dy = cy - y;
+        let dist = (dx * dx + dy * dy).sqrt();
+        if dist < best_dist {
+            best_dist = dist;
+            best = Some(junction.id.clone());
+        }
+    }
+    match best {
+        Some(id) => Ok(JsValue::from_str(&id)),
+        None => Ok(JsValue::NULL),
     }
 }
 
