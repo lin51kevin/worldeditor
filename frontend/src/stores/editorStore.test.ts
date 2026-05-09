@@ -116,6 +116,67 @@ describe('editorStore', () => {
     });
   });
 
+  describe('Elevation editing', () => {
+    it('should add elevation point and keep s sorted', () => {
+      useEditorStore.getState().addRoad(makeRoad({
+        elevation_profile: [
+          { s: 0, a: 0, b: 0, c: 0, d: 0 },
+          { s: 100, a: 10, b: 0, c: 0, d: 0 },
+        ],
+      }));
+
+      useEditorStore.getState().addElevationPoint('r1', 50, 5);
+
+      const profile = useEditorStore.getState().project.roads[0]!.elevation_profile;
+      expect(profile).toHaveLength(3);
+      expect(profile.map((p) => p.s)).toEqual([0, 50, 100]);
+      expect(useEditorStore.getState().canUndo()).toBe(true);
+    });
+
+    it('should update elevation point by index', () => {
+      useEditorStore.getState().addRoad(makeRoad({
+        elevation_profile: [{ s: 0, a: 0, b: 0, c: 0, d: 0 }],
+      }));
+
+      useEditorStore.getState().updateElevationPoint('r1', 0, { a: 2.5 });
+
+      const profile = useEditorStore.getState().project.roads[0]!.elevation_profile;
+      expect(profile[0]!.a).toBe(2.5);
+    });
+
+    it('should remove elevation point by index', () => {
+      useEditorStore.getState().addRoad(makeRoad({
+        elevation_profile: [
+          { s: 0, a: 0, b: 0, c: 0, d: 0 },
+          { s: 50, a: 5, b: 0, c: 0, d: 0 },
+        ],
+      }));
+
+      useEditorStore.getState().removeElevationPoint('r1', 1);
+
+      const profile = useEditorStore.getState().project.roads[0]!.elevation_profile;
+      expect(profile).toHaveLength(1);
+      expect(profile[0]!.s).toBe(0);
+    });
+
+    it('should smooth interior elevation points', () => {
+      useEditorStore.getState().addRoad(makeRoad({
+        elevation_profile: [
+          { s: 0, a: 0, b: 0, c: 0, d: 0 },
+          { s: 50, a: 9, b: 0, c: 0, d: 0 },
+          { s: 100, a: 0, b: 0, c: 0, d: 0 },
+        ],
+      }));
+
+      useEditorStore.getState().smoothElevation('r1', 1);
+
+      const profile = useEditorStore.getState().project.roads[0]!.elevation_profile;
+      expect(profile[1]!.a).toBeCloseTo(3, 5);
+      expect(profile[0]!.a).toBe(0);
+      expect(profile[2]!.a).toBe(0);
+    });
+  });
+
   describe('cursorWorldPos', () => {
     it('should update cursor position', () => {
       useEditorStore.getState().setCursorWorldPos({ x: 100, y: 200 });

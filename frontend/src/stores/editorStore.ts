@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Project, Road, Junction, LaneWidth } from '../services/platform';
+import type { Elevation, Project, Road, Junction, LaneWidth } from '../services/platform';
 import type { LaneSide, SceneNodeSelection } from '../utils/sceneGraph';
 
 interface EditorState {
@@ -40,6 +40,10 @@ interface EditorState {
   updateObject: (id: string, updates: Partial<ObjectItem>) => void;
   updateLaneType: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, laneType: string) => void;
   updateLaneWidth: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, width: LaneWidth) => void;
+  addElevationPoint: (roadId: string, s: number, height: number) => void;
+  updateElevationPoint: (roadId: string, index: number, updates: Partial<Elevation>) => void;
+  removeElevationPoint: (roadId: string, index: number) => void;
+  smoothElevation: (roadId: string, iterations?: number) => void;
   setCursorWorldPos: (pos: { x: number; y: number }) => void;
   setViewportInfo: (info: { gridSpacing: number; mpp: number }) => void;
   markDirty: () => void;
@@ -286,6 +290,84 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           );
           sections[sectionIndex] = { ...section, [side]: lanes };
           return { ...r, lane_sections: sections };
+        }),
+      },
+      isDirty: true,
+    })),
+
+  addElevationPoint: (roadId, s, height) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          const next = [
+            ...r.elevation_profile,
+            { s, a: height, b: 0, c: 0, d: 0 },
+          ].sort((a, b) => a.s - b.s);
+          return { ...r, elevation_profile: next };
+        }),
+      },
+      isDirty: true,
+    })),
+
+  updateElevationPoint: (roadId, index, updates) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          if (index < 0 || index >= r.elevation_profile.length) return r;
+          const elevation_profile = r.elevation_profile
+            .map((p, i) => (i === index ? { ...p, ...updates } : p))
+            .sort((a, b) => a.s - b.s);
+          return { ...r, elevation_profile };
+        }),
+      },
+      isDirty: true,
+    })),
+
+  removeElevationPoint: (roadId, index) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          if (index < 0 || index >= r.elevation_profile.length) return r;
+          return {
+            ...r,
+            elevation_profile: r.elevation_profile.filter((_, i) => i !== index),
+          };
+        }),
+      },
+      isDirty: true,
+    })),
+
+  smoothElevation: (roadId, iterations = 1) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          if (r.elevation_profile.length < 3) return r;
+
+          let next = [...r.elevation_profile];
+          for (let iter = 0; iter < Math.max(1, iterations); iter += 1) {
+            const prev = [...next];
+            next = next.map((entry, i) => {
+              if (i === 0 || i === prev.length - 1) {
+                return entry;
+              }
+              const avgA = (prev[i - 1]!.a + prev[i]!.a + prev[i + 1]!.a) / 3;
+              return { ...entry, a: avgA };
+            });
+          }
+
+          return { ...r, elevation_profile: next };
         }),
       },
       isDirty: true,
