@@ -73,7 +73,9 @@ function createPlatformMock() {
     generateLaneLineVertices: vi.fn<PlatformService['generateLaneLineVertices']>().mockResolvedValue(new Float32Array()),
     generateCenterLineVertices: vi.fn<PlatformService['generateCenterLineVertices']>().mockResolvedValue(new Float32Array()),
     generateSignalPaintVertices: vi.fn<PlatformService['generateSignalPaintVertices']>().mockResolvedValue(new Float32Array()),
+    generateSingleJunctionVertices: vi.fn<PlatformService['generateSingleJunctionVertices']>().mockResolvedValue(new Float32Array()),
     pickRoadAtPoint: vi.fn<PlatformService['pickRoadAtPoint']>().mockResolvedValue(null),
+    pickJunctionAtPoint: vi.fn<PlatformService['pickJunctionAtPoint']>().mockResolvedValue(null),
   };
 
   return { platform, parseOpenDrive, writeOpenDrive, openFile, saveFile };

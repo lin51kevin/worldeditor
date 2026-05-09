@@ -257,9 +257,11 @@ export function MenuBar() {
 
   // Zoom to selected
   const handleZoomToSelected = useCallback(() => {
-    const { selectedRoadId } = useEditorStore.getState();
+    const { selectedRoadId, selectedJunctionId } = useEditorStore.getState();
     if (selectedRoadId) {
       emitViewportEvent({ type: 'zoom-to-selected', roadId: selectedRoadId });
+    } else if (selectedJunctionId) {
+      emitViewportEvent({ type: 'zoom-to-junction', junctionId: selectedJunctionId });
     }
   }, []);
 

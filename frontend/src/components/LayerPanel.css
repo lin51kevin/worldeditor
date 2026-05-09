@@ -118,6 +118,10 @@
   border-left: 2px solid var(--color-accent);
 }
 
+.layer-item.layer-item-hidden {
+  opacity: 0.5;
+}
+
 .road-expand {
   background: transparent;
   border: none;

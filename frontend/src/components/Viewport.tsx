@@ -6,6 +6,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getPlatformService } from '../services';
+import type { Project } from '../services/platform';
 import { showContextMenu } from '../services/contextMenu';
 import './Viewport.css';
 
@@ -34,12 +35,33 @@ function exceededDragThreshold(startX: number, startY: number, clientX: number, 
   return dx * dx + dy * dy > DRAG_THRESHOLD_SQ;
 }
 
+function filterProjectByVisibility(
+  project: Project,
+  hiddenRoadIds: string[],
+  hiddenJunctionIds: string[],
+): Project {
+  const hiddenRoadSet = new Set(hiddenRoadIds);
+  const hiddenJunctionSet = new Set(hiddenJunctionIds);
+  const roads = project.roads.filter((r) => !hiddenRoadSet.has(r.id));
+  const roadIds = new Set(roads.map((r) => r.id));
+  const junctions = project.junctions
+    .filter((j) => !hiddenJunctionSet.has(j.id))
+    .map((j) => ({
+      ...j,
+      connections: j.connections.filter((c) => roadIds.has(c.incoming_road) && roadIds.has(c.connecting_road)),
+    }))
+    .filter((j) => j.connections.length > 0);
+
+  return { ...project, roads, junctions };
+}
+
 export function Viewport() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ViewportRenderer | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
   const project = useEditorStore((s) => s.project);
   const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
+  const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
   const { showGrid, showAxis, dimension, display } = useEditorViewStore();
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
@@ -52,20 +74,25 @@ export function Viewport() {
 
     try {
       const service = await getPlatformService();
+      const visibleProject = filterProjectByVisibility(
+        project,
+        display.hiddenRoadIds,
+        display.hiddenJunctionIds,
+      );
 
       // Run all needed generators in parallel; use empty fallbacks for disabled layers
       const centerLineProm = display.showReferenceLine
-        ? service.generateCenterLineVertices(project, 2.0)
+        ? service.generateCenterLineVertices(visibleProject, 2.0)
         : Promise.resolve(new Float32Array(0));
       const signalProm = display.showSignals
-        ? service.generateSignalPaintVertices(project, 2.0)
+        ? service.generateSignalPaintVertices(visibleProject, 2.0)
         : Promise.resolve(new Float32Array(0));
 
       const [roadVerts, junctionVerts, laneLineVerts, centerLineVerts, signalVerts] =
         await Promise.all([
-          service.generateRoadVertices(project, 2.0),
-          service.generateJunctionVertices(project),
-          service.generateLaneLineVertices(project, 2.0),
+          service.generateRoadVertices(visibleProject, 2.0),
+          service.generateJunctionVertices(visibleProject),
+          service.generateLaneLineVertices(visibleProject, 2.0),
           centerLineProm,
           signalProm,
         ]);
@@ -83,37 +110,50 @@ export function Viewport() {
     } catch (err) {
       console.error('[Viewport] Failed to generate road mesh:', err);
     }
-  }, [project, status, display.showReferenceLine, display.showSignals]);
+  }, [
+    project,
+    status,
+    display.showReferenceLine,
+    display.showSignals,
+    display.hiddenRoadIds,
+    display.hiddenJunctionIds,
+  ]);
 
   useEffect(() => { updateMesh(); }, [updateMesh]);
 
-  // Update selection highlight when selectedRoadId changes
+  // Update selection highlight when selectedRoadId / selectedJunctionId changes
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer || status !== 'ready') return;
 
-    const selectedRoad = selectedRoadId
-      ? project.roads.find((r) => r.id === selectedRoadId)
-      : null;
-
-    if (!selectedRoad) {
-      renderer.clearHighlight();
-      return;
-    }
-
     (async () => {
       try {
         const service = await getPlatformService();
-        // Highlight color: bright blue with slight transparency
-        const highlightVerts = await service.generateSingleRoadVertices(
-          selectedRoad, 2.0, [0.2, 0.5, 1.0, 0.7],
-        );
-        renderer.uploadHighlightVertices(highlightVerts);
+        if (selectedRoadId) {
+          const selectedRoad = project.roads.find((r) => r.id === selectedRoadId);
+          if (!selectedRoad) {
+            renderer.clearHighlight();
+            return;
+          }
+          const highlightVerts = await service.generateSingleRoadVertices(
+            selectedRoad, 2.0, [0.2, 0.5, 1.0, 0.7],
+          );
+          renderer.uploadHighlightVertices(highlightVerts);
+          return;
+        }
+        if (selectedJunctionId) {
+          const highlightVerts = await service.generateSingleJunctionVertices(
+            project, selectedJunctionId, [0.7, 0.4, 1.0, 0.65],
+          );
+          renderer.uploadHighlightVertices(highlightVerts);
+          return;
+        }
+        renderer.clearHighlight();
       } catch (err) {
         console.error('[Viewport] Failed to generate highlight mesh:', err);
       }
     })();
-  }, [selectedRoadId, project, status]);
+  }, [selectedRoadId, selectedJunctionId, project, status]);
 
   // Sync grid/axis/dimension to renderer
   useEffect(() => {
@@ -156,6 +196,36 @@ export function Viewport() {
       switch (event.type) {
         case 'zoom-to-fit':
           renderer.fitToVertices();
+          break;
+        case 'zoom-to-selected':
+          (async () => {
+            try {
+              const service = await getPlatformService();
+              const { project: currentProject } = useEditorStore.getState();
+              const road = currentProject.roads.find((r) => r.id === event.roadId);
+              if (!road) return;
+              const verts = await service.generateSingleRoadVertices(road, 2.0, [0.2, 0.5, 1.0, 0.7]);
+              renderer.fitToVertices(verts);
+            } catch (err) {
+              console.error('[Viewport] zoom-to-selected failed:', err);
+            }
+          })();
+          break;
+        case 'zoom-to-junction':
+          (async () => {
+            try {
+              const service = await getPlatformService();
+              const { project: currentProject } = useEditorStore.getState();
+              const verts = await service.generateSingleJunctionVertices(
+                currentProject,
+                event.junctionId,
+                [0.7, 0.4, 1.0, 0.65],
+              );
+              renderer.fitToVertices(verts);
+            } catch (err) {
+              console.error('[Viewport] zoom-to-junction failed:', err);
+            }
+          })();
           break;
         case 'set-dimension':
           renderer.setDimension(event.dimension);
@@ -275,8 +345,19 @@ export function Viewport() {
     try {
       const service = await getPlatformService();
       const { project: currentProject } = useEditorStore.getState();
-      const roadId = await service.pickRoadAtPoint(currentProject, worldPos.x, worldPos.y, 5.0);
-      useEditorStore.getState().selectRoad(roadId);
+      const { display: currentDisplay } = useEditorViewStore.getState();
+      const visibleProject = filterProjectByVisibility(
+        currentProject,
+        currentDisplay.hiddenRoadIds,
+        currentDisplay.hiddenJunctionIds,
+      );
+      const roadId = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
+      if (roadId) {
+        useEditorStore.getState().selectRoad(roadId);
+        return;
+      }
+      const junctionId = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
+      useEditorStore.getState().selectJunction(junctionId);
     } catch (err) {
       console.error('[Viewport] Pick failed:', err);
     }

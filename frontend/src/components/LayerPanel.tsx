@@ -43,13 +43,18 @@ function hasProjectData(project: { roads: unknown[]; junctions: unknown[]; heade
 
 export function LayerPanel() {
   const { project, selectedRoadId, selectRoad, selectedJunctionId, selectJunction } = useEditorStore();
-  const { display, toggleDisplaySetting, setColorMode } = useEditorViewStore();
+  const {
+    display,
+    toggleDisplaySetting,
+    setColorMode,
+    toggleRoadVisibility: toggleRoadVisibilityInStore,
+    toggleJunctionVisibility: toggleJunctionVisibilityInStore,
+  } = useEditorViewStore();
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(
     Object.fromEntries(LAYER_CATEGORIES.map((c) => [c.id, true])),
   );
   const [expandedRoads, setExpandedRoads] = useState<Set<string>>(new Set());
   const [expandedJunctions, setExpandedJunctions] = useState<Set<string>>(new Set());
-  const [roadVisibility, setRoadVisibility] = useState<Record<string, boolean>>({});
   const [mapInfoCollapsed, setMapInfoCollapsed] = useState(true);
   const [displaySettingsCollapsed, setDisplaySettingsCollapsed] = useState(true);
   const [categoriesCollapsed, setCategoriesCollapsed] = useState(false);
@@ -78,14 +83,25 @@ export function LayerPanel() {
 
   const toggleRoadVisibility = (roadId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setRoadVisibility((prev) => ({ ...prev, [roadId]: prev[roadId] === false ? true : false }));
+    toggleRoadVisibilityInStore(roadId);
   };
 
-  const isRoadVisible = (roadId: string) => roadVisibility[roadId] !== false;
+  const toggleJunctionVisibility = (junctionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleJunctionVisibilityInStore(junctionId);
+  };
+
+  const isRoadVisible = (roadId: string) => !display.hiddenRoadIds.includes(roadId);
+  const isJunctionVisible = (junctionId: string) => !display.hiddenJunctionIds.includes(junctionId);
 
   const handleZoomToRoad = useCallback((roadId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     emitViewportEvent({ type: 'zoom-to-selected', roadId });
+  }, []);
+
+  const handleZoomToJunction = useCallback((junctionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    emitViewportEvent({ type: 'zoom-to-junction', junctionId });
   }, []);
 
   const filteredRoads = project.roads;
@@ -229,7 +245,7 @@ export function LayerPanel() {
             {filteredRoads.map((road) => (
               <div key={`road-${road.id}`} className="road-list-entry">
                 <div
-                  className={`layer-item ${selectedRoadId === road.id ? 'selected' : ''}`}
+                  className={`layer-item ${selectedRoadId === road.id ? 'selected' : ''} ${!isRoadVisible(road.id) ? 'layer-item-hidden' : ''}`}
                   onClick={() => selectRoad(road.id)}
                 >
                   <button
@@ -298,7 +314,7 @@ export function LayerPanel() {
             {filteredJunctions.map((junc) => (
               <div key={`junc-${junc.id}`} className="road-list-entry">
                 <div
-                  className={`layer-item ${selectedJunctionId === junc.id ? 'selected' : ''}`}
+                  className={`layer-item ${selectedJunctionId === junc.id ? 'selected' : ''} ${!isJunctionVisible(junc.id) ? 'layer-item-hidden' : ''}`}
                   onClick={() => selectJunction(junc.id)}
                 >
                   <button
@@ -315,6 +331,20 @@ export function LayerPanel() {
                     {junc.name || `Junction(${junc.id})`}
                     <span className="road-id"> ({junc.id})</span>
                   </span>
+                  <button
+                    className="road-zoom-btn"
+                    onClick={(e) => handleZoomToJunction(junc.id, e)}
+                    title={t('layerPanel.zoomTo')}
+                  >
+                    <Crosshair size={12} />
+                  </button>
+                  <button
+                    className={`road-visibility ${isJunctionVisible(junc.id) ? '' : 'off'}`}
+                    onClick={(e) => toggleJunctionVisibility(junc.id, e)}
+                    title={isJunctionVisible(junc.id) ? t('layerPanel.hideRoad') : t('layerPanel.showRoad')}
+                  >
+                    {isJunctionVisible(junc.id) ? <Eye size={12} /> : <EyeOff size={12} />}
+                  </button>
                 </div>
                 {expandedJunctions.has(junc.id) && (
                   <div className="road-details">

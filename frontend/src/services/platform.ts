@@ -200,6 +200,9 @@ export interface PlatformService {
   /** Generate vertices for a single road with a custom color. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateSingleRoadVertices(road: Road, sampleStep: number, color: [number, number, number, number]): Promise<Float32Array>;
 
+  /** Generate vertices for a single junction with a custom color. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
+  generateSingleJunctionVertices(project: Project, junctionId: string, color: [number, number, number, number]): Promise<Float32Array>;
+
   /** Generate junction surface mesh vertices. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateJunctionVertices(project: Project): Promise<Float32Array>;
 
@@ -214,4 +217,7 @@ export interface PlatformService {
 
   /** Find the closest road to a world-space point. Returns road ID or null. */
   pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null>;
+
+  /** Find the closest junction to a world-space point. Returns junction ID or null. */
+  pickJunctionAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null>;
 }

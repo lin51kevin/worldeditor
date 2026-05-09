@@ -8,6 +8,7 @@
 export type ViewportEvent =
   | { type: 'zoom-to-fit' }
   | { type: 'zoom-to-selected'; roadId: string }
+  | { type: 'zoom-to-junction'; junctionId: string }
   | { type: 'set-dimension'; dimension: '3d' | '2d' }
   | { type: 'set-show-grid'; show: boolean }
   | { type: 'set-show-axis'; show: boolean };

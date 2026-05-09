@@ -96,6 +96,17 @@ export class WebPlatformService implements PlatformService {
     );
   }
 
+  async generateSingleJunctionVertices(
+    project: Project,
+    junctionId: string,
+    color: [number, number, number, number],
+  ): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_single_junction_vertices(
+      JSON.stringify(project), junctionId, color[0], color[1], color[2], color[3],
+    );
+  }
+
   async generateJunctionVertices(project: Project): Promise<Float32Array> {
     const wasm = await this.getWasm();
     return wasm.generate_junction_vertices(JSON.stringify(project));
@@ -119,6 +130,12 @@ export class WebPlatformService implements PlatformService {
   async pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null> {
     const wasm = await this.getWasm();
     const result = wasm.pick_road_at_point(JSON.stringify(project), x, y, threshold);
+    return result as string | null;
+  }
+
+  async pickJunctionAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null> {
+    const wasm = await this.getWasm();
+    const result = wasm.pick_junction_at_point(JSON.stringify(project), x, y, threshold);
     return result as string | null;
   }
 }

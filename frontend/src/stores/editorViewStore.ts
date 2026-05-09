@@ -23,6 +23,13 @@ const DEFAULT_LAYOUT: PanelLayout = {
 };
 
 type ColorMode = 'single' | 'byRoad' | 'byLaneType';
+type DisplayBooleanKey =
+  | 'showRoadMesh'
+  | 'showLaneLines'
+  | 'showRoadMarks'
+  | 'showReferenceLine'
+  | 'showSignals'
+  | 'showObjects';
 
 interface DisplaySettings {
   showRoadMesh: boolean;
@@ -32,6 +39,8 @@ interface DisplaySettings {
   showSignals: boolean;
   showObjects: boolean;
   colorMode: ColorMode;
+  hiddenRoadIds: string[];
+  hiddenJunctionIds: string[];
 }
 
 const DEFAULT_DISPLAY: DisplaySettings = {
@@ -42,6 +51,8 @@ const DEFAULT_DISPLAY: DisplaySettings = {
   showSignals: true,
   showObjects: true,
   colorMode: 'byLaneType',
+  hiddenRoadIds: [],
+  hiddenJunctionIds: [],
 };
 
 interface EditorViewState {
@@ -72,8 +83,10 @@ interface EditorViewState {
   setViewMode: (m: 'sketch' | 'wire' | 'solid') => void;
 
   // Display settings actions
-  toggleDisplaySetting: (key: keyof Omit<DisplaySettings, 'colorMode'>) => void;
+  toggleDisplaySetting: (key: DisplayBooleanKey) => void;
   setColorMode: (mode: ColorMode) => void;
+  toggleRoadVisibility: (roadId: string) => void;
+  toggleJunctionVisibility: (junctionId: string) => void;
 
   // Panel layout actions
   setLeftWidth: (width: number) => void;
@@ -158,6 +171,26 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   setColorMode: (mode) =>
     set((state) => {
       const display = { ...state.display, colorMode: mode };
+      saveDisplay(display);
+      return { display };
+    }),
+
+  toggleRoadVisibility: (roadId) =>
+    set((state) => {
+      const hiddenRoadIds = state.display.hiddenRoadIds.includes(roadId)
+        ? state.display.hiddenRoadIds.filter((id) => id !== roadId)
+        : [...state.display.hiddenRoadIds, roadId];
+      const display = { ...state.display, hiddenRoadIds };
+      saveDisplay(display);
+      return { display };
+    }),
+
+  toggleJunctionVisibility: (junctionId) =>
+    set((state) => {
+      const hiddenJunctionIds = state.display.hiddenJunctionIds.includes(junctionId)
+        ? state.display.hiddenJunctionIds.filter((id) => id !== junctionId)
+        : [...state.display.hiddenJunctionIds, junctionId];
+      const display = { ...state.display, hiddenJunctionIds };
       saveDisplay(display);
       return { display };
     }),
