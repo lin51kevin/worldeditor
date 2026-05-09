@@ -532,8 +532,19 @@ fn parse_lane(start: &BytesStart, reader: &mut Reader<&[u8]>) -> Result<Lane, Op
         match reader.read_event() {
             Ok(Event::Start(ref e)) => match e.name().as_ref() {
                 b"link" => lane.link = Some(parse_lane_link(reader)?),
-                b"width" | b"roadMark" | b"border" => {
-                    skip_element(reader, e.name().as_ref())?;
+                // When roadMark/width/border have child elements (Start event),
+                // parse their attributes from the opening tag then skip the children.
+                b"width" => {
+                    lane.width.push(parse_lane_width(e)?);
+                    skip_element(reader, b"width")?;
+                }
+                b"roadMark" => {
+                    lane.road_marks.push(parse_road_mark(e)?);
+                    skip_element(reader, b"roadMark")?;
+                }
+                b"border" => {
+                    lane.borders.push(parse_lane_border(e)?);
+                    skip_element(reader, b"border")?;
                 }
                 _ => skip_element(reader, e.name().as_ref())?,
             },
@@ -1020,4 +1031,93 @@ fn skip_element(reader: &mut Reader<&[u8]>, name: &[u8]) -> Result<(), OpenDrive
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verify that `<roadMark>` elements with child elements are parsed correctly.
+    /// This is the fix for the bug where Start events for roadMark/width/border
+    /// were silently skipped instead of having their attributes parsed.
+    #[test]
+    fn test_parse_road_mark_with_children_is_parsed() {
+        let xml = r#"<?xml version="1.0"?>
+<OpenDRIVE>
+  <road name="test" length="100" id="1" junction="-1">
+    <planView>
+      <geometry s="0" x="0" y="0" hdg="0" length="100">
+        <line/>
+      </geometry>
+    </planView>
+    <lanes>
+      <laneSection s="0">
+        <center>
+          <lane id="0" type="none" level="false"/>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" color="standard" weight="standard" width="0.13">
+              <type name="solid" width="0.13">
+                <line length="0" space="0" width="0.13" sOffset="0" rule="no passing" color="standard"/>
+              </type>
+            </roadMark>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+</OpenDRIVE>"#;
+
+        let project = parse(xml).expect("parse should succeed");
+        assert_eq!(project.roads.len(), 1);
+        let road = &project.roads[0];
+        assert_eq!(road.lane_sections.len(), 1);
+
+        let section = &road.lane_sections[0];
+        assert_eq!(section.right.len(), 1);
+        let lane = &section.right[0];
+
+        // The roadMark with child elements must be parsed (not skipped)
+        assert_eq!(lane.road_marks.len(), 1, "roadMark with child <type> element must be parsed");
+        assert_eq!(lane.road_marks[0].mark_type, RoadMarkType::Solid);
+        assert!((lane.road_marks[0].width - 0.13).abs() < 1e-6);
+
+        // The width element with no children should still work
+        assert_eq!(lane.width.len(), 1);
+        assert!((lane.width[0].a - 3.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_parse_road_mark_self_closing_still_works() {
+        let xml = r#"<?xml version="1.0"?>
+<OpenDRIVE>
+  <road name="test" length="50" id="2" junction="-1">
+    <planView>
+      <geometry s="0" x="0" y="0" hdg="0" length="50">
+        <line/>
+      </geometry>
+    </planView>
+    <lanes>
+      <laneSection s="0">
+        <center>
+          <lane id="0" type="none" level="false"/>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <roadMark sOffset="0" type="broken" color="yellow" width="0.12"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+</OpenDRIVE>"#;
+
+        let project = parse(xml).expect("parse should succeed");
+        let lane = &project.roads[0].lane_sections[0].right[0];
+        assert_eq!(lane.road_marks.len(), 1);
+        assert_eq!(lane.road_marks[0].mark_type, RoadMarkType::Broken);
+        assert_eq!(lane.road_marks[0].color, RoadMarkColor::Yellow);
+    }
 }
