@@ -124,29 +124,29 @@ pub fn generate_road_vertices(project_json: &str, sample_step: f64) -> Result<Ve
             // Right lanes (negative IDs, inner to outer)
             let mut right_sorted: Vec<_> = section.right.iter().collect();
             right_sorted.sort_by_key(|l| l.id.abs());
-            let mut right_offset = 0.0f64;
+            let mut right_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
             for lane in &right_sorted {
                 let color = lane_surface_color(lane.lane_type);
                 road_verts.extend(gen_lane_strip(
                     &section_pts, &lane.width, section.s,
-                    &road.elevation_profile, &road.lane_offsets, right_offset, false, color,
+                    &road.elevation_profile, &road.lane_offsets, &right_prev_widths, false, color,
                     &evaluate_elevation, &evaluate_lane_width, &eval_lane_offset, &offset_point,
                 ));
-                right_offset += avg_lane_width(&lane.width, &evaluate_lane_width);
+                right_prev_widths.push(&lane.width);
             }
 
             // Left lanes (positive IDs, inner to outer)
             let mut left_sorted: Vec<_> = section.left.iter().collect();
             left_sorted.sort_by_key(|l| l.id);
-            let mut left_offset = 0.0f64;
+            let mut left_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
             for lane in &left_sorted {
                 let color = lane_surface_color(lane.lane_type);
                 road_verts.extend(gen_lane_strip(
                     &section_pts, &lane.width, section.s,
-                    &road.elevation_profile, &road.lane_offsets, left_offset, true, color,
+                    &road.elevation_profile, &road.lane_offsets, &left_prev_widths, true, color,
                     &evaluate_elevation, &evaluate_lane_width, &eval_lane_offset, &offset_point,
                 ));
-                left_offset += avg_lane_width(&lane.width, &evaluate_lane_width);
+                left_prev_widths.push(&lane.width);
             }
         }
 
@@ -281,7 +281,7 @@ pub fn generate_lane_line_vertices(
                         let dashed = is_dashed(rm.mark_type);
                         let verts = gen_road_mark_line(
                             &section_pts, &road.elevation_profile,
-                            &road.lane_offsets, 0.0, lw, lc, dashed,
+                            section.s, &road.lane_offsets, &|_| 0.0, lw, lc, dashed,
                             &evaluate_elevation, &eval_lane_offset, &offset_point,
                         );
                         for v in &verts { all_floats.extend_from_slice(v); }
@@ -292,43 +292,51 @@ pub fn generate_lane_line_vertices(
             // Right lane outer boundaries (inner → outer, accumulating offset)
             let mut right_sorted: Vec<_> = section.right.iter().collect();
             right_sorted.sort_by_key(|l| l.id.abs());
-            let mut right_offset = 0.0f64;
+            let mut right_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
             for lane in &right_sorted {
-                right_offset += avg_lane_width(&lane.width, &evaluate_lane_width);
                 if let Some(rm) = lane.road_marks.first() {
                     if rm.mark_type != RoadMarkType::None {
                         let lc = mark_color(rm.color);
                         let lw = if rm.width > 0.0 { rm.width as f32 } else { 0.15 };
                         let dashed = is_dashed(rm.mark_type);
+                        let mut boundary_widths = right_prev_widths.clone();
+                        boundary_widths.push(&lane.width);
                         let verts = gen_road_mark_line(
                             &section_pts, &road.elevation_profile,
-                            &road.lane_offsets, -right_offset, lw, lc, dashed,
+                            section.s, &road.lane_offsets,
+                            &|ds| -sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
+                            lw, lc, dashed,
                             &evaluate_elevation, &eval_lane_offset, &offset_point,
                         );
                         for v in &verts { all_floats.extend_from_slice(v); }
                     }
                 }
+                right_prev_widths.push(&lane.width);
             }
 
             // Left lane outer boundaries
             let mut left_sorted: Vec<_> = section.left.iter().collect();
             left_sorted.sort_by_key(|l| l.id);
-            let mut left_offset = 0.0f64;
+            let mut left_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
             for lane in &left_sorted {
-                left_offset += avg_lane_width(&lane.width, &evaluate_lane_width);
                 if let Some(rm) = lane.road_marks.first() {
                     if rm.mark_type != RoadMarkType::None {
                         let lc = mark_color(rm.color);
                         let lw = if rm.width > 0.0 { rm.width as f32 } else { 0.15 };
                         let dashed = is_dashed(rm.mark_type);
+                        let mut boundary_widths = left_prev_widths.clone();
+                        boundary_widths.push(&lane.width);
                         let verts = gen_road_mark_line(
                             &section_pts, &road.elevation_profile,
-                            &road.lane_offsets, left_offset, lw, lc, dashed,
+                            section.s, &road.lane_offsets,
+                            &|ds| sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
+                            lw, lc, dashed,
                             &evaluate_elevation, &eval_lane_offset, &offset_point,
                         );
                         for v in &verts { all_floats.extend_from_slice(v); }
                     }
                 }
+                left_prev_widths.push(&lane.width);
             }
         }
     }
@@ -457,22 +465,13 @@ fn is_dashed(t: we_core::model::RoadMarkType) -> bool {
     matches!(t, RoadMarkType::Broken | RoadMarkType::SolidBroken | RoadMarkType::BrokenSolid)
 }
 
-/// Average lane width sampled at 10 points (for offset accumulation).
-fn avg_lane_width(
-    widths: &[we_core::model::LaneWidth],
+/// Sum lane widths at ds across multiple lanes.
+fn sum_widths_at_ds(
+    widths_list: &[&[we_core::model::LaneWidth]],
+    ds: f64,
     eval: &dyn Fn(&[we_core::model::LaneWidth], f64) -> f64,
 ) -> f64 {
-    if widths.is_empty() {
-        return 0.0;
-    }
-    const N: usize = 10;
-    let s_max = 100.0f64;
-    let mut sum = 0.0f64;
-    for i in 0..N {
-        let s = s_max * (i as f64) / (N as f64 - 1.0);
-        sum += eval(widths, s);
-    }
-    sum / N as f64
+    widths_list.iter().map(|w| eval(w, ds)).sum()
 }
 
 /// Evaluate laneOffset polynomial at station `s`.
@@ -494,7 +493,7 @@ fn gen_lane_strip(
     section_s: f64,
     elevations: &[we_core::model::Elevation],
     lane_offsets: &[we_core::model::LaneOffset],
-    inner_offset: f64,
+    prev_widths: &[&[we_core::model::LaneWidth]],
     is_left: bool,
     color: [f32; 4],
     eval_elev: &dyn Fn(&[we_core::model::Elevation], f64) -> f64,
@@ -517,6 +516,8 @@ fn gen_lane_strip(
         if w0 <= 0.0 && w1 <= 0.0 {
             continue;
         }
+        let inner0 = sum_widths_at_ds(prev_widths, ds0, eval_width);
+        let inner1 = sum_widths_at_ds(prev_widths, ds1, eval_width);
 
         let z0 = eval_elev(elevations, pt0.s) as f32;
         let z1 = eval_elev(elevations, pt1.s) as f32;
@@ -525,14 +526,14 @@ fn gen_lane_strip(
         let lo1 = eval_lane_off(lane_offsets, pt1.s);
 
         let (in0, out0) = if is_left {
-            (lo0 + inner_offset, lo0 + inner_offset + w0)
+            (lo0 + inner0, lo0 + inner0 + w0)
         } else {
-            (lo0 - inner_offset, lo0 - (inner_offset + w0))
+            (lo0 - inner0, lo0 - (inner0 + w0))
         };
         let (in1, out1) = if is_left {
-            (lo1 + inner_offset, lo1 + inner_offset + w1)
+            (lo1 + inner1, lo1 + inner1 + w1)
         } else {
-            (lo1 - inner_offset, lo1 - (inner_offset + w1))
+            (lo1 - inner1, lo1 - (inner1 + w1))
         };
 
         let (ix0, iy0, _) = offset_pt(pt0, in0, 0.0);
@@ -592,8 +593,9 @@ fn gen_default_ribbon(
 fn gen_road_mark_line(
     ref_pts: &[&we_core::geometry::eval::RefLinePoint],
     elevations: &[we_core::model::Elevation],
+    section_s: f64,
     lane_offsets: &[we_core::model::LaneOffset],
-    lateral_offset: f64,
+    lateral_offset_at_ds: &dyn Fn(f64) -> f64,
     line_width: f32,
     color: [f32; 4],
     is_dashed: bool,
@@ -621,11 +623,15 @@ fn gen_road_mark_line(
 
         let z0 = eval_elev(elevations, pt0.s) as f32 + z_lift;
         let z1 = eval_elev(elevations, pt1.s) as f32 + z_lift;
+        let ds0 = (pt0.s - section_s).max(0.0);
+        let ds1 = (pt1.s - section_s).max(0.0);
+        let lateral_offset0 = lateral_offset_at_ds(ds0);
+        let lateral_offset1 = lateral_offset_at_ds(ds1);
 
         let lo0 = eval_lane_off(lane_offsets, pt0.s);
         let lo1 = eval_lane_off(lane_offsets, pt1.s);
-        let t0 = lo0 + lateral_offset;
-        let t1 = lo1 + lateral_offset;
+        let t0 = lo0 + lateral_offset0;
+        let t1 = lo1 + lateral_offset1;
 
         // Center points at lane-offset-adjusted lateral position, then expand ±half_w
         let (cx0, cy0, _) = offset_pt(pt0, t0, 0.0);
