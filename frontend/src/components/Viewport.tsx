@@ -292,7 +292,7 @@ export function Viewport() {
   }, []);
 
   // Handle mouse move for world coordinates (unproject to ground plane)
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  const handleMouseMove = useCallback(async (e: React.MouseEvent) => {
     const gesture = mouseGestureRef.current;
     if (gesture && !gesture.dragged && exceededDragThreshold(gesture.startX, gesture.startY, e.clientX, e.clientY)) {
       gesture.dragged = true;
@@ -304,9 +304,36 @@ export function Viewport() {
     const screenX = (e.clientX - rect.left) * devicePixelRatio;
     const screenY = (e.clientY - rect.top) * devicePixelRatio;
     const worldPos = renderer.unprojectToGround(screenX, screenY);
-    if (worldPos) {
-      useEditorStore.getState().setCursorWorldPos(worldPos);
+    if (!worldPos) return;
+
+    const viewState = useEditorViewStore.getState();
+    if (viewState.snapEnabled) {
+      try {
+        const service = await getPlatformService();
+        const { project: currentProject, selectedRoadId: excludeId } = useEditorStore.getState();
+        const snapResult = await service.snapPoint(
+          currentProject,
+          worldPos.x,
+          worldPos.y,
+          {
+            grid_enabled: viewState.snapMode === 'Grid',
+            grid_size: viewState.gridSnapSize,
+            endpoint_enabled: viewState.snapMode === 'Endpoint',
+            endpoint_threshold: viewState.snapThreshold,
+            midpoint_enabled: viewState.snapMode === 'Midpoint',
+            perpendicular_enabled: viewState.snapMode === 'Perpendicular',
+          },
+          excludeId ?? undefined,
+        );
+        if (snapResult.snapped) {
+          useEditorStore.getState().setCursorWorldPos({ x: snapResult.x, y: snapResult.y });
+          return;
+        }
+      } catch {
+        // Fall through to raw position on snap error
+      }
     }
+    useEditorStore.getState().setCursorWorldPos(worldPos);
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -335,6 +362,36 @@ export function Viewport() {
     const screenY = (e.clientY - rect.top) * devicePixelRatio;
     const worldPos = renderer.unprojectToGround(screenX, screenY);
     if (!worldPos) return;
+
+    // Measurement mode: collect points instead of picking
+    const { measureMode, measurePoints, addMeasurePoint, setMeasurementResult } = useEditorViewStore.getState();
+    if (measureMode !== 'none') {
+      const point = { x: worldPos.x, y: worldPos.y, z: 0 };
+      addMeasurePoint(point);
+      const pts = [...measurePoints, point];
+      try {
+        const service = await getPlatformService();
+        if (measureMode === 'distance' && pts.length >= 2) {
+          const p0 = pts[0]!;
+          const p1 = pts[1]!;
+          const result = await service.measureDistance(p0.x, p0.y, p0.z, p1.x, p1.y, p1.z);
+          setMeasurementResult({ type: 'distance', value: result });
+        } else if (measureMode === 'angle' && pts.length >= 3) {
+          const p0 = pts[0]!;
+          const p1 = pts[1]!;
+          const p2 = pts[2]!;
+          const result = await service.measureAngle(p0.x, p0.y, p1.x, p1.y, p2.x, p2.y);
+          setMeasurementResult({ type: 'angle', value: result });
+        } else if (measureMode === 'area' && pts.length >= 3) {
+          const coords: Array<[number, number]> = pts.map((p) => [p.x, p.y]);
+          const result = await service.measureArea(coords);
+          setMeasurementResult({ type: 'area', value: result });
+        }
+      } catch (err) {
+        console.error('[Viewport] Measurement failed:', err);
+      }
+      return;
+    }
 
     try {
       const service = await getPlatformService();

@@ -11,6 +11,7 @@ import { StatusBar } from './components/StatusBar';
 import { CommandPalette } from './components/CommandPalette';
 import { OutputPanel } from './components/OutputPanel';
 import { FloatingPanel } from './components/FloatingPanel';
+import { MeasurementPanel } from './components/MeasurementPanel';
 import { useEditorStore } from './stores/editorStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorViewStore } from './stores/editorViewStore';
@@ -88,7 +89,7 @@ export function App() {
   const showRightPanel = !layout.rightCollapsed && (!!selectedRoadId || !!selectedJunctionId);
 
   return (
-    <ErrorBoundary t={(key, fallback) => t(key) || fallback}>
+    <ErrorBoundary t={(key, fallback) => t(key) || fallback || key}>
     <div className="app-container">
       {/* Full-bleed viewport as base layer */}
       <div className="canvas-viewport">
@@ -156,6 +157,7 @@ export function App() {
       {/* Floating status chips */}
       <StatusBar />
       <CommandPalette />
+      <MeasurementPanel />
     </div>
     </ErrorBoundary>
   );

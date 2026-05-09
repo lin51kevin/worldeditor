@@ -62,10 +62,15 @@ function buildMenus(
   onToggleAxis: () => void,
   onResetPanels: () => void,
   onCalculateRoadLength: () => void,
+  onToggleSnap: () => void,
+  onMeasureDistance: () => void,
+  onMeasureAngle: () => void,
+  onMeasureArea: () => void,
   canUndo: boolean,
   canRedo: boolean,
   showGrid: boolean,
   showAxis: boolean,
+  snapEnabled: boolean,
   dimension: string,
   t: (key: string) => string,
 ): Menu[] {
@@ -111,6 +116,12 @@ function buildMenus(
       label: t('menu.tools'),
       items: [
         { label: t('menu.calculateRoadLength'), action: onCalculateRoadLength, disabled: project.roads.length === 0 },
+        { separator: true, label: '' },
+        { label: t('toolbar.snap'), action: onToggleSnap, checked: snapEnabled },
+        { separator: true, label: '' },
+        { label: t('measurement.distance'), action: onMeasureDistance },
+        { label: t('measurement.angle'), action: onMeasureAngle },
+        { label: t('measurement.area'), action: onMeasureArea },
       ],
     },
     {
@@ -142,6 +153,9 @@ export function MenuBar() {
     toggleAxis,
     setDimension,
     dimension,
+    snapEnabled,
+    toggleSnap,
+    setMeasureMode,
   } = useEditorViewStore();
 
   const { theme, toggleTheme } = useThemeStore();
@@ -305,10 +319,15 @@ export function MenuBar() {
     handleToggleAxis,
     resetAllPanels,
     handleCalculateRoadLength,
+    toggleSnap,
+    () => setMeasureMode('distance'),
+    () => setMeasureMode('angle'),
+    () => setMeasureMode('area'),
     canUndo(),
     canRedo(),
     showGrid,
     showAxis,
+    snapEnabled,
     dimension,
     t,
   );

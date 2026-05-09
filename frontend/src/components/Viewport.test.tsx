@@ -127,6 +127,15 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     generateSingleJunctionVertices: vi.fn().mockResolvedValue(new Float32Array()),
     pickRoadAtPoint: vi.fn().mockResolvedValue(null),
     pickJunctionAtPoint: vi.fn().mockResolvedValue(null),
+    queryElevation: vi.fn().mockResolvedValue({ elevation: 0, grade: 0, grade_pct: 0 }),
+    addElevationPoint: vi.fn().mockResolvedValue(makeProject()),
+    deleteElevationPoint: vi.fn().mockResolvedValue(makeProject()),
+    smoothElevation: vi.fn().mockResolvedValue(makeProject()),
+    snapPoint: vi.fn().mockResolvedValue({ x: 0, y: 0, snapped: false, snap_type: 'None', target_id: null }),
+    measureDistance: vi.fn().mockResolvedValue({ straight: 0, horizontal: 0, vertical: 0 }),
+    measureAngle: vi.fn().mockResolvedValue({ radians: 0, degrees: 0 }),
+    measureArea: vi.fn().mockResolvedValue({ area: 0, perimeter: 0 }),
+    measureRoadLength: vi.fn().mockResolvedValue(0),
   };
 }
 

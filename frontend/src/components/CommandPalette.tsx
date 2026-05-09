@@ -22,7 +22,7 @@ export function CommandPalette() {
   const { t } = useTranslation();
 
   const commands = useMemo<Command[]>(() => {
-    const { toggleGrid, toggleAxis, setEditMode, setViewMode, toggleLeftPanel, toggleRightPanel, toggleOutputPanel } =
+    const { toggleGrid, toggleAxis, setEditMode, setViewMode, toggleLeftPanel, toggleRightPanel, toggleOutputPanel, toggleSnap, setMeasureMode } =
       useEditorViewStore.getState();
     const { toggleTheme } = useThemeStore.getState();
 
@@ -45,6 +45,12 @@ export function CommandPalette() {
       { id: 'view-sketch', label: t('toolbar.sketch'), category: 'Display', action: () => setViewMode('sketch') },
       { id: 'view-wire', label: t('toolbar.wireframe'), category: 'Display', action: () => setViewMode('wire') },
       { id: 'view-solid', label: t('toolbar.solid'), category: 'Display', action: () => setViewMode('solid') },
+
+      // Tools
+      { id: 'toggle-snap', label: t('toolbar.snap'), category: 'Tools', action: toggleSnap },
+      { id: 'measure-distance', label: t('measurement.distance'), category: 'Tools', action: () => setMeasureMode('distance') },
+      { id: 'measure-angle', label: t('measurement.angle'), category: 'Tools', action: () => setMeasureMode('angle') },
+      { id: 'measure-area', label: t('measurement.area'), category: 'Tools', action: () => setMeasureMode('area') },
 
       // Actions
       { id: 'undo', label: t('menuBar.undo'), shortcut: 'Ctrl+Z', category: 'Edit', action: () => { if (useEditorStore.getState().canUndo()) useEditorStore.getState().undo(); } },

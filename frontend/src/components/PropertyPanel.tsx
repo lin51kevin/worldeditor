@@ -31,6 +31,8 @@ export function PropertyPanel() {
   const selectedRoad = project.roads.find((r) => r.id === selectedRoadId);
   const selectedJunction = project.junctions.find((j) => j.id === selectedJunctionId);
   const { t } = useTranslation();
+  const [newElevationS, setNewElevationS] = useState(0);
+  const [newElevationH, setNewElevationH] = useState(0);
 
   return (
     <div className="property-panel">
@@ -149,6 +151,80 @@ export function PropertyPanel() {
                 <div className="property-row">
                   <span className="property-label">{t('propertyPanel.elevationSegments')}</span>
                   <span className="property-value">{selectedRoad.elevation_profile.length}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">s</span>
+                  <input
+                    className="property-input property-input-narrow"
+                    type="number"
+                    step="0.1"
+                    value={newElevationS}
+                    onChange={(e) => setNewElevationS(parseFloat(e.target.value) || 0)}
+                  />
+                  <span className="property-label">h</span>
+                  <input
+                    className="property-input property-input-narrow"
+                    type="number"
+                    step="0.1"
+                    value={newElevationH}
+                    onChange={(e) => setNewElevationH(parseFloat(e.target.value) || 0)}
+                  />
+                  <button
+                    className="property-btn"
+                    onClick={() => useEditorStore.getState().addElevationPoint(selectedRoad.id, newElevationS, newElevationH)}
+                  >
+                    {t('propertyPanel.addPoint')}
+                  </button>
+                </div>
+
+                {selectedRoad.elevation_profile
+                  .map((elev, sourceIndex) => ({ elev, sourceIndex }))
+                  .sort((a, b) => a.elev.s - b.elev.s)
+                  .map(({ elev, sourceIndex }, displayIndex) => (
+                    <div key={`${sourceIndex}-${elev.s}`} className="property-row sub lane-row">
+                      <span className="property-label">#{displayIndex + 1}</span>
+                      <div className="property-lane-controls">
+                        <input
+                          className="property-input property-input-narrow"
+                          type="number"
+                          step="0.1"
+                          value={elev.s}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value);
+                            if (!Number.isNaN(value)) {
+                              useEditorStore.getState().updateElevationPoint(selectedRoad.id, sourceIndex, { s: value });
+                            }
+                          }}
+                        />
+                        <input
+                          className="property-input property-input-narrow"
+                          type="number"
+                          step="0.01"
+                          value={elev.a}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value);
+                            if (!Number.isNaN(value)) {
+                              useEditorStore.getState().updateElevationPoint(selectedRoad.id, sourceIndex, { a: value });
+                            }
+                          }}
+                        />
+                        <button
+                          className="property-btn"
+                          onClick={() => useEditorStore.getState().removeElevationPoint(selectedRoad.id, sourceIndex)}
+                        >
+                          {t('propertyPanel.deletePoint')}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                <div className="property-row">
+                  <button
+                    className="property-btn"
+                    onClick={() => useEditorStore.getState().smoothElevation(selectedRoad.id, 1)}
+                  >
+                    {t('propertyPanel.smoothElevation')}
+                  </button>
                 </div>
               </CardSection>
             </div>

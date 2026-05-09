@@ -5,6 +5,7 @@ import {
   Undo2, Redo2, Trash2,
   MousePointer, Route, AlignJustify, GitMerge,
   Spline, Scan, Layers, Grid, Crosshair,
+  Magnet, Ruler,
 } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
@@ -30,11 +31,15 @@ export function Toolbar() {
     showAxis,
     editMode,
     viewMode,
+    snapEnabled,
+    measureMode,
     setDimension,
     toggleGrid,
     toggleAxis,
     setEditMode,
     setViewMode,
+    toggleSnap,
+    setMeasureMode,
   } = useEditorViewStore();
   const { t } = useTranslation();
 
@@ -258,6 +263,28 @@ export function Toolbar() {
         >
           <Crosshair size={16} className="tb-icon" />
           <span className="tb-label">{t('toolbar.axis')}</span>
+        </button>
+      </div>
+
+      <div className="toolbar-separator" />
+
+      {/* Snap / Measure */}
+      <div className="toolbar-group">
+        <button
+          className={`toolbar-btn toolbar-toggle ${snapEnabled ? 'active' : ''}`}
+          onClick={toggleSnap}
+          title={t('toolbar.snapTitle')}
+        >
+          <Magnet size={16} className="tb-icon" />
+          <span className="tb-label">{t('toolbar.snap')}</span>
+        </button>
+        <button
+          className={`toolbar-btn toolbar-toggle ${measureMode !== 'none' ? 'active' : ''}`}
+          onClick={() => setMeasureMode(measureMode !== 'none' ? 'none' : 'distance')}
+          title={t('toolbar.measureTitle')}
+        >
+          <Ruler size={16} className="tb-icon" />
+          <span className="tb-label">{t('toolbar.measure')}</span>
         </button>
       </div>
     </div>

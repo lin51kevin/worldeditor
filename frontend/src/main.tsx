@@ -9,6 +9,9 @@ if (import.meta.env.DEV) {
   import('./stores/editorStore').then(({ useEditorStore }) => {
     (window as unknown as Record<string, unknown>)['__editorStore'] = useEditorStore;
   });
+  import('./stores/editorViewStore').then(({ useEditorViewStore }) => {
+    (window as unknown as Record<string, unknown>)['__editorViewStore'] = useEditorViewStore;
+  });
   import('./services').then(({ getPlatformService }) => {
     (window as unknown as Record<string, unknown>)['__getPlatformService'] = getPlatformService;
   });

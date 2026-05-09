@@ -76,6 +76,15 @@ function createPlatformMock() {
     generateSingleJunctionVertices: vi.fn<PlatformService['generateSingleJunctionVertices']>().mockResolvedValue(new Float32Array()),
     pickRoadAtPoint: vi.fn<PlatformService['pickRoadAtPoint']>().mockResolvedValue(null),
     pickJunctionAtPoint: vi.fn<PlatformService['pickJunctionAtPoint']>().mockResolvedValue(null),
+    queryElevation: vi.fn<PlatformService['queryElevation']>().mockResolvedValue({ elevation: 0, grade: 0, grade_pct: 0 }),
+    addElevationPoint: vi.fn<PlatformService['addElevationPoint']>().mockResolvedValue(makeProject()),
+    deleteElevationPoint: vi.fn<PlatformService['deleteElevationPoint']>().mockResolvedValue(makeProject()),
+    smoothElevation: vi.fn<PlatformService['smoothElevation']>().mockResolvedValue(makeProject()),
+    snapPoint: vi.fn<PlatformService['snapPoint']>().mockResolvedValue({ x: 0, y: 0, snapped: false, snap_type: 'None', target_id: null }),
+    measureDistance: vi.fn<PlatformService['measureDistance']>().mockResolvedValue({ straight: 0, horizontal: 0, vertical: 0 }),
+    measureAngle: vi.fn<PlatformService['measureAngle']>().mockResolvedValue({ radians: 0, degrees: 0 }),
+    measureArea: vi.fn<PlatformService['measureArea']>().mockResolvedValue({ area: 0, perimeter: 0 }),
+    measureRoadLength: vi.fn<PlatformService['measureRoadLength']>().mockResolvedValue(0),
   };
 
   return { platform, parseOpenDrive, writeOpenDrive, openFile, saveFile };

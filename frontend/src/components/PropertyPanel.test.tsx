@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { LaneSection, Project, Road } from '../services/platform';
 import { useEditorStore } from '../stores/editorStore';
@@ -107,5 +107,59 @@ describe('PropertyPanel', () => {
     // Lane labels: L1, R1 for each side
     expect(screen.getByText('L1')).toBeInTheDocument();
     expect(screen.getByText('R1')).toBeInTheDocument();
+
+    // Elevation editor card header is visible
+    expect(screen.getByText('高程 (1)')).toBeInTheDocument();
+  });
+
+  it('shows elevation editor actions when elevation card is expanded', () => {
+    const road = makeRoad();
+
+    act(() => {
+      useEditorStore.setState({
+        project: makeProject([road]),
+        selectedRoadId: road.id,
+        selectedObjectType: 'road',
+      });
+    });
+
+    render(<PropertyPanel />);
+
+    act(() => {
+      screen.getByText('高程 (1)').click();
+    });
+
+    expect(screen.getByText('添加点')).toBeInTheDocument();
+    expect(screen.getByText('平滑高程')).toBeInTheDocument();
+  });
+
+  it('can add and delete elevation points from panel actions', () => {
+    const road = makeRoad();
+
+    act(() => {
+      useEditorStore.setState({
+        project: makeProject([road]),
+        selectedRoadId: road.id,
+        selectedObjectType: 'road',
+      });
+    });
+
+    render(<PropertyPanel />);
+
+    act(() => {
+      screen.getByText('高程 (1)').click();
+    });
+
+    act(() => {
+      fireEvent.click(screen.getByText('添加点'));
+    });
+
+    expect(useEditorStore.getState().project.roads[0]?.elevation_profile.length).toBe(2);
+
+    act(() => {
+      fireEvent.click(screen.getAllByText('删除')[0]!);
+    });
+
+    expect(useEditorStore.getState().project.roads[0]?.elevation_profile.length).toBe(1);
   });
 });
