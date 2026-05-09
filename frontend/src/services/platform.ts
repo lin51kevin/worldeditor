@@ -4,7 +4,10 @@
  */
 
 export interface GeoReference {
-  value: string;
+  origin_lat: number;
+  origin_long: number;
+  origin_alt: number;
+  origin_hdg: number;
 }
 
 export interface Header {
@@ -70,6 +73,24 @@ export interface Road {
   plan_view: Geometry[];
   elevation_profile: Elevation[];
   lane_sections: LaneSection[];
+  /** Signals parsed from `<signals>` block. May be absent in older projects. */
+  signals?: Signal[];
+}
+
+export interface Signal {
+  id: string;
+  name: string;
+  s: number;
+  t: number;
+  z_offset: number;
+  h_offset: number;
+  width: number;
+  height: number;
+  signal_type: string;
+  signal_subtype: string;
+  value: string | null;
+  orientation: string;
+  is_dynamic: boolean;
 }
 
 export interface LaneSection {
@@ -187,6 +208,9 @@ export interface PlatformService {
 
   /** Generate reference line (centerline) visualization vertices. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateCenterLineVertices(project: Project, sampleStep: number): Promise<Float32Array>;
+
+  /** Generate signal paint mark and sign marker vertices. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
+  generateSignalPaintVertices(project: Project, sampleStep: number): Promise<Float32Array>;
 
   /** Find the closest road to a world-space point. Returns road ID or null. */
   pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null>;
