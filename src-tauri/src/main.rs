@@ -1,3 +1,3 @@
 fn main() {
-    worldeditor_desktop::run();
+    worldeditor::run();
 }
