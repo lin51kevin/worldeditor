@@ -14,6 +14,9 @@ export default defineConfig({
     locale: 'zh-CN',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    launchOptions: {
+      args: ['--enable-unsafe-webgpu'],
+    },
   },
 
   projects: [

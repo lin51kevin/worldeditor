@@ -1,4 +1,45 @@
-import { test, expect, injectProject, makeTestProject, makeTestRoad } from './fixtures';
+import {
+  test,
+  expect,
+  injectProject,
+  makeTestProject,
+  makeTestRoad,
+  openXodrInBrowser,
+  readXodrFixture,
+} from './fixtures';
+
+async function countRedHighlightPixels(page: import('@playwright/test').Page): Promise<number> {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('canvas.viewport-canvas') as HTMLCanvasElement | null;
+    if (!canvas || canvas.width === 0 || canvas.height === 0) {
+      return 0;
+    }
+
+    const copy = document.createElement('canvas');
+    copy.width = canvas.width;
+    copy.height = canvas.height;
+    const ctx = copy.getContext('2d');
+    if (!ctx) {
+      return 0;
+    }
+    ctx.drawImage(canvas, 0, 0);
+
+    const sampleW = Math.min(canvas.width, 320);
+    const sampleH = Math.min(canvas.height, 240);
+    const data = ctx.getImageData(0, 0, sampleW, sampleH).data;
+
+    let redLike = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i]!;
+      const g = data[i + 1]!;
+      const b = data[i + 2]!;
+      if (r > 145 && r > g * 1.25 && r > b * 1.25) {
+        redLike++;
+      }
+    }
+    return redLike;
+  });
+}
 
 test.describe('Road Selection & Properties', () => {
   test('click road in layer panel shows properties', async ({ editorPage: page }) => {
@@ -32,6 +73,27 @@ test.describe('Road Selection & Properties', () => {
   });
 
   test('no selection shows empty state', async ({ editorPage: page }) => {
-    await expect(page.getByText('未选择对象')).toBeVisible();
+    await expect(page.locator('.floating-right')).toHaveCount(0);
+  });
+
+  test('selecting a road adds visible red highlight in viewport', async ({ editorPage: page }) => {
+    const xml = readXodrFixture('single_road.xodr');
+    await openXodrInBrowser(page, xml, 'single_road.xodr');
+    await page.waitForTimeout(800);
+
+    const overlay = page.locator('.viewport-overlay');
+    const hasWebGPU = !(await overlay.isVisible());
+    test.skip(!hasWebGPU, 'WebGPU unavailable in current runtime; cannot sample highlight pixels.');
+
+    const canvas = page.locator('canvas.viewport-canvas');
+    await expect(canvas).toBeVisible();
+
+    const beforeRed = await countRedHighlightPixels(page);
+
+    await page.locator('.layer-item').filter({ hasText: 'MainStreet' }).click();
+    await page.waitForTimeout(500);
+
+    const afterRed = await countRedHighlightPixels(page);
+    expect(afterRed).toBeGreaterThan(beforeRed + 30);
   });
 });
