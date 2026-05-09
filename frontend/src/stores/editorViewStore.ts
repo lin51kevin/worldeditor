@@ -1,6 +1,20 @@
 import { create } from 'zustand';
 import { makeLaneKey } from '../utils/sceneGraph';
 import type { LaneSide } from '../utils/sceneGraph';
+import type { SnapType, DistanceMeasurement, AngleMeasurement, AreaMeasurement } from '../services/platform';
+
+export type MeasureMode = 'none' | 'distance' | 'angle' | 'area';
+
+export interface MeasurePoint {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export type MeasurementResult =
+  | { type: 'distance'; value: DistanceMeasurement }
+  | { type: 'angle'; value: AngleMeasurement }
+  | { type: 'area'; value: AreaMeasurement };
 
 type ViewDimension = '3d' | '2d';
 
@@ -81,12 +95,35 @@ interface EditorViewState {
   // Panel layout
   layout: PanelLayout;
 
+  // Snapping
+  snapEnabled: boolean;
+  snapMode: SnapType;
+  snapThreshold: number;
+  gridSnapSize: number;
+
+  // Measurement
+  measureMode: MeasureMode;
+  measurePoints: MeasurePoint[];
+  lastMeasurement: MeasurementResult | null;
+
   // Actions
   setDimension: (d: ViewDimension) => void;
   toggleGrid: () => void;
   toggleAxis: () => void;
   setEditMode: (m: 'select' | 'road' | 'lane' | 'junction') => void;
   setViewMode: (m: 'sketch' | 'wire' | 'solid') => void;
+
+  // Snapping actions
+  toggleSnap: () => void;
+  setSnapMode: (mode: SnapType) => void;
+  setSnapThreshold: (threshold: number) => void;
+  setGridSnapSize: (size: number) => void;
+
+  // Measurement actions
+  setMeasureMode: (mode: MeasureMode) => void;
+  addMeasurePoint: (point: MeasurePoint) => void;
+  clearMeasurePoints: () => void;
+  setMeasurementResult: (result: MeasurementResult | null) => void;
 
   // Display settings actions
   toggleDisplaySetting: (key: DisplayBooleanKey) => void;
@@ -162,12 +199,32 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   viewMode: 'solid',
   display: loadDisplay(),
   layout: DEFAULT_LAYOUT,
+  snapEnabled: false,
+  snapMode: 'Grid' as SnapType,
+  snapThreshold: 5.0,
+  gridSnapSize: 1.0,
+  measureMode: 'none' as MeasureMode,
+  measurePoints: [],
+  lastMeasurement: null,
 
   setDimension: (dimension) => set({ dimension }),
   toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
   toggleAxis: () => set((state) => ({ showAxis: !state.showAxis })),
   setEditMode: (editMode) => set({ editMode }),
   setViewMode: (viewMode) => set({ viewMode }),
+
+  // Snapping actions
+  toggleSnap: () => set((state) => ({ snapEnabled: !state.snapEnabled })),
+  setSnapMode: (snapMode) => set({ snapMode }),
+  setSnapThreshold: (snapThreshold) => set({ snapThreshold: Math.max(0.1, snapThreshold) }),
+  setGridSnapSize: (gridSnapSize) => set({ gridSnapSize: Math.max(0.01, gridSnapSize) }),
+
+  // Measurement actions
+  setMeasureMode: (measureMode) => set({ measureMode, measurePoints: [], lastMeasurement: null }),
+  addMeasurePoint: (point) =>
+    set((state) => ({ measurePoints: [...state.measurePoints, point] })),
+  clearMeasurePoints: () => set({ measurePoints: [], lastMeasurement: null }),
+  setMeasurementResult: (lastMeasurement) => set({ lastMeasurement }),
 
   toggleDisplaySetting: (key) =>
     set((state) => {

@@ -19,6 +19,13 @@ describe('editorViewStore', () => {
         rightCollapsed: false,
         outputCollapsed: true,
       },
+      snapEnabled: false,
+      snapMode: 'Grid',
+      snapThreshold: 5.0,
+      gridSnapSize: 1.0,
+      measureMode: 'none',
+      measurePoints: [],
+      lastMeasurement: null,
     });
   });
 
@@ -162,5 +169,96 @@ describe('editorViewStore', () => {
     });
 
     expect(useEditorViewStore.getState().display.hiddenLaneKeys).toEqual(['r1::section::0::left::2']);
+  });
+
+  // --- Snapping state ---
+
+  describe('snapping', () => {
+    it('toggleSnap flips snapEnabled', () => {
+      expect(useEditorViewStore.getState().snapEnabled).toBe(false);
+      act(() => { useEditorViewStore.getState().toggleSnap(); });
+      expect(useEditorViewStore.getState().snapEnabled).toBe(true);
+      act(() => { useEditorViewStore.getState().toggleSnap(); });
+      expect(useEditorViewStore.getState().snapEnabled).toBe(false);
+    });
+
+    it('setSnapMode changes snap mode', () => {
+      act(() => { useEditorViewStore.getState().setSnapMode('Endpoint'); });
+      expect(useEditorViewStore.getState().snapMode).toBe('Endpoint');
+    });
+
+    it('setSnapThreshold clamps to minimum 0.1', () => {
+      act(() => { useEditorViewStore.getState().setSnapThreshold(10); });
+      expect(useEditorViewStore.getState().snapThreshold).toBe(10);
+
+      act(() => { useEditorViewStore.getState().setSnapThreshold(0.05); });
+      expect(useEditorViewStore.getState().snapThreshold).toBe(0.1);
+    });
+
+    it('setGridSnapSize clamps to minimum 0.01', () => {
+      act(() => { useEditorViewStore.getState().setGridSnapSize(2.0); });
+      expect(useEditorViewStore.getState().gridSnapSize).toBe(2.0);
+
+      act(() => { useEditorViewStore.getState().setGridSnapSize(0.001); });
+      expect(useEditorViewStore.getState().gridSnapSize).toBe(0.01);
+    });
+
+    it('has correct default snapping state', () => {
+      const state = useEditorViewStore.getState();
+      expect(state.snapEnabled).toBe(false);
+      expect(state.snapMode).toBe('Grid');
+      expect(state.snapThreshold).toBe(5.0);
+      expect(state.gridSnapSize).toBe(1.0);
+    });
+  });
+
+  // --- Measurement state ---
+
+  describe('measurement', () => {
+    it('setMeasureMode changes mode and clears points', () => {
+      act(() => {
+        useEditorViewStore.getState().addMeasurePoint({ x: 1, y: 2, z: 0 });
+        useEditorViewStore.getState().setMeasureMode('distance');
+      });
+      const state = useEditorViewStore.getState();
+      expect(state.measureMode).toBe('distance');
+      expect(state.measurePoints).toEqual([]);
+      expect(state.lastMeasurement).toBeNull();
+    });
+
+    it('addMeasurePoint appends points', () => {
+      act(() => {
+        useEditorViewStore.getState().addMeasurePoint({ x: 0, y: 0, z: 0 });
+        useEditorViewStore.getState().addMeasurePoint({ x: 10, y: 0, z: 0 });
+      });
+      expect(useEditorViewStore.getState().measurePoints).toHaveLength(2);
+      expect(useEditorViewStore.getState().measurePoints[1]).toEqual({ x: 10, y: 0, z: 0 });
+    });
+
+    it('clearMeasurePoints resets points and result', () => {
+      act(() => {
+        useEditorViewStore.getState().addMeasurePoint({ x: 1, y: 2, z: 3 });
+        useEditorViewStore.getState().setMeasurementResult({
+          type: 'distance',
+          value: { straight: 10, horizontal: 10, vertical: 0 },
+        });
+        useEditorViewStore.getState().clearMeasurePoints();
+      });
+      expect(useEditorViewStore.getState().measurePoints).toEqual([]);
+      expect(useEditorViewStore.getState().lastMeasurement).toBeNull();
+    });
+
+    it('setMeasurementResult stores result', () => {
+      const result = { type: 'angle' as const, value: { radians: 1.57, degrees: 90 } };
+      act(() => { useEditorViewStore.getState().setMeasurementResult(result); });
+      expect(useEditorViewStore.getState().lastMeasurement).toEqual(result);
+    });
+
+    it('has correct default measurement state', () => {
+      const state = useEditorViewStore.getState();
+      expect(state.measureMode).toBe('none');
+      expect(state.measurePoints).toEqual([]);
+      expect(state.lastMeasurement).toBeNull();
+    });
   });
 });
