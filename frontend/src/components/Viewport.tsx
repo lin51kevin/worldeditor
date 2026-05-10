@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ViewportRenderer } from '../viewport/renderer';
+import { ViewportRenderer, getSplineHandlePoints } from '../viewport/renderer';
 import { onViewportEvent } from '../viewport/viewportEvents';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getPlatformService } from '../services';
+import type { EditableSpline, SplineKnot } from '../services/platform';
 import { showContextMenu } from '../services/contextMenu';
 import {
   buildHighlightProject,
@@ -40,6 +41,54 @@ function exceededDragThreshold(startX: number, startY: number, clientX: number, 
   return dx * dx + dy * dy > DRAG_THRESHOLD_SQ;
 }
 
+function makeSplineKnot(position: [number, number, number], s: number): SplineKnot {
+  return {
+    position,
+    tangent_in: [0, 0, 0],
+    tangent_out: [0, 0, 0],
+    s,
+    knot_type: 'Key',
+    tangent_mode: 'Auto',
+  };
+}
+
+function buildEditableSpline(points: Array<[number, number, number]>): EditableSpline {
+  const knots: SplineKnot[] = [];
+  let station = 0;
+  for (let i = 0; i < points.length; i += 1) {
+    if (i > 0) {
+      const prev = points[i - 1]!;
+      const curr = points[i]!;
+      const dx = curr[0] - prev[0];
+      const dy = curr[1] - prev[1];
+      const dz = curr[2] - prev[2];
+      station += Math.hypot(dx, dy, dz);
+    }
+    knots.push(makeSplineKnot(points[i]!, station));
+  }
+  if (knots.length > 0) {
+    const firstKnot = knots[0]!;
+    knots[0] = { ...firstKnot, knot_type: 'Anchor' };
+  }
+  if (knots.length > 1) {
+    const last = knots.length - 1;
+    const lastKnot = knots[last]!;
+    knots[last] = { ...lastKnot, knot_type: 'Anchor' };
+  }
+  return { knots };
+}
+
+function nextSplineRoadId(existingRoadIds: string[]): string {
+  let index = existingRoadIds.length + 1;
+  let id = `road_spline_${index}`;
+  const idSet = new Set(existingRoadIds);
+  while (idSet.has(id)) {
+    index += 1;
+    id = `road_spline_${index}`;
+  }
+  return id;
+}
+
 export function Viewport() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ViewportRenderer | null>(null);
@@ -47,10 +96,76 @@ export function Viewport() {
   const project = useEditorStore((s) => s.project);
   const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
   const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
-  const { showGrid, showAxis, dimension, display } = useEditorViewStore();
+  const { showGrid, showAxis, dimension, display, editMode } = useEditorViewStore();
+  const splineKnots = useEditorViewStore((s) => s.splineKnots);
+  const splineTangentOverrides = useEditorViewStore((s) => s.splineTangentOverrides);
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
+
+  const finalizeSplineCreation = useCallback(async (overrideKnots?: Array<[number, number, number]>) => {
+    const viewState = useEditorViewStore.getState();
+    const knots = overrideKnots ?? viewState.splineKnots;
+    if (knots.length < 2) {
+      console.warn('[Viewport] Need at least 2 spline knots to create a road.');
+      return;
+    }
+
+    try {
+      const service = await getPlatformService();
+      const editorState = useEditorStore.getState();
+      const roadId = nextSplineRoadId(editorState.project.roads.map((road) => road.id));
+      const spline = buildEditableSpline(knots);
+      const nextProject = await service.createRoadFromSpline(
+        editorState.project,
+        roadId,
+        spline,
+        viewState.splineTemplateId,
+      );
+      editorState.setProject(nextProject);
+      editorState.markDirty();
+      editorState.selectRoad(roadId);
+      viewState.clearSplineKnots();
+    } catch (err) {
+      console.error('[Viewport] Failed to create road from spline:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (editMode !== 'spline') {
+      useEditorViewStore.getState().clearSplineKnots();
+    }
+  }, [editMode]);
+
+  useEffect(() => {
+    if (editMode !== 'spline') {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        useEditorViewStore.getState().clearSplineKnots();
+      } else if (event.key === 'Backspace') {
+        useEditorViewStore.getState().popSplineKnot();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        void finalizeSplineCreation();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [editMode, finalizeSplineCreation]);
+
+  // Sync spline knot preview into the WebGPU renderer each time knots or tangents change
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer || status !== 'ready') return;
+    const overrides = Object.keys(splineTangentOverrides).length > 0 ? splineTangentOverrides : undefined;
+    renderer.setSplinePreviewKnots(editMode === 'spline' ? splineKnots : [], overrides);
+  }, [splineKnots, splineTangentOverrides, editMode, status]);
 
   // Regenerate road mesh when project or display settings change
   const updateMesh = useCallback(async () => {
@@ -306,7 +421,66 @@ export function Viewport() {
     const worldPos = renderer.unprojectToGround(screenX, screenY);
     if (!worldPos) return;
 
+    // Spline knot dragging: update knot position
     const viewState = useEditorViewStore.getState();
+    const drag = viewState.draggingKnot;
+    if (drag) {
+      const knots = viewState.splineKnots;
+      if (drag.index >= 0 && drag.index < knots.length) {
+        if (drag.type === 'knot') {
+          // Move knot directly to cursor
+          const updated: Array<[number, number, number]> = knots.map((k, i) =>
+            i === drag.index ? [worldPos.x, worldPos.y, k[2]] : k
+          );
+          viewState.setSplineKnots(updated);
+        } else {
+          // Tangent handle drag: compute new tangent vector from knot→cursor
+          // so the handle visually tracks the cursor and the curve curvature changes.
+          const kn = knots[drag.index]!;
+          const handleVec: [number, number, number] = [
+            worldPos.x - kn[0],
+            worldPos.y - kn[1],
+            0,
+          ];
+          // Convert handle display offset to actual tangent vector.
+          // Display uses scale = min(4/|t|, 0.3), so tangent = handleVec / 0.3
+          // for handles within visual range.
+          const DISPLAY_SCALE = 0.3;
+          const tangent: [number, number, number] = drag.type === 'out'
+            ? [handleVec[0] / DISPLAY_SCALE, handleVec[1] / DISPLAY_SCALE, 0]
+            : [-handleVec[0] / DISPLAY_SCALE, -handleVec[1] / DISPLAY_SCALE, 0];
+          viewState.setSplineTangentOverride(drag.index, tangent);
+        }
+      }
+      // Update cursor position but skip snapping during drag
+      useEditorStore.getState().setCursorWorldPos(worldPos);
+      return;
+    }
+
+    // Hover cursor: check if mouse is over a draggable knot
+    if (viewState.editMode === 'spline' && viewState.splineKnots.length > 0) {
+      const camDist = renderer.getCameraDistance();
+      const hitThreshold = Math.max(1.5, camDist * 0.02);
+      const hitThresholdSq = hitThreshold * hitThreshold;
+      let hovering = false;
+      for (const k of viewState.splineKnots) {
+        const dx = worldPos.x - k[0];
+        const dy = worldPos.y - k[1];
+        if (dx * dx + dy * dy < hitThresholdSq) { hovering = true; break; }
+      }
+      if (!hovering) {
+        const handles = getSplineHandlePoints(viewState.splineKnots, viewState.splineTangentOverrides);
+        for (const h of handles) {
+          const dx = worldPos.x - h.x;
+          const dy = worldPos.y - h.y;
+          if (dx * dx + dy * dy < hitThresholdSq) { hovering = true; break; }
+        }
+      }
+      canvas.style.cursor = hovering ? 'grab' : '';
+    } else {
+      canvas.style.cursor = '';
+    }
+
     if (viewState.snapEnabled) {
       try {
         const service = await getPlatformService();
@@ -343,6 +517,59 @@ export function Viewport() {
       startY: e.clientY,
       dragged: false,
     };
+
+    // Hit-test spline knots on left-button press
+    if (e.button !== 0) return;
+    const { editMode: mode, splineKnots: knots } = useEditorViewStore.getState();
+    if (mode !== 'spline' || knots.length === 0) return;
+
+    const canvas = canvasRef.current;
+    const renderer = rendererRef.current;
+    if (!canvas || !renderer) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const screenX = (e.clientX - rect.left) * devicePixelRatio;
+    const screenY = (e.clientY - rect.top) * devicePixelRatio;
+    const worldPos = renderer.unprojectToGround(screenX, screenY);
+    if (!worldPos) return;
+
+    const camDist = renderer.getCameraDistance();
+    const hitThreshold = Math.max(1.5, camDist * 0.02);
+    const hitThresholdSq = hitThreshold * hitThreshold;
+
+    // Check knot positions (yellow squares) first
+    let bestDistSq = Infinity;
+    let bestHit: { index: number; type: 'knot' | 'in' | 'out' } | null = null;
+
+    for (let i = 0; i < knots.length; i++) {
+      const [kx, ky] = knots[i]!;
+      const dx = worldPos.x - kx;
+      const dy = worldPos.y - ky;
+      const dSq = dx * dx + dy * dy;
+      if (dSq < hitThresholdSq && dSq < bestDistSq) {
+        bestDistSq = dSq;
+        bestHit = { index: i, type: 'knot' };
+      }
+    }
+
+    // Check tangent handle positions (white squares)
+    const { splineTangentOverrides: overrides } = useEditorViewStore.getState();
+    const handles = getSplineHandlePoints(knots, overrides);
+    for (const h of handles) {
+      const dx = worldPos.x - h.x;
+      const dy = worldPos.y - h.y;
+      const dSq = dx * dx + dy * dy;
+      if (dSq < hitThresholdSq && dSq < bestDistSq) {
+        bestDistSq = dSq;
+        bestHit = { index: h.knotIndex, type: h.type };
+      }
+    }
+
+    if (bestHit) {
+      useEditorViewStore.getState().setDraggingKnot(bestHit);
+      renderer.lockCamera();
+      canvas.style.cursor = 'grabbing';
+    }
   }, []);
 
   const handleClick = useCallback(async (e: React.MouseEvent) => {
@@ -393,6 +620,19 @@ export function Viewport() {
       return;
     }
 
+    const splineState = useEditorViewStore.getState();
+    if (splineState.editMode === 'spline') {
+      const nextKnots: Array<[number, number, number]> = [
+        ...splineState.splineKnots,
+        [worldPos.x, worldPos.y, 0],
+      ];
+      splineState.setSplineKnots(nextKnots);
+      if (e.detail >= 2 && nextKnots.length >= 2) {
+        await finalizeSplineCreation(nextKnots);
+      }
+      return;
+    }
+
     try {
       const service = await getPlatformService();
       const { project: currentProject } = useEditorStore.getState();
@@ -407,6 +647,19 @@ export function Viewport() {
       useEditorStore.getState().selectJunction(junctionId);
     } catch (err) {
       console.error('[Viewport] Pick failed:', err);
+    }
+  }, [finalizeSplineCreation]);
+
+  const handleMouseUp = useCallback(() => {
+    const { draggingKnot } = useEditorViewStore.getState();
+    if (draggingKnot) {
+      useEditorViewStore.getState().setDraggingKnot(null);
+      const renderer = rendererRef.current;
+      if (renderer) {
+        renderer.unlockCamera();
+      }
+      const canvas = canvasRef.current;
+      if (canvas) canvas.style.cursor = '';
     }
   }, []);
 
@@ -431,6 +684,7 @@ export function Viewport() {
         className="viewport-canvas"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
       />

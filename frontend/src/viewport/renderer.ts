@@ -1,4 +1,41 @@
 /**
+ * 返回所有样条切线控制点（白点）的世界坐标及其 knot 索引和端点类型。
+ * 用于前端命中检测和拖拽。
+ *
+ * @param knots 样条节点数组 [x, y, z][]
+ * @param tangentOverrides 手动切线覆盖 { [knotIndex]: [tx, ty, tz] }
+ * @returns Array<{ knotIndex: number, type: 'in' | 'out', x: number, y: number, z: number }>
+ */
+export function getSplineHandlePoints(
+  knots: Array<[number, number, number]>,
+  tangentOverrides?: Record<number, [number, number, number]>,
+): Array<{ knotIndex: number, type: 'in' | 'out', x: number, y: number, z: number }> {
+  const result: Array<{ knotIndex: number, type: 'in' | 'out', x: number, y: number, z: number }> = [];
+  if (knots.length < 2) return result;
+  // Catmull-Rom/Hermite 切线 (可被 tangentOverrides 覆盖)
+  const tangentAt = (i: number): [number, number, number] => {
+    if (tangentOverrides && i in tangentOverrides) return tangentOverrides[i]!;
+    const n = knots.length;
+    if (n === 1) return [0, 0, 0];
+    if (i === 0) return [knots[1]![0] - knots[0]![0], knots[1]![1] - knots[0]![1], knots[1]![2] - knots[0]![2]];
+    if (i === n - 1) return [knots[n - 1]![0] - knots[n - 2]![0], knots[n - 1]![1] - knots[n - 2]![1], knots[n - 1]![2] - knots[n - 2]![2]];
+    return [0.5 * (knots[i + 1]![0] - knots[i - 1]![0]), 0.5 * (knots[i + 1]![1] - knots[i - 1]![1]), 0.5 * (knots[i + 1]![2] - knots[i - 1]![2])];
+  };
+  for (let i = 0; i < knots.length; i++) {
+    const [kx, ky, kz] = knots[i]!;
+    const [tvx, tvy] = tangentAt(i);
+    const tLen = Math.hypot(tvx, tvy);
+    if (tLen < 1e-6) continue;
+    // Clamp visual handle length与渲染一致
+    const scale = Math.min(4.0 / tLen, 0.3);
+    // out 端点
+    result.push({ knotIndex: i, type: 'out', x: kx + tvx * scale, y: ky + tvy * scale, z: kz });
+    // in 端点
+    result.push({ knotIndex: i, type: 'in', x: kx - tvx * scale, y: ky - tvy * scale, z: kz });
+  }
+  return result;
+}
+/**
  * WebGPU viewport renderer.
  *
  * Renders OpenDRIVE road geometry on a <canvas> element using the WebGPU API.
@@ -209,6 +246,7 @@ export class ViewportRenderer {
   private meshes: RenderableMesh[] = [];
   // Lane line meshes
   private laneLineMeshes: RenderableMesh[] = [];
+  private splinePreviewMeshes: RenderableMesh[] = [];
   private width = 0;
   private height = 0;
   private animFrameId = 0;
@@ -221,6 +259,7 @@ export class ViewportRenderer {
   private activeMouseButton: number | null = null;
   private activeDragAction: MouseDragAction | null = null;
   private lastMouse: [number, number] = [0, 0];
+  private _cameraLocked = false;
 
   // Visibility flags for grid/axis
   private showGrid = true;
@@ -481,6 +520,137 @@ export class ViewportRenderer {
     });
   }
 
+  /**
+   * Upload spline knot preview geometry: Catmull-Rom smooth curve + tangent handles + knot markers.
+   * Pass an empty array to clear the preview.
+   * Vertex format: 7 floats per vertex (x, y, z, r, g, b, a), triangle-list.
+   */
+  setSplinePreviewKnots(
+    knots: Array<[number, number, number]>,
+    tangentOverrides?: Record<number, [number, number, number]>,
+  ): void {
+    this.disposeMeshes(this.splinePreviewMeshes);
+    if (knots.length === 0) return;
+
+    const vertices: number[] = [];
+    const zOffset = 0.15;
+    const STEPS = 24;
+
+    // Colors
+    const cR = 1.0, cG = 0.55, cB = 0.0, cA = 1.0;  // orange curve
+    const mR = 1.0, mG = 1.0, mB = 0.0, mA = 1.0;   // yellow knot marker
+    const tR = 0.7, tG = 0.7, tB = 0.7, tA = 0.85;  // gray tangent handle line
+    const hR = 1.0, hG = 1.0, hB = 1.0, hA = 0.9;   // white handle endpoint dot
+
+    // Compute Catmull-Rom tangent at knot index i (with manual override support)
+    const tangentAt = (i: number): [number, number, number] => {
+      if (tangentOverrides && i in tangentOverrides) return tangentOverrides[i]!;
+      const n = knots.length;
+      if (n === 1) return [0, 0, 0];
+      if (i === 0) return [knots[1]![0] - knots[0]![0], knots[1]![1] - knots[0]![1], knots[1]![2] - knots[0]![2]];
+      if (i === n - 1) return [knots[n - 1]![0] - knots[n - 2]![0], knots[n - 1]![1] - knots[n - 2]![1], knots[n - 1]![2] - knots[n - 2]![2]];
+      return [0.5 * (knots[i + 1]![0] - knots[i - 1]![0]), 0.5 * (knots[i + 1]![1] - knots[i - 1]![1]), 0.5 * (knots[i + 1]![2] - knots[i - 1]![2])];
+    };
+
+    // Hermite interpolation between p1 and p2 using explicit tangents m1, m2
+    const hermiteInterp = (
+      p1: [number, number, number], m1: [number, number, number],
+      p2: [number, number, number], m2: [number, number, number],
+      t: number,
+    ): [number, number, number] => {
+      const t2 = t * t, t3 = t2 * t;
+      const h00 = 2 * t3 - 3 * t2 + 1;
+      const h10 = t3 - 2 * t2 + t;
+      const h01 = -2 * t3 + 3 * t2;
+      const h11 = t3 - t2;
+      return [
+        h00 * p1[0] + h10 * m1[0] + h01 * p2[0] + h11 * m2[0],
+        h00 * p1[1] + h10 * m1[1] + h01 * p2[1] + h11 * m2[1],
+        h00 * p1[2] + h10 * m1[2] + h01 * p2[2] + h11 * m2[2],
+      ];
+    };
+
+    // Emit a thick quad (two triangles) between two 2D points at fixed z
+    const addQuad = (
+      ax: number, ay: number, bx: number, by: number, z: number,
+      hw: number, r: number, g: number, b: number, a: number,
+    ) => {
+      const dx = bx - ax, dy = by - ay;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-6) return;
+      const px = (-dy / len) * hw, py = (dx / len) * hw;
+      vertices.push(ax - px, ay - py, z, r, g, b, a);
+      vertices.push(ax + px, ay + py, z, r, g, b, a);
+      vertices.push(bx + px, by + py, z, r, g, b, a);
+      vertices.push(ax - px, ay - py, z, r, g, b, a);
+      vertices.push(bx + px, by + py, z, r, g, b, a);
+      vertices.push(bx - px, by - py, z, r, g, b, a);
+    };
+
+    // Emit an axis-aligned square centred at (cx, cy, z)
+    const addSquare = (
+      cx: number, cy: number, z: number, half: number,
+      r: number, g: number, b: number, a: number,
+    ) => {
+      vertices.push(cx - half, cy - half, z, r, g, b, a);
+      vertices.push(cx + half, cy - half, z, r, g, b, a);
+      vertices.push(cx + half, cy + half, z, r, g, b, a);
+      vertices.push(cx - half, cy - half, z, r, g, b, a);
+      vertices.push(cx + half, cy + half, z, r, g, b, a);
+      vertices.push(cx - half, cy + half, z, r, g, b, a);
+    };
+
+    // --- 1. Smooth Hermite curve (Catmull-Rom with manual tangent overrides) ---
+    if (knots.length >= 2) {
+      let prev: [number, number, number] | null = null;
+      for (let i = 0; i < knots.length - 1; i++) {
+        const p1 = knots[i]!;
+        const p2 = knots[i + 1]!;
+        const m1 = tangentAt(i);
+        const m2 = tangentAt(i + 1);
+        for (let s = 0; s <= STEPS; s++) {
+          const pt = hermiteInterp(p1, m1, p2, m2, s / STEPS);
+          if (prev) addQuad(prev[0], prev[1], pt[0], pt[1], zOffset, 0.2, cR, cG, cB, cA);
+          prev = pt;
+        }
+      }
+    }
+
+    // --- 2. Tangent handles (displayed when >= 2 knots) ---
+    if (knots.length >= 2) {
+      const handleZ = zOffset + 0.02;
+      for (let i = 0; i < knots.length; i++) {
+        const [kx, ky] = knots[i]!;
+        const [tvx, tvy] = tangentAt(i);
+        const tLen = Math.hypot(tvx, tvy);
+        if (tLen < 1e-6) continue;
+        // Clamp visual handle length to ~4 m world units
+        const scale = Math.min(4.0 / tLen, 0.3);
+        const hx1 = kx + tvx * scale, hy1 = ky + tvy * scale;
+        const hx2 = kx - tvx * scale, hy2 = ky - tvy * scale;
+        addQuad(hx2, hy2, hx1, hy1, handleZ, 0.08, tR, tG, tB, tA);
+        addSquare(hx1, hy1, handleZ + 0.01, 0.25, hR, hG, hB, hA);
+        addSquare(hx2, hy2, handleZ + 0.01, 0.25, hR, hG, hB, hA);
+      }
+    }
+
+    // --- 3. Knot markers on top ---
+    for (const [kx, ky, kz] of knots) {
+      addSquare(kx, ky, kz + zOffset + 0.04, 0.5, mR, mG, mB, mA);
+    }
+
+    if (vertices.length === 0) return;
+    const vertexData = new Float32Array(vertices);
+    const buffer = this.device.createBuffer({
+      size: vertexData.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      mappedAtCreation: true,
+    });
+    new Float32Array(buffer.getMappedRange()).set(vertexData);
+    buffer.unmap();
+    this.splinePreviewMeshes.push({ vertexBuffer: buffer, vertexCount: vertices.length / 7 });
+  }
+
   /** Compute bounding box of vertex data and move camera to see all geometry. */
   fitToVertices(vertexData?: Float32Array): void {
     const data = vertexData ?? this.lastVertexData;
@@ -559,6 +729,7 @@ export class ViewportRenderer {
     this.stop();
     this.disposeMeshes(this.meshes);
     this.disposeMeshes(this.laneLineMeshes);
+    this.disposeMeshes(this.splinePreviewMeshes);
     this.disposeMeshes(this.highlightMeshes);
     this.depthTexture?.destroy();
     this.gridUniformBuffer?.destroy();
@@ -665,6 +836,16 @@ export class ViewportRenderer {
       pass.setPipeline(this.basicPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
       for (const mesh of this.laneLineMeshes) {
+        pass.setVertexBuffer(0, mesh.vertexBuffer);
+        pass.draw(mesh.vertexCount);
+      }
+    }
+
+    // Draw spline preview on top (knot markers + connecting lines)
+    if (this.splinePreviewMeshes.length > 0) {
+      pass.setPipeline(this.basicPipeline);
+      pass.setBindGroup(0, this.basicBindGroup);
+      for (const mesh of this.splinePreviewMeshes) {
         pass.setVertexBuffer(0, mesh.vertexBuffer);
         pass.draw(mesh.vertexCount);
       }
@@ -920,6 +1101,7 @@ export class ViewportRenderer {
   }
   private setupMouseControls(canvas: HTMLCanvasElement): void {
     canvas.addEventListener('mousedown', (e) => {
+      if (this._cameraLocked) return;
       const action = resolveMouseDragAction(e.button, e);
       if (!action) return;
       this.isDragging = true;
@@ -966,6 +1148,26 @@ export class ViewportRenderer {
     this.isDragging = false;
     this.activeMouseButton = null;
     this.activeDragAction = null;
+  }
+
+  /** Lock camera controls (pan/orbit/zoom) — used during spline knot dragging. */
+  lockCamera(): void {
+    this._cameraLocked = true;
+    this.stopDragging();
+  }
+
+  /** Unlock camera controls. */
+  unlockCamera(): void {
+    this._cameraLocked = false;
+  }
+
+  /** Return the distance from camera to its target point. */
+  getCameraDistance(): number {
+    const [px, py, pz] = this.camera.position;
+    const [tx, ty, tz] = this.camera.target;
+    return Math.sqrt(
+      (px - tx) ** 2 + (py - ty) ** 2 + (pz - tz) ** 2,
+    );
   }
 
   private orbit(dx: number, dy: number): void {

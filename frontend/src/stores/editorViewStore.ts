@@ -17,6 +17,7 @@ export type MeasurementResult =
   | { type: 'area'; value: AreaMeasurement };
 
 type ViewDimension = '3d' | '2d';
+type EditMode = 'select' | 'road' | 'lane' | 'junction' | 'spline';
 
 const STORAGE_KEY = 'we-editor-view';
 
@@ -84,7 +85,15 @@ interface EditorViewState {
   showAxis: boolean;
 
   // Edit mode
-  editMode: 'select' | 'road' | 'lane' | 'junction';
+  editMode: EditMode;
+
+  // Spline drawing
+  splineTemplateId: string;
+  splineKnots: Array<[number, number, number]>;
+  splineTangentOverrides: Record<number, [number, number, number]>;
+
+  // Spline knot dragging
+  draggingKnot: { index: number; type: 'knot' | 'in' | 'out' } | null;
 
   // View mode (sketch/wire/solid)
   viewMode: 'sketch' | 'wire' | 'solid';
@@ -110,7 +119,15 @@ interface EditorViewState {
   setDimension: (d: ViewDimension) => void;
   toggleGrid: () => void;
   toggleAxis: () => void;
-  setEditMode: (m: 'select' | 'road' | 'lane' | 'junction') => void;
+  setEditMode: (m: EditMode) => void;
+  setSplineTemplateId: (templateId: string) => void;
+  setSplineKnots: (knots: Array<[number, number, number]>) => void;
+  appendSplineKnot: (knot: [number, number, number]) => void;
+  popSplineKnot: () => void;
+  clearSplineKnots: () => void;
+  setDraggingKnot: (info: { index: number; type: 'knot' | 'in' | 'out' } | null) => void;
+  setSplineTangentOverride: (index: number, tangent: [number, number, number]) => void;
+  clearSplineTangentOverrides: () => void;
   setViewMode: (m: 'sketch' | 'wire' | 'solid') => void;
 
   // Snapping actions
@@ -196,6 +213,10 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   showGrid: true,
   showAxis: true,
   editMode: 'select',
+  splineTemplateId: 'single',
+  splineKnots: [],
+  splineTangentOverrides: {},
+  draggingKnot: null,
   viewMode: 'solid',
   display: loadDisplay(),
   layout: DEFAULT_LAYOUT,
@@ -211,6 +232,17 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
   toggleAxis: () => set((state) => ({ showAxis: !state.showAxis })),
   setEditMode: (editMode) => set({ editMode }),
+  setSplineTemplateId: (splineTemplateId) => set({ splineTemplateId }),
+  setSplineKnots: (splineKnots) => set({ splineKnots }),
+  appendSplineKnot: (knot) =>
+    set((state) => ({ splineKnots: [...state.splineKnots, knot] })),
+  popSplineKnot: () =>
+    set((state) => ({ splineKnots: state.splineKnots.slice(0, -1) })),
+  clearSplineKnots: () => set({ splineKnots: [], splineTangentOverrides: {}, draggingKnot: null }),
+  setDraggingKnot: (draggingKnot) => set({ draggingKnot }),
+  setSplineTangentOverride: (index, tangent) =>
+    set((state) => ({ splineTangentOverrides: { ...state.splineTangentOverrides, [index]: tangent } })),
+  clearSplineTangentOverrides: () => set({ splineTangentOverrides: {} }),
   setViewMode: (viewMode) => set({ viewMode }),
 
   // Snapping actions
