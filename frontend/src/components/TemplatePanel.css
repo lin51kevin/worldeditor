@@ -83,6 +83,14 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
+.template-item[draggable="true"] {
+  cursor: grab;
+}
+
+.template-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 [data-theme="light"] .template-item:hover {
   background: rgba(0, 0, 0, 0.04);
 }

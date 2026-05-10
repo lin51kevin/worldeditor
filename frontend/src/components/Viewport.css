@@ -5,6 +5,11 @@
   overflow: hidden;
 }
 
+.viewport-drag-over {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -2px;
+}
+
 .viewport-canvas {
   width: 100%;
   height: 100%;

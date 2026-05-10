@@ -55,7 +55,7 @@ const TEMPLATE_LANES: Record<string, [number, number]> = {
   dual6: [3, 3],
 };
 
-function createRoadFromTemplate(templateId: string): Road | null {
+export function createRoadFromTemplate(templateId: string, x = 0, y = 0, hdg = 0): Road | null {
   const laneCounts = TEMPLATE_LANES[templateId];
   if (!laneCounts) return null;
   const [leftCount, rightCount] = laneCounts;
@@ -65,9 +65,9 @@ function createRoadFromTemplate(templateId: string): Road | null {
 
   const geometry: Geometry = {
     s: 0,
-    x: 0,
-    y: 0,
-    hdg: 0,
+    x,
+    y,
+    hdg,
     length: roadLength,
     geo_type: 'Line',
   };
@@ -95,6 +95,11 @@ export function TemplatePanel() {
     }
   };
 
+  const handleDragStart = (e: React.DragEvent, templateId: string) => {
+    e.dataTransfer.setData('application/we-template-id', templateId);
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
   return (
     <div className="template-panel">
       <div className="template-header">
@@ -106,6 +111,8 @@ export function TemplatePanel() {
             key={tpl.id}
             className="template-item"
             title={t(tpl.labelKey)}
+            draggable
+            onDragStart={(e) => handleDragStart(e, tpl.id)}
             onClick={() => handleTemplateClick(tpl.id)}
             role="button"
             tabIndex={0}
