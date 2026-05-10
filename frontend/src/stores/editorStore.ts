@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Elevation, Geometry, Project, Road, Junction, LaneWidth } from '../services/platform';
+import type { Elevation, Geometry, Project, Road, RoadObject, Signal, Junction, LaneWidth } from '../services/platform';
 import type { LaneSide, SceneNodeSelection } from '../utils/sceneGraph';
 
 interface EditorState {
@@ -33,12 +33,12 @@ interface EditorState {
   updateRoad: (id: string, updates: Partial<Pick<Road, 'name' | 'length' | 'junction_id'>>) => void;
   updateRoadGeometry: (id: string, planView: Geometry[], length: number) => void;
   updateJunction: (id: string, updates: Partial<Pick<Junction, 'name'>>) => void;
-  addSignal: (signal: SignalItem) => void;
+  addSignal: (signal: Signal) => void;
   removeSignal: (id: string) => void;
-  updateSignal: (id: string, updates: Partial<SignalItem>) => void;
-  addObject: (obj: ObjectItem) => void;
+  updateSignal: (id: string, updates: Partial<Signal>) => void;
+  addObject: (obj: RoadObject) => void;
   removeObject: (id: string) => void;
-  updateObject: (id: string, updates: Partial<ObjectItem>) => void;
+  updateObject: (id: string, updates: Partial<RoadObject>) => void;
   updateLaneType: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, laneType: string) => void;
   updateLaneWidth: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, width: LaneWidth) => void;
   addElevationPoint: (roadId: string, s: number, height: number) => void;
@@ -57,23 +57,7 @@ interface EditorState {
 }
 
 // Signal and Object types for store
-export interface SignalItem {
-  id: string;
-  roadId: string;
-  sPosition: number;
-  laneId: number;
-  type: string;
-  validity: string;
-}
-
-export interface ObjectItem {
-  id: string;
-  roadId: string;
-  sPosition: number;
-  laneId: number;
-  type: string;
-  validity: string;
-}
+export type { Signal, RoadObject };
 
 const MAX_UNDO = 50;
 
@@ -209,7 +193,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...pushUndo(state),
       project: {
         ...state.project,
-        signals: [...((state.project as any).signals || []), signal],
+        signals: [...(state.project.signals || []), signal],
       },
       isDirty: true,
     })),
@@ -219,7 +203,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...pushUndo(state),
       project: {
         ...state.project,
-        signals: ((state.project as any).signals || []).filter((s: SignalItem) => s.id !== id),
+        signals: (state.project.signals || []).filter((s) => s.id !== id),
       },
       isDirty: true,
     })),
@@ -229,7 +213,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...pushUndo(state),
       project: {
         ...state.project,
-        signals: ((state.project as any).signals || []).map((s: SignalItem) =>
+        signals: (state.project.signals || []).map((s) =>
           s.id === id ? { ...s, ...updates } : s,
         ),
       },
@@ -241,7 +225,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...pushUndo(state),
       project: {
         ...state.project,
-        objects: [...((state.project as any).objects || []), obj],
+        objects: [...(state.project.objects || []), obj],
       },
       isDirty: true,
     })),
@@ -251,7 +235,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...pushUndo(state),
       project: {
         ...state.project,
-        objects: ((state.project as any).objects || []).filter((o: ObjectItem) => o.id !== id),
+        objects: (state.project.objects || []).filter((o) => o.id !== id),
       },
       isDirty: true,
     })),
@@ -261,7 +245,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ...pushUndo(state),
       project: {
         ...state.project,
-        objects: ((state.project as any).objects || []).map((o: ObjectItem) =>
+        objects: (state.project.objects || []).map((o) =>
           o.id === id ? { ...o, ...updates } : o,
         ),
       },

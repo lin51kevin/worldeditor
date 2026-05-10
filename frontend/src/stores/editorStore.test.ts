@@ -55,15 +55,15 @@ describe('editorStore', () => {
     it('should add and remove signals', () => {
       const store = useEditorStore.getState();
       store.addSignal({ id: 's1', roadId: 'r1', sPosition: 10, laneId: -1, type: 'traffic_light', validity: '' });
-      expect((useEditorStore.getState().project as any).signals.length).toBe(1);
+      expect(useEditorStore.getState().project.signals!.length).toBe(1);
       store.removeSignal('s1');
-      expect((useEditorStore.getState().project as any).signals.length).toBe(0);
+      expect(useEditorStore.getState().project.signals!.length).toBe(0);
     });
 
     it('should update signal', () => {
       useEditorStore.getState().addSignal({ id: 's1', roadId: 'r1', sPosition: 10, laneId: -1, type: 'traffic_light', validity: '' });
       useEditorStore.getState().updateSignal('s1', { type: 'stop_sign' });
-      const sig = (useEditorStore.getState().project as any).signals[0];
+      const sig = useEditorStore.getState().project.signals![0]!;
       expect(sig.type).toBe('stop_sign');
     });
   });
@@ -71,15 +71,15 @@ describe('editorStore', () => {
   describe('Object CRUD', () => {
     it('should add and remove objects', () => {
       useEditorStore.getState().addObject({ id: 'o1', roadId: 'r1', sPosition: 20, laneId: -1, type: 'pole', validity: '' });
-      expect((useEditorStore.getState().project as any).objects.length).toBe(1);
+      expect(useEditorStore.getState().project.objects!.length).toBe(1);
       useEditorStore.getState().removeObject('o1');
-      expect((useEditorStore.getState().project as any).objects.length).toBe(0);
+      expect(useEditorStore.getState().project.objects!.length).toBe(0);
     });
 
     it('should update object', () => {
       useEditorStore.getState().addObject({ id: 'o1', roadId: 'r1', sPosition: 20, laneId: -1, type: 'pole', validity: '' });
       useEditorStore.getState().updateObject('o1', { type: 'tree' });
-      const obj = (useEditorStore.getState().project as any).objects[0];
+      const obj = useEditorStore.getState().project.objects![0]!;
       expect(obj.type).toBe('tree');
     });
   });

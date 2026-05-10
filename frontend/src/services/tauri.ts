@@ -132,37 +132,34 @@ export class TauriPlatformService implements PlatformService {
 
   async pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null> {
     const wasm = await this.getWasm();
-    const result = wasm.pick_road_at_point(JSON.stringify(project), x, y, threshold);
-    return result as string | null;
+    return wasm.pick_road_at_point(JSON.stringify(project), x, y, threshold);
   }
 
   async pickJunctionAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null> {
     const wasm = await this.getWasm();
-    const result = wasm.pick_junction_at_point(JSON.stringify(project), x, y, threshold);
-    return result as string | null;
+    return wasm.pick_junction_at_point(JSON.stringify(project), x, y, threshold);
   }
 
   async queryElevation(road: import('./platform').Road, s: number): Promise<import('./platform').ElevationQueryResult> {
     const wasm = await this.getWasm();
-    const result = await (wasm as any).query_elevation(JSON.stringify(road), s);
-    return result as import('./platform').ElevationQueryResult;
+    return wasm.query_elevation(JSON.stringify(road), s);
   }
 
   async addElevationPoint(project: Project, roadId: string, s: number, height: number): Promise<Project> {
     const wasm = await this.getWasm();
-    const json = await (wasm as any).add_elevation_point(JSON.stringify(project), roadId, s, height);
+    const json = await wasm.add_elevation_point(JSON.stringify(project), roadId, s, height);
     return JSON.parse(json) as Project;
   }
 
   async deleteElevationPoint(project: Project, roadId: string, s: number, tolerance: number): Promise<Project> {
     const wasm = await this.getWasm();
-    const json = await (wasm as any).delete_elevation_point(JSON.stringify(project), roadId, s, tolerance);
+    const json = await wasm.delete_elevation_point(JSON.stringify(project), roadId, s, tolerance);
     return JSON.parse(json) as Project;
   }
 
   async smoothElevation(project: Project, roadId: string, iterations: number): Promise<Project> {
     const wasm = await this.getWasm();
-    const json = await (wasm as any).smooth_elevation(JSON.stringify(project), roadId, iterations);
+    const json = await wasm.smooth_elevation(JSON.stringify(project), roadId, iterations);
     return JSON.parse(json) as Project;
   }
 
@@ -174,14 +171,13 @@ export class TauriPlatformService implements PlatformService {
     excludeRoadId?: string,
   ): Promise<import('./platform').SnapResult> {
     const wasm = await this.getWasm();
-    const result = await (wasm as any).snap_point(
+    return wasm.snap_point(
       JSON.stringify(project),
       x,
       y,
       JSON.stringify(config),
       excludeRoadId,
     );
-    return result as import('./platform').SnapResult;
   }
 
   async measureDistance(
@@ -193,8 +189,7 @@ export class TauriPlatformService implements PlatformService {
     z2: number,
   ): Promise<import('./platform').DistanceMeasurement> {
     const wasm = await this.getWasm();
-    const result = await (wasm as any).measure_distance(x1, y1, z1, x2, y2, z2);
-    return result as import('./platform').DistanceMeasurement;
+    return wasm.measure_distance(x1, y1, z1, x2, y2, z2);
   }
 
   async measureAngle(
@@ -206,24 +201,22 @@ export class TauriPlatformService implements PlatformService {
     y3: number,
   ): Promise<import('./platform').AngleMeasurement> {
     const wasm = await this.getWasm();
-    const result = await (wasm as any).measure_angle(x1, y1, x2, y2, x3, y3);
-    return result as import('./platform').AngleMeasurement;
+    return wasm.measure_angle(x1, y1, x2, y2, x3, y3);
   }
 
   async measureArea(points: Array<[number, number]>): Promise<import('./platform').AreaMeasurement> {
     const wasm = await this.getWasm();
-    const result = await (wasm as any).measure_area(JSON.stringify(points));
-    return result as import('./platform').AreaMeasurement;
+    return wasm.measure_area(JSON.stringify(points));
   }
 
   async measureRoadLength(road: import('./platform').Road, sStart: number, sEnd: number): Promise<number> {
     const wasm = await this.getWasm();
-    return (wasm as any).measure_road_length(JSON.stringify(road), sStart, sEnd) as number;
+    return wasm.measure_road_length(JSON.stringify(road), sStart, sEnd);
   }
 
   async getRoadTemplates(): Promise<RoadTemplate[]> {
     const wasm = await this.getWasm();
-    return (wasm as any).get_road_templates() as RoadTemplate[];
+    return wasm.get_road_templates();
   }
 
   async createRoadFromSpline(
@@ -233,7 +226,7 @@ export class TauriPlatformService implements PlatformService {
     templateId: string,
   ): Promise<Project> {
     const wasm = await this.getWasm();
-    const json = await (wasm as any).create_road_from_spline(
+    const json = await wasm.create_road_from_spline(
       JSON.stringify(project),
       roadId,
       JSON.stringify(spline),
@@ -244,7 +237,7 @@ export class TauriPlatformService implements PlatformService {
 
   async roadToSpline(road: import('./platform').Road, sampleStep: number): Promise<import('./platform').EditableSpline> {
     const wasm = await this.getWasm();
-    const json = (wasm as any).road_to_spline(JSON.stringify(road), sampleStep) as string;
+    const json = wasm.road_to_spline(JSON.stringify(road), sampleStep);
     return JSON.parse(json) as import('./platform').EditableSpline;
   }
 
@@ -256,13 +249,13 @@ export class TauriPlatformService implements PlatformService {
     z: number,
   ): Promise<import('./platform').EditableSpline> {
     const wasm = await this.getWasm();
-    const json = (wasm as any).move_spline_knot(JSON.stringify(spline), knotIndex, x, y, z) as string;
+    const json = wasm.move_spline_knot(JSON.stringify(spline), knotIndex, x, y, z);
     return JSON.parse(json) as import('./platform').EditableSpline;
   }
 
   async splineToGeometries(spline: import('./platform').EditableSpline): Promise<import('./platform').Geometry[]> {
     const wasm = await this.getWasm();
-    const json = (wasm as any).spline_to_geometries(JSON.stringify(spline)) as string;
+    const json = wasm.spline_to_geometries(JSON.stringify(spline));
     return JSON.parse(json) as import('./platform').Geometry[];
   }
 }

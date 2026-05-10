@@ -27,6 +27,8 @@ export interface Project {
   header: Header;
   roads: Road[];
   junctions: Junction[];
+  signals?: Signal[];
+  objects?: RoadObject[];
 }
 
 export interface LinkElement {
@@ -80,18 +82,20 @@ export interface Road {
 
 export interface Signal {
   id: string;
-  name: string;
-  s: number;
-  t: number;
-  z_offset: number;
-  h_offset: number;
-  width: number;
-  height: number;
-  signal_type: string;
-  signal_subtype: string;
-  value: string | null;
-  orientation: string;
-  is_dynamic: boolean;
+  roadId: string;
+  sPosition: number;
+  laneId: number;
+  type: string;
+  validity: string;
+}
+
+export interface RoadObject {
+  id: string;
+  roadId: string;
+  sPosition: number;
+  laneId: number;
+  type: string;
+  validity: string;
 }
 
 export interface LaneSection {
