@@ -337,4 +337,13 @@ export interface PlatformService {
     spline: EditableSpline,
     templateId: string,
   ): Promise<Project>;
+
+  /** Convert a road's plan_view geometry to an editable spline. */
+  roadToSpline(road: Road, sampleStep: number): Promise<EditableSpline>;
+
+  /** Move a spline knot to a new position, recomputing tangents. Returns updated spline. */
+  moveSplineKnot(spline: EditableSpline, knotIndex: number, x: number, y: number, z: number): Promise<EditableSpline>;
+
+  /** Convert an editable spline back to OpenDRIVE geometry segments. */
+  splineToGeometries(spline: EditableSpline): Promise<Geometry[]>;
 }

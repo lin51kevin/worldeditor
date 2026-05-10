@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Elevation, Project, Road, Junction, LaneWidth } from '../services/platform';
+import type { Elevation, Geometry, Project, Road, Junction, LaneWidth } from '../services/platform';
 import type { LaneSide, SceneNodeSelection } from '../utils/sceneGraph';
 
 interface EditorState {
@@ -31,6 +31,7 @@ interface EditorState {
   addRoad: (road: Road) => void;
   removeRoad: (id: string) => void;
   updateRoad: (id: string, updates: Partial<Pick<Road, 'name' | 'length' | 'junction_id'>>) => void;
+  updateRoadGeometry: (id: string, planView: Geometry[], length: number) => void;
   updateJunction: (id: string, updates: Partial<Pick<Junction, 'name'>>) => void;
   addSignal: (signal: SignalItem) => void;
   removeSignal: (id: string) => void;
@@ -174,6 +175,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...state.project,
         roads: state.project.roads.map((r) =>
           r.id === id ? { ...r, ...updates } : r,
+        ),
+      },
+      isDirty: true,
+    })),
+
+  updateRoadGeometry: (id, planView, length) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) =>
+          r.id === id ? { ...r, plan_view: planView, length } : r,
         ),
       },
       isDirty: true,

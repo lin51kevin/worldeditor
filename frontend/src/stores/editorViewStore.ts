@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { makeLaneKey } from '../utils/sceneGraph';
 import type { LaneSide } from '../utils/sceneGraph';
-import type { SnapType, DistanceMeasurement, AngleMeasurement, AreaMeasurement } from '../services/platform';
+import type { SnapType, DistanceMeasurement, AngleMeasurement, AreaMeasurement, EditableSpline } from '../services/platform';
 
 export type MeasureMode = 'none' | 'distance' | 'angle' | 'area';
 
@@ -115,6 +115,10 @@ interface EditorViewState {
   measurePoints: MeasurePoint[];
   lastMeasurement: MeasurementResult | null;
 
+  // Geometry editing (editing existing road's plan_view via spline)
+  geometryEditRoadId: string | null;
+  geometryEditSpline: EditableSpline | null;
+
   // Actions
   setDimension: (d: ViewDimension) => void;
   toggleGrid: () => void;
@@ -141,6 +145,11 @@ interface EditorViewState {
   addMeasurePoint: (point: MeasurePoint) => void;
   clearMeasurePoints: () => void;
   setMeasurementResult: (result: MeasurementResult | null) => void;
+
+  // Geometry editing actions
+  enterGeometryEdit: (roadId: string, spline: EditableSpline) => void;
+  exitGeometryEdit: () => void;
+  setGeometryEditSpline: (spline: EditableSpline) => void;
 
   // Display settings actions
   toggleDisplaySetting: (key: DisplayBooleanKey) => void;
@@ -227,6 +236,8 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   measureMode: 'none' as MeasureMode,
   measurePoints: [],
   lastMeasurement: null,
+  geometryEditRoadId: null,
+  geometryEditSpline: null,
 
   setDimension: (dimension) => set({ dimension }),
   toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
@@ -257,6 +268,19 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
     set((state) => ({ measurePoints: [...state.measurePoints, point] })),
   clearMeasurePoints: () => set({ measurePoints: [], lastMeasurement: null }),
   setMeasurementResult: (lastMeasurement) => set({ lastMeasurement }),
+
+  // Geometry editing actions
+  enterGeometryEdit: (roadId, spline) => set({
+    geometryEditRoadId: roadId,
+    geometryEditSpline: spline,
+    draggingKnot: null,
+  }),
+  exitGeometryEdit: () => set({
+    geometryEditRoadId: null,
+    geometryEditSpline: null,
+    draggingKnot: null,
+  }),
+  setGeometryEditSpline: (spline) => set({ geometryEditSpline: spline }),
 
   toggleDisplaySetting: (key) =>
     set((state) => {

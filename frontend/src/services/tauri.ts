@@ -241,4 +241,28 @@ export class TauriPlatformService implements PlatformService {
     );
     return JSON.parse(json) as Project;
   }
+
+  async roadToSpline(road: import('./platform').Road, sampleStep: number): Promise<import('./platform').EditableSpline> {
+    const wasm = await this.getWasm();
+    const json = (wasm as any).road_to_spline(JSON.stringify(road), sampleStep) as string;
+    return JSON.parse(json) as import('./platform').EditableSpline;
+  }
+
+  async moveSplineKnot(
+    spline: import('./platform').EditableSpline,
+    knotIndex: number,
+    x: number,
+    y: number,
+    z: number,
+  ): Promise<import('./platform').EditableSpline> {
+    const wasm = await this.getWasm();
+    const json = (wasm as any).move_spline_knot(JSON.stringify(spline), knotIndex, x, y, z) as string;
+    return JSON.parse(json) as import('./platform').EditableSpline;
+  }
+
+  async splineToGeometries(spline: import('./platform').EditableSpline): Promise<import('./platform').Geometry[]> {
+    const wasm = await this.getWasm();
+    const json = (wasm as any).spline_to_geometries(JSON.stringify(spline)) as string;
+    return JSON.parse(json) as import('./platform').Geometry[];
+  }
 }
