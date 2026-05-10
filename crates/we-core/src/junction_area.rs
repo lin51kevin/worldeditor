@@ -175,7 +175,7 @@ fn polygon_area(pts: &[[f64; 2]]) -> f64 {
 /// Compute the convex hull of a set of 2D points (Andrew's monotone chain).
 fn convex_hull(points: &[[f64; 2]]) -> Vec<[f64; 2]> {
     let mut pts: Vec<[f64; 2]> = points.to_vec();
-    pts.sort_by(|a, b| a[0].partial_cmp(&b[0]).unwrap().then(a[1].partial_cmp(&b[1]).unwrap()));
+    pts.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
     pts.dedup_by(|a, b| (a[0] - b[0]).abs() < 1e-9 && (a[1] - b[1]).abs() < 1e-9);
 
     let n = pts.len();
