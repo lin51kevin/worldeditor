@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
+import { useEditorViewStore } from '../stores/editorViewStore';
+import { getPlatformService } from '../services';
 import './PropertyPanel.css';
 
 interface CardSectionProps {
@@ -30,9 +32,41 @@ export function PropertyPanel() {
   const { project, selectedRoadId, selectedJunctionId } = useEditorStore();
   const selectedRoad = project.roads.find((r) => r.id === selectedRoadId);
   const selectedJunction = project.junctions.find((j) => j.id === selectedJunctionId);
+  const geometryEditRoadId = useEditorViewStore((s) => s.geometryEditRoadId);
   const { t } = useTranslation();
   const [newElevationS, setNewElevationS] = useState(0);
   const [newElevationH, setNewElevationH] = useState(0);
+
+  const isEditingGeometry = geometryEditRoadId === selectedRoadId;
+
+  const handleEditGeometry = async () => {
+    if (!selectedRoad || selectedRoad.plan_view.length === 0) return;
+    if (isEditingGeometry) {
+      // Exit geometry edit mode: finalize
+      const viewState = useEditorViewStore.getState();
+      const { geometryEditSpline: spline } = viewState;
+      if (spline) {
+        try {
+          const service = await getPlatformService();
+          const geometries = await service.splineToGeometries(spline);
+          const totalLength = geometries.reduce((sum, g) => sum + g.length, 0);
+          useEditorStore.getState().updateRoadGeometry(selectedRoad.id, geometries, totalLength);
+        } catch (err) {
+          console.error('[PropertyPanel] Failed to finalize geometry edit:', err);
+        }
+      }
+      viewState.exitGeometryEdit();
+    } else {
+      // Enter geometry edit mode
+      try {
+        const service = await getPlatformService();
+        const spline = await service.roadToSpline(selectedRoad, 2.0);
+        useEditorViewStore.getState().enterGeometryEdit(selectedRoad.id, spline);
+      } catch (err) {
+        console.error('[PropertyPanel] Failed to enter geometry edit:', err);
+      }
+    }
+  };
 
   return (
     <div className="property-panel">
@@ -83,6 +117,12 @@ export function PropertyPanel() {
                     </span>
                   </div>
                 ))}
+                <button
+                  className="geometry-edit-btn"
+                  onClick={() => void handleEditGeometry()}
+                >
+                  {isEditingGeometry ? t('propertyPanel.finishEditGeometry') : t('propertyPanel.editGeometry')}
+                </button>
               </CardSection>
 
               {/* Lanes Card */}

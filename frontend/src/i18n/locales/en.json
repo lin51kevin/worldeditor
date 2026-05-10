@@ -96,6 +96,8 @@
     "length": "Length",
     "junction": "Junction",
     "geometry": "Geometry",
+    "editGeometry": "Edit Geometry",
+    "finishEditGeometry": "Finish Editing",
     "segments": "Segments",
     "lanes": "Lanes",
     "laneSections": "Lane Sections",

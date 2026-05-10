@@ -97,6 +97,8 @@
     "length": "长度",
     "junction": "Junction",
     "geometry": "几何",
+    "editGeometry": "编辑几何",
+    "finishEditGeometry": "完成编辑",
     "segments": "段数",
     "lanes": "车道",
     "laneSections": "车道段",

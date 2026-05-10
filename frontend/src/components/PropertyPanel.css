@@ -258,3 +258,19 @@
   margin-bottom: 0;
   padding-bottom: 0;
 }
+
+.geometry-edit-btn {
+  margin-top: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-accent, #0078d4);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm, 3px);
+  cursor: pointer;
+  font-size: var(--font-xs, 11px);
+}
+
+.geometry-edit-btn:hover {
+  opacity: 0.85;
+}
