@@ -22,6 +22,7 @@ const rendererMocks = vi.hoisted(() => ({
   uploadHighlightVertices: vi.fn(),
   clearHighlight: vi.fn(),
   unprojectToGround: vi.fn(),
+  setSplinePreviewKnots: vi.fn(),
   setScaleChangeCallback: vi.fn(),
   setClearColor: vi.fn(),
   setGridColor: vi.fn(),
@@ -56,6 +57,7 @@ vi.mock('../viewport/renderer', () => ({
       uploadHighlightVertices: rendererMocks.uploadHighlightVertices,
       clearHighlight: rendererMocks.clearHighlight,
       unprojectToGround: rendererMocks.unprojectToGround,
+      setSplinePreviewKnots: rendererMocks.setSplinePreviewKnots,
       setScaleChangeCallback: rendererMocks.setScaleChangeCallback,
       setClearColor: rendererMocks.setClearColor,
       setGridColor: rendererMocks.setGridColor,
@@ -136,6 +138,10 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     measureAngle: vi.fn().mockResolvedValue({ radians: 0, degrees: 0 }),
     measureArea: vi.fn().mockResolvedValue({ area: 0, perimeter: 0 }),
     measureRoadLength: vi.fn().mockResolvedValue(0),
+    getRoadTemplates: vi.fn().mockResolvedValue([
+      { id: 'single', name: 'Single Lane', left_lanes: 1, right_lanes: 1, lane_width: 3.5 },
+    ]),
+    createRoadFromSpline: vi.fn().mockResolvedValue(makeProject()),
   };
 }
 

@@ -9,6 +9,8 @@ describe('editorViewStore', () => {
       showGrid: true,
       showAxis: true,
       editMode: 'select',
+      splineTemplateId: 'single',
+      splineKnots: [],
       viewMode: 'solid',
       display: { ...DEFAULT_DISPLAY },
       layout: {
@@ -76,7 +78,7 @@ describe('editorViewStore', () => {
     expect(useEditorViewStore.getState().showAxis).toBe(false);
   });
 
-  it.each(['select', 'road', 'lane', 'junction'] as const)(
+  it.each(['select', 'road', 'lane', 'junction', 'spline'] as const)(
     'setEditMode changes editMode to %s',
     (editMode) => {
       act(() => {
@@ -86,6 +88,27 @@ describe('editorViewStore', () => {
       expect(useEditorViewStore.getState().editMode).toBe(editMode);
     }
   );
+
+  it('spline knot actions mutate knot list immutably', () => {
+    act(() => {
+      useEditorViewStore.getState().appendSplineKnot([1, 2, 0]);
+      useEditorViewStore.getState().appendSplineKnot([3, 4, 0]);
+    });
+    expect(useEditorViewStore.getState().splineKnots).toEqual([
+      [1, 2, 0],
+      [3, 4, 0],
+    ]);
+
+    act(() => {
+      useEditorViewStore.getState().popSplineKnot();
+    });
+    expect(useEditorViewStore.getState().splineKnots).toEqual([[1, 2, 0]]);
+
+    act(() => {
+      useEditorViewStore.getState().clearSplineKnots();
+    });
+    expect(useEditorViewStore.getState().splineKnots).toEqual([]);
+  });
 
   it.each(['sketch', 'wire', 'solid'] as const)(
     'setViewMode changes viewMode to %s',

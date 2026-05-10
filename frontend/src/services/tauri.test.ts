@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Project } from './platform';
+import type { EditableSpline, Project } from './platform';
 import { TauriPlatformService } from './tauri';
-import * as wasmModule from '../../wasm/pkg';
+import * as wasmModule from '../../wasm/pkg/we_wasm';
 
-vi.mock('../../wasm/pkg', () => ({
+vi.mock('../../wasm/pkg/we_wasm', () => ({
   default: vi.fn().mockResolvedValue(undefined),
   parse_opendrive: vi.fn(),
   write_opendrive: vi.fn(),
+  get_road_templates: vi.fn(),
+  create_road_from_spline: vi.fn(),
   wgs84_to_gcj02: vi.fn(),
   gcj02_to_wgs84: vi.fn(),
   geo_to_utm: vi.fn(),
@@ -49,6 +51,10 @@ describe('TauriPlatformService', () => {
     vi.mocked(wasmModule.generate_road_vertices).mockReturnValue(new Float32Array([0, 1, 2]));
     vi.mocked(wasmModule.generate_single_road_vertices).mockReturnValue(new Float32Array([3, 4, 5]));
     vi.mocked(wasmModule.pick_road_at_point).mockReturnValue('road-1' as never);
+    vi.mocked(wasmModule.get_road_templates).mockReturnValue([
+      { id: 'single', name: 'Single Lane', left_lanes: 1, right_lanes: 1, lane_width: 3.5 },
+    ] as never);
+    vi.mocked(wasmModule.create_road_from_spline).mockReturnValue(JSON.stringify(makeProject()) as never);
   });
 
   it('returns tauri platform info', () => {
@@ -167,5 +173,39 @@ describe('TauriPlatformService', () => {
 
     expect(invoke).toHaveBeenCalledWith('write_opendrive', { project });
     expect(result).toBe('<OpenDRIVE />');
+  });
+
+  it('forwards road template queries to wasm', async () => {
+    const service = new TauriPlatformService();
+
+    await expect(service.getRoadTemplates()).resolves.toEqual([
+      { id: 'single', name: 'Single Lane', left_lanes: 1, right_lanes: 1, lane_width: 3.5 },
+    ]);
+
+    expect(wasmModule.get_road_templates).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes spline road creation through wasm and parses the result', async () => {
+    const service = new TauriPlatformService();
+    const project = makeProject();
+    const spline: EditableSpline = {
+      knots: [{
+        position: [0, 0, 0],
+        tangent_in: [0, 0, 0],
+        tangent_out: [1, 0, 0],
+        s: 0,
+        knot_type: 'Anchor' as const,
+        tangent_mode: 'Auto' as const,
+      }],
+    };
+
+    await expect(service.createRoadFromSpline(project, 'road_spline_1', spline, 'single')).resolves.toEqual(project);
+
+    expect(wasmModule.create_road_from_spline).toHaveBeenCalledWith(
+      JSON.stringify(project),
+      'road_spline_1',
+      JSON.stringify(spline),
+      'single',
+    );
   });
 });
