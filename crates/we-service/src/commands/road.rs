@@ -233,6 +233,73 @@ impl Command for CreateRoadFromCenterline {
     }
 }
 
+// ── CreateRoadFromSpline ─────────────────────────────
+
+/// Create a new road from an editable spline with a lane template.
+#[derive(Debug, Clone)]
+pub struct CreateRoadFromSpline {
+    pub road_id: String,
+    pub spline: we_core::spline::EditableSpline,
+    pub template: RoadTemplate,
+}
+
+impl CreateRoadFromSpline {
+    pub fn new(
+        road_id: impl Into<String>,
+        spline: we_core::spline::EditableSpline,
+        template: RoadTemplate,
+    ) -> Self {
+        Self {
+            road_id: road_id.into(),
+            spline,
+            template,
+        }
+    }
+}
+
+impl Command for CreateRoadFromSpline {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        if project.roads.iter().any(|r| r.id == self.road_id) {
+            return Err(EditorError::OperationFailed(format!(
+                "Road '{}' already exists",
+                self.road_id
+            )));
+        }
+
+        // Convert spline to geometries
+        let geometries = we_core::spline::spline_to_geometries(&self.spline);
+
+        if geometries.is_empty() {
+            return Err(EditorError::OperationFailed(
+                "Spline must have at least one geometry segment".into(),
+            ));
+        }
+
+        // Calculate total length
+        let total_length: f64 = geometries.iter().map(|geo| geo.length).sum();
+
+        // Build road with template lanes
+        let mut road = Road::new(&self.road_id, total_length);
+        road.plan_view = geometries;
+        let lane_section = self.template.to_lane_section();
+        road.lane_sections.push(lane_section);
+
+        let mut p = project.clone();
+        p.roads.push(road);
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        p.roads.retain(|r| r.id != self.road_id);
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        "Create Road from Spline"
+    }
+}
+
 // ── SetRoadElevation ─────────────────────────────────
 
 /// Replace the elevation profile of a road.

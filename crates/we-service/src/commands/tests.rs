@@ -298,6 +298,102 @@ fn test_create_road_from_centerline_duplicate() {
     assert!(cmd.execute(&project).is_err());
 }
 
+// ── CreateRoadFromSpline tests ────────────────────
+
+#[test]
+fn test_create_road_from_spline_single_lane() {
+    use we_core::spline::{EditableSpline, SplineKnot};
+
+    let project = Project::default();
+    let spline = EditableSpline::from_knots(vec![
+        SplineKnot::new(0.0, 0.0, 0.0),
+        SplineKnot::new(100.0, 0.0, 0.0),
+    ]);
+    let template = RoadTemplate::single_lane();
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    let result = cmd.execute(&project).unwrap();
+
+    assert_eq!(result.roads.len(), 1);
+    let road = &result.roads[0];
+    assert_eq!(road.id, "road_1");
+    assert!(road.length > 99.0 && road.length < 101.0); // Allow small tolerance
+    assert_eq!(road.lane_sections.len(), 1);
+    assert_eq!(road.lane_sections[0].left.len(), 1);
+    assert_eq!(road.lane_sections[0].right.len(), 1);
+}
+
+#[test]
+fn test_create_road_from_spline_dual_lanes() {
+    use we_core::spline::{EditableSpline, SplineKnot};
+
+    let project = Project::default();
+    let spline = EditableSpline::from_knots(vec![
+        SplineKnot::new(0.0, 0.0, 0.0),
+        SplineKnot::new(50.0, 0.0, 0.0),
+    ]);
+    let template = RoadTemplate::dual_two_lane();
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    let result = cmd.execute(&project).unwrap();
+
+    let road = &result.roads[0];
+    assert_eq!(road.lane_sections[0].left.len(), 2);
+    assert_eq!(road.lane_sections[0].right.len(), 2);
+}
+
+#[test]
+fn test_create_road_from_spline_undo() {
+    use we_core::spline::{EditableSpline, SplineKnot};
+
+    let project = Project::default();
+    let spline = EditableSpline::from_knots(vec![
+        SplineKnot::new(0.0, 0.0, 0.0),
+        SplineKnot::new(100.0, 0.0, 0.0),
+    ]);
+    let template = RoadTemplate::single_lane();
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    let after = cmd.execute(&project).unwrap();
+    let undone = cmd.undo(&after).unwrap();
+    assert_eq!(undone.roads.len(), 0);
+}
+
+#[test]
+fn test_create_road_from_spline_duplicate_id() {
+    use we_core::spline::{EditableSpline, SplineKnot};
+
+    let mut project = Project::default();
+    project.roads.push(Road::new("road_1", 50.0));
+
+    let spline = EditableSpline::from_knots(vec![
+        SplineKnot::new(0.0, 0.0, 0.0),
+        SplineKnot::new(100.0, 0.0, 0.0),
+    ]);
+    let template = RoadTemplate::single_lane();
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    assert!(cmd.execute(&project).is_err());
+}
+
+#[test]
+fn test_create_road_from_spline_empty_knots() {
+    use we_core::spline::EditableSpline;
+
+    let project = Project::default();
+    let spline = EditableSpline::new();
+    let template = RoadTemplate::single_lane();
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    assert!(cmd.execute(&project).is_err());
+}
+
+#[test]
+fn test_create_road_from_spline_single_knot() {
+    use we_core::spline::{EditableSpline, SplineKnot};
+
+    let project = Project::default();
+    let spline = EditableSpline::from_knots(vec![SplineKnot::new(0.0, 0.0, 0.0)]);
+    let template = RoadTemplate::single_lane();
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    assert!(cmd.execute(&project).is_err());
+}
+
 // ── AddLane tests ─────────────────────────────────────
 
 #[test]

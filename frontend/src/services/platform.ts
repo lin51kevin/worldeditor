@@ -210,6 +210,27 @@ export interface AreaMeasurement {
   perimeter: number;
 }
 
+export interface SplineKnot {
+  position: [number, number, number];
+  tangent_in: [number, number, number];
+  tangent_out: [number, number, number];
+  s: number;
+  knot_type: 'Key' | 'Intermediate' | 'Anchor';
+  tangent_mode: 'Auto' | 'Manual';
+}
+
+export interface EditableSpline {
+  knots: SplineKnot[];
+}
+
+export interface RoadTemplate {
+  id: string;
+  name: string;
+  left_lanes: number;
+  right_lanes: number;
+  lane_width: number;
+}
+
 export interface PlatformService {
   /** Parse an OpenDRIVE XML string into a Project. */
   parseOpenDrive(xml: string): Promise<Project>;
@@ -305,4 +326,15 @@ export interface PlatformService {
 
   /** Measure road arc length between two stations. */
   measureRoadLength(road: Road, sStart: number, sEnd: number): Promise<number>;
+
+  /** List built-in road templates for spline-based road generation. */
+  getRoadTemplates(): Promise<RoadTemplate[]>;
+
+  /** Create a road from spline and template, returning updated project. */
+  createRoadFromSpline(
+    project: Project,
+    roadId: string,
+    spline: EditableSpline,
+    templateId: string,
+  ): Promise<Project>;
 }

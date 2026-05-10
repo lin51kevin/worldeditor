@@ -4,6 +4,7 @@
 //! All types are serializable and WASM compatible.
 
 pub(crate) mod road;
+pub(crate) mod template;
 
 pub use road::{
     Bridge, Crossfall, CrossfallSide, Elevation, Geometry, GeometryType, Lane, LaneBorder,
@@ -12,6 +13,7 @@ pub use road::{
     RoadMarkColor, RoadMarkType, RoadMarkWeight, RoadObject, Signal, Superelevation, Tunnel,
     Validity,
 };
+pub use template::RoadTemplate;
 
 use serde::{Deserialize, Serialize};
 

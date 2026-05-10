@@ -5,15 +5,15 @@
  * frontend side — the module must be explicitly initialised before first use,
  * just like in WebPlatformService.
  */
-import type { GisCoord, PlatformService, Project, UtmCoord } from './platform';
+import type { GisCoord, PlatformService, Project, RoadTemplate, UtmCoord } from './platform';
 
 export class TauriPlatformService implements PlatformService {
-  private wasmModule: typeof import('../../wasm/pkg') | null = null;
+  private wasmModule: typeof import('../../wasm/pkg/we_wasm') | null = null;
 
   /** Lazy-initialise the WASM module exactly once. */
-  private async getWasm(): Promise<typeof import('../../wasm/pkg')> {
+  private async getWasm(): Promise<typeof import('../../wasm/pkg/we_wasm')> {
     if (!this.wasmModule) {
-      const wasm = await import('../../wasm/pkg');
+      const wasm = await import('../../wasm/pkg/we_wasm');
       await wasm.default();
       this.wasmModule = wasm;
     }
@@ -219,5 +219,26 @@ export class TauriPlatformService implements PlatformService {
   async measureRoadLength(road: import('./platform').Road, sStart: number, sEnd: number): Promise<number> {
     const wasm = await this.getWasm();
     return (wasm as any).measure_road_length(JSON.stringify(road), sStart, sEnd) as number;
+  }
+
+  async getRoadTemplates(): Promise<RoadTemplate[]> {
+    const wasm = await this.getWasm();
+    return (wasm as any).get_road_templates() as RoadTemplate[];
+  }
+
+  async createRoadFromSpline(
+    project: Project,
+    roadId: string,
+    spline: import('./platform').EditableSpline,
+    templateId: string,
+  ): Promise<Project> {
+    const wasm = await this.getWasm();
+    const json = await (wasm as any).create_road_from_spline(
+      JSON.stringify(project),
+      roadId,
+      JSON.stringify(spline),
+      templateId,
+    );
+    return JSON.parse(json) as Project;
   }
 }

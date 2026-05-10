@@ -2,15 +2,15 @@
  * Web platform adapter.
  * Uses WASM for core logic, browser APIs for file I/O.
  */
-import type { GisCoord, PlatformService, Project, UtmCoord } from './platform';
+import type { GisCoord, PlatformService, Project, RoadTemplate, UtmCoord } from './platform';
 
 export class WebPlatformService implements PlatformService {
-  private wasmModule: typeof import('../../wasm/pkg') | null = null;
+  private wasmModule: typeof import('../../wasm/pkg/we_wasm') | null = null;
 
   private async getWasm() {
     if (!this.wasmModule) {
       // Lazy-load and initialize the WASM module
-      const wasm = await import('../../wasm/pkg');
+      const wasm = await import('../../wasm/pkg/we_wasm');
       const initWasm = wasm.default;
       await initWasm();
       this.wasmModule = wasm;
@@ -216,5 +216,26 @@ export class WebPlatformService implements PlatformService {
   async measureRoadLength(road: import('./platform').Road, sStart: number, sEnd: number): Promise<number> {
     const wasm = await this.getWasm();
     return (wasm as any).measure_road_length(JSON.stringify(road), sStart, sEnd) as number;
+  }
+
+  async getRoadTemplates(): Promise<RoadTemplate[]> {
+    const wasm = await this.getWasm();
+    return (wasm as any).get_road_templates() as RoadTemplate[];
+  }
+
+  async createRoadFromSpline(
+    project: Project,
+    roadId: string,
+    spline: import('./platform').EditableSpline,
+    templateId: string,
+  ): Promise<Project> {
+    const wasm = await this.getWasm();
+    const json = await (wasm as any).create_road_from_spline(
+      JSON.stringify(project),
+      roadId,
+      JSON.stringify(spline),
+      templateId,
+    );
+    return JSON.parse(json) as Project;
   }
 }

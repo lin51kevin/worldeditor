@@ -1509,6 +1509,52 @@ pub fn smooth_elevation(
     serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
 }
 
+// ── Road Creation ────────────────────────────────────
+
+/// Create a road from a spline and lane template, returning the modified project.
+///
+/// - `spline_json`: JSON representation of EditableSpline
+/// - `template_id`: Template ID (e.g., "single", "dual2", "dual4", "dual6")
+/// - `road_id`: Unique ID for the new road
+#[wasm_bindgen]
+pub fn create_road_from_spline(
+    project_json: &str,
+    road_id: &str,
+    spline_json: &str,
+    template_id: &str,
+) -> Result<String, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let spline: we_core::spline::EditableSpline =
+        serde_json::from_str(spline_json).map_err(|e| JsError::new(&e.to_string()))?;
+    
+    let template = match template_id {
+        "single" => we_core::model::RoadTemplate::single_lane(),
+        "dual2" => we_core::model::RoadTemplate::dual_two_lane(),
+        "dual4" => we_core::model::RoadTemplate::dual_four_lane(),
+        "dual6" => we_core::model::RoadTemplate::dual_six_lane(),
+        _ => return Err(JsError::new(&format!("Unknown template ID: {}", template_id))),
+    };
+
+    let cmd = we_service::commands::CreateRoadFromSpline::new(road_id, spline, template);
+    let result = cmd
+        .execute(&project)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// List built-in road templates available for spline-based road creation.
+#[wasm_bindgen]
+pub fn get_road_templates() -> Result<JsValue, JsError> {
+    let templates = vec![
+        we_core::model::RoadTemplate::single_lane(),
+        we_core::model::RoadTemplate::dual_two_lane(),
+        we_core::model::RoadTemplate::dual_four_lane(),
+        we_core::model::RoadTemplate::dual_six_lane(),
+    ];
+    serde_wasm_bindgen::to_value(&templates).map_err(|e| JsError::new(&e.to_string()))
+}
+
 // ── Snapping ─────────────────────────────────────────
 
 /// Snap a point to the nearest grid/endpoint/etc.
