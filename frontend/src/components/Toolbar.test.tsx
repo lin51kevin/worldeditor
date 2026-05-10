@@ -89,6 +89,9 @@ function createPlatformMock() {
       { id: 'single', name: 'Single Lane', left_lanes: 1, right_lanes: 1, lane_width: 3.5 },
     ]),
     createRoadFromSpline: vi.fn<PlatformService['createRoadFromSpline']>().mockResolvedValue(makeProject()),
+    roadToSpline: vi.fn<PlatformService['roadToSpline']>().mockResolvedValue({ knots: [] }),
+    moveSplineKnot: vi.fn<PlatformService['moveSplineKnot']>().mockResolvedValue({ knots: [] }),
+    splineToGeometries: vi.fn<PlatformService['splineToGeometries']>().mockResolvedValue([]),
   };
 
   return { platform, parseOpenDrive, writeOpenDrive, openFile, saveFile };
