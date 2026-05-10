@@ -40,6 +40,7 @@ export function Toolbar() {
     setViewMode,
     toggleSnap,
     setMeasureMode,
+    clearSplineKnots,
   } = useEditorViewStore();
   const { t } = useTranslation();
 
@@ -116,6 +117,11 @@ export function Toolbar() {
     }
   }, []);
 
+  const handleSplineMode = useCallback(() => {
+    setEditMode('spline');
+    clearSplineKnots();
+  }, [setEditMode, clearSplineKnots]);
+
   return (
     <div
       className="toolbar"
@@ -175,6 +181,14 @@ export function Toolbar() {
         >
           <Route size={16} className="tb-icon" />
           <span className="tb-label">{t('toolbar.roadEdit')}</span>
+        </button>
+        <button
+          className={`toolbar-btn toolbar-toggle ${editMode === 'spline' ? 'active' : ''}`}
+          onClick={handleSplineMode}
+          title={t('toolbar.splineEditTitle')}
+        >
+          <Spline size={16} className="tb-icon" />
+          <span className="tb-label">{t('toolbar.splineEdit')}</span>
         </button>
         <button
           className={`toolbar-btn toolbar-toggle ${editMode === 'lane' ? 'active' : ''}`}

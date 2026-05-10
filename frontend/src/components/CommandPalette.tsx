@@ -38,6 +38,7 @@ export function CommandPalette() {
       // Edit mode
       { id: 'mode-select', label: t('toolbar.select'), shortcut: 'V', category: 'Edit', action: () => setEditMode('select') },
       { id: 'mode-road', label: t('toolbar.road'), shortcut: 'R', category: 'Edit', action: () => setEditMode('road') },
+      { id: 'mode-spline', label: t('toolbar.splineEdit'), shortcut: 'P', category: 'Edit', action: () => setEditMode('spline') },
       { id: 'mode-lane', label: t('toolbar.lane'), shortcut: 'L', category: 'Edit', action: () => setEditMode('lane') },
       { id: 'mode-junction', label: t('toolbar.junction'), shortcut: 'J', category: 'Edit', action: () => setEditMode('junction') },
 
