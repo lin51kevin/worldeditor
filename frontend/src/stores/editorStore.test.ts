@@ -405,5 +405,76 @@ describe('editorStore', () => {
       expect(useEditorStore.getState().project.roads).toHaveLength(1);
     });
   });
+
+  describe('selectAll', () => {
+    const makeJunction = (id = 'j1') => ({
+      id,
+      name: id,
+      type: 'default' as const,
+      x: 0,
+      y: 0,
+      z: 0,
+      connections: [],
+      laneLinks: [],
+    });
+
+    it('should select all roads and junctions', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r2' }));
+      useEditorStore.setState((s) => ({
+        project: { ...s.project, junctions: [makeJunction('j1')] },
+      }));
+      useEditorStore.getState().selectAll();
+      expect(useEditorStore.getState().selectedRoadIds).toEqual(['r1', 'r2']);
+      expect(useEditorStore.getState().selectedJunctionIds).toEqual(['j1']);
+    });
+
+    it('should work with an empty project', () => {
+      useEditorStore.getState().selectAll();
+      expect(useEditorStore.getState().selectedRoadIds).toEqual([]);
+      expect(useEditorStore.getState().selectedJunctionIds).toEqual([]);
+    });
+  });
+
+  describe('duplicateSelected', () => {
+    it('should clone the selected road', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().selectRoad('r1');
+      useEditorStore.getState().duplicateSelected();
+      expect(useEditorStore.getState().project.roads).toHaveLength(2);
+    });
+
+    it('should select the newly cloned road', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().selectRoad('r1');
+      useEditorStore.getState().duplicateSelected();
+      const newId = useEditorStore.getState().selectedRoadId;
+      expect(newId).not.toBeNull();
+      expect(newId).not.toBe('r1');
+    });
+
+    it('should generate a unique ID even when default copy name already exists', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1_copy1' }));
+      useEditorStore.getState().selectRoad('r1');
+      useEditorStore.getState().duplicateSelected();
+      const roads = useEditorStore.getState().project.roads;
+      expect(roads.map((r) => r.id)).toContain('r1_copy2');
+    });
+
+    it('should push undo', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().selectRoad('r1');
+      const undoBefore = useEditorStore.getState().undoStack.length;
+      useEditorStore.getState().duplicateSelected();
+      expect(useEditorStore.getState().undoStack.length).toBeGreaterThan(undoBefore);
+    });
+
+    it('should do nothing when no road is selected', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().duplicateSelected();
+      expect(useEditorStore.getState().project.roads).toHaveLength(1);
+    });
+  });
 });
 

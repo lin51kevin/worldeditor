@@ -37,6 +37,8 @@ interface EditorState {
   removeRoad: (id: string) => void;
   removeJunction: (id: string) => void;
   deleteSelected: () => void;
+  selectAll: () => void;
+  duplicateSelected: () => void;
   updateRoad: (id: string, updates: Partial<Pick<Road, 'name' | 'length' | 'junction_id'>>) => void;
   updateRoadGeometry: (id: string, planView: Geometry[], length: number) => void;
   cloneRoad: (id: string, newId: string, offsetXy: [number, number]) => void;
@@ -222,6 +224,27 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (state.selectedJunctionId) {
       get().removeJunction(state.selectedJunctionId);
     }
+  },
+
+  selectAll: () => {
+    const { project } = get();
+    const roadIds = project.roads.map((r) => r.id);
+    const junctionIds = project.junctions.map((j) => j.id);
+    get().selectMultiple(roadIds, junctionIds);
+  },
+
+  duplicateSelected: () => {
+    const { selectedRoadId, project } = get();
+    if (!selectedRoadId) return;
+    const existing = new Set(project.roads.map((r) => r.id));
+    let i = 1;
+    let newId = `${selectedRoadId}_copy${i}`;
+    while (existing.has(newId)) {
+      i += 1;
+      newId = `${selectedRoadId}_copy${i}`;
+    }
+    get().cloneRoad(selectedRoadId, newId, [5, 5]);
+    get().selectRoad(newId);
   },
 
   updateRoad: (id, updates) =>
