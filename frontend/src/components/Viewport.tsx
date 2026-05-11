@@ -120,6 +120,8 @@ export function Viewport() {
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
+  /** Guards against concurrent road-preview regenerations during knot drag. */
+  const isPreviewingRoadRef = useRef(false);
 
   const finalizeSplineCreation = useCallback(async (overrideKnots?: Array<[number, number, number]>) => {
     const viewState = useEditorViewStore.getState();
@@ -501,6 +503,41 @@ export function Viewport() {
               spline, drag.index, worldPos.x, worldPos.y, spline.knots[drag.index]!.position[2],
             );
             viewState.setGeometryEditSpline(updated);
+
+            // Real-time road mesh preview: regenerate geometry for the edited road
+            // and upload directly to the renderer without touching the undo store.
+            const editRoadId = viewState.geometryEditRoadId;
+            const renderer = rendererRef.current;
+            if (editRoadId && renderer && !isPreviewingRoadRef.current) {
+              isPreviewingRoadRef.current = true;
+              void (async () => {
+                try {
+                  const geometries = await service.splineToGeometries(updated);
+                  const totalLength = geometries.reduce((s, g) => s + g.length, 0);
+                  const currentProject = useEditorStore.getState().project;
+                  const previewProject = {
+                    ...currentProject,
+                    roads: currentProject.roads.map((r) =>
+                      r.id === editRoadId ? { ...r, plan_view: geometries, length: totalLength } : r,
+                    ),
+                  };
+                  const visibleProject = buildRenderableProject(
+                    previewProject,
+                    useEditorViewStore.getState().display,
+                  );
+                  const liveRenderer = rendererRef.current;
+                  if (!liveRenderer) return;
+                  const [roadVerts, junctionVerts, laneLineVerts] = await Promise.all([
+                    service.generateRoadVertices(visibleProject, 2.0),
+                    service.generateJunctionVertices(visibleProject),
+                    service.generateLaneLineVertices(visibleProject, 2.0),
+                  ]);
+                  liveRenderer.uploadRoadVertices(mergeFloat32Arrays(roadVerts, junctionVerts));
+                  liveRenderer.uploadLaneLineVertices(laneLineVerts);
+                } catch { /* ignore preview errors during drag */ }
+                finally { isPreviewingRoadRef.current = false; }
+              })();
+            }
           } catch {
             // Ignore move errors during drag
           }
