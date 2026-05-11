@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MenuBar } from './components/MenuBar';
@@ -29,6 +29,7 @@ export function App() {
     toggleRightPanel,
     toggleOutputPanel,
   } = useEditorViewStore();
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
 
   useEffect(() => {
     initTheme();
@@ -108,6 +109,16 @@ export function App() {
         e.preventDefault();
         useEditorStore.getState().pasteFromClipboard();
       }
+      // ?: toggle shortcut help overlay (no modifier, not in input)
+      if (e.key === '?') {
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+        setShowShortcutHelp((v) => !v);
+      }
+      // Escape: close shortcut help overlay (if open)
+      if (e.key === 'Escape') {
+        setShowShortcutHelp(false);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -186,6 +197,35 @@ export function App() {
       <StatusBar />
       <CommandPalette />
       <MeasurementPanel />
+
+      {/* Keyboard shortcut help overlay */}
+      {showShortcutHelp && (
+        <div className="shortcut-help-overlay" onClick={() => setShowShortcutHelp(false)}>
+          <div className="shortcut-help-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>键盘快捷键</h3>
+            <table>
+              <tbody>
+                <tr><td><kbd>Ctrl+Z</kbd></td><td>撤销</td></tr>
+                <tr><td><kbd>Ctrl+Y</kbd></td><td>重做</td></tr>
+                <tr><td><kbd>Ctrl+A</kbd></td><td>全选</td></tr>
+                <tr><td><kbd>Ctrl+D</kbd></td><td>复制选中道路</td></tr>
+                <tr><td><kbd>Ctrl+C</kbd></td><td>复制到剪贴板</td></tr>
+                <tr><td><kbd>Ctrl+V</kbd></td><td>粘贴</td></tr>
+                <tr><td><kbd>Delete</kbd></td><td>删除选中</td></tr>
+                <tr><td><kbd>Esc</kbd></td><td>取消选择</td></tr>
+                <tr><td><kbd>E</kbd></td><td>进入几何编辑</td></tr>
+                <tr><td><kbd>Shift+拖拽</kbd></td><td>框选多个元素</td></tr>
+                <tr><td><kbd>Shift+点击</kbd></td><td>切换多选</td></tr>
+                <tr><td><kbd>Home</kbd></td><td>视图缩放到全部</td></tr>
+                <tr><td><kbd>L</kbd></td><td>显示/隐藏图层面板</td></tr>
+                <tr><td><kbd>I</kbd></td><td>显示/隐藏检查面板</td></tr>
+                <tr><td><kbd>?</kbd></td><td>显示此帮助</td></tr>
+              </tbody>
+            </table>
+            <button onClick={() => setShowShortcutHelp(false)}>关闭</button>
+          </div>
+        </div>
+      )}
     </div>
     </ErrorBoundary>
   );
