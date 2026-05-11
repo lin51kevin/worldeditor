@@ -217,7 +217,7 @@ describe('Viewport', () => {
       );
     });
 
-    expect(rendererMocks.resize).toHaveBeenCalledWith(100, 50);
+    await waitFor(() => expect(rendererMocks.resize).toHaveBeenCalledWith(100, 50));
 
     unmount();
 

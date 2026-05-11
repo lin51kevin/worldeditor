@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ViewportRenderer, getSplineHandlePoints } from '../viewport/renderer';
+import { emitCursorMove } from '../viewport/cursorEvents';
 import { onViewportEvent } from '../viewport/viewportEvents';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
@@ -122,6 +123,7 @@ export function Viewport() {
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
   /** Guards against concurrent road-preview regenerations during knot drag. */
   const isPreviewingRoadRef = useRef(false);
+  const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
 
   const finalizeSplineCreation = useCallback(async (overrideKnots?: Array<[number, number, number]>) => {
     const viewState = useEditorViewStore.getState();
@@ -332,6 +334,20 @@ export function Viewport() {
     })();
   }, [display, project, selectedJunctionId, selectedSceneNode, status]);
 
+  // Throttle Zustand cursor updates to once per animation frame
+  useEffect(() => {
+    let frameId = 0;
+    const flush = () => {
+      if (pendingCursorRef.current) {
+        useEditorStore.getState().setCursorWorldPos(pendingCursorRef.current);
+        pendingCursorRef.current = null;
+      }
+      frameId = requestAnimationFrame(flush);
+    };
+    frameId = requestAnimationFrame(flush);
+    return () => cancelAnimationFrame(frameId);
+  }, []);
+
   // Sync grid/axis/dimension to renderer
   useEffect(() => {
     const renderer = rendererRef.current;
@@ -454,16 +470,19 @@ export function Viewport() {
 
     // Handle resize
     const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        const w = Math.floor(width * devicePixelRatio);
-        const h = Math.floor(height * devicePixelRatio);
-        if (canvas.width !== w || canvas.height !== h) {
-          canvas.width = w;
-          canvas.height = h;
-          renderer.resize(w, h);
+      // Debounce resize via rAF to avoid redundant depth-texture recreations
+      requestAnimationFrame(() => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+          const w = Math.floor(width * devicePixelRatio);
+          const h = Math.floor(height * devicePixelRatio);
+          if (canvas.width !== w || canvas.height !== h) {
+            canvas.width = w;
+            canvas.height = h;
+            renderer.resize(w, h);
+          }
         }
-      }
+      });
     });
     observer.observe(canvas.parentElement!);
 
@@ -497,6 +516,12 @@ export function Viewport() {
       if (viewState.geometryEditSpline) {
         const spline = viewState.geometryEditSpline;
         if (drag.type === 'knot' && drag.index >= 0 && drag.index < spline.knots.length) {
+          // Skip if previous frame's update hasn't completed
+          if (isPreviewingRoadRef.current) {
+            emitCursorMove(worldPos.x, worldPos.y);
+            pendingCursorRef.current = worldPos;
+            return;
+          }
           try {
             const service = await getPlatformService();
             const updated = await service.moveSplineKnot(
@@ -504,36 +529,27 @@ export function Viewport() {
             );
             viewState.setGeometryEditSpline(updated);
 
-            // Real-time road mesh preview: regenerate geometry for the edited road
-            // and upload directly to the renderer without touching the undo store.
+            // Real-time road mesh preview: regenerate geometry for the edited road only.
             const editRoadId = viewState.geometryEditRoadId;
             const renderer = rendererRef.current;
-            if (editRoadId && renderer && !isPreviewingRoadRef.current) {
+            if (editRoadId && renderer) {
               isPreviewingRoadRef.current = true;
               void (async () => {
                 try {
+                  const liveRenderer = rendererRef.current;
+                  if (!liveRenderer) return;
+                  // Incremental update: convert spline to geometries, then generate only the changed road's vertices
                   const geometries = await service.splineToGeometries(updated);
                   const totalLength = geometries.reduce((s, g) => s + g.length, 0);
                   const currentProject = useEditorStore.getState().project;
-                  const previewProject = {
-                    ...currentProject,
-                    roads: currentProject.roads.map((r) =>
-                      r.id === editRoadId ? { ...r, plan_view: geometries, length: totalLength } : r,
-                    ),
-                  };
-                  const visibleProject = buildRenderableProject(
-                    previewProject,
-                    useEditorViewStore.getState().display,
-                  );
-                  const liveRenderer = rendererRef.current;
-                  if (!liveRenderer) return;
-                  const [roadVerts, junctionVerts, laneLineVerts] = await Promise.all([
-                    service.generateRoadVertices(visibleProject, 2.0),
-                    service.generateJunctionVertices(visibleProject),
-                    service.generateLaneLineVertices(visibleProject, 2.0),
-                  ]);
-                  liveRenderer.uploadRoadVertices(mergeFloat32Arrays(roadVerts, junctionVerts));
-                  liveRenderer.uploadLaneLineVertices(laneLineVerts);
+                  const previewRoad = { ...currentProject.roads.find((r) => r.id === editRoadId)!, plan_view: geometries, length: totalLength };
+                  // Only generate vertices for the single changed road
+                  const singleRoadVerts = await service.generateSingleRoadVertices(previewRoad, 2.0, [0.35, 0.35, 0.35, 1.0]);
+                  // For lane lines, only include the edited road
+                  const singleProject = { ...currentProject, roads: [previewRoad] };
+                  const singleLaneLineVerts = await service.generateLaneLineVertices(singleProject, 2.0);
+                  liveRenderer.uploadRoadVertices(singleRoadVerts);
+                  liveRenderer.uploadLaneLineVertices(singleLaneLineVerts);
                 } catch { /* ignore preview errors during drag */ }
                 finally { isPreviewingRoadRef.current = false; }
               })();
@@ -542,7 +558,8 @@ export function Viewport() {
             // Ignore move errors during drag
           }
         }
-        useEditorStore.getState().setCursorWorldPos(worldPos);
+        emitCursorMove(worldPos.x, worldPos.y);
+        pendingCursorRef.current = worldPos;
         return;
       }
 
@@ -575,7 +592,8 @@ export function Viewport() {
         }
       }
       // Update cursor position but skip snapping during drag
-      useEditorStore.getState().setCursorWorldPos(worldPos);
+      emitCursorMove(worldPos.x, worldPos.y);
+      pendingCursorRef.current = worldPos;
       return;
     }
 
@@ -633,14 +651,16 @@ export function Viewport() {
           excludeId ?? undefined,
         );
         if (snapResult.snapped) {
-          useEditorStore.getState().setCursorWorldPos({ x: snapResult.x, y: snapResult.y });
+          emitCursorMove(snapResult.x, snapResult.y);
+          pendingCursorRef.current = { x: snapResult.x, y: snapResult.y };
           return;
         }
       } catch {
         // Fall through to raw position on snap error
       }
     }
-    useEditorStore.getState().setCursorWorldPos(worldPos);
+    emitCursorMove(worldPos.x, worldPos.y);
+    pendingCursorRef.current = worldPos;
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {

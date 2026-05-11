@@ -1,6 +1,8 @@
+import { useEffect, useRef } from 'react';
 import { MapPin } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../stores/editorStore';
+import { onCursorMove } from '../viewport/cursorEvents';
 import './StatusBar.css';
 
 function formatDist(m: number): string {
@@ -10,8 +12,20 @@ function formatDist(m: number): string {
 }
 
 export function StatusBar() {
-  const { cursorWorldPos, gridSpacing, viewportMpp } = useEditorStore();
+  // gridSpacing and viewportMpp are stable — only change on camera/scale changes
+  const { gridSpacing, viewportMpp } = useEditorStore();
   const { t } = useTranslation();
+  const coordRef = useRef<HTMLSpanElement>(null);
+
+  // Direct DOM update for cursor coordinates (no React re-render)
+  useEffect(() => {
+    const unsubscribe = onCursorMove((x, y) => {
+      if (coordRef.current) {
+        coordRef.current.textContent = `${t('statusBar.worldCoord')}: ${x.toFixed(3)}, ${y.toFixed(3)}`;
+      }
+    });
+    return unsubscribe;
+  }, [t]);
 
   // Bar represents 1 grid cell width on screen at current zoom
   const barPx = Math.min(180, Math.max(20, Math.round(gridSpacing / viewportMpp)));
@@ -20,7 +34,7 @@ export function StatusBar() {
     <div className="statusbar">
       <span className="statusbar-item">
         <MapPin size={11} />
-        {t('statusBar.worldCoord')}: {cursorWorldPos.x.toFixed(3)}, {cursorWorldPos.y.toFixed(3)}
+        <span ref={coordRef}>{t('statusBar.worldCoord')}: 0.000, 0.000</span>
       </span>
       <span className="statusbar-item statusbar-scale">
         <span className="scale-bar-track" style={{ width: `${barPx}px` }} />

@@ -1,6 +1,7 @@
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useEditorStore } from '../stores/editorStore';
+import { emitCursorMove } from '../viewport/cursorEvents';
 import { StatusBar } from './StatusBar';
 
 describe('StatusBar', () => {
@@ -22,7 +23,7 @@ describe('StatusBar', () => {
   it('updates world coordinate display when cursor moves', () => {
     render(<StatusBar />);
     act(() => {
-      useEditorStore.setState({ cursorWorldPos: { x: 123.45678, y: -9.1 } });
+      emitCursorMove(123.45678, -9.1);
     });
     expect(screen.getByText(/世界坐标系:\s*123\.457,\s*-9\.100/)).toBeInTheDocument();
   });

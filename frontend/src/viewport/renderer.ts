@@ -286,6 +286,10 @@ export class ViewportRenderer {
   private cachedViewProj: Float32Array | null = null;
   private cachedInverseViewProj: Float32Array | null = null;
 
+  // Camera dirty flag — skip viewProj recomputation when camera hasn't moved
+  private cameraDirty = true;
+  private cachedViewProjForRender: Float32Array | null = null;
+
   // Callback invoked after data load or camera changes
   private onScaleChange: ((info: { gridSpacing: number; mpp: number }) => void) | null = null;
 
@@ -454,6 +458,7 @@ export class ViewportRenderer {
       this.camera.position = [tx, ty - dist * 0.5, tz + dist * 0.7];
       this.camera.up = [0, 0, 1];
     }
+    this.cameraDirty = true;
   }
 
   /** Unproject a screen pixel to world-space coordinates on the Z=0 ground plane. */
@@ -512,7 +517,6 @@ export class ViewportRenderer {
     });
     new Float32Array(buffer.getMappedRange()).set(vertexData);
     buffer.unmap();
-
 
     this.laneLineMeshes.push({
       vertexBuffer: buffer,
@@ -737,6 +741,7 @@ export class ViewportRenderer {
     this.camera.position = [cx, cy - dist * 0.5, cz + dist];
     this.camera.near = Math.max(0.1, maxExtent * 0.001);
     this.camera.far = Math.max(100000, maxExtent * 10);
+    this.cameraDirty = true;
     this.reportScale();
   }
 
@@ -747,6 +752,7 @@ export class ViewportRenderer {
     this.height = height;
     this.depthTexture?.destroy();
     this.createDepthTexture();
+    this.cameraDirty = true;
   }
 
   /** Start the render loop. */
@@ -906,6 +912,9 @@ export class ViewportRenderer {
   }
 
   private computeViewProj(): Float32Array {
+    if (!this.cameraDirty && this.cachedViewProjForRender) {
+      return this.cachedViewProjForRender;
+    }
     const aspect = this.width / this.height;
     const proj = perspectiveMatrix(this.camera.fovY, aspect, this.camera.near, this.camera.far);
     const view = lookAtMatrix(this.camera.position, this.camera.target, this.camera.up);
@@ -916,7 +925,10 @@ export class ViewportRenderer {
       0, 0, 0.5, 0,
       0, 0, 0.5, 1,
     ]);
-    return multiplyMatrices(correction, multiplyMatrices(proj, view));
+    const result = multiplyMatrices(correction, multiplyMatrices(proj, view));
+    this.cachedViewProjForRender = result;
+    this.cameraDirty = false;
+    return result;
   }
 
   private createDepthTexture(): void {
@@ -1229,6 +1241,7 @@ export class ViewportRenderer {
       ty + r * Math.sin(phi) * Math.sin(theta),
       tz + r * Math.cos(phi),
     ];
+    this.cameraDirty = true;
     this.reportScale();
   }
 
@@ -1246,6 +1259,7 @@ export class ViewportRenderer {
       ty - (dy / norm) * dist,
       tz - (dz / norm) * dist,
     ];
+    this.cameraDirty = true;
     this.reportScale();
   }
 
@@ -1263,6 +1277,7 @@ export class ViewportRenderer {
 
     this.camera.position = [px + offset.x, py + offset.y, pz];
     this.camera.target = [tx + offset.x, ty + offset.y, tz];
+    this.cameraDirty = true;
     this.reportScale();
   }
 
