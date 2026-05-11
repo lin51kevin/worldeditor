@@ -218,7 +218,7 @@ function loadDisplay(): DisplaySettings {
 }
 
 export const useEditorViewStore = create<EditorViewState>((set) => ({
-  dimension: '3d',
+  dimension: '2d',
   showGrid: true,
   showAxis: true,
   editMode: 'select',
