@@ -135,24 +135,30 @@ describe('MenuBar', () => {
   it('renders all top-level menu labels', () => {
     render(<MenuBar />);
 
+    // Click the hamburger menu button to open the mega dropdown
+    const hamburger = screen.getByTitle('文件');
+    fireEvent.click(hamburger);
+
     ['文件', '编辑', '视图', '工具', '关于'].forEach((label) => {
-      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+      expect(screen.getByText(label)).toBeInTheDocument();
     });
   });
 
   it('opens, closes, and dismisses dropdown menus', () => {
     render(<MenuBar />);
 
-    const fileMenu = screen.getByRole('button', { name: '文件' });
-    fireEvent.click(fileMenu);
+    const hamburger = screen.getByTitle('文件');
+    fireEvent.click(hamburger);
+    // Click the "文件" first-level item to expand its submenu
+    fireEvent.click(screen.getByText('文件'));
     expect(screen.getByText('新建项目')).toBeInTheDocument();
     expect(screen.getByText('Ctrl+N')).toBeInTheDocument();
     expect(screen.getByText('Ctrl+Shift+S')).toBeInTheDocument();
 
-    fireEvent.click(fileMenu);
+    fireEvent.click(hamburger);
     expect(screen.queryByText('新建项目')).not.toBeInTheDocument();
 
-    fireEvent.click(fileMenu);
+    fireEvent.click(hamburger);
     fireEvent.mouseDown(document.body);
     expect(screen.queryByText('新建项目')).not.toBeInTheDocument();
   });
@@ -160,7 +166,9 @@ describe('MenuBar', () => {
   it('shows disabled and enabled file actions based on project state', () => {
     const { rerender } = render(<MenuBar />);
 
-    fireEvent.click(screen.getByRole('button', { name: '文件' }));
+    const hamburger = screen.getByTitle('文件');
+    fireEvent.click(hamburger);
+    fireEvent.click(screen.getByText('文件'));
     expect(screen.getByText('保存').closest('button')).toBeDisabled();
     expect(screen.getByText('导出 OpenDRIVE...').closest('button')).toBeDisabled();
 
@@ -173,7 +181,8 @@ describe('MenuBar', () => {
 
     rerender(<MenuBar />);
     fireEvent.mouseDown(document.body);
-    fireEvent.click(screen.getByRole('button', { name: '文件' }));
+    fireEvent.click(hamburger);
+    fireEvent.click(screen.getByText('文件'));
     expect(screen.getByText('保存').closest('button')).toBeEnabled();
     expect(screen.getByText('导出 OpenDRIVE...').closest('button')).toBeEnabled();
   });
@@ -189,7 +198,9 @@ describe('MenuBar', () => {
 
     render(<MenuBar />);
 
-    fireEvent.click(screen.getByRole('button', { name: '工具' }));
+    const hamburger = screen.getByTitle('文件');
+    fireEvent.click(hamburger);
+    fireEvent.click(screen.getByText('工具'));
     fireEvent.click(screen.getByText('计算道路总长度'));
 
     expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('150.500'));
@@ -199,9 +210,12 @@ describe('MenuBar', () => {
     const alertSpy = vi.mocked(window.alert);
     render(<MenuBar />);
 
-    fireEvent.click(screen.getByRole('button', { name: '关于' }));
+    const hamburger = screen.getByTitle('文件');
+    fireEvent.click(hamburger);
+    fireEvent.click(screen.getByText('关于'));
     fireEvent.click(screen.getByText('关于 WorldEditor'));
-    fireEvent.click(screen.getByRole('button', { name: '关于' }));
+    fireEvent.click(hamburger);
+    fireEvent.click(screen.getByText('关于'));
     fireEvent.click(screen.getByText('版本信息'));
 
     expect(alertSpy).toHaveBeenNthCalledWith(1, expect.stringContaining('1.8.0430'));
@@ -302,7 +316,8 @@ describe('MenuBar', () => {
     act(() => { useEditorStore.setState({ project: originalProject }); });
 
     render(<MenuBar />);
-    fireEvent.click(screen.getByRole('button', { name: '文件' }));
+    fireEvent.click(screen.getByTitle('文件'));
+    fireEvent.click(screen.getByText('文件'));
     fireEvent.click(screen.getByText('打开文件...'));
 
     await waitFor(() => expect(alertSpy).toHaveBeenCalled());

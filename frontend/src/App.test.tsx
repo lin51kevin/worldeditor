@@ -39,10 +39,6 @@ describe('App', () => {
 
   it('should render the application shell', () => {
     render(<App />);
-    expect(screen.getByText('文件')).toBeDefined();
-    expect(screen.getByText('新建')).toBeDefined();
-    expect(screen.getByText('打开...')).toBeDefined();
-    expect(screen.getByText('保存...')).toBeDefined();
     expect(screen.getByText('导航器')).toBeDefined();
     // PropertyPanel (属性) only visible when a road is selected (Quick Inspector)
     expect(screen.getByText('模板')).toBeDefined();

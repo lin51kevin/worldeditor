@@ -194,6 +194,47 @@ describe('editorStore', () => {
     });
   });
 
+  describe('selectMultiple', () => {
+    it('should set selectedRoadIds and selectedJunctionIds', () => {
+      useEditorStore.getState().selectMultiple(['r1', 'r2'], ['j1']);
+      const { selectedRoadIds, selectedJunctionIds } = useEditorStore.getState();
+      expect(selectedRoadIds).toEqual(['r1', 'r2']);
+      expect(selectedJunctionIds).toEqual(['j1']);
+    });
+
+    it('should clear single selection when selecting multiple', () => {
+      useEditorStore.getState().selectRoad('r1');
+      useEditorStore.getState().selectMultiple(['r2', 'r3'], []);
+      const { selectedRoadId, selectedJunctionId } = useEditorStore.getState();
+      expect(selectedRoadId).toBeNull();
+      expect(selectedJunctionId).toBeNull();
+    });
+
+    it('should clear multi-selection when selecting a single road', () => {
+      useEditorStore.getState().selectMultiple(['r1', 'r2'], ['j1']);
+      useEditorStore.getState().selectRoad('r3');
+      const { selectedRoadIds, selectedJunctionIds } = useEditorStore.getState();
+      expect(selectedRoadIds).toEqual([]);
+      expect(selectedJunctionIds).toEqual([]);
+    });
+
+    it('should clear multi-selection when selecting a single junction', () => {
+      useEditorStore.getState().selectMultiple(['r1'], ['j1', 'j2']);
+      useEditorStore.getState().selectJunction('j3');
+      const { selectedRoadIds, selectedJunctionIds } = useEditorStore.getState();
+      expect(selectedRoadIds).toEqual([]);
+      expect(selectedJunctionIds).toEqual([]);
+    });
+
+    it('should clear multi-selection on reset', () => {
+      useEditorStore.getState().selectMultiple(['r1'], ['j1']);
+      useEditorStore.getState().reset();
+      const { selectedRoadIds, selectedJunctionIds } = useEditorStore.getState();
+      expect(selectedRoadIds).toEqual([]);
+      expect(selectedJunctionIds).toEqual([]);
+    });
+  });
+
   describe('scene selection', () => {
     it('should select lane sections while keeping the parent road selected', () => {
       useEditorStore.getState().selectLaneSection('r1', 2);
@@ -220,3 +261,4 @@ describe('editorStore', () => {
     });
   });
 });
+

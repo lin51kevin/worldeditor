@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LaneSection, Project, Road } from '../services/platform';
 import { useEditorStore } from '../stores/editorStore';
 import { DEFAULT_DISPLAY, useEditorViewStore } from '../stores/editorViewStore';
@@ -50,6 +50,9 @@ function makeLaneSection(): LaneSection {
 
 describe('LayerPanel', () => {
   beforeEach(() => {
+    // jsdom doesn't implement scrollIntoView; mock it to avoid "not a function" errors
+    Element.prototype.scrollIntoView = vi.fn();
+
     act(() => {
       useEditorStore.setState({
         project: makeProject(),
