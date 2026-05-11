@@ -5,8 +5,8 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ---
 
-<a name="0.11.2"></a>
-## [0.11.2] — 2026-05-11
+<a name="0.1.1"></a>
+## [0.1.1] — 2026-05-11
 
 ### Bug Fixes
 
@@ -77,26 +77,26 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 - 图层可见性控制
 - 插件系统骨架（`we-plugin-core`）
 
-[`95c35aa`]: https://github.com/51world-ai-copilot/worldeditor/commit/95c35aa
-[`83b1900`]: https://github.com/51world-ai-copilot/worldeditor/commit/83b1900
-[`dfa9135`]: https://github.com/51world-ai-copilot/worldeditor/commit/dfa9135
-[`af66122`]: https://github.com/51world-ai-copilot/worldeditor/commit/af66122
-[`da279d0`]: https://github.com/51world-ai-copilot/worldeditor/commit/da279d0
-[`da1600b`]: https://github.com/51world-ai-copilot/worldeditor/commit/da1600b
-[`bed71ba`]: https://github.com/51world-ai-copilot/worldeditor/commit/bed71ba
-[`d6846cb`]: https://github.com/51world-ai-copilot/worldeditor/commit/d6846cb
-[`b711bf0`]: https://github.com/51world-ai-copilot/worldeditor/commit/b711bf0
-[`74bae3b`]: https://github.com/51world-ai-copilot/worldeditor/commit/74bae3b
-[`5ed23d8`]: https://github.com/51world-ai-copilot/worldeditor/commit/5ed23d8
-[`34cbbb5`]: https://github.com/51world-ai-copilot/worldeditor/commit/34cbbb5
-[`05461ba`]: https://github.com/51world-ai-copilot/worldeditor/commit/05461ba
-[`f6fc37e`]: https://github.com/51world-ai-copilot/worldeditor/commit/f6fc37e
-[`54d42a1`]: https://github.com/51world-ai-copilot/worldeditor/commit/54d42a1
-[`003ff55`]: https://github.com/51world-ai-copilot/worldeditor/commit/003ff55
-[`2c65376`]: https://github.com/51world-ai-copilot/worldeditor/commit/2c65376
-[`64493c4`]: https://github.com/51world-ai-copilot/worldeditor/commit/64493c4
-[`fd7d28f`]: https://github.com/51world-ai-copilot/worldeditor/commit/fd7d28f
-[`f8a360b`]: https://github.com/51world-ai-copilot/worldeditor/commit/f8a360b
-[`c6dbe60`]: https://github.com/51world-ai-copilot/worldeditor/commit/c6dbe60
-[`526400f`]: https://github.com/51world-ai-copilot/worldeditor/commit/526400f
-[`54f77f9`]: https://github.com/51world-ai-copilot/worldeditor/commit/54f77f9
+[`95c35aa`]: https://github.com/lin51kevin/worldeditor/commit/95c35aa
+[`83b1900`]: https://github.com/lin51kevin/worldeditor/commit/83b1900
+[`dfa9135`]: https://github.com/lin51kevin/worldeditor/commit/dfa9135
+[`af66122`]: https://github.com/lin51kevin/worldeditor/commit/af66122
+[`da279d0`]: https://github.com/lin51kevin/worldeditor/commit/da279d0
+[`da1600b`]: https://github.com/lin51kevin/worldeditor/commit/da1600b
+[`bed71ba`]: https://github.com/lin51kevin/worldeditor/commit/bed71ba
+[`d6846cb`]: https://github.com/lin51kevin/worldeditor/commit/d6846cb
+[`b711bf0`]: https://github.com/lin51kevin/worldeditor/commit/b711bf0
+[`74bae3b`]: https://github.com/lin51kevin/worldeditor/commit/74bae3b
+[`5ed23d8`]: https://github.com/lin51kevin/worldeditor/commit/5ed23d8
+[`34cbbb5`]: https://github.com/lin51kevin/worldeditor/commit/34cbbb5
+[`05461ba`]: https://github.com/lin51kevin/worldeditor/commit/05461ba
+[`f6fc37e`]: https://github.com/lin51kevin/worldeditor/commit/f6fc37e
+[`54d42a1`]: https://github.com/lin51kevin/worldeditor/commit/54d42a1
+[`003ff55`]: https://github.com/lin51kevin/worldeditor/commit/003ff55
+[`2c65376`]: https://github.com/lin51kevin/worldeditor/commit/2c65376
+[`64493c4`]: https://github.com/lin51kevin/worldeditor/commit/64493c4
+[`fd7d28f`]: https://github.com/lin51kevin/worldeditor/commit/fd7d28f
+[`f8a360b`]: https://github.com/lin51kevin/worldeditor/commit/f8a360b
+[`c6dbe60`]: https://github.com/lin51kevin/worldeditor/commit/c6dbe60
+[`526400f`]: https://github.com/lin51kevin/worldeditor/commit/526400f
+[`54f77f9`]: https://github.com/lin51kevin/worldeditor/commit/54f77f9

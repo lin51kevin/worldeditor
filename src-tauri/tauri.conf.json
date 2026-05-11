@@ -1,6 +1,6 @@
 {
   "productName": "WorldEditor",
-  "version": "0.11.2",
+  "version": "0.1.1",
   "identifier": "com.worldeditor.next",
   "build": {
     "frontendDist": "../frontend/dist",
