@@ -1451,6 +1451,18 @@ export class ViewportRenderer {
     );
   }
 
+  /** Apply a screen-space pan delta (client pixel coordinates). Used by touch gesture handler. */
+  applyPan(canvas: HTMLCanvasElement, prevClientXY: [number, number], currClientXY: [number, number]): void {
+    if (this._cameraLocked) return;
+    this.pan(canvas, prevClientXY, currClientXY);
+  }
+
+  /** Apply a zoom scale factor (>1 zooms out, <1 zooms in). Used by touch pinch gesture handler. */
+  applyZoomFactor(factor: number): void {
+    if (this._cameraLocked) return;
+    this.zoom(factor);
+  }
+
   private orbit(dx: number, dy: number): void {
     const [px, py, pz] = this.camera.position;
     const [tx, ty, tz] = this.camera.target;

@@ -36,6 +36,8 @@ const rendererMocks = vi.hoisted(() => ({
   setClearColor: vi.fn(),
   setGridColor: vi.fn(),
   getMetersPerPixel: vi.fn().mockReturnValue(0.1),
+  applyPan: vi.fn(),
+  applyZoomFactor: vi.fn(),
 }));
 
 vi.mock('../services', () => ({
@@ -81,6 +83,8 @@ vi.mock('../viewport/renderer', () => ({
       setClearColor: rendererMocks.setClearColor,
       setGridColor: rendererMocks.setGridColor,
       getMetersPerPixel: rendererMocks.getMetersPerPixel,
+      applyPan: rendererMocks.applyPan,
+      applyZoomFactor: rendererMocks.applyZoomFactor,
     })),
     { isSupported: rendererMocks.isSupported },
   ),
@@ -618,5 +622,53 @@ describe('Viewport', () => {
     await waitFor(() =>
       expect(useEditorStore.getState().selectedRoadIds).not.toContain('road-1')
     );
+  });
+
+  it('single-touch drag pans the camera', async () => {
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    const platform = createPlatformMock();
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    render(<Viewport />);
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+    const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+
+    // Create a minimal Touch-like object
+    const makeTouch = (id: number, x: number, y: number) =>
+      ({ identifier: id, clientX: x, clientY: y, target: canvas } as unknown as Touch);
+
+    fireEvent.touchStart(canvas, { changedTouches: [makeTouch(0, 100, 100)], touches: [makeTouch(0, 100, 100)] });
+    fireEvent.touchMove(canvas, { changedTouches: [makeTouch(0, 120, 110)], touches: [makeTouch(0, 120, 110)] });
+
+    expect(rendererMocks.applyPan).toHaveBeenCalled();
+  });
+
+  it('two-finger pinch zooms the camera', async () => {
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    const platform = createPlatformMock();
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    render(<Viewport />);
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+    const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+    const makeTouch = (id: number, x: number, y: number) =>
+      ({ identifier: id, clientX: x, clientY: y, target: canvas } as unknown as Touch);
+
+    // Start with two fingers 100px apart
+    fireEvent.touchStart(canvas, {
+      changedTouches: [makeTouch(0, 100, 100), makeTouch(1, 200, 100)],
+      touches: [makeTouch(0, 100, 100), makeTouch(1, 200, 100)],
+    });
+    // Move fingers 50px apart (pinch in)
+    fireEvent.touchMove(canvas, {
+      changedTouches: [makeTouch(0, 125, 100), makeTouch(1, 175, 100)],
+      touches: [makeTouch(0, 125, 100), makeTouch(1, 175, 100)],
+    });
+
+    expect(rendererMocks.applyZoomFactor).toHaveBeenCalled();
   });
 });

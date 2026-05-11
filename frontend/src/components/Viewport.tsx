@@ -166,6 +166,11 @@ export function Viewport() {
   const hoveredJunctionRef = useRef<string | null>(null);
   /** Snap indicator DOM element — positioned imperatively to avoid React re-renders on every mousemove. */
   const snapIndicatorDomRef = useRef<HTMLDivElement | null>(null);
+  /** Touch gesture state: tracks start positions for pan and pinch. */
+  const touchStateRef = useRef<{
+    touches: Array<{ id: number; x: number; y: number }>;
+    lastPinchDist: number | null;
+  }>({ touches: [], lastPinchDist: null });
 
   const finalizeSplineCreation = useCallback(async (overrideKnots?: Array<[number, number, number]>) => {
     const viewState = useEditorViewStore.getState();
@@ -1236,6 +1241,53 @@ export function Viewport() {
     if (snapEl) snapEl.style.display = 'none';
   }, []);
 
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    const touches = Array.from(e.touches).map((t) => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+    touchStateRef.current.touches = touches;
+    if (touches.length === 2) {
+      const dx = touches[1]!.x - touches[0]!.x;
+      const dy = touches[1]!.y - touches[0]!.y;
+      touchStateRef.current.lastPinchDist = Math.sqrt(dx * dx + dy * dy);
+    } else {
+      touchStateRef.current.lastPinchDist = null;
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    const renderer = rendererRef.current;
+    const canvas = canvasRef.current;
+    if (!renderer || !canvas) return;
+
+    const prev = touchStateRef.current.touches;
+    const curr = Array.from(e.touches).map((t) => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+    touchStateRef.current.touches = curr;
+
+    if (curr.length === 1 && prev.length === 1) {
+      // Single-finger pan
+      const p = prev[0]!;
+      const c = curr[0]!;
+      renderer.applyPan(canvas, [p.x, p.y], [c.x, c.y]);
+    } else if (curr.length === 2 && prev.length >= 2) {
+      // Two-finger pinch-to-zoom
+      const dx = curr[1]!.x - curr[0]!.x;
+      const dy = curr[1]!.y - curr[0]!.y;
+      const newDist = Math.sqrt(dx * dx + dy * dy);
+      const oldDist = touchStateRef.current.lastPinchDist;
+      if (oldDist && oldDist > 0) {
+        renderer.applyZoomFactor(oldDist / newDist);
+      }
+      touchStateRef.current.lastPinchDist = newDist;
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    const curr = Array.from(e.touches).map((t) => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+    touchStateRef.current.touches = curr;
+    if (curr.length < 2) touchStateRef.current.lastPinchDist = null;
+  }, []);
+
   return (
     <div
       className={`viewport${isDragOver ? ' viewport-drag-over' : ''}`}
@@ -1252,6 +1304,9 @@ export function Viewport() {
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       />
       {/* Rubber-band selection overlay */}
       <div ref={rubberBandOverlayRef} className="selection-rect" />
