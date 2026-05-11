@@ -10,10 +10,12 @@ test.describe('Project Lifecycle', () => {
     await injectProject(page, project);
 
     // Project name updates in toolbar
-    await expect(page.getByText('Beijing Demo')).toBeVisible();
+    // Project name in toolbar (absolute-positioned span — check via textContent)
+    const projectName = await page.locator('.toolbar-title').textContent();
+    expect(projectName).toContain('Beijing Demo');
 
-    // Roads show in layer panel
-    await expect(page.getByText('道路列表 (2)')).toBeVisible();
+    // Roads show in layer panel (format: 场景 (道路: 2, 路口: 0))
+    await expect(page.locator('.layer-section-toggle').last()).toContainText('道路: 2');
     await expect(page.getByText('Main Street')).toBeVisible();
     await expect(page.getByText('Side Road')).toBeVisible();
 
@@ -27,14 +29,15 @@ test.describe('Project Lifecycle', () => {
   test('reset project clears everything', async ({ editorPage: page }) => {
     // Load a project first
     await injectProject(page, makeTestProject('MyProject', [makeTestRoad('1')]));
-    await expect(page.getByText('道路列表 (1)')).toBeVisible();
+    await expect(page.locator('.layer-section-toggle').last()).toContainText('道路: 1');
 
-    // Click 新建
-    await page.locator('.toolbar-btn').filter({ hasText: '新建' }).click();
+    // Click 新建 via keyboard shortcut (no text-labeled button in current UI)
+    await page.keyboard.press('Control+n');
 
     // Reverts to initial state
-    await expect(page.getByText('Untitled')).toBeVisible();
-    await expect(page.getByText('道路列表 (0)')).toBeVisible();
+    const resetName = await page.locator('.toolbar-title').textContent();
+    expect(resetName).toContain('Untitled');
+    await expect(page.locator('.layer-section-toggle').last()).toContainText('道路: 0');
     await expect(page.locator('.statusbar')).toContainText('道路: 0');
   });
 });

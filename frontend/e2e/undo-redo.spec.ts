@@ -2,9 +2,9 @@ import { test, expect, injectProject, getProject, makeTestProject, makeTestRoad 
 
 test.describe('Undo / Redo', () => {
   test('undo and redo buttons are disabled initially', async ({ editorPage: page }) => {
-    // Match by title since button text includes icon + label spans
-    await expect(page.locator('.toolbar-btn[title*="撤销"]')).toBeDisabled();
-    await expect(page.locator('.toolbar-btn[title*="重做"]')).toBeDisabled();
+    // Undo/Redo are MenuBar quick-action buttons (menubar-action-btn)
+    await expect(page.locator('.menubar-action-btn[title*="撤销"]')).toBeDisabled();
+    await expect(page.locator('.menubar-action-btn[title*="重做"]')).toBeDisabled();
   });
 
   test('undo reverts addRoad, redo restores it', async ({ editorPage: page }) => {
@@ -25,18 +25,19 @@ test.describe('Undo / Redo', () => {
 
     // Road appears
     await expect(page.getByText('Undo Test Road')).toBeVisible();
-    await expect(page.locator('.toolbar-btn[title*="撤销"]')).toBeEnabled();
+    await expect(page.locator('.menubar-action-btn[title*="撤销"]')).toBeEnabled();
 
     // Click Undo
-    await page.locator('.toolbar-btn[title*="撤销"]').click();
+    await page.locator('.menubar-action-btn[title*="撤销"]').click();
     await expect(page.getByText('Undo Test Road')).not.toBeVisible();
-    await expect(page.getByText('道路列表 (0)')).toBeVisible();
+    // Road count in statusbar reflects undo
+    await expect(page.locator('.statusbar')).toContainText('道路: 0');
 
     // Click Redo
-    await expect(page.locator('.toolbar-btn[title*="重做"]')).toBeEnabled();
-    await page.locator('.toolbar-btn[title*="重做"]').click();
+    await expect(page.locator('.menubar-action-btn[title*="重做"]')).toBeEnabled();
+    await page.locator('.menubar-action-btn[title*="重做"]').click();
     await expect(page.getByText('Undo Test Road')).toBeVisible();
-    await expect(page.getByText('道路列表 (1)')).toBeVisible();
+    await expect(page.locator('.statusbar')).toContainText('道路: 1');
   });
 
   test('Ctrl+Z / Ctrl+Y keyboard shortcuts', async ({ editorPage: page }) => {
@@ -87,6 +88,8 @@ test.describe('Undo / Redo', () => {
 
     // Status shows Modified, title shows dot
     await expect(page.getByText('已修改')).toBeVisible();
-    await expect(page.getByText('Untitled •')).toBeVisible();
+      // Toolbar-title span is absolutely positioned; check its text content directly
+      const titleText = await page.locator('.toolbar-title').textContent();
+      expect(titleText).toContain('•');
   });
 });

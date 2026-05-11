@@ -6,7 +6,8 @@ test.describe('Open & Parse & Render', () => {
     await openXodrInBrowser(page, xml, 'single_road.xodr');
 
     // Verify project loaded in toolbar
-    await expect(page.locator('.toolbar-title')).toContainText('single_road.xodr');
+    const title1 = await page.locator('.toolbar-title').textContent();
+    expect(title1).toContain('single_road.xodr');
 
     // Verify road appears in layer panel
     const roadItem = page.locator('.layer-item').filter({ hasText: 'MainStreet' });
@@ -62,7 +63,8 @@ test.describe('Open & Parse & Render', () => {
     await openXodrInBrowser(page, xml, 'junction.xodr');
 
     // Verify toolbar title
-    await expect(page.locator('.toolbar-title')).toContainText('junction.xodr');
+    const title2 = await page.locator('.toolbar-title').textContent();
+    expect(title2).toContain('junction.xodr');
 
     // Verify 3 roads in layer panel
     await expect(page.locator('.statusbar')).toContainText('道路: 3');

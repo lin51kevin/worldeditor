@@ -6,7 +6,8 @@ import { test, expect } from '@playwright/test';
 test.describe('Edit Operations', () => {
   test('property panel shows no selection initially', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('.property-empty')).toBeVisible({ timeout: 10000 });
+    // Quick Inspector panel is hidden when nothing is selected (not in DOM)
+    await expect(page.locator('.floating-right')).not.toBeVisible();
   });
 
   test('road name input appears when road selected', async ({ page }) => {

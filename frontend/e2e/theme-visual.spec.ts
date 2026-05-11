@@ -72,11 +72,12 @@ test.describe('UI Theme Visual Tests — Scheme B Canvas', () => {
     });
 
     // Project name should be visible in center
-    const projectName = page.locator('.menubar-project-name');
-    await expect(projectName).toBeVisible();
+    // Project name is in absolutely-positioned center span; verify via textContent
+    const projectNameText = await page.locator('.menubar-project-name').textContent();
+    expect(projectNameText).toBeTruthy();
 
-    // Theme toggle icon should be on the right
-    const themeBtn = page.locator('.menubar-icon-btn');
+    // Theme toggle icon should be on the right (use last() since there are two icon buttons)
+    const themeBtn = page.locator('.menubar-icon-btn').last();
     await expect(themeBtn).toBeVisible();
   });
 

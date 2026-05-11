@@ -6,8 +6,8 @@ import { test, expect } from './fixtures';
 
 test.describe('Measurement Tool', () => {
   test('measure button in toolbar toggles measurement panel', async ({ editorPage: page }) => {
-    // Find the measure button
-    const measureBtn = page.locator('.toolbar-btn', { has: page.locator('.tb-label', { hasText: '测量' }) });
+    // Measure button is in MenuBar quick-actions (icon-only, identified by title)
+    const measureBtn = page.locator('.menubar-action-btn[title*="测量"]');
     await expect(measureBtn).toBeVisible({ timeout: 5000 });
 
     // Initially no measurement panel
@@ -147,13 +147,17 @@ test.describe('Measurement Tool', () => {
   });
 
   test('measurement via tools menu', async ({ editorPage: page }) => {
-    // Open Tools menu
-    const toolsMenu = page.locator('.menubar-item', { hasText: '工具' });
-    await toolsMenu.click();
-    await expect(page.locator('.menubar-dropdown')).toBeVisible({ timeout: 3000 });
+    // Open the hamburger mega-menu
+    await page.locator('.menubar-hamburger').click();
+    await expect(page.locator('.menubar-mega-dropdown')).toBeVisible({ timeout: 3000 });
+
+    // Hover over the '工具' mega-item to reveal its submenu
+    const toolsItem = page.locator('.menubar-mega-item', { hasText: '工具' });
+    await toolsItem.hover();
+    await expect(page.locator('.menubar-submenu')).toBeVisible({ timeout: 3000 });
 
     // Click distance measurement entry
-    const distEntry = page.locator('.menubar-dropdown-item', { hasText: '距离' });
+    const distEntry = page.locator('.menubar-submenu .menubar-dropdown-item', { hasText: '距离' });
     await distEntry.click();
 
     // Panel should appear

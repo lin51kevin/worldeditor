@@ -6,8 +6,8 @@ import { test, expect } from './fixtures';
 
 test.describe('Snapping', () => {
   test('snap toggle button in toolbar', async ({ editorPage: page }) => {
-    // Find the snap button
-    const snapBtn = page.locator('.toolbar-btn', { has: page.locator('.tb-label', { hasText: '吸附' }) });
+    // Snap button is in MenuBar quick-actions (icon-only, identified by title)
+    const snapBtn = page.locator('.menubar-action-btn[title*="吸附"]');
     await expect(snapBtn).toBeVisible({ timeout: 5000 });
 
     // Initially not active
@@ -67,13 +67,17 @@ test.describe('Snapping', () => {
   });
 
   test('snap menu entry in Tools menu', async ({ editorPage: page }) => {
-    // Open Tools menu
-    const toolsMenu = page.locator('.menubar-item', { hasText: '工具' });
-    await toolsMenu.click();
-    await expect(page.locator('.menubar-dropdown')).toBeVisible({ timeout: 3000 });
+    // Open the hamburger mega-menu
+    await page.locator('.menubar-hamburger').click();
+    await expect(page.locator('.menubar-mega-dropdown')).toBeVisible({ timeout: 3000 });
 
-    // Find the snap entry
-    const snapEntry = page.locator('.menubar-dropdown-item', { hasText: '吸附' });
+    // Hover over the '工具' mega-item to reveal its submenu
+    const toolsItem = page.locator('.menubar-mega-item', { hasText: '工具' });
+    await toolsItem.hover();
+    await expect(page.locator('.menubar-submenu')).toBeVisible({ timeout: 3000 });
+
+    // Find the snap entry in the submenu
+    const snapEntry = page.locator('.menubar-submenu .menubar-dropdown-item', { hasText: '吸附' });
     await expect(snapEntry).toBeVisible();
   });
 });
