@@ -30,6 +30,7 @@ const rendererMocks = vi.hoisted(() => ({
   getCameraDistance: vi.fn().mockReturnValue(100),
   refreshSplineMarkers: vi.fn(),
   unprojectToGround: vi.fn(),
+  projectWorldToScreen: vi.fn().mockReturnValue({ x: 50, y: 50 }),
   setSplinePreviewKnots: vi.fn(),
   setScaleChangeCallback: vi.fn(),
   setClearColor: vi.fn(),
@@ -73,6 +74,7 @@ vi.mock('../viewport/renderer', () => ({
       getCameraDistance: rendererMocks.getCameraDistance,
       refreshSplineMarkers: rendererMocks.refreshSplineMarkers,
       unprojectToGround: rendererMocks.unprojectToGround,
+      projectWorldToScreen: rendererMocks.projectWorldToScreen,
       setSplinePreviewKnots: rendererMocks.setSplinePreviewKnots,
       setScaleChangeCallback: rendererMocks.setScaleChangeCallback,
       setClearColor: rendererMocks.setClearColor,
@@ -111,6 +113,25 @@ function makeProjectWithRoad(): Project {
       junction_id: null,
       link: { predecessor: null, successor: null },
       plan_view: [],
+      elevation_profile: [],
+      lane_sections: [],
+    }],
+  };
+}
+
+function makeProjectWithRoadPlanView(): Project {
+  return {
+    ...makeProject(),
+    roads: [{
+      id: 'road-1',
+      name: 'Road 1',
+      length: 20,
+      junction_id: null,
+      link: { predecessor: null, successor: null },
+      plan_view: [
+        { x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' },
+        { x: 10, y: 0, hdg: 0, length: 10, geo_type: 'Line' },
+      ],
       elevation_profile: [],
       lane_sections: [],
     }],
@@ -482,5 +503,65 @@ describe('Viewport', () => {
 
     fireEvent.mouseMove(canvas, { clientX: 200, clientY: 200 });
     await waitFor(() => expect(rendererMocks.clearHover).toHaveBeenCalled());
+  });
+
+  it('enters geometry edit mode when E is pressed with a road selected', async () => {
+    const platform = createPlatformMock();
+    (platform.roadToSpline as ReturnType<typeof vi.fn>).mockResolvedValue({ knots: [[0, 0, 0], [10, 0, 0]] });
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    act(() => {
+      useEditorStore.setState({
+        project: makeProjectWithRoadPlanView(),
+        selectedRoadId: 'road-1',
+        selectedObjectType: 'road',
+        selectedSceneNode: { type: 'road', roadId: 'road-1' },
+      });
+    });
+
+    render(<Viewport />);
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }));
+    });
+
+    await waitFor(() =>
+      expect(useEditorViewStore.getState().geometryEditSpline).not.toBeNull()
+    );
+  });
+
+  it('shows context hints bar when a road is selected', async () => {
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    const platform = createPlatformMock();
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    act(() => {
+      useEditorStore.setState({
+        project: makeProjectWithRoad(),
+        selectedRoadId: 'road-1',
+        selectedObjectType: 'road',
+      });
+    });
+
+    render(<Viewport />);
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+    expect(document.querySelector('.viewport-context-hints')).not.toBeNull();
+  });
+
+  it('hides context hints bar when nothing is selected', async () => {
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    const platform = createPlatformMock();
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    render(<Viewport />);
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+    expect(document.querySelector('.viewport-context-hints')).toBeNull();
   });
 });

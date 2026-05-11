@@ -141,6 +141,7 @@ export function Viewport() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
   const [isDragOver, setIsDragOver] = useState(false);
   const project = useEditorStore((s) => s.project);
+  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
   const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
   const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
   const selectedRoadIds = useEditorStore((s) => s.selectedRoadIds);
@@ -268,6 +269,17 @@ export function Viewport() {
         return;
       }
 
+      // E: enter geometry edit mode for selected road (normal select mode only)
+      if (event.key === 'e' || event.key === 'E') {
+        if (!viewState.geometryEditRoadId && viewState.editMode !== 'spline' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          const { selectedRoadId } = useEditorStore.getState();
+          if (selectedRoadId) {
+            void enterGeometryEditMode(selectedRoadId);
+          }
+        }
+        return;
+      }
+
       if (editMode !== 'spline') return;
       if (event.key === 'Backspace') {
         useEditorViewStore.getState().popSplineKnot();
@@ -281,7 +293,7 @@ export function Viewport() {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [editMode, finalizeSplineCreation, finalizeGeometryEdit]);
+  }, [editMode, finalizeSplineCreation, finalizeGeometryEdit, enterGeometryEditMode]);
 
   // Sync spline knot preview into the WebGPU renderer each time knots or tangents change
   useEffect(() => {
@@ -1224,6 +1236,17 @@ export function Viewport() {
       <div ref={rubberBandOverlayRef} className="selection-rect" />
       {/* Snap indicator: shown when cursor snaps to a nearby point */}
       <div ref={snapIndicatorDomRef} className="snap-indicator" style={{ display: 'none' }} />
+      {/* Context hints: keyboard shortcut hints when elements are selected */}
+      {(selectedRoadId || selectedJunctionId || selectedRoadIds.length > 0) && (
+        <div className="viewport-context-hints">
+          {selectedRoadIds.length > 0
+            ? <><span>已选 {selectedRoadIds.length} 条</span><kbd>Delete</kbd><span>批量删除</span><kbd>Esc</kbd><span>取消</span></>
+            : selectedRoadId
+            ? <><kbd>Delete</kbd><span>删除</span><kbd>Ctrl+D</kbd><span>复制</span><kbd>E</kbd><span>编辑</span><kbd>Esc</kbd><span>取消</span></>
+            : <><kbd>Delete</kbd><span>删除</span><kbd>Esc</kbd><span>取消</span></>
+          }
+        </div>
+      )}
       {status !== 'ready' && (
         <div className="viewport-overlay">
           <span className="viewport-label">
