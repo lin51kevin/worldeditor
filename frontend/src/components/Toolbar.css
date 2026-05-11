@@ -94,3 +94,8 @@
   letter-spacing: 0.03em;
   padding: 2px 0;
 }
+
+.tb-plugin-icon {
+  font-size: 14px;
+  line-height: 1;
+}

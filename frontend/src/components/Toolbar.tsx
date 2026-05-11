@@ -2,11 +2,11 @@ import { useCallback, useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MousePointer, Route, AlignJustify, GitMerge,
-  Spline, Grid, Crosshair,
-  Magnet, Ruler,
+  Spline,
 } from 'lucide-react';
 import { useEditorViewStore } from '../stores/editorViewStore';
-import { emitViewportEvent } from '../viewport/viewportEvents';
+import { useEditorStore } from '../stores/editorStore';
+import { usePluginContribStore } from '../stores/pluginContribStore';
 import './Toolbar.css';
 
 const STORAGE_KEY = 'we-toolbar-pos';
@@ -21,20 +21,16 @@ function loadPos(): { tx: number; ty: number } {
 
 export function Toolbar() {
   const {
-    dimension,
-    showGrid,
-    showAxis,
     editMode,
-    snapEnabled,
-    measureMode,
-    setDimension,
-    toggleGrid,
-    toggleAxis,
     setEditMode,
-    toggleSnap,
-    setMeasureMode,
     clearSplineKnots,
   } = useEditorViewStore();
+
+  // Subscribe so toolbar re-renders when selectedRoadId or editMode changes
+  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
+
+  const { toolbarButtons } = usePluginContribStore();
+
   const { t } = useTranslation();
 
   const initial = loadPos();
@@ -75,6 +71,12 @@ export function Toolbar() {
     setEditMode('spline');
     clearSplineKnots();
   }, [setEditMode, clearSplineKnots]);
+
+  // Force subscribe to selectedRoadId so toolbar re-renders when selection changes
+  void selectedRoadId;
+
+  const pluginModeButtons = toolbarButtons.filter((b) => b.group === 'mode');
+  const pluginActionButtons = toolbarButtons.filter((b) => b.group === 'action');
 
   return (
     <div
@@ -126,69 +128,47 @@ export function Toolbar() {
         </button>
       </div>
 
-      <div className="toolbar-separator" />
+      {/* Plugin mode buttons (e.g. move-road, rotate-road, adjust-node) */}
+      {pluginModeButtons.length > 0 && (
+        <>
+          <div className="toolbar-separator" />
+          <div className="toolbar-group">
+            {pluginModeButtons.map((btn) => (
+              <button
+                key={btn.id}
+                className={`toolbar-btn toolbar-toggle ${btn.isActive?.() ? 'active' : ''}`}
+                disabled={btn.isDisabled?.() ?? false}
+                onClick={btn.onClick}
+                title={t(btn.tooltipKey ?? btn.labelKey)}
+              >
+                <span className="tb-icon tb-plugin-icon">{btn.icon}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
-      {/* 3D/2D */}
-      <div className="toolbar-group">
-        <button
-          className={`toolbar-btn toolbar-toggle ${dimension === '3d' ? 'active' : ''}`}
-          onClick={() => { setDimension('3d'); emitViewportEvent({ type: 'set-dimension', dimension: '3d' }); }}
-          title={t('toolbar.view3dTitle')}
-        >
-          <span className="tb-dim-label">3D</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${dimension === '2d' ? 'active' : ''}`}
-          onClick={() => { setDimension('2d'); emitViewportEvent({ type: 'set-dimension', dimension: '2d' }); }}
-          title={t('toolbar.view2dTitle')}
-        >
-          <span className="tb-dim-label">2D</span>
-        </button>
-      </div>
+      {/* Plugin action buttons (instant operations: clone, reverse, mirror…) */}
+      {pluginActionButtons.length > 0 && (
+        <>
+          <div className="toolbar-separator" />
+          <div className="toolbar-group">
+            {pluginActionButtons.map((btn) => (
+              <button
+                key={btn.id}
+                className="toolbar-btn"
+                disabled={btn.isDisabled?.() ?? false}
+                onClick={btn.onClick}
+                title={t(btn.tooltipKey ?? btn.labelKey)}
+              >
+                <span className="tb-icon tb-plugin-icon">{btn.icon}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
-      <div className="toolbar-separator" />
-
-      {/* Grid/Axis toggles */}
-      <div className="toolbar-group">
-        <button
-          className={`toolbar-btn toolbar-toggle ${showGrid ? 'active' : ''}`}
-          onClick={() => { const newVal = !showGrid; toggleGrid(); emitViewportEvent({ type: 'set-show-grid', show: newVal }); }}
-          title={t('toolbar.gridTitle')}
-        >
-          <Grid size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.grid')}</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${showAxis ? 'active' : ''}`}
-          onClick={() => { const newVal = !showAxis; toggleAxis(); emitViewportEvent({ type: 'set-show-axis', show: newVal }); }}
-          title={t('toolbar.axisTitle')}
-        >
-          <Crosshair size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.axis')}</span>
-        </button>
-      </div>
-
-      <div className="toolbar-separator" />
-
-      {/* Snap / Measure */}
-      <div className="toolbar-group">
-        <button
-          className={`toolbar-btn toolbar-toggle ${snapEnabled ? 'active' : ''}`}
-          onClick={toggleSnap}
-          title={t('toolbar.snapTitle')}
-        >
-          <Magnet size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.snap')}</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${measureMode !== 'none' ? 'active' : ''}`}
-          onClick={() => setMeasureMode(measureMode !== 'none' ? 'none' : 'distance')}
-          title={t('toolbar.measureTitle')}
-        >
-          <Ruler size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.measure')}</span>
-        </button>
-      </div>
     </div>
   );
 }
+

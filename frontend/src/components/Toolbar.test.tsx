@@ -41,33 +41,29 @@ describe('Toolbar', () => {
     expect(document.querySelector('.toolbar')).toBeInTheDocument();
   });
 
-  it('renders dimension toggle buttons', () => {
+  it('snap and measure buttons are not in the toolbar (moved to MenuBar)', () => {
     render(<Toolbar />);
 
-    expect(screen.getByTitle('3D视图')).toBeInTheDocument();
-    expect(screen.getByTitle('2D视图')).toBeInTheDocument();
+    expect(screen.queryByTitle('开关吸附')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('测量工具')).not.toBeInTheDocument();
   });
 
-  it('renders grid and axis toggles', () => {
+  it('3D/2D and Grid/Axis buttons are not in the toolbar (moved to MenuBar)', () => {
     render(<Toolbar />);
 
-    expect(screen.getByRole('button', { name: '网格' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '坐标轴' })).toBeInTheDocument();
+    expect(screen.queryByTitle('3D视图')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('2D视图')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '网格' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '坐标轴' })).not.toBeInTheDocument();
   });
 
-  it('updates edit, view, dimension, and visibility controls', () => {
+  it('updates edit mode via toolbar buttons', () => {
     render(<Toolbar />);
 
     fireEvent.click(screen.getByRole('button', { name: '道路' }));
     fireEvent.click(screen.getByRole('button', { name: '车道' }));
     fireEvent.click(screen.getByRole('button', { name: '路口' }));
-    fireEvent.click(screen.getByTitle('2D视图'));
-    fireEvent.click(screen.getByRole('button', { name: '网格' }));
-    fireEvent.click(screen.getByRole('button', { name: '坐标轴' }));
 
     expect(useEditorViewStore.getState().editMode).toBe('junction');
-    expect(useEditorViewStore.getState().dimension).toBe('2d');
-    expect(useEditorViewStore.getState().showGrid).toBe(false);
-    expect(useEditorViewStore.getState().showAxis).toBe(false);
   });
 });
