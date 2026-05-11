@@ -15,6 +15,9 @@ interface EditorState {
   selectedRoadIds: string[];
   selectedJunctionIds: string[];
 
+  // Clipboard for copy-paste
+  clipboardRoadId: string | null;
+
   // Cursor position (world coordinates)
   cursorWorldPos: { x: number; y: number };
 
@@ -39,6 +42,8 @@ interface EditorState {
   deleteSelected: () => void;
   selectAll: () => void;
   duplicateSelected: () => void;
+  copySelected: () => void;
+  pasteFromClipboard: () => void;
   updateRoad: (id: string, updates: Partial<Pick<Road, 'name' | 'length' | 'junction_id'>>) => void;
   updateRoadGeometry: (id: string, planView: Geometry[], length: number) => void;
   cloneRoad: (id: string, newId: string, offsetXy: [number, number]) => void;
@@ -108,6 +113,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedSceneNode: null,
   selectedRoadIds: [],
   selectedJunctionIds: [],
+  clipboardRoadId: null,
   cursorWorldPos: { x: 0, y: 0 },
   gridSpacing: 10.0,
   viewportMpp: 0.1,
@@ -244,6 +250,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       newId = `${selectedRoadId}_copy${i}`;
     }
     get().cloneRoad(selectedRoadId, newId, [5, 5]);
+    get().selectRoad(newId);
+  },
+
+  copySelected: () => {
+    const { selectedRoadId } = get();
+    if (!selectedRoadId) return;
+    set({ clipboardRoadId: selectedRoadId });
+  },
+
+  pasteFromClipboard: () => {
+    const { clipboardRoadId, project } = get();
+    if (!clipboardRoadId) return;
+    const existing = new Set(project.roads.map((r) => r.id));
+    let i = 1;
+    let newId = `${clipboardRoadId}_copy${i}`;
+    while (existing.has(newId)) {
+      i += 1;
+      newId = `${clipboardRoadId}_copy${i}`;
+    }
+    get().cloneRoad(clipboardRoadId, newId, [5, 5]);
     get().selectRoad(newId);
   },
 
@@ -739,7 +765,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   markDirty: () => set({ isDirty: true }),
   markClean: () => set({ isDirty: false }),
-  reset: () => set((s) => ({ project: initialProject, isDirty: false, selectedRoadId: null, selectedJunctionId: null, selectedObjectType: null, selectedSceneNode: null, selectedRoadIds: [], selectedJunctionIds: [], undoStack: [], redoStack: [], cursorWorldPos: { x: 0, y: 0 }, gridSpacing: 10.0, viewportMpp: 0.1, projectLoadVersion: s.projectLoadVersion + 1 })),
+  reset: () => set((s) => ({ project: initialProject, isDirty: false, selectedRoadId: null, selectedJunctionId: null, selectedObjectType: null, selectedSceneNode: null, selectedRoadIds: [], selectedJunctionIds: [], clipboardRoadId: null, undoStack: [], redoStack: [], cursorWorldPos: { x: 0, y: 0 }, gridSpacing: 10.0, viewportMpp: 0.1, projectLoadVersion: s.projectLoadVersion + 1 })),
 
   undo: () =>
     set((state) => {

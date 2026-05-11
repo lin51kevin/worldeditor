@@ -98,6 +98,16 @@ export function App() {
         e.preventDefault();
         useEditorStore.getState().duplicateSelected();
       }
+      // Ctrl+C: copy selected road to clipboard
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        e.preventDefault();
+        useEditorStore.getState().copySelected();
+      }
+      // Ctrl+V: paste road from clipboard
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        e.preventDefault();
+        useEditorStore.getState().pasteFromClipboard();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);

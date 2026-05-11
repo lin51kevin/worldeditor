@@ -476,5 +476,43 @@ describe('editorStore', () => {
       expect(useEditorStore.getState().project.roads).toHaveLength(1);
     });
   });
+
+  describe('copySelected / pasteFromClipboard', () => {
+    it('copySelected sets clipboardRoadId to the selected road', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().selectRoad('r1');
+      useEditorStore.getState().copySelected();
+      expect(useEditorStore.getState().clipboardRoadId).toBe('r1');
+    });
+
+    it('copySelected does nothing when no road is selected', () => {
+      useEditorStore.getState().copySelected();
+      expect(useEditorStore.getState().clipboardRoadId).toBeNull();
+    });
+
+    it('pasteFromClipboard clones the clipboard road and selects the copy', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().selectRoad('r1');
+      useEditorStore.getState().copySelected();
+      useEditorStore.getState().pasteFromClipboard();
+      expect(useEditorStore.getState().project.roads).toHaveLength(2);
+      expect(useEditorStore.getState().selectedRoadId).not.toBe('r1');
+    });
+
+    it('pasteFromClipboard does nothing when clipboard is empty', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().pasteFromClipboard();
+      expect(useEditorStore.getState().project.roads).toHaveLength(1);
+    });
+
+    it('pasteFromClipboard pushes undo', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().selectRoad('r1');
+      useEditorStore.getState().copySelected();
+      const undoBefore = useEditorStore.getState().undoStack.length;
+      useEditorStore.getState().pasteFromClipboard();
+      expect(useEditorStore.getState().undoStack.length).toBeGreaterThan(undoBefore);
+    });
+  });
 });
 
