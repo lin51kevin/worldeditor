@@ -71,3 +71,64 @@ impl FromRequestParts<Arc<AuthService>> for Claims {
         state.verify_token(bearer.token())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_service() -> AuthService {
+        AuthService::new("test-secret-key-for-jwt-signing".into())
+    }
+
+    #[test]
+    fn test_generate_and_verify_roundtrip() {
+        let svc = make_service();
+        let token = svc.generate_token("user-42").unwrap();
+        let claims = svc.verify_token(&token).unwrap();
+        assert_eq!(claims.sub, "user-42");
+    }
+
+    #[test]
+    fn test_claims_has_valid_timestamps() {
+        let svc = make_service();
+        let token = svc.generate_token("u1").unwrap();
+        let claims = svc.verify_token(&token).unwrap();
+        assert!(claims.exp > claims.iat);
+        // Expiry should be ~24h in the future
+        let diff = claims.exp - claims.iat;
+        assert!(diff >= 86000 && diff <= 87000);
+    }
+
+    #[test]
+    fn test_verify_rejects_tampered_token() {
+        let svc = make_service();
+        let token = svc.generate_token("u1").unwrap();
+        let tampered = format!("{}x", token);
+        assert!(svc.verify_token(&tampered).is_err());
+    }
+
+    #[test]
+    fn test_verify_rejects_wrong_secret() {
+        let svc1 = AuthService::new("secret-1".into());
+        let svc2 = AuthService::new("secret-2".into());
+        let token = svc1.generate_token("u1").unwrap();
+        assert!(svc2.verify_token(&token).is_err());
+    }
+
+    #[test]
+    fn test_verify_rejects_garbage() {
+        let svc = make_service();
+        assert!(svc.verify_token("not.a.jwt").is_err());
+        assert!(svc.verify_token("").is_err());
+    }
+
+    #[test]
+    fn test_different_users_get_different_tokens() {
+        let svc = make_service();
+        let t1 = svc.generate_token("alice").unwrap();
+        let t2 = svc.generate_token("bob").unwrap();
+        assert_ne!(t1, t2);
+        assert_eq!(svc.verify_token(&t1).unwrap().sub, "alice");
+        assert_eq!(svc.verify_token(&t2).unwrap().sub, "bob");
+    }
+}

@@ -28,6 +28,7 @@ describe('editorViewStore', () => {
       measureMode: 'none',
       measurePoints: [],
       lastMeasurement: null,
+      softSelectionRadius: 50,
     });
   });
 
@@ -282,6 +283,36 @@ describe('editorViewStore', () => {
       expect(state.measureMode).toBe('none');
       expect(state.measurePoints).toEqual([]);
       expect(state.lastMeasurement).toBeNull();
+    });
+  });
+
+  // --- Soft selection radius ---
+
+  describe('softSelectionRadius', () => {
+    it('has a default value of 50', () => {
+      useEditorViewStore.setState({ softSelectionRadius: 50 });
+      expect(useEditorViewStore.getState().softSelectionRadius).toBe(50);
+    });
+
+    it('setSoftSelectionRadius updates the radius', () => {
+      act(() => {
+        useEditorViewStore.getState().setSoftSelectionRadius(120);
+      });
+      expect(useEditorViewStore.getState().softSelectionRadius).toBe(120);
+    });
+
+    it('setSoftSelectionRadius clamps values below 0.1 to 0.1', () => {
+      act(() => {
+        useEditorViewStore.getState().setSoftSelectionRadius(-5);
+      });
+      expect(useEditorViewStore.getState().softSelectionRadius).toBe(0.1);
+    });
+
+    it('setSoftSelectionRadius accepts large radii', () => {
+      act(() => {
+        useEditorViewStore.getState().setSoftSelectionRadius(9999);
+      });
+      expect(useEditorViewStore.getState().softSelectionRadius).toBe(9999);
     });
   });
 });
