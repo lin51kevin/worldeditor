@@ -1,8 +1,9 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
-import type { Project } from './services/platform';
+import type { Project, Road } from './services/platform';
 import { useEditorStore } from './stores/editorStore';
+import { onViewportEvent } from './viewport/viewportEvents';
 
 function makeProject(name: string): Project {
   return {
@@ -20,6 +21,19 @@ function makeProject(name: string): Project {
     },
     roads: [],
     junctions: [],
+  };
+}
+
+function makeRoad(id: string): Road {
+  return {
+    id,
+    name: id,
+    length: 100,
+    junction_id: null,
+    link: { predecessor: null, successor: null },
+    plan_view: [],
+    lane_sections: [],
+    elevation_profile: [],
   };
 }
 
@@ -61,5 +75,41 @@ describe('App', () => {
 
     fireEvent.keyDown(window, { key: 'y', ctrlKey: true });
     expect(useEditorStore.getState().project.name).toBe('Current');
+  });
+
+  it('should select all roads and junctions on Ctrl+A', () => {
+    act(() => {
+      useEditorStore.setState({
+        project: {
+          ...makeProject('Test'),
+          roads: [makeRoad('r1'), makeRoad('r2')],
+          junctions: [],
+        },
+      });
+    });
+    render(<App />);
+    fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
+    expect(useEditorStore.getState().selectedRoadIds).toEqual(['r1', 'r2']);
+  });
+
+  it('should duplicate selected road on Ctrl+D', () => {
+    act(() => {
+      useEditorStore.setState({
+        project: { ...makeProject('Test'), roads: [makeRoad('r1')], junctions: [] },
+        selectedRoadId: 'r1',
+      });
+    });
+    render(<App />);
+    fireEvent.keyDown(window, { key: 'd', ctrlKey: true });
+    expect(useEditorStore.getState().project.roads).toHaveLength(2);
+  });
+
+  it('should emit zoom-to-fit event on Home key', () => {
+    const spy = vi.fn();
+    const unsub = onViewportEvent(spy);
+    render(<App />);
+    fireEvent.keyDown(window, { key: 'Home' });
+    unsub();
+    expect(spy).toHaveBeenCalledWith({ type: 'zoom-to-fit' });
   });
 });

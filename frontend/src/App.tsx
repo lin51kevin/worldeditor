@@ -88,6 +88,16 @@ export function App() {
         e.preventDefault();
         toggleOutputPanel();
       }
+      // Ctrl+A: select all roads and junctions
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault();
+        useEditorStore.getState().selectAll();
+      }
+      // Ctrl+D: duplicate selected road
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        e.preventDefault();
+        useEditorStore.getState().duplicateSelected();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
