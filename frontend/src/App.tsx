@@ -15,6 +15,7 @@ import { MeasurementPanel } from './components/MeasurementPanel';
 import { useEditorStore } from './stores/editorStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorViewStore } from './stores/editorViewStore';
+import { mountRoadToolsPlugin } from './plugins/roadTools.plugin';
 
 export function App() {
   const { undo, redo, canUndo, canRedo, selectedRoadId, selectedJunctionId } = useEditorStore();
@@ -31,6 +32,8 @@ export function App() {
   useEffect(() => {
     initTheme();
     initLayout();
+    const unmountRoadTools = mountRoadToolsPlugin();
+    return unmountRoadTools;
   }, [initTheme, initLayout]);
 
   // Sync native window title and document.title with the current language

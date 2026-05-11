@@ -26,6 +26,7 @@
     "showAxis": "坐标轴",
     "resetPanels": "重置面板位置",
     "calculateRoadLength": "计算道路总长度",
+    "road": "道路",
     "aboutWorldEditor": "关于 WorldEditor",
     "versionInfo": "版本信息"
   },

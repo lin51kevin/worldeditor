@@ -25,6 +25,8 @@
     "showGrid": "Show Grid",
     "showAxis": "Show Axis",
     "calculateRoadLength": "Calculate Road Length",
+    "road": "Road",
+    "resetPanels": "Reset Panel Positions",
     "aboutWorldEditor": "About WorldEditor",
     "versionInfo": "Version Info"
   },
