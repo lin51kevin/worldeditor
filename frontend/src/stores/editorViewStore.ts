@@ -119,6 +119,9 @@ interface EditorViewState {
   geometryEditRoadId: string | null;
   geometryEditSpline: EditableSpline | null;
 
+  // Soft selection radius for knot editing
+  softSelectionRadius: number;
+
   // Actions
   setDimension: (d: ViewDimension) => void;
   toggleGrid: () => void;
@@ -150,6 +153,7 @@ interface EditorViewState {
   enterGeometryEdit: (roadId: string, spline: EditableSpline) => void;
   exitGeometryEdit: () => void;
   setGeometryEditSpline: (spline: EditableSpline) => void;
+  setSoftSelectionRadius: (radius: number) => void;
 
   // Display settings actions
   toggleDisplaySetting: (key: DisplayBooleanKey) => void;
@@ -238,6 +242,7 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   lastMeasurement: null,
   geometryEditRoadId: null,
   geometryEditSpline: null,
+  softSelectionRadius: 50.0,
 
   setDimension: (dimension) => set({ dimension }),
   toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
@@ -281,6 +286,8 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
     draggingKnot: null,
   }),
   setGeometryEditSpline: (spline) => set({ geometryEditSpline: spline }),
+  setSoftSelectionRadius: (softSelectionRadius) =>
+    set({ softSelectionRadius: Math.max(0.1, softSelectionRadius) }),
 
   toggleDisplaySetting: (key) =>
     set((state) => {

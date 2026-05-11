@@ -37,6 +37,11 @@ interface EditorState {
   removeRoad: (id: string) => void;
   updateRoad: (id: string, updates: Partial<Pick<Road, 'name' | 'length' | 'junction_id'>>) => void;
   updateRoadGeometry: (id: string, planView: Geometry[], length: number) => void;
+  cloneRoad: (id: string, newId: string, offsetXy: [number, number]) => void;
+  reverseRoad: (id: string) => void;
+  mirrorRoad: (id: string) => void;
+  optimizeRoad: (id: string) => void;
+  swapCenterline: (id: string, targetLaneId: number) => void;
   updateJunction: (id: string, updates: Partial<Pick<Junction, 'name'>>) => void;
   addSignal: (signal: Signal) => void;
   removeSignal: (id: string) => void;
@@ -198,6 +203,276 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       },
       isDirty: true,
     })),
+
+  cloneRoad: (id, newId, offsetXy) =>
+    set((state) => {
+      const source = state.project.roads.find((r) => r.id === id);
+      if (!source) return state;
+      const [dx, dy] = offsetXy;
+      const cloned: Road = {
+        ...JSON.parse(JSON.stringify(source)) as Road,
+        id: newId,
+        link: undefined as unknown as Road['link'],
+        plan_view: source.plan_view.map((g) => ({ ...g, x: g.x + dx, y: g.y + dy })),
+      };
+      (cloned as any).link = null;
+      return {
+        ...pushUndo(state),
+        project: { ...state.project, roads: [...state.project.roads, cloned] },
+        isDirty: true,
+      };
+    }),
+
+  reverseRoad: (id) =>
+    set((state) => {
+      const road = state.project.roads.find((r) => r.id === id);
+      if (!road || road.plan_view.length === 0) return state;
+
+      const normalizeAngle = (a: number): number => {
+        let v = a;
+        while (v > Math.PI) v -= 2 * Math.PI;
+        while (v <= -Math.PI) v += 2 * Math.PI;
+        return v;
+      };
+
+      /** Compute world-space end pose of a geometry segment. */
+      const getEndPose = (g: Geometry): { x: number; y: number; hdg: number } => {
+        const cosH = Math.cos(g.hdg);
+        const sinH = Math.sin(g.hdg);
+        const gt = g.geo_type;
+        if (gt === 'Line') {
+          return { x: g.x + g.length * cosH, y: g.y + g.length * sinH, hdg: g.hdg };
+        }
+        if (typeof gt === 'object' && 'Arc' in gt) {
+          const k = gt.Arc.curvature;
+          if (Math.abs(k) < 1e-15) {
+            return { x: g.x + g.length * cosH, y: g.y + g.length * sinH, hdg: g.hdg };
+          }
+          const r = 1 / k;
+          const theta = g.length * k;
+          const lx = r * Math.sin(theta);
+          const ly = r * (1 - Math.cos(theta));
+          return {
+            x: g.x + lx * cosH - ly * sinH,
+            y: g.y + lx * sinH + ly * cosH,
+            hdg: g.hdg + theta,
+          };
+        }
+        // Spiral and parametric curves: approximate as line for end-pose
+        return { x: g.x + g.length * cosH, y: g.y + g.length * sinH, hdg: g.hdg };
+      };
+
+      /** Reverse a geometry type for the reversed-direction segment. */
+      const reverseGeoType = (gt: Geometry['geo_type']): Geometry['geo_type'] => {
+        if (gt === 'Line') return 'Line';
+        if (typeof gt === 'object' && 'Arc' in gt) {
+          return { Arc: { curvature: -gt.Arc.curvature } };
+        }
+        if (typeof gt === 'object' && 'Spiral' in gt) {
+          const s = (gt as any).Spiral as { curv_start: number; curv_end: number };
+          return { Spiral: { curv_start: -s.curv_end, curv_end: -s.curv_start } } as any;
+        }
+        return gt;
+      };
+
+      const endPoses = road.plan_view.map(getEndPose);
+      let currentS = 0;
+      const reversedPlanView: Geometry[] = road.plan_view
+        .slice()
+        .reverse()
+        .map((geo, idx) => {
+          const origIdx = road.plan_view.length - 1 - idx;
+          const { x, y, hdg } = endPoses[origIdx];
+          const newHdg = normalizeAngle(hdg + Math.PI);
+          const g: Geometry = {
+            s: currentS,
+            x,
+            y,
+            hdg: newHdg,
+            length: geo.length,
+            geo_type: reverseGeoType(geo.geo_type),
+          };
+          currentS += geo.length;
+          return g;
+        });
+
+      // Swap predecessor ↔ successor
+      let newLink = road.link ? { ...road.link } : null;
+      if (newLink) {
+        const tmp = newLink.predecessor;
+        newLink = { ...newLink, predecessor: newLink.successor, successor: tmp };
+      }
+
+      // Swap left ↔ right lanes and negate IDs
+      const reversedSections = road.lane_sections.map((sec) => {
+        const negateId = (l: Road['lane_sections'][0]['left'][0]) => ({ ...l, id: -l.id });
+        return {
+          ...sec,
+          left: sec.right.map(negateId),
+          right: sec.left.map(negateId),
+          center: sec.center.map((l) => ({ ...l, id: l.id === 0 ? 0 : -l.id })),
+        };
+      });
+
+      const updatedRoad: Road = {
+        ...road,
+        plan_view: reversedPlanView,
+        link: newLink as Road['link'],
+        lane_sections: reversedSections,
+      };
+
+      return {
+        ...pushUndo(state),
+        project: {
+          ...state.project,
+          roads: state.project.roads.map((r) => (r.id === id ? updatedRoad : r)),
+        },
+        isDirty: true,
+      };
+    }),
+
+  mirrorRoad: (id) =>
+    set((state) => {
+      const road = state.project.roads.find((r) => r.id === id);
+      if (!road) return state;
+
+      const mirroredSections = road.lane_sections.map((sec) => {
+        const negateId = (l: Road['lane_sections'][0]['left'][0]) => ({ ...l, id: -l.id });
+        return {
+          ...sec,
+          left: sec.right.map(negateId),
+          right: sec.left.map(negateId),
+        };
+      });
+
+      const updatedRoad: Road = { ...road, lane_sections: mirroredSections };
+      return {
+        ...pushUndo(state),
+        project: {
+          ...state.project,
+          roads: state.project.roads.map((r) => (r.id === id ? updatedRoad : r)),
+        },
+        isDirty: true,
+      };
+    }),
+
+  optimizeRoad: (id) =>
+    set((state) => {
+      const road = state.project.roads.find((r) => r.id === id);
+      if (!road || road.plan_view.length < 2) return state;
+
+      // Frontend-side Douglas–Peucker on plan_view x/y start points
+      const epsilon = 0.01;
+      const pts = road.plan_view.map((g) => ({ x: g.x, y: g.y, geo: g }));
+
+      const dpKeep = new Array(pts.length).fill(true);
+      function dpRecurse(start: number, end: number): void {
+        if (end <= start + 1) return;
+        const ax = pts[start].x, ay = pts[start].y;
+        const bx = pts[end].x, by = pts[end].y;
+        const dx = bx - ax, dy = by - ay;
+        const chordLen = Math.sqrt(dx * dx + dy * dy);
+        let maxDist = 0, maxIdx = start;
+        for (let i = start + 1; i < end; i++) {
+          const px = pts[i].x - ax, py = pts[i].y - ay;
+          const dist = chordLen < 1e-9
+            ? Math.sqrt(px * px + py * py)
+            : Math.abs(px * dy - py * dx) / chordLen;
+          if (dist > maxDist) { maxDist = dist; maxIdx = i; }
+        }
+        if (maxDist < epsilon) {
+          for (let i = start + 1; i < end; i++) dpKeep[i] = false;
+        } else {
+          dpRecurse(start, maxIdx);
+          dpRecurse(maxIdx, end);
+        }
+      }
+      dpRecurse(0, pts.length - 1);
+
+      const keptGeos = road.plan_view.filter((_, i) => dpKeep[i]);
+      if (keptGeos.length === road.plan_view.length) return state; // nothing to do
+
+      // Renumber s values
+      let s = 0;
+      const optimizedGeos: Geometry[] = keptGeos.map((g) => {
+        const ng = { ...g, s };
+        s += g.length;
+        return ng;
+      });
+      const newLength = optimizedGeos.reduce((acc, g) => acc + g.length, 0);
+
+      const updatedRoad: Road = { ...road, plan_view: optimizedGeos, length: newLength };
+      return {
+        ...pushUndo(state),
+        project: {
+          ...state.project,
+          roads: state.project.roads.map((r) => (r.id === id ? updatedRoad : r)),
+        },
+        isDirty: true,
+      };
+    }),
+
+  swapCenterline: (id, targetLaneId) =>
+    set((state) => {
+      const road = state.project.roads.find((r) => r.id === id);
+      if (!road || targetLaneId === 0) return state;
+
+      const section = road.lane_sections[0];
+      if (!section) return state;
+
+      // Compute cumulative lateral offset to the outer edge of targetLaneId
+      const lanes = targetLaneId > 0 ? section.left : section.right;
+      const absId = Math.abs(targetLaneId);
+      let cumulativeWidth = 0;
+      for (const lane of lanes) {
+        if (Math.abs(lane.id) <= absId) {
+          cumulativeWidth += lane.width[0]?.a ?? 0;
+        }
+      }
+      const T = targetLaneId > 0 ? cumulativeWidth : -cumulativeWidth;
+
+      // Offset each geometry segment perpendicular to its heading by T
+      const newPlanView = road.plan_view.map((geo) => {
+        const nx = -Math.sin(geo.hdg);
+        const ny = Math.cos(geo.hdg);
+        return { ...geo, x: geo.x + T * nx, y: geo.y + T * ny };
+      });
+
+      // Rebuild lane sections around the new centerline
+      const newSections = road.lane_sections.map((sec) => {
+        if (targetLaneId > 0) {
+          const outsideLeft = sec.left
+            .filter((l) => l.id > targetLaneId)
+            .map((l, i) => ({ ...l, id: i + 1 }));
+          const newRight = [...sec.left.filter((l) => l.id <= targetLaneId).reverse(), ...sec.right]
+            .map((l, i) => ({ ...l, id: -(i + 1) }));
+          return { ...sec, left: outsideLeft, right: newRight };
+        } else {
+          const absTarget = Math.abs(targetLaneId);
+          const outsideRight = sec.right
+            .filter((l) => Math.abs(l.id) > absTarget)
+            .map((l, i) => ({ ...l, id: -(i + 1) }));
+          const newLeft = [...sec.right.filter((l) => Math.abs(l.id) <= absTarget).reverse(), ...sec.left]
+            .map((l, i) => ({ ...l, id: i + 1 }));
+          return { ...sec, right: outsideRight, left: newLeft };
+        }
+      });
+
+      const updatedRoad: Road = {
+        ...road,
+        plan_view: newPlanView,
+        lane_sections: newSections,
+        link: null,
+      };
+      return {
+        ...pushUndo(state),
+        project: {
+          ...state.project,
+          roads: state.project.roads.map((r) => (r.id === id ? updatedRoad : r)),
+        },
+        isDirty: true,
+      };
+    }),
 
   updateJunction: (id, updates) =>
     set((state) => ({
