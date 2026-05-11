@@ -91,7 +91,7 @@ const initialProject: Project = {
 
 /** Push current project onto undo stack, clear redo. */
 function pushUndo(state: EditorState): Partial<EditorState> {
-  const undoStack = [...state.undoStack, state.project].slice(-MAX_UNDO);
+  const undoStack = [...state.undoStack.map(p => structuredClone(p)), structuredClone(state.project)].slice(-MAX_UNDO);
   return { undoStack, redoStack: [] };
 }
 
@@ -210,12 +210,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (!source) return state;
       const [dx, dy] = offsetXy;
       const cloned: Road = {
-        ...JSON.parse(JSON.stringify(source)) as Road,
+        ...(JSON.parse(JSON.stringify(source)) as Omit<Road, 'link'>),
         id: newId,
-        link: undefined as unknown as Road['link'],
+        link: { predecessor: null, successor: null },
         plan_view: source.plan_view.map((g) => ({ ...g, x: g.x + dx, y: g.y + dy })),
       };
-      (cloned as any).link = null;
       return {
         ...pushUndo(state),
         project: { ...state.project, roads: [...state.project.roads, cloned] },
@@ -269,8 +268,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           return { Arc: { curvature: -gt.Arc.curvature } };
         }
         if (typeof gt === 'object' && 'Spiral' in gt) {
-          const s = (gt as any).Spiral as { curv_start: number; curv_end: number };
-          return { Spiral: { curv_start: -s.curv_end, curv_end: -s.curv_start } } as any;
+          const s = gt.Spiral;
+          return { Spiral: { curv_start: -s.curv_end, curv_end: -s.curv_start } };
         }
         return gt;
       };
@@ -560,7 +559,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           const sections = [...r.lane_sections];
           const section = sections[sectionIndex];
           if (!section) return r;
-          const lanes = section[side].map((l: any) =>
+          const lanes = section[side].map((l) =>
             l.id === laneId ? { ...l, lane_type: laneType } : l,
           );
           sections[sectionIndex] = { ...section, [side]: lanes };
@@ -580,7 +579,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           const sections = [...r.lane_sections];
           const section = sections[sectionIndex];
           if (!section) return r;
-          const lanes = section[side].map((l: any) =>
+          const lanes = section[side].map((l) =>
             l.id === laneId ? { ...l, width: [width] } : l,
           );
           sections[sectionIndex] = { ...section, [side]: lanes };
@@ -682,7 +681,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         project: prev,
         undoStack: state.undoStack.slice(0, -1),
-        redoStack: [...state.redoStack, state.project],
+        redoStack: [...state.redoStack, structuredClone(state.project)],
         isDirty: true,
       };
     }),
@@ -693,7 +692,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const next = state.redoStack[state.redoStack.length - 1];
       return {
         project: next,
-        undoStack: [...state.undoStack, state.project],
+        undoStack: [...state.undoStack, structuredClone(state.project)],
         redoStack: state.redoStack.slice(0, -1),
         isDirty: true,
       };
