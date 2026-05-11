@@ -8,6 +8,7 @@ pub mod measurement;
 pub mod model;
 pub mod opendrive;
 pub mod picking;
+pub mod road_ops;
 pub mod snapping;
 pub mod spatial_index;
 pub mod spline;

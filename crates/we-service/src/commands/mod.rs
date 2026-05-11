@@ -7,6 +7,7 @@ mod elevation;
 mod junction;
 mod lane;
 mod road;
+mod road_ops;
 mod signal;
 mod spline;
 
@@ -18,6 +19,7 @@ pub use elevation::*;
 pub use junction::*;
 pub use lane::*;
 pub use road::*;
+pub use road_ops::*;
 pub use signal::*;
 pub use spline::*;
 
