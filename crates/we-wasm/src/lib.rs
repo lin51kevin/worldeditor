@@ -1063,6 +1063,8 @@ pub fn pick_junction_at_point(
 /// Find the closest road to a world-space point.
 ///
 /// Returns the road ID as a string, or null if no road is within the threshold.
+/// Hit-testing uses the full road surface width (sum of all lane widths), not just
+/// the reference line centre.
 #[wasm_bindgen]
 pub fn pick_road_at_point(
     project_json: &str,
@@ -1070,23 +1072,90 @@ pub fn pick_road_at_point(
     y: f64,
     threshold: f64,
 ) -> Result<JsValue, JsError> {
+    use we_core::geometry::eval::{evaluate_lane_width, sample_road_reference_line};
+
     let project: we_core::model::Project =
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
 
+    /// Compute total left and right lane extents at road station `s`.
+    fn road_half_widths(road: &we_core::model::Road, s: f64) -> (f64, f64) {
+        let section = road
+            .lane_sections
+            .iter()
+            .rev()
+            .find(|ls| ls.s <= s + 1e-9)
+            .or_else(|| road.lane_sections.first());
+
+        if let Some(ls) = section {
+            let ds = (s - ls.s).max(0.0);
+            let left: f64 = ls.left.iter().map(|l| evaluate_lane_width(&l.width, ds)).sum();
+            let right: f64 = ls.right.iter().map(|l| evaluate_lane_width(&l.width, ds)).sum();
+            (left, right)
+        } else {
+            (0.0, 0.0)
+        }
+    }
+
     let mut best_road_id: Option<String> = None;
-    let mut best_dist = threshold;
+    // Score: 0 = inside road, >0 = distance outside road edge; threshold caps the search.
+    let mut best_score = threshold;
 
     for road in &project.roads {
         if road.render_hidden {
             continue;
         }
-        let ref_pts = we_core::geometry::eval::sample_road_reference_line(road, 2.0);
-        for pt in &ref_pts {
-            let dx = pt.x - x;
-            let dy = pt.y - y;
-            let dist = (dx * dx + dy * dy).sqrt();
-            if dist < best_dist {
-                best_dist = dist;
+        let ref_pts = sample_road_reference_line(road, 2.0);
+
+        for (i, pt) in ref_pts.iter().enumerate() {
+            // Perpendicular (left-normal) and tangent directions at this station
+            let nx = -(pt.hdg.sin()); // left normal x
+            let ny = pt.hdg.cos();    // left normal y
+            let tx = pt.hdg.cos();    // tangent x
+            let ty = pt.hdg.sin();    // tangent y
+
+            // Vector from ref point to query point
+            let dx = x - pt.x;
+            let dy = y - pt.y;
+
+            // Decompose into lateral (across-road) and along-road components
+            let lateral = dx * nx + dy * ny;   // positive = left of ref line
+            let along = dx * tx + dy * ty;     // positive = forward along road
+
+            // Only consider this sample point if the click is "closest" to it along
+            // the road — use half-step window to avoid double-counting neighbouring pts.
+            let step = if i + 1 < ref_pts.len() {
+                let np = &ref_pts[i + 1];
+                let ddx = np.x - pt.x;
+                let ddy = np.y - pt.y;
+                (ddx * ddx + ddy * ddy).sqrt()
+            } else if i > 0 {
+                let pp = &ref_pts[i - 1];
+                let ddx = pt.x - pp.x;
+                let ddy = pt.y - pp.y;
+                (ddx * ddx + ddy * ddy).sqrt()
+            } else {
+                2.0
+            };
+            if along.abs() > step * 0.6 {
+                continue;
+            }
+
+            let (left_w, right_w) = road_half_widths(road, pt.s);
+            // Fallback: if no lanes defined, use threshold as minimum road width
+            let left_w = left_w.max(0.5);
+            let right_w = right_w.max(0.5);
+
+            // Distance outside the road surface (0 if click is inside)
+            let score = if lateral >= -right_w && lateral <= left_w {
+                0.0_f64 // inside road surface
+            } else if lateral > left_w {
+                lateral - left_w  // outside left edge
+            } else {
+                -right_w - lateral  // outside right edge
+            };
+
+            if score < best_score {
+                best_score = score;
                 best_road_id = Some(road.id.clone());
             }
         }
