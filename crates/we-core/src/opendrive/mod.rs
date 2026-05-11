@@ -885,6 +885,8 @@ mod tests {
                 orientation: 0.0,
                 width: 0.5,
                 height: 0.8,
+                length: 0.0,
+                corners: vec![],
                 validity: Some(Validity { from_lane: -1, to_lane: -2 }),
             }];
             r
@@ -919,6 +921,8 @@ mod tests {
                     orientation: 0.0,
                     width: 1.0,
                     height: 1.0,
+                    length: 0.0,
+                    corners: vec![],
                     validity: None,
                 }];
                 r
@@ -940,6 +944,8 @@ mod tests {
                 orientation: 1.57,
                 width: 0.2,
                 height: 1.0,
+                length: 0.0,
+                corners: vec![],
                 validity: None,
             }];
             r
@@ -1365,6 +1371,8 @@ mod tests {
                 orientation: 0.0,
                 width: 0.3,
                 height: 2.0,
+                length: 0.0,
+                corners: vec![],
                 validity: None,
             }];
             r.bridges = vec![Bridge { id: "b1".into(), s: 20.0, length: 10.0, bridge_type: "steel".into() }];

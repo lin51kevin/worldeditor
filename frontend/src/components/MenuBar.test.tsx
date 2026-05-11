@@ -95,6 +95,7 @@ function createPlatformMock() {
     roadToSpline: vi.fn<PlatformService['roadToSpline']>().mockResolvedValue({ knots: [] }),
     moveSplineKnot: vi.fn<PlatformService['moveSplineKnot']>().mockResolvedValue({ knots: [] }),
     splineToGeometries: vi.fn<PlatformService['splineToGeometries']>().mockResolvedValue([]),
+    generateObjectVertices: vi.fn<PlatformService['generateObjectVertices']>().mockResolvedValue(new Float32Array()),
   };
 
   return {

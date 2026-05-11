@@ -188,6 +188,7 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     roadToSpline: vi.fn().mockResolvedValue({ knots: [] }),
     moveSplineKnot: vi.fn().mockResolvedValue({ knots: [] }),
     splineToGeometries: vi.fn().mockResolvedValue([]),
+    generateObjectVertices: vi.fn().mockResolvedValue(new Float32Array()),
   };
 }
 
