@@ -9,13 +9,25 @@ use we_core::model::{ObjectType, Point3D, RoadObject};
 /// Default colors for different object types.
 fn object_color(obj_type: &ObjectType) -> [f32; 4] {
     match obj_type {
-        ObjectType::Sign => [0.9, 0.9, 0.9, 1.0], // White/gray for signs
-        ObjectType::Guardrail => [0.5, 0.5, 0.5, 1.0], // Metal gray
-        ObjectType::Barrier => [0.8, 0.6, 0.2, 1.0], // Orange/yellow for barriers
-        ObjectType::Curb => [0.6, 0.6, 0.55, 1.0], // Concrete
-        ObjectType::Wall => [0.4, 0.4, 0.4, 1.0], // Dark gray
-        ObjectType::Pillar => [0.5, 0.5, 0.5, 1.0], // Metal
-        ObjectType::TrafficCone => [0.9, 0.5, 0.1, 1.0], // Orange
+        ObjectType::Sign => [0.9, 0.9, 0.9, 1.0],
+        ObjectType::Guardrail => [0.5, 0.5, 0.5, 1.0],
+        ObjectType::Barrier => [0.8, 0.6, 0.2, 1.0],
+        ObjectType::Curb => [0.6, 0.6, 0.55, 1.0],
+        ObjectType::Wall => [0.4, 0.4, 0.4, 1.0],
+        ObjectType::Pillar => [0.5, 0.5, 0.5, 1.0],
+        ObjectType::TrafficCone => [0.9, 0.5, 0.1, 1.0],
+        ObjectType::ParkingSpace => [0.424, 0.549, 0.278, 1.0],
+        ObjectType::Crosswalk => [0.000, 0.000, 0.502, 1.0],
+        ObjectType::StopLine | ObjectType::ForwardWaitingArea | ObjectType::TurnLeftWaitingArea => [1.0, 1.0, 1.0, 1.0],
+        ObjectType::CrossHatchArea => [0.965, 0.651, 0.137, 1.0],
+        ObjectType::WovenArea => [1.000, 0.051, 0.651, 1.0],
+        ObjectType::SlowDownToYieldLine => [0.000, 0.749, 1.000, 1.0],
+        ObjectType::StopToYieldLine => [0.816, 0.008, 0.106, 1.0],
+        ObjectType::SimpleSignalPole => [0.000, 1.000, 1.000, 1.0],
+        ObjectType::TrafficLightPole => [0.400, 0.251, 1.000, 1.0],
+        ObjectType::StreetLightPole => [0.612, 0.553, 0.839, 1.0],
+        ObjectType::SignGantry => [0.071, 0.455, 0.212, 1.0],
+        ObjectType::LTypeSignalPole => [0.502, 0.000, 0.000, 1.0],
         ObjectType::Custom(_) => [0.7, 0.7, 0.7, 1.0],
     }
 }
@@ -244,6 +256,8 @@ mod tests {
             orientation: 0.0,
             width: 1.0,
             height: 1.0,
+            length: 0.0,
+            corners: vec![],
             validity: None,
         }];
         let vertices = generate_object_render_data(&objects);
@@ -259,6 +273,8 @@ mod tests {
             orientation: 0.0,
             width: 1.0,
             height: 1.0,
+            length: 0.0,
+            corners: vec![],
             validity: None,
         }
     }
