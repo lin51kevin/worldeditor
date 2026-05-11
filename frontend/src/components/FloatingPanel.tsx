@@ -79,6 +79,8 @@ export function FloatingPanel({
   const [height, setHeight] = useState<number | null>(initialState.height);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const txRef = useRef(tx);
+  const tyRef = useRef(ty);
 
   // Drag state
   const drag = useRef<{
@@ -99,6 +101,10 @@ export function FloatingPanel({
     origTx: number;
     origTy: number;
   } | null>(null);
+
+  // Sync refs for stable callbacks
+  txRef.current = tx;
+  tyRef.current = ty;
 
   // Persist whenever state changes
   useEffect(() => {
@@ -139,13 +145,13 @@ export function FloatingPanel({
         startY: e.clientY,
         origWidth: width ?? rect.width,
         origHeight: height ?? rect.height,
-        origTx: tx,
-        origTy: ty,
+        origTx: txRef.current,
+        origTy: tyRef.current,
       };
       document.body.style.userSelect = 'none';
       document.body.style.cursor = (edge === 'top' || edge === 'bottom') ? 'row-resize' : 'col-resize';
     },
-    [width, height, tx, ty],
+    [width, height],
   );
 
   // Clamp tx/ty so at least KEEP_PX pixels of the panel stay visible on screen.
