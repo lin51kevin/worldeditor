@@ -24,7 +24,7 @@ corepack enable              # 启用 yarn
 ### 首次构建
 
 ```bash
-git clone https://github.com/51world-ai-copilot/worldeditor.git
+git clone https://github.com/lin51kevin/worldeditor.git
 cd worldeditor-next
 cd frontend && yarn install && cd ..
 just build-all

@@ -2,7 +2,7 @@
 
 > 下一代自动驾驶道路网络编辑器 — 基于 Rust + TypeScript + Tauri 2.0 重构，支持桌面与 Web 双端部署。
 
-[![CI](https://github.com/51world-ai-copilot/worldeditor/actions/workflows/ci.yml/badge.svg)](https://github.com/51world-ai-copilot/worldeditor/actions/workflows/ci.yml)
+[![CI](https://github.com/lin51kevin/worldeditor/actions/workflows/ci.yml/badge.svg)](https://github.com/lin51kevin/worldeditor/actions/workflows/ci.yml)
 
 ## 概述
 
@@ -132,7 +132,7 @@ we-core ────────────────────────
 
 ```bash
 # 克隆仓库
-git clone https://github.com/51world-ai-copilot/worldeditor.git
+git clone https://github.com/lin51kevin/worldeditor.git
 cd worldeditor-next
 
 # 安装前端依赖
