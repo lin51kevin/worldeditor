@@ -1065,6 +1065,27 @@ export function Viewport() {
       const visibleProject = buildRenderableProject(currentProject, currentDisplay);
       const roadId = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
 
+      // Shift+click: toggle item in/out of multi-selection without clearing others
+      if (e.shiftKey) {
+        if (roadId) {
+          const { selectedRoadIds, selectedJunctionIds } = useEditorStore.getState();
+          const newRoadIds = selectedRoadIds.includes(roadId)
+            ? selectedRoadIds.filter((id) => id !== roadId)
+            : [...selectedRoadIds, roadId];
+          useEditorStore.getState().selectMultiple(newRoadIds, selectedJunctionIds);
+        } else {
+          const junctionId = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
+          if (junctionId) {
+            const { selectedRoadIds, selectedJunctionIds } = useEditorStore.getState();
+            const newJunctionIds = selectedJunctionIds.includes(junctionId)
+              ? selectedJunctionIds.filter((id) => id !== junctionId)
+              : [...selectedJunctionIds, junctionId];
+            useEditorStore.getState().selectMultiple(selectedRoadIds, newJunctionIds);
+          }
+        }
+        return;
+      }
+
       // Double-click on already-selected road → enter geometry edit mode
       if (e.detail >= 2 && roadId && roadId === selectedRoadId) {
         void enterGeometryEditMode(roadId);

@@ -35,6 +35,7 @@ const rendererMocks = vi.hoisted(() => ({
   setScaleChangeCallback: vi.fn(),
   setClearColor: vi.fn(),
   setGridColor: vi.fn(),
+  getMetersPerPixel: vi.fn().mockReturnValue(0.1),
 }));
 
 vi.mock('../services', () => ({
@@ -79,6 +80,7 @@ vi.mock('../viewport/renderer', () => ({
       setScaleChangeCallback: rendererMocks.setScaleChangeCallback,
       setClearColor: rendererMocks.setClearColor,
       setGridColor: rendererMocks.setGridColor,
+      getMetersPerPixel: rendererMocks.getMetersPerPixel,
     })),
     { isSupported: rendererMocks.isSupported },
   ),
@@ -219,7 +221,7 @@ describe('Viewport', () => {
         undoStack: [],
         redoStack: [],
       });
-      useEditorViewStore.setState({ display: { ...DEFAULT_DISPLAY } });
+      useEditorViewStore.setState({ display: { ...DEFAULT_DISPLAY }, geometryEditSpline: null, geometryEditRoadId: null, editMode: 'normal', splineKnots: [] });
     });
   });
 
@@ -563,5 +565,58 @@ describe('Viewport', () => {
     await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
 
     expect(document.querySelector('.viewport-context-hints')).toBeNull();
+  });
+
+  it('shift+click adds a road to multi-selection', async () => {
+    const platform = createPlatformMock();
+    (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    rendererMocks.unprojectToGround.mockReturnValue({ x: 10, y: 20 });
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    act(() => {
+      useEditorStore.setState({ project: makeProjectWithRoad(), selectedRoadIds: [] });
+    });
+
+    render(<Viewport />);
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+    const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+    // Simulate Shift+click (mousedown + click with shiftKey)
+    fireEvent.mouseDown(canvas, { button: 0, clientX: 50, clientY: 50, shiftKey: true });
+    fireEvent.click(canvas, { button: 0, clientX: 50, clientY: 50, shiftKey: true });
+
+    await waitFor(() =>
+      expect(useEditorStore.getState().selectedRoadIds).toContain('road-1')
+    );
+  });
+
+  it('shift+click on already-selected road removes it from multi-selection', async () => {
+    const platform = createPlatformMock();
+    (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    rendererMocks.unprojectToGround.mockReturnValue({ x: 10, y: 20 });
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    act(() => {
+      useEditorStore.setState({
+        project: makeProjectWithRoad(),
+        selectedRoadIds: ['road-1'],
+        selectedRoadId: null,
+      });
+    });
+
+    render(<Viewport />);
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+    const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+    fireEvent.mouseDown(canvas, { button: 0, clientX: 50, clientY: 50, shiftKey: true });
+    fireEvent.click(canvas, { button: 0, clientX: 50, clientY: 50, shiftKey: true });
+
+    await waitFor(() =>
+      expect(useEditorStore.getState().selectedRoadIds).not.toContain('road-1')
+    );
   });
 });
