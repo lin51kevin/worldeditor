@@ -200,12 +200,17 @@ function loadLayout(): PanelLayout {
 
 const DISPLAY_STORAGE_KEY = 'we-display-settings';
 
+let displayPersistTimer: ReturnType<typeof setTimeout> | null = null;
+
 function saveDisplay(display: DisplaySettings): void {
-  try {
-    localStorage.setItem(DISPLAY_STORAGE_KEY, JSON.stringify(display));
-  } catch {
-    // Ignore storage errors
-  }
+  if (displayPersistTimer) clearTimeout(displayPersistTimer);
+  displayPersistTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(DISPLAY_STORAGE_KEY, JSON.stringify(display));
+    } catch {
+      // Ignore storage errors
+    }
+  }, 100);
 }
 
 function loadDisplay(): DisplaySettings {
