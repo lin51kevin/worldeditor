@@ -71,6 +71,25 @@
   transform: translateY(-50%);
 }
 
+/* Coordinate overlay: world-space cursor position at bottom-left of viewport */
+.viewport-coords {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  pointer-events: none;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  white-space: nowrap;
+}
+
 /* Context hints: keyboard shortcut bar shown at bottom of viewport when elements are selected */
 .viewport-context-hints {
   position: absolute;
@@ -80,23 +99,25 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: 4px;
   padding: 4px 10px;
   pointer-events: none;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--color-text-primary);
   white-space: nowrap;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 .viewport-context-hints kbd {
   display: inline-block;
   padding: 1px 5px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
   font-family: inherit;
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-text-primary);
   margin: 0 2px;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ViewportRenderer, getSplineHandlePoints } from '../viewport/renderer';
-import { emitCursorMove } from '../viewport/cursorEvents';
+import { emitCursorMove, onCursorMove } from '../viewport/cursorEvents';
 import { onViewportEvent } from '../viewport/viewportEvents';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
@@ -166,6 +166,8 @@ export function Viewport() {
   const hoveredJunctionRef = useRef<string | null>(null);
   /** Snap indicator DOM element — positioned imperatively to avoid React re-renders on every mousemove. */
   const snapIndicatorDomRef = useRef<HTMLDivElement | null>(null);
+  /** Viewport coordinate overlay — updated imperatively to show cursor world position. */
+  const coordOverlayRef = useRef<HTMLSpanElement>(null);
   /** Touch gesture state: tracks start positions for pan and pinch. */
   const touchStateRef = useRef<{
     touches: Array<{ id: number; x: number; y: number }>;
@@ -236,6 +238,15 @@ export function Viewport() {
       useEditorViewStore.getState().clearSplineKnots();
     }
   }, [editMode]);
+
+  // Update viewport-embedded coordinate display on cursor move (imperative DOM update, no re-render)
+  useEffect(() => {
+    return onCursorMove((x, y) => {
+      if (coordOverlayRef.current) {
+        coordOverlayRef.current.textContent = `X ${x.toFixed(2)}  Y ${y.toFixed(2)}`;
+      }
+    });
+  }, []);
 
   // Keyboard handling for spline creation, geometry editing, and select-mode shortcuts
   useEffect(() => {
@@ -1312,6 +1323,10 @@ export function Viewport() {
       <div ref={rubberBandOverlayRef} className="selection-rect" />
       {/* Snap indicator: shown when cursor snaps to a nearby point */}
       <div ref={snapIndicatorDomRef} className="snap-indicator" style={{ display: 'none' }} />
+      {/* Coordinate overlay: world-space cursor position at bottom-left */}
+      <div className="viewport-coords">
+        <span ref={coordOverlayRef}>X 0.00  Y 0.00</span>
+      </div>
       {/* Context hints: keyboard shortcut hints when elements are selected */}
       {(selectedRoadId || selectedJunctionId || selectedRoadIds.length > 0) && (
         <div className="viewport-context-hints">
