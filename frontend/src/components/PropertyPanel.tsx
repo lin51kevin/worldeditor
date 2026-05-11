@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { getPlatformService } from '../services';
+import { RoadEditToolbar } from './RoadEditToolbar';
 import './PropertyPanel.css';
 
 interface CardSectionProps {
@@ -267,6 +268,8 @@ export function PropertyPanel() {
                   </button>
                 </div>
               </CardSection>
+              {/* Road Edit Tools Card */}
+              <RoadEditToolbar />
             </div>
           ) : selectedJunction ? (
             <div className="inspector-cards">

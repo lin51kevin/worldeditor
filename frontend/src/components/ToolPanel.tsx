@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { RoadEditToolbar } from './RoadEditToolbar';
 import './ToolPanel.css';
 
 interface ToolItem {
@@ -46,6 +47,7 @@ export function ToolPanel() {
           </button>
         ))}
       </div>
+      <RoadEditToolbar />
     </div>
   );
 }
