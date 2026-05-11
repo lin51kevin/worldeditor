@@ -1,13 +1,15 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Menu as MenuIcon, ChevronRight,
   FileText, FolderOpen, Save,
   Undo2, Redo2, Trash2,
+  Grid, Crosshair, Magnet, Ruler,
 } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { useThemeStore } from '../stores/themeStore';
+import { usePluginContribStore } from '../stores/pluginContribStore';
 import { emitViewportEvent } from '../viewport/viewportEvents';
 import { getPlatformService } from '../services';
 import { resetAllPanels } from './FloatingPanel';
@@ -160,12 +162,18 @@ export function MenuBar() {
     setDimension,
     dimension,
     snapEnabled,
+    measureMode,
     toggleSnap,
     setMeasureMode,
   } = useEditorViewStore();
 
   const { theme, toggleTheme } = useThemeStore();
   const { i18n } = useTranslation();
+  const allMenuItems = usePluginContribStore((s) => s.menuItems);
+  const roadMenuItems = useMemo(
+    () => allMenuItems.filter((m) => m.menu === 'road'),
+    [allMenuItems],
+  );
 
   const toggleLanguage = useCallback(() => {
     const next = i18n.language.startsWith('zh') ? 'en' : 'zh';
@@ -306,7 +314,7 @@ export function MenuBar() {
     alert(`${t('dialog.roadLength')}: ${total.toFixed(3)} ${t('dialog.meters')}`);
   }, [project]);
 
-  const menus = buildMenus(
+  const staticMenus = buildMenus(
     project,
     isDirty,
     handleNew,
@@ -339,6 +347,26 @@ export function MenuBar() {
     t,
   );
 
+  // Insert plugin-contributed Road menu between Edit (index 1) and View (index 2)
+  const roadMenu = roadMenuItems.length > 0
+    ? [{
+        label: t('menu.road'),
+        items: roadMenuItems.map((item) => ({
+          label: item.separator ? '' : t(item.labelKey),
+          shortcut: item.shortcut,
+          action: item.onClick,
+          separator: item.separator,
+          disabled: item.isDisabled?.() ?? false,
+        })),
+      }]
+    : [];
+
+  const menus = [
+    ...staticMenus.slice(0, 2),  // File, Edit
+    ...roadMenu,
+    ...staticMenus.slice(2),     // View, Tools, About
+  ];
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (menuBarRef.current && !menuBarRef.current.contains(e.target as Node)) {
@@ -367,6 +395,13 @@ export function MenuBar() {
         } else {
           handleSave();
         }
+      } else if (isCtrl && e.key === 'd') {
+        e.preventDefault();
+        // Clone road shortcut — delegate to plugin contrib action
+        const roadClone = usePluginContribStore.getState().menuItems.find(
+          (m) => m.id === 'road-tools:menu-clone',
+        );
+        if (roadClone && !(roadClone.isDisabled?.() ?? false)) roadClone.onClick();
       } else if (isCtrl && e.key === 'z') {
         e.preventDefault();
         if (canUndo()) undo();
@@ -478,6 +513,57 @@ export function MenuBar() {
           </button>
           <button className="menubar-action-btn" onClick={handleDelete} title={t('toolbar.deleteTitle')} disabled={!selectedRoadId}>
             <Trash2 size={14} />
+          </button>
+
+          <div className="menubar-action-separator" />
+
+          {/* View toggles: 3D/2D/Grid/Axis */}
+          <button
+            className={`menubar-action-btn ${dimension === '3d' ? 'active' : ''}`}
+            onClick={handleView3D}
+            title={t('toolbar.view3dTitle')}
+          >
+            <span className="menubar-view-label">3D</span>
+          </button>
+          <button
+            className={`menubar-action-btn ${dimension === '2d' ? 'active' : ''}`}
+            onClick={handleView2D}
+            title={t('toolbar.view2dTitle')}
+          >
+            <span className="menubar-view-label">2D</span>
+          </button>
+          <div className="menubar-action-separator" />
+          <button
+            className={`menubar-action-btn ${showGrid ? 'active' : ''}`}
+            onClick={handleToggleGrid}
+            title={t('toolbar.gridTitle')}
+          >
+            <Grid size={14} />
+          </button>
+          <button
+            className={`menubar-action-btn ${showAxis ? 'active' : ''}`}
+            onClick={handleToggleAxis}
+            title={t('toolbar.axisTitle')}
+          >
+            <Crosshair size={14} />
+          </button>
+
+          <div className="menubar-action-separator" />
+
+          {/* Snap / Measure */}
+          <button
+            className={`menubar-action-btn ${snapEnabled ? 'active' : ''}`}
+            onClick={toggleSnap}
+            title={t('toolbar.snapTitle')}
+          >
+            <Magnet size={14} />
+          </button>
+          <button
+            className={`menubar-action-btn ${measureMode !== 'none' ? 'active' : ''}`}
+            onClick={() => setMeasureMode(measureMode !== 'none' ? 'none' : 'distance')}
+            title={t('toolbar.measureTitle')}
+          >
+            <Ruler size={14} />
           </button>
         </div>
       </div>
