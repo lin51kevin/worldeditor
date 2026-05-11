@@ -246,7 +246,16 @@ export class ViewportRenderer {
   private meshes: RenderableMesh[] = [];
   // Lane line meshes
   private laneLineMeshes: RenderableMesh[] = [];
-  private splinePreviewMeshes: RenderableMesh[] = [];
+  // Spline curve geometry (screen-size independent — rebuilt on knot change only)
+  private splineCurveMeshes: RenderableMesh[] = [];
+  // Spline marker geometry (screen-size dependent — rebuilt on zoom AND knot change)
+  private splineMarkerMeshes: RenderableMesh[] = [];
+  // Cached knot data so markers can be rebuilt on zoom without re-calling setSplinePreviewKnots
+  private splineKnotsCache: Array<[number, number, number]> = [];
+  private splineTangentCache: Record<number, [number, number, number]> | undefined = undefined;
+  // Hover / selection state for control points
+  private hoveredControlPoint: { index: number; type: 'knot' | 'in' | 'out' } | null = null;
+  private selectedControlPoint: { index: number; type: 'knot' | 'in' | 'out' } | null = null;
   private width = 0;
   private height = 0;
   private animFrameId = 0;
@@ -260,6 +269,7 @@ export class ViewportRenderer {
   private activeDragAction: MouseDragAction | null = null;
   private lastMouse: [number, number] = [0, 0];
   private _cameraLocked = false;
+  private _dimension: '3d' | '2d' = '3d';
 
   // Visibility flags for grid/axis
   private showGrid = true;
@@ -300,7 +310,7 @@ export class ViewportRenderer {
   }
 
   /** Compute current meters-per-pixel (perspective approximation at target distance). */
-  private getMetersPerPixel(): number {
+  getMetersPerPixel(): number {
     const [px, py, pz] = this.camera.position;
     const [tx, ty, tz] = this.camera.target;
     const camDist = Math.sqrt((px - tx) ** 2 + (py - ty) ** 2 + (pz - tz) ** 2);
@@ -310,6 +320,11 @@ export class ViewportRenderer {
 
   private reportScale(): void {
     this.onScaleChange?.({ gridSpacing: this.gridSpacing, mpp: this.getMetersPerPixel() });
+    // Rebuild both curve (thinner at new zoom) and markers (screen-constant size)
+    if (this.splineKnotsCache.length > 0) {
+      this.refreshSplineCurve();
+      this.refreshSplineMarkers();
+    }
   }
 
   /** Check if WebGPU is available. */
@@ -359,13 +374,19 @@ export class ViewportRenderer {
 
   /** Upload road vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
   uploadRoadVertices(vertexData: Float32Array): void {
+    // Track whether this is a fresh load (previously empty) to decide on auto-fit
+    const wasEmpty = this.lastVertexData === null || this.lastVertexData.length === 0;
+
     // Clear old meshes
     for (const m of this.meshes) {
       m.vertexBuffer.destroy();
     }
     this.meshes = [];
 
-    if (vertexData.length === 0) return;
+    if (vertexData.length === 0) {
+      this.lastVertexData = vertexData;
+      return;
+    }
 
     const buffer = this.device.createBuffer({
       size: vertexData.byteLength,
@@ -383,8 +404,10 @@ export class ViewportRenderer {
     // Store for later zoomToFit calls
     this.lastVertexData = vertexData;
 
-    // Auto-fit camera to the uploaded geometry
-    this.fitToVertices(vertexData);
+    // Auto-fit camera only on first load (when there was no geometry before)
+    if (wasEmpty) {
+      this.fitToVertices(vertexData);
+    }
   }
 
   /** Upload selection highlight vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
@@ -458,6 +481,7 @@ export class ViewportRenderer {
       this.camera.position = [tx, ty - dist * 0.5, tz + dist * 0.7];
       this.camera.up = [0, 0, 1];
     }
+    this._dimension = dimension;
     this.cameraDirty = true;
   }
 
@@ -533,71 +557,39 @@ export class ViewportRenderer {
     knots: Array<[number, number, number]>,
     tangentOverrides?: Record<number, [number, number, number]>,
   ): void {
-    this.disposeMeshes(this.splinePreviewMeshes);
+    this.disposeMeshes(this.splineCurveMeshes);
+    this.disposeMeshes(this.splineMarkerMeshes);
+
+    // Cache for zoom-driven refresh
+    this.splineKnotsCache = knots;
+    this.splineTangentCache = tangentOverrides;
+    // Reset interaction states when knots change
+    this.hoveredControlPoint = null;
+    this.selectedControlPoint = null;
+
     if (knots.length === 0) return;
 
-    const vertices: number[] = [];
+    this.refreshSplineCurve();
+    this.refreshSplineMarkers();
+  }
+
+  /**
+   * Rebuild the Hermite curve geometry using current mpp (called on zoom too).
+   */
+  private refreshSplineCurve(): void {
+    this.disposeMeshes(this.splineCurveMeshes);
+    const knots = this.splineKnotsCache;
+    if (knots.length < 2) return;
+
+    const tangentOverrides = this.splineTangentCache;
     const zOffset = 0.15;
     const STEPS = 24;
+    const mpp = this.getMetersPerPixel();
+    const lineHW = 1.0 * mpp; // ~2px screen width
 
-    // 现代化颜色方案（改进原"太丑"样式）
-    const cR = 0.204, cG = 0.596, cB = 0.859, cA = 0.9;   // 蓝色曲线 #3498db (90%透明度)
-    const mR = 0.204, mG = 0.596, mB = 0.859, mA = 1.0;   // 蓝色节点 #3498db
-    const tR = 0.906, tG = 0.298, tB = 0.235, tA = 0.7;   // 红色切线 #e74c3c (70%透明度)
-    const hR = 0.906, hG = 0.298, hB = 0.235, hA = 1.0;   // 红色端点 #e74c3c
-    
-    // 边框颜色（用于增强视觉效果）
-    const knotBorderR = 1.0, knotBorderG = 1.0, knotBorderB = 1.0, knotBorderA = 0.8; // 白色节点边框
+    // Yellow spline curve
+    const cR = 0.961, cG = 0.651, cB = 0.137, cA = 1.0; // #F5A623
 
-    // 圆形生成函数（现代化控制点设计）
-    const addCircle = (
-      cx: number, cy: number, z: number, radius: number,
-      sections: number, r: number, g: number, b: number, a: number,
-    ) => {
-      for (let i = 0; i < sections; i++) {
-        const angle1 = (i / sections) * Math.PI * 2;
-        const angle2 = ((i + 1) / sections) * Math.PI * 2;
-        const x1 = cx + Math.cos(angle1) * radius;
-        const y1 = cy + Math.sin(angle1) * radius;
-        const x2 = cx + Math.cos(angle2) * radius;
-        const y2 = cy + Math.sin(angle2) * radius;
-        
-        // 中心到边缘的三角形
-        vertices.push(cx, cy, z, r, g, b, a);
-        vertices.push(x1, y1, z, r, g, b, a);
-        vertices.push(x2, y2, z, r, g, b, a);
-      }
-    };
-
-    // 环形生成函数（用于边框效果）
-    const addRing = (
-      cx: number, cy: number, z: number, innerRadius: number, outerRadius: number,
-      sections: number, r: number, g: number, b: number, a: number,
-    ) => {
-      for (let i = 0; i < sections; i++) {
-        const angle1 = (i / sections) * Math.PI * 2;
-        const angle2 = ((i + 1) / sections) * Math.PI * 2;
-        
-        const ix1 = cx + Math.cos(angle1) * innerRadius;
-        const iy1 = cy + Math.sin(angle1) * innerRadius;
-        const ox1 = cx + Math.cos(angle1) * outerRadius;
-        const oy1 = cy + Math.sin(angle1) * outerRadius;
-        const ix2 = cx + Math.cos(angle2) * innerRadius;
-        const iy2 = cy + Math.sin(angle2) * innerRadius;
-        const ox2 = cx + Math.cos(angle2) * outerRadius;
-        const oy2 = cy + Math.sin(angle2) * outerRadius;
-        
-        vertices.push(ix1, iy1, z, r, g, b, a);
-        vertices.push(ox1, oy1, z, r, g, b, a);
-        vertices.push(ox2, oy2, z, r, g, b, a);
-        
-        vertices.push(ix1, iy1, z, r, g, b, a);
-        vertices.push(ox2, oy2, z, r, g, b, a);
-        vertices.push(ix2, iy2, z, r, g, b, a);
-      }
-    };
-
-    // Compute Catmull-Rom tangent at knot index i (with manual override support)
     const tangentAt = (i: number): [number, number, number] => {
       if (tangentOverrides && i in tangentOverrides) return tangentOverrides[i]!;
       const n = knots.length;
@@ -607,7 +599,6 @@ export class ViewportRenderer {
       return [0.5 * (knots[i + 1]![0] - knots[i - 1]![0]), 0.5 * (knots[i + 1]![1] - knots[i - 1]![1]), 0.5 * (knots[i + 1]![2] - knots[i - 1]![2])];
     };
 
-    // Hermite interpolation between p1 and p2 using explicit tangents m1, m2
     const hermiteInterp = (
       p1: [number, number, number], m1: [number, number, number],
       p2: [number, number, number], m2: [number, number, number],
@@ -625,8 +616,8 @@ export class ViewportRenderer {
       ];
     };
 
-    // Emit a thick quad (two triangles) between two 2D points at fixed z
     const addQuad = (
+      verts: number[],
       ax: number, ay: number, bx: number, by: number, z: number,
       hw: number, r: number, g: number, b: number, a: number,
     ) => {
@@ -634,60 +625,162 @@ export class ViewportRenderer {
       const len = Math.hypot(dx, dy);
       if (len < 1e-6) return;
       const px = (-dy / len) * hw, py = (dx / len) * hw;
-      vertices.push(ax - px, ay - py, z, r, g, b, a);
-      vertices.push(ax + px, ay + py, z, r, g, b, a);
-      vertices.push(bx + px, by + py, z, r, g, b, a);
-      vertices.push(ax - px, ay - py, z, r, g, b, a);
-      vertices.push(bx + px, by + py, z, r, g, b, a);
-      vertices.push(bx - px, by - py, z, r, g, b, a);
+      verts.push(
+        ax - px, ay - py, z, r, g, b, a,
+        ax + px, ay + py, z, r, g, b, a,
+        bx + px, by + py, z, r, g, b, a,
+        ax - px, ay - py, z, r, g, b, a,
+        bx + px, by + py, z, r, g, b, a,
+        bx - px, by - py, z, r, g, b, a,
+      );
     };
 
-    // --- 1. Smooth Hermite curve (Catmull-Rom with manual tangent overrides) ---
-    if (knots.length >= 2) {
-      let prev: [number, number, number] | null = null;
-      for (let i = 0; i < knots.length - 1; i++) {
-        const p1 = knots[i]!;
-        const p2 = knots[i + 1]!;
-        const m1 = tangentAt(i);
-        const m2 = tangentAt(i + 1);
-        for (let s = 0; s <= STEPS; s++) {
-          const pt = hermiteInterp(p1, m1, p2, m2, s / STEPS);
-          if (prev) addQuad(prev[0], prev[1], pt[0], pt[1], zOffset, 0.25, cR, cG, cB, cA); // 稍微加宽曲线
-          prev = pt;
-        }
+    const curveVerts: number[] = [];
+    let prev: [number, number, number] | null = null;
+    for (let i = 0; i < knots.length - 1; i++) {
+      const p1 = knots[i]!;
+      const p2 = knots[i + 1]!;
+      const m1 = tangentAt(i);
+      const m2 = tangentAt(i + 1);
+      for (let s = 0; s <= STEPS; s++) {
+        const pt = hermiteInterp(p1, m1, p2, m2, s / STEPS);
+        if (prev) addQuad(curveVerts, prev[0], prev[1], pt[0], pt[1], zOffset, lineHW, cR, cG, cB, cA);
+        prev = pt;
       }
     }
+    this.uploadToMeshArray(this.splineCurveMeshes, curveVerts);
+  }
 
-    // --- 2. Tangent handles (displayed when >= 2 knots) ---
+  /**
+   * Rebuild spline control-point marker geometry with screen-space constant sizes.
+   * Optionally updates hover/selection state before rebuilding.
+   * Call this on zoom/pan/orbit or on hover/click state changes.
+   */
+  refreshSplineMarkers(
+    hovered?: { index: number; type: 'knot' | 'in' | 'out' } | null,
+    selected?: { index: number; type: 'knot' | 'in' | 'out' } | null,
+  ): void {
+    if (hovered !== undefined) this.hoveredControlPoint = hovered;
+    if (selected !== undefined) this.selectedControlPoint = selected;
+
+    this.disposeMeshes(this.splineMarkerMeshes);
+    const knots = this.splineKnotsCache;
+    if (knots.length === 0) return;
+
+    const tangentOverrides = this.splineTangentCache;
+    const zOffset = 0.15;
+    const mpp = this.getMetersPerPixel();
+
+    // Screen-constant sizes (in world units)
+    const knotHalfSize = 6.0 * mpp;   // ~12px square
+    const handleHalfSize = 4.0 * mpp; // ~8px square
+    const lineHW = 1.5 * mpp;         // tangent line ~3px wide
+
+    // Colors
+    const colYellow: [number,number,number,number] = [0.961, 0.651, 0.137, 0.85]; // tangent lines
+    const colBlack:  [number,number,number,number] = [0.05,  0.05,  0.05,  1.0];  // default knot
+    const colGreen:  [number,number,number,number] = [0.13,  0.78,  0.37,  1.0];  // hover
+    const colRed:    [number,number,number,number] = [0.91,  0.30,  0.24,  1.0];  // selected
+    const colBlue:   [number,number,number,number] = [0.13,  0.55,  0.93,  1.0];  // tangent handles
+
+    const tangentAt = (i: number): [number, number, number] => {
+      if (tangentOverrides && i in tangentOverrides) return tangentOverrides[i]!;
+      const n = knots.length;
+      if (n === 1) return [0, 0, 0];
+      if (i === 0) return [knots[1]![0] - knots[0]![0], knots[1]![1] - knots[0]![1], knots[1]![2] - knots[0]![2]];
+      if (i === n - 1) return [knots[n - 1]![0] - knots[n - 2]![0], knots[n - 1]![1] - knots[n - 2]![1], knots[n - 1]![2] - knots[n - 2]![2]];
+      return [0.5 * (knots[i + 1]![0] - knots[i - 1]![0]), 0.5 * (knots[i + 1]![1] - knots[i - 1]![1]), 0.5 * (knots[i + 1]![2] - knots[i - 1]![2])];
+    };
+
+    const markerVerts: number[] = [];
+
+    // Stroke half-width for marker lines: ~1px
+    const strokeHW = mpp * 1.0;
+
+    // Emit a thick line segment (quad) into markerVerts
+    const seg = (
+      ax: number, ay: number, bx: number, by: number, z: number,
+      hw: number, r: number, g: number, b: number, a: number,
+    ) => {
+      const dx = bx - ax, dy = by - ay;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-8) return;
+      const px = (-dy / len) * hw, py = (dx / len) * hw;
+      markerVerts.push(
+        ax - px, ay - py, z, r, g, b, a,
+        ax + px, ay + py, z, r, g, b, a,
+        bx + px, by + py, z, r, g, b, a,
+        ax - px, ay - py, z, r, g, b, a,
+        bx + px, by + py, z, r, g, b, a,
+        bx - px, by - py, z, r, g, b, a,
+      );
+    };
+
+    // Outlined square with two diagonals (X pattern)
+    const addXSquare = (
+      cx: number, cy: number, z: number, halfSize: number,
+      r: number, g: number, b: number, a: number,
+    ) => {
+      const x0 = cx - halfSize, x1 = cx + halfSize;
+      const y0 = cy - halfSize, y1 = cy + halfSize;
+      // 4 border edges
+      seg(x0, y0, x1, y0, z, strokeHW, r, g, b, a); // bottom
+      seg(x1, y0, x1, y1, z, strokeHW, r, g, b, a); // right
+      seg(x1, y1, x0, y1, z, strokeHW, r, g, b, a); // top
+      seg(x0, y1, x0, y0, z, strokeHW, r, g, b, a); // left
+      // 2 diagonal lines (X)
+      seg(x0, y0, x1, y1, z, strokeHW, r, g, b, a); // bottom-left → top-right
+      seg(x1, y0, x0, y1, z, strokeHW, r, g, b, a); // bottom-right → top-left
+    };
+
+    const hov = this.hoveredControlPoint;
+    const sel = this.selectedControlPoint;
+
+    const knotZ = zOffset + 0.04;
+    const handleZ = zOffset + 0.06;
+
+    // --- Tangent handle lines and endpoint X-squares ---
     if (knots.length >= 2) {
-      const handleZ = zOffset + 0.02;
       for (let i = 0; i < knots.length; i++) {
         const [kx, ky] = knots[i]!;
         const [tvx, tvy] = tangentAt(i);
         const tLen = Math.hypot(tvx, tvy);
         if (tLen < 1e-6) continue;
-        // Clamp visual handle length to ~4 m world units
         const scale = Math.min(4.0 / tLen, 0.3);
-        const hx1 = kx + tvx * scale, hy1 = ky + tvy * scale;
-        const hx2 = kx - tvx * scale, hy2 = ky - tvy * scale;
-        // 红色半透明切线线（更细更现代）
-        addQuad(hx2, hy2, hx1, hy1, handleZ, 0.06, tR, tG, tB, tA);
-        // 红色圆形手柄端点
-        const tangentRadius = 0.35;
-        addCircle(hx1, hy1, handleZ + 0.01, tangentRadius, 12, hR, hG, hB, hA);
-        addCircle(hx2, hy2, handleZ + 0.01, tangentRadius, 12, hR, hG, hB, hA);
+        const hx1 = kx + tvx * scale, hy1 = ky + tvy * scale; // 'out' handle
+        const hx2 = kx - tvx * scale, hy2 = ky - tvy * scale; // 'in'  handle
+
+        // Thin yellow tangent line
+        seg(hx2, hy2, hx1, hy1, handleZ - 0.01, lineHW, ...colYellow);
+
+        // 'out' handle X-square
+        const outColor = (hov?.index === i && hov?.type === 'out') ? colGreen
+          : (sel?.index === i && sel?.type === 'out') ? colRed
+          : colBlue;
+        addXSquare(hx1, hy1, handleZ, handleHalfSize, ...outColor);
+
+        // 'in' handle X-square
+        const inColor = (hov?.index === i && hov?.type === 'in') ? colGreen
+          : (sel?.index === i && sel?.type === 'in') ? colRed
+          : colBlue;
+        addXSquare(hx2, hy2, handleZ, handleHalfSize, ...inColor);
       }
     }
 
-    // --- 3. 现代化节点标记（蓝色圆形 + 白色边框） ---
-    for (const [kx, ky, kz] of knots) {
-      const knotRadius = 0.6;
-      // 蓝色圆形节点
-      addCircle(kx, ky, kz + zOffset + 0.04, knotRadius, 16, mR, mG, mB, mA);
-      // 白色边框效果（增强视觉层次）
-      addRing(kx, ky, kz + zOffset + 0.045, knotRadius, knotRadius + 0.1, 16, knotBorderR, knotBorderG, knotBorderB, knotBorderA);
+    // --- Knot X-squares (drawn above handles so they appear on top) ---
+    for (let i = 0; i < knots.length; i++) {
+      const [kx, ky, kz] = knots[i]!;
+      const knotColor = (hov?.index === i && hov?.type === 'knot') ? colGreen
+        : (sel?.index === i && sel?.type === 'knot') ? colRed
+        : colBlack;
+      addXSquare(kx, ky, (kz ?? 0) + knotZ, knotHalfSize, ...knotColor);
     }
 
+    this.uploadToMeshArray(this.splineMarkerMeshes, markerVerts);
+  }
+
+  /** Upload a vertex array into a mesh array, clearing existing meshes first. */
+  private uploadToMeshArray(meshArray: RenderableMesh[], vertices: number[]): void {
     if (vertices.length === 0) return;
     const vertexData = new Float32Array(vertices);
     const buffer = this.device.createBuffer({
@@ -697,7 +790,7 @@ export class ViewportRenderer {
     });
     new Float32Array(buffer.getMappedRange()).set(vertexData);
     buffer.unmap();
-    this.splinePreviewMeshes.push({ vertexBuffer: buffer, vertexCount: vertices.length / 7 });
+    meshArray.push({ vertexBuffer: buffer, vertexCount: vertices.length / 7 });
   }
 
   /** Compute bounding box of vertex data and move camera to see all geometry. */
@@ -735,12 +828,59 @@ export class ViewportRenderer {
     // Derive a nice grid spacing from the data extent (~10 divisions)
     this.gridSpacing = niceNumber(Math.max(maxExtent / 10, 0.5));
 
-    // Place camera above the center, looking down at 45° angle
+    // Place camera above the center, respecting the current dimension mode
     const dist = maxExtent * 0.8;
     this.camera.target = [cx, cy, cz];
-    this.camera.position = [cx, cy - dist * 0.5, cz + dist];
+    if (this._dimension === '2d') {
+      this.camera.position = [cx, cy, cz + dist];
+      this.camera.up = [0, 1, 0];
+    } else {
+      this.camera.position = [cx, cy - dist * 0.5, cz + dist];
+      this.camera.up = [0, 0, 1];
+    }
     this.camera.near = Math.max(0.1, maxExtent * 0.001);
     this.camera.far = Math.max(100000, maxExtent * 10);
+    this.cameraDirty = true;
+    this.reportScale();
+  }
+
+  /**
+   * Pan the camera to center on the AABB of the given vertex data.
+   * Unlike fitToVertices, the camera distance (zoom level) is preserved.
+   */
+  panToCenter(vertexData: Float32Array): void {
+    const stride = 7;
+    const count = vertexData.length / stride;
+    if (count === 0) return;
+
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+    for (let i = 0; i < count; i++) {
+      const x = vertexData[i * stride]!;
+      const y = vertexData[i * stride + 1]!;
+      const z = vertexData[i * stride + 2]!;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (z < minZ) minZ = z;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+      if (z > maxZ) maxZ = z;
+    }
+
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const cz = (minZ + maxZ) / 2;
+
+    // Preserve the camera → target offset vector (keeps zoom level)
+    const [px, py, pz] = this.camera.position;
+    const [tx, ty, tz] = this.camera.target;
+    const offsetX = px - tx;
+    const offsetY = py - ty;
+    const offsetZ = pz - tz;
+
+    this.camera.target = [cx, cy, cz];
+    this.camera.position = [cx + offsetX, cy + offsetY, cz + offsetZ];
     this.cameraDirty = true;
     this.reportScale();
   }
@@ -773,6 +913,12 @@ export class ViewportRenderer {
     }
   }
 
+  /** Clear the vertex data cache so the next uploadRoadVertices triggers auto-fit.
+   * Call this when switching to a completely new project. */
+  clearVertexCache(): void {
+    this.lastVertexData = null;
+  }
+
   /** Dispose all GPU resources. */
   dispose(): void {
     // Mark as disposed first so any in-flight async init() bails out.
@@ -780,7 +926,8 @@ export class ViewportRenderer {
     this.stop();
     this.disposeMeshes(this.meshes);
     this.disposeMeshes(this.laneLineMeshes);
-    this.disposeMeshes(this.splinePreviewMeshes);
+    this.disposeMeshes(this.splineCurveMeshes);
+    this.disposeMeshes(this.splineMarkerMeshes);
     this.disposeMeshes(this.highlightMeshes);
     this.depthTexture?.destroy();
     this.gridUniformBuffer?.destroy();
@@ -892,11 +1039,21 @@ export class ViewportRenderer {
       }
     }
 
-    // Draw spline preview on top (knot markers + connecting lines)
-    if (this.splinePreviewMeshes.length > 0) {
+    // Draw spline preview curve on top of road surface
+    if (this.splineCurveMeshes.length > 0) {
       pass.setPipeline(this.basicPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
-      for (const mesh of this.splinePreviewMeshes) {
+      for (const mesh of this.splineCurveMeshes) {
+        pass.setVertexBuffer(0, mesh.vertexBuffer);
+        pass.draw(mesh.vertexCount);
+      }
+    }
+
+    // Draw spline control point markers (screen-size constant squares)
+    if (this.splineMarkerMeshes.length > 0) {
+      pass.setPipeline(this.basicPipeline);
+      pass.setBindGroup(0, this.basicBindGroup);
+      for (const mesh of this.splineMarkerMeshes) {
         pass.setVertexBuffer(0, mesh.vertexBuffer);
         pass.draw(mesh.vertexCount);
       }
@@ -1179,11 +1336,11 @@ export class ViewportRenderer {
 
       const action = resolveMouseDragAction(this.activeMouseButton, e) ?? this.activeDragAction;
       this.activeDragAction = action;
-      if (action === 'orbit') {
+      if (action === 'orbit' && this._dimension !== '2d') {
         const dx = (e.clientX - previousMouse[0]) * 0.005;
         const dy = (e.clientY - previousMouse[1]) * 0.005;
         this.orbit(dx, dy);
-      } else if (action === 'pan') {
+      } else if (action === 'pan' || (action === 'orbit' && this._dimension === '2d')) {
         this.pan(canvas, previousMouse, this.lastMouse);
       }
     });
