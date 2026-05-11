@@ -28,3 +28,12 @@
   font-size: 11px;
   color: var(--color-viewport-label);
 }
+
+.selection-rect {
+  position: absolute;
+  border: 1.5px solid rgba(100, 180, 255, 0.9);
+  background: rgba(100, 180, 255, 0.1);
+  pointer-events: none;
+  display: none;
+  box-sizing: border-box;
+}

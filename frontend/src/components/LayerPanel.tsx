@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Spline, Route,
@@ -44,7 +44,10 @@ export function LayerPanel() {
   const {
     project,
     selectedSceneNode,
+    selectedRoadId,
     selectedJunctionId,
+    selectedRoadIds,
+    selectedJunctionIds,
     selectRoad,
     selectJunction,
     selectLaneSection,
@@ -69,6 +72,27 @@ export function LayerPanel() {
   const [categoriesCollapsed, setCategoriesCollapsed] = useState(false);
   const [sceneListCollapsed, setSceneListCollapsed] = useState(false);
   const { t } = useTranslation();
+
+  // Refs for auto-scroll: track each row's DOM element
+  const rowRefs = useRef(new Map<string, HTMLElement>());
+  // Track whether the last selection came from within the panel (to avoid unwanted auto-scroll)
+  const selectionSourceRef = useRef<'panel' | 'viewport'>('viewport');
+
+  // Auto-scroll to the selected road/junction when selection originates from the viewport
+  useEffect(() => {
+    if (selectionSourceRef.current === 'panel') {
+      selectionSourceRef.current = 'viewport';
+      return;
+    }
+    const id = selectedRoadId ? `road-${selectedRoadId}` : selectedJunctionId ? `junc-${selectedJunctionId}` : null;
+    if (!id) return;
+    // Ensure the scene list section is expanded so the item is visible
+    setSceneListCollapsed(false);
+    const el = rowRefs.current.get(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [selectedRoadId, selectedJunctionId]);
 
   const toggleLayerVisibility = (id: string) => {
     setLayerVisibility((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -138,7 +162,10 @@ export function LayerPanel() {
   };
 
   const isRoadSelected = (roadId: string) =>
-    selectedSceneNode?.type === 'road' && selectedSceneNode.roadId === roadId;
+    (selectedSceneNode?.type === 'road' && selectedSceneNode.roadId === roadId)
+    || selectedRoadIds.includes(roadId);
+  const isJunctionItemSelected = (junctionId: string) =>
+    selectedJunctionId === junctionId || selectedJunctionIds.includes(junctionId);
   const isLaneSectionSelected = (roadId: string, sectionIndex: number) =>
     selectedSceneNode?.type === 'laneSection'
     && selectedSceneNode.roadId === roadId
@@ -149,6 +176,20 @@ export function LayerPanel() {
     && selectedSceneNode.sectionIndex === sectionIndex
     && selectedSceneNode.side === side
     && selectedSceneNode.laneId === laneId;
+
+  /** Called when the user clicks a road in the panel — select + pan viewport. */
+  const handleSelectRoad = useCallback((roadId: string) => {
+    selectionSourceRef.current = 'panel';
+    selectRoad(roadId);
+    emitViewportEvent({ type: 'pan-to-road', roadId });
+  }, [selectRoad]);
+
+  /** Called when the user clicks a junction in the panel — select + pan viewport. */
+  const handleSelectJunction = useCallback((junctionId: string) => {
+    selectionSourceRef.current = 'panel';
+    selectJunction(junctionId);
+    emitViewportEvent({ type: 'pan-to-junction', junctionId });
+  }, [selectJunction]);
 
   const handleZoomToRoad = useCallback((roadId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -299,10 +340,17 @@ export function LayerPanel() {
           <div className="road-list">
             {/* Roads */}
             {filteredRoads.map((road) => (
-              <div key={`road-${road.id}`} className="road-list-entry">
+              <div
+                key={`road-${road.id}`}
+                className="road-list-entry"
+                ref={(el) => {
+                  if (el) rowRefs.current.set(`road-${road.id}`, el);
+                  else rowRefs.current.delete(`road-${road.id}`);
+                }}
+              >
                 <div
                   className={`layer-item ${isRoadSelected(road.id) ? 'selected' : ''} ${!isRoadVisible(road.id) ? 'layer-item-hidden' : ''}`}
-                  onClick={() => selectRoad(road.id)}
+                  onClick={() => handleSelectRoad(road.id)}
                 >
                   <button
                     className="road-expand"
@@ -418,10 +466,17 @@ export function LayerPanel() {
 
             {/* Junctions (after roads, same level — flat tree) */}
             {filteredJunctions.map((junc) => (
-              <div key={`junc-${junc.id}`} className="road-list-entry">
+              <div
+                key={`junc-${junc.id}`}
+                className="road-list-entry"
+                ref={(el) => {
+                  if (el) rowRefs.current.set(`junc-${junc.id}`, el);
+                  else rowRefs.current.delete(`junc-${junc.id}`);
+                }}
+              >
                 <div
-                  className={`layer-item ${selectedJunctionId === junc.id ? 'selected' : ''} ${!isJunctionVisible(junc.id) ? 'layer-item-hidden' : ''}`}
-                  onClick={() => selectJunction(junc.id)}
+                  className={`layer-item ${isJunctionItemSelected(junc.id) ? 'selected' : ''} ${!isJunctionVisible(junc.id) ? 'layer-item-hidden' : ''}`}
+                  onClick={() => handleSelectJunction(junc.id)}
                 >
                   <span className="road-expand road-expand-placeholder" />
                   <GitMerge size={12} className="junction-icon" />

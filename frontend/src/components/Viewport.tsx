@@ -7,7 +7,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getPlatformService } from '../services';
-import type { EditableSpline, SplineKnot } from '../services/platform';
+import type { EditableSpline, SplineKnot, Road, Junction, Project } from '../services/platform';
 import { showContextMenu } from '../services/contextMenu';
 import { createRoadFromTemplate } from './TemplatePanel';
 import {
@@ -80,6 +80,35 @@ function buildEditableSpline(points: Array<[number, number, number]>): EditableS
   return { knots };
 }
 
+/** Check if any geometry point (start or estimated end) of a road falls within the AABB. */
+function roadIntersectsAABB(road: Road, minX: number, minY: number, maxX: number, maxY: number): boolean {
+  for (const seg of road.plan_view) {
+    if (seg.x >= minX && seg.x <= maxX && seg.y >= minY && seg.y <= maxY) return true;
+    const endX = seg.x + Math.cos(seg.hdg) * seg.length;
+    const endY = seg.y + Math.sin(seg.hdg) * seg.length;
+    if (endX >= minX && endX <= maxX && endY >= minY && endY <= maxY) return true;
+  }
+  return false;
+}
+
+/** Check if any connecting road of a junction has geometry within the AABB. */
+function junctionIntersectsAABB(
+  junc: Junction,
+  project: Project,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+): boolean {
+  for (const conn of junc.connections) {
+    const r1 = project.roads.find((r) => r.id === conn.connecting_road);
+    if (r1 && roadIntersectsAABB(r1, minX, minY, maxX, maxY)) return true;
+    const r2 = project.roads.find((r) => r.id === conn.incoming_road);
+    if (r2 && roadIntersectsAABB(r2, minX, minY, maxX, maxY)) return true;
+  }
+  return false;
+}
+
 function nextSplineRoadId(existingRoadIds: string[]): string {
   let index = existingRoadIds.length + 1;
   let id = `road_spline_${index}`;
@@ -114,6 +143,8 @@ export function Viewport() {
   const project = useEditorStore((s) => s.project);
   const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
   const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
+  const selectedRoadIds = useEditorStore((s) => s.selectedRoadIds);
+  const selectedJunctionIds = useEditorStore((s) => s.selectedJunctionIds);
   const { showGrid, showAxis, dimension, display, editMode } = useEditorViewStore();
   const splineKnots = useEditorViewStore((s) => s.splineKnots);
   const splineTangentOverrides = useEditorViewStore((s) => s.splineTangentOverrides);
@@ -124,6 +155,11 @@ export function Viewport() {
   /** Guards against concurrent road-preview regenerations during knot drag. */
   const isPreviewingRoadRef = useRef(false);
   const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
+  /** Tracks the currently hovered control point to avoid redundant refreshSplineMarkers calls. */
+  const hoveredControlPointRef = useRef<{ index: number; type: 'knot' | 'in' | 'out' } | null>(null);
+  /** Rubber-band selection state: tracks drag start and whether the overlay is active. */
+  const rubberBandRef = useRef<{ startClientX: number; startClientY: number; active: boolean } | null>(null);
+  const rubberBandOverlayRef = useRef<HTMLDivElement>(null);
 
   const finalizeSplineCreation = useCallback(async (overrideKnots?: Array<[number, number, number]>) => {
     const viewState = useEditorViewStore.getState();
@@ -287,6 +323,15 @@ export function Viewport() {
     display.hiddenLaneKeys,
   ]);
 
+  const projectLoadVersion = useEditorStore((s) => s.projectLoadVersion);
+
+  // Reset auto-fit cache only when a genuinely new file is loaded (not on every mutation)
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (status !== 'ready') return;
+    renderer?.clearVertexCache();
+  }, [projectLoadVersion, status]);
+
   useEffect(() => { updateMesh(); }, [updateMesh]);
 
   // Update selection highlight when scene selection changes
@@ -297,6 +342,24 @@ export function Viewport() {
     (async () => {
       try {
         const service = await getPlatformService();
+
+        // Multi-select highlight (rubber-band box selection)
+        if (selectedRoadIds.length > 0 || selectedJunctionIds.length > 0) {
+          const parts: Float32Array[] = [];
+          if (selectedRoadIds.length > 0) {
+            const multiProject = { ...project, roads: project.roads.filter((r) => selectedRoadIds.includes(r.id)) };
+            const verts = await service.generateRoadVertices(multiProject, 2.0);
+            parts.push(tintVertices(verts, [0.95, 0.18, 0.18, 0.82]));
+          }
+          for (const jId of selectedJunctionIds) {
+            const jVerts = await service.generateSingleJunctionVertices(project, jId, [0.7, 0.4, 1.0, 0.65]);
+            parts.push(jVerts);
+          }
+          const combined = parts.reduce((acc, p) => mergeFloat32Arrays(acc, p), new Float32Array());
+          renderer.uploadHighlightVertices(combined);
+          return;
+        }
+
         if (!isSceneSelectionVisible(selectedSceneNode, display)) {
           renderer.clearHighlight();
           return;
@@ -332,7 +395,7 @@ export function Viewport() {
         console.error('[Viewport] Failed to generate highlight mesh:', err);
       }
     })();
-  }, [display, project, selectedJunctionId, selectedSceneNode, status]);
+  }, [display, project, selectedJunctionId, selectedJunctionIds, selectedRoadIds, selectedSceneNode, status]);
 
   // Throttle Zustand cursor updates to once per animation frame
   useEffect(() => {
@@ -420,6 +483,36 @@ export function Viewport() {
             }
           })();
           break;
+        case 'pan-to-road':
+          (async () => {
+            try {
+              const service = await getPlatformService();
+              const { project: currentProject } = useEditorStore.getState();
+              const road = currentProject.roads.find((r) => r.id === event.roadId);
+              if (!road) return;
+              const verts = await service.generateSingleRoadVertices(road, 2.0, [0.2, 0.5, 1.0, 0.7]);
+              if (verts.length > 0) renderer.panToCenter(verts);
+            } catch (err) {
+              console.error('[Viewport] pan-to-road failed:', err);
+            }
+          })();
+          break;
+        case 'pan-to-junction':
+          (async () => {
+            try {
+              const service = await getPlatformService();
+              const { project: currentProject } = useEditorStore.getState();
+              const verts = await service.generateSingleJunctionVertices(
+                currentProject,
+                event.junctionId,
+                [0.7, 0.4, 1.0, 0.65],
+              );
+              if (verts.length > 0) renderer.panToCenter(verts);
+            } catch (err) {
+              console.error('[Viewport] pan-to-junction failed:', err);
+            }
+          })();
+          break;
         case 'set-dimension':
           renderer.setDimension(event.dimension);
           break;
@@ -502,6 +595,31 @@ export function Viewport() {
     const canvas = canvasRef.current;
     const renderer = rendererRef.current;
     if (!canvas || !renderer) return;
+
+    // Rubber-band selection: update overlay position
+    const rubberBand = rubberBandRef.current;
+    if (rubberBand) {
+      const dx = e.clientX - rubberBand.startClientX;
+      const dy = e.clientY - rubberBand.startClientY;
+      if (dx * dx + dy * dy > DRAG_THRESHOLD_SQ) {
+        rubberBand.active = true;
+        const overlay = rubberBandOverlayRef.current;
+        if (overlay) {
+          const canvasRect = canvas.getBoundingClientRect();
+          const x0 = rubberBand.startClientX - canvasRect.left;
+          const y0 = rubberBand.startClientY - canvasRect.top;
+          const x1 = e.clientX - canvasRect.left;
+          const y1 = e.clientY - canvasRect.top;
+          overlay.style.display = 'block';
+          overlay.style.left = `${Math.min(x0, x1)}px`;
+          overlay.style.top = `${Math.min(y0, y1)}px`;
+          overlay.style.width = `${Math.abs(x1 - x0)}px`;
+          overlay.style.height = `${Math.abs(y1 - y0)}px`;
+        }
+      }
+      return;
+    }
+
     const rect = canvas.getBoundingClientRect();
     const screenX = (e.clientX - rect.left) * devicePixelRatio;
     const screenY = (e.clientY - rect.top) * devicePixelRatio;
@@ -601,10 +719,10 @@ export function Viewport() {
     const isGeometryEdit = !!viewState.geometryEditSpline;
     const isSplineCreate = viewState.editMode === 'spline' && viewState.splineKnots.length > 0;
     if (isGeometryEdit || isSplineCreate) {
-      const camDist = renderer.getCameraDistance();
-      const hitThreshold = Math.max(1.5, camDist * 0.02);
-      const hitThresholdSq = hitThreshold * hitThreshold;
-      let hovering = false;
+      const mpp = renderer.getMetersPerPixel();
+      const knotHitSq   = (8.0 * mpp) ** 2;  // match knotHalfSize (6*mpp) + small margin
+      const handleHitSq = (6.0 * mpp) ** 2;  // match handleHalfSize (4*mpp) + small margin
+      let newHover: { index: number; type: 'knot' | 'in' | 'out' } | null = null;
 
       // Get knot positions and tangent overrides based on mode
       const hoverKnots = isGeometryEdit
@@ -614,21 +732,35 @@ export function Viewport() {
         ? splineToRendererFormat(viewState.geometryEditSpline!).tangentOverrides
         : viewState.splineTangentOverrides;
 
-      for (const k of hoverKnots) {
+      for (let ki = 0; ki < hoverKnots.length; ki++) {
+        const k = hoverKnots[ki]!;
         const dx = worldPos.x - k[0];
         const dy = worldPos.y - k[1];
-        if (dx * dx + dy * dy < hitThresholdSq) { hovering = true; break; }
+        if (dx * dx + dy * dy < knotHitSq) { newHover = { index: ki, type: 'knot' }; break; }
       }
-      if (!hovering) {
+      if (!newHover) {
         const handles = getSplineHandlePoints(hoverKnots, hoverOverrides);
         for (const h of handles) {
           const dx = worldPos.x - h.x;
           const dy = worldPos.y - h.y;
-          if (dx * dx + dy * dy < hitThresholdSq) { hovering = true; break; }
+          if (dx * dx + dy * dy < handleHitSq) { newHover = { index: h.knotIndex, type: h.type }; break; }
         }
       }
-      canvas.style.cursor = hovering ? 'grab' : '';
+
+      // Update marker visuals only when hover changes (avoids per-frame GPU buffer rebuild)
+      const prev = hoveredControlPointRef.current;
+      const changed = newHover?.index !== prev?.index || newHover?.type !== prev?.type;
+      if (changed) {
+        hoveredControlPointRef.current = newHover;
+        renderer.refreshSplineMarkers(newHover, undefined);
+      }
+
+      canvas.style.cursor = newHover ? 'grab' : '';
     } else {
+      if (hoveredControlPointRef.current !== null) {
+        hoveredControlPointRef.current = null;
+        renderer.refreshSplineMarkers(null, undefined);
+      }
       canvas.style.cursor = '';
     }
 
@@ -695,7 +827,14 @@ export function Viewport() {
       hitOverrides = viewState.splineTangentOverrides;
     }
 
-    if (!hitKnots || hitKnots.length === 0) return;
+    if (!hitKnots || hitKnots.length === 0) {
+      // Shift+left-drag starts rubber-band multi-select (plain left-drag still pans)
+      if (e.shiftKey && viewState.editMode !== 'spline' && !viewState.geometryEditSpline) {
+        rubberBandRef.current = { startClientX: e.clientX, startClientY: e.clientY, active: false };
+        renderer.lockCamera();
+      }
+      return;
+    }
 
     const rect = canvas.getBoundingClientRect();
     const screenX = (e.clientX - rect.left) * devicePixelRatio;
@@ -703,11 +842,11 @@ export function Viewport() {
     const worldPos = renderer.unprojectToGround(screenX, screenY);
     if (!worldPos) return;
 
-    const camDist = renderer.getCameraDistance();
-    const hitThreshold = Math.max(1.5, camDist * 0.02);
-    const hitThresholdSq = hitThreshold * hitThreshold;
+    const mpp = renderer.getMetersPerPixel();
+    const knotHitSq   = (8.0 * mpp) ** 2;
+    const handleHitSq = (6.0 * mpp) ** 2;
 
-    // Check knot positions (yellow squares) first
+    // Check knot positions first
     let bestDistSq = Infinity;
     let bestHit: { index: number; type: 'knot' | 'in' | 'out' } | null = null;
 
@@ -716,20 +855,20 @@ export function Viewport() {
       const dx = worldPos.x - kx;
       const dy = worldPos.y - ky;
       const dSq = dx * dx + dy * dy;
-      if (dSq < hitThresholdSq && dSq < bestDistSq) {
+      if (dSq < knotHitSq && dSq < bestDistSq) {
         bestDistSq = dSq;
         bestHit = { index: i, type: 'knot' };
       }
     }
 
-    // Check tangent handle positions (white squares) — only for spline creation mode
+    // Check tangent handle positions — only for spline creation mode
     if (!viewState.geometryEditSpline) {
       const handles = getSplineHandlePoints(hitKnots, hitOverrides);
       for (const h of handles) {
         const dx = worldPos.x - h.x;
         const dy = worldPos.y - h.y;
         const dSq = dx * dx + dy * dy;
-        if (dSq < hitThresholdSq && dSq < bestDistSq) {
+        if (dSq < handleHitSq && dSq < bestDistSq) {
           bestDistSq = dSq;
           bestHit = { index: h.knotIndex, type: h.type };
         }
@@ -740,6 +879,9 @@ export function Viewport() {
       viewState.setDraggingKnot(bestHit);
       renderer.lockCamera();
       canvas.style.cursor = 'grabbing';
+      // Show red selection highlight on the clicked control point
+      hoveredControlPointRef.current = null;
+      renderer.refreshSplineMarkers(null, bestHit);
     }
   }, []);
 
@@ -834,7 +976,46 @@ export function Viewport() {
     }
   }, [finalizeSplineCreation, enterGeometryEditMode]);
 
-  const handleMouseUp = useCallback(async () => {
+  const handleMouseUp = useCallback(async (e: React.MouseEvent) => {
+    // Commit rubber-band multi-select
+    const rubberBand = rubberBandRef.current;
+    if (rubberBand) {
+      rubberBandRef.current = null;
+      const overlay = rubberBandOverlayRef.current;
+      if (overlay) overlay.style.display = 'none';
+      const rendererInst = rendererRef.current;
+      if (rendererInst) rendererInst.unlockCamera();
+
+      if (rubberBand.active) {
+        const canvas = canvasRef.current;
+        if (canvas && rendererInst) {
+          const canvasRect = canvas.getBoundingClientRect();
+          const dpr = devicePixelRatio;
+          const sx0 = (rubberBand.startClientX - canvasRect.left) * dpr;
+          const sy0 = (rubberBand.startClientY - canvasRect.top) * dpr;
+          const sx1 = (e.clientX - canvasRect.left) * dpr;
+          const sy1 = (e.clientY - canvasRect.top) * dpr;
+          const tl = rendererInst.unprojectToGround(Math.min(sx0, sx1), Math.min(sy0, sy1));
+          const br = rendererInst.unprojectToGround(Math.max(sx0, sx1), Math.max(sy0, sy1));
+          if (tl && br) {
+            const minX = Math.min(tl.x, br.x);
+            const maxX = Math.max(tl.x, br.x);
+            const minY = Math.min(tl.y, br.y);
+            const maxY = Math.max(tl.y, br.y);
+            const { project } = useEditorStore.getState();
+            const roadIds = project.roads
+              .filter((r) => roadIntersectsAABB(r, minX, minY, maxX, maxY))
+              .map((r) => r.id);
+            const junctionIds = project.junctions
+              .filter((j) => junctionIntersectsAABB(j, project, minX, minY, maxX, maxY))
+              .map((j) => j.id);
+            useEditorStore.getState().selectMultiple(roadIds, junctionIds);
+          }
+        }
+      }
+      return;
+    }
+
     const viewState = useEditorViewStore.getState();
     const { draggingKnot } = viewState;
     if (draggingKnot) {
@@ -842,7 +1023,10 @@ export function Viewport() {
       const renderer = rendererRef.current;
       if (renderer) {
         renderer.unlockCamera();
+        // Clear red selection highlight when drag ends
+        renderer.refreshSplineMarkers(null, null);
       }
+      hoveredControlPointRef.current = null;
       const canvas = canvasRef.current;
       if (canvas) canvas.style.cursor = '';
 
@@ -917,6 +1101,7 @@ export function Viewport() {
   return (
     <div
       className={`viewport${isDragOver ? ' viewport-drag-over' : ''}`}
+      onMouseUp={handleMouseUp}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -926,10 +1111,11 @@ export function Viewport() {
         className="viewport-canvas"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
       />
+      {/* Rubber-band selection overlay */}
+      <div ref={rubberBandOverlayRef} className="selection-rect" />
       {status !== 'ready' && (
         <div className="viewport-overlay">
           <span className="viewport-label">

@@ -11,6 +11,10 @@ interface EditorState {
   selectedObjectType: 'road' | 'junction' | null;
   selectedSceneNode: SceneNodeSelection | null;
 
+  // Multi-selection (rubber-band box select)
+  selectedRoadIds: string[];
+  selectedJunctionIds: string[];
+
   // Cursor position (world coordinates)
   cursorWorldPos: { x: number; y: number };
 
@@ -26,6 +30,7 @@ interface EditorState {
   setProject: (project: Project) => void;
   selectRoad: (id: string | null) => void;
   selectJunction: (id: string | null) => void;
+  selectMultiple: (roadIds: string[], junctionIds: string[]) => void;
   selectLaneSection: (roadId: string, sectionIndex: number) => void;
   selectLane: (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => void;
   addRoad: (road: Road) => void;
@@ -45,6 +50,7 @@ interface EditorState {
   updateElevationPoint: (roadId: string, index: number, updates: Partial<Elevation>) => void;
   removeElevationPoint: (roadId: string, index: number) => void;
   smoothElevation: (roadId: string, iterations?: number) => void;
+  projectLoadVersion: number;
   setCursorWorldPos: (pos: { x: number; y: number }) => void;
   setViewportInfo: (info: { gridSpacing: number; mpp: number }) => void;
   markDirty: () => void;
@@ -91,13 +97,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedJunctionId: null,
   selectedObjectType: null,
   selectedSceneNode: null,
+  selectedRoadIds: [],
+  selectedJunctionIds: [],
   cursorWorldPos: { x: 0, y: 0 },
   gridSpacing: 10.0,
   viewportMpp: 0.1,
+  projectLoadVersion: 0,
   undoStack: [],
   redoStack: [],
 
-  setProject: (project) => set({ project, isDirty: false, undoStack: [], redoStack: [] }),
+  setProject: (project) => set((s) => ({ project, isDirty: false, undoStack: [], redoStack: [], projectLoadVersion: s.projectLoadVersion + 1 })),
 
   selectRoad: (id) =>
     set({
@@ -105,6 +114,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedJunctionId: null,
       selectedObjectType: id ? 'road' : null,
       selectedSceneNode: id ? { type: 'road', roadId: id } : null,
+      selectedRoadIds: [],
+      selectedJunctionIds: [],
     }),
 
   selectJunction: (id) =>
@@ -113,6 +124,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedRoadId: null,
       selectedObjectType: id ? 'junction' : null,
       selectedSceneNode: id ? { type: 'junction', junctionId: id } : null,
+      selectedRoadIds: [],
+      selectedJunctionIds: [],
+    }),
+
+  selectMultiple: (roadIds, junctionIds) =>
+    set({
+      selectedRoadIds: roadIds,
+      selectedJunctionIds: junctionIds,
+      selectedRoadId: null,
+      selectedJunctionId: null,
+      selectedObjectType: null,
+      selectedSceneNode: null,
     }),
 
   selectLaneSection: (roadId, sectionIndex) =>
@@ -375,7 +398,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   markDirty: () => set({ isDirty: true }),
   markClean: () => set({ isDirty: false }),
-  reset: () => set({ project: initialProject, isDirty: false, selectedRoadId: null, selectedJunctionId: null, selectedObjectType: null, selectedSceneNode: null, undoStack: [], redoStack: [], cursorWorldPos: { x: 0, y: 0 }, gridSpacing: 10.0, viewportMpp: 0.1 }),
+  reset: () => set((s) => ({ project: initialProject, isDirty: false, selectedRoadId: null, selectedJunctionId: null, selectedObjectType: null, selectedSceneNode: null, selectedRoadIds: [], selectedJunctionIds: [], undoStack: [], redoStack: [], cursorWorldPos: { x: 0, y: 0 }, gridSpacing: 10.0, viewportMpp: 0.1, projectLoadVersion: s.projectLoadVersion + 1 })),
 
   undo: () =>
     set((state) => {
