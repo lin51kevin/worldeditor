@@ -490,18 +490,46 @@ impl Point3D {
 pub enum ObjectType {
     /// Traffic sign/notice board
     Sign,
-    /// Guardrail
+    /// Guardrail along road edge
     Guardrail,
-    /// Barrier
+    /// Barrier (concrete, water, etc.)
     Barrier,
-    /// Curb
+    /// Physical curb
     Curb,
     /// Wall
     Wall,
-    /// Pillar
+    /// Pillar / pole
     Pillar,
     /// Traffic cone
     TrafficCone,
+    /// Parking space (outline polygon)
+    ParkingSpace,
+    /// Crosswalk / zebra crossing
+    Crosswalk,
+    /// Stop line
+    StopLine,
+    /// Cross-hatch no-stopping area
+    CrossHatchArea,
+    /// Woven / weave merge area
+    WovenArea,
+    /// Forward waiting area (stop box)
+    ForwardWaitingArea,
+    /// Left-turn waiting area
+    TurnLeftWaitingArea,
+    /// Slow-down-to-yield line
+    SlowDownToYieldLine,
+    /// Stop-to-yield line
+    StopToYieldLine,
+    /// Simple signal pole
+    SimpleSignalPole,
+    /// Traffic light pole
+    TrafficLightPole,
+    /// Street light pole
+    StreetLightPole,
+    /// Sign gantry / overhead sign structure
+    SignGantry,
+    /// Simple (L-type) signal pole
+    LTypeSignalPole,
     /// Custom object
     Custom(String),
 }
@@ -513,16 +541,27 @@ pub struct Validity {
     pub to_lane: i32,
 }
 
-/// A road object (signs, barriers, guardrails, etc.).
+/// A road object (signs, barriers, guardrails, parking spaces, crosswalks, etc.).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoadObject {
     pub id: String,
     pub object_type: ObjectType,
     pub name: String,
+    /// Position in road-local coordinates: x=s (station), y=t (lateral offset), z=zOffset.
     pub position: Point3D,
+    /// Heading offset relative to road direction (degrees, 0 = forward, 180 = backward).
     pub orientation: f64,
+    /// Object width (lateral extent in metres).
     pub width: f64,
+    /// Object height (vertical extent in metres).
     pub height: f64,
+    /// Object length along the road (metres). Used for objects that span a section.
+    #[serde(default)]
+    pub length: f64,
+    /// Corner polygon in road-local (s, t) coordinates. Non-empty for area objects
+    /// such as crosswalks, parking spaces, and cross-hatch areas.
+    #[serde(default)]
+    pub corners: Vec<Point3D>,
     pub validity: Option<Validity>,
 }
 
@@ -751,6 +790,8 @@ mod tests {
             orientation: 180.0,
             width: 2.5,
             height: 1.2,
+            length: 0.0,
+            corners: vec![],
             validity: Some(Validity {
                 from_lane: -2,
                 to_lane: 2,
