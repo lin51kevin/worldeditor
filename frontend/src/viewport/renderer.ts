@@ -536,11 +536,62 @@ export class ViewportRenderer {
     const zOffset = 0.15;
     const STEPS = 24;
 
-    // Colors
-    const cR = 1.0, cG = 0.55, cB = 0.0, cA = 1.0;  // orange curve
-    const mR = 1.0, mG = 1.0, mB = 0.0, mA = 1.0;   // yellow knot marker
-    const tR = 0.7, tG = 0.7, tB = 0.7, tA = 0.85;  // gray tangent handle line
-    const hR = 1.0, hG = 1.0, hB = 1.0, hA = 0.9;   // white handle endpoint dot
+    // 现代化颜色方案（改进原"太丑"样式）
+    const cR = 0.204, cG = 0.596, cB = 0.859, cA = 0.9;   // 蓝色曲线 #3498db (90%透明度)
+    const mR = 0.204, mG = 0.596, mB = 0.859, mA = 1.0;   // 蓝色节点 #3498db
+    const tR = 0.906, tG = 0.298, tB = 0.235, tA = 0.7;   // 红色切线 #e74c3c (70%透明度)
+    const hR = 0.906, hG = 0.298, hB = 0.235, hA = 1.0;   // 红色端点 #e74c3c
+    
+    // 边框颜色（用于增强视觉效果）
+    const knotBorderR = 1.0, knotBorderG = 1.0, knotBorderB = 1.0, knotBorderA = 0.8; // 白色节点边框
+
+    // 圆形生成函数（现代化控制点设计）
+    const addCircle = (
+      cx: number, cy: number, z: number, radius: number,
+      sections: number, r: number, g: number, b: number, a: number,
+    ) => {
+      for (let i = 0; i < sections; i++) {
+        const angle1 = (i / sections) * Math.PI * 2;
+        const angle2 = ((i + 1) / sections) * Math.PI * 2;
+        const x1 = cx + Math.cos(angle1) * radius;
+        const y1 = cy + Math.sin(angle1) * radius;
+        const x2 = cx + Math.cos(angle2) * radius;
+        const y2 = cy + Math.sin(angle2) * radius;
+        
+        // 中心到边缘的三角形
+        vertices.push(cx, cy, z, r, g, b, a);
+        vertices.push(x1, y1, z, r, g, b, a);
+        vertices.push(x2, y2, z, r, g, b, a);
+      }
+    };
+
+    // 环形生成函数（用于边框效果）
+    const addRing = (
+      cx: number, cy: number, z: number, innerRadius: number, outerRadius: number,
+      sections: number, r: number, g: number, b: number, a: number,
+    ) => {
+      for (let i = 0; i < sections; i++) {
+        const angle1 = (i / sections) * Math.PI * 2;
+        const angle2 = ((i + 1) / sections) * Math.PI * 2;
+        
+        const ix1 = cx + Math.cos(angle1) * innerRadius;
+        const iy1 = cy + Math.sin(angle1) * innerRadius;
+        const ox1 = cx + Math.cos(angle1) * outerRadius;
+        const oy1 = cy + Math.sin(angle1) * outerRadius;
+        const ix2 = cx + Math.cos(angle2) * innerRadius;
+        const iy2 = cy + Math.sin(angle2) * innerRadius;
+        const ox2 = cx + Math.cos(angle2) * outerRadius;
+        const oy2 = cy + Math.sin(angle2) * outerRadius;
+        
+        vertices.push(ix1, iy1, z, r, g, b, a);
+        vertices.push(ox1, oy1, z, r, g, b, a);
+        vertices.push(ox2, oy2, z, r, g, b, a);
+        
+        vertices.push(ix1, iy1, z, r, g, b, a);
+        vertices.push(ox2, oy2, z, r, g, b, a);
+        vertices.push(ix2, iy2, z, r, g, b, a);
+      }
+    };
 
     // Compute Catmull-Rom tangent at knot index i (with manual override support)
     const tangentAt = (i: number): [number, number, number] => {
@@ -587,19 +638,6 @@ export class ViewportRenderer {
       vertices.push(bx - px, by - py, z, r, g, b, a);
     };
 
-    // Emit an axis-aligned square centred at (cx, cy, z)
-    const addSquare = (
-      cx: number, cy: number, z: number, half: number,
-      r: number, g: number, b: number, a: number,
-    ) => {
-      vertices.push(cx - half, cy - half, z, r, g, b, a);
-      vertices.push(cx + half, cy - half, z, r, g, b, a);
-      vertices.push(cx + half, cy + half, z, r, g, b, a);
-      vertices.push(cx - half, cy - half, z, r, g, b, a);
-      vertices.push(cx + half, cy + half, z, r, g, b, a);
-      vertices.push(cx - half, cy + half, z, r, g, b, a);
-    };
-
     // --- 1. Smooth Hermite curve (Catmull-Rom with manual tangent overrides) ---
     if (knots.length >= 2) {
       let prev: [number, number, number] | null = null;
@@ -610,7 +648,7 @@ export class ViewportRenderer {
         const m2 = tangentAt(i + 1);
         for (let s = 0; s <= STEPS; s++) {
           const pt = hermiteInterp(p1, m1, p2, m2, s / STEPS);
-          if (prev) addQuad(prev[0], prev[1], pt[0], pt[1], zOffset, 0.2, cR, cG, cB, cA);
+          if (prev) addQuad(prev[0], prev[1], pt[0], pt[1], zOffset, 0.25, cR, cG, cB, cA); // 稍微加宽曲线
           prev = pt;
         }
       }
@@ -628,15 +666,22 @@ export class ViewportRenderer {
         const scale = Math.min(4.0 / tLen, 0.3);
         const hx1 = kx + tvx * scale, hy1 = ky + tvy * scale;
         const hx2 = kx - tvx * scale, hy2 = ky - tvy * scale;
-        addQuad(hx2, hy2, hx1, hy1, handleZ, 0.08, tR, tG, tB, tA);
-        addSquare(hx1, hy1, handleZ + 0.01, 0.25, hR, hG, hB, hA);
-        addSquare(hx2, hy2, handleZ + 0.01, 0.25, hR, hG, hB, hA);
+        // 红色半透明切线线（更细更现代）
+        addQuad(hx2, hy2, hx1, hy1, handleZ, 0.06, tR, tG, tB, tA);
+        // 红色圆形手柄端点
+        const tangentRadius = 0.35;
+        addCircle(hx1, hy1, handleZ + 0.01, tangentRadius, 12, hR, hG, hB, hA);
+        addCircle(hx2, hy2, handleZ + 0.01, tangentRadius, 12, hR, hG, hB, hA);
       }
     }
 
-    // --- 3. Knot markers on top ---
+    // --- 3. 现代化节点标记（蓝色圆形 + 白色边框） ---
     for (const [kx, ky, kz] of knots) {
-      addSquare(kx, ky, kz + zOffset + 0.04, 0.5, mR, mG, mB, mA);
+      const knotRadius = 0.6;
+      // 蓝色圆形节点
+      addCircle(kx, ky, kz + zOffset + 0.04, knotRadius, 16, mR, mG, mB, mA);
+      // 白色边框效果（增强视觉层次）
+      addRing(kx, ky, kz + zOffset + 0.045, knotRadius, knotRadius + 0.1, 16, knotBorderR, knotBorderG, knotBorderB, knotBorderA);
     }
 
     if (vertices.length === 0) return;
