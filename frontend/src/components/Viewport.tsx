@@ -163,6 +163,8 @@ export function Viewport() {
   /** Tracks the road/junction currently under the cursor for hover highlighting. */
   const hoveredRoadRef = useRef<string | null>(null);
   const hoveredJunctionRef = useRef<string | null>(null);
+  /** Snap indicator DOM element — positioned imperatively to avoid React re-renders on every mousemove. */
+  const snapIndicatorDomRef = useRef<HTMLDivElement | null>(null);
 
   const finalizeSplineCreation = useCallback(async (overrideKnots?: Array<[number, number, number]>) => {
     const viewState = useEditorViewStore.getState();
@@ -812,6 +814,17 @@ export function Viewport() {
           excludeId ?? undefined,
         );
         if (snapResult.snapped) {
+          // Show snap indicator at the snapped world position
+          const renderer = rendererRef.current;
+          const snapEl = snapIndicatorDomRef.current;
+          if (renderer && snapEl) {
+            const screenPos = renderer.projectWorldToScreen(snapResult.x, snapResult.y);
+            if (screenPos) {
+              snapEl.style.left = `${screenPos.x}px`;
+              snapEl.style.top = `${screenPos.y}px`;
+              snapEl.style.display = 'block';
+            }
+          }
           emitCursorMove(snapResult.x, snapResult.y);
           pendingCursorRef.current = { x: snapResult.x, y: snapResult.y };
           return;
@@ -819,6 +832,9 @@ export function Viewport() {
       } catch {
         // Fall through to raw position on snap error
       }
+      // Not snapped — hide snap indicator
+      const snapEl = snapIndicatorDomRef.current;
+      if (snapEl) snapEl.style.display = 'none';
     }
 
     // Hover detection: gold-highlight road/junction under cursor in select mode
@@ -1182,6 +1198,9 @@ export function Viewport() {
       hoveredJunctionRef.current = null;
       rendererRef.current?.clearHover();
     }
+    // Always hide snap indicator on leave
+    const snapEl = snapIndicatorDomRef.current;
+    if (snapEl) snapEl.style.display = 'none';
   }, []);
 
   return (
@@ -1203,6 +1222,8 @@ export function Viewport() {
       />
       {/* Rubber-band selection overlay */}
       <div ref={rubberBandOverlayRef} className="selection-rect" />
+      {/* Snap indicator: shown when cursor snaps to a nearby point */}
+      <div ref={snapIndicatorDomRef} className="snap-indicator" style={{ display: 'none' }} />
       {status !== 'ready' && (
         <div className="viewport-overlay">
           <span className="viewport-label">

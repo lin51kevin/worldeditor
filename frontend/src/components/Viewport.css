@@ -37,3 +37,36 @@
   display: none;
   box-sizing: border-box;
 }
+
+/* Snap indicator: yellow-green crosshair shown at active snap point */
+.snap-indicator {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border: 2px solid #adff2f;
+  border-radius: 2px;
+  box-shadow: 0 0 4px rgba(173, 255, 47, 0.8);
+  background: transparent;
+}
+.snap-indicator::before,
+.snap-indicator::after {
+  content: '';
+  position: absolute;
+  background: #adff2f;
+}
+.snap-indicator::before {
+  left: 50%;
+  top: -5px;
+  width: 1.5px;
+  height: calc(100% + 10px);
+  transform: translateX(-50%);
+}
+.snap-indicator::after {
+  top: 50%;
+  left: -5px;
+  height: 1.5px;
+  width: calc(100% + 10px);
+  transform: translateY(-50%);
+}

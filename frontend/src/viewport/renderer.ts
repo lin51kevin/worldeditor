@@ -557,6 +557,24 @@ export class ViewportRenderer {
     };
   }
 
+  /** Project a world-space XY point (Z=0) to canvas pixel coordinates. Returns null if off-screen. */
+  projectWorldToScreen(wx: number, wy: number): { x: number; y: number } | null {
+    if (this.width === 0 || this.height === 0) return null;
+    const viewProj = this.computeViewProj();
+    // Multiply [wx, wy, 0, 1] by viewProj (column-major)
+    const x = wx, y = wy, z = 0, w = 1;
+    const px = viewProj[0]! * x + viewProj[4]! * y + viewProj[8]! * z + viewProj[12]! * w;
+    const py = viewProj[1]! * x + viewProj[5]! * y + viewProj[9]! * z + viewProj[13]! * w;
+    const pw = viewProj[3]! * x + viewProj[7]! * y + viewProj[11]! * z + viewProj[15]! * w;
+    if (Math.abs(pw) < 1e-10) return null;
+    const ndcX = px / pw;
+    const ndcY = py / pw;
+    return {
+      x: (ndcX + 1) * 0.5 * this.width,
+      y: (1 - ndcY) * 0.5 * this.height,
+    };
+  }
+
 
   /** Upload lane line vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
   uploadLaneLineVertices(vertexData: Float32Array): void {
