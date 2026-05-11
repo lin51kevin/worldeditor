@@ -29,7 +29,9 @@ function CardSection({ title, defaultOpen = true, children }: CardSectionProps) 
 }
 
 export function PropertyPanel() {
-  const { project, selectedRoadId, selectedJunctionId } = useEditorStore();
+  const project = useEditorStore((s) => s.project);
+  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
+  const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
   const selectedRoad = project.roads.find((r) => r.id === selectedRoadId);
   const selectedJunction = project.junctions.find((j) => j.id === selectedJunctionId);
   const geometryEditRoadId = useEditorViewStore((s) => s.geometryEditRoadId);

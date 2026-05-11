@@ -570,7 +570,7 @@ export function MenuBar() {
 
       {/* Center: project name */}
       <div className="menubar-center">
-        <span className="menubar-project-name">
+        <span className="menubar-project-name toolbar-title">
           {project.name}{isDirty ? ' •' : ''}
         </span>
       </div>

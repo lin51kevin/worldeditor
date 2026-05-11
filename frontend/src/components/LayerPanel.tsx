@@ -41,18 +41,16 @@ function hasProjectData(project: { roads: unknown[]; junctions: unknown[]; heade
 }
 
 export function LayerPanel() {
-  const {
-    project,
-    selectedSceneNode,
-    selectedRoadId,
-    selectedJunctionId,
-    selectedRoadIds,
-    selectedJunctionIds,
-    selectRoad,
-    selectJunction,
-    selectLaneSection,
-    selectLane,
-  } = useEditorStore();
+  const project = useEditorStore((s) => s.project);
+  const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
+  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
+  const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
+  const selectedRoadIds = useEditorStore((s) => s.selectedRoadIds);
+  const selectedJunctionIds = useEditorStore((s) => s.selectedJunctionIds);
+  const selectRoad = useEditorStore((s) => s.selectRoad);
+  const selectJunction = useEditorStore((s) => s.selectJunction);
+  const selectLaneSection = useEditorStore((s) => s.selectLaneSection);
+  const selectLane = useEditorStore((s) => s.selectLane);
   const {
     display,
     toggleDisplaySetting,

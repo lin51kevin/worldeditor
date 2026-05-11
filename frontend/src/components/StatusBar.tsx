@@ -13,7 +13,11 @@ function formatDist(m: number): string {
 
 export function StatusBar() {
   // gridSpacing and viewportMpp are stable — only change on camera/scale changes
-  const { gridSpacing, viewportMpp } = useEditorStore();
+  const gridSpacing = useEditorStore((s) => s.gridSpacing);
+  const viewportMpp = useEditorStore((s) => s.viewportMpp);
+  const roadCount = useEditorStore((s) => s.project.roads.length);
+  const junctionCount = useEditorStore((s) => s.project.junctions.length);
+  const isDirty = useEditorStore((s) => s.isDirty);
   const { t } = useTranslation();
   const coordRef = useRef<HTMLSpanElement>(null);
 
@@ -32,6 +36,13 @@ export function StatusBar() {
 
   return (
     <div className="statusbar">
+      <span className="statusbar-item statusbar-save-state">
+        {isDirty ? t('statusBar.modified') : t('statusBar.saved')}
+      </span>
+      <span className="statusbar-item statusbar-counts">
+        {t('statusBar.roads')}: {roadCount}
+        {junctionCount > 0 && <> &nbsp; {t('statusBar.junctions')}: {junctionCount}</>}
+      </span>
       <span className="statusbar-item">
         <MapPin size={11} />
         <span ref={coordRef}>{t('statusBar.worldCoord')}: 0.000, 0.000</span>
