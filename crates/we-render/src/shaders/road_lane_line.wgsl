@@ -46,20 +46,22 @@ fn vs_main(vertex: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Dashed-line pattern: cumulative_dist wraps into dash_gap cycle
-    let dash = in.dash_info.x;
-    let gap  = in.dash_info.y;
-    let period = dash + gap;
-    if (period > 0.0) {
-        let t = mod(dash, period);
-        if (t > dash) {
+    // Dashed-line pattern:
+    //   dash_info.x = cumulative distance along the line (increases monotonically)
+    //   dash_info.y = dash segment length (the solid portion)
+    //   dash_scale  = gap length (the invisible portion)
+    // period = dash_len + gap_len; fragment is visible when t < dash_len
+    let cumulative_dist = in.dash_info.x;
+    let dash_len = in.dash_info.y;
+    let gap_len  = in.dash_scale;
+    let period = dash_len + gap_len;
+    if (period > 0.0 && gap_len > 0.0) {
+        let t = cumulative_dist % period;
+        if (t >= dash_len) {
             // In the gap — discard this fragment
             discard;
         }
     }
 
-    // Antialias at dash edges (simple smoothstep)
-    let aa = 1.0; // could be increased for thicker lines
-    let alpha = 1.0; // could fade at edges here
-    return vec4<f32>(in.color.rgb, in.color.a * alpha);
+    return vec4<f32>(in.color.rgb, in.color.a);
 }
