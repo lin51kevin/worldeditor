@@ -720,6 +720,20 @@ fn write_objects(
             ObjectType::Wall => "wall".to_string(),
             ObjectType::Pillar => "pillar".to_string(),
             ObjectType::TrafficCone => "trafficCone".to_string(),
+            ObjectType::ParkingSpace => "parkingSpace".to_string(),
+            ObjectType::Crosswalk => "crosswalk".to_string(),
+            ObjectType::StopLine => "stopLine".to_string(),
+            ObjectType::CrossHatchArea => "crossHatchArea".to_string(),
+            ObjectType::WovenArea => "wovenArea".to_string(),
+            ObjectType::ForwardWaitingArea => "forwardWaitingArea".to_string(),
+            ObjectType::TurnLeftWaitingArea => "turnLeftWaitingArea".to_string(),
+            ObjectType::SlowDownToYieldLine => "slowDownToYieldLine".to_string(),
+            ObjectType::StopToYieldLine => "stopToYieldLine".to_string(),
+            ObjectType::SimpleSignalPole => "simpleSignalPole".to_string(),
+            ObjectType::TrafficLightPole => "trafficLightPole".to_string(),
+            ObjectType::StreetLightPole => "streetLightPole".to_string(),
+            ObjectType::SignGantry => "signGantry".to_string(),
+            ObjectType::LTypeSignalPole => "lTypeSignalPole".to_string(),
             ObjectType::Custom(s) => s.clone(),
         };
         let mut attrs = vec![
@@ -732,14 +746,37 @@ fn write_objects(
             ("hdg", f(obj.orientation)),
             ("width", f(obj.width)),
             ("height", f(obj.height)),
+            ("length", f(obj.length)),
         ];
         if let Some(ref v) = obj.validity {
             attrs.push(("validity", format!("{} {}", v.from_lane, v.to_lane)));
         }
-        writer
-            .write_event(Event::Empty(elem_with_attrs("roadObject", &attrs)))
-            .map_err(w_err)?;
-    }
+        if obj.corners.is_empty() {
+            writer
+                .write_event(Event::Empty(elem_with_attrs("roadObject", &attrs)))
+                .map_err(w_err)?;
+        } else {
+            writer
+                .write_event(Event::Start(elem_with_attrs("roadObject", &attrs)))
+                .map_err(w_err)?;
+            for corner in &obj.corners {
+                let mut corner_attrs = vec![
+                    ("u", f(corner.x)),
+                    ("v", f(corner.y)),
+                    ("dz", f(corner.z)),
+                ];
+                if let Some(ref cid) = corner.id {
+                    corner_attrs.push(("id", cid.clone()));
+                }
+                writer
+                    .write_event(Event::Empty(elem_with_attrs("cornerLocal", &corner_attrs)))
+                    .map_err(w_err)?;
+            }
+            writer
+                .write_event(Event::End(BytesEnd::new("roadObject")))
+                .map_err(w_err)?;
+        }
+    } // end for obj in objects
 
     writer
         .write_event(Event::End(BytesEnd::new("roadObjects".to_string())))

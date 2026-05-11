@@ -1149,6 +1149,25 @@ fn parse_road_object_elem(
                 }
                 obj.validity = Some(Validity { from_lane, to_lane });
             }
+            Ok(Event::Start(ref e) | Event::Empty(ref e))
+                if e.name().as_ref() == b"corner" || e.name().as_ref() == b"cornerLocal" || e.name().as_ref() == b"cornerRoad" =>
+            {
+                // Supports both <cornerLocal> and <cornerRoad> (road-frame s/t)
+                let mut s = 0.0f64;
+                let mut t = 0.0f64;
+                let mut dz = 0.0f64;
+                let mut id: Option<String> = None;
+                for attr in e.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"u" | b"s" => s = parse_f64(&attr).unwrap_or(0.0),
+                        b"v" | b"t" => t = parse_f64(&attr).unwrap_or(0.0),
+                        b"dz" | b"z" => dz = parse_f64(&attr).unwrap_or(0.0),
+                        b"id" => id = Some(attr_str(&attr)?),
+                        _ => {}
+                    }
+                }
+                obj.corners.push(Point3D::new_with_id(s, t, dz, id));
+            }
             Ok(Event::End(ref e)) if e.name().as_ref() == b"roadObject" => break,
             Ok(Event::Eof) => {
                 return Err(OpenDriveError::InvalidStructure(
@@ -1176,6 +1195,8 @@ fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError>
         orientation: 0.0,
         width: 0.0,
         height: 0.0,
+        length: 0.0,
+        corners: Vec::new(),
         validity: None,
     };
 
@@ -1197,7 +1218,8 @@ fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError>
             }
             b"width" => obj.width = parse_f64(&attr)?,
             b"height" => obj.height = parse_f64(&attr)?,
-            // hdg, pitch, roll, length — not stored in current model but accepted
+            b"length" => obj.length = parse_f64(&attr)?,
+            // hdg, pitch, roll — not stored in current model but accepted
             _ => {}
         }
     }
@@ -1208,12 +1230,26 @@ fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError>
 fn parse_object_type(s: &str) -> ObjectType {
     match s {
         "barrier" => ObjectType::Barrier,
-        "guardrail" => ObjectType::Guardrail,
+        "guardrail" | "Guardrail" | "RoadGuardrail" => ObjectType::Guardrail,
         "sign" | "signal" => ObjectType::Sign,
-        "curb" => ObjectType::Curb,
-        "wall" => ObjectType::Wall,
-        "pole" | "pillar" => ObjectType::Pillar,
-        "trafficCone" | "cone" => ObjectType::TrafficCone,
+        "curb" | "Curb" => ObjectType::Curb,
+        "wall" | "Wall" => ObjectType::Wall,
+        "pole" | "pillar" | "Pillar" => ObjectType::Pillar,
+        "trafficCone" | "cone" | "TrafficCone" => ObjectType::TrafficCone,
+        "parkingSpace" | "ParkingSpace" | "SlotSpace" => ObjectType::ParkingSpace,
+        "crosswalk" | "Crosswalk" | "ZebraStripsArea" | "zebra" => ObjectType::Crosswalk,
+        "stopLine" | "StopLine" => ObjectType::StopLine,
+        "crossHatchArea" | "CrossHatchArea" | "SimpleCrossHatch" => ObjectType::CrossHatchArea,
+        "wovenArea" | "WovenArea" => ObjectType::WovenArea,
+        "forwardWaitingArea" | "ForwardWaitingArea" => ObjectType::ForwardWaitingArea,
+        "turnLeftWaitingArea" | "TurnLeftWaitingArea" => ObjectType::TurnLeftWaitingArea,
+        "slowDownToYieldLine" | "SlowDownToYieldLine" => ObjectType::SlowDownToYieldLine,
+        "stopToYieldLine" | "StopToYieldLine" => ObjectType::StopToYieldLine,
+        "simpleSignalPole" | "SimpleSignalPole" => ObjectType::SimpleSignalPole,
+        "trafficLightPole" | "TrafficLightPole" => ObjectType::TrafficLightPole,
+        "streetLightPole" | "StreetLightPole" => ObjectType::StreetLightPole,
+        "signGantry" | "SignGantry" => ObjectType::SignGantry,
+        "lTypeSignalPole" | "LTypeSignalPole" => ObjectType::LTypeSignalPole,
         _ => ObjectType::Custom(s.to_string()),
     }
 }
