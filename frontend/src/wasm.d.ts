@@ -20,6 +20,7 @@ declare module '../../wasm/pkg/we_wasm' {
   export function generate_lane_line_vertices(project_json: string, sample_step: number): Float32Array;
   export function generate_center_line_vertices(project_json: string, sample_step: number): Float32Array;
   export function generate_signal_paint_vertices(project_json: string, sample_step: number): Float32Array;
+  export function generate_object_vertices(project_json: string): Float32Array;
 
   // Picking
   export function pick_road_at_point(project_json: string, x: number, y: number, threshold: number): string | null;

@@ -130,6 +130,11 @@ export class TauriPlatformService implements PlatformService {
     return wasm.generate_signal_paint_vertices(JSON.stringify(project), sampleStep);
   }
 
+  async generateObjectVertices(project: Project): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_object_vertices(JSON.stringify(project));
+  }
+
   async pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null> {
     const wasm = await this.getWasm();
     return wasm.pick_road_at_point(JSON.stringify(project), x, y, threshold);

@@ -344,19 +344,24 @@ export function Viewport() {
         ? service.generateSignalPaintVertices(visibleProject, 2.0)
         : Promise.resolve(new Float32Array(0));
 
-      const [roadVerts, junctionVerts, laneLineVerts, centerLineVerts, signalVerts] =
+      const objectProm = display.showObjects
+        ? service.generateObjectVertices(visibleProject)
+        : Promise.resolve(new Float32Array(0));
+
+      const [roadVerts, junctionVerts, laneLineVerts, centerLineVerts, signalVerts, objectVerts] =
         await Promise.all([
           service.generateRoadVertices(visibleProject, 2.0),
           service.generateJunctionVertices(visibleProject),
           service.generateLaneLineVertices(visibleProject, 2.0),
           centerLineProm,
           signalProm,
+          objectProm,
         ]);
 
-      // Merge road surfaces + junction surfaces + signal paint marks into one upload
+      // Merge road surfaces + junction surfaces + signal paint marks + objects into one upload
       const surfaceVerts = mergeFloat32Arrays(
-        mergeFloat32Arrays(roadVerts, junctionVerts),
-        signalVerts,
+        mergeFloat32Arrays(mergeFloat32Arrays(roadVerts, junctionVerts), signalVerts),
+        objectVerts,
       );
       renderer.uploadRoadVertices(surfaceVerts);
 
@@ -371,6 +376,7 @@ export function Viewport() {
     status,
     display.showReferenceLine,
     display.showSignals,
+    display.showObjects,
     display.hiddenRoadIds,
     display.hiddenJunctionIds,
     display.hiddenLaneSectionKeys,

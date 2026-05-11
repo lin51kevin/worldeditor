@@ -284,6 +284,10 @@ export interface PlatformService {
   /** Generate signal paint mark and sign marker vertices. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateSignalPaintVertices(project: Project, sampleStep: number): Promise<Float32Array>;
 
+  /** Generate road object vertices (crosswalks, parking spaces, stop lines, guardrails, etc.).
+   *  Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
+  generateObjectVertices(project: Project): Promise<Float32Array>;
+
   /** Find the closest road to a world-space point. Returns road ID or null. */
   pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null>;
 
