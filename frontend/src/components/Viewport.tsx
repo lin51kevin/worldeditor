@@ -160,6 +160,9 @@ export function Viewport() {
   /** Rubber-band selection state: tracks drag start and whether the overlay is active. */
   const rubberBandRef = useRef<{ startClientX: number; startClientY: number; active: boolean } | null>(null);
   const rubberBandOverlayRef = useRef<HTMLDivElement>(null);
+  /** Tracks the road/junction currently under the cursor for hover highlighting. */
+  const hoveredRoadRef = useRef<string | null>(null);
+  const hoveredJunctionRef = useRef<string | null>(null);
 
   const finalizeSplineCreation = useCallback(async (overrideKnots?: Array<[number, number, number]>) => {
     const viewState = useEditorViewStore.getState();
@@ -226,11 +229,12 @@ export function Viewport() {
     }
   }, [editMode]);
 
-  // Keyboard handling for spline creation and geometry editing
+  // Keyboard handling for spline creation, geometry editing, and select-mode shortcuts
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const viewState = useEditorViewStore.getState();
+
       if (event.key === 'Escape') {
-        const viewState = useEditorViewStore.getState();
         // If in geometry edit mode, finalize and exit
         if (viewState.geometryEditRoadId) {
           void finalizeGeometryEdit();
@@ -241,7 +245,27 @@ export function Viewport() {
           viewState.clearSplineKnots();
           return;
         }
+        // Normal select mode: clear any active selection
+        const editorState = useEditorStore.getState();
+        if (
+          editorState.selectedRoadId ||
+          editorState.selectedJunctionId ||
+          editorState.selectedRoadIds.length > 0 ||
+          editorState.selectedJunctionIds.length > 0
+        ) {
+          editorState.selectRoad(null);
+        }
+        return;
       }
+
+      // Delete selected element(s) — only in select mode (not spline / geometry edit)
+      if (event.key === 'Delete') {
+        if (!viewState.geometryEditRoadId && viewState.editMode !== 'spline') {
+          useEditorStore.getState().deleteSelected();
+        }
+        return;
+      }
+
       if (editMode !== 'spline') return;
       if (event.key === 'Backspace') {
         useEditorViewStore.getState().popSplineKnot();
@@ -796,6 +820,55 @@ export function Viewport() {
         // Fall through to raw position on snap error
       }
     }
+
+    // Hover detection: gold-highlight road/junction under cursor in select mode
+    const isInSelectMode =
+      viewState.editMode !== 'spline' &&
+      !viewState.geometryEditSpline &&
+      !viewState.draggingKnot &&
+      !rubberBandRef.current;
+
+    if (isInSelectMode) {
+      try {
+        const service = await getPlatformService();
+        const { project: currentProject } = useEditorStore.getState();
+        const { display: currentDisplay } = useEditorViewStore.getState();
+        const visibleProject = buildRenderableProject(currentProject, currentDisplay);
+        const rendererInst = rendererRef.current;
+
+        const newHoveredRoad = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
+        if (newHoveredRoad !== hoveredRoadRef.current || hoveredJunctionRef.current !== null) {
+          hoveredRoadRef.current = newHoveredRoad;
+          hoveredJunctionRef.current = null;
+          if (rendererInst) {
+            if (newHoveredRoad) {
+              const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
+              if (road) {
+                const hoverVerts = await service.generateSingleRoadVertices(road, 2.0, [1.0, 0.85, 0.1, 0.5]);
+                rendererInst.uploadHoverVertices(hoverVerts);
+              }
+              canvas.style.cursor = 'pointer';
+            } else {
+              rendererInst.clearHover();
+              const newHoveredJunction = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
+              hoveredJunctionRef.current = newHoveredJunction;
+              if (newHoveredJunction) {
+                const hoverVerts = await service.generateSingleJunctionVertices(
+                  currentProject, newHoveredJunction, [1.0, 0.85, 0.1, 0.5],
+                );
+                rendererInst.uploadHoverVertices(hoverVerts);
+                canvas.style.cursor = 'pointer';
+              } else {
+                canvas.style.cursor = '';
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignore hover detection errors
+      }
+    }
+
     emitCursorMove(worldPos.x, worldPos.y);
     pendingCursorRef.current = worldPos;
   }, []);
@@ -1103,6 +1176,14 @@ export function Viewport() {
     showContextMenu(e.clientX, e.clientY, 'viewport');
   }, []);
 
+  const handleMouseLeave = useCallback(() => {
+    if (hoveredRoadRef.current !== null || hoveredJunctionRef.current !== null) {
+      hoveredRoadRef.current = null;
+      hoveredJunctionRef.current = null;
+      rendererRef.current?.clearHover();
+    }
+  }, []);
+
   return (
     <div
       className={`viewport${isDragOver ? ' viewport-drag-over' : ''}`}
@@ -1116,6 +1197,7 @@ export function Viewport() {
         className="viewport-canvas"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
       />

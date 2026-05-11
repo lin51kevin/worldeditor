@@ -21,6 +21,8 @@ const rendererMocks = vi.hoisted(() => ({
   fitToVertices: vi.fn(),
   panToCenter: vi.fn(),
   uploadHighlightVertices: vi.fn(),
+  uploadHoverVertices: vi.fn(),
+  clearHover: vi.fn(),
   clearHighlight: vi.fn(),
   clearVertexCache: vi.fn(),
   lockCamera: vi.fn(),
@@ -63,6 +65,8 @@ vi.mock('../viewport/renderer', () => ({
       panToCenter: rendererMocks.panToCenter,
       uploadHighlightVertices: rendererMocks.uploadHighlightVertices,
       clearHighlight: rendererMocks.clearHighlight,
+      uploadHoverVertices: rendererMocks.uploadHoverVertices,
+      clearHover: rendererMocks.clearHover,
       clearVertexCache: rendererMocks.clearVertexCache,
       lockCamera: rendererMocks.lockCamera,
       unlockCamera: rendererMocks.unlockCamera,
@@ -374,5 +378,109 @@ describe('Viewport', () => {
     fireEvent.contextMenu(canvas, { button: 2, clientX: 84, clientY: 108 });
 
     expect(showContextMenu).not.toHaveBeenCalled();
+  });
+
+  it('deletes the selected road when the Delete key is pressed', async () => {
+    const platform = createPlatformMock();
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    act(() => {
+      useEditorStore.setState({
+        project: makeProjectWithRoad(),
+        selectedRoadId: 'road-1',
+        selectedObjectType: 'road',
+        selectedSceneNode: { type: 'road', roadId: 'road-1' },
+      });
+    });
+
+    render(<Viewport />);
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }));
+    });
+
+    await waitFor(() => expect(useEditorStore.getState().project.roads).toHaveLength(0));
+    expect(useEditorStore.getState().selectedRoadId).toBeNull();
+  });
+
+  it('clears road selection when Escape is pressed in select mode', async () => {
+    const platform = createPlatformMock();
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    act(() => {
+      useEditorStore.setState({
+        project: makeProjectWithRoad(),
+        selectedRoadId: 'road-1',
+        selectedObjectType: 'road',
+        selectedSceneNode: { type: 'road', roadId: 'road-1' },
+      });
+    });
+
+    render(<Viewport />);
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+
+    expect(useEditorStore.getState().selectedRoadId).toBeNull();
+  });
+
+  it('uploads golden hover vertices when hovering over a road in select mode', async () => {
+    const platform = createPlatformMock();
+    (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+    (platform.generateSingleRoadVertices as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Float32Array([1, 2, 3, 1.0, 0.85, 0.1, 0.5]),
+    );
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    rendererMocks.unprojectToGround.mockReturnValue({ x: 10, y: 20 });
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    act(() => {
+      useEditorStore.setState({ project: makeProjectWithRoad() });
+    });
+
+    render(<Viewport />);
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+    const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+    fireEvent.mouseMove(canvas, { clientX: 50, clientY: 50 });
+
+    await waitFor(() => expect(rendererMocks.uploadHoverVertices).toHaveBeenCalled());
+  });
+
+  it('clears hover vertices when mouse moves off a road', async () => {
+    const platform = createPlatformMock();
+    (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce('road-1')
+      .mockResolvedValue(null);
+    (platform.pickJunctionAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (platform.generateSingleRoadVertices as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Float32Array([1, 2, 3, 1, 0, 0, 1]),
+    );
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    rendererMocks.unprojectToGround.mockReturnValue({ x: 10, y: 20 });
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    act(() => {
+      useEditorStore.setState({ project: makeProjectWithRoad() });
+    });
+
+    render(<Viewport />);
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+    const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+    fireEvent.mouseMove(canvas, { clientX: 50, clientY: 50 });
+    await waitFor(() => expect(rendererMocks.uploadHoverVertices).toHaveBeenCalled());
+
+    fireEvent.mouseMove(canvas, { clientX: 200, clientY: 200 });
+    await waitFor(() => expect(rendererMocks.clearHover).toHaveBeenCalled());
   });
 });

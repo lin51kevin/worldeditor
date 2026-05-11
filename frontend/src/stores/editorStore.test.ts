@@ -306,5 +306,104 @@ describe('editorStore', () => {
       expect(fn1).toBe(fn2);
     });
   });
+
+  describe('removeJunction', () => {
+    const makeJunction = () => ({
+      id: 'j1',
+      name: 'J1',
+      type: 'default' as const,
+      x: 0,
+      y: 0,
+      z: 0,
+      connections: [],
+      laneLinks: [],
+    });
+
+    it('should remove junction by id', () => {
+      useEditorStore.setState((s) => ({
+        project: { ...s.project, junctions: [makeJunction()] },
+      }));
+      useEditorStore.getState().removeJunction('j1');
+      expect(useEditorStore.getState().project.junctions).toHaveLength(0);
+    });
+
+    it('should push undo when removing junction', () => {
+      useEditorStore.setState((s) => ({
+        project: { ...s.project, junctions: [makeJunction()] },
+      }));
+      useEditorStore.getState().removeJunction('j1');
+      expect(useEditorStore.getState().canUndo()).toBe(true);
+    });
+
+    it('should clear selectedJunctionId when removing the selected junction', () => {
+      useEditorStore.setState((s) => ({
+        project: { ...s.project, junctions: [makeJunction()] },
+        selectedJunctionId: 'j1',
+        selectedObjectType: 'junction',
+        selectedSceneNode: { type: 'junction', junctionId: 'j1' },
+      }));
+      useEditorStore.getState().removeJunction('j1');
+      expect(useEditorStore.getState().selectedJunctionId).toBeNull();
+    });
+
+    it('should mark project as dirty', () => {
+      useEditorStore.setState((s) => ({
+        project: { ...s.project, junctions: [makeJunction()] },
+      }));
+      useEditorStore.getState().removeJunction('j1');
+      expect(useEditorStore.getState().isDirty).toBe(true);
+    });
+  });
+
+  describe('deleteSelected', () => {
+    const makeJunction = () => ({
+      id: 'j1',
+      name: 'J1',
+      type: 'default' as const,
+      x: 0,
+      y: 0,
+      z: 0,
+      connections: [],
+      laneLinks: [],
+    });
+
+    it('should delete the selected single road', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().selectRoad('r1');
+      useEditorStore.getState().deleteSelected();
+      expect(useEditorStore.getState().project.roads).toHaveLength(0);
+      expect(useEditorStore.getState().selectedRoadId).toBeNull();
+    });
+
+    it('should delete the selected single junction', () => {
+      useEditorStore.setState((s) => ({
+        project: { ...s.project, junctions: [makeJunction()] },
+        selectedJunctionId: 'j1',
+      }));
+      useEditorStore.getState().deleteSelected();
+      expect(useEditorStore.getState().project.junctions).toHaveLength(0);
+      expect(useEditorStore.getState().selectedJunctionId).toBeNull();
+    });
+
+    it('should delete all multi-selected roads and junctions', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r2' }));
+      useEditorStore.setState((s) => ({
+        project: { ...s.project, junctions: [makeJunction()] },
+      }));
+      useEditorStore.getState().selectMultiple(['r1', 'r2'], ['j1']);
+      useEditorStore.getState().deleteSelected();
+      expect(useEditorStore.getState().project.roads).toHaveLength(0);
+      expect(useEditorStore.getState().project.junctions).toHaveLength(0);
+      expect(useEditorStore.getState().selectedRoadIds).toEqual([]);
+      expect(useEditorStore.getState().selectedJunctionIds).toEqual([]);
+    });
+
+    it('should do nothing when nothing is selected', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().deleteSelected();
+      expect(useEditorStore.getState().project.roads).toHaveLength(1);
+    });
+  });
 });
 

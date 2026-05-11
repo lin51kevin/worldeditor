@@ -283,6 +283,9 @@ export class ViewportRenderer {
   // Selection highlight mesh
   private highlightMeshes: RenderableMesh[] = [];
 
+  // Hover highlight mesh (shown when mouse hovers over a road/junction)
+  private hoverMeshes: RenderableMesh[] = [];
+
   // Last uploaded vertex data (needed for zoomToFit re-trigger)
   private lastVertexData: Float32Array | null = null;
 
@@ -437,6 +440,34 @@ export class ViewportRenderer {
       m.vertexBuffer.destroy();
     }
     this.highlightMeshes = [];
+  }
+
+  /** Upload hover highlight vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
+  uploadHoverVertices(vertexData: Float32Array): void {
+    this.clearHover();
+
+    if (vertexData.length === 0) return;
+
+    const buffer = this.device.createBuffer({
+      size: vertexData.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      mappedAtCreation: true,
+    });
+    new Float32Array(buffer.getMappedRange()).set(vertexData);
+    buffer.unmap();
+
+    this.hoverMeshes.push({
+      vertexBuffer: buffer,
+      vertexCount: vertexData.length / 7,
+    });
+  }
+
+  /** Clear the hover highlight mesh. */
+  clearHover(): void {
+    for (const m of this.hoverMeshes) {
+      m.vertexBuffer.destroy();
+    }
+    this.hoverMeshes = [];
   }
 
   /** Set visibility of the grid. */
@@ -931,6 +962,7 @@ export class ViewportRenderer {
     this.disposeMeshes(this.splineCurveMeshes);
     this.disposeMeshes(this.splineMarkerMeshes);
     this.disposeMeshes(this.highlightMeshes);
+    this.disposeMeshes(this.hoverMeshes);
     this.depthTexture?.destroy();
     this.gridUniformBuffer?.destroy();
     this.basicUniformBuffer?.destroy();
@@ -1020,6 +1052,16 @@ export class ViewportRenderer {
       pass.setPipeline(this.basicPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
       for (const mesh of this.meshes) {
+        pass.setVertexBuffer(0, mesh.vertexBuffer);
+        pass.draw(mesh.vertexCount);
+      }
+    }
+
+    // Draw hover highlight (above road surface, below selection so selection overrides)
+    if (this.hoverMeshes.length > 0) {
+      pass.setPipeline(this.highlightPipeline);
+      pass.setBindGroup(0, this.basicBindGroup);
+      for (const mesh of this.hoverMeshes) {
         pass.setVertexBuffer(0, mesh.vertexBuffer);
         pass.draw(mesh.vertexCount);
       }

@@ -35,6 +35,8 @@ interface EditorState {
   selectLane: (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => void;
   addRoad: (road: Road) => void;
   removeRoad: (id: string) => void;
+  removeJunction: (id: string) => void;
+  deleteSelected: () => void;
   updateRoad: (id: string, updates: Partial<Pick<Road, 'name' | 'length' | 'junction_id'>>) => void;
   updateRoadGeometry: (id: string, planView: Geometry[], length: number) => void;
   cloneRoad: (id: string, newId: string, offsetXy: [number, number]) => void;
@@ -179,6 +181,48 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ? null
         : state.selectedSceneNode,
     })),
+
+  removeJunction: (id) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        junctions: state.project.junctions.filter((j) => j.id !== id),
+      },
+      isDirty: true,
+      selectedJunctionId: state.selectedJunctionId === id ? null : state.selectedJunctionId,
+      selectedObjectType: state.selectedJunctionId === id ? null : state.selectedObjectType,
+      selectedSceneNode: state.selectedSceneNode && 'junctionId' in state.selectedSceneNode && state.selectedSceneNode.junctionId === id
+        ? null
+        : state.selectedSceneNode,
+    })),
+
+  deleteSelected: () => {
+    const state = get();
+    // Multi-select takes priority
+    if (state.selectedRoadIds.length > 0 || state.selectedJunctionIds.length > 0) {
+      const { selectedRoadIds, selectedJunctionIds } = state;
+      set((s) => ({
+        ...pushUndo(s),
+        project: {
+          ...s.project,
+          roads: s.project.roads.filter((r) => !selectedRoadIds.includes(r.id)),
+          junctions: s.project.junctions.filter((j) => !selectedJunctionIds.includes(j.id)),
+        },
+        isDirty: true,
+        selectedRoadIds: [],
+        selectedJunctionIds: [],
+      }));
+      return;
+    }
+    if (state.selectedRoadId) {
+      get().removeRoad(state.selectedRoadId);
+      return;
+    }
+    if (state.selectedJunctionId) {
+      get().removeJunction(state.selectedJunctionId);
+    }
+  },
 
   updateRoad: (id, updates) =>
     set((state) => ({
