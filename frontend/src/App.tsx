@@ -18,7 +18,8 @@ import { useEditorViewStore } from './stores/editorViewStore';
 import { mountRoadToolsPlugin } from './plugins/roadTools.plugin';
 
 export function App() {
-  const { undo, redo, canUndo, canRedo, selectedRoadId, selectedJunctionId } = useEditorStore();
+  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
+  const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
   const { initTheme } = useThemeStore();
   const { t, i18n } = useTranslation();
   const {
@@ -51,10 +52,12 @@ export function App() {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
+        const { canUndo, undo } = useEditorStore.getState();
         if (canUndo()) undo();
       }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault();
+        const { canRedo, redo } = useEditorStore.getState();
         if (canRedo()) redo();
       }
       // Ctrl+B: toggle left panel
@@ -67,6 +70,7 @@ export function App() {
         const target = e.target as HTMLElement;
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
         if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (target.closest('.cp-overlay, .menubar-dropdown, [role="dialog"], dialog')) return;
         e.preventDefault();
         toggleLeftPanel();
       }
@@ -75,6 +79,7 @@ export function App() {
         const target = e.target as HTMLElement;
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
         if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (target.closest('.cp-overlay, .menubar-dropdown, [role="dialog"], dialog')) return;
         e.preventDefault();
         toggleRightPanel();
       }
@@ -86,7 +91,7 @@ export function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, canUndo, canRedo, toggleLeftPanel, toggleRightPanel, toggleOutputPanel]);
+  }, [toggleLeftPanel, toggleRightPanel, toggleOutputPanel]);
 
   // Show right panel only when something is selected (Quick Inspector behavior)
   const showRightPanel = !layout.rightCollapsed && (!!selectedRoadId || !!selectedJunctionId);
