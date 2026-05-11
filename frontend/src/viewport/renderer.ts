@@ -89,7 +89,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   let scale = uniforms.grid_scale;
   let coord = in.world_pos.xy / scale;
   let grid = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
-  let line = min(grid.x, grid.y);
+  let line = max(min(grid.x, grid.y), 0.0);
   let alpha = 1.0 - min(line, 1.0);
   let dist = length(in.world_pos.xy - uniforms.camera_pos.xy);
   let fade_radius = uniforms.cam_dist * 2.0;
@@ -229,6 +229,7 @@ export class ViewportRenderer {
   private gridUniformBuffer!: GPUBuffer;
   private basicPipeline!: GPURenderPipeline;
   private highlightPipeline!: GPURenderPipeline;
+  private basicShaderModule!: GPUShaderModule;
   private basicBindGroup!: GPUBindGroup;
   private basicUniformBuffer!: GPUBuffer;
 
@@ -456,6 +457,7 @@ export class ViewportRenderer {
   /** Set the grid line color. */
   setGridColor(r: number, g: number, b: number): void {
     this.gridColor = [r, g, b];
+    this.cameraDirty = true;
   }
 
   /** Switch between 3D perspective and 2D top-down orthographic view. */
@@ -959,31 +961,35 @@ export class ViewportRenderer {
       return;
     }
 
+    const wasDirty = this.cameraDirty;
     const viewProj = this.computeViewProj();
 
-    // Update grid uniforms (96 bytes: mat4x4 + vec3 + f32 + vec3 + f32)
-    const gridData = this.gridUniformData;
-    gridData.set(viewProj, 0);
-    gridData.set(this.camera.position, 16);
-    // Auto-scale grid based on camera distance
-    const camDist = Math.sqrt(
-      (this.camera.position[0] - this.camera.target[0]) ** 2 +
-      (this.camera.position[1] - this.camera.target[1]) ** 2 +
-      (this.camera.position[2] - this.camera.target[2]) ** 2,
-    );
-    // Grid scale from data extent (nice number, auto-computed in fitToVertices)
-    const gridScale = this.gridSpacing;
-    gridData[19] = gridScale;
-    gridData.set(this.gridColor, 20);
-    gridData[23] = camDist; // cam_dist for fade radius calculation
-    this.device.queue.writeBuffer(this.gridUniformBuffer, 0, gridData);
+    // Only update uniforms when camera has changed (skip redundant GPU writes)
+    if (wasDirty) {
+      // Update grid uniforms (96 bytes: mat4x4 + vec3 + f32 + vec3 + f32)
+      const gridData = this.gridUniformData;
+      gridData.set(viewProj, 0);
+      gridData.set(this.camera.position, 16);
+      // Auto-scale grid based on camera distance
+      const camDist = Math.sqrt(
+        (this.camera.position[0] - this.camera.target[0]) ** 2 +
+        (this.camera.position[1] - this.camera.target[1]) ** 2 +
+        (this.camera.position[2] - this.camera.target[2]) ** 2,
+      );
+      // Grid scale from data extent (nice number, auto-computed in fitToVertices)
+      const gridScale = this.gridSpacing;
+      gridData[19] = gridScale;
+      gridData.set(this.gridColor, 20);
+      gridData[23] = camDist; // cam_dist for fade radius calculation
+      this.device.queue.writeBuffer(this.gridUniformBuffer, 0, gridData);
 
-    // Update basic uniforms (128 bytes: mat4x4 view_proj + mat4x4 model)
-    const basicData = this.basicUniformData;
-    basicData.set(viewProj, 0);
-    // Identity model matrix
-    basicData[16] = 1; basicData[21] = 1; basicData[26] = 1; basicData[31] = 1;
-    this.device.queue.writeBuffer(this.basicUniformBuffer, 0, basicData);
+      // Update basic uniforms (128 bytes: mat4x4 view_proj + mat4x4 model)
+      const basicData = this.basicUniformData;
+      basicData.set(viewProj, 0);
+      // Identity model matrix
+      basicData[16] = 1; basicData[21] = 1; basicData[26] = 1; basicData[31] = 1;
+      this.device.queue.writeBuffer(this.basicUniformBuffer, 0, basicData);
+    }
 
     const encoder = this.device.createCommandEncoder();
 
@@ -1144,7 +1150,8 @@ export class ViewportRenderer {
   }
 
   private createBasicPipeline(): void {
-    const shader = this.device.createShaderModule({ code: BASIC_SHADER });
+    this.basicShaderModule = this.device.createShaderModule({ code: BASIC_SHADER });
+    const shader = this.basicShaderModule;
 
     const bindGroupLayout = this.device.createBindGroupLayout({
       entries: [{
@@ -1181,7 +1188,7 @@ export class ViewportRenderer {
         }],
       },
       fragment: {
-        module: shader,
+        module: this.basicShaderModule,
         entryPoint: 'fs_main',
         targets: [{
           format: this.format,
@@ -1204,7 +1211,7 @@ export class ViewportRenderer {
     this.highlightPipeline = this.device.createRenderPipeline({
       layout: this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
       vertex: {
-        module: shader,
+        module: this.basicShaderModule,
         entryPoint: 'vs_main',
         buffers: [{
           arrayStride: 28, // 7 * 4 bytes
@@ -1215,7 +1222,7 @@ export class ViewportRenderer {
         }],
       },
       fragment: {
-        module: shader,
+        module: this.basicShaderModule,
         entryPoint: 'fs_main',
         targets: [{
           format: this.format,
@@ -1243,7 +1250,7 @@ export class ViewportRenderer {
   /** Create lane line pipeline (LineVertex layout: 10 floats). Lazy-created. */
   createLaneLinePipeline(): GPURenderPipeline {
     if (this._laneLinePipeline) return this._laneLinePipeline;
-    const shader = this.device.createShaderModule({ code: BASIC_SHADER });
+    const shader = this.basicShaderModule;
     const bindGroupLayout = this.device.createBindGroupLayout({
       entries: [{
         binding: 0,
@@ -1280,7 +1287,7 @@ export class ViewportRenderer {
   /** Create billboard pipeline (BillboardVertex layout: 11 floats). Lazy-created. */
   createBillboardPipeline(): GPURenderPipeline {
     if (this._billboardPipeline) return this._billboardPipeline;
-    const shader = this.device.createShaderModule({ code: BASIC_SHADER });
+    const shader = this.basicShaderModule;
     const bindGroupLayout = this.device.createBindGroupLayout({
       entries: [{
         binding: 0,
