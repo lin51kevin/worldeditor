@@ -1,5 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  Menu as MenuIcon, ChevronRight,
+  FileText, FolderOpen, Save,
+  Undo2, Redo2, Trash2,
+} from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { useThemeStore } from '../stores/themeStore';
@@ -144,6 +149,7 @@ export function MenuBar() {
     canRedo,
     reset,
     setProject,
+    selectedRoadId,
   } = useEditorStore();
 
   const {
@@ -167,6 +173,7 @@ export function MenuBar() {
   }, [i18n]);
 
   const [openMenu, setOpenMenu] = useState<number | null>(null);
+  const [hoveredMenu, setHoveredMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
 
@@ -336,6 +343,7 @@ export function MenuBar() {
     const handleClick = (e: MouseEvent) => {
       if (menuBarRef.current && !menuBarRef.current.contains(e.target as Node)) {
         setOpenMenu(null);
+        setHoveredMenu(null);
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -381,48 +389,97 @@ export function MenuBar() {
 
   return (
     <div className="menubar" ref={menuBarRef}>
-      {/* Left: menus */}
+      {/* Left: hamburger menu + quick action buttons */}
       <div className="menubar-left">
-        {menus.map((menu, idx) => (
-          <div key={menu.label} className="menubar-item-wrapper">
-            <button
-              className={`menubar-item ${openMenu === idx ? 'active' : ''}`}
-              onClick={() => setOpenMenu(openMenu === idx ? null : idx)}
-              onMouseEnter={() => {
-                if (openMenu !== null) setOpenMenu(idx);
-              }}
-            >
-              {menu.label}
-            </button>
-            {openMenu === idx && (
-              <div className="menubar-dropdown">
-                {menu.items.map((item, i) =>
-                  item.separator ? (
-                    <div key={i} className="menubar-separator" />
-                  ) : (
-                    <button
-                      key={i}
-                      className={`menubar-dropdown-item ${item.disabled ? 'disabled' : ''} ${item.checked ? 'checked' : ''}`}
-                      onClick={() => {
-                        if (!item.disabled) {
-                          item.action?.();
-                          setOpenMenu(null);
-                        }
-                      }}
-                      disabled={item.disabled}
-                    >
-                      <span>{item.label}</span>
-                      {item.shortcut && <span className="menubar-shortcut">{item.shortcut}</span>}
-                      {item.checked !== undefined && (
-                        <span className="menubar-check">{item.checked ? '✓' : ''}</span>
+        {/* Hamburger menu button */}
+        <div className="menubar-item-wrapper">
+          <button
+            className={`menubar-hamburger ${openMenu !== null ? 'active' : ''}`}
+            onClick={() => {
+              if (openMenu !== null) {
+                setOpenMenu(null);
+                setHoveredMenu(null);
+              } else {
+                setOpenMenu(0);
+              }
+            }}
+            title={t('menu.file')}
+          >
+            <MenuIcon size={16} />
+          </button>
+          {openMenu !== null && (
+            <div className="menubar-mega-dropdown" onMouseLeave={() => setHoveredMenu(null)}>
+              {menus.map((menu, idx) => (
+                <div
+                  key={menu.label}
+                  className={`menubar-mega-item ${hoveredMenu === idx ? 'active' : ''}`}
+                  onMouseEnter={() => setHoveredMenu(idx)}
+                  onClick={() => setHoveredMenu(hoveredMenu === idx ? null : idx)}
+                >
+                  <span>{menu.label}</span>
+                  <ChevronRight size={14} className="menubar-mega-arrow" />
+                  {hoveredMenu === idx && (
+                    <div className="menubar-submenu">
+                      {menu.items.map((item, i) =>
+                        item.separator ? (
+                          <div key={i} className="menubar-separator" />
+                        ) : (
+                          <button
+                            key={i}
+                            className={`menubar-dropdown-item ${item.disabled ? 'disabled' : ''} ${item.checked ? 'checked' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!item.disabled) {
+                                item.action?.();
+                                setOpenMenu(null);
+                                setHoveredMenu(null);
+                              }
+                            }}
+                            disabled={item.disabled}
+                          >
+                            <span>{item.label}</span>
+                            {item.shortcut && <span className="menubar-shortcut">{item.shortcut}</span>}
+                            {item.checked !== undefined && (
+                              <span className="menubar-check">{item.checked ? '✓' : ''}</span>
+                            )}
+                          </button>
+                        ),
                       )}
-                    </button>
-                  ),
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Separator */}
+        <div className="menubar-action-separator" />
+
+        {/* Quick action buttons */}
+        <div className="menubar-quick-actions">
+          <button className="menubar-action-btn" onClick={handleNew} title={t('toolbar.newTitle')}>
+            <FileText size={14} />
+          </button>
+          <button className="menubar-action-btn" onClick={handleOpen} title={t('toolbar.openTitle')}>
+            <FolderOpen size={14} />
+          </button>
+          <button className="menubar-action-btn" onClick={handleSave} title={t('toolbar.saveTitle')} disabled={!isDirty}>
+            <Save size={14} />
+          </button>
+
+          <div className="menubar-action-separator" />
+
+          <button className="menubar-action-btn" onClick={undo} title={t('toolbar.undoTitle')} disabled={!canUndo()}>
+            <Undo2 size={14} />
+          </button>
+          <button className="menubar-action-btn" onClick={redo} title={t('toolbar.redoTitle')} disabled={!canRedo()}>
+            <Redo2 size={14} />
+          </button>
+          <button className="menubar-action-btn" onClick={handleDelete} title={t('toolbar.deleteTitle')} disabled={!selectedRoadId}>
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Center: project name */}

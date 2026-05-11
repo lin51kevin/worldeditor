@@ -24,6 +24,115 @@
   min-width: 0;
 }
 
+/* Hamburger menu button */
+.menubar-hamburger {
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menubar-hamburger:hover,
+.menubar-hamburger.active {
+  background: var(--color-bg-hover);
+}
+
+/* Mega dropdown — first-level menu list */
+.menubar-mega-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 160px;
+  background: var(--color-menu-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  box-shadow: var(--shadow-md);
+  padding: 4px 0;
+  z-index: 1000;
+}
+
+/* First-level menu item */
+.menubar-mega-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 12px 5px 16px;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.menubar-mega-item:hover,
+.menubar-mega-item.active {
+  background: var(--color-menu-hover);
+  color: var(--color-menu-hover-text);
+}
+
+.menubar-mega-arrow {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+/* Second-level sub-menu — cascades to the right */
+.menubar-submenu {
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  min-width: 200px;
+  background: var(--color-menu-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  box-shadow: var(--shadow-md);
+  padding: 4px 0;
+  z-index: 1001;
+}
+
+/* Separator between hamburger and quick actions, and between save/undo */
+.menubar-action-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--glass-border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Quick action buttons container */
+.menubar-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+/* Quick action icon button */
+.menubar-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menubar-action-btn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.menubar-action-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .menubar-center {
   position: absolute;
   left: 50%;
