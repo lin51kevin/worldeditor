@@ -26,8 +26,10 @@ export function Toolbar() {
     clearSplineKnots,
   } = useEditorViewStore();
 
-  // Subscribe so toolbar re-renders when selectedRoadId or editMode changes
+  // Subscribe so toolbar re-renders when selectedRoadId changes (plugin buttons may react to selection state)
   const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
+  // Intentionally consumed to ensure re-render on selection changes; value used implicitly by plugin buttons
+  void selectedRoadId;
 
   const { toolbarButtons } = usePluginContribStore();
 
@@ -72,8 +74,8 @@ export function Toolbar() {
     clearSplineKnots();
   }, [setEditMode, clearSplineKnots]);
 
-  // Force subscribe to selectedRoadId so toolbar re-renders when selection changes
-  void selectedRoadId;
+  // Subscribe so toolbar re-renders when selectedRoadId changes (used by plugin buttons that read selection state)
+  // Note: selectedRoadId is intentionally subscribed even if not directly referenced here
 
   const pluginModeButtons = toolbarButtons.filter((b) => b.group === 'mode');
   const pluginActionButtons = toolbarButtons.filter((b) => b.group === 'action');
