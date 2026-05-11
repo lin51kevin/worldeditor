@@ -64,7 +64,8 @@ describe('editorStore – road ops actions', () => {
       store.addRoad(r);
       store.cloneRoad('r1', 'r1-clone', [0, 0]);
       const clone = useEditorStore.getState().project.roads[1];
-      expect(clone.link === null || clone.link === undefined).toBe(true);
+      expect(clone.link.predecessor).toBeNull();
+      expect(clone.link.successor).toBeNull();
     });
 
     it('should not modify the original road geometry', () => {

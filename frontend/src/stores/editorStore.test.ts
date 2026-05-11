@@ -235,6 +235,38 @@ describe('editorStore', () => {
     });
   });
 
+  describe('undo/redo isolation', () => {
+    it('should not mutate project stored in undo stack', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1', name: 'Original' }));
+      useEditorStore.getState().updateRoad('r1', { name: 'Modified' });
+      useEditorStore.getState().undo();
+      const road = useEditorStore.getState().project.roads[0]!;
+      expect(road.name).toBe('Original');
+    });
+
+    it('should not mutate project stored in redo stack', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1', name: 'V1' }));
+      useEditorStore.getState().updateRoad('r1', { name: 'V2' });
+      useEditorStore.getState().undo();
+      // Redo should correctly restore V2
+      useEditorStore.getState().redo();
+      const road = useEditorStore.getState().project.roads[0]!;
+      expect(road.name).toBe('V2');
+    });
+
+    it('should deep clone project when pushing to undo stack', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1', name: 'Original' }));
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r2', name: 'Road2' }));
+      useEditorStore.getState().updateRoad('r1', { name: 'Modified R1' });
+      useEditorStore.getState().updateRoad('r2', { name: 'Modified R2' });
+      useEditorStore.getState().undo();
+      useEditorStore.getState().undo();
+      const roads = useEditorStore.getState().project.roads;
+      expect(roads.find(r => r.id === 'r1')!.name).toBe('Original');
+      expect(roads.find(r => r.id === 'r2')!.name).toBe('Road2');
+    });
+  });
+
   describe('scene selection', () => {
     it('should select lane sections while keeping the parent road selected', () => {
       useEditorStore.getState().selectLaneSection('r1', 2);
@@ -258,6 +290,20 @@ describe('editorStore', () => {
         laneId: -2,
       });
       expect(state.selectedObjectType).toBe('road');
+    });
+  });
+
+  describe('store selectors', () => {
+    it('should return stable undo function reference', () => {
+      const fn1 = useEditorStore.getState().undo;
+      const fn2 = useEditorStore.getState().undo;
+      expect(fn1).toBe(fn2);
+    });
+
+    it('should return stable redo function reference', () => {
+      const fn1 = useEditorStore.getState().redo;
+      const fn2 = useEditorStore.getState().redo;
+      expect(fn1).toBe(fn2);
     });
   });
 });
