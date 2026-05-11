@@ -339,9 +339,12 @@ export function Viewport() {
     const renderer = rendererRef.current;
     if (!renderer || status !== 'ready') return;
 
+    let cancelled = false;
+
     (async () => {
       try {
         const service = await getPlatformService();
+        if (cancelled) return;
 
         // Multi-select highlight (rubber-band box selection)
         if (selectedRoadIds.length > 0 || selectedJunctionIds.length > 0) {
@@ -392,9 +395,11 @@ export function Viewport() {
         }
         renderer.clearHighlight();
       } catch (err) {
-        console.error('[Viewport] Failed to generate highlight mesh:', err);
+        if (!cancelled) console.error('[Viewport] Failed to generate highlight mesh:', err);
       }
     })();
+
+    return () => { cancelled = true; };
   }, [display, project, selectedJunctionId, selectedJunctionIds, selectedRoadIds, selectedSceneNode, status]);
 
   // Throttle Zustand cursor updates to once per animation frame
