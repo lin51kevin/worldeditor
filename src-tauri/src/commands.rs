@@ -120,6 +120,10 @@ pub fn plugin_list(registry: State<'_, SharedPluginRegistry>) -> Vec<PluginInfoD
 /// Read the plugin's compiled JS bundle (`dist/plugin.js`) and return its content.
 #[tauri::command]
 pub fn plugin_get_script(id: String, registry: State<'_, SharedPluginRegistry>) -> Result<String, String> {
+    // Reject any id that looks like a path traversal attempt.
+    if id.contains('/') || id.contains('\\') || id.contains("..") || id.is_empty() {
+        return Err("Invalid plugin id".to_string());
+    }
     let inner = registry.read().map_err(|e| e.to_string())?;
     let script_path = inner.plugins_dir().join(&id).join("dist").join("plugin.js");
     std::fs::read_to_string(&script_path)
@@ -147,6 +151,12 @@ pub fn plugin_install(src_path: String, registry: State<'_, SharedPluginRegistry
     if !src.is_dir() {
         return Err(format!("'{}' is not a directory", src_path));
     }
+
+    // Validate that the source contains a well-formed manifest before copying.
+    let manifest_path = src.join("manifest.json");
+    let manifest = we_plugin_core::manifest::PluginManifest::from_path(&manifest_path)
+        .map_err(|e| format!("Invalid plugin manifest: {}", e))?;
+    manifest.validate().map_err(|e| e.to_string())?;
 
     let dest = {
         let inner = registry.read().map_err(|e| e.to_string())?;
@@ -249,5 +259,22 @@ mod tests {
         let geo = utm_to_geo(e, n, z, is_n, a);
         assert!((geo["lat"].as_f64().unwrap() - 39.9042).abs() < 1e-6);
         assert!((geo["lon"].as_f64().unwrap() - 116.4074).abs() < 1e-6);
+    }
+
+    // ── plugin_get_script path-traversal guards ───────────────────────────────
+
+    #[test]
+    fn test_plugin_get_script_rejects_path_traversal_ids() {
+        // Validate the guard logic used in plugin_get_script
+        let reject = |id: &str| -> bool {
+            id.contains('/') || id.contains('\\') || id.contains("..") || id.is_empty()
+        };
+        assert!(reject("../secret"),          "dotdot prefix must be rejected");
+        assert!(reject("../../etc/passwd"),   "double dotdot must be rejected");
+        assert!(reject("foo/bar"),            "slash in id must be rejected");
+        assert!(reject("foo\\bar"),           "backslash in id must be rejected");
+        assert!(reject(""),                   "empty id must be rejected");
+        assert!(!reject("my-plugin-v1"),      "clean id must pass");
+        assert!(!reject("my_plugin_123"),     "underscore id must pass");
     }
 }
