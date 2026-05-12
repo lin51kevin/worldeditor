@@ -25,6 +25,10 @@
     "showGrid": "网格",
     "showAxis": "坐标轴",
     "resetPanels": "重置面板位置",
+    "showLayerPanel": "图层面板",
+    "showPropertyPanel": "属性面板",
+    "showTemplatePanel": "模板面板",
+    "showOutputPanel": "输出面板",
     "calculateRoadLength": "计算道路总长度",
     "road": "道路",
     "aboutWorldEditor": "关于 WorldEditor",
@@ -48,7 +52,8 @@
     "redo": "重做",
     "redoTitle": "重做 (Ctrl+Y)",
     "delete": "删除",
-    "deleteTitle": "删除 (Del)",
+    "deleteTitle": "删除选中 (Del)",
+    "resetTitle": "重置未保存修改",
     "selectMode": "默认",
     "selectModeTitle": "选择模式 (S)",
     "roadEdit": "道路",
@@ -287,8 +292,12 @@
   "status": {
     "ready": "就绪"
   },
+  "panel": {
+    "close": "关闭面板"
+  },
   "dialog": {
     "confirmNew": "当前项目有未保存的更改，确定要新建项目吗？",
+    "confirmReset": "重置会丢失所有未保存的修改，确定要重置吗？",
     "projectName": "输入项目名称:",
     "fileName": "输入文件名:",
     "roadLength": "道路总长度:",

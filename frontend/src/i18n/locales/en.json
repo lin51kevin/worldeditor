@@ -27,6 +27,10 @@
     "calculateRoadLength": "Calculate Road Length",
     "road": "Road",
     "resetPanels": "Reset Panel Positions",
+    "showLayerPanel": "Layer Panel",
+    "showPropertyPanel": "Property Panel",
+    "showTemplatePanel": "Template Panel",
+    "showOutputPanel": "Output Panel",
     "aboutWorldEditor": "About WorldEditor",
     "versionInfo": "Version Info",
     "plugins": "Plugins",
@@ -49,6 +53,7 @@
     "redoTitle": "Redo (Ctrl+Y)",
     "delete": "Delete",
     "deleteTitle": "Delete (Del)",
+    "resetTitle": "Reset unsaved changes",
     "selectMode": "Default",
     "selectModeTitle": "Select Mode (S)",
     "roadEdit": "Road",
@@ -287,8 +292,12 @@
   "status": {
     "ready": "Ready"
   },
+  "panel": {
+    "close": "Close panel"
+  },
   "dialog": {
     "confirmNew": "Current project has unsaved changes, are you sure you want to create a new project?",
+    "confirmReset": "This will discard all unsaved changes. Are you sure you want to reset?",
     "projectName": "Enter project name:",
     "fileName": "Enter file name:",
     "roadLength": "Total road length:",
