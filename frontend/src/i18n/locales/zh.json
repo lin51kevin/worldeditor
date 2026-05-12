@@ -272,7 +272,9 @@
     "disableReasonPrompt": "请输入禁用原因（可选）：",
     "disableReasonPlaceholder": "例如：不兼容当前版本",
     "cancel": "取消",
-    "confirmDisable": "确认禁用"
+    "confirmDisable": "确认禁用",
+    "builtin": "内置",
+    "installFromFile": "从文件安装"
   },
   "viewport": {
     "initializing": "3D 视口 — 正在初始化 WebGPU...",

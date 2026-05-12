@@ -272,7 +272,9 @@
     "disableReasonPrompt": "Enter disable reason (optional):",
     "disableReasonPlaceholder": "e.g., incompatible with current version",
     "cancel": "Cancel",
-    "confirmDisable": "Confirm Disable"
+    "confirmDisable": "Confirm Disable",
+    "builtin": "Built-in",
+    "installFromFile": "Install from File"
   },
   "viewport": {
     "initializing": "3D Viewport — Initializing WebGPU...",
