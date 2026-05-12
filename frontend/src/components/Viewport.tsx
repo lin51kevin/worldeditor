@@ -889,35 +889,45 @@ export function Viewport() {
         const rendererInst = rendererRef.current;
 
         const newHoveredRoad = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
-        if (newHoveredRoad !== hoveredRoadRef.current || hoveredJunctionRef.current !== null) {
-          hoveredRoadRef.current = newHoveredRoad;
-          hoveredJunctionRef.current = null;
-          if (rendererInst) {
-            if (newHoveredRoad) {
-              const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
-              if (road) {
-                // Use reference-line (centerline) geometry for a narrow hover band
-                const singleProject = { ...currentProject, roads: [road] };
-                const hoverVerts = await service.generateCenterLineVertices(singleProject, 0.5);
-                rendererInst.uploadHoverVertices(hoverVerts);
-              }
-              canvas.style.cursor = 'pointer';
-            } else {
-              rendererInst.clearHover();
-              const newHoveredJunction = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
-              hoveredJunctionRef.current = newHoveredJunction;
-              if (newHoveredJunction) {
-                const hoverVerts = await service.generateSingleJunctionVertices(
-                  currentProject, newHoveredJunction, [1.0, 0.85, 0.1, 0.5],
-                );
-                rendererInst.uploadHoverVertices(hoverVerts);
-                canvas.style.cursor = 'pointer';
+          if (newHoveredRoad !== hoveredRoadRef.current || hoveredJunctionRef.current !== null) {
+            hoveredRoadRef.current = newHoveredRoad;
+            hoveredJunctionRef.current = null;
+            if (rendererInst) {
+              if (newHoveredRoad) {
+                // Only show yellow hover highlight if not already selected
+                const { selectedRoadId } = useEditorStore.getState();
+                if (newHoveredRoad !== selectedRoadId) {
+                  const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
+                  if (road) {
+                    const hoverVerts = await service.generateSingleRoadVertices(road, 1.0, [1.0, 0.85, 0.1, 0.5]);
+                    rendererInst.uploadHoverVertices(hoverVerts);
+                  }
+                } else {
+                  rendererInst.clearHover();
+                }
+                if (!rendererInst.pointerDragging) {
+                  canvas.style.cursor = 'pointer';
+                }
               } else {
-                canvas.style.cursor = '';
+                rendererInst.clearHover();
+                const newHoveredJunction = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
+                hoveredJunctionRef.current = newHoveredJunction;
+                if (newHoveredJunction) {
+                  const hoverVerts = await service.generateSingleJunctionVertices(
+                    currentProject, newHoveredJunction, [1.0, 0.85, 0.1, 0.5],
+                  );
+                  rendererInst.uploadHoverVertices(hoverVerts);
+                  if (!rendererInst.pointerDragging) {
+                    canvas.style.cursor = 'pointer';
+                  }
+                } else {
+                  if (!rendererInst.pointerDragging) {
+                    canvas.style.cursor = '';
+                  }
+                }
               }
             }
           }
-        }
       } catch {
         // Ignore hover detection errors
       }
