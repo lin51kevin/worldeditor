@@ -5,6 +5,7 @@
 pub mod bridge_tunnel_render;
 pub mod camera;
 pub mod endpoint_render;
+pub mod gizmo;
 pub mod gpu;
 pub mod junction_render;
 pub mod mark_render;

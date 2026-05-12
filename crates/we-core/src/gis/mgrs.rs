@@ -29,7 +29,7 @@ pub struct MgrsRef {
 
 impl MgrsRef {
     /// Format as standard MGRS string, e.g. "50TMK12345678".
-    pub fn to_string(&self) -> String {
+    pub fn format_ref(&self) -> String {
         let digits = self.precision as usize;
         let e_str = format!("{:0>width$}", self.easting / 10u32.pow(5 - self.precision as u32), width = digits);
         let n_str = format!("{:0>width$}", self.northing / 10u32.pow(5 - self.precision as u32), width = digits);
@@ -54,7 +54,7 @@ pub fn utm_to_mgrs(utm: &UtmCoord, lat_deg: f64, precision: u8) -> Option<MgrsRe
     let col_idx = ((utm.easting as u32 / 100_000) as usize + col_offset) % COL_LETTERS.len();
     let col = COL_LETTERS[col_idx] as char;
     // Row letter: based on zone parity + northing
-    let row_base = if utm.zone % 2 == 0 { 5 } else { 0 }; // even zones offset by 5
+    let row_base = if utm.zone.is_multiple_of(2) { 5 } else { 0 }; // even zones offset by 5
     let row_idx = ((utm.northing as u32 / 100_000) as usize + row_base) % ROW_LETTERS.len();
     let row = ROW_LETTERS[row_idx] as char;
     let easting = utm.easting as u32 % 100_000;
@@ -65,7 +65,7 @@ pub fn utm_to_mgrs(utm: &UtmCoord, lat_deg: f64, precision: u8) -> Option<MgrsRe
 /// Latitude band letter (C–X, 8° bands, no I/O).
 fn lat_band(lat: f64) -> Option<char> {
     const BANDS: &[u8] = b"CDEFGHJKLMNPQRSTUVWX";
-    if lat < -80.0 || lat > 84.0 {
+    if !(-80.0..=84.0).contains(&lat) {
         return None; // polar regions use UPS
     }
     let idx = ((lat + 80.0) / 8.0).floor() as usize;
@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn test_mgrs_to_string_format() {
         let mgrs = geo_to_mgrs(39.9042, 116.4074, 5).unwrap();
-        let s = mgrs.to_string();
+        let s = mgrs.format_ref();
         // Should start with zone number + band letter
         assert!(s.len() >= 7, "mgrs='{s}'");
     }
