@@ -168,18 +168,16 @@ interface MenuBarProps {
 }
 
 export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
-  const {
-    project,
-    isDirty,
-    savedProject,
-    undo,
-    redo,
-    canUndo,
-    canRedo,
-    reset,
-    resetToSaved,
-    setProject,
-  } = useEditorStore();
+  const project = useEditorStore((s) => s.project);
+  const isDirty = useEditorStore((s) => s.isDirty);
+  const savedProject = useEditorStore((s) => s.savedProject);
+  const undo = useEditorStore((s) => s.undo);
+  const redo = useEditorStore((s) => s.redo);
+  const canUndo = useEditorStore((s) => s.canUndo);
+  const canRedo = useEditorStore((s) => s.canRedo);
+  const reset = useEditorStore((s) => s.reset);
+  const resetToSaved = useEditorStore((s) => s.resetToSaved);
+  const setProject = useEditorStore((s) => s.setProject);
 
   const {
     showGrid,

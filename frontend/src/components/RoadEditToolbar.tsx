@@ -18,15 +18,13 @@ interface ToolDef {
 
 export function RoadEditToolbar() {
   const { t } = useTranslation();
-  const {
-    selectedRoadId,
-    project,
-    cloneRoad,
-    reverseRoad,
-    mirrorRoad,
-    optimizeRoad,
-    swapCenterline,
-  } = useEditorStore();
+  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
+  const project = useEditorStore((s) => s.project);
+  const cloneRoad = useEditorStore((s) => s.cloneRoad);
+  const reverseRoad = useEditorStore((s) => s.reverseRoad);
+  const mirrorRoad = useEditorStore((s) => s.mirrorRoad);
+  const optimizeRoad = useEditorStore((s) => s.optimizeRoad);
+  const swapCenterline = useEditorStore((s) => s.swapCenterline);
 
   const { editMode, setEditMode, clearSplineKnots, softSelectionRadius, setSoftSelectionRadius } =
     useEditorViewStore();
