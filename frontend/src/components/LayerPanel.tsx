@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Spline, Route,
   Eye, EyeOff, ChevronRight, ChevronDown,
   Crosshair, GitMerge,
 } from 'lucide-react';
@@ -15,19 +14,7 @@ import {
 import { emitViewportEvent } from '../viewport/viewportEvents';
 import './LayerPanel.css';
 
-interface LayerCategory {
-  id: string;
-  labelKey: string;
-  icon: React.ReactNode;
-}
-
-const LAYER_CATEGORIES: LayerCategory[] = [
-  { id: 'vector', labelKey: 'layerPanel.vector', icon: <Spline size={14} /> },
-  { id: 'road',   labelKey: 'layerPanel.road',   icon: <Route size={14} /> },
-];
-
 const DISPLAY_TOGGLES = [
-  'showRoadMesh',
   'showLaneLines',
   'showRoadMarks',
   'showReferenceLine',
@@ -60,14 +47,10 @@ export function LayerPanel() {
     toggleLaneSectionVisibility: toggleLaneSectionVisibilityInStore,
     toggleLaneVisibility: toggleLaneVisibilityInStore,
   } = useEditorViewStore();
-  const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(
-    Object.fromEntries(LAYER_CATEGORIES.map((c) => [c.id, true])),
-  );
   const [expandedRoads, setExpandedRoads] = useState<Set<string>>(new Set());
   const [expandedLaneSections, setExpandedLaneSections] = useState<Set<string>>(new Set());
   const [mapInfoCollapsed, setMapInfoCollapsed] = useState(true);
   const [displaySettingsCollapsed, setDisplaySettingsCollapsed] = useState(true);
-  const [categoriesCollapsed, setCategoriesCollapsed] = useState(false);
   const [sceneListCollapsed, setSceneListCollapsed] = useState(false);
   const { t } = useTranslation();
 
@@ -92,9 +75,6 @@ export function LayerPanel() {
     }
   }, [selectedRoadId, selectedJunctionId]);
 
-  const toggleLayerVisibility = (id: string) => {
-    setLayerVisibility((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
 
   const toggleRoadExpand = (roadId: string) => {
     setExpandedRoads((prev) => {
@@ -297,7 +277,7 @@ export function LayerPanel() {
           )}
         </div>
 
-        {/* Card 1: Layer categories */}
+        {/* Card 1: Layer categories — hidden until category filtering is implemented
         <div className="layer-card">
           <div
             className="layer-section-toggle"
@@ -322,6 +302,7 @@ export function LayerPanel() {
             </div>
           )}
         </div>
+        */}
 
         {/* Card 2: Unified scene list — Roads first, then Junctions (flat, like C# version) */}
         <div className={`layer-card ${!sceneListCollapsed ? 'layer-card-grow' : ''}`}>

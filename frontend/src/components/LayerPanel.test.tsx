@@ -78,9 +78,9 @@ describe('LayerPanel', () => {
   it('shows layer categories', () => {
     render(<LayerPanel />);
 
-    ['矢量', '道路'].forEach((label) => {
-      expect(screen.getByText(label)).toBeInTheDocument();
-    });
+    // Layer categories card is temporarily hidden; these labels should not appear
+    expect(screen.queryByText('矢量')).not.toBeInTheDocument();
+    expect(screen.queryByText('道路')).not.toBeInTheDocument();
   });
 
   it('shows empty road list when project has no roads', () => {
@@ -105,16 +105,20 @@ describe('LayerPanel', () => {
   it('toggles layer visibility via checkbox', () => {
     render(<LayerPanel />);
 
-    const vectorLabel = screen.getByText('矢量').closest('label') as HTMLElement;
-    const vectorCheckbox = vectorLabel.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    // Expand the display settings section (collapsed by default)
+    fireEvent.click(screen.getByText('显示设置'));
 
-    expect(vectorCheckbox.checked).toBe(true);
+    // Test the display settings toggle
+    const laneLineLabel = screen.getByText('车道线').closest('label') as HTMLElement;
+    const laneLineCheckbox = laneLineLabel.querySelector('input[type="checkbox"]') as HTMLInputElement;
 
-    fireEvent.click(vectorCheckbox);
-    expect(vectorCheckbox.checked).toBe(false);
+    expect(laneLineCheckbox.checked).toBe(true);
 
-    fireEvent.click(vectorCheckbox);
-    expect(vectorCheckbox.checked).toBe(true);
+    fireEvent.click(laneLineCheckbox);
+    expect(laneLineCheckbox.checked).toBe(false);
+
+    fireEvent.click(laneLineCheckbox);
+    expect(laneLineCheckbox.checked).toBe(true);
   });
 
   it('selects roads and toggles road details and visibility', () => {
