@@ -3,7 +3,11 @@
 //! These functions bridge the frontend TypeScript calls to Rust backend logic.
 
 use serde_json::Value;
+use tauri::State;
 use we_core::model::Project;
+use we_plugin_core::{PluginStatus, SharedPluginRegistry};
+
+// ─── OpenDRIVE / Core commands ───────────────────────────────────────────────
 
 /// Parse an OpenDRIVE XML string into a Project.
 #[tauri::command]
@@ -61,6 +65,126 @@ pub fn utm_to_geo(easting: f64, northing: f64, zone: u8, is_northern: bool, alt:
     let utm = we_core::gis::UtmCoord::new(easting, northing, zone, is_northern, alt);
     let coord = we_core::gis::utm_to_geo(&utm);
     serde_json::json!({ "lat": coord.lat, "lon": coord.lon, "alt": coord.alt })
+}
+
+// ─── Plugin commands ─────────────────────────────────────────────────────────
+
+/// JSON-serialisable plugin info sent to the frontend.
+#[derive(serde::Serialize, Debug)]
+pub struct PluginInfoDto {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+    pub dependencies: Vec<String>,
+    pub permissions: Vec<String>,
+    /// "available" | "loaded" | "disabled"
+    pub status: String,
+    pub disabled_reason: Option<String>,
+}
+
+/// List all plugins discovered in the plugins directory with their current status.
+#[tauri::command]
+pub fn plugin_list(registry: State<'_, SharedPluginRegistry>) -> Vec<PluginInfoDto> {
+    let inner = match registry.read() {
+        Ok(r) => r,
+        Err(e) => {
+            log::error!("plugin_list: registry lock poisoned: {}", e);
+            return vec![];
+        }
+    };
+
+    let ids: Vec<String> = inner.list_discovered().iter().map(|m| m.id.clone()).collect();
+    ids.iter()
+        .filter_map(|id| inner.plugin_info(id))
+        .map(|info| {
+            let (status, disabled_reason) = match &info.status {
+                PluginStatus::Available => ("available".to_string(), None),
+                PluginStatus::Loaded => ("loaded".to_string(), None),
+                PluginStatus::Disabled(r) => ("disabled".to_string(), Some(r.clone())),
+            };
+            PluginInfoDto {
+                id: info.id,
+                name: info.name,
+                version: info.version,
+                description: info.description,
+                dependencies: info.dependencies,
+                permissions: info.permissions,
+                status,
+                disabled_reason,
+            }
+        })
+        .collect()
+}
+
+/// Read the plugin's compiled JS bundle (`dist/plugin.js`) and return its content.
+#[tauri::command]
+pub fn plugin_get_script(id: String, registry: State<'_, SharedPluginRegistry>) -> Result<String, String> {
+    let inner = registry.read().map_err(|e| e.to_string())?;
+    let script_path = inner.plugins_dir().join(&id).join("dist").join("plugin.js");
+    std::fs::read_to_string(&script_path)
+        .map_err(|e| format!("Cannot read plugin script for '{}': {}", id, e))
+}
+
+/// Enable a previously-disabled plugin (makes it available again).
+#[tauri::command]
+pub fn plugin_enable(id: String, registry: State<'_, SharedPluginRegistry>) -> Result<(), String> {
+    registry.write().map_err(|e| e.to_string())?.enable(&id).map_err(|e| e.to_string())
+}
+
+/// Disable a plugin (will be skipped on next load).
+#[tauri::command]
+pub fn plugin_disable(id: String, reason: String, registry: State<'_, SharedPluginRegistry>) -> Result<(), String> {
+    registry.write().map_err(|e| e.to_string())?.disable(&id, &reason).map_err(|e| e.to_string())
+}
+
+/// Copy a plugin directory into the managed plugins folder and re-discover.
+///
+/// `src_path` must be the path to a plugin directory containing a `manifest.json`.
+#[tauri::command]
+pub fn plugin_install(src_path: String, registry: State<'_, SharedPluginRegistry>) -> Result<(), String> {
+    let src = std::path::Path::new(&src_path);
+    if !src.is_dir() {
+        return Err(format!("'{}' is not a directory", src_path));
+    }
+
+    let dest = {
+        let inner = registry.read().map_err(|e| e.to_string())?;
+        let dir_name = src.file_name().ok_or("Invalid source path: no directory name")?;
+        inner.plugins_dir().join(dir_name)
+    };
+
+    if dest.exists() {
+        std::fs::remove_dir_all(&dest).map_err(|e| format!("Cannot remove existing plugin: {}", e))?;
+    }
+    copy_dir_all(src, &dest).map_err(|e| format!("Cannot copy plugin files: {}", e))?;
+
+    registry.write().map_err(|e| e.to_string())?.discover();
+    log::info!("Installed plugin from: {}", src_path);
+    Ok(())
+}
+
+fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let dest = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_all(&entry.path(), &dest)?;
+        } else {
+            std::fs::copy(entry.path(), dest)?;
+        }
+    }
+    Ok(())
+}
+
+/// Notify the backend that a plugin has been unloaded from the frontend JS context.
+/// (Best-effort; the registry marks it as available again.)
+#[tauri::command]
+pub fn plugin_unload(id: String, _registry: State<'_, SharedPluginRegistry>) -> Result<(), String> {
+    // JS plugins are unloaded purely on the frontend side; nothing to do in the registry.
+    log::info!("plugin_unload: {} acknowledged", id);
+    Ok(())
 }
 
 #[cfg(test)]

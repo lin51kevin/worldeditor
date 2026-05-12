@@ -22,3 +22,4 @@ we-core = { path = "../crates/we-core" }
 we-io = { path = "../crates/we-io" }
 we-service = { path = "../crates/we-service" }
 we-native = { path = "../crates/we-native" }
+we-plugin-core = { path = "../crates/we-plugin-core" }
