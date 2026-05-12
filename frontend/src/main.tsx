@@ -15,6 +15,9 @@ if (import.meta.env.DEV) {
   import('./services').then(({ getPlatformService }) => {
     (window as unknown as Record<string, unknown>)['__getPlatformService'] = getPlatformService;
   });
+  import('./utils/geometryBuilder').then((mod) => {
+    (window as unknown as Record<string, unknown>)['__geometryBuilder'] = mod;
+  });
 }
 
 const rootElement = document.getElementById('root');
