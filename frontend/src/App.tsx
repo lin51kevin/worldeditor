@@ -12,10 +12,12 @@ import { CommandPalette } from './components/CommandPalette';
 import { OutputPanel } from './components/OutputPanel';
 import { FloatingPanel } from './components/FloatingPanel';
 import { MeasurementPanel } from './components/MeasurementPanel';
+import { PluginManager } from './components/PluginManager';
 import { useEditorStore } from './stores/editorStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorViewStore } from './stores/editorViewStore';
 import { mountRoadToolsPlugin } from './plugins/roadTools.plugin';
+import { mountTemplatesPlugin } from './plugins/templates.plugin';
 
 export function App() {
   const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
@@ -30,12 +32,17 @@ export function App() {
     toggleOutputPanel,
   } = useEditorViewStore();
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
+  const [showPluginManager, setShowPluginManager] = useState(false);
 
   useEffect(() => {
     initTheme();
     initLayout();
     const unmountRoadTools = mountRoadToolsPlugin();
-    return unmountRoadTools;
+    const unmountTemplates = mountTemplatesPlugin();
+    return () => {
+      unmountRoadTools();
+      unmountTemplates();
+    };
   }, [initTheme, initLayout]);
 
   // Sync native window title and document.title with the current language
@@ -136,7 +143,7 @@ export function App() {
       </div>
 
       {/* Floating UI layers on top of viewport */}
-      <MenuBar />
+      <MenuBar onOpenPluginManager={() => setShowPluginManager(true)} />
       <Toolbar />
 
       {/* Floating left panel */}
@@ -197,6 +204,9 @@ export function App() {
       <StatusBar />
       <CommandPalette />
       <MeasurementPanel />
+
+      {/* Plugin Manager dialog */}
+      <PluginManager open={showPluginManager} onClose={() => setShowPluginManager(false)} />
 
       {/* Keyboard shortcut help overlay */}
       {showShortcutHelp && (
