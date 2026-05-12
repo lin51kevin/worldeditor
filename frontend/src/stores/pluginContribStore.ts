@@ -39,6 +39,10 @@ export interface MenuItemContrib {
   menu: 'file' | 'edit' | 'view' | 'road' | 'tools';
   /** i18n key for the label */
   labelKey: string;
+  /** Fallback label if i18n key is not found */
+  label?: string;
+  /** Group/submenu hint for rendering; items with the same group are separated by dividers */
+  group?: string;
   shortcut?: string;
   separator?: boolean;
   isDisabled?: () => boolean;
@@ -101,6 +105,14 @@ export interface PanelContrib {
   icon?: ReactNode;
 }
 
+/** Context passed to `ContextMenuContrib.isVisible` for conditional visibility */
+export interface ContextMenuCtx {
+  /** The kind of element the context menu was invoked on */
+  type: 'road' | 'junction' | 'viewport' | string;
+  /** ID of the target element, if any */
+  targetId?: string;
+}
+
 /** Context menu item contributed by a plugin */
 export interface ContextMenuContrib {
   id: string;
@@ -108,10 +120,12 @@ export interface ContextMenuContrib {
   /** Which context menu this item appears in ('road', 'junction', 'viewport', etc.) */
   menu: string;
   label: string;
+  /** i18n key for the label */
+  labelKey?: string;
   shortcut?: string;
   onClick: () => void;
   /** Return false to hide the item in the current context */
-  isVisible?: () => boolean;
+  isVisible?: (ctx?: ContextMenuCtx) => boolean;
   isDisabled?: () => boolean;
 }
 

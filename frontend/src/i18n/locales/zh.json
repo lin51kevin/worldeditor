@@ -297,7 +297,9 @@
     "builtinRoadToolsName": "道路工具",
     "builtinRoadToolsDesc": "道路编辑工具栏按鈕与道路菜单项",
     "builtinTemplatesName": "内置模板",
-    "builtinTemplatesDesc": "预设道路、路口、信号与标线模板"
+    "builtinTemplatesDesc": "预设道路、路口、信号与标线模板",
+    "builtinAdvancedEditingName": "高级编辑",
+    "builtinAdvancedEditingDesc": "高级道路/车道/路口编辑操作，支持撤销/重做"
   },
   "viewport": {
     "initializing": "3D 视口 — 正在初始化 WebGPU...",

@@ -32,4 +32,16 @@ export const BUILTIN_PLUGINS: PluginInfo[] = [
     status: 'loaded',
     isBuiltin: true,
   },
+  {
+    id: 'advanced-editing',
+    name: 'Advanced Editing',
+    nameKey: 'pluginManager.builtinAdvancedEditingName',
+    version: '1.0.0',
+    description: 'Advanced road/lane/junction editing operations with undo/redo support',
+    descriptionKey: 'pluginManager.builtinAdvancedEditingDesc',
+    dependencies: [],
+    permissions: [],
+    status: 'loaded',
+    isBuiltin: true,
+  },
 ];

@@ -3,9 +3,12 @@
 //! Core data structures representing roads, lanes, junctions, signals, etc.
 //! All types are serializable and WASM compatible.
 
+pub(crate) mod crg;
 pub(crate) mod road;
 pub(crate) mod template;
+pub(crate) mod zone;
 
+pub use crg::{CrgOrientation, CrgProfile, CrgReference};
 pub use road::{
     Bridge, Crossfall, CrossfallSide, Elevation, Geometry, GeometryType, Lane, LaneBorder,
     LaneLink, LaneSection, LaneType, LaneWidth, LaneOffset, LateralProfile, LinkElement,
@@ -14,6 +17,7 @@ pub use road::{
     Validity,
 };
 pub use template::RoadTemplate;
+pub use zone::{Zone, ZoneStatus, ZoneType, ZoneVertex};
 
 use serde::{Deserialize, Serialize};
 
@@ -75,7 +79,7 @@ pub struct JunctionLaneLink {
 }
 
 /// Contact point on a road.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ContactPoint {
     Start,
     End,

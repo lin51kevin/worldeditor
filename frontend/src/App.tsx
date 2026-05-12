@@ -22,6 +22,7 @@ import { useEditorViewStore } from './stores/editorViewStore';
 import { useBuiltinPluginStore } from './stores/builtinPluginStore';
 import { mountRoadToolsPlugin } from './plugins/roadTools.plugin';
 import { mountTemplatesPlugin } from './plugins/templates.plugin';
+import { mountAdvancedEditingPlugin } from './plugins/advancedEditing.plugin';
 
 export function App() {
   const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
@@ -56,6 +57,9 @@ export function App() {
     }
     if (!disabledBuiltins.includes('builtin-templates')) {
       cleanups.push(mountTemplatesPlugin());
+    }
+    if (!disabledBuiltins.includes('advanced-editing')) {
+      cleanups.push(mountAdvancedEditingPlugin());
     }
     return () => cleanups.forEach((fn) => fn());
   }, [disabledBuiltins]);

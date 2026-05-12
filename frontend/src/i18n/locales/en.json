@@ -297,7 +297,9 @@
     "builtinRoadToolsName": "Road Tools",
     "builtinRoadToolsDesc": "Road editing toolbar buttons and Road menu items",
     "builtinTemplatesName": "Built-in Templates",
-    "builtinTemplatesDesc": "Predefined road, junction, signal, and marking templates"
+    "builtinTemplatesDesc": "Predefined road, junction, signal, and marking templates",
+    "builtinAdvancedEditingName": "Advanced Editing",
+    "builtinAdvancedEditingDesc": "Advanced road/lane/junction editing operations with undo/redo support"
   },
   "viewport": {
     "initializing": "3D Viewport — Initializing WebGPU...",
