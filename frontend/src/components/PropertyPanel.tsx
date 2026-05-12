@@ -130,7 +130,7 @@ export function PropertyPanel() {
                     <div key={i} className="property-row sub">
                       <span className="property-label">#{i + 1}</span>
                       <span className="property-value" title={curvatureInfo.trim()}>
-                        {typeName} ({geo.length.toFixed(1)}m){curvatureInfo}
+                        {typeName} ({geo.length.toFixed(1)}m){curvatureInfo && <span className="property-value-detail">{curvatureInfo}</span>}
                       </span>
                     </div>
                   );
