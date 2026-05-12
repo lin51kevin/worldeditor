@@ -32,7 +32,6 @@ function mockUsePlugins(overrides: Partial<UsePluginsReturn> = {}) {
     refresh: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
-
   vi.mocked(usePlugins).mockReturnValue(value);
   return value;
 }
@@ -40,6 +39,12 @@ function mockUsePlugins(overrides: Partial<UsePluginsReturn> = {}) {
 describe('PluginManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('does not render when open is false', () => {
+    mockUsePlugins();
+    render(<PluginManager open={false} onClose={() => {}} />);
+    expect(screen.queryByText('插件管理')).not.toBeInTheDocument();
   });
 
   it('renders the plugin manager header and empty state', () => {
@@ -60,64 +65,99 @@ describe('PluginManager', () => {
     expect(screen.getByText('加载中...')).toBeInTheDocument();
   });
 
-  it('renders plugin details and toggles expand/collapse', () => {
+  it('shows available plugins on the Available tab', () => {
     mockUsePlugins({
-      plugins: [
-        makePlugin({ id: 'available.plugin', name: 'Available Plugin', status: 'available' }),
-        makePlugin({ id: 'loaded.plugin', name: 'Loaded Plugin', status: 'loaded', dependencies: [], permissions: [] }),
-        makePlugin({ id: 'disabled.plugin', name: 'Disabled Plugin', status: 'disabled', disabledReason: 'incompatible', dependencies: [], permissions: [] }),
-      ],
+      plugins: [makePlugin({ id: 'available.plugin', name: 'Available Plugin', status: 'available', dependencies: [], permissions: [] })],
     });
 
     render(<PluginManager />);
 
     expect(screen.getByText('Available Plugin')).toBeInTheDocument();
-    expect(screen.getAllByText('v1.0.0')).toHaveLength(3);
-    expect(screen.getByText('可用')).toBeInTheDocument();
-    expect(screen.getByText('已加载')).toBeInTheDocument();
-    expect(screen.getByText('已禁用')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Available Plugin'));
-    expect(screen.getByText('Plugin description')).toBeInTheDocument();
-    expect(screen.getByText('available.plugin')).toBeInTheDocument();
-    expect(screen.getByText('dep-a')).toBeInTheDocument();
-    expect(screen.getByText('read-files')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Available Plugin'));
-    expect(screen.queryByText('Plugin description')).not.toBeInTheDocument();
+    expect(screen.getByText('v1.0.0')).toBeInTheDocument();
+    expect(screen.getByTitle('加载')).toBeInTheDocument();
   });
 
-  it('refreshes and triggers load, unload, and enable actions', async () => {
+  it('shows installed plugins on the Installed tab', () => {
+    mockUsePlugins({
+      plugins: [makePlugin({ id: 'loaded.plugin', name: 'Loaded Plugin', status: 'loaded', dependencies: [], permissions: [] })],
+    });
+
+    render(<PluginManager />);
+
+    fireEvent.click(screen.getByRole('tab', { name: /已安装/ }));
+
+    expect(screen.getByText('Loaded Plugin')).toBeInTheDocument();
+    expect(screen.getByTitle('卸载')).toBeInTheDocument();
+    expect(screen.getByTitle('禁用')).toBeInTheDocument();
+  });
+
+  it('shows disabled plugins on the Disabled tab', () => {
+    mockUsePlugins({
+      plugins: [makePlugin({ id: 'disabled.plugin', name: 'Disabled Plugin', status: 'disabled', dependencies: [], permissions: [] })],
+    });
+
+    render(<PluginManager />);
+
+    fireEvent.click(screen.getByRole('tab', { name: /已禁用/ }));
+
+    expect(screen.getByText('Disabled Plugin')).toBeInTheDocument();
+    expect(screen.getByTitle('启用')).toBeInTheDocument();
+  });
+
+  it('triggers load action from Available tab', async () => {
     const hookValue = mockUsePlugins({
-      plugins: [
-        makePlugin({ id: 'available.plugin', name: 'Available Plugin', status: 'available', dependencies: [], permissions: [] }),
-        makePlugin({ id: 'loaded.plugin', name: 'Loaded Plugin', status: 'loaded', dependencies: [], permissions: [] }),
-        makePlugin({ id: 'disabled.plugin', name: 'Disabled Plugin', status: 'disabled', dependencies: [], permissions: [] }),
-      ],
+      plugins: [makePlugin({ id: 'available.plugin', name: 'Available Plugin', status: 'available', dependencies: [], permissions: [] })],
     });
 
     render(<PluginManager />);
 
     fireEvent.click(screen.getByTitle('刷新'));
     fireEvent.click(screen.getByTitle('加载'));
+
+    await waitFor(() => {
+      expect(hookValue.refresh).toHaveBeenCalled();
+      expect(hookValue.loadPlugin).toHaveBeenCalledWith('available.plugin');
+    });
+  });
+
+  it('triggers unload action from Installed tab', async () => {
+    const hookValue = mockUsePlugins({
+      plugins: [makePlugin({ id: 'loaded.plugin', name: 'Loaded Plugin', status: 'loaded', dependencies: [], permissions: [] })],
+    });
+
+    render(<PluginManager />);
+
+    fireEvent.click(screen.getByRole('tab', { name: /已安装/ }));
     fireEvent.click(screen.getByTitle('卸载'));
+
+    await waitFor(() => {
+      expect(hookValue.unloadPlugin).toHaveBeenCalledWith('loaded.plugin');
+    });
+  });
+
+  it('triggers enable action from Disabled tab', async () => {
+    const hookValue = mockUsePlugins({
+      plugins: [makePlugin({ id: 'disabled.plugin', name: 'Disabled Plugin', status: 'disabled', dependencies: [], permissions: [] })],
+    });
+
+    render(<PluginManager />);
+
+    fireEvent.click(screen.getByRole('tab', { name: /已禁用/ }));
     fireEvent.click(screen.getByTitle('启用'));
 
     await waitFor(() => {
-      expect(hookValue.refresh).toHaveBeenCalledTimes(1);
-      expect(hookValue.loadPlugin).toHaveBeenCalledWith('available.plugin');
-      expect(hookValue.unloadPlugin).toHaveBeenCalledWith('loaded.plugin');
       expect(hookValue.enablePlugin).toHaveBeenCalledWith('disabled.plugin');
     });
   });
 
   it('opens the disable dialog and confirms a disable reason', async () => {
     const hookValue = mockUsePlugins({
-      plugins: [makePlugin({ id: 'available.plugin', name: 'Available Plugin' })],
+      plugins: [makePlugin({ id: 'loaded.plugin', name: 'Loaded Plugin', status: 'loaded', dependencies: [], permissions: [] })],
     });
 
     render(<PluginManager />);
 
+    fireEvent.click(screen.getByRole('tab', { name: /已安装/ }));
     fireEvent.click(screen.getByTitle('禁用'));
     fireEvent.change(screen.getByPlaceholderText('例如：不兼容当前版本'), {
       target: { value: 'manual disable' },
@@ -125,7 +165,7 @@ describe('PluginManager', () => {
     fireEvent.click(screen.getByRole('button', { name: '确认禁用' }));
 
     await waitFor(() => {
-      expect(hookValue.disablePlugin).toHaveBeenCalledWith('available.plugin', 'manual disable');
+      expect(hookValue.disablePlugin).toHaveBeenCalledWith('loaded.plugin', 'manual disable');
     });
     await waitFor(() => {
       expect(screen.queryByText('禁用插件')).not.toBeInTheDocument();
@@ -138,5 +178,13 @@ describe('PluginManager', () => {
     render(<PluginManager />);
 
     expect(screen.getByText('plugin registry unavailable')).toBeInTheDocument();
+  });
+
+  it('calls onClose when close button is clicked', () => {
+    const onClose = vi.fn();
+    mockUsePlugins();
+    render(<PluginManager open={true} onClose={onClose} />);
+    fireEvent.click(screen.getByText('关闭'));
+    expect(onClose).toHaveBeenCalled();
   });
 });
