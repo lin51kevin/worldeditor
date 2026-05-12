@@ -86,7 +86,13 @@
     "snap": "Snap",
     "snapTitle": "Toggle Snap",
     "measure": "Measure",
-    "measureTitle": "Measure Tool"
+    "measureTitle": "Measure Tool",
+    "drawLine": "Line",
+    "drawLineTitle": "Draw Line Road (click 2 points)",
+    "drawArc": "Arc",
+    "drawArcTitle": "Draw Arc Road (click 3 points: start, through, end)",
+    "drawSpiral": "Spiral",
+    "drawSpiralTitle": "Draw Spiral Road (click 2 points)"
   },
   "statusBar": {
     "roads": "Roads",

@@ -17,7 +17,7 @@ export type MeasurementResult =
   | { type: 'area'; value: AreaMeasurement };
 
 type ViewDimension = '3d' | '2d';
-type EditMode = 'select' | 'road' | 'lane' | 'junction' | 'spline' | 'move-road' | 'rotate-road' | 'adjust-edge' | 'road-markings';
+type EditMode = 'select' | 'road' | 'lane' | 'junction' | 'spline' | 'move-road' | 'rotate-road' | 'adjust-edge' | 'road-markings' | 'draw-line' | 'draw-arc' | 'draw-spiral';
 
 const STORAGE_KEY = 'we-editor-view';
 
@@ -121,6 +121,9 @@ interface EditorViewState {
   geometryEditRoadId: string | null;
   geometryEditSpline: EditableSpline | null;
 
+  // Geometry drawing (draw-line / draw-arc / draw-spiral)
+  drawPoints: Array<[number, number, number]>;
+
   // Soft selection radius for knot editing
   softSelectionRadius: number;
 
@@ -156,6 +159,10 @@ interface EditorViewState {
   exitGeometryEdit: () => void;
   setGeometryEditSpline: (spline: EditableSpline) => void;
   setSoftSelectionRadius: (radius: number) => void;
+
+  // Geometry drawing actions
+  appendDrawPoint: (point: [number, number, number]) => void;
+  clearDrawPoints: () => void;
 
   // Display settings actions
   toggleDisplaySetting: (key: DisplayBooleanKey) => void;
@@ -250,6 +257,7 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   lastMeasurement: null,
   geometryEditRoadId: null,
   geometryEditSpline: null,
+  drawPoints: [],
   softSelectionRadius: 50.0,
 
   setDimension: (dimension) => set({ dimension }),
@@ -296,6 +304,11 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   setGeometryEditSpline: (spline) => set({ geometryEditSpline: spline }),
   setSoftSelectionRadius: (softSelectionRadius) =>
     set({ softSelectionRadius: Math.max(0.1, softSelectionRadius) }),
+
+  // Geometry drawing actions
+  appendDrawPoint: (point) =>
+    set((state) => ({ drawPoints: [...state.drawPoints, point] })),
+  clearDrawPoints: () => set({ drawPoints: [] }),
 
   toggleDisplaySetting: (key) =>
     set((state) => {

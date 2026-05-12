@@ -86,7 +86,13 @@
     "snap": "吸附",
     "snapTitle": "开关吸附",
     "measure": "测量",
-    "measureTitle": "测量工具"
+    "measureTitle": "测量工具",
+    "drawLine": "直线",
+    "drawLineTitle": "绘制直线道路（点击2个点）",
+    "drawArc": "圆弧",
+    "drawArcTitle": "绘制圆弧道路（点击3个点：起点、途经点、终点）",
+    "drawSpiral": "回旋线",
+    "drawSpiralTitle": "绘制回旋线道路（点击2个点）"
   },
   "statusBar": {
     "roads": "道路",

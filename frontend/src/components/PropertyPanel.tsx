@@ -108,17 +108,33 @@ export function PropertyPanel() {
 
               {/* Geometry Card */}
               <CardSection title={`${t('propertyPanel.geometry')} (${selectedRoad.plan_view.length})`} defaultOpen={false}>
-                {selectedRoad.plan_view.map((geo, i) => (
-                  <div key={i} className="property-row sub">
-                    <span className="property-label">#{i + 1}</span>
-                    <span className="property-value">
-                      {typeof geo.geo_type === 'string'
-                        ? geo.geo_type
-                        : Object.keys(geo.geo_type)[0]
-                      } ({geo.length.toFixed(1)}m)
-                    </span>
-                  </div>
-                ))}
+                {selectedRoad.plan_view.map((geo, i) => {
+                  const typeName = typeof geo.geo_type === 'string'
+                    ? geo.geo_type
+                    : Object.keys(geo.geo_type)[0];
+                  const typeData = typeof geo.geo_type === 'object' ? geo.geo_type : null;
+
+                  // Extract curvature info for Arc and Spiral
+                  let curvatureInfo = '';
+                  if (typeData && 'Arc' in typeData) {
+                    const arc = typeData.Arc as { curvature: number };
+                    const radius = Math.abs(1.0 / arc.curvature);
+                    const dir = arc.curvature > 0 ? 'L' : 'R';
+                    curvatureInfo = ` κ=${arc.curvature.toFixed(4)} R=${radius.toFixed(1)}m ${dir}`;
+                  } else if (typeData && 'Spiral' in typeData) {
+                    const spiral = typeData.Spiral as { curv_start: number; curv_end: number };
+                    curvatureInfo = ` κ₀=${spiral.curv_start.toFixed(4)} κ₁=${spiral.curv_end.toFixed(4)}`;
+                  }
+
+                  return (
+                    <div key={i} className="property-row sub">
+                      <span className="property-label">#{i + 1}</span>
+                      <span className="property-value" title={curvatureInfo.trim()}>
+                        {typeName} ({geo.length.toFixed(1)}m){curvatureInfo}
+                      </span>
+                    </div>
+                  );
+                })}
                 <button
                   className="geometry-edit-btn"
                   onClick={() => void handleEditGeometry()}

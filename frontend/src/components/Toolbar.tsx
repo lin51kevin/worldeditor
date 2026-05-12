@@ -2,7 +2,7 @@ import { useCallback, useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MousePointer, Route, AlignJustify, GitMerge,
-  Spline,
+  Spline, Minus, Circle, Waves,
 } from 'lucide-react';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { useEditorStore } from '../stores/editorStore';
@@ -24,6 +24,7 @@ export function Toolbar() {
     editMode,
     setEditMode,
     clearSplineKnots,
+    clearDrawPoints,
   } = useEditorViewStore();
 
   // Subscribe so toolbar re-renders when selectedRoadId changes (plugin buttons may react to selection state)
@@ -74,6 +75,11 @@ export function Toolbar() {
     clearSplineKnots();
   }, [setEditMode, clearSplineKnots]);
 
+  const handleDrawMode = useCallback((mode: 'draw-line' | 'draw-arc' | 'draw-spiral') => {
+    setEditMode(mode);
+    clearDrawPoints();
+  }, [setEditMode, clearDrawPoints]);
+
   // Subscribe so toolbar re-renders when selectedRoadId changes (used by plugin buttons that read selection state)
   // Note: selectedRoadId is intentionally subscribed even if not directly referenced here
 
@@ -90,7 +96,7 @@ export function Toolbar() {
       <div className="toolbar-group">
         <button
           className={`toolbar-btn toolbar-toggle ${editMode === 'select' ? 'active' : ''}`}
-          onClick={() => setEditMode('select')}
+          onClick={() => { setEditMode('select'); clearDrawPoints(); }}
           title={t('toolbar.selectModeTitle')}
         >
           <MousePointer size={16} className="tb-icon" />
@@ -127,6 +133,35 @@ export function Toolbar() {
         >
           <GitMerge size={16} className="tb-icon" />
           <span className="tb-label">{t('toolbar.junctionEdit')}</span>
+        </button>
+      </div>
+
+      {/* Geometry draw tools */}
+      <div className="toolbar-separator" />
+      <div className="toolbar-group">
+        <button
+          className={`toolbar-btn toolbar-toggle ${editMode === 'draw-line' ? 'active' : ''}`}
+          onClick={() => handleDrawMode('draw-line')}
+          title={t('toolbar.drawLineTitle')}
+        >
+          <Minus size={16} className="tb-icon" />
+          <span className="tb-label">{t('toolbar.drawLine')}</span>
+        </button>
+        <button
+          className={`toolbar-btn toolbar-toggle ${editMode === 'draw-arc' ? 'active' : ''}`}
+          onClick={() => handleDrawMode('draw-arc')}
+          title={t('toolbar.drawArcTitle')}
+        >
+          <Circle size={16} className="tb-icon" />
+          <span className="tb-label">{t('toolbar.drawArc')}</span>
+        </button>
+        <button
+          className={`toolbar-btn toolbar-toggle ${editMode === 'draw-spiral' ? 'active' : ''}`}
+          onClick={() => handleDrawMode('draw-spiral')}
+          title={t('toolbar.drawSpiralTitle')}
+        >
+          <Waves size={16} className="tb-icon" />
+          <span className="tb-label">{t('toolbar.drawSpiral')}</span>
         </button>
       </div>
 

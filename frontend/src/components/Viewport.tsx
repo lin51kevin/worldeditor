@@ -16,6 +16,12 @@ import {
   isSceneSelectionVisible,
   tintVertices,
 } from '../utils/sceneGraph';
+import {
+  buildLineGeometry,
+  buildArcGeometry,
+  buildSpiralGeometry,
+  buildRoadFromGeometry,
+} from '../utils/geometryBuilder';
 import './Viewport.css';
 
 const DRAG_THRESHOLD_SQ = 9;
@@ -177,6 +183,7 @@ export function Viewport() {
   const splineKnots = useEditorViewStore((s) => s.splineKnots);
   const splineTangentOverrides = useEditorViewStore((s) => s.splineTangentOverrides);
   const geometryEditSpline = useEditorViewStore((s) => s.geometryEditSpline);
+  const drawPoints = useEditorViewStore((s) => s.drawPoints);
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
@@ -233,6 +240,31 @@ export function Viewport() {
     }
   }, []);
 
+  /** Finalize geometry draw mode: create a road from the accumulated draw points. */
+  const finalizeDrawGeometry = useCallback(async (
+    mode: 'draw-line' | 'draw-arc' | 'draw-spiral',
+    points: Array<[number, number, number]>,
+  ) => {
+    const editorState = useEditorStore.getState();
+    const viewState = useEditorViewStore.getState();
+
+    const roadId = nextSplineRoadId(editorState.project.roads.map((r) => r.id));
+
+    let geometry;
+    if (mode === 'draw-line') {
+      geometry = buildLineGeometry(points[0]!, points[1]!);
+    } else if (mode === 'draw-arc') {
+      geometry = buildArcGeometry(points[0]!, points[1]!, points[2]!);
+    } else {
+      geometry = buildSpiralGeometry(points[0]!, points[1]!);
+    }
+
+    const road = buildRoadFromGeometry(roadId, geometry);
+    editorState.addRoad(road);
+    editorState.selectRoad(roadId);
+    viewState.clearDrawPoints();
+  }, []);
+
   /** Enter geometry edit mode for the given road. */
   const enterGeometryEditMode = useCallback(async (roadId: string) => {
     const editorState = useEditorStore.getState();
@@ -268,6 +300,9 @@ export function Viewport() {
     if (editMode !== 'spline') {
       useEditorViewStore.getState().clearSplineKnots();
     }
+    if (editMode !== 'draw-line' && editMode !== 'draw-arc' && editMode !== 'draw-spiral') {
+      useEditorViewStore.getState().clearDrawPoints();
+    }
   }, [editMode]);
 
   // Keyboard handling for spline creation, geometry editing, and select-mode shortcuts
@@ -284,6 +319,11 @@ export function Viewport() {
         // If in spline creation mode, clear knots
         if (viewState.editMode === 'spline') {
           viewState.clearSplineKnots();
+          return;
+        }
+        // If in geometry draw mode, clear draw points
+        if (viewState.editMode === 'draw-line' || viewState.editMode === 'draw-arc' || viewState.editMode === 'draw-spiral') {
+          viewState.clearDrawPoints();
           return;
         }
         // If in a transient edit mode (move/rotate), return to select mode
@@ -352,7 +392,12 @@ export function Viewport() {
 
     const overrides = Object.keys(splineTangentOverrides).length > 0 ? splineTangentOverrides : undefined;
     renderer.setSplinePreviewKnots(editMode === 'spline' ? splineKnots : [], overrides);
-  }, [splineKnots, splineTangentOverrides, editMode, status, geometryEditSpline]);
+
+    // For geometry draw modes, show draw points as preview knots (reuse spline markers)
+    if (editMode === 'draw-line' || editMode === 'draw-arc' || editMode === 'draw-spiral') {
+      renderer.setSplinePreviewKnots(drawPoints, undefined);
+    }
+  }, [splineKnots, splineTangentOverrides, editMode, status, geometryEditSpline, drawPoints]);
 
   // Regenerate road mesh when project or display settings change
   const updateMesh = useCallback(async () => {
@@ -975,6 +1020,9 @@ export function Viewport() {
       viewState.editMode !== 'spline' &&
       viewState.editMode !== 'move-road' &&
       viewState.editMode !== 'rotate-road' &&
+      viewState.editMode !== 'draw-line' &&
+      viewState.editMode !== 'draw-arc' &&
+      viewState.editMode !== 'draw-spiral' &&
       !viewState.geometryEditSpline &&
       !viewState.draggingKnot &&
       !rubberBandRef.current;
@@ -983,6 +1031,8 @@ export function Viewport() {
     if (viewState.editMode === 'move-road') {
       canvas.style.cursor = 'move';
     } else if (viewState.editMode === 'rotate-road') {
+      canvas.style.cursor = 'crosshair';
+    } else if (viewState.editMode === 'draw-line' || viewState.editMode === 'draw-arc' || viewState.editMode === 'draw-spiral') {
       canvas.style.cursor = 'crosshair';
     }
 
@@ -1119,6 +1169,11 @@ export function Viewport() {
         rubberBandRef.current = { startClientX: e.clientX, startClientY: e.clientY, active: false };
         renderer.lockCamera();
       }
+
+      // In draw modes, lock camera so left-click doesn't start a pan
+      if (viewState.editMode === 'draw-line' || viewState.editMode === 'draw-arc' || viewState.editMode === 'draw-spiral') {
+        renderer.lockCamera();
+      }
       return;
     }
 
@@ -1243,6 +1298,22 @@ export function Viewport() {
       return;
     }
 
+    // Geometry draw modes: draw-line, draw-arc, draw-spiral
+    if (splineState.editMode === 'draw-line' || splineState.editMode === 'draw-arc' || splineState.editMode === 'draw-spiral') {
+      const renderer = rendererRef.current;
+      if (renderer) renderer.unlockCamera();
+
+      const point: [number, number, number] = [worldPos.x, worldPos.y, 0];
+      const nextPoints = [...splineState.drawPoints, point];
+      splineState.appendDrawPoint(point);
+
+      const requiredPoints = splineState.editMode === 'draw-arc' ? 3 : 2;
+      if (nextPoints.length >= requiredPoints) {
+        await finalizeDrawGeometry(splineState.editMode, nextPoints);
+      }
+      return;
+    }
+
     try {
       const service = await getPlatformService();
       const { project: currentProject, selectedRoadId } = useEditorStore.getState();
@@ -1363,6 +1434,13 @@ export function Viewport() {
 
     const viewState = useEditorViewStore.getState();
     const { draggingKnot } = viewState;
+
+    // Unlock camera for draw modes (locked in handleMouseDown to prevent pan)
+    if (viewState.editMode === 'draw-line' || viewState.editMode === 'draw-arc' || viewState.editMode === 'draw-spiral') {
+      const renderer = rendererRef.current;
+      if (renderer) renderer.unlockCamera();
+    }
+
     if (draggingKnot) {
       viewState.setDraggingKnot(null);
       const renderer = rendererRef.current;
