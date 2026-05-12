@@ -7,6 +7,17 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
+// Suppress built-in plugins so tests see only server-provided plugins
+vi.mock('../plugins/builtinRegistry', () => ({
+  BUILTIN_PLUGINS: [],
+}));
+
+// Mock plugin loader to avoid URL.createObjectURL in jsdom
+vi.mock('../plugins/pluginLoader', () => ({
+  loadPluginBundle: vi.fn().mockResolvedValue(undefined),
+  unloadPluginBundle: vi.fn(),
+}));
+
 function setTauriEnabled(enabled: boolean) {
   if (enabled) {
     Object.defineProperty(window, '__TAURI__', {
@@ -90,8 +101,6 @@ describe('usePlugins', () => {
   });
 
   it.each([
-    ['loadPlugin', 'plugin_load', ['plugin.test'] as const],
-    ['unloadPlugin', 'plugin_unload', ['plugin.test'] as const],
     ['enablePlugin', 'plugin_enable', ['plugin.test'] as const],
     ['disablePlugin', 'plugin_disable', ['plugin.test', 'manual disable'] as const],
   ])('runs %s and refreshes afterward', async (method, command, args) => {
@@ -108,10 +117,6 @@ describe('usePlugins', () => {
     await act(async () => {
       if (method === 'disablePlugin') {
         await result.current.disablePlugin(args[0], args[1]!);
-      } else if (method === 'loadPlugin') {
-        await result.current.loadPlugin(args[0]);
-      } else if (method === 'unloadPlugin') {
-        await result.current.unloadPlugin(args[0]);
       } else {
         await result.current.enablePlugin(args[0]);
       }
@@ -121,6 +126,46 @@ describe('usePlugins', () => {
       ? { id: args[0], reason: args[1] }
       : { id: args[0] });
     expect(invokeMock).toHaveBeenNthCalledWith(2, 'plugin_list', undefined);
+  });
+
+  it('runs loadPlugin by fetching script and executing bundle', async () => {
+    setTauriEnabled(true);
+    const fakeScript = 'console.log("plugin loaded")';
+    invokeMock.mockResolvedValueOnce([]); // initial plugin_list
+    invokeMock.mockResolvedValueOnce(fakeScript); // plugin_get_script
+
+    const { result } = renderHook(() => usePlugins());
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('plugin_list', undefined);
+    });
+    invokeMock.mockClear();
+
+    await act(async () => {
+      await result.current.loadPlugin('plugin.test');
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('plugin_get_script', { id: 'plugin.test' });
+    expect(result.current.error).toBeNull();
+  });
+
+  it('runs unloadPlugin and notifies backend', async () => {
+    setTauriEnabled(true);
+    invokeMock.mockResolvedValue([]);
+
+    const { result } = renderHook(() => usePlugins());
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('plugin_list', undefined);
+    });
+    invokeMock.mockClear();
+
+    await act(async () => {
+      await result.current.unloadPlugin('plugin.test');
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('plugin_unload', { id: 'plugin.test' });
+    expect(result.current.error).toBeNull();
   });
 
   it('sets error state when refresh fails', async () => {

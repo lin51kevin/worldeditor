@@ -1,6 +1,17 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TemplatePanel } from './TemplatePanel';
+import { mountTemplatesPlugin } from '../plugins/templates.plugin';
+
+let cleanupTemplates: () => void;
+
+beforeEach(() => {
+  cleanupTemplates = mountTemplatesPlugin();
+});
+
+afterEach(() => {
+  cleanupTemplates?.();
+});
 
 describe('TemplatePanel', () => {
   it('renders template panel', () => {

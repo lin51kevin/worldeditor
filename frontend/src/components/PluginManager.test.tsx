@@ -74,7 +74,7 @@ describe('PluginManager', () => {
     render(<PluginManager />);
 
     expect(screen.getByText('Available Plugin')).toBeInTheDocument();
-    expect(screen.getByText('v1.0.0')).toBeInTheDocument();
+    expect(screen.getByText('1.0.0')).toBeInTheDocument();
     expect(screen.getByTitle('加载')).toBeInTheDocument();
   });
 

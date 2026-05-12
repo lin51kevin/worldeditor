@@ -209,8 +209,8 @@
     "roads": {
       "singleLane": "单车道",
       "dual2Lane": "双向2车道",
-      "dual4Lane": "双向4车道",
-      "dual6Lane": "双向6车道",
+      "dual4Lane": "双向4车道带路肩",
+      "dual6Lane": "双向6车道带路肩",
       "highway": "高速公路",
       "ramp": "匝道",
       "urbanRoad": "城市道路"
