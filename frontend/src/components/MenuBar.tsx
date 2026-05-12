@@ -4,7 +4,7 @@ import {
   Menu as MenuIcon, ChevronRight,
   FileText, FolderOpen, Save,
   Undo2, Redo2, Trash2,
-  Grid, Crosshair, Magnet, Ruler,
+  Grid, Crosshair, Magnet, Ruler, RotateCcw,
 } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
@@ -68,6 +68,10 @@ function buildMenus(
   onToggleGrid: () => void,
   onToggleAxis: () => void,
   onResetPanels: () => void,
+  onToggleLeftPanel: () => void,
+  onToggleRightPanel: () => void,
+  onToggleTemplatePanel: () => void,
+  onToggleOutputPanel: () => void,
   onCalculateRoadLength: () => void,
   onToggleSnap: () => void,
   onMeasureDistance: () => void,
@@ -80,6 +84,10 @@ function buildMenus(
   showAxis: boolean,
   snapEnabled: boolean,
   dimension: string,
+  leftCollapsed: boolean,
+  rightCollapsed: boolean,
+  templatePanelCollapsed: boolean,
+  outputCollapsed: boolean,
   t: (key: string) => string,
 ): Menu[] {
   return [
@@ -116,6 +124,11 @@ function buildMenus(
         { separator: true, label: '' },
         { label: t('menu.showGrid'), action: onToggleGrid, checked: showGrid },
         { label: t('menu.showAxis'), action: onToggleAxis, checked: showAxis },
+        { separator: true, label: '' },
+        { label: t('menu.showLayerPanel'), action: onToggleLeftPanel, checked: !leftCollapsed },
+        { label: t('menu.showPropertyPanel'), action: onToggleRightPanel, checked: !rightCollapsed },
+        { label: t('menu.showTemplatePanel'), action: onToggleTemplatePanel, checked: !templatePanelCollapsed },
+        { label: t('menu.showOutputPanel'), action: onToggleOutputPanel, checked: !outputCollapsed },
         { separator: true, label: '' },
         { label: t('menu.resetPanels'), action: onResetPanels },
       ],
@@ -156,11 +169,13 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
   const {
     project,
     isDirty,
+    savedProject,
     undo,
     redo,
     canUndo,
     canRedo,
     reset,
+    resetToSaved,
     setProject,
     selectedRoadId,
   } = useEditorStore();
@@ -176,6 +191,11 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     measureMode,
     toggleSnap,
     setMeasureMode,
+    layout,
+    toggleLeftPanel,
+    toggleRightPanel,
+    toggleTemplatePanel,
+    toggleOutputPanel,
   } = useEditorViewStore();
 
   const { theme, toggleTheme } = useThemeStore();
@@ -325,6 +345,13 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     alert(`${t('dialog.roadLength')}: ${total.toFixed(3)} ${t('dialog.meters')}`);
   }, [project]);
 
+  // Reset unsaved changes
+  const handleResetToSaved = useCallback(() => {
+    if (!isDirty || !savedProject) return;
+    if (!window.confirm(t('dialog.confirmReset'))) return;
+    resetToSaved();
+  }, [isDirty, savedProject, resetToSaved, t]);
+
   const staticMenus = buildMenus(
     project,
     isDirty,
@@ -344,6 +371,10 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     handleToggleGrid,
     handleToggleAxis,
     resetAllPanels,
+    toggleLeftPanel,
+    toggleRightPanel,
+    toggleTemplatePanel,
+    toggleOutputPanel,
     handleCalculateRoadLength,
     toggleSnap,
     () => setMeasureMode('distance'),
@@ -356,6 +387,10 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     showAxis,
     snapEnabled,
     dimension,
+    layout.leftCollapsed,
+    layout.rightCollapsed,
+    layout.templatePanelCollapsed,
+    layout.outputCollapsed,
     t,
   );
 
@@ -525,6 +560,14 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
           </button>
           <button className="menubar-action-btn" onClick={handleDelete} title={t('toolbar.deleteTitle')} disabled={!selectedRoadId}>
             <Trash2 size={14} />
+          </button>
+          <button
+            className="menubar-action-btn"
+            onClick={handleResetToSaved}
+            title={t('toolbar.resetTitle')}
+            disabled={!isDirty || !savedProject}
+          >
+            <RotateCcw size={14} />
           </button>
 
           <div className="menubar-action-separator" />
