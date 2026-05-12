@@ -16,6 +16,7 @@ import { PluginManager } from './components/PluginManager';
 import { useEditorStore } from './stores/editorStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorViewStore } from './stores/editorViewStore';
+import { useBuiltinPluginStore } from './stores/builtinPluginStore';
 import { mountRoadToolsPlugin } from './plugins/roadTools.plugin';
 import { mountTemplatesPlugin } from './plugins/templates.plugin';
 
@@ -35,16 +36,32 @@ export function App() {
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
 
+  const disabledBuiltins = useBuiltinPluginStore((s) => s.disabledBuiltins);
+  const templatePluginEnabled = !disabledBuiltins.includes('builtin-templates');
+
   useEffect(() => {
     initTheme();
     initLayout();
-    const unmountRoadTools = mountRoadToolsPlugin();
-    const unmountTemplates = mountTemplatesPlugin();
-    return () => {
-      unmountRoadTools();
-      unmountTemplates();
-    };
   }, [initTheme, initLayout]);
+
+  // Conditionally mount builtin plugins based on enabled state
+  useEffect(() => {
+    const cleanups: Array<() => void> = [];
+    if (!disabledBuiltins.includes('road-tools')) {
+      cleanups.push(mountRoadToolsPlugin());
+    }
+    if (!disabledBuiltins.includes('builtin-templates')) {
+      cleanups.push(mountTemplatesPlugin());
+    }
+    return () => cleanups.forEach((fn) => fn());
+  }, [disabledBuiltins]);
+
+  // Auto-collapse the template panel when its plugin is disabled
+  useEffect(() => {
+    if (!templatePluginEnabled && !layout.templatePanelCollapsed) {
+      toggleTemplatePanel();
+    }
+  }, [templatePluginEnabled, layout.templatePanelCollapsed, toggleTemplatePanel]);
 
   // Sync native window title and document.title with the current language
   useEffect(() => {
@@ -164,8 +181,8 @@ export function App() {
         </FloatingPanel>
       )}
 
-      {/* Floating template panel */}
-      {!layout.templatePanelCollapsed && (
+      {/* Floating template panel — only shown when builtin-templates plugin is enabled */}
+      {!layout.templatePanelCollapsed && templatePluginEnabled && (
       <FloatingPanel
         className="floating-template"
         dragHandleSelector=".template-header"

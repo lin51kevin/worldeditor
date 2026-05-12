@@ -135,17 +135,3 @@
     user-select: none;
     position: relative;
 }
-
-/* Visual feedback: subtle move icon on hover */
-.floating-left .panel-header:hover::after,
-.floating-right .prop-header:hover::after,
-.floating-template .template-header:hover::after {
-    content: '⠷';
-    position: absolute;
-    right: var(--space-3);
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 14px;
-    color: var(--color-text-muted);
-    pointer-events: none;
-}

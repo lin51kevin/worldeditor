@@ -6,6 +6,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { BUILTIN_PLUGINS } from '../plugins/builtinRegistry';
 import { loadPluginBundle, unloadPluginBundle } from '../plugins/pluginLoader';
+import { useBuiltinPluginStore } from '../stores/builtinPluginStore';
 
 export interface PluginInfo {
   id: string;
@@ -31,7 +32,7 @@ export interface UsePluginsReturn {
   loadPlugin: (id: string) => Promise<void>;
   unloadPlugin: (id: string) => Promise<void>;
   enablePlugin: (id: string) => Promise<void>;
-  disablePlugin: (id: string, reason: string) => Promise<void>;
+  disablePlugin: (id: string) => Promise<void>;
   installPlugin: (srcPath: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -55,6 +56,8 @@ export function usePlugins(): UsePluginsReturn {
   const [loadedIds, setLoadedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const disabledBuiltins = useBuiltinPluginStore((s) => s.disabledBuiltins);
 
   const invokeCommand = useCallback(async <T>(command: string, args?: Record<string, unknown>): Promise<T> => {
     // Check if running in Tauri environment
@@ -85,12 +88,16 @@ export function usePlugins(): UsePluginsReturn {
    * For external plugins that have been JS-loaded in this session, status is overridden to 'loaded'.
    */
   const plugins = useMemo<PluginInfo[]>(() => {
+    const builtins = BUILTIN_PLUGINS.map((p) => ({
+      ...p,
+      status: disabledBuiltins.includes(p.id) ? ('disabled' as const) : p.status,
+    }));
     const external = serverPlugins.map((p) => ({
       ...p,
       status: loadedIds.has(p.id) ? ('loaded' as const) : p.status,
     }));
-    return [...BUILTIN_PLUGINS, ...external];
-  }, [serverPlugins, loadedIds]);
+    return [...builtins, ...external];
+  }, [serverPlugins, loadedIds, disabledBuiltins]);
 
   const loadPlugin = useCallback(async (id: string) => {
     setError(null);
@@ -118,6 +125,11 @@ export function usePlugins(): UsePluginsReturn {
   }, [invokeCommand]);
 
   const enablePlugin = useCallback(async (id: string) => {
+    // Builtin plugins: toggle via store (App.tsx re-mounts the plugin)
+    if (BUILTIN_PLUGINS.some((p) => p.id === id)) {
+      useBuiltinPluginStore.getState().enableBuiltin(id);
+      return;
+    }
     setError(null);
     try {
       await invokeCommand<void>(TAURI_COMMANDS.enablePlugin, { id });
@@ -130,13 +142,18 @@ export function usePlugins(): UsePluginsReturn {
     }
   }, [invokeCommand, loadPlugin, refresh]);
 
-  const disablePlugin = useCallback(async (id: string, reason: string) => {
+  const disablePlugin = useCallback(async (id: string) => {
+    // Builtin plugins: toggle via store (App.tsx unmounts the plugin)
+    if (BUILTIN_PLUGINS.some((p) => p.id === id)) {
+      useBuiltinPluginStore.getState().disableBuiltin(id);
+      return;
+    }
     setError(null);
     try {
       // Unload the JS bundle first so plugin contributions are removed from the UI
       unloadPluginBundle(id);
       setLoadedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
-      await invokeCommand<void>(TAURI_COMMANDS.disablePlugin, { id, reason });
+      await invokeCommand<void>(TAURI_COMMANDS.disablePlugin, { id, reason: '' });
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

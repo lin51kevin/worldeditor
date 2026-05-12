@@ -6,8 +6,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  X, Package, Power, PowerOff, RefreshCw, Loader2,
-  AlertCircle, Download, Trash2, FolderOpen,
+  X, Package, RefreshCw, Loader2,
+  AlertCircle, Trash2, FolderOpen,
 } from 'lucide-react';
 import { usePlugins, type PluginInfo } from '../hooks/usePlugins';
 import { loadPluginBundle } from '../plugins/pluginLoader';
@@ -37,8 +37,6 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   const [activeTab, setActiveTab] = useState<TabId>('available');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
-  const [disableDialogOpen, setDisableDialogOpen] = useState(false);
-  const [disableTargetId, setDisableTargetId] = useState<string | null>(null);
   /** Hidden file input for web-mode plugin installation */
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,15 +50,15 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
     setSelectedId(null);
   }, [activeTab]);
 
-  // ESC to close (when sub-dialog is not open)
+  // ESC to close
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !disableDialogOpen) onClose();
+      if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose, disableDialogOpen]);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -89,18 +87,7 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   const handleLoad   = (id: string) => withLoading(id, () => loadPlugin(id));
   const handleUnload = (id: string) => withLoading(id, () => unloadPlugin(id));
   const handleEnable = (id: string) => withLoading(id, () => enablePlugin(id));
-
-  const openDisableConfirm = (id: string) => {
-    setDisableTargetId(id);
-    setDisableDialogOpen(true);
-  };
-
-  const handleDisableConfirm = async (reason: string) => {
-    if (!disableTargetId) return;
-    await withLoading(disableTargetId, () => disablePlugin(disableTargetId, reason));
-    setDisableDialogOpen(false);
-    setDisableTargetId(null);
-  };
+  const handleDisable = (id: string) => withLoading(id, () => disablePlugin(id));
 
   const handleInstallFromFile = async () => {
     if (typeof window !== 'undefined' && '__TAURI__' in window) {
@@ -151,7 +138,7 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
       />
     <div
       className="pm-overlay"
-      onClick={(e) => { if (e.target === e.currentTarget && !disableDialogOpen) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
       aria-label={t('pluginManager.title')}
@@ -215,7 +202,7 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
                   <th>{t('pluginManager.colName')}</th>
                   <th>{t('pluginManager.colVersion')}</th>
                   <th>{t('pluginManager.colDescription')}</th>
-                  <th></th>
+                  <th>{t('pluginManager.colActions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -229,7 +216,7 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
                     onLoad={() => void handleLoad(plugin.id)}
                     onUnload={() => void handleUnload(plugin.id)}
                     onEnable={() => void handleEnable(plugin.id)}
-                    onDisable={() => openDisableConfirm(plugin.id)}
+                    onDisable={() => void handleDisable(plugin.id)}
                   />
                 ))}
               </tbody>
@@ -240,11 +227,11 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
         {/* Footer */}
         <div className="pm-footer">
           <div className="pm-footer-info">
-            {selectedId && (
-              <span className="pm-footer-hint">
-                {plugins.find((p) => p.id === selectedId)?.name ?? ''}
-              </span>
-            )}
+            {selectedId && (() => {
+              const sel = plugins.find((p) => p.id === selectedId);
+              const name = sel ? (sel.nameKey ? t(sel.nameKey, sel.name) : sel.name) : '';
+              return <span className="pm-footer-hint">{name}</span>;
+            })()}
           </div>
           <div className="pm-footer-actions">
             <button
@@ -271,13 +258,6 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
           </div>
         </div>
       </div>
-
-      {disableDialogOpen && (
-        <DisableDialog
-          onConfirm={(r) => void handleDisableConfirm(r)}
-          onCancel={() => { setDisableDialogOpen(false); setDisableTargetId(null); }}
-        />
-      )}
     </div>
     </>
   );
@@ -322,69 +302,31 @@ function PluginRow({ plugin, selected, isLoading, onSelect, onLoad, onUnload, on
         </span>
       </td>
       <td className="pm-col-actions" onClick={(e) => e.stopPropagation()}>
-        {plugin.isBuiltin ? null : isLoading ? (
+        {isLoading ? (
           <Loader2 size={14} className="spin" />
-        ) : plugin.status === 'available' ? (
-          <button className="pm-row-btn load" onClick={onLoad} title={t('pluginManager.load')}>
-            <Download size={12} />
+        ) : plugin.status === 'available' && !plugin.isBuiltin ? (
+          <button className="pm-row-btn load" onClick={onLoad}>
             {t('pluginManager.install')}
           </button>
         ) : plugin.status === 'loaded' ? (
           <div className="pm-row-btn-group">
-            <button className="pm-row-btn disable-icon" onClick={onDisable} title={t('pluginManager.disable')}>
-              <PowerOff size={12} />
+            <button className="pm-row-btn disable" onClick={onDisable}>
+              {t('pluginManager.disable')}
             </button>
-            <button className="pm-row-btn unload" onClick={onUnload} title={t('pluginManager.unload')}>
-              <Trash2 size={12} />
-              {t('pluginManager.uninstall')}
-            </button>
+            {!plugin.isBuiltin && (
+              <button className="pm-row-btn unload" onClick={onUnload}>
+                <Trash2 size={12} />
+                {t('pluginManager.uninstall')}
+              </button>
+            )}
           </div>
-        ) : (
-          <button className="pm-row-btn enable" onClick={onEnable} title={t('pluginManager.enable')}>
-            <Power size={12} />
+        ) : plugin.status === 'disabled' ? (
+          <button className="pm-row-btn enable" onClick={onEnable}>
             {t('pluginManager.enable')}
           </button>
-        )}
+        ) : null}
       </td>
     </tr>
-  );
-}
-
-// ─── Disable Confirm Dialog ──────────────────────────────────────────────────
-
-interface DisableDialogProps {
-  onConfirm: (reason: string) => void;
-  onCancel: () => void;
-}
-
-function DisableDialog({ onConfirm, onCancel }: DisableDialogProps) {
-  const [reason, setReason] = useState('');
-  const { t } = useTranslation();
-
-  return (
-    <div className="pm-sub-overlay" onClick={onCancel}>
-      <div className="pm-sub-dialog" onClick={(e) => e.stopPropagation()}>
-        <h3>{t('pluginManager.disablePlugin')}</h3>
-        <p>{t('pluginManager.disableReasonPrompt')}</p>
-        <input
-          type="text"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder={t('pluginManager.disableReasonPlaceholder')}
-          autoFocus
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onConfirm(reason);
-            else if (e.key === 'Escape') onCancel();
-          }}
-        />
-        <div className="pm-sub-actions">
-          <button onClick={onCancel}>{t('pluginManager.cancel')}</button>
-          <button className="confirm" onClick={() => onConfirm(reason)}>
-            {t('pluginManager.confirmDisable')}
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 

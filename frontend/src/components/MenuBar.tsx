@@ -10,6 +10,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { useThemeStore } from '../stores/themeStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
+import { useBuiltinPluginStore } from '../stores/builtinPluginStore';
 import { emitViewportEvent } from '../viewport/viewportEvents';
 import { getPlatformService } from '../services';
 import { resetAllPanels } from './FloatingPanel';
@@ -88,6 +89,7 @@ function buildMenus(
   rightCollapsed: boolean,
   templatePanelCollapsed: boolean,
   outputCollapsed: boolean,
+  templatePluginEnabled: boolean,
   t: (key: string) => string,
 ): Menu[] {
   return [
@@ -127,7 +129,7 @@ function buildMenus(
         { separator: true, label: '' },
         { label: t('menu.showLayerPanel'), action: onToggleLeftPanel, checked: !leftCollapsed },
         { label: t('menu.showPropertyPanel'), action: onToggleRightPanel, checked: !rightCollapsed },
-        { label: t('menu.showTemplatePanel'), action: onToggleTemplatePanel, checked: !templatePanelCollapsed },
+        { label: t('menu.showTemplatePanel'), action: onToggleTemplatePanel, checked: !templatePanelCollapsed, disabled: !templatePluginEnabled },
         { label: t('menu.showOutputPanel'), action: onToggleOutputPanel, checked: !outputCollapsed },
         { separator: true, label: '' },
         { label: t('menu.resetPanels'), action: onResetPanels },
@@ -204,6 +206,9 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
   const roadMenuItems = useMemo(
     () => allMenuItems.filter((m) => m.menu === 'road'),
     [allMenuItems],
+  );
+  const templatePluginEnabled = useBuiltinPluginStore(
+    (s) => !s.disabledBuiltins.includes('builtin-templates'),
   );
 
   const toggleLanguage = useCallback(() => {
@@ -391,6 +396,7 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     layout.rightCollapsed,
     layout.templatePanelCollapsed,
     layout.outputCollapsed,
+    templatePluginEnabled,
     t,
   );
 
@@ -557,9 +563,6 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
           </button>
           <button className="menubar-action-btn" onClick={redo} title={t('toolbar.redoTitle')} disabled={!canRedo()}>
             <Redo2 size={14} />
-          </button>
-          <button className="menubar-action-btn" onClick={handleDelete} title={t('toolbar.deleteTitle')} disabled={!selectedRoadId}>
-            <Trash2 size={14} />
           </button>
           <button
             className="menubar-action-btn"
