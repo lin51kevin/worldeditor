@@ -176,7 +176,9 @@
     "noMapData": "未加载地图数据",
     "searchPlaceholder": "搜索道路/路口...",
     "noSearchResults": "无匹配结果",
-    "filteredCount": "{{count}}/{{total}}"
+    "filteredCount": "{{count}}/{{total}}",
+    "roadSignals": "信号标志",
+    "roadObjects": "道路物体"
   },
   "toolPanel": {
     "header": "工具",

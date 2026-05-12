@@ -176,7 +176,9 @@
     "noMapData": "No map data loaded",
     "searchPlaceholder": "Search roads/junctions...",
     "noSearchResults": "No matching results",
-    "filteredCount": "{{count}}/{{total}}"
+    "filteredCount": "{{count}}/{{total}}",
+    "roadSignals": "Signals",
+    "roadObjects": "Objects"
   },
   "toolPanel": {
     "header": "Tools",

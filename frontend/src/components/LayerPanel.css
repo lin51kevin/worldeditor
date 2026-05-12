@@ -286,6 +286,21 @@
   margin-top: 1px;
 }
 
+.road-sub-group {
+  position: relative;
+  margin-top: 2px;
+  padding-left: 14px;
+}
+
+.road-sub-group::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  height: calc(50% + 1px);
+  left: 4px;
+  border-left: 1px dashed var(--color-border-subtle, var(--color-border));
+}
+
 /* Map info card */
 .map-info-content {
   padding: var(--space-2) var(--space-4);

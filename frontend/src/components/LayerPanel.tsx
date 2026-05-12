@@ -49,6 +49,8 @@ export function LayerPanel() {
   } = useEditorViewStore();
   const [expandedRoads, setExpandedRoads] = useState<Set<string>>(new Set());
   const [expandedLaneSections, setExpandedLaneSections] = useState<Set<string>>(new Set());
+  const [expandedRoadSignals, setExpandedRoadSignals] = useState<Set<string>>(new Set());
+  const [expandedRoadObjects, setExpandedRoadObjects] = useState<Set<string>>(new Set());
   const [mapInfoCollapsed, setMapInfoCollapsed] = useState(true);
   const [displaySettingsCollapsed, setDisplaySettingsCollapsed] = useState(true);
   const [sceneListCollapsed, setSceneListCollapsed] = useState(false);
@@ -89,6 +91,22 @@ export function LayerPanel() {
     setExpandedLaneSections((prev) => {
       const next = new Set(prev);
       if (next.has(sectionKey)) next.delete(sectionKey); else next.add(sectionKey);
+      return next;
+    });
+  };
+
+  const toggleRoadSignalsExpand = (roadId: string) => {
+    setExpandedRoadSignals((prev) => {
+      const next = new Set(prev);
+      if (next.has(roadId)) next.delete(roadId); else next.add(roadId);
+      return next;
+    });
+  };
+
+  const toggleRoadObjectsExpand = (roadId: string) => {
+    setExpandedRoadObjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(roadId)) next.delete(roadId); else next.add(roadId);
       return next;
     });
   };
@@ -476,6 +494,64 @@ export function LayerPanel() {
                         )}
                       </div>
                     ))}
+                    {/* Signals group */}
+                    {(road.signals ?? []).length > 0 && (
+                      <div className="road-sub-group">
+                        <div
+                          className="layer-item layer-item-child layer-item-section"
+                          onClick={() => toggleRoadSignalsExpand(road.id)}
+                        >
+                          <button className="road-expand" onClick={(e) => { e.stopPropagation(); toggleRoadSignalsExpand(road.id); }}>
+                            {expandedRoadSignals.has(road.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                          </button>
+                          <span className="layer-name">
+                            {t('layerPanel.roadSignals')}
+                            <span className="road-id"> ({(road.signals ?? []).length})</span>
+                          </span>
+                        </div>
+                        {expandedRoadSignals.has(road.id) && (
+                          <div className="lane-section-children">
+                            {(road.signals ?? []).map((sig) => (
+                              <div key={sig.id} className="layer-item layer-item-child layer-item-lane">
+                                <span className="layer-name">
+                                  {sig.id}
+                                  <span className="road-id"> ({sig.type})</span>
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* Objects group */}
+                    {(project.objects ?? []).filter((o) => o.roadId === road.id).length > 0 && (
+                      <div className="road-sub-group">
+                        <div
+                          className="layer-item layer-item-child layer-item-section"
+                          onClick={() => toggleRoadObjectsExpand(road.id)}
+                        >
+                          <button className="road-expand" onClick={(e) => { e.stopPropagation(); toggleRoadObjectsExpand(road.id); }}>
+                            {expandedRoadObjects.has(road.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                          </button>
+                          <span className="layer-name">
+                            {t('layerPanel.roadObjects')}
+                            <span className="road-id"> ({(project.objects ?? []).filter((o) => o.roadId === road.id).length})</span>
+                          </span>
+                        </div>
+                        {expandedRoadObjects.has(road.id) && (
+                          <div className="lane-section-children">
+                            {(project.objects ?? []).filter((o) => o.roadId === road.id).map((obj) => (
+                              <div key={obj.id} className="layer-item layer-item-child layer-item-lane">
+                                <span className="layer-name">
+                                  {obj.id}
+                                  <span className="road-id"> ({obj.type})</span>
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
