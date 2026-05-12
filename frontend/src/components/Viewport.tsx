@@ -286,6 +286,11 @@ export function Viewport() {
           viewState.clearSplineKnots();
           return;
         }
+        // If in a transient edit mode (move/rotate), return to select mode
+        if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
+          viewState.setEditMode('select');
+          return;
+        }
         // Normal select mode: clear any active selection
         const editorState = useEditorStore.getState();
         if (
