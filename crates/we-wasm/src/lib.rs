@@ -6,11 +6,13 @@ use wasm_bindgen::prelude::*;
 
 pub mod elevation;
 pub mod gis;
+pub mod gis_ext;
 pub mod measure;
 pub mod opendrive;
 pub mod picking;
 pub mod render;
 pub mod spline;
+pub mod validation;
 
 // Set up better panic messages in the browser console.
 #[wasm_bindgen(start)]
