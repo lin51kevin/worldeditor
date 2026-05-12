@@ -1,30 +1,52 @@
-/* Plugin Manager Styles */
+/* Plugin Manager — Modal Dialog Styles (Notepad++ inspired) */
 
-.plugin-manager {
+/* ── Overlay ── */
+.pm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(0, 0, 0, 0.55);
   display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-base);
+  align-items: center;
+  justify-content: center;
 }
 
-.plugin-manager-header {
+/* ── Dialog box ── */
+.pm-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 720px;
+  max-width: calc(100vw - 40px);
+  height: 520px;
+  max-height: calc(100vh - 80px);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.pm-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-5) var(--space-6);
+  padding: 10px 14px;
+  background: var(--color-bg-primary);
   border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
-.plugin-manager-title {
+.pm-header-title {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-base);
 }
 
-.plugin-refresh-btn {
+.pm-close-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -38,328 +60,404 @@
   transition: background 0.15s, color 0.15s;
 }
 
-.plugin-refresh-btn:hover {
+.pm-close-btn:hover {
   background: var(--color-bg-hover);
   color: var(--color-text-primary);
 }
 
-.plugin-refresh-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.plugin-error {
+/* ── Error banner ── */
+.pm-error {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-6);
-  background: rgba(239, 68, 68, 0.15);
+  padding: var(--space-3) 14px;
+  background: rgba(239, 68, 68, 0.12);
   color: var(--color-danger);
-  border-bottom: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.plugin-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
-  padding: 32px;
-  color: var(--color-text-secondary);
-}
-
-.plugin-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
-  padding: 48px 24px;
-  color: var(--color-text-secondary);
-}
-
-.plugin-empty-hint {
+  border-bottom: 1px solid rgba(239, 68, 68, 0.25);
   font-size: var(--font-size-sm);
-  opacity: 0.7;
+  flex-shrink: 0;
 }
 
-.plugin-list {
+/* ── Tab bar ── */
+.pm-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+
+.pm-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px 14px 7px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.pm-tab:hover {
+  color: var(--color-text-primary);
+}
+
+.pm-tab.active {
+  color: var(--color-accent, #3b82f6);
+  border-bottom-color: var(--color-accent, #3b82f6);
+  font-weight: var(--font-weight-medium);
+}
+
+.pm-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pm-tab.active .pm-tab-badge {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--color-accent, #3b82f6);
+}
+
+/* ── Body (scrollable plugin list) ── */
+.pm-body {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-4) 0;
+  min-height: 0;
 }
 
-.plugin-item {
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-.plugin-item:last-child {
-  border-bottom: none;
-}
-
-.plugin-item-header {
+/* Loading / Empty states */
+.pm-loading,
+.pm-empty {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--space-5) var(--space-6);
-  cursor: pointer;
-  transition: background 0.15s;
+  justify-content: center;
+  gap: var(--space-5);
+  height: 100%;
+  padding: 32px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
-.plugin-item-header:hover {
+/* ── Plugin table ── */
+.pm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.pm-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-bg-secondary);
+}
+
+.pm-table thead th {
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.pm-table thead th:last-child {
+  width: 130px;
+  text-align: right;
+}
+
+/* Plugin rows */
+.pm-plugin-row {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.pm-plugin-row:hover {
   background: var(--color-bg-hover);
 }
 
-.plugin-item-left {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  min-width: 0;
+.pm-plugin-row.selected {
+  background: rgba(59, 130, 246, 0.1);
 }
 
-.plugin-item-left > svg {
-  flex-shrink: 0;
+.pm-plugin-row td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+
+.pm-plugin-row:last-child td {
+  border-bottom: none;
+}
+
+/* Columns */
+.pm-col-name {
+  width: 180px;
+  min-width: 120px;
+}
+
+.pm-plugin-name {
+  font-weight: var(--font-weight-medium);
+}
+
+.pm-col-version {
+  width: 80px;
+  white-space: nowrap;
+}
+
+.pm-plugin-version {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-hover);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+}
+
+.pm-col-desc {
+  /* fills remaining space */
+}
+
+.pm-plugin-desc {
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pm-col-actions {
+  width: 140px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ── Row action buttons ── */
+.pm-row-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.pm-row-btn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-focus);
+}
+
+.pm-row-btn.load:hover {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.pm-row-btn.unload:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.pm-row-btn.enable:hover {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: var(--color-accent, #3b82f6);
+  color: var(--color-accent, #3b82f6);
+}
+
+.pm-row-btn.disable-icon {
+  padding: 3px 6px;
   color: var(--color-text-secondary);
 }
 
-.plugin-name {
-  font-weight: 500;
+.pm-row-btn.disable-icon:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.pm-row-btn-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Footer ── */
+.pm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+  flex-shrink: 0;
+  gap: var(--space-4);
+}
+
+.pm-footer-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pm-footer-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.plugin-version {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  flex-shrink: 0;
-}
-
-.plugin-item-right {
+.pm-footer-actions {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   flex-shrink: 0;
 }
 
-.plugin-status {
+/* Footer buttons */
+.pm-btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 2px var(--space-4);
-  border-radius: 10px;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-}
-
-.plugin-status.loaded {
-  background: rgba(34, 197, 94, 0.15);
-  color: var(--color-success);
-}
-
-.plugin-status.available {
-  background: rgba(234, 179, 8, 0.15);
-  color: var(--color-warning);
-}
-
-.plugin-status.disabled {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--color-danger);
-}
-
-.plugin-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.plugin-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
+  gap: var(--space-3);
+  padding: 5px 14px;
   border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
-.plugin-action-btn:hover:not(:disabled) {
-  background: var(--color-bg-hover);
+.pm-btn-secondary {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
   color: var(--color-text-primary);
 }
 
-.plugin-action-btn.load:hover:not(:disabled) {
-  color: var(--color-success);
+.pm-btn-secondary:hover:not(:disabled) {
+  background: var(--color-bg-hover);
 }
 
-.plugin-action-btn.unload:hover:not(:disabled) {
-  color: var(--color-danger);
-}
-
-.plugin-action-btn.enable:hover:not(:disabled) {
-  color: var(--color-success);
-}
-
-.plugin-action-btn.disable:hover:not(:disabled) {
-  color: var(--color-warning);
-}
-
-.plugin-action-btn:disabled {
+.pm-btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.plugin-item-details {
-  padding: var(--space-4) var(--space-6) var(--space-6) 34px;
-  background: var(--color-bg-tertiary);
-  border-top: 1px solid var(--color-border-subtle);
-}
-
-.plugin-detail {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
-  margin-top: var(--space-4);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.plugin-detail:first-child {
-  margin-top: 0;
-}
-
-.plugin-detail svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.plugin-detail-label {
-  flex-shrink: 0;
-  font-weight: 500;
+.pm-btn-primary {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-hover);
   color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
 }
 
-.plugin-detail code {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
-  padding: 1px 5px;
-  background: var(--color-bg-primary);
-  border-radius: var(--radius-sm);
+.pm-btn-primary:hover {
+  background: var(--color-bg-tertiary);
 }
 
-.plugin-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.plugin-tag {
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-}
-
-.plugin-tag.dependency {
-  background: rgba(59, 130, 246, 0.15);
-  color: var(--color-info);
-}
-
-.plugin-tag.permission {
-  background: rgba(168, 85, 247, 0.15);
-  color: #a855f7;
-}
-
-/* Disable Dialog */
-.plugin-dialog-overlay {
+/* ── Sub-dialog (Disable confirmation) ── */
+.pm-sub-overlay {
   position: fixed;
   inset: 0;
+  z-index: 9100;
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg-overlay);
-  z-index: 1000;
 }
 
-.plugin-dialog {
+.pm-sub-dialog {
+  width: 380px;
+  max-width: calc(100vw - 40px);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-10);
-  min-width: 320px;
-  box-shadow: var(--shadow-dialog);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-.plugin-dialog h3 {
-  margin: 0 0 var(--space-6);
-  font-size: 15px;
+.pm-sub-dialog h3 {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
 }
 
-.plugin-dialog p {
-  margin: 0 0 var(--space-6);
+.pm-sub-dialog p {
+  margin: 0 0 var(--space-5);
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
 
-.plugin-dialog input {
+.pm-sub-dialog input {
   width: 100%;
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg-input);
   color: var(--color-text-primary);
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   box-sizing: border-box;
 }
 
-.plugin-dialog input:focus {
+.pm-sub-dialog input:focus {
   outline: none;
   border-color: var(--color-border-focus);
 }
 
-.plugin-dialog-actions {
+.pm-sub-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-4);
-  margin-top: var(--space-8);
+  margin-top: var(--space-6);
 }
 
-.plugin-dialog-actions button {
-  padding: var(--space-3) 14px;
-  border: none;
+.pm-sub-actions button {
+  padding: 5px 14px;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   cursor: pointer;
   transition: background 0.15s;
-}
-
-.plugin-dialog-actions button:not(.confirm) {
   background: var(--color-bg-hover);
   color: var(--color-text-primary);
 }
 
-.plugin-dialog-actions button:not(.confirm):hover {
+.pm-sub-actions button:hover {
   background: var(--color-bg-tertiary);
 }
 
-.plugin-dialog-actions button.confirm {
+.pm-sub-actions button.confirm {
   background: var(--color-danger);
   color: var(--color-text-inverse);
+  border-color: var(--color-danger);
 }
 
-.plugin-dialog-actions button.confirm:hover {
-  background: var(--color-danger-hover);
+.pm-sub-actions button.confirm:hover {
+  background: var(--color-danger-hover, #dc2626);
 }
 
-/* Spin animation */
+/* ── Spin animation ── */
 .spin {
-  animation: plugin-spin 1s linear infinite;
+  animation: pm-spin 1s linear infinite;
 }
 
-@keyframes plugin-spin {
+@keyframes pm-spin {
   from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  to   { transform: rotate(360deg); }
 }
