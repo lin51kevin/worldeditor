@@ -132,7 +132,7 @@ export function PropertyPanel() {
                 {selectedRoad.lane_sections.map((ls, si) => (
                   <div key={si} className="property-lane-section">
                     <div className="property-row sub">
-                      <span className="property-label">Section #{si + 1} (s={ls.s})</span>
+                      <span className="property-label">{t('propertyPanel.laneSection')} #{si + 1} (s={ls.s})</span>
                     </div>
                     {(['left', 'right'] as const).map((side) =>
                       ls[side].map((lane) => {
@@ -179,6 +179,15 @@ export function PropertyPanel() {
                                 }}
                               />
                               <span className="property-unit">m</span>
+                              <button
+                                className="property-btn property-btn-delete-lane"
+                                title={t('propertyPanel.deleteLane')}
+                                onClick={() =>
+                                  useEditorStore.getState().removeLane(selectedRoad.id, si, side, lane.id)
+                                }
+                              >
+                                ×
+                              </button>
                             </div>
                           </div>
                         );

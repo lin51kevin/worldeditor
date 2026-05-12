@@ -68,6 +68,7 @@ interface EditorState {
   updateObject: (id: string, updates: Partial<RoadObject>) => void;
   updateLaneType: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, laneType: string) => void;
   updateLaneWidth: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, width: LaneWidth) => void;
+  removeLane: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number) => void;
   addElevationPoint: (roadId: string, s: number, height: number) => void;
   updateElevationPoint: (roadId: string, index: number, updates: Partial<Elevation>) => void;
   removeElevationPoint: (roadId: string, index: number) => void;
@@ -795,6 +796,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           return {
             ...r,
             elevation_profile: r.elevation_profile.filter((_, i) => i !== index),
+          };
+        }),
+      },
+      isDirty: true,
+    })),
+
+  removeLane: (roadId, sectionIndex, side, laneId) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          return {
+            ...r,
+            lane_sections: r.lane_sections.map((ls, si) => {
+              if (si !== sectionIndex) return ls;
+              return {
+                ...ls,
+                [side]: ls[side].filter((l) => l.id !== laneId),
+              };
+            }),
           };
         }),
       },
