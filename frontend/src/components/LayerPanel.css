@@ -21,6 +21,28 @@
   position: relative;
 }
 
+.panel-close-btn {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.panel-close-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
 /* Cards scroll container */
 .layer-cards {
   flex: 1;
@@ -282,7 +304,7 @@
   border-left: 1px dashed var(--color-border-subtle, var(--color-border));
 }
 
-.lane-section-children .layer-item-lane + .layer-item-lane {
+.lane-section-children .layer-item-lane+.layer-item-lane {
   margin-top: 1px;
 }
 
