@@ -1,12 +1,14 @@
 import { useCallback, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FlipHorizontal2, Sparkles, ArrowUpDown } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import './RoadEditToolbar.css';
 
 interface ToolDef {
   id: string;
-  icon: string;
+  icon: ReactNode;
   labelKey: string;
   action: () => void;
   /** 'instant' = one-click operation; 'mode' = enters a persistent interaction mode */
@@ -114,7 +116,7 @@ export function RoadEditToolbar() {
     },
     {
       id: 'optimize-node',
-      icon: '✦',
+      icon: <Sparkles size={14} />,
       labelKey: 'toolPanel.optimizeNode',
       kind: 'instant',
       action: handleOptimize,
@@ -143,14 +145,14 @@ export function RoadEditToolbar() {
     },
     {
       id: 'mirror-road',
-      icon: '⇌',
+      icon: <FlipHorizontal2 size={14} />,
       labelKey: 'toolPanel.mirrorRoad',
       kind: 'instant',
       action: handleMirror,
     },
     {
       id: 'swap-centerline',
-      icon: '⇅',
+      icon: <ArrowUpDown size={14} />,
       labelKey: 'toolPanel.swapCenterlineAndEdge',
       kind: 'instant',
       action: handleSwapCenterline,

@@ -9,6 +9,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { ToolbarButtonContrib, MenuItemContrib } from '../stores/pluginContribStore';
+import { FlipHorizontal2, Sparkles, ArrowUpDown } from 'lucide-react';
 
 const PLUGIN_ID = 'road-tools';
 
@@ -114,7 +115,7 @@ export function mountRoadToolsPlugin(): () => void {
     {
       id: `${PLUGIN_ID}:mirror`,
       pluginId: PLUGIN_ID,
-      icon: '⇌',
+      icon: <FlipHorizontal2 size={14} />,
       labelKey: 'toolPanel.mirrorRoad',
       group: 'action',
       isDisabled: () => !useEditorStore.getState().selectedRoadId,
@@ -126,7 +127,7 @@ export function mountRoadToolsPlugin(): () => void {
     {
       id: `${PLUGIN_ID}:optimize`,
       pluginId: PLUGIN_ID,
-      icon: '✦',
+      icon: <Sparkles size={14} />,
       labelKey: 'toolPanel.optimizeNode',
       group: 'action',
       isDisabled: () => !useEditorStore.getState().selectedRoadId,
@@ -138,7 +139,7 @@ export function mountRoadToolsPlugin(): () => void {
     {
       id: `${PLUGIN_ID}:swap-centerline`,
       pluginId: PLUGIN_ID,
-      icon: '⇅',
+      icon: <ArrowUpDown size={14} />,
       labelKey: 'toolPanel.swapCenterlineAndEdge',
       group: 'action',
       isDisabled: () => !useEditorStore.getState().selectedRoadId,

@@ -9,12 +9,13 @@
  * categorized template items to the TemplatePanel.
  */
 import { create } from 'zustand';
+import type { ReactNode } from 'react';
 
 export interface ToolbarButtonContrib {
   id: string;
   pluginId: string;
-  /** Unicode glyph or emoji icon */
-  icon: string;
+  /** Icon — Lucide React element or emoji/Unicode string */
+  icon: ReactNode;
   /** i18n key for the label (translated by Toolbar) */
   labelKey: string;
   /** i18n key for the tooltip; falls back to labelKey */
