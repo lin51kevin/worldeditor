@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Eye, EyeOff, ChevronRight, ChevronDown,
-  Crosshair, GitMerge, X,
+  Crosshair, GitMerge,
 } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
@@ -190,13 +190,6 @@ export function LayerPanel() {
     <div className="layer-panel">
       <div className="panel-header">
         <span>{t('layerPanel.header')}</span>
-        <button
-          className="panel-close-btn"
-          onClick={() => useEditorViewStore.getState().toggleLeftPanel()}
-          title={t('panel.close')}
-        >
-          <X size={12} />
-        </button>
       </div>
 
       <div className="layer-cards">

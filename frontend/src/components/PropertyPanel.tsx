@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronRight, X } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { getPlatformService } from '../services';
@@ -75,13 +75,6 @@ export function PropertyPanel() {
       {/* Drag handle + header */}
       <div className="prop-header">
         <span className="prop-header-title">{t('propertyPanel.properties')}</span>
-        <button
-          className="panel-close-btn"
-          onClick={() => useEditorViewStore.getState().toggleRightPanel()}
-          title={t('panel.close')}
-        >
-          <X size={12} />
-        </button>
       </div>
 
       {/* Properties content */}

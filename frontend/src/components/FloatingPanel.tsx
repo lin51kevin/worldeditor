@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect, type CSSProperties } from 'react';
+import { X } from 'lucide-react';
 import './FloatingPanel.css';
 
 interface SavedState {
@@ -25,6 +26,8 @@ interface FloatingPanelProps {
   anchorHorizontal?: 'left' | 'right';
   /** localStorage key for persisting position/size */
   storageKey: string;
+  /** Optional close callback — when provided a × button is rendered in the top-right corner */
+  onClose?: () => void;
 }
 
 function loadState(key: string, defaultWidth: number): SavedState {
@@ -71,6 +74,7 @@ export function FloatingPanel({
   resizeEdges,
   anchorHorizontal = 'left',
   storageKey,
+  onClose,
 }: FloatingPanelProps) {
   const initialState = loadState(storageKey, defaultWidth);
   const [tx, setTx] = useState(initialState.tx);
@@ -273,6 +277,11 @@ export function FloatingPanel({
     >
       <div className="fp-inner">
         {children}
+        {onClose && (
+          <button className="fp-close-btn" onClick={onClose} title="关闭" type="button">
+            <X size={12} />
+          </button>
+        )}
       </div>
 
       {resizeEdges.includes('top') && (

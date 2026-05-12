@@ -30,6 +30,7 @@ export function App() {
     toggleLeftPanel,
     toggleRightPanel,
     toggleOutputPanel,
+    toggleTemplatePanel,
   } = useEditorViewStore();
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
@@ -157,6 +158,7 @@ export function App() {
           minHeight={200}
           resizeEdges={['top', 'right', 'bottom', 'left']}
           storageKey="we-panel-left"
+          onClose={toggleLeftPanel}
         >
           <LayerPanel />
         </FloatingPanel>
@@ -173,6 +175,7 @@ export function App() {
         minHeight={80}
           resizeEdges={['top', 'right', 'bottom', 'left']}
           storageKey="we-panel-template"
+          onClose={toggleTemplatePanel}
       >
         <TemplatePanel />
       </FloatingPanel>
@@ -190,6 +193,7 @@ export function App() {
           resizeEdges={['top', 'right', 'bottom', 'left']}
           anchorHorizontal="right"
           storageKey="we-panel-right"
+          onClose={toggleRightPanel}
         >
           <PropertyPanel />
         </FloatingPanel>
