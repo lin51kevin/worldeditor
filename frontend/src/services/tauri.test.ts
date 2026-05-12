@@ -90,7 +90,7 @@ describe('TauriPlatformService', () => {
 
     const result = await service.generateRoadVertices(project, 2.0);
 
-    expect(wasmModule.generate_road_vertices).toHaveBeenCalledWith(JSON.stringify(project), 2.0);
+    expect(wasmModule.generate_road_vertices).toHaveBeenCalledWith(JSON.stringify(project), 2.0, 'byLaneType');
     expect(result).toEqual(new Float32Array([0, 1, 2]));
   });
 

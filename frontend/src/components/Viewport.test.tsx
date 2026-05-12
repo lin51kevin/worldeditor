@@ -249,7 +249,7 @@ describe('Viewport', () => {
 
     await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
     await waitFor(() => expect(rendererMocks.start).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(platform.generateRoadVertices).toHaveBeenCalledWith(makeProject(), 2));
+    await waitFor(() => expect(platform.generateRoadVertices).toHaveBeenCalledWith(makeProject(), 2, 'byLaneType'));
     await waitFor(() => expect(rendererMocks.uploadRoadVertices).toHaveBeenCalledWith(vertices));
 
     const resizeObserver = resizeObservers[0]!;
@@ -281,12 +281,11 @@ describe('Viewport', () => {
 
     await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
     await waitFor(() => expect(platform.generateRoadVertices).toHaveBeenCalled());
-    await waitFor(() => expect(consoleErrorSpy).toHaveBeenCalledWith(
-      '[Viewport] Failed to generate road mesh:',
-      expect.any(Error),
-    ));
+    // generateRoadVertices rejection is caught individually; no console.error expected
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    // uploadRoadVertices is still called with empty fallback data
+    await waitFor(() => expect(rendererMocks.uploadRoadVertices).toHaveBeenCalled());
 
-    expect(rendererMocks.uploadRoadVertices).not.toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
   });
 

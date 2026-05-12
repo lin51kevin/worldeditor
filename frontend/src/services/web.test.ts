@@ -81,7 +81,7 @@ describe('WebPlatformService', () => {
     expect(wasmModule.gcj02_to_wgs84).toHaveBeenCalledWith(4, 5, 6);
     expect(wasmModule.geo_to_utm).toHaveBeenCalledWith(7, 8, 9);
     expect(wasmModule.utm_to_geo).toHaveBeenCalledWith(10, 11, 50, true, 12);
-    expect(wasmModule.generate_road_vertices).toHaveBeenCalledWith(JSON.stringify(project), 0.5);
+    expect(wasmModule.generate_road_vertices).toHaveBeenCalledWith(JSON.stringify(project), 0.5, 'byLaneType');
   });
 
   it('opens a file picker and resolves the selected file contents', async () => {
