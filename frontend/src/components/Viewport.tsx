@@ -9,7 +9,7 @@ import { useThemeStore } from '../stores/themeStore';
 import { getPlatformService } from '../services';
 import type { EditableSpline, SplineKnot, Road, Junction, Project } from '../services/platform';
 import { showContextMenu } from '../services/contextMenu';
-import { createRoadFromTemplate } from './TemplatePanel';
+import { usePluginContribStore } from '../stores/pluginContribStore';
 import {
   buildHighlightProject,
   buildRenderableProject,
@@ -1225,11 +1225,11 @@ export function Viewport() {
     const worldPos = renderer.unprojectToGround(screenX, screenY);
     if (!worldPos) return;
 
-    const road = createRoadFromTemplate(templateId, worldPos.x, worldPos.y, 0);
-    if (road) {
-      useEditorStore.getState().addRoad(road);
-      useEditorStore.getState().markDirty();
-      useEditorStore.getState().selectRoad(road.id);
+    // Resolve the template item from the contrib store and let it handle creation
+    const sections = usePluginContribStore.getState().templateSections;
+    const item = sections.flatMap((s) => s.items).find((i) => i.id === templateId);
+    if (item) {
+      item.onApply({ x: worldPos.x, y: worldPos.y, hdg: 0 });
     }
   }, []);
 
