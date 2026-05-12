@@ -125,7 +125,10 @@ we-core ────────────────────────
 - [Rust](https://rustup.rs/) (stable, edition 2024)
 - [Node.js](https://nodejs.org/) 22+
 - [Yarn](https://yarnpkg.com/) (通过 corepack 启用)
-- [just](https://github.com/casey/just) (任务运行器): `cargo install just`
+- [just](https://github.com/casey/just) (任务运行器):
+  - `cargo install just`，或
+  - Windows: `winget install casey.just` 或 `scoop install just`
+  - macOS/Linux: `brew install just`
 - [wasm-pack](https://rustwasm.github.io/wasm-pack/): `cargo install wasm-pack`
 
 ### 构建与运行
