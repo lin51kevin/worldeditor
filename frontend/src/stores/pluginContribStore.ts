@@ -4,6 +4,9 @@
  * Plugins call registerToolbarButton / registerMenuItem to inject their
  * buttons/items into the Toolbar and MenuBar. On unload, call
  * unregisterPlugin(pluginId) to remove all contributions at once.
+ *
+ * Template sections: plugins register TemplateSectionContrib to add
+ * categorized template items to the TemplatePanel.
  */
 import { create } from 'zustand';
 
@@ -37,14 +40,42 @@ export interface MenuItemContrib {
   onClick: () => void;
 }
 
+/** A single item in a template section (e.g. "Single Lane", "Traffic Light") */
+export interface TemplateItemDef {
+  id: string;
+  /** i18n key for the visible label */
+  labelKey: string;
+  /** Unicode glyph / emoji used as thumbnail */
+  icon: string;
+  /**
+   * Called when the user clicks or activates the item.
+   * @param opts optional drop position in world coordinates
+   */
+  onApply: (opts?: { x?: number; y?: number; hdg?: number }) => void;
+}
+
+/** A category of templates contributed by a plugin */
+export interface TemplateSectionContrib {
+  id: string;
+  pluginId: string;
+  /** i18n key for the tab label */
+  categoryKey: string;
+  /** Controls tab order (ascending) */
+  order: number;
+  items: TemplateItemDef[];
+}
+
 interface PluginContribState {
   toolbarButtons: ToolbarButtonContrib[];
   menuItems: MenuItemContrib[];
+  templateSections: TemplateSectionContrib[];
 
   registerToolbarButton: (contrib: ToolbarButtonContrib) => void;
   unregisterToolbarButton: (id: string) => void;
   registerMenuItem: (contrib: MenuItemContrib) => void;
   unregisterMenuItem: (id: string) => void;
+  registerTemplateSection: (section: TemplateSectionContrib) => void;
+  unregisterTemplateSection: (sectionId: string) => void;
   /** Remove all contributions from a given plugin at once */
   unregisterPlugin: (pluginId: string) => void;
 }
@@ -52,6 +83,7 @@ interface PluginContribState {
 export const usePluginContribStore = create<PluginContribState>((set) => ({
   toolbarButtons: [],
   menuItems: [],
+  templateSections: [],
 
   registerToolbarButton: (contrib) =>
     set((state) => ({
@@ -79,9 +111,23 @@ export const usePluginContribStore = create<PluginContribState>((set) => ({
       menuItems: state.menuItems.filter((m) => m.id !== id),
     })),
 
+  registerTemplateSection: (section) =>
+    set((state) => ({
+      templateSections: [
+        ...state.templateSections.filter((s) => s.id !== section.id),
+        section,
+      ],
+    })),
+
+  unregisterTemplateSection: (sectionId) =>
+    set((state) => ({
+      templateSections: state.templateSections.filter((s) => s.id !== sectionId),
+    })),
+
   unregisterPlugin: (pluginId) =>
     set((state) => ({
       toolbarButtons: state.toolbarButtons.filter((b) => b.pluginId !== pluginId),
       menuItems: state.menuItems.filter((m) => m.pluginId !== pluginId),
+      templateSections: state.templateSections.filter((s) => s.pluginId !== pluginId),
     })),
 }));
