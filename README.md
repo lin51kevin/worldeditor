@@ -166,6 +166,64 @@ just audit              # 安全依赖审计
 just clean              # 清理构建产物
 ```
 
+## 打包发布（制作安装包）
+
+### 前置步骤（仅需安装一次）
+
+```bash
+# 安装 Tauri CLI
+cargo install tauri-cli
+```
+
+### 打包命令
+
+```bash
+# 为当前平台打包（自动构建前端 + Rust，输出安装包）
+just bundle
+
+# 或直接使用 Tauri CLI
+cargo tauri build
+
+# 为指定目标平台交叉编译
+just bundle-target x86_64-pc-windows-msvc   # Windows
+just bundle-target aarch64-apple-darwin      # macOS (Apple Silicon)
+just bundle-target x86_64-unknown-linux-gnu  # Linux
+```
+
+> `cargo tauri build` 会自动执行前端构建（`yarn build`），无需单独运行。
+
+### 输出产物
+
+打包完成后，安装包位于 `src-tauri/target/<target>/release/bundle/`：
+
+| 平台 | 安装包格式 | 路径 |
+|------|-----------|------|
+| Windows | `.exe` (NSIS) / `.msi` (WiX) | `bundle/nsis/` / `bundle/msi/` |
+| macOS | `.dmg` / `.app` | `bundle/dmg/` / `bundle/macos/` |
+| Linux | `.deb` / `.AppImage` / `.rpm` | `bundle/deb/` / `bundle/appimage/` / `bundle/rpm/` |
+
+### Linux 额外系统依赖
+
+在 Ubuntu/Debian 上打包前需安装：
+
+```bash
+sudo apt install -y \
+  libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
+  pkg-config libdbus-1-dev \
+  libxcb1-dev libxcb-shm0-dev libxcb-xfixes0-dev \
+  libxcb-render0-dev libxkbcommon-dev libxkbcommon-x11-dev
+```
+
+### CI 自动发布
+
+推送 `v*` 格式的 git tag 会触发 GitHub Actions 自动为三平台构建并上传 Release：
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+详见 [`.github/workflows/release.yml`](.github/workflows/release.yml)。
+
 ## 测试
 
 项目采用 TDD 工作流，所有代码变更必须附带测试。
