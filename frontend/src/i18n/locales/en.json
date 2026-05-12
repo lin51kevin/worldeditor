@@ -27,7 +27,7 @@
     "calculateRoadLength": "Calculate Road Length",
     "road": "Road",
     "resetPanels": "Reset Panel Positions",
-    "showLayerPanel": "Layer Panel",
+    "showLayerPanel": "Navigator Panel",
     "showPropertyPanel": "Property Panel",
     "showTemplatePanel": "Template Panel",
     "showOutputPanel": "Output Panel",
@@ -52,7 +52,6 @@
     "redo": "Redo",
     "redoTitle": "Redo (Ctrl+Y)",
     "delete": "Delete",
-    "deleteTitle": "Delete (Del)",
     "resetTitle": "Reset unsaved changes",
     "selectMode": "Default",
     "selectModeTitle": "Select Mode (S)",
@@ -174,7 +173,10 @@
     "sceneList": "Scene",
     "roads": "Roads",
     "junctions": "Junctions",
-    "noMapData": "No map data loaded"
+    "noMapData": "No map data loaded",
+    "searchPlaceholder": "Search roads/junctions...",
+    "noSearchResults": "No matching results",
+    "filteredCount": "{{count}}/{{total}}"
   },
   "toolPanel": {
     "header": "Tools",
@@ -268,6 +270,7 @@
     "colName": "Name",
     "colVersion": "Version",
     "colDescription": "Description",
+    "colActions": "Actions",
     "noAvailable": "No available plugins",
     "noInstalled": "No installed plugins",
     "noDisabled": "No disabled plugins",

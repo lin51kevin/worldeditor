@@ -1,8 +1,8 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Eye, EyeOff, ChevronRight, ChevronDown,
-  Crosshair, GitMerge,
+  Crosshair, GitMerge, Search, X,
 } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
@@ -52,6 +52,7 @@ export function LayerPanel() {
   const [mapInfoCollapsed, setMapInfoCollapsed] = useState(true);
   const [displaySettingsCollapsed, setDisplaySettingsCollapsed] = useState(true);
   const [sceneListCollapsed, setSceneListCollapsed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { t } = useTranslation();
 
   // Refs for auto-scroll: track each row's DOM element
@@ -71,7 +72,7 @@ export function LayerPanel() {
     setSceneListCollapsed(false);
     const el = rowRefs.current.get(id);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      el.scrollIntoView({ behavior: 'instant', block: 'nearest' });
     }
   }, [selectedRoadId, selectedJunctionId]);
 
@@ -179,9 +180,21 @@ export function LayerPanel() {
     emitViewportEvent({ type: 'zoom-to-junction', junctionId });
   }, []);
 
-  const filteredRoads = project.roads;
+  const filteredRoads = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return project.roads;
+    return project.roads.filter(
+      (r) => r.id.toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q),
+    );
+  }, [project.roads, searchQuery]);
 
-  const filteredJunctions = project.junctions;
+  const filteredJunctions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return project.junctions;
+    return project.junctions.filter(
+      (j) => j.id.toLowerCase().includes(q) || (j.name || '').toLowerCase().includes(q),
+    );
+  }, [project.junctions, searchQuery]);
 
   const header = project.header;
   const loaded = hasProjectData(project);
@@ -314,10 +327,33 @@ export function LayerPanel() {
           >
             {sceneListCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
             <span>
-              {t('layerPanel.sceneList')} ({t('layerPanel.roads')}: {filteredRoads.length}, {t('layerPanel.junctions')}: {filteredJunctions.length})
+              {t('layerPanel.sceneList')}{' '}
+              {searchQuery.trim()
+                ? `(${t('layerPanel.roads')}: ${t('layerPanel.filteredCount', { count: filteredRoads.length, total: project.roads.length })}, ${t('layerPanel.junctions')}: ${t('layerPanel.filteredCount', { count: filteredJunctions.length, total: project.junctions.length })})`
+                : `(${t('layerPanel.roads')}: ${filteredRoads.length}, ${t('layerPanel.junctions')}: ${filteredJunctions.length})`}
             </span>
           </div>
           {!sceneListCollapsed && (
+            <>
+              <div className="search-bar">
+                <Search size={12} className="search-icon" />
+                <input
+                  className="search-input"
+                  type="text"
+                  value={searchQuery}
+                  placeholder={t('layerPanel.searchPlaceholder')}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (e.target.value) setSceneListCollapsed(false);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                {searchQuery && (
+                  <button className="search-clear" onClick={() => setSearchQuery('')} title="Clear">
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
           <div className="road-list">
             {/* Roads */}
             {filteredRoads.map((road) => (
@@ -483,6 +519,10 @@ export function LayerPanel() {
               </div>
             ))}
           </div>
+          {filteredRoads.length === 0 && filteredJunctions.length === 0 && searchQuery.trim() && (
+            <div className="scene-list-empty">{t('layerPanel.noSearchResults')}</div>
+          )}
+            </>
           )}
         </div>
       </div>

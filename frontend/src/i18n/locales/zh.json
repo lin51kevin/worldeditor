@@ -25,7 +25,7 @@
     "showGrid": "网格",
     "showAxis": "坐标轴",
     "resetPanels": "重置面板位置",
-    "showLayerPanel": "图层面板",
+    "showLayerPanel": "导航器面板",
     "showPropertyPanel": "属性面板",
     "showTemplatePanel": "模板面板",
     "showOutputPanel": "输出面板",
@@ -52,7 +52,6 @@
     "redo": "重做",
     "redoTitle": "重做 (Ctrl+Y)",
     "delete": "删除",
-    "deleteTitle": "删除选中 (Del)",
     "resetTitle": "重置未保存修改",
     "selectMode": "默认",
     "selectModeTitle": "选择模式 (S)",
@@ -174,7 +173,10 @@
     "sceneList": "场景",
     "roads": "道路",
     "junctions": "路口",
-    "noMapData": "未加载地图数据"
+    "noMapData": "未加载地图数据",
+    "searchPlaceholder": "搜索道路/路口...",
+    "noSearchResults": "无匹配结果",
+    "filteredCount": "{{count}}/{{total}}"
   },
   "toolPanel": {
     "header": "工具",
@@ -268,6 +270,7 @@
     "colName": "名称",
     "colVersion": "版本",
     "colDescription": "描述",
+    "colActions": "操作",
     "noAvailable": "暂无可用插件",
     "noInstalled": "尚未安装任何插件",
     "noDisabled": "无已禁用插件",

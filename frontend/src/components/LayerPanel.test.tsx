@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LaneSection, Project, Road } from '../services/platform';
+import type { Junction, LaneSection, Project, Road } from '../services/platform';
 import { useEditorStore } from '../stores/editorStore';
 import { DEFAULT_DISPLAY, useEditorViewStore } from '../stores/editorViewStore';
 import { makeLaneKey, makeLaneSectionKey } from '../utils/sceneGraph';
@@ -46,6 +46,14 @@ function makeLaneSection(): LaneSection {
     center: [{ id: 0, lane_type: 'None', level: false, link: { predecessor: null, successor: null }, width: [], road_marks: [] }],
     right: [{ id: -1, lane_type: 'Driving', level: false, link: { predecessor: null, successor: null }, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
   };
+}
+
+function makeProjectWithJunctions(roads: Road[] = [], junctions: Junction[] = []): Project {
+  return { ...makeProject(roads), junctions };
+}
+
+function makeJunction(id: string, name: string): Junction {
+  return { id, name, connections: [] };
 }
 
 describe('LayerPanel', () => {
@@ -181,5 +189,94 @@ describe('LayerPanel', () => {
     expect(useEditorViewStore.getState().display.hiddenLaneSectionKeys).toEqual([
       makeLaneSectionKey('r-1', 0),
     ]);
+  });
+
+  // ── Search box tests ──────────────────────────────────────────────────────
+
+  it('shows search input inside scene list', () => {
+    render(<LayerPanel />);
+    expect(screen.getByPlaceholderText('搜索道路/路口...')).toBeInTheDocument();
+  });
+
+  it('filters roads by id', () => {
+    act(() => {
+      useEditorStore.setState({
+        project: makeProject([makeRoad('road-1', '主干道'), makeRoad('road-2', '辅路')]),
+      });
+    });
+
+    render(<LayerPanel />);
+
+    fireEvent.change(screen.getByPlaceholderText('搜索道路/路口...'), { target: { value: 'road-1' } });
+
+    expect(screen.getByText('主干道')).toBeInTheDocument();
+    expect(screen.queryByText('辅路')).not.toBeInTheDocument();
+  });
+
+  it('filters roads by name (case-insensitive)', () => {
+    act(() => {
+      useEditorStore.setState({
+        project: makeProject([makeRoad('r-1', 'MainStreet'), makeRoad('r-2', 'SideRoad')]),
+      });
+    });
+
+    render(<LayerPanel />);
+
+    fireEvent.change(screen.getByPlaceholderText('搜索道路/路口...'), { target: { value: 'main' } });
+
+    expect(screen.getByText('MainStreet')).toBeInTheDocument();
+    expect(screen.queryByText('SideRoad')).not.toBeInTheDocument();
+  });
+
+  it('filters junctions by id', () => {
+    act(() => {
+      useEditorStore.setState({
+        project: makeProjectWithJunctions(
+          [],
+          [makeJunction('j-10', 'Junction Alpha'), makeJunction('j-20', 'Junction Beta')],
+        ),
+      });
+    });
+
+    render(<LayerPanel />);
+
+    fireEvent.change(screen.getByPlaceholderText('搜索道路/路口...'), { target: { value: 'j-10' } });
+
+    expect(screen.getByText('Junction Alpha')).toBeInTheDocument();
+    expect(screen.queryByText('Junction Beta')).not.toBeInTheDocument();
+  });
+
+  it('shows no-results message when nothing matches', () => {
+    act(() => {
+      useEditorStore.setState({
+        project: makeProject([makeRoad('r-1', '测试道路')]),
+      });
+    });
+
+    render(<LayerPanel />);
+
+    fireEvent.change(screen.getByPlaceholderText('搜索道路/路口...'), { target: { value: 'xyz-不存在' } });
+
+    expect(screen.queryByText('测试道路')).not.toBeInTheDocument();
+    expect(screen.getByText('无匹配结果')).toBeInTheDocument();
+  });
+
+  it('restores full list when search is cleared', () => {
+    act(() => {
+      useEditorStore.setState({
+        project: makeProject([makeRoad('r-1', '道路A'), makeRoad('r-2', '道路B')]),
+      });
+    });
+
+    render(<LayerPanel />);
+    const input = screen.getByPlaceholderText('搜索道路/路口...');
+
+    fireEvent.change(input, { target: { value: '道路A' } });
+    expect(screen.queryByText('道路B')).not.toBeInTheDocument();
+
+    // Click the clear button
+    fireEvent.click(screen.getByTitle('Clear'));
+    expect(screen.getByText('道路A')).toBeInTheDocument();
+    expect(screen.getByText('道路B')).toBeInTheDocument();
   });
 });
