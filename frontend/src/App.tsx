@@ -23,6 +23,16 @@ import { useBuiltinPluginStore } from './stores/builtinPluginStore';
 import { mountRoadToolsPlugin } from './plugins/roadTools.plugin';
 import { mountTemplatesPlugin } from './plugins/templates.plugin';
 import { mountAdvancedEditingPlugin } from './plugins/advancedEditing.plugin';
+import { mountIoCsvPlugin } from './plugins/ioCsv.plugin';
+import { mountIoObj3dPlugin } from './plugins/ioObj3d.plugin';
+import { mountIoLanelet2Plugin } from './plugins/ioLanelet2.plugin';
+import { mountIoShapefilePlugin } from './plugins/ioShapefile.plugin';
+import { mountIoDxfPlugin } from './plugins/ioDxf.plugin';
+import { mountIoNioPlugin } from './plugins/ioNio.plugin';
+import { mountIoMifPlugin } from './plugins/ioMif.plugin';
+import { mountIoOsmPlugin } from './plugins/ioOsm.plugin';
+import { mountIoSignalsPlugin } from './plugins/ioSignals.plugin';
+import { mountIoXodrExtPlugin } from './plugins/ioXodrExt.plugin';
 
 export function App() {
   const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
@@ -61,6 +71,16 @@ export function App() {
     if (!disabledBuiltins.includes('advanced-editing')) {
       cleanups.push(mountAdvancedEditingPlugin());
     }
+    if (!disabledBuiltins.includes('io-csv')) cleanups.push(mountIoCsvPlugin());
+    if (!disabledBuiltins.includes('io-obj3d')) cleanups.push(mountIoObj3dPlugin());
+    if (!disabledBuiltins.includes('io-lanelet2')) cleanups.push(mountIoLanelet2Plugin());
+    if (!disabledBuiltins.includes('io-shapefile')) cleanups.push(mountIoShapefilePlugin());
+    if (!disabledBuiltins.includes('io-dxf')) cleanups.push(mountIoDxfPlugin());
+    if (!disabledBuiltins.includes('io-nio')) cleanups.push(mountIoNioPlugin());
+    if (!disabledBuiltins.includes('io-mif')) cleanups.push(mountIoMifPlugin());
+    if (!disabledBuiltins.includes('io-osm')) cleanups.push(mountIoOsmPlugin());
+    if (!disabledBuiltins.includes('io-signals')) cleanups.push(mountIoSignalsPlugin());
+    if (!disabledBuiltins.includes('io-xodr-ext')) cleanups.push(mountIoXodrExtPlugin());
     return () => cleanups.forEach((fn) => fn());
   }, [disabledBuiltins]);
 
