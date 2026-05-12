@@ -18,6 +18,13 @@ pub fn run() {
             commands::gcj02_to_wgs84,
             commands::geo_to_utm,
             commands::utm_to_geo,
+            // Plugin management
+            commands::plugin_list,
+            commands::plugin_get_script,
+            commands::plugin_enable,
+            commands::plugin_disable,
+            commands::plugin_install,
+            commands::plugin_unload,
         ])
         .setup(|app| {
             // Set window icon explicitly so dev mode also shows the correct taskbar icon.
@@ -27,6 +34,22 @@ pub fn run() {
                     let _ = window.set_icon(icon);
                 }
             }
+
+            // Initialize plugin registry in the app data directory
+            let plugins_dir = app
+                .path()
+                .app_data_dir()
+                .map(|d| d.join("plugins"))
+                .unwrap_or_else(|_| std::path::PathBuf::from("plugins"));
+
+            if let Err(e) = std::fs::create_dir_all(&plugins_dir) {
+                log::warn!("Could not create plugins directory {:?}: {}", plugins_dir, e);
+            }
+
+            let mut registry = we_plugin_core::PluginRegistry::new(&plugins_dir);
+            registry.discover();
+            app.manage(we_plugin_core::SharedPluginRegistry::new(registry));
+
             Ok(())
         })
         .run(tauri::generate_context!())
