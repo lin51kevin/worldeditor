@@ -30,20 +30,22 @@ describe('StatusBar', () => {
 
   it('renders coordinate chip and scale bar', () => {
     const { container } = render(<StatusBar />);
-    // Now 4 items: save-state, counts, coords, scale
-    expect(container.querySelectorAll('.statusbar-item').length).toBeGreaterThanOrEqual(3);
+    // Now 2 items: coords, scale
+    expect(container.querySelectorAll('.statusbar-item').length).toBeGreaterThanOrEqual(2);
   });
 
   it('shows saved status when not dirty', () => {
     act(() => { useEditorStore.setState({ isDirty: false }); });
     render(<StatusBar />);
-    expect(screen.getByText('已保存')).toBeInTheDocument();
+    // Save state is no longer shown in StatusBar
+    expect(screen.queryByText('已保存')).not.toBeInTheDocument();
   });
 
   it('shows modified status when dirty', () => {
     act(() => { useEditorStore.setState({ isDirty: true }); });
     render(<StatusBar />);
-    expect(screen.getByText('已修改')).toBeInTheDocument();
+    // Save state is no longer shown in StatusBar
+    expect(screen.queryByText('已修改')).not.toBeInTheDocument();
   });
 
   it('shows road count from project', () => {
@@ -54,7 +56,8 @@ describe('StatusBar', () => {
       });
     });
     render(<StatusBar />);
-    expect(screen.getByText(/道路:\s*1/)).toBeInTheDocument();
+    // Road count is no longer shown in StatusBar
+    expect(screen.queryByText(/道路:\s*1/)).not.toBeInTheDocument();
   });
 
   it('renders scale bar label matching grid spacing', () => {
