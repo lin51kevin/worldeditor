@@ -37,6 +37,8 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   const [activeTab, setActiveTab] = useState<TabId>('available');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
+  const [disableDialogId, setDisableDialogId] = useState<string | null>(null);
+  const [disableReason, setDisableReason] = useState('');
   /** Hidden file input for web-mode plugin installation */
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -87,7 +89,21 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   const handleLoad   = (id: string) => withLoading(id, () => loadPlugin(id));
   const handleUnload = (id: string) => withLoading(id, () => unloadPlugin(id));
   const handleEnable = (id: string) => withLoading(id, () => enablePlugin(id));
-  const handleDisable = (id: string) => withLoading(id, () => disablePlugin(id));
+  const handleDisable = (id: string) => {
+    setDisableReason('');
+    setDisableDialogId(id);
+  };
+  const confirmDisable = () => {
+    if (!disableDialogId) return;
+    const id = disableDialogId;
+    const reason = disableReason;
+    setDisableDialogId(null);
+    void withLoading(id, () => disablePlugin(id, reason));
+  };
+  const cancelDisable = () => {
+    setDisableDialogId(null);
+    setDisableReason('');
+  };
 
   const handleInstallFromFile = async () => {
     if (typeof window !== 'undefined' && '__TAURI__' in window) {
@@ -257,6 +273,32 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
             </button>
           </div>
         </div>
+
+        {/* Disable reason dialog */}
+        {disableDialogId && (
+          <div className="pm-disable-dialog-overlay" onClick={cancelDisable}>
+            <div className="pm-disable-dialog" onClick={(e) => e.stopPropagation()}>
+              <h4>{t('pluginManager.disablePlugin')}</h4>
+              <p>{t('pluginManager.disableReasonPrompt')}</p>
+              <textarea
+                className="pm-disable-reason"
+                rows={3}
+                placeholder={t('pluginManager.disableReasonPlaceholder')}
+                value={disableReason}
+                onChange={(e) => setDisableReason(e.target.value)}
+                autoFocus
+              />
+              <div className="pm-disable-dialog-actions">
+                <button className="pm-btn pm-btn-secondary" onClick={cancelDisable}>
+                  {t('pluginManager.cancel')}
+                </button>
+                <button className="pm-btn pm-btn-primary" onClick={confirmDisable}>
+                  {t('pluginManager.confirmDisable')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
     </>
@@ -305,23 +347,23 @@ function PluginRow({ plugin, selected, isLoading, onSelect, onLoad, onUnload, on
         {isLoading ? (
           <Loader2 size={14} className="spin" />
         ) : plugin.status === 'available' && !plugin.isBuiltin ? (
-          <button className="pm-row-btn load" onClick={onLoad}>
-            {t('pluginManager.install')}
+          <button className="pm-row-btn load" title={t('pluginManager.load')} onClick={onLoad}>
+            {t('pluginManager.load')}
           </button>
         ) : plugin.status === 'loaded' ? (
           <div className="pm-row-btn-group">
-            <button className="pm-row-btn disable" onClick={onDisable}>
+            <button className="pm-row-btn disable" title={t('pluginManager.disable')} onClick={onDisable}>
               {t('pluginManager.disable')}
             </button>
             {!plugin.isBuiltin && (
-              <button className="pm-row-btn unload" onClick={onUnload}>
+              <button className="pm-row-btn unload" title={t('pluginManager.unload')} onClick={onUnload}>
                 <Trash2 size={12} />
                 {t('pluginManager.uninstall')}
               </button>
             )}
           </div>
         ) : plugin.status === 'disabled' ? (
-          <button className="pm-row-btn enable" onClick={onEnable}>
+          <button className="pm-row-btn enable" title={t('pluginManager.enable')} onClick={onEnable}>
             {t('pluginManager.enable')}
           </button>
         ) : null}

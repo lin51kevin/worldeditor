@@ -116,7 +116,7 @@ describe('usePlugins', () => {
 
     await act(async () => {
       if (method === 'disablePlugin') {
-        await result.current.disablePlugin(args[0]);
+        await result.current.disablePlugin(args[0], args[1] as string | undefined);
       } else {
         await result.current.enablePlugin(args[0]);
       }
