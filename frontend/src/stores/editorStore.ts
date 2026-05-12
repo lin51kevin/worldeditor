@@ -376,7 +376,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         .reverse()
         .map((geo, idx) => {
           const origIdx = road.plan_view.length - 1 - idx;
-          const { x, y, hdg } = endPoses[origIdx];
+          const { x, y, hdg } = endPoses[origIdx]!;
           const newHdg = normalizeAngle(hdg + Math.PI);
           const g: Geometry = {
             s: currentS,
@@ -462,13 +462,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const dpKeep = new Array(pts.length).fill(true);
       function dpRecurse(start: number, end: number): void {
         if (end <= start + 1) return;
-        const ax = pts[start].x, ay = pts[start].y;
-        const bx = pts[end].x, by = pts[end].y;
+        const ax = pts[start]!.x, ay = pts[start]!.y;
+        const bx = pts[end]!.x, by = pts[end]!.y;
         const dx = bx - ax, dy = by - ay;
         const chordLen = Math.sqrt(dx * dx + dy * dy);
         let maxDist = 0, maxIdx = start;
         for (let i = start + 1; i < end; i++) {
-          const px = pts[i].x - ax, py = pts[i].y - ay;
+          const px = pts[i]!.x - ax, py = pts[i]!.y - ay;
           const dist = chordLen < 1e-9
             ? Math.sqrt(px * px + py * py)
             : Math.abs(px * dy - py * dx) / chordLen;

@@ -18,17 +18,12 @@ function makeRoad(id: string): Road {
         s: 0,
         single_side: false,
         render_hidden: false,
-        left: [{ id: 1, lane_type: 'Driving', level: 0, render_hidden: false, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], borders: [], road_marks: [] }],
-        center: [{ id: 0, lane_type: 'None', level: 0, render_hidden: false, link: null, width: [], borders: [], road_marks: [] }],
-        right: [{ id: -1, lane_type: 'Driving', level: 0, render_hidden: false, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], borders: [], road_marks: [] }],
+        left: [{ id: 1, lane_type: 'Driving', level: false, render_hidden: false, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
+        center: [{ id: 0, lane_type: 'None', level: false, render_hidden: false, link: null, width: [], road_marks: [] }],
+        right: [{ id: -1, lane_type: 'Driving', level: false, render_hidden: false, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
       },
     ],
-    lane_offsets: [],
-    lateral_profile: { superelevations: [], crossfalls: [] } as any,
-    bridges: [],
-    tunnels: [],
     signals: [],
-    objects: [],
   };
 }
 
@@ -45,16 +40,16 @@ describe('editorStore – road ops actions', () => {
       store.addRoad(makeRoad('r1'));
       store.cloneRoad('r1', 'r1-clone', [0, 0]);
       expect(useEditorStore.getState().project.roads).toHaveLength(2);
-      expect(useEditorStore.getState().project.roads[1].id).toBe('r1-clone');
+      expect(useEditorStore.getState().project.roads[1]!.id).toBe('r1-clone');
     });
 
     it('should apply the xy offset to all geometry segments', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1'));
       store.cloneRoad('r1', 'r1-clone', [10, 20]);
-      const clone = useEditorStore.getState().project.roads[1];
-      expect(clone.plan_view[0].x).toBeCloseTo(10);
-      expect(clone.plan_view[0].y).toBeCloseTo(20);
+      const clone = useEditorStore.getState().project.roads[1]!;
+      expect(clone.plan_view[0]!.x).toBeCloseTo(10);
+      expect(clone.plan_view[0]!.y).toBeCloseTo(20);
     });
 
     it('should clear the link on the clone', () => {
@@ -63,18 +58,18 @@ describe('editorStore – road ops actions', () => {
       (r as any).link = { predecessor: { element_type: 'Road', element_id: 'prev', contact_point: null }, successor: null };
       store.addRoad(r);
       store.cloneRoad('r1', 'r1-clone', [0, 0]);
-      const clone = useEditorStore.getState().project.roads[1];
-      expect(clone.link.predecessor).toBeNull();
-      expect(clone.link.successor).toBeNull();
+      const clone = useEditorStore.getState().project.roads[1]!;
+      expect(clone.link!.predecessor).toBeNull();
+      expect(clone.link!.successor).toBeNull();
     });
 
     it('should not modify the original road geometry', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1'));
       store.cloneRoad('r1', 'r1-clone', [50, 50]);
-      const original = useEditorStore.getState().project.roads[0];
-      expect(original.plan_view[0].x).toBeCloseTo(0);
-      expect(original.plan_view[0].y).toBeCloseTo(0);
+      const original = useEditorStore.getState().project.roads[0]!;
+      expect(original.plan_view[0]!.x).toBeCloseTo(0);
+      expect(original.plan_view[0]!.y).toBeCloseTo(0);
     });
 
     it('should push onto undo stack', () => {
@@ -98,27 +93,27 @@ describe('editorStore – road ops actions', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1')); // line x=0,y=0,hdg=0,length=100 → end at (100,0)
       store.reverseRoad('r1');
-      const road = useEditorStore.getState().project.roads[0];
-      expect(road.plan_view[0].x).toBeCloseTo(100);
-      expect(road.plan_view[0].y).toBeCloseTo(0);
+      const road = useEditorStore.getState().project.roads[0]!;
+      expect(road.plan_view[0]!.x).toBeCloseTo(100);
+      expect(road.plan_view[0]!.y).toBeCloseTo(0);
     });
 
     it('should flip heading by π for a straight line', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1'));
       store.reverseRoad('r1');
-      const road = useEditorStore.getState().project.roads[0];
-      expect(Math.abs(road.plan_view[0].hdg)).toBeCloseTo(Math.PI);
+      const road = useEditorStore.getState().project.roads[0]!;
+      expect(Math.abs(road.plan_view[0]!.hdg)).toBeCloseTo(Math.PI);
     });
 
     it('should swap left/right lanes', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1'));
       store.reverseRoad('r1');
-      const sec = useEditorStore.getState().project.roads[0].lane_sections[0];
+      const sec = useEditorStore.getState().project.roads[0]!.lane_sections[0]!;
       // After reverse: left IDs positive (came from right negated), right negative
-      expect(sec.left[0].id).toBeGreaterThan(0);
-      expect(sec.right[0].id).toBeLessThan(0);
+      expect(sec.left[0]!.id).toBeGreaterThan(0);
+      expect(sec.right[0]!.id).toBeLessThan(0);
     });
 
     it('should push onto undo stack', () => {
@@ -132,10 +127,10 @@ describe('editorStore – road ops actions', () => {
     it('should be undoable', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1'));
-      const origX = useEditorStore.getState().project.roads[0].plan_view[0].x;
+      const origX = useEditorStore.getState().project.roads[0]!.plan_view[0]!.x;
       store.reverseRoad('r1');
       store.undo();
-      expect(useEditorStore.getState().project.roads[0].plan_view[0].x).toBeCloseTo(origX);
+      expect(useEditorStore.getState().project.roads[0]!.plan_view[0]!.x).toBeCloseTo(origX);
     });
   });
 
@@ -146,26 +141,26 @@ describe('editorStore – road ops actions', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1'));
       store.mirrorRoad('r1');
-      const sec = useEditorStore.getState().project.roads[0].lane_sections[0];
-      expect(sec.left[0].id).toBeGreaterThan(0);
-      expect(sec.right[0].id).toBeLessThan(0);
+      const sec = useEditorStore.getState().project.roads[0]!.lane_sections[0]!;
+      expect(sec.left[0]!.id).toBeGreaterThan(0);
+      expect(sec.right[0]!.id).toBeLessThan(0);
     });
 
     it('should preserve the reference line geometry', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1'));
-      const origX = useEditorStore.getState().project.roads[0].plan_view[0].x;
+      const origX = useEditorStore.getState().project.roads[0]!.plan_view[0]!.x;
       store.mirrorRoad('r1');
-      expect(useEditorStore.getState().project.roads[0].plan_view[0].x).toBeCloseTo(origX);
+      expect(useEditorStore.getState().project.roads[0]!.plan_view[0]!.x).toBeCloseTo(origX);
     });
 
     it('should be undoable', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1'));
-      const origLeftId = useEditorStore.getState().project.roads[0].lane_sections[0].left[0].id;
+      const origLeftId = useEditorStore.getState().project.roads[0]!.lane_sections[0]!.left[0]!.id;
       store.mirrorRoad('r1');
       store.undo();
-      expect(useEditorStore.getState().project.roads[0].lane_sections[0].left[0].id).toBe(origLeftId);
+      expect(useEditorStore.getState().project.roads[0]!.lane_sections[0]!.left[0]!.id).toBe(origLeftId);
     });
 
     it('should silently ignore missing road id', () => {
@@ -195,7 +190,7 @@ describe('editorStore – road ops actions', () => {
       r.length = 30;
       store.addRoad(r);
       store.optimizeRoad('r1');
-      const optimized = useEditorStore.getState().project.roads[0];
+      const optimized = useEditorStore.getState().project.roads[0]!;
       expect(optimized.plan_view.length).toBeLessThanOrEqual(3);
     });
 
@@ -209,12 +204,12 @@ describe('editorStore – road ops actions', () => {
       ];
       r.length = 30;
       store.addRoad(r);
-      const origLen = useEditorStore.getState().project.roads[0].plan_view.length;
+      const origLen = useEditorStore.getState().project.roads[0]!.plan_view.length;
       store.optimizeRoad('r1');
       // Only undo if optimization actually changed something
-      if (useEditorStore.getState().project.roads[0].plan_view.length !== origLen) {
+      if (useEditorStore.getState().project.roads[0]!.plan_view.length !== origLen) {
         store.undo();
-        expect(useEditorStore.getState().project.roads[0].plan_view.length).toBe(origLen);
+        expect(useEditorStore.getState().project.roads[0]!.plan_view.length).toBe(origLen);
       }
     });
   });
@@ -226,26 +221,26 @@ describe('editorStore – road ops actions', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1')); // left lane 1, width 3.5 at heading 0
       store.swapCenterline('r1', 1);
-      const road = useEditorStore.getState().project.roads[0];
+      const road = useEditorStore.getState().project.roads[0]!;
       // heading=0 → normal = (0,1), offset = +3.5 in y
-      expect(road.plan_view[0].y).toBeCloseTo(3.5, 0);
+      expect(road.plan_view[0]!.y).toBeCloseTo(3.5, 0);
     });
 
     it('should shift geometry right for a right lane swap', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1'));
       store.swapCenterline('r1', -1);
-      const road = useEditorStore.getState().project.roads[0];
+      const road = useEditorStore.getState().project.roads[0]!;
       // normal = (0,1), offset = -3.5 in y
-      expect(road.plan_view[0].y).toBeCloseTo(-3.5, 0);
+      expect(road.plan_view[0]!.y).toBeCloseTo(-3.5, 0);
     });
 
     it('should not change anything when targetLaneId is 0', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1'));
-      const origY = useEditorStore.getState().project.roads[0].plan_view[0].y;
+      const origY = useEditorStore.getState().project.roads[0]!.plan_view[0]!.y;
       store.swapCenterline('r1', 0);
-      expect(useEditorStore.getState().project.roads[0].plan_view[0].y).toBeCloseTo(origY);
+      expect(useEditorStore.getState().project.roads[0]!.plan_view[0]!.y).toBeCloseTo(origY);
     });
 
     it('should push onto undo stack', () => {
@@ -259,10 +254,10 @@ describe('editorStore – road ops actions', () => {
     it('should be undoable', () => {
       const store = useEditorStore.getState();
       store.addRoad(makeRoad('r1'));
-      const origY = useEditorStore.getState().project.roads[0].plan_view[0].y;
+      const origY = useEditorStore.getState().project.roads[0]!.plan_view[0]!.y;
       store.swapCenterline('r1', 1);
       store.undo();
-      expect(useEditorStore.getState().project.roads[0].plan_view[0].y).toBeCloseTo(origY);
+      expect(useEditorStore.getState().project.roads[0]!.plan_view[0]!.y).toBeCloseTo(origY);
     });
 
     it('should silently ignore missing road id', () => {

@@ -72,7 +72,7 @@ export interface Road {
   length: number;
   junction_id: string | null;
   render_hidden?: boolean;
-  link: RoadLink;
+  link: RoadLink | null;
   plan_view: Geometry[];
   elevation_profile: Elevation[];
   lane_sections: LaneSection[];
@@ -127,7 +127,7 @@ export interface Lane {
   lane_type: string;
   level: boolean;
   render_hidden?: boolean;
-  link: LaneLink;
+  link: LaneLink | null;
   width: LaneWidth[];
   road_marks: RoadMark[];
 }

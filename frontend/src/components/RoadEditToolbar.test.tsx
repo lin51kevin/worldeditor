@@ -103,15 +103,15 @@ describe('RoadEditToolbar', () => {
       fireEvent.click(screen.getByTitle('克隆道路'));
       const roads = useEditorStore.getState().project.roads;
       expect(roads).toHaveLength(before + 1);
-      expect(roads[roads.length - 1].id).toMatch(/^r1-clone-\d+$/);
+      expect(roads[roads.length - 1]!.id).toMatch(/^r1-clone-\d+$/);
     });
 
     it('reverse button flips lanes on the selected road', () => {
       render(<RoadEditToolbar />);
-      const beforeLeft = useEditorStore.getState().project.roads[0].lane_sections[0].left.length;
-      const beforeRight = useEditorStore.getState().project.roads[0].lane_sections[0].right.length;
+      const beforeLeft = useEditorStore.getState().project.roads[0]!.lane_sections[0]!.left.length;
+      const beforeRight = useEditorStore.getState().project.roads[0]!.lane_sections[0]!.right.length;
       fireEvent.click(screen.getByTitle('反转道路'));
-      const sec = useEditorStore.getState().project.roads[0].lane_sections[0];
+      const sec = useEditorStore.getState().project.roads[0]!.lane_sections[0]!;
       // After reverse, left/right should swap
       expect(sec.left.length).toBe(beforeRight);
       expect(sec.right.length).toBe(beforeLeft);
@@ -120,7 +120,7 @@ describe('RoadEditToolbar', () => {
     it('mirror button swaps left and right lanes', () => {
       render(<RoadEditToolbar />);
       fireEvent.click(screen.getByTitle('镜像道路'));
-      const sec = useEditorStore.getState().project.roads[0].lane_sections[0];
+      const sec = useEditorStore.getState().project.roads[0]!.lane_sections[0]!;
       // Mirror swaps lanes (one in each side originally)
       expect(sec.left).toHaveLength(1);
       expect(sec.right).toHaveLength(1);
@@ -141,9 +141,9 @@ describe('RoadEditToolbar', () => {
         useEditorStore.getState().selectRoad('r1');
       });
       render(<RoadEditToolbar />);
-      const before = useEditorStore.getState().project.roads[0].plan_view[0];
+      const before = useEditorStore.getState().project.roads[0]!.plan_view[0]!;
       fireEvent.click(screen.getByTitle('交换道路中心线与边缘'));
-      const after = useEditorStore.getState().project.roads[0].plan_view[0];
+      const after = useEditorStore.getState().project.roads[0]!.plan_view[0]!;
       // For hdg=0, a left swap shifts perpendicular (+y direction)
       expect(after.y).not.toBe(before.y);
     });
@@ -155,9 +155,9 @@ describe('RoadEditToolbar', () => {
         useEditorStore.getState().selectRoad('r1');
       });
       render(<RoadEditToolbar />);
-      const before = useEditorStore.getState().project.roads[0].plan_view[0];
+      const before = useEditorStore.getState().project.roads[0]!.plan_view[0]!;
       fireEvent.click(screen.getByTitle('交换道路中心线与边缘'));
-      const after = useEditorStore.getState().project.roads[0].plan_view[0];
+      const after = useEditorStore.getState().project.roads[0]!.plan_view[0]!;
       // For hdg=0, a right swap shifts in -y direction
       expect(after.y).not.toBe(before.y);
     });

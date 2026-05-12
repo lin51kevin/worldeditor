@@ -135,8 +135,8 @@ function makeProjectWithRoadPlanView(): Project {
       junction_id: null,
       link: { predecessor: null, successor: null },
       plan_view: [
-        { x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' },
-        { x: 10, y: 0, hdg: 0, length: 10, geo_type: 'Line' },
+        { s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' },
+        { s: 10, x: 10, y: 0, hdg: 0, length: 10, geo_type: 'Line' },
       ],
       elevation_profile: [],
       lane_sections: [],
@@ -226,7 +226,7 @@ describe('Viewport', () => {
         undoStack: [],
         redoStack: [],
       });
-      useEditorViewStore.setState({ display: { ...DEFAULT_DISPLAY }, geometryEditSpline: null, geometryEditRoadId: null, editMode: 'normal', splineKnots: [] });
+      useEditorViewStore.setState({ display: { ...DEFAULT_DISPLAY }, geometryEditSpline: null, geometryEditRoadId: null, editMode: 'select', splineKnots: [] });
     });
   });
 

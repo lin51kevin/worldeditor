@@ -20,7 +20,7 @@ describe('usePluginContribStore', () => {
   it('registers a toolbar button', () => {
     usePluginContribStore.getState().registerToolbarButton(makeBtn('b1'));
     expect(usePluginContribStore.getState().toolbarButtons).toHaveLength(1);
-    expect(usePluginContribStore.getState().toolbarButtons[0].id).toBe('b1');
+    expect(usePluginContribStore.getState().toolbarButtons[0]!.id).toBe('b1');
   });
 
   it('replaces existing button with same id on re-register', () => {
@@ -30,7 +30,7 @@ describe('usePluginContribStore', () => {
     usePluginContribStore.getState().registerToolbarButton(updated);
     const buttons = usePluginContribStore.getState().toolbarButtons;
     expect(buttons).toHaveLength(1);
-    expect(buttons[0].icon).toBe('✓');
+    expect(buttons[0]!.icon).toBe('✓');
   });
 
   it('unregisters a toolbar button by id', () => {
@@ -39,7 +39,7 @@ describe('usePluginContribStore', () => {
     usePluginContribStore.getState().unregisterToolbarButton('b1');
     const buttons = usePluginContribStore.getState().toolbarButtons;
     expect(buttons).toHaveLength(1);
-    expect(buttons[0].id).toBe('b2');
+    expect(buttons[0]!.id).toBe('b2');
   });
 
   it('registers a menu item', () => {
@@ -52,7 +52,7 @@ describe('usePluginContribStore', () => {
     usePluginContribStore.getState().registerMenuItem(makeItem('m2'));
     usePluginContribStore.getState().unregisterMenuItem('m1');
     expect(usePluginContribStore.getState().menuItems).toHaveLength(1);
-    expect(usePluginContribStore.getState().menuItems[0].id).toBe('m2');
+    expect(usePluginContribStore.getState().menuItems[0]!.id).toBe('m2');
   });
 
   it('unregisterPlugin removes all contributions from that plugin', () => {
@@ -65,9 +65,9 @@ describe('usePluginContribStore', () => {
 
     const { toolbarButtons, menuItems } = usePluginContribStore.getState();
     expect(toolbarButtons).toHaveLength(1);
-    expect(toolbarButtons[0].pluginId).toBe('plugin-b');
+    expect(toolbarButtons[0]!.pluginId).toBe('plugin-b');
     expect(menuItems).toHaveLength(1);
-    expect(menuItems[0].pluginId).toBe('plugin-b');
+    expect(menuItems[0]!.pluginId).toBe('plugin-b');
   });
 
   it('does not throw when unregistering non-existent id', () => {
