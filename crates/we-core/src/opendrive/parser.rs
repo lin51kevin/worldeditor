@@ -1102,15 +1102,21 @@ fn parse_signal_elem_attrs(e: &BytesStart) -> Result<Signal, OpenDriveError> {
 // ── Objects ──────────────────────────────────────────
 
 /// Parse a `<objects>` block and return all contained road objects.
+///
+/// Accepts both `<roadObject>` (OpenDRIVE 1.6+) and `<object>` (older/RoadRunner convention).
 fn parse_objects(reader: &mut Reader<&[u8]>) -> Result<Vec<RoadObject>, OpenDriveError> {
     let mut objects = Vec::new();
 
     loop {
         match reader.read_event() {
-            Ok(Event::Start(ref e)) if e.name().as_ref() == b"roadObject" => {
+            Ok(Event::Start(ref e))
+                if e.name().as_ref() == b"roadObject" || e.name().as_ref() == b"object" =>
+            {
                 objects.push(parse_road_object_elem(e, reader)?);
             }
-            Ok(Event::Empty(ref e)) if e.name().as_ref() == b"roadObject" => {
+            Ok(Event::Empty(ref e))
+                if e.name().as_ref() == b"roadObject" || e.name().as_ref() == b"object" =>
+            {
                 objects.push(parse_road_object_attrs(e)?);
             }
             Ok(Event::End(ref e)) if e.name().as_ref() == b"objects" => break,
@@ -1127,11 +1133,25 @@ fn parse_objects(reader: &mut Reader<&[u8]>) -> Result<Vec<RoadObject>, OpenDriv
     Ok(objects)
 }
 
-/// Parse a `<roadObject …>…</roadObject>` element.
+/// Parse a `<roadObject …>…</roadObject>` or `<object …>…</object>` element.
+///
+/// Both tag variants are used across different OpenDRIVE authoring tools:
+/// - `<roadObject>` is the OpenDRIVE 1.6+ standard
+/// - `<object>` is used by RoadRunner and older toolchains (e.g. CityScape maps)
+///
+/// Corner geometry may be nested inside an `<outline>` child element; the
+/// function transparently reads through that wrapper.
 fn parse_road_object_elem(
     start: &BytesStart,
     reader: &mut Reader<&[u8]>,
 ) -> Result<RoadObject, OpenDriveError> {
+    // Determine which closing tag to look for based on the opening tag name.
+    let closing: &[u8] = if start.name().as_ref() == b"object" {
+        b"object"
+    } else {
+        b"roadObject"
+    };
+
     let mut obj = parse_road_object_attrs(start)?;
     loop {
         match reader.read_event() {
@@ -1150,9 +1170,13 @@ fn parse_road_object_elem(
                 obj.validity = Some(Validity { from_lane, to_lane });
             }
             Ok(Event::Start(ref e) | Event::Empty(ref e))
-                if e.name().as_ref() == b"corner" || e.name().as_ref() == b"cornerLocal" || e.name().as_ref() == b"cornerRoad" =>
+                if e.name().as_ref() == b"corner"
+                    || e.name().as_ref() == b"cornerLocal"
+                    || e.name().as_ref() == b"cornerRoad" =>
             {
-                // Supports both <cornerLocal> and <cornerRoad> (road-frame s/t)
+                // Supports both <cornerLocal> (road-frame u/v) and <cornerRoad> (road-frame s/t).
+                // Nested inside an optional <outline> wrapper; the wrapper tag is simply ignored
+                // and corner events are captured at any depth within the element.
                 let mut s = 0.0f64;
                 let mut t = 0.0f64;
                 let mut dz = 0.0f64;
@@ -1168,7 +1192,7 @@ fn parse_road_object_elem(
                 }
                 obj.corners.push(Point3D::new_with_id(s, t, dz, id));
             }
-            Ok(Event::End(ref e)) if e.name().as_ref() == b"roadObject" => break,
+            Ok(Event::End(ref e)) if e.name().as_ref() == closing => break,
             Ok(Event::Eof) => {
                 return Err(OpenDriveError::InvalidStructure(
                     "Unexpected EOF in roadObject element".into(),
