@@ -34,24 +34,28 @@
 .template-tab {
   background: transparent;
   border: none;
-  color: var(--color-accent);
-  padding: var(--space-1) var(--space-3);
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-secondary);
+  padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-xs);
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .template-tab:hover {
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-primary);
+  background: transparent;
 }
 
 [data-theme="light"] .template-tab:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: transparent;
 }
 
 .template-tab.active {
-  color: var(--color-text-inverse);
-  background: var(--color-accent);
+  color: var(--color-text-primary);
+  background: transparent;
+  border-bottom-color: var(--color-accent);
 }
 
 .template-grid {
