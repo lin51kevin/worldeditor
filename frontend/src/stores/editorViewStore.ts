@@ -28,6 +28,7 @@ interface PanelLayout {
   leftCollapsed: boolean;
   rightCollapsed: boolean;
   outputCollapsed: boolean;
+  templatePanelCollapsed: boolean;
 }
 
 const DEFAULT_LAYOUT: PanelLayout = {
@@ -37,6 +38,7 @@ const DEFAULT_LAYOUT: PanelLayout = {
   leftCollapsed: false,
   rightCollapsed: false,
   outputCollapsed: true,
+  templatePanelCollapsed: false,
 };
 
 type ColorMode = 'single' | 'byRoad' | 'byLaneType';
@@ -170,6 +172,7 @@ interface EditorViewState {
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
   toggleOutputPanel: () => void;
+  toggleTemplatePanel: () => void;
   initLayout: () => void;
 }
 
@@ -390,6 +393,13 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   toggleOutputPanel: () =>
     set((state) => {
       const layout = { ...state.layout, outputCollapsed: !state.layout.outputCollapsed };
+      saveLayout(layout);
+      return { layout };
+    }),
+
+  toggleTemplatePanel: () =>
+    set((state) => {
+      const layout = { ...state.layout, templatePanelCollapsed: !state.layout.templatePanelCollapsed };
       saveLayout(layout);
       return { layout };
     }),

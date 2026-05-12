@@ -20,6 +20,7 @@ describe('editorViewStore', () => {
         leftCollapsed: false,
         rightCollapsed: false,
         outputCollapsed: true,
+        templatePanelCollapsed: false,
       },
       snapEnabled: false,
       snapMode: 'Grid',
