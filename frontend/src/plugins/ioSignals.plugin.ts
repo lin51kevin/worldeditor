@@ -33,7 +33,8 @@ function exportHdMapXml(project: Project): Promise<void> {
 
 export function mountIoSignalsPlugin(): () => void {
   const { registerImporter, registerExporter, unregisterPlugin } = usePluginContribStore.getState();
-  registerImporter({ id: `${PLUGIN_ID}:importer`, pluginId: PLUGIN_ID, formatName: 'Signal JSON', extensions: ['.json'], onImport: importSignals });
+  // Importer is disabled: JSON signal data cannot yet be merged into a project.
+  registerImporter({ id: `${PLUGIN_ID}:importer`, pluginId: PLUGIN_ID, formatName: 'Signal JSON', extensions: ['.json'], disabled: true, onImport: importSignals });
   registerExporter({ id: `${PLUGIN_ID}:exporter`, pluginId: PLUGIN_ID, formatName: 'HD Map XML', onExport: exportHdMapXml });
   return () => unregisterPlugin(PLUGIN_ID);
 }

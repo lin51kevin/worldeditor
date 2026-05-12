@@ -425,7 +425,12 @@
     "autoDeployCrosswalks": "自动铺设斑马线",
     "autoDeployStopLines": "自动铺设停车线",
     "addBridge": "添加桥梁段",
-    "addTunnel": "添加隧道段"
+    "addTunnel": "添加隧道段",
+    "noRoadSelected": "未选择道路，请先选择一条道路。",
+    "noJunctionSelected": "未选择路口，请先选择一个路口。",
+    "roadTooShort": "道路过短，无法分割（最短 2 米）。",
+    "selectTwoRoads": "请至少选择 2 条道路才能焊接。",
+    "requiresWasm": "此功能需要 WASM 后端支持，将在未来版本中提供。"
   },
   "converter": { "batchConvert": "批量转换..." },
   "ecosystem": { "placeTrees": "放置树木" },

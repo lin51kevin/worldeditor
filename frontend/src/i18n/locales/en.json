@@ -425,7 +425,12 @@
     "autoDeployCrosswalks": "Auto-Deploy Crosswalks",
     "autoDeployStopLines": "Auto-Deploy Stop Lines",
     "addBridge": "Add Bridge Section",
-    "addTunnel": "Add Tunnel Section"
+    "addTunnel": "Add Tunnel Section",
+    "noRoadSelected": "No road selected. Please select a road first.",
+    "noJunctionSelected": "No junction selected. Please select a junction first.",
+    "roadTooShort": "Road is too short to split (minimum 2 m).",
+    "selectTwoRoads": "Please select at least 2 roads to weld.",
+    "requiresWasm": "This feature requires WASM backend support and will be available in a future release."
   },
   "converter": { "batchConvert": "Batch Convert…" },
   "ecosystem": { "placeTrees": "Place Trees" },

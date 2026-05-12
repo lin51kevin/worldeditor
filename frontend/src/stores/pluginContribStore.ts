@@ -80,6 +80,8 @@ export interface ImporterContrib {
   pluginId: string;
   formatName: string;
   extensions: string[];
+  /** When true, the menu item is shown but greyed out (coming soon). */
+  disabled?: boolean;
   /** Called with raw file content (text or ArrayBuffer); returns parsed Project */
   onImport: (content: string | ArrayBuffer, fileName: string) => Promise<Project>;
 }
@@ -89,6 +91,8 @@ export interface ExporterContrib {
   id: string;
   pluginId: string;
   formatName: string;
+  /** When true, the menu item is shown but greyed out (coming soon). */
+  disabled?: boolean;
   /** Called with the current project; plugin handles file download/save */
   onExport: (project: Project) => Promise<void>;
 }

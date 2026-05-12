@@ -25,6 +25,14 @@ import { useEditorStore } from '../stores/editorStore';
 import type { MenuItemContrib, ToolbarButtonContrib, ContextMenuContrib, ContextMenuCtx } from '../stores/pluginContribStore';
 import { showAlert } from '../utils/dialog';
 import i18next from 'i18next';
+import {
+  splitRoadAt,
+  weldRoads as weldRoadsUtil,
+  deploySidewalks as deploySidewalksUtil,
+  applyStandardMarkings as applyMarkingsUtil,
+  deployCrosswalks as deployCrosswalksUtil,
+  deployStopLines as deployStopLinesUtil,
+} from '../utils/roadEdit';
 
 const PLUGIN_ID = 'advanced-editing';
 
@@ -40,7 +48,7 @@ function getStore() {
 
 // ─── Feature implementations ───────────────────────────────────────────────────
 
-/** Split a road at a given s-station, creating a junction between the two halves. */
+/** Split a road at its midpoint, creating two half-roads and a junction between them. */
 function splitRoadAtJunction(): void {
   const { selectedRoadId, project, executePluginCommand } = getStore();
   if (!selectedRoadId) {
@@ -56,9 +64,12 @@ function splitRoadAtJunction(): void {
   executePluginCommand(
     t('advancedEditing.splitRoad', 'Split Road'),
     (p) => {
-      // Stub: return project unchanged (full implementation in Phase 3)
-      void splitS;
-      return p;
+      const { road1, road2, junction } = splitRoadAt(road, splitS);
+      return {
+        ...p,
+        roads: p.roads.filter((r) => r.id !== selectedRoadId).concat([road1, road2]),
+        junctions: [...p.junctions, junction],
+      };
     },
   );
 }
@@ -72,9 +83,10 @@ function autoDeploySidewalks(): void {
   }
   executePluginCommand(
     t('advancedEditing.autoDeploySidewalks', 'Auto-Deploy Sidewalks'),
-    (p) => {
-      return p; // Stub: full implementation in Phase 3
-    },
+    (p) => ({
+      ...p,
+      roads: p.roads.map((r) => (r.id === selectedRoadId ? deploySidewalksUtil(r) : r)),
+    }),
   );
 }
 
@@ -87,7 +99,7 @@ function autoDeployCrosswalks(): void {
   }
   executePluginCommand(
     t('advancedEditing.autoDeployCrosswalks', 'Auto-Deploy Crosswalks'),
-    (p) => p, // Stub
+    (p) => deployCrosswalksUtil(p, selectedJunctionId),
   );
 }
 
@@ -100,21 +112,18 @@ function autoDeployStopLines(): void {
   }
   executePluginCommand(
     t('advancedEditing.autoDeployStopLines', 'Auto-Deploy Stop Lines'),
-    (p) => p, // Stub
+    (p) => deployStopLinesUtil(p, selectedJunctionId),
   );
 }
 
 /** Optimise lane geometry (smooth and de-duplicate knots). */
 function optimiseLaneGeometry(): void {
-  const { selectedRoadId, executePluginCommand } = getStore();
+  const { selectedRoadId } = getStore();
   if (!selectedRoadId) {
     void showAlert(t('advancedEditing.noRoadSelected', 'No road selected'));
     return;
   }
-  executePluginCommand(
-    t('advancedEditing.optimiseLanes', 'Optimise Lane Geometry'),
-    (p) => p, // Stub: calls WASM smooth() in Phase 3
-  );
+  void showAlert(t('advancedEditing.requiresWasm', 'This feature requires WASM backend support and will be available in a future release'));
 }
 
 /** Apply standard road markings (centre line, edge lines, etc.). */
@@ -126,7 +135,10 @@ function applyStandardMarkings(): void {
   }
   executePluginCommand(
     t('advancedEditing.applyStandardMarkings', 'Apply Standard Markings'),
-    (p) => p, // Stub
+    (p) => ({
+      ...p,
+      roads: p.roads.map((r) => (r.id === selectedRoadId ? applyMarkingsUtil(r) : r)),
+    }),
   );
 }
 
@@ -184,43 +196,47 @@ function addTunnelSection(): void {
   );
 }
 
-/** Weld two roads together at their endpoints. */
+/** Weld two selected roads together at their endpoints. */
 function weldRoads(): void {
-  const { selectedRoadIds, executePluginCommand } = getStore();
+  const { selectedRoadIds, project, executePluginCommand } = getStore();
   if (selectedRoadIds.length < 2) {
     void showAlert(t('advancedEditing.selectTwoRoads', 'Select at least 2 roads to weld'));
     return;
   }
+  const [id1, id2] = selectedRoadIds;
+  const r1 = project.roads.find((r) => r.id === id1);
+  const r2 = project.roads.find((r) => r.id === id2);
+  if (!r1 || !r2) return;
   executePluginCommand(
     t('advancedEditing.weldRoads', 'Weld Roads'),
-    (p) => p, // Stub
+    (p) => {
+      const welded = weldRoadsUtil(r1, r2);
+      return {
+        ...p,
+        roads: p.roads.filter((r) => r.id !== id1 && r.id !== id2).concat([welded]),
+      };
+    },
   );
 }
 
 /** Auto-build connecting roads between junctions. */
 function autoBuildConnectingRoads(): void {
-  const { selectedJunctionId, executePluginCommand } = getStore();
+  const { selectedJunctionId } = getStore();
   if (!selectedJunctionId) {
     void showAlert(t('advancedEditing.noJunctionSelected', 'No junction selected'));
     return;
   }
-  executePluginCommand(
-    t('advancedEditing.autoBuildConnecting', 'Auto-Build Connecting Roads'),
-    (p) => p, // Stub
-  );
+  void showAlert(t('advancedEditing.requiresWasm', 'This feature requires WASM backend support and will be available in a future release'));
 }
 
 /** Build a junction polygon for the selected junction. */
 function buildJunctionPolygon(): void {
-  const { selectedJunctionId, executePluginCommand } = getStore();
+  const { selectedJunctionId } = getStore();
   if (!selectedJunctionId) {
     void showAlert(t('advancedEditing.noJunctionSelected', 'No junction selected'));
     return;
   }
-  executePluginCommand(
-    t('advancedEditing.buildJunctionPolygon', 'Build Junction Polygon'),
-    (p) => p, // Stub: calls WASM junction_polygon in Phase 3
-  );
+  void showAlert(t('advancedEditing.requiresWasm', 'This feature requires WASM backend support and will be available in a future release'));
 }
 
 // ─── Plugin registration ───────────────────────────────────────────────────────

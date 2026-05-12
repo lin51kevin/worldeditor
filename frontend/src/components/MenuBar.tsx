@@ -10,6 +10,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { useThemeStore } from '../stores/themeStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
+import type { MenuItemContrib } from '../stores/pluginContribStore';
 import { useBuiltinPluginStore } from '../stores/builtinPluginStore';
 import { emitViewportEvent } from '../viewport/viewportEvents';
 import { getPlatformService } from '../services';
@@ -80,6 +81,52 @@ function pushRecentFile(name: string): string[] {
 // Calculate total road length
 function calculateTotalRoadLength(project: Project): number {
   return project.roads.reduce((sum, road) => sum + (road.length || 0), 0);
+}
+
+// Group order for Road menu contributions
+const ROAD_GROUP_ORDER = ['', 'transform', 'edit', 'advanced', 'deploy', 'infrastructure', 'junction'];
+
+/**
+ * Build Road menu items grouped by their `group` field, with separators between groups.
+ * Manual separator items are removed and replaced by group-derived separators.
+ */
+function buildGroupedRoadItems(
+  items: MenuItemContrib[],
+  t: (key: string) => string,
+): MenuItem[] {
+  // Remove manual separator entries
+  const realItems = items.filter((item) => !item.separator);
+
+  // Group by group field (undefined → '')
+  const groups = new Map<string, MenuItemContrib[]>();
+  for (const item of realItems) {
+    const g = item.group ?? '';
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g)!.push(item);
+  }
+
+  // Sort group keys by predefined order
+  const sortedKeys = [...groups.keys()].sort((a, b) => {
+    const ai = ROAD_GROUP_ORDER.indexOf(a);
+    const bi = ROAD_GROUP_ORDER.indexOf(b);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+
+  const result: MenuItem[] = [];
+  let firstGroup = true;
+  for (const key of sortedKeys) {
+    if (!firstGroup) result.push({ separator: true, label: '' });
+    firstGroup = false;
+    for (const item of groups.get(key)!) {
+      result.push({
+        label: t(item.labelKey),
+        shortcut: item.shortcut,
+        action: item.onClick,
+        disabled: item.isDisabled?.() ?? false,
+      });
+    }
+  }
+  return result;
 }
 
 // Create menus based on current state
@@ -447,7 +494,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     t,
   );
 
-  // Import menu: OpenDRIVE + all plugin importers
+  // Import menu: OpenDRIVE + all plugin importers (disabled stubs shown greyed out)
   const importMenu: Menu = {
     label: t('menu.import'),
     items: [
@@ -455,7 +502,8 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
       ...(importers.length > 0 ? [{ separator: true, label: '' } as MenuItem] : []),
       ...importers.map((imp): MenuItem => ({
         label: `${t('menu.import')} ${imp.formatName}...`,
-        action: () => {
+        disabled: imp.disabled === true,
+        action: imp.disabled ? undefined : () => {
           const input = document.createElement('input');
           input.type = 'file';
           input.accept = imp.extensions.join(',');
@@ -473,7 +521,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     ],
   };
 
-  // Export menu: OpenDRIVE + all plugin exporters
+  // Export menu: OpenDRIVE + all plugin exporters (disabled stubs shown greyed out)
   const exportMenu: Menu = {
     label: t('menu.export'),
     items: [
@@ -481,7 +529,8 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
       ...(exporters.length > 0 ? [{ separator: true, label: '' } as MenuItem] : []),
       ...exporters.map((exp): MenuItem => ({
         label: `${t('menu.export')} ${exp.formatName}...`,
-        action: () => void exp.onExport(project),
+        disabled: exp.disabled === true,
+        action: exp.disabled ? undefined : () => void exp.onExport(project),
       })),
     ],
   };
@@ -505,16 +554,11 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
   };
 
   // Insert plugin-contributed Road menu between Edit (index 1) and View (index 2)
+  // Items are grouped by their `group` field with separators between groups.
   const roadMenu = roadMenuItems.length > 0
     ? [{
         label: t('menu.road'),
-        items: roadMenuItems.map((item): MenuItem => ({
-          label: item.separator ? '' : t(item.labelKey),
-          shortcut: item.shortcut,
-          action: item.onClick,
-          separator: item.separator,
-          disabled: item.isDisabled?.() ?? false,
-        })),
+        items: buildGroupedRoadItems(roadMenuItems, t),
       }]
     : [];
 

@@ -1,5 +1,4 @@
-/**
- * plugin-io-lanelet2: Lanelet2 OSM-XML import/export plugin.
+/** plugin-io-lanelet2: Lanelet2 OSM-XML import/export plugin.
  * Stub — Phase 3 will wire WASM backend.
  */
 import { usePluginContribStore } from '../stores/pluginContribStore';
@@ -14,6 +13,7 @@ export function mountIoLanelet2Plugin(): () => void {
     pluginId: PLUGIN_ID,
     formatName: 'Lanelet2 OSM-XML',
     extensions: ['.osm', '.xml'],
+    disabled: true,
     onImport: (_content, _fileName) =>
       Promise.reject(new Error('Lanelet2 import requires Phase 3 WASM integration')),
   });
@@ -22,6 +22,7 @@ export function mountIoLanelet2Plugin(): () => void {
     id: `${PLUGIN_ID}:exporter`,
     pluginId: PLUGIN_ID,
     formatName: 'Lanelet2 OSM-XML',
+    disabled: true,
     onExport: (_project) =>
       Promise.reject(new Error('Lanelet2 export requires Phase 3 WASM integration')),
   });
