@@ -73,6 +73,7 @@ function buildMenus(
   onMeasureDistance: () => void,
   onMeasureAngle: () => void,
   onMeasureArea: () => void,
+  onOpenPluginManager: () => void,
   canUndo: boolean,
   canRedo: boolean,
   showGrid: boolean,
@@ -132,6 +133,12 @@ function buildMenus(
       ],
     },
     {
+      label: t('menu.plugins'),
+      items: [
+        { label: t('menu.pluginManager'), action: onOpenPluginManager },
+      ],
+    },
+    {
       label: t('menu.about'),
       items: [
         { label: t('menu.aboutWorldEditor'), action: () => showAbout(t) },
@@ -141,7 +148,11 @@ function buildMenus(
   ];
 }
 
-export function MenuBar() {
+interface MenuBarProps {
+  onOpenPluginManager?: () => void;
+}
+
+export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
   const {
     project,
     isDirty,
@@ -338,6 +349,7 @@ export function MenuBar() {
     () => setMeasureMode('distance'),
     () => setMeasureMode('angle'),
     () => setMeasureMode('area'),
+    onOpenPluginManager,
     canUndo(),
     canRedo(),
     showGrid,
@@ -351,7 +363,7 @@ export function MenuBar() {
   const roadMenu = roadMenuItems.length > 0
     ? [{
         label: t('menu.road'),
-        items: roadMenuItems.map((item) => ({
+        items: roadMenuItems.map((item): MenuItem => ({
           label: item.separator ? '' : t(item.labelKey),
           shortcut: item.shortcut,
           action: item.onClick,
