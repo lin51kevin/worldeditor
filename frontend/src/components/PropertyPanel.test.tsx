@@ -28,14 +28,14 @@ function makeLaneSection(): LaneSection {
     s: 0,
     single_side: false,
     left: [
-      { id: 1, lane_type: 'driving', level: false, link: { predecessor: null, successor: null }, width: [], road_marks: [] },
+      { id: 1, lane_type: 'driving', level: 0, link: { predecessor: null, successor: null }, width: [], road_marks: [] },
     ],
     center: [
-      { id: 0, lane_type: 'none', level: false, link: { predecessor: null, successor: null }, width: [], road_marks: [] },
+      { id: 0, lane_type: 'none', level: 0, link: { predecessor: null, successor: null }, width: [], road_marks: [] },
     ],
     right: [
-      { id: -1, lane_type: 'driving', level: false, link: { predecessor: null, successor: null }, width: [], road_marks: [] },
-      { id: -2, lane_type: 'driving', level: false, link: { predecessor: null, successor: null }, width: [], road_marks: [] },
+      { id: -1, lane_type: 'driving', level: 0, link: { predecessor: null, successor: null }, width: [], road_marks: [] },
+      { id: -2, lane_type: 'driving', level: 0, link: { predecessor: null, successor: null }, width: [], road_marks: [] },
     ],
   };
 }

@@ -25,9 +25,10 @@ function makeLane(id: number, laneType = 'Driving', width = LANE_WIDTH, marks: R
   return {
     id,
     lane_type: laneType,
-    level: false,
+    level: 0,
     link: { predecessor: null, successor: null },
     width: [{ s_offset: 0, a: width, b: 0, c: 0, d: 0 }],
+    borders: [],
     road_marks: marks,
   };
 }
@@ -73,6 +74,12 @@ function makeRoad(
     link: { predecessor: null, successor: null },
     plan_view: [makeLineGeometry(x, y, hdg, length)],
     elevation_profile: [],
+    lane_offsets: [],
+    lateral_profile: { superelevations: [], crossfalls: [] },
+    bridges: [],
+    tunnels: [],
+    signals: [],
+    objects: [],
     lane_sections: [laneSection],
   };
 }

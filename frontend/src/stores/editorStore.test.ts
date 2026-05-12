@@ -90,7 +90,7 @@ describe('editorStore', () => {
         lane_sections: [{
           s: 0,
           single_side: false,
-          left: [{ id: 1, lane_type: 'driving', level: false, link: { predecessor: null, successor: null }, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
+          left: [{ id: 1, lane_type: 'driving', level: 0, link: { predecessor: null, successor: null }, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
           center: [],
           right: [],
         }],
@@ -105,7 +105,7 @@ describe('editorStore', () => {
       const road = makeRoad({
         lane_sections: [{
           s: 0, single_side: false,
-          left: [{ id: 1, lane_type: 'driving', level: false, link: { predecessor: null, successor: null }, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
+          left: [{ id: 1, lane_type: 'driving', level: 0, link: { predecessor: null, successor: null }, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
           center: [], right: [],
         }],
       });

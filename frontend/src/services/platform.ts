@@ -66,6 +66,14 @@ export interface Elevation {
   d: number;
 }
 
+export interface LaneOffset {
+  s: number;
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+}
+
 export interface Road {
   id: string;
   name: string;
@@ -76,8 +84,12 @@ export interface Road {
   plan_view: Geometry[];
   elevation_profile: Elevation[];
   lane_sections: LaneSection[];
-  /** Signals parsed from `<signals>` block. May be absent in older projects. */
+  lane_offsets?: LaneOffset[];
+  lateral_profile?: { superelevations: unknown[]; crossfalls: unknown[] };
+  bridges?: unknown[];
+  tunnels?: unknown[];
   signals?: Signal[];
+  objects?: unknown[];
 }
 
 export interface Signal {
@@ -122,13 +134,22 @@ export interface RoadMark {
   lane_change: string;
 }
 
+export interface LaneBorder {
+  s_offset: number;
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+}
+
 export interface Lane {
   id: number;
   lane_type: string;
-  level: boolean;
+  level: number;
   render_hidden?: boolean;
   link: LaneLink | null;
   width: LaneWidth[];
+  borders?: LaneBorder[];
   road_marks: RoadMark[];
 }
 

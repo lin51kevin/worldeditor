@@ -13,13 +13,19 @@ pub struct Road {
     pub plan_view: Vec<Geometry>,
     pub elevation_profile: Vec<Elevation>,
     pub lane_sections: Vec<LaneSection>,
+    #[serde(default)]
     pub lane_offsets: Vec<LaneOffset>,
+    #[serde(default)]
     pub lateral_profile: LateralProfile,
+    #[serde(default)]
     pub bridges: Vec<Bridge>,
+    #[serde(default)]
     pub tunnels: Vec<Tunnel>,
     /// Traffic signals on this road.
+    #[serde(default)]
     pub signals: Vec<Signal>,
     /// Road objects (signs, barriers, etc.) on this road.
+    #[serde(default)]
     pub objects: Vec<RoadObject>,
 }
 
