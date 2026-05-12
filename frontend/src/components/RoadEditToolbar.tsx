@@ -35,6 +35,8 @@ export function RoadEditToolbar() {
     editMode === 'spline' ? 'adjust-node' :
     editMode === 'move-road' ? 'move-road' :
     editMode === 'rotate-road' ? 'rotate-road' :
+    editMode === 'adjust-edge' ? 'adjust-edge' :
+    editMode === 'road-markings' ? 'edit-markings' :
     null;
 
   const selectedRoad = selectedRoadId
@@ -93,8 +95,10 @@ export function RoadEditToolbar() {
       icon: '⊞',
       labelKey: 'toolPanel.adjustEdge',
       kind: 'mode',
-      disabled: true,
-      action: () => {},
+      action: () => {
+        const isEntering = editMode !== 'adjust-edge';
+        setEditMode(isEntering ? 'adjust-edge' : 'select');
+      },
     },
     {
       id: 'move-road',
@@ -128,8 +132,10 @@ export function RoadEditToolbar() {
       icon: '▬',
       labelKey: 'toolPanel.editRoadMarkings',
       kind: 'mode',
-      disabled: true,
-      action: () => {},
+      action: () => {
+        const isEntering = editMode !== 'road-markings';
+        setEditMode(isEntering ? 'road-markings' : 'select');
+      },
     },
     {
       id: 'clone-road',
