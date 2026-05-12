@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [master, develop]
   pull_request:
-    branches: [main, develop]
+    branches: [master, develop]
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-22.04, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -26,7 +26,7 @@ jobs:
 
   build-wasm:
     name: Build WASM
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -40,7 +40,7 @@ jobs:
 
   build-frontend:
     name: Build Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -58,7 +58,7 @@ jobs:
   # Stage 2: Unit Tests
   test-rust:
     name: Test Rust
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: build-rust
     steps:
       - uses: actions/checkout@v4
@@ -85,7 +85,7 @@ jobs:
 
   test-wasm:
     name: Test WASM
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: build-wasm
     steps:
       - uses: actions/checkout@v4
@@ -103,7 +103,7 @@ jobs:
 
   test-frontend:
     name: Test Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: build-frontend
     steps:
       - uses: actions/checkout@v4
@@ -122,7 +122,7 @@ jobs:
   # Stage 3: Quality Gates
   quality:
     name: Quality Gates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [test-rust, test-frontend]
     steps:
       - uses: actions/checkout@v4

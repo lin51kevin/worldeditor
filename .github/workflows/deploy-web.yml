@@ -2,7 +2,7 @@ name: Deploy Web
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
 
 env:
@@ -11,7 +11,7 @@ env:
 jobs:
   deploy-web:
     name: Deploy Web to GitHub Pages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       pages: write
