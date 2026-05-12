@@ -28,7 +28,9 @@
     "calculateRoadLength": "计算道路总长度",
     "road": "道路",
     "aboutWorldEditor": "关于 WorldEditor",
-    "versionInfo": "版本信息"
+    "versionInfo": "版本信息",
+    "plugins": "插件",
+    "pluginManager": "插件管理器..."
   },
   "toolbar": {
     "select": "选择",
@@ -197,17 +199,47 @@
   },
   "templatePanel": {
     "header": "模板",
-    "road": "道路",
-    "singleLane": "单车道",
-    "dualTwoLane": "双向2车道",
-    "dualFourLane": "双向4车道带路肩",
-    "dualSixLane": "双向6车道带路肩",
-    "fork3": "分叉路口3",
-    "fork4": "分叉路口4",
-    "fork5": "分叉路口5",
-    "fork6": "分叉路口6",
-    "fork7": "分叉路口7",
-    "noTemplates": "暂无模板"
+    "noTemplates": "暂无模板",
+    "categories": {
+      "roads": "道路",
+      "junctions": "交汇处",
+      "signals": "信号",
+      "markings": "喷漆"
+    },
+    "roads": {
+      "singleLane": "单车道",
+      "dual2Lane": "双向2车道",
+      "dual4Lane": "双向4车道",
+      "dual6Lane": "双向6车道",
+      "highway": "高速公路",
+      "ramp": "匝道",
+      "urbanRoad": "城市道路"
+    },
+    "junctions": {
+      "tIntersection": "T型路口",
+      "crossIntersection": "十字路口",
+      "fiveWay": "五叉路口",
+      "sixWay": "六叉路口",
+      "roundabout": "环形路口"
+    },
+    "signals": {
+      "trafficLight": "交通灯",
+      "stopSign": "停车标志",
+      "warningSign": "警告标志",
+      "speedLimit30": "限速30",
+      "speedLimit60": "限速60",
+      "speedLimit80": "限速80",
+      "speedLimit120": "限速120",
+      "noEntry": "禁止驶入"
+    },
+    "markings": {
+      "solidWhite": "实白线",
+      "dashedWhite": "虚白线",
+      "solidYellow": "实黄线",
+      "doubleYellow": "双黄线",
+      "zebraCrossing": "斑马线",
+      "noMarking": "无标线"
+    }
   },
   "pluginManager": {
     "title": "插件管理",
@@ -220,8 +252,20 @@
     "available": "可用",
     "unload": "卸载",
     "load": "加载",
+    "install": "安装",
+    "uninstall": "卸载",
     "disable": "禁用",
     "enable": "启用",
+    "close": "关闭",
+    "tabAvailable": "可用",
+    "tabInstalled": "已安装",
+    "tabDisabled": "已禁用",
+    "colName": "名称",
+    "colVersion": "版本",
+    "colDescription": "描述",
+    "noAvailable": "暂无可用插件",
+    "noInstalled": "尚未安装任何插件",
+    "noDisabled": "无已禁用插件",
     "dependencies": "依赖:",
     "permissions": "权限:",
     "disablePlugin": "禁用插件",

@@ -28,7 +28,9 @@
     "road": "Road",
     "resetPanels": "Reset Panel Positions",
     "aboutWorldEditor": "About WorldEditor",
-    "versionInfo": "Version Info"
+    "versionInfo": "Version Info",
+    "plugins": "Plugins",
+    "pluginManager": "Plugin Manager..."
   },
   "toolbar": {
     "select": "Select",
@@ -197,17 +199,47 @@
   },
   "templatePanel": {
     "header": "Templates",
-    "road": "Road",
-    "singleLane": "Single Lane",
-    "dualTwoLane": "Dual 2-Lane",
-    "dualFourLane": "Dual 4-Lane with Shoulder",
-    "dualSixLane": "Dual 6-Lane with Shoulder",
-    "fork3": "3-Way Fork",
-    "fork4": "4-Way Fork",
-    "fork5": "5-Way Fork",
-    "fork6": "6-Way Fork",
-    "fork7": "7-Way Fork",
-    "noTemplates": "No templates available"
+    "noTemplates": "No templates available",
+    "categories": {
+      "roads": "Roads",
+      "junctions": "Junctions",
+      "signals": "Signals",
+      "markings": "Markings"
+    },
+    "roads": {
+      "singleLane": "Single Lane",
+      "dual2Lane": "Dual 2-Lane",
+      "dual4Lane": "Dual 4-Lane",
+      "dual6Lane": "Dual 6-Lane",
+      "highway": "Highway",
+      "ramp": "On-Ramp",
+      "urbanRoad": "Urban Road"
+    },
+    "junctions": {
+      "tIntersection": "T-Junction",
+      "crossIntersection": "Cross (+)",
+      "fiveWay": "5-Way",
+      "sixWay": "6-Way",
+      "roundabout": "Roundabout"
+    },
+    "signals": {
+      "trafficLight": "Traffic Light",
+      "stopSign": "Stop Sign",
+      "warningSign": "Warning",
+      "speedLimit30": "Speed 30",
+      "speedLimit60": "Speed 60",
+      "speedLimit80": "Speed 80",
+      "speedLimit120": "Speed 120",
+      "noEntry": "No Entry"
+    },
+    "markings": {
+      "solidWhite": "Solid White",
+      "dashedWhite": "Dashed White",
+      "solidYellow": "Solid Yellow",
+      "doubleYellow": "Double Yellow",
+      "zebraCrossing": "Zebra Crossing",
+      "noMarking": "No Marking"
+    }
   },
   "pluginManager": {
     "title": "Plugin Manager",
@@ -220,8 +252,20 @@
     "available": "Available",
     "unload": "Unload",
     "load": "Load",
+    "install": "Install",
+    "uninstall": "Uninstall",
     "disable": "Disable",
     "enable": "Enable",
+    "close": "Close",
+    "tabAvailable": "Available",
+    "tabInstalled": "Installed",
+    "tabDisabled": "Disabled",
+    "colName": "Name",
+    "colVersion": "Version",
+    "colDescription": "Description",
+    "noAvailable": "No available plugins",
+    "noInstalled": "No installed plugins",
+    "noDisabled": "No disabled plugins",
     "dependencies": "Dependencies:",
     "permissions": "Permissions:",
     "disablePlugin": "Disable Plugin",
