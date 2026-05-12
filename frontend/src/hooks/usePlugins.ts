@@ -18,6 +18,10 @@ export interface PluginInfo {
   disabledReason?: string;
   /** True for plugins compiled directly into the app (always loaded, cannot be uninstalled) */
   isBuiltin?: boolean;
+  /** i18n key for the plugin name (optional; falls back to name) */
+  nameKey?: string;
+  /** i18n key for the plugin description (optional; falls back to description) */
+  descriptionKey?: string;
 }
 
 export interface UsePluginsReturn {

@@ -274,7 +274,11 @@
     "cancel": "取消",
     "confirmDisable": "确认禁用",
     "builtin": "内置",
-    "installFromFile": "从文件安装"
+    "installFromFile": "从文件安装",
+    "builtinRoadToolsName": "道路工具",
+    "builtinRoadToolsDesc": "道路编辑工具栏按鈕与道路菜单项",
+    "builtinTemplatesName": "内置模板",
+    "builtinTemplatesDesc": "预设道路、路口、信号与标线模板"
   },
   "viewport": {
     "initializing": "3D 视口 — 正在初始化 WebGPU...",

@@ -3,13 +3,14 @@
  * Tabs: Available | Installed | Disabled
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   X, Package, Power, PowerOff, RefreshCw, Loader2,
   AlertCircle, Download, Trash2, FolderOpen,
 } from 'lucide-react';
 import { usePlugins, type PluginInfo } from '../hooks/usePlugins';
+import { loadPluginBundle } from '../plugins/pluginLoader';
 import './PluginManager.css';
 
 type TabId = 'available' | 'installed' | 'disabled';
@@ -38,6 +39,8 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
   const [disableDialogOpen, setDisableDialogOpen] = useState(false);
   const [disableTargetId, setDisableTargetId] = useState<string | null>(null);
+  /** Hidden file input for web-mode plugin installation */
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Refresh list when dialog opens
   useEffect(() => {
@@ -100,8 +103,8 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   };
 
   const handleInstallFromFile = async () => {
-    // Use Tauri dialog to pick a plugin directory
     if (typeof window !== 'undefined' && '__TAURI__' in window) {
+      // Tauri desktop: use native directory picker
       try {
         const { open } = await import('@tauri-apps/plugin-dialog');
         const selected = await open({ directory: true, multiple: false, title: t('pluginManager.installFromFile') });
@@ -109,15 +112,43 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
           await withLoading('__install__', () => installPlugin(selected));
         }
       } catch (err) {
-        // Dialog cancelled or error — silently ignore cancel
         if (err instanceof Error && !err.message.includes('cancel')) {
           console.error('[PluginManager] install error:', err);
         }
       }
+    } else {
+      // Web mode: trigger hidden file input to pick a .js plugin bundle
+      fileInputRef.current?.click();
+    }
+  };
+
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
+    try {
+      const jsContent = await file.text();
+      const pluginId = file.name.replace(/\.js$/i, '');
+      await withLoading('__install__', async () => {
+        await loadPluginBundle(pluginId, jsContent);
+      });
+      await refresh();
+    } catch (err) {
+      console.error('[PluginManager] web install error:', err);
     }
   };
 
   return (
+    <>
+      {/* Hidden file input for web-mode plugin installation */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".js"
+        style={{ display: 'none' }}
+        onChange={(e) => void handleFileInputChange(e)}
+      />
     <div
       className="pm-overlay"
       onClick={(e) => { if (e.target === e.currentTarget && !disableDialogOpen) onClose(); }}
@@ -248,6 +279,7 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
         />
       )}
     </div>
+    </>
   );
 }
 
@@ -272,7 +304,9 @@ function PluginRow({ plugin, selected, isLoading, onSelect, onLoad, onUnload, on
       onClick={onSelect}
     >
       <td className="pm-col-name">
-        <span className="pm-plugin-name">{plugin.name}</span>
+        <span className="pm-plugin-name">
+          {plugin.nameKey ? t(plugin.nameKey, plugin.name) : plugin.name}
+        </span>
         {plugin.isBuiltin && (
           <span className="pm-builtin-badge">{t('pluginManager.builtin')}</span>
         )}
@@ -281,7 +315,11 @@ function PluginRow({ plugin, selected, isLoading, onSelect, onLoad, onUnload, on
         <code className="pm-plugin-version">{plugin.version}</code>
       </td>
       <td className="pm-col-desc">
-        <span className="pm-plugin-desc">{plugin.description ?? '—'}</span>
+        <span className="pm-plugin-desc">
+          {plugin.descriptionKey
+            ? t(plugin.descriptionKey, plugin.description ?? '—')
+            : (plugin.description ?? '—')}
+        </span>
       </td>
       <td className="pm-col-actions" onClick={(e) => e.stopPropagation()}>
         {plugin.isBuiltin ? null : isLoading ? (
