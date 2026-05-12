@@ -1,8 +1,11 @@
 /**
  * Plugin management hook — interfaces with backend PluginRegistry via Tauri commands.
+ * Built-in plugins (compiled into the app) are merged with dynamically discovered ones.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { BUILTIN_PLUGINS } from '../plugins/builtinRegistry';
+import { loadPluginBundle, unloadPluginBundle } from '../plugins/pluginLoader';
 
 export interface PluginInfo {
   id: string;
@@ -13,6 +16,8 @@ export interface PluginInfo {
   permissions: string[];
   status: 'available' | 'loaded' | 'disabled';
   disabledReason?: string;
+  /** True for plugins compiled directly into the app (always loaded, cannot be uninstalled) */
+  isBuiltin?: boolean;
 }
 
 export interface UsePluginsReturn {
@@ -23,22 +28,27 @@ export interface UsePluginsReturn {
   unloadPlugin: (id: string) => Promise<void>;
   enablePlugin: (id: string) => Promise<void>;
   disablePlugin: (id: string, reason: string) => Promise<void>;
+  installPlugin: (srcPath: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
 const TAURI_COMMANDS = {
   listPlugins: 'plugin_list',
-  loadPlugin: 'plugin_load',
+  getScript: 'plugin_get_script',
   unloadPlugin: 'plugin_unload',
   enablePlugin: 'plugin_enable',
   disablePlugin: 'plugin_disable',
+  installPlugin: 'plugin_install',
 } as const;
 
 /**
  * Hook for managing plugins from the frontend.
  */
 export function usePlugins(): UsePluginsReturn {
-  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  /** Plugins discovered by the backend (external, from plugins/ directory) */
+  const [serverPlugins, setServerPlugins] = useState<PluginInfo[]>([]);
+  /** IDs of external plugins whose JS has been executed in the browser */
+  const [loadedIds, setLoadedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,7 +68,7 @@ export function usePlugins(): UsePluginsReturn {
     setError(null);
     try {
       const result = await invokeCommand<PluginInfo[]>(TAURI_COMMANDS.listPlugins);
-      setPlugins(result);
+      setServerPlugins(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -66,27 +76,42 @@ export function usePlugins(): UsePluginsReturn {
     }
   }, [invokeCommand]);
 
+  /**
+   * Merged plugin list: built-ins (always loaded) + external (discovered by backend).
+   * For external plugins that have been JS-loaded in this session, status is overridden to 'loaded'.
+   */
+  const plugins = useMemo<PluginInfo[]>(() => {
+    const external = serverPlugins.map((p) => ({
+      ...p,
+      status: loadedIds.has(p.id) ? ('loaded' as const) : p.status,
+    }));
+    return [...BUILTIN_PLUGINS, ...external];
+  }, [serverPlugins, loadedIds]);
+
   const loadPlugin = useCallback(async (id: string) => {
     setError(null);
     try {
-      await invokeCommand<void>(TAURI_COMMANDS.loadPlugin, { id });
-      await refresh();
+      const js = await invokeCommand<string>(TAURI_COMMANDS.getScript, { id });
+      await loadPluginBundle(id, js);
+      setLoadedIds((prev) => new Set(prev).add(id));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       throw err;
     }
-  }, [invokeCommand, refresh]);
+  }, [invokeCommand]);
 
   const unloadPlugin = useCallback(async (id: string) => {
     setError(null);
     try {
-      await invokeCommand<void>(TAURI_COMMANDS.unloadPlugin, { id });
-      await refresh();
+      unloadPluginBundle(id);
+      setLoadedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+      // Best-effort notification to backend
+      await invokeCommand<void>(TAURI_COMMANDS.unloadPlugin, { id }).catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       throw err;
     }
-  }, [invokeCommand, refresh]);
+  }, [invokeCommand]);
 
   const enablePlugin = useCallback(async (id: string) => {
     setError(null);
@@ -110,6 +135,17 @@ export function usePlugins(): UsePluginsReturn {
     }
   }, [invokeCommand, refresh]);
 
+  const installPlugin = useCallback(async (srcPath: string) => {
+    setError(null);
+    try {
+      await invokeCommand<void>(TAURI_COMMANDS.installPlugin, { srcPath });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  }, [invokeCommand, refresh]);
+
   useEffect(() => {
     refresh();
   }, [refresh]);
@@ -122,6 +158,7 @@ export function usePlugins(): UsePluginsReturn {
     unloadPlugin,
     enablePlugin,
     disablePlugin,
+    installPlugin,
     refresh,
   };
 }
