@@ -136,7 +136,7 @@ export function App() {
 
   return (
     <ErrorBoundary t={(key, fallback) => t(key) || fallback || key}>
-    <div className="app-container">
+    <div className="app-container" onContextMenu={(e) => e.preventDefault()}>
       {/* Full-bleed viewport as base layer */}
       <div className="canvas-viewport">
         <Viewport />
@@ -163,6 +163,7 @@ export function App() {
       )}
 
       {/* Floating template panel */}
+      {!layout.templatePanelCollapsed && (
       <FloatingPanel
         className="floating-template"
         dragHandleSelector=".template-header"
@@ -175,6 +176,7 @@ export function App() {
       >
         <TemplatePanel />
       </FloatingPanel>
+      )}
 
       {/* Floating right panel — Quick Inspector (only when selected) */}
       {showRightPanel && (
