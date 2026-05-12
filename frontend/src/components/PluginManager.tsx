@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   X, Package, Power, PowerOff, RefreshCw, Loader2,
-  AlertCircle, Download, Trash2,
+  AlertCircle, Download, Trash2, FolderOpen,
 } from 'lucide-react';
 import { usePlugins, type PluginInfo } from '../hooks/usePlugins';
 import './PluginManager.css';
@@ -28,6 +28,7 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
     unloadPlugin,
     enablePlugin,
     disablePlugin,
+    installPlugin,
     refresh,
   } = usePlugins();
   const { t } = useTranslation();
@@ -96,6 +97,24 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
     await withLoading(disableTargetId, () => disablePlugin(disableTargetId, reason));
     setDisableDialogOpen(false);
     setDisableTargetId(null);
+  };
+
+  const handleInstallFromFile = async () => {
+    // Use Tauri dialog to pick a plugin directory
+    if (typeof window !== 'undefined' && '__TAURI__' in window) {
+      try {
+        const { open } = await import('@tauri-apps/plugin-dialog');
+        const selected = await open({ directory: true, multiple: false, title: t('pluginManager.installFromFile') });
+        if (selected && typeof selected === 'string') {
+          await withLoading('__install__', () => installPlugin(selected));
+        }
+      } catch (err) {
+        // Dialog cancelled or error — silently ignore cancel
+        if (err instanceof Error && !err.message.includes('cancel')) {
+          console.error('[PluginManager] install error:', err);
+        }
+      }
+    }
   };
 
   return (
@@ -199,6 +218,15 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
           <div className="pm-footer-actions">
             <button
               className="pm-btn pm-btn-secondary"
+              onClick={() => void handleInstallFromFile()}
+              disabled={loading}
+              title={t('pluginManager.installFromFile')}
+            >
+              <FolderOpen size={13} />
+              {t('pluginManager.installFromFile')}
+            </button>
+            <button
+              className="pm-btn pm-btn-secondary"
               onClick={() => void refresh()}
               disabled={loading}
               title={t('pluginManager.refresh')}
@@ -240,11 +268,14 @@ function PluginRow({ plugin, selected, isLoading, onSelect, onLoad, onUnload, on
   const { t } = useTranslation();
   return (
     <tr
-      className={`pm-plugin-row${selected ? ' selected' : ''}`}
+      className={`pm-plugin-row${selected ? ' selected' : ''}${plugin.isBuiltin ? ' builtin' : ''}`}
       onClick={onSelect}
     >
       <td className="pm-col-name">
         <span className="pm-plugin-name">{plugin.name}</span>
+        {plugin.isBuiltin && (
+          <span className="pm-builtin-badge">{t('pluginManager.builtin')}</span>
+        )}
       </td>
       <td className="pm-col-version">
         <code className="pm-plugin-version">{plugin.version}</code>
@@ -253,7 +284,7 @@ function PluginRow({ plugin, selected, isLoading, onSelect, onLoad, onUnload, on
         <span className="pm-plugin-desc">{plugin.description ?? '—'}</span>
       </td>
       <td className="pm-col-actions" onClick={(e) => e.stopPropagation()}>
-        {isLoading ? (
+        {plugin.isBuiltin ? null : isLoading ? (
           <Loader2 size={14} className="spin" />
         ) : plugin.status === 'available' ? (
           <button className="pm-row-btn load" onClick={onLoad} title={t('pluginManager.load')}>

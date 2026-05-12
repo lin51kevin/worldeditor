@@ -29,6 +29,7 @@ function mockUsePlugins(overrides: Partial<UsePluginsReturn> = {}) {
     unloadPlugin: vi.fn().mockResolvedValue(undefined),
     enablePlugin: vi.fn().mockResolvedValue(undefined),
     disablePlugin: vi.fn().mockResolvedValue(undefined),
+    installPlugin: vi.fn().mockResolvedValue(undefined),
     refresh: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
