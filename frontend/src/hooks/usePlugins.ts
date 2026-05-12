@@ -121,16 +121,21 @@ export function usePlugins(): UsePluginsReturn {
     setError(null);
     try {
       await invokeCommand<void>(TAURI_COMMANDS.enablePlugin, { id });
+      // Reload the JS bundle so the plugin re-registers its contributions
+      await loadPlugin(id);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       throw err;
     }
-  }, [invokeCommand, refresh]);
+  }, [invokeCommand, loadPlugin, refresh]);
 
   const disablePlugin = useCallback(async (id: string, reason: string) => {
     setError(null);
     try {
+      // Unload the JS bundle first so plugin contributions are removed from the UI
+      unloadPluginBundle(id);
+      setLoadedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
       await invokeCommand<void>(TAURI_COMMANDS.disablePlugin, { id, reason });
       await refresh();
     } catch (err) {

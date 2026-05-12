@@ -122,10 +122,15 @@ describe('usePlugins', () => {
       }
     });
 
-    expect(invokeMock).toHaveBeenNthCalledWith(1, command, method === 'disablePlugin'
-      ? { id: args[0], reason: args[1] }
-      : { id: args[0] });
-    expect(invokeMock).toHaveBeenNthCalledWith(2, 'plugin_list', undefined);
+    if (method === 'enablePlugin') {
+      // enablePlugin reloads the bundle (plugin_get_script) before enabling, then refreshes
+      expect(invokeMock).toHaveBeenCalledWith('plugin_get_script', { id: args[0] });
+      expect(invokeMock).toHaveBeenCalledWith(command, { id: args[0] });
+      expect(invokeMock).toHaveBeenCalledWith('plugin_list', undefined);
+    } else {
+      expect(invokeMock).toHaveBeenNthCalledWith(1, command, { id: args[0], reason: args[1] });
+      expect(invokeMock).toHaveBeenNthCalledWith(2, 'plugin_list', undefined);
+    }
   });
 
   it('runs loadPlugin by fetching script and executing bundle', async () => {
