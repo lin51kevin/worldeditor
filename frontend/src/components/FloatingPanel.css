@@ -67,6 +67,35 @@
     border-radius: 4px;
 }
 
+/* Bottom-right corner handle */
+.fp-resize-corner-br {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 14px;
+    height: 14px;
+    cursor: nwse-resize;
+    z-index: 10;
+}
+
+.fp-resize-corner-br::after {
+    content: '';
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--color-border);
+    border-bottom: 2px solid var(--color-border);
+    border-radius: 0 0 2px 0;
+    opacity: 0.5;
+}
+
+.fp-resize-corner-br:hover::after {
+    opacity: 1;
+    border-color: var(--color-accent, #4a90e2);
+}
+
 /* ── Cursor hints on drag-handle areas ── */
 
 /* Layer panel title */

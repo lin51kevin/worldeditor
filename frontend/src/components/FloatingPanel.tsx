@@ -93,7 +93,7 @@ export function FloatingPanel({
   const didDrag = useRef(false);
   // Resize state
   const resize = useRef<{
-    edge: 'top' | 'right' | 'bottom' | 'left';
+    edge: 'top' | 'right' | 'bottom' | 'left' | 'bottom-right';
     startX: number;
     startY: number;
     origWidth: number;
@@ -133,7 +133,7 @@ export function FloatingPanel({
 
   // Resize: start on edge handle mousedown
   const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent, edge: 'top' | 'right' | 'bottom' | 'left') => {
+    (e: React.MouseEvent, edge: 'top' | 'right' | 'bottom' | 'left' | 'bottom-right') => {
       e.preventDefault();
       e.stopPropagation();
       const el = containerRef.current;
@@ -149,7 +149,7 @@ export function FloatingPanel({
         origTy: tyRef.current,
       };
       document.body.style.userSelect = 'none';
-      document.body.style.cursor = (edge === 'top' || edge === 'bottom') ? 'row-resize' : 'col-resize';
+      document.body.style.cursor = (edge === 'top' || edge === 'bottom') ? 'row-resize' : edge === 'bottom-right' ? 'nwse-resize' : 'col-resize';
     },
     [width, height],
   );
@@ -209,6 +209,16 @@ export function FloatingPanel({
         } else if (edge === 'bottom') {
           const newH = Math.max(minHeight, origHeight + (e.clientY - startY));
           setHeight(newH);
+        } else if (edge === 'bottom-right') {
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          const newW = Math.max(minWidth, Math.min(maxWidth, origWidth + dx));
+          const newH = Math.max(minHeight, origHeight + dy);
+          setWidth(newW);
+          setHeight(newH);
+          if (anchorHorizontal === 'right') {
+            setTx(origTx + (newW - origWidth));
+          }
         } else if (edge === 'top') {
           // Growing upward: bottom stays fixed, top edge moves → adjust ty + height together
           const dy = e.clientY - startY;
@@ -287,6 +297,12 @@ export function FloatingPanel({
         <div
           className="fp-resize-handle fp-resize-bottom"
           onMouseDown={(e) => handleResizeMouseDown(e, 'bottom')}
+        />
+      )}
+      {(resizeEdges.includes('right') && resizeEdges.includes('bottom')) && (
+        <div
+          className="fp-resize-handle fp-resize-corner-br"
+          onMouseDown={(e) => handleResizeMouseDown(e, 'bottom-right')}
         />
       )}
     </div>
