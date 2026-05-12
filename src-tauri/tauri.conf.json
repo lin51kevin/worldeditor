@@ -14,6 +14,7 @@
         "title": "WorldEditor",
         "width": 1400,
         "height": 900,
+        "maximized": true,
         "resizable": true,
         "fullscreen": false,
         "minWidth": 800,
@@ -21,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: https://asset.localhost data: blob:; font-src 'self' data:; connect-src ipc: http://ipc.localhost 'self'"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' asset: https://asset.localhost data: blob:; font-src 'self' data:; connect-src ipc: http://ipc.localhost 'self'"
     }
   },
   "bundle": {
