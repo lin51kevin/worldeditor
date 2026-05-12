@@ -52,6 +52,8 @@ interface EditorState {
   optimizeRoad: (id: string) => void;
   swapCenterline: (id: string, targetLaneId: number) => void;
   updateJunction: (id: string, updates: Partial<Pick<Junction, 'name'>>) => void;
+  /** Add multiple roads and a junction record in a single undoable operation */
+  addJunctionWithRoads: (junction: Junction, roads: Road[]) => void;
   addSignal: (signal: Signal) => void;
   removeSignal: (id: string) => void;
   updateSignal: (id: string, updates: Partial<Signal>) => void;
@@ -574,6 +576,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         junctions: state.project.junctions.map((j) =>
           j.id === id ? { ...j, ...updates } : j,
         ),
+      },
+      isDirty: true,
+    })),
+
+  addJunctionWithRoads: (junction, roads) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: [...state.project.roads, ...roads],
+        junctions: [...state.project.junctions, junction],
       },
       isDirty: true,
     })),
