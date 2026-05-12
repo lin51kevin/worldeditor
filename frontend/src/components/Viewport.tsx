@@ -19,6 +19,8 @@ import {
 import './Viewport.css';
 
 const DRAG_THRESHOLD_SQ = 9;
+const HOVER_HIGHLIGHT_COLOR: [number, number, number, number] = [0.95, 0.78, 0.20, 0.60];
+const HOVER_HIGHLIGHT_Z_LIFT = 0.03;
 
 /** Concatenate two Float32Arrays into a single new array. */
 function mergeFloat32Arrays(a: Float32Array, b: Float32Array): Float32Array {
@@ -28,6 +30,16 @@ function mergeFloat32Arrays(a: Float32Array, b: Float32Array): Float32Array {
   merged.set(a, 0);
   merged.set(b, a.length);
   return merged;
+}
+
+/** Raise mesh vertices along Z to avoid coplanar depth fighting with road surfaces. */
+function liftMeshZ(vertices: Float32Array, zLift: number): Float32Array {
+  if (vertices.length === 0) return vertices;
+  const lifted = new Float32Array(vertices);
+  for (let index = 2; index < lifted.length; index += 7) {
+    lifted[index] = (lifted[index] ?? 0) + zLift;
+  }
+  return lifted;
 }
 
 interface MouseGestureState {
@@ -141,7 +153,7 @@ export function Viewport() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
   const [isDragOver, setIsDragOver] = useState(false);
   const project = useEditorStore((s) => s.project);
-  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
+  // const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
   const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
   const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
   const selectedRoadIds = useEditorStore((s) => s.selectedRoadIds);
@@ -873,7 +885,7 @@ export function Viewport() {
       if (snapEl) snapEl.style.display = 'none';
     }
 
-    // Hover detection: gold-highlight road/junction under cursor in select mode
+    // Hover detection: opaque yellow highlight for road/junction under cursor in select mode
     const isInSelectMode =
       viewState.editMode !== 'spline' &&
       !viewState.geometryEditSpline &&
@@ -899,8 +911,12 @@ export function Viewport() {
                 if (newHoveredRoad !== selectedRoadId) {
                   const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
                   if (road) {
-                    const hoverVerts = await service.generateSingleRoadVertices(road, 1.0, [1.0, 0.85, 0.1, 0.5]);
-                    rendererInst.uploadHoverVertices(hoverVerts);
+                    const singleRoadProject = { ...currentProject, roads: [road], junctions: [] };
+                    const hoverVerts = tintVertices(
+                      await service.generateRoadVertices(singleRoadProject, 2.0),
+                      HOVER_HIGHLIGHT_COLOR,
+                    );
+                    rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
                   }
                 } else {
                   rendererInst.clearHover();
@@ -914,9 +930,11 @@ export function Viewport() {
                 hoveredJunctionRef.current = newHoveredJunction;
                 if (newHoveredJunction) {
                   const hoverVerts = await service.generateSingleJunctionVertices(
-                    currentProject, newHoveredJunction, [1.0, 0.85, 0.1, 0.5],
+                    currentProject,
+                    newHoveredJunction,
+                    HOVER_HIGHLIGHT_COLOR,
                   );
-                  rendererInst.uploadHoverVertices(hoverVerts);
+                  rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
                   if (!rendererInst.pointerDragging) {
                     canvas.style.cursor = 'pointer';
                   }
@@ -1349,7 +1367,7 @@ export function Viewport() {
       {/* Snap indicator: shown when cursor snaps to a nearby point */}
       <div ref={snapIndicatorDomRef} className="snap-indicator" style={{ display: 'none' }} />
       {/* Context hints: keyboard shortcut hints when elements are selected */}
-      {(selectedRoadId || selectedJunctionId || selectedRoadIds.length > 0) && (
+      {/* {(selectedRoadId || selectedJunctionId || selectedRoadIds.length > 0) && (
         <div className="viewport-context-hints">
           {selectedRoadIds.length > 0
             ? <><span>已选 {selectedRoadIds.length} 条</span><kbd>Delete</kbd><span>批量删除</span><kbd>Esc</kbd><span>取消</span></>
@@ -1358,7 +1376,7 @@ export function Viewport() {
             : <><kbd>Delete</kbd><span>删除</span><kbd>Esc</kbd><span>取消</span></>
           }
         </div>
-      )}
+      )} */}
       {status !== 'ready' && (
         <div className="viewport-overlay">
           <span className="viewport-label">
