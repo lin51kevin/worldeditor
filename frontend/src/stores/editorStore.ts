@@ -5,6 +5,8 @@ import type { LaneSide, SceneNodeSelection } from '../utils/sceneGraph';
 interface EditorState {
   // Project state
   project: Project;
+  /** Snapshot of the project at the last save/load — used for reset-to-saved. */
+  savedProject: Project | null;
   isDirty: boolean;
   selectedRoadId: string | null;
   selectedJunctionId: string | null;
@@ -72,6 +74,7 @@ interface EditorState {
   markDirty: () => void;
   markClean: () => void;
   reset: () => void;
+  resetToSaved: () => void;
   undo: () => void;
   redo: () => void;
   canUndo: () => boolean;
@@ -108,6 +111,7 @@ function pushUndo(state: EditorState): Partial<EditorState> {
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   project: initialProject,
+  savedProject: null,
   isDirty: false,
   selectedRoadId: null,
   selectedJunctionId: null,
@@ -123,7 +127,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   undoStack: [],
   redoStack: [],
 
-  setProject: (project) => set((s) => ({ project, isDirty: false, undoStack: [], redoStack: [], projectLoadVersion: s.projectLoadVersion + 1 })),
+  setProject: (project) => set((s) => ({ project, savedProject: project, isDirty: false, undoStack: [], redoStack: [], projectLoadVersion: s.projectLoadVersion + 1 })),
 
   selectRoad: (id) =>
     set({
@@ -777,7 +781,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setViewportInfo: ({ gridSpacing, mpp }) => set({ gridSpacing, viewportMpp: mpp }),
 
   markDirty: () => set({ isDirty: true }),
-  markClean: () => set({ isDirty: false }),
+  markClean: () => set((s) => ({ isDirty: false, savedProject: s.project })),
+  resetToSaved: () => set((s) => s.savedProject
+    ? { project: s.savedProject, isDirty: false, undoStack: [], redoStack: [], selectedRoadId: null, selectedJunctionId: null, selectedObjectType: null, selectedSceneNode: null, selectedRoadIds: [], selectedJunctionIds: [] }
+    : s),
   reset: () => set((s) => ({ project: initialProject, isDirty: false, selectedRoadId: null, selectedJunctionId: null, selectedObjectType: null, selectedSceneNode: null, selectedRoadIds: [], selectedJunctionIds: [], clipboardRoadId: null, undoStack: [], redoStack: [], cursorWorldPos: { x: 0, y: 0 }, gridSpacing: 10.0, viewportMpp: 0.1, projectLoadVersion: s.projectLoadVersion + 1 })),
 
   undo: () =>
