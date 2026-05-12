@@ -49,6 +49,21 @@ interface MouseGestureState {
   dragged: boolean;
 }
 
+/** Drag state for move-road and rotate-road modes. */
+interface MoveRotateDragState {
+  mode: 'move-road' | 'rotate-road';
+  roadId: string;
+  startWorldX: number;
+  startWorldY: number;
+  /** Road geometry centroid — rotation pivot for rotate-road mode. */
+  centroidX: number;
+  centroidY: number;
+  /** Accumulated delta / angle written on each mousemove and committed on mouseup. */
+  currentDx: number;
+  currentDy: number;
+  currentAngle: number;
+}
+
 function exceededDragThreshold(startX: number, startY: number, clientX: number, clientY: number): boolean {
   const dx = clientX - startX;
   const dy = clientY - startY;
@@ -173,6 +188,8 @@ export function Viewport() {
   /** Rubber-band selection state: tracks drag start and whether the overlay is active. */
   const rubberBandRef = useRef<{ startClientX: number; startClientY: number; active: boolean } | null>(null);
   const rubberBandOverlayRef = useRef<HTMLDivElement>(null);
+  /** Active move-road / rotate-road drag state. */
+  const moveRotateDragRef = useRef<MoveRotateDragState | null>(null);
   /** Tracks the road/junction currently under the cursor for hover highlighting. */
   const hoveredRoadRef = useRef<string | null>(null);
   const hoveredJunctionRef = useRef<string | null>(null);
@@ -705,6 +722,69 @@ export function Viewport() {
     const worldPos = renderer.unprojectToGround(screenX, screenY);
     if (!worldPos) return;
 
+    // Move/Rotate road drag: compute transform and generate preview vertices
+    const moveRotateDrag = moveRotateDragRef.current;
+    if (moveRotateDrag) {
+      const { mode, roadId, startWorldX, startWorldY, centroidX, centroidY } = moveRotateDrag;
+      const { project: currentProject } = useEditorStore.getState();
+      const road = currentProject.roads.find((r) => r.id === roadId);
+      if (road) {
+        let previewRoad: typeof road;
+        if (mode === 'move-road') {
+          const dx = worldPos.x - startWorldX;
+          const dy = worldPos.y - startWorldY;
+          moveRotateDrag.currentDx = dx;
+          moveRotateDrag.currentDy = dy;
+          previewRoad = {
+            ...road,
+            plan_view: road.plan_view.map((g) => ({ ...g, x: g.x + dx, y: g.y + dy })),
+          };
+        } else {
+          // Angle from centroid to start vs centroid to current
+          const startAngle = Math.atan2(startWorldY - centroidY, startWorldX - centroidX);
+          const currentAngle = Math.atan2(worldPos.y - centroidY, worldPos.x - centroidX);
+          const angleDelta = currentAngle - startAngle;
+          moveRotateDrag.currentAngle = angleDelta;
+          const cosA = Math.cos(angleDelta);
+          const sinA = Math.sin(angleDelta);
+          previewRoad = {
+            ...road,
+            plan_view: road.plan_view.map((g) => {
+              const rx = g.x - centroidX;
+              const ry = g.y - centroidY;
+              return {
+                ...g,
+                x: centroidX + rx * cosA - ry * sinA,
+                y: centroidY + rx * sinA + ry * cosA,
+                hdg: g.hdg + angleDelta,
+              };
+            }),
+          };
+        }
+
+        // Upload async preview as highlight overlay (throttled like knot drag)
+        if (!isPreviewingRoadRef.current) {
+          isPreviewingRoadRef.current = true;
+          const liveRenderer = rendererRef.current;
+          if (liveRenderer) {
+            void (async () => {
+              try {
+                const service = await getPlatformService();
+                const verts = await service.generateSingleRoadVertices(
+                  previewRoad, 2.0, [0.95, 0.60, 0.10, 0.85],
+                );
+                rendererRef.current?.uploadHighlightVertices(verts);
+              } catch { /* ignore preview errors */ }
+              finally { isPreviewingRoadRef.current = false; }
+            })();
+          }
+        }
+      }
+      emitCursorMove(worldPos.x, worldPos.y);
+      pendingCursorRef.current = worldPos;
+      return;
+    }
+
     // Spline knot dragging: update knot position
     const viewState = useEditorViewStore.getState();
     const drag = viewState.draggingKnot;
@@ -888,9 +968,18 @@ export function Viewport() {
     // Hover detection: opaque yellow highlight for road/junction under cursor in select mode
     const isInSelectMode =
       viewState.editMode !== 'spline' &&
+      viewState.editMode !== 'move-road' &&
+      viewState.editMode !== 'rotate-road' &&
       !viewState.geometryEditSpline &&
       !viewState.draggingKnot &&
       !rubberBandRef.current;
+
+    // Set mode-specific cursor when no drag is active
+    if (viewState.editMode === 'move-road') {
+      canvas.style.cursor = 'move';
+    } else if (viewState.editMode === 'rotate-road') {
+      canvas.style.cursor = 'crosshair';
+    }
 
     if (isInSelectMode) {
       try {
@@ -988,6 +1077,38 @@ export function Viewport() {
     }
 
     if (!hitKnots || hitKnots.length === 0) {
+      // Move/Rotate road: start drag on the selected road
+      if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
+        const { selectedRoadId: selRoadId, project: currentProject } = useEditorStore.getState();
+        if (selRoadId) {
+          const road = currentProject.roads.find((r) => r.id === selRoadId);
+          if (road && road.plan_view.length > 0) {
+            const rect = canvas.getBoundingClientRect();
+            const screenX = (e.clientX - rect.left) * devicePixelRatio;
+            const screenY = (e.clientY - rect.top) * devicePixelRatio;
+            const worldPos = renderer.unprojectToGround(screenX, screenY);
+            if (worldPos) {
+              const cx = road.plan_view.reduce((sum, g) => sum + g.x, 0) / road.plan_view.length;
+              const cy = road.plan_view.reduce((sum, g) => sum + g.y, 0) / road.plan_view.length;
+              moveRotateDragRef.current = {
+                mode: viewState.editMode,
+                roadId: selRoadId,
+                startWorldX: worldPos.x,
+                startWorldY: worldPos.y,
+                centroidX: cx,
+                centroidY: cy,
+                currentDx: 0,
+                currentDy: 0,
+                currentAngle: 0,
+              };
+              renderer.lockCamera();
+              canvas.style.cursor = viewState.editMode === 'move-road' ? 'move' : 'crosshair';
+            }
+          }
+        }
+        return;
+      }
+
       // Shift+left-drag starts rubber-band multi-select (plain left-drag still pans)
       if (e.shiftKey && viewState.editMode !== 'spline' && !viewState.geometryEditSpline) {
         rubberBandRef.current = { startClientX: e.clientX, startClientY: e.clientY, active: false };
@@ -1095,6 +1216,11 @@ export function Viewport() {
 
     const splineState = useEditorViewStore.getState();
 
+    // In move/rotate mode, clicks do not change road selection
+    if (splineState.editMode === 'move-road' || splineState.editMode === 'rotate-road') {
+      return;
+    }
+
     // If in geometry edit mode, click outside knots → do nothing (stay in edit)
     if (splineState.geometryEditRoadId) {
       return;
@@ -1198,6 +1324,27 @@ export function Viewport() {
             useEditorStore.getState().selectMultiple(roadIds, junctionIds);
           }
         }
+      }
+      return;
+    }
+
+    // Commit move/rotate road drag
+    const moveRotateDrag = moveRotateDragRef.current;
+    if (moveRotateDrag) {
+      moveRotateDragRef.current = null;
+      const renderer = rendererRef.current;
+      if (renderer) {
+        renderer.unlockCamera();
+        renderer.clearHighlight();
+      }
+      const canvas = canvasRef.current;
+      if (canvas) canvas.style.cursor = '';
+      const { mode, roadId, currentDx, currentDy, currentAngle, centroidX, centroidY } = moveRotateDrag;
+      const store = useEditorStore.getState();
+      if (mode === 'move-road' && (currentDx !== 0 || currentDy !== 0)) {
+        store.moveRoad(roadId, currentDx, currentDy);
+      } else if (mode === 'rotate-road' && currentAngle !== 0) {
+        store.rotateRoad(roadId, currentAngle, centroidX, centroidY);
       }
       return;
     }
