@@ -627,9 +627,8 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
 
       {/* Center: project name */}
       <div className="menubar-center">
-        <span className="menubar-project-name toolbar-title">
-          {project.name}
-          {isDirty && <span className="menubar-dirty-dot" title="Unsaved changes" />}
+        <span className="menubar-project-name">
+          <>{project.name}</><>{isDirty ? ' •' : ''}</>
         </span>
       </div>
 
