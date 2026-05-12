@@ -1,0 +1,314 @@
+use wasm_bindgen::prelude::*;
+use crate::render::{build_junction_polygon_points, point_in_polygon, road_point_at_s};
+
+/// Find the closest junction to a world-space point.
+#[wasm_bindgen]
+pub fn pick_junction_at_point(
+    project_json: &str,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Result<JsValue, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut best: Option<String> = None;
+    let mut best_dist = threshold;
+
+    for junction in &project.junctions {
+        let poly = build_junction_polygon_points(&project, junction);
+        if poly.len() >= 3 {
+            if point_in_polygon(x, y, &poly) {
+                return Ok(JsValue::from_str(&junction.id));
+            }
+            let cx: f64 = poly.iter().map(|p| p[0] as f64).sum::<f64>() / poly.len() as f64;
+            let cy: f64 = poly.iter().map(|p| p[1] as f64).sum::<f64>() / poly.len() as f64;
+            let dx = cx - x;
+            let dy = cy - y;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < best_dist {
+                best_dist = dist;
+                best = Some(junction.id.clone());
+            }
+        } else {
+            // Fallback for junctions with insufficient polygon points (e.g. missing
+            // or hidden connected roads): collect road endpoints from all connections
+            // and use their centroid for a proximity check.
+            let mut sum_x = 0.0f64;
+            let mut sum_y = 0.0f64;
+            let mut count = 0usize;
+            for conn in &junction.connections {
+                if let Some(road) = project.roads.iter().find(|r| r.id == conn.connecting_road) {
+                    if let Some(pt) = road_point_at_s(&road.plan_view, 0.0) {
+                        sum_x += pt.x;
+                        sum_y += pt.y;
+                        count += 1;
+                    }
+                    if let Some(pt) = road_point_at_s(&road.plan_view, road.length) {
+                        sum_x += pt.x;
+                        sum_y += pt.y;
+                        count += 1;
+                    }
+                }
+                if let Some(road) = project.roads.iter().find(|r| r.id == conn.incoming_road) {
+                    if let Some(pt) = road_point_at_s(&road.plan_view, 0.0) {
+                        sum_x += pt.x;
+                        sum_y += pt.y;
+                        count += 1;
+                    }
+                    if let Some(pt) = road_point_at_s(&road.plan_view, road.length) {
+                        sum_x += pt.x;
+                        sum_y += pt.y;
+                        count += 1;
+                    }
+                }
+            }
+            if count > 0 {
+                let cx = sum_x / count as f64;
+                let cy = sum_y / count as f64;
+                let dx = cx - x;
+                let dy = cy - y;
+                let dist = (dx * dx + dy * dy).sqrt();
+                // Use a larger effective radius for the fallback centroid check
+                if dist < best_dist * 2.0 && dist < best_dist {
+                    best_dist = dist;
+                    best = Some(junction.id.clone());
+                }
+            }
+        }
+    }
+    match best {
+        Some(id) => Ok(JsValue::from_str(&id)),
+        None => Ok(JsValue::NULL),
+    }
+}
+
+/// Find the closest road to a world-space point.
+///
+/// Returns the road ID as a string, or null if no road is within the threshold.
+/// Hit-testing uses the full road surface width (sum of all lane widths), not just
+/// the reference line centre.
+#[wasm_bindgen]
+pub fn pick_road_at_point(
+    project_json: &str,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Result<JsValue, JsError> {
+    use we_core::geometry::eval::{evaluate_lane_width, sample_road_reference_line};
+
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    /// Compute total left and right lane extents at road station `s`.
+    fn road_half_widths(road: &we_core::model::Road, s: f64) -> (f64, f64) {
+        let section = road
+            .lane_sections
+            .iter()
+            .rev()
+            .find(|ls| ls.s <= s + 1e-9)
+            .or_else(|| road.lane_sections.first());
+
+        if let Some(ls) = section {
+            let ds = (s - ls.s).max(0.0);
+            let left: f64 = ls.left.iter().map(|l| evaluate_lane_width(&l.width, ds)).sum();
+            let right: f64 = ls.right.iter().map(|l| evaluate_lane_width(&l.width, ds)).sum();
+            (left, right)
+        } else {
+            (0.0, 0.0)
+        }
+    }
+
+    let mut best_road_id: Option<String> = None;
+    // Score: 0 = inside road, >0 = distance outside road edge; threshold caps the search.
+    let mut best_score = threshold;
+
+    for road in &project.roads {
+        if road.render_hidden {
+            continue;
+        }
+        let ref_pts = sample_road_reference_line(road, 2.0);
+
+        for (i, pt) in ref_pts.iter().enumerate() {
+            // Perpendicular (left-normal) and tangent directions at this station
+            let nx = -(pt.hdg.sin()); // left normal x
+            let ny = pt.hdg.cos();    // left normal y
+            let tx = pt.hdg.cos();    // tangent x
+            let ty = pt.hdg.sin();    // tangent y
+
+            // Vector from ref point to query point
+            let dx = x - pt.x;
+            let dy = y - pt.y;
+
+            // Decompose into lateral (across-road) and along-road components
+            let lateral = dx * nx + dy * ny;   // positive = left of ref line
+            let along = dx * tx + dy * ty;     // positive = forward along road
+
+            // Only consider this sample point if the click is "closest" to it along
+            // the road — use half-step window to avoid double-counting neighbouring pts.
+            let step = if i + 1 < ref_pts.len() {
+                let np = &ref_pts[i + 1];
+                let ddx = np.x - pt.x;
+                let ddy = np.y - pt.y;
+                (ddx * ddx + ddy * ddy).sqrt()
+            } else if i > 0 {
+                let pp = &ref_pts[i - 1];
+                let ddx = pt.x - pp.x;
+                let ddy = pt.y - pp.y;
+                (ddx * ddx + ddy * ddy).sqrt()
+            } else {
+                2.0
+            };
+            if along.abs() > step * 0.6 {
+                continue;
+            }
+
+            let (left_w, right_w) = road_half_widths(road, pt.s);
+            // Fallback: if no lanes defined, use threshold as minimum road width
+            let left_w = left_w.max(0.5);
+            let right_w = right_w.max(0.5);
+
+            // Distance outside the road surface (0 if click is inside)
+            let score = if lateral >= -right_w && lateral <= left_w {
+                0.0_f64 // inside road surface
+            } else if lateral > left_w {
+                lateral - left_w  // outside left edge
+            } else {
+                -right_w - lateral  // outside right edge
+            };
+
+            if score < best_score {
+                best_score = score;
+                best_road_id = Some(road.id.clone());
+            }
+        }
+    }
+
+    match best_road_id {
+        Some(id) => Ok(JsValue::from_str(&id)),
+        None => Ok(JsValue::NULL),
+    }
+}
+
+/// Pick the closest knot to a point.
+///
+/// Returns JSON: `{ "index": number, "distance": number }` or `null` if none within threshold.
+#[wasm_bindgen]
+pub fn pick_spline_knot(
+    spline_json: &str,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Result<JsValue, JsError> {
+    let spline: we_core::spline::EditableSpline =
+        serde_json::from_str(spline_json).map_err(|e| JsError::new(&e.to_string()))?;
+    match we_core::spline::pick_knot(&spline, x, y, threshold) {
+        Some((idx, dist)) => {
+            let result = serde_json::json!({ "index": idx, "distance": dist });
+            serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+        }
+        None => Ok(JsValue::NULL),
+    }
+}
+
+/// Query elements near a point using a spatial index.
+///
+/// Returns JSON array of `{ id, kind, aabb }`.
+#[wasm_bindgen]
+pub fn spatial_query_point(
+    project_json: &str,
+    x: f64,
+    y: f64,
+    radius: f64,
+) -> Result<JsValue, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let idx = we_core::spatial_index::SpatialIndex::build(&project, 100.0);
+    let results = idx.query_point(x, y, radius);
+    let out: Vec<serde_json::Value> = results
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "id": r.id,
+                "kind": format!("{:?}", r.kind),
+                "aabb": {
+                    "min_x": r.aabb.min_x,
+                    "min_y": r.aabb.min_y,
+                    "max_x": r.aabb.max_x,
+                    "max_y": r.aabb.max_y,
+                }
+            })
+        })
+        .collect();
+    serde_wasm_bindgen::to_value(&out).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Test if a point is inside a junction's computed area.
+#[wasm_bindgen]
+pub fn point_in_junction(
+    project_json: &str,
+    junction_id: &str,
+    x: f64,
+    y: f64,
+) -> Result<bool, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let junction = project
+        .junctions
+        .iter()
+        .find(|j| j.id == junction_id)
+        .ok_or_else(|| JsError::new(&format!("Junction '{}' not found", junction_id)))?;
+    match we_core::junction_area::compute_junction_area(&project, junction) {
+        Some(area) => Ok(we_core::junction_area::point_in_junction_area(&area, x, y)),
+        None => Ok(false),
+    }
+}
+
+/// Compute the boundary area of a junction from its connecting roads.
+///
+/// Returns JSON with `{ id, center, boundary, area }` or null if
+/// the junction has insufficient connections.
+#[wasm_bindgen]
+pub fn compute_junction_area(
+    project_json: &str,
+    junction_id: &str,
+) -> Result<JsValue, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let junction = project
+        .junctions
+        .iter()
+        .find(|j| j.id == junction_id)
+        .ok_or_else(|| JsError::new(&format!("Junction '{}' not found", junction_id)))?;
+    match we_core::junction_area::compute_junction_area(&project, junction) {
+        Some(area) => {
+            serde_wasm_bindgen::to_value(&area).map_err(|e| JsError::new(&e.to_string()))
+        }
+        None => Ok(JsValue::NULL),
+    }
+}
+
+/// Snap a point to the nearest grid/endpoint/etc.
+///
+/// Returns JSON `{ x, y, snapped, snap_type, target_id }`.
+#[wasm_bindgen]
+pub fn snap_point(
+    project_json: &str,
+    x: f64,
+    y: f64,
+    config_json: &str,
+    exclude_road_id: Option<String>,
+) -> Result<JsValue, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let config: we_core::snapping::SnapConfig =
+        serde_json::from_str(config_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let result = we_core::snapping::snap_point(
+        x,
+        y,
+        &config,
+        &project,
+        exclude_road_id.as_deref(),
+    );
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+}
