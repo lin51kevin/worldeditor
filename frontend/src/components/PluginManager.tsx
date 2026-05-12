@@ -37,8 +37,6 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   const [activeTab, setActiveTab] = useState<TabId>('available');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
-  const [disableDialogId, setDisableDialogId] = useState<string | null>(null);
-  const [disableReason, setDisableReason] = useState('');
   /** Hidden file input for web-mode plugin installation */
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -89,21 +87,7 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   const handleLoad   = (id: string) => withLoading(id, () => loadPlugin(id));
   const handleUnload = (id: string) => withLoading(id, () => unloadPlugin(id));
   const handleEnable = (id: string) => withLoading(id, () => enablePlugin(id));
-  const handleDisable = (id: string) => {
-    setDisableReason('');
-    setDisableDialogId(id);
-  };
-  const confirmDisable = () => {
-    if (!disableDialogId) return;
-    const id = disableDialogId;
-    const reason = disableReason;
-    setDisableDialogId(null);
-    void withLoading(id, () => disablePlugin(id, reason));
-  };
-  const cancelDisable = () => {
-    setDisableDialogId(null);
-    setDisableReason('');
-  };
+  const handleDisable = (id: string) => void withLoading(id, () => disablePlugin(id, ''));
 
   const handleInstallFromFile = async () => {
     if (typeof window !== 'undefined' && '__TAURI__' in window) {
@@ -274,31 +258,6 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
           </div>
         </div>
 
-        {/* Disable reason dialog */}
-        {disableDialogId && (
-          <div className="pm-disable-dialog-overlay" onClick={cancelDisable}>
-            <div className="pm-disable-dialog" onClick={(e) => e.stopPropagation()}>
-              <h4>{t('pluginManager.disablePlugin')}</h4>
-              <p>{t('pluginManager.disableReasonPrompt')}</p>
-              <textarea
-                className="pm-disable-reason"
-                rows={3}
-                placeholder={t('pluginManager.disableReasonPlaceholder')}
-                value={disableReason}
-                onChange={(e) => setDisableReason(e.target.value)}
-                autoFocus
-              />
-              <div className="pm-disable-dialog-actions">
-                <button className="pm-btn pm-btn-secondary" onClick={cancelDisable}>
-                  {t('pluginManager.cancel')}
-                </button>
-                <button className="pm-btn pm-btn-primary" onClick={confirmDisable}>
-                  {t('pluginManager.confirmDisable')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
     </>
