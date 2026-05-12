@@ -507,6 +507,9 @@ export class ViewportRenderer {
   /** Set the WebGPU clear (background) color. */
   setClearColor(r: number, g: number, b: number): void {
     this.clearColor = { r, g, b, a: 1.0 };
+    if (this.splineKnotsCache.length > 0) {
+      this.refreshSplineMarkers();
+    }
   }
 
   /** Set the grid line color. */
@@ -751,12 +754,21 @@ export class ViewportRenderer {
     const handleHalfSize = 4.0 * mpp; // ~8px square
     const lineHW = 1.5 * mpp;         // tangent line ~3px wide
 
+    const clearLuma = 0.2126 * this.clearColor.r + 0.7152 * this.clearColor.g + 0.0722 * this.clearColor.b;
+    const darkTheme = clearLuma < 0.5;
+
     // Colors
-    const colYellow: [number,number,number,number] = [0.961, 0.651, 0.137, 0.85]; // tangent lines
-    const colBlack:  [number,number,number,number] = [0.05,  0.05,  0.05,  1.0];  // default knot
+    const colYellow: [number,number,number,number] = darkTheme
+      ? [1.0, 0.82, 0.25, 0.92]
+      : [0.88, 0.56, 0.06, 0.9]; // tangent lines
+    const colDefaultKnot: [number,number,number,number] = darkTheme
+      ? [0.96, 0.96, 0.96, 1.0]
+      : [0.08, 0.08, 0.08, 1.0];
     const colGreen:  [number,number,number,number] = [0.13,  0.78,  0.37,  1.0];  // hover
     const colRed:    [number,number,number,number] = [0.91,  0.30,  0.24,  1.0];  // selected
-    const colBlue:   [number,number,number,number] = [0.13,  0.55,  0.93,  1.0];  // tangent handles
+    const colBlue:   [number,number,number,number] = darkTheme
+      ? [0.42, 0.72, 1.0, 1.0]
+      : [0.10, 0.46, 0.82, 1.0]; // tangent handles
 
     const tangentAt = (i: number): [number, number, number] => {
       if (tangentOverrides && i in tangentOverrides) return tangentOverrides[i]!;
@@ -847,7 +859,7 @@ export class ViewportRenderer {
       const [kx, ky, kz] = knots[i]!;
       const knotColor = (hov?.index === i && hov?.type === 'knot') ? colGreen
         : (sel?.index === i && sel?.type === 'knot') ? colRed
-        : colBlack;
+        : colDefaultKnot;
       addXSquare(kx, ky, (kz ?? 0) + knotZ, knotHalfSize, ...knotColor);
     }
 
