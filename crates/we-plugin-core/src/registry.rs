@@ -110,6 +110,11 @@ impl PluginRegistry {
         self.loaded.keys().map(|s| s.as_str()).collect()
     }
 
+    /// Return the plugins directory path
+    pub fn plugins_dir(&self) -> &std::path::Path {
+        &self.plugins_dir
+    }
+
     /// Get info about a specific plugin
     pub fn plugin_info(&self, id: &str) -> Option<PluginInfo> {
         if let Some(loaded) = self.loaded.get(id) {
@@ -268,6 +273,16 @@ impl SharedPluginRegistry {
     /// Access the inner registry
     pub fn inner(&self) -> &Arc<RwLock<PluginRegistry>> {
         &self.0
+    }
+
+    /// Acquire a read lock on the registry
+    pub fn read(&self) -> std::sync::LockResult<std::sync::RwLockReadGuard<'_, PluginRegistry>> {
+        self.0.read()
+    }
+
+    /// Acquire a write lock on the registry
+    pub fn write(&self) -> std::sync::LockResult<std::sync::RwLockWriteGuard<'_, PluginRegistry>> {
+        self.0.write()
     }
 }
 
