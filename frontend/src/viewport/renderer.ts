@@ -56,6 +56,8 @@ struct Uniforms {
   grid_scale: f32,
   grid_color: vec3<f32>,
   cam_dist: f32,
+  show_grid: f32,
+  show_axis: f32,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -90,17 +92,23 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   let coord = in.world_pos.xy / scale;
   let grid = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
   let line = max(min(grid.x, grid.y), 0.0);
-  let alpha = 1.0 - min(line, 1.0);
+  let grid_alpha = 1.0 - min(line, 1.0);
   let dist = length(in.world_pos.xy - uniforms.camera_pos.xy);
   let fade_radius = uniforms.cam_dist * 2.0;
   let fade_start = fade_radius * 0.4;
   let fade_end = fade_radius;
   let fade = 1.0 - smoothstep(fade_start, fade_end, dist);
-  let axis_width = 0.02 * scale;
+  // Axis: screen-space constant width (approx 2px) regardless of zoom
+  let axis_width = 2.0 * fwidth(in.world_pos.x);
   var color = uniforms.grid_color;
-  if (abs(in.world_pos.x) < axis_width) { color = vec3<f32>(0.2, 0.7, 0.2); }
-  if (abs(in.world_pos.y) < axis_width) { color = vec3<f32>(0.7, 0.2, 0.2); }
-  return vec4<f32>(color, alpha * fade * 0.85);
+  // Grid lines: only visible when show_grid is set
+  var final_alpha = select(0.0, grid_alpha * fade * 0.85, uniforms.show_grid > 0.5);
+  // Axis lines: independent of grid; override color and ensure full opacity at axis
+  if (uniforms.show_axis > 0.5) {
+    if (abs(in.world_pos.x) < axis_width) { color = vec3<f32>(0.2, 0.7, 0.2); final_alpha = max(final_alpha, fade * 0.9); }
+    if (abs(in.world_pos.y) < axis_width) { color = vec3<f32>(0.7, 0.2, 0.2); final_alpha = max(final_alpha, fade * 0.9); }
+  }
+  return vec4<f32>(color, final_alpha);
 }
 `;
 
@@ -295,7 +303,8 @@ export class ViewportRenderer {
   private gridSpacing = 10.0;
 
   // Pre-allocated uniform buffers (avoid per-frame GC)
-  private gridUniformData = new Float32Array(24);
+  // 28 floats = 112 bytes: mat4x4(16) + vec3(3)+f32(1) + vec3(3)+f32(1) + f32 show_grid + f32 show_axis + 2 pad
+  private gridUniformData = new Float32Array(28);
   private basicUniformData = new Float32Array(32);
 
   // Matrix inverse cache (avoid redundant inversion on static camera)
@@ -476,11 +485,13 @@ export class ViewportRenderer {
   /** Set visibility of the grid. */
   setShowGrid(show: boolean): void {
     this.showGrid = show;
+    this.cameraDirty = true;
   }
 
   /** Set visibility of the axis indicator. */
   setShowAxis(show: boolean): void {
     this.showAxis = show;
+    this.cameraDirty = true;
   }
 
   /** Set the WebGPU clear (background) color. */
@@ -1038,6 +1049,8 @@ export class ViewportRenderer {
       gridData[19] = gridScale;
       gridData.set(this.gridColor, 20);
       gridData[23] = camDist; // cam_dist for fade radius calculation
+      gridData[24] = this.showGrid ? 1.0 : 0.0;
+      gridData[25] = this.showAxis ? 1.0 : 0.0;
       this.device.queue.writeBuffer(this.gridUniformBuffer, 0, gridData);
 
       // Update basic uniforms (128 bytes: mat4x4 view_proj + mat4x4 model)
@@ -1194,7 +1207,7 @@ export class ViewportRenderer {
     });
 
     this.gridUniformBuffer = this.device.createBuffer({
-      size: 96, // mat4x4 + vec3 + f32 + vec3 + f32(pad)
+      size: 112, // mat4x4(64) + vec3+f32(16) + vec3+f32(16) + show_grid+show_axis+pad(16)
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
