@@ -222,6 +222,8 @@ export class ViewportRenderer {
   private context!: GPUCanvasContext;
   private format!: GPUTextureFormat;
   private depthTexture!: GPUTexture;
+  // MSAA 4x resolve texture — render to this, then blit to the swap chain
+  private msaaTexture: GPUTexture | null = null;
 
   // Pipelines
   private gridPipeline!: GPURenderPipeline;
@@ -369,6 +371,7 @@ export class ViewportRenderer {
     this.height = canvas.height;
 
     this.createDepthTexture();
+    this.createMsaaTexture();
     this.createGridPipeline();
     this.createBasicPipeline();
     this.setupMouseControls(canvas);
@@ -942,7 +945,10 @@ export class ViewportRenderer {
     this.width = width;
     this.height = height;
     this.depthTexture?.destroy();
+    this.msaaTexture?.destroy();
+    this.msaaTexture = null;
     this.createDepthTexture();
+    this.createMsaaTexture();
     this.cameraDirty = true;
   }
 
@@ -982,6 +988,7 @@ export class ViewportRenderer {
     this.disposeMeshes(this.highlightMeshes);
     this.disposeMeshes(this.hoverMeshes);
     this.depthTexture?.destroy();
+    this.msaaTexture?.destroy();
     this.gridUniformBuffer?.destroy();
     this.basicUniformBuffer?.destroy();
     // Release the canvas from this device so a subsequent renderer can
@@ -1043,12 +1050,15 @@ export class ViewportRenderer {
 
     const encoder = this.device.createCommandEncoder();
 
+    const swapChainView = texture.createView();
+    const msaaView = this.msaaTexture?.createView() ?? swapChainView;
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
-        view: texture.createView(),
+        view: msaaView,
+        resolveTarget: this.msaaTexture ? swapChainView : undefined,
         clearValue: this.clearColor,
         loadOp: 'clear',
-        storeOp: 'store',
+        storeOp: this.msaaTexture ? 'discard' : 'store',
       }],
       depthStencilAttachment: {
         view: this.depthTexture.createView(),
@@ -1097,7 +1107,7 @@ export class ViewportRenderer {
 
     // Draw lane lines (between road surface and markings)
     if (this.laneLineMeshes.length > 0) {
-      pass.setPipeline(this.basicPipeline);
+      pass.setPipeline(this.highlightPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
       for (const mesh of this.laneLineMeshes) {
         pass.setVertexBuffer(0, mesh.vertexBuffer);
@@ -1158,6 +1168,16 @@ export class ViewportRenderer {
     this.depthTexture = this.device.createTexture({
       size: [this.width, this.height],
       format: 'depth32float',
+      sampleCount: 4,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+  }
+
+  private createMsaaTexture(): void {
+    this.msaaTexture = this.device.createTexture({
+      size: [this.width, this.height],
+      format: this.format,
+      sampleCount: 4,
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
   }
@@ -1205,6 +1225,7 @@ export class ViewportRenderer {
         depthWriteEnabled: false,
         depthCompare: 'less-equal',
       },
+      multisample: { count: 4 },
       primitive: { topology: 'triangle-list' },
     });
   }
@@ -1263,6 +1284,7 @@ export class ViewportRenderer {
         depthWriteEnabled: true,
         depthCompare: 'less',
       },
+      multisample: { count: 4 },
       primitive: { topology: 'triangle-list' },
     });
 
@@ -1297,6 +1319,7 @@ export class ViewportRenderer {
         depthWriteEnabled: false,
         depthCompare: 'less-equal',
       },
+      multisample: { count: 4 },
       primitive: { topology: 'triangle-list' },
     });
   }
@@ -1338,6 +1361,7 @@ export class ViewportRenderer {
         }}],
       },
       depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' },
+      multisample: { count: 4 },
       primitive: { topology: 'triangle-list' },
     });
     this._laneLinePipeline = pipeline;
@@ -1375,6 +1399,7 @@ export class ViewportRenderer {
         }}],
       },
       depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'less' },
+      multisample: { count: 4 },
       primitive: { topology: 'triangle-list' },
     });
     this._billboardPipeline = pipeline;
@@ -1399,6 +1424,7 @@ export class ViewportRenderer {
       this.activeMouseButton = e.button;
       this.activeDragAction = action;
       this.lastMouse = [e.clientX, e.clientY];
+      canvas.style.cursor = 'grabbing';
 
       detachDocListeners(); // guard against leaked listeners
 
@@ -1425,6 +1451,7 @@ export class ViewportRenderer {
       };
 
       onDocUp = () => {
+        canvas.style.cursor = '';
         this.stopDragging();
         detachDocListeners();
       };
@@ -1458,6 +1485,11 @@ export class ViewportRenderer {
   /** Unlock camera controls. */
   unlockCamera(): void {
     this._cameraLocked = false;
+  }
+
+  /** True while the user is panning/orbiting with a mouse button held down. */
+  get pointerDragging(): boolean {
+    return this.isDragging;
   }
 
   /** Return the distance from camera to its target point. */
