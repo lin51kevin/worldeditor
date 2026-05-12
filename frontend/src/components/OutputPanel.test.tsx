@@ -9,7 +9,7 @@ describe('OutputPanel', () => {
     Element.prototype.scrollTo = vi.fn();
 
     act(() => {
-      useEditorViewStore.setState({ layout: { leftWidth: 260, rightWidth: 300, outputHeight: 150, leftCollapsed: false, rightCollapsed: false, outputCollapsed: false } });
+      useEditorViewStore.setState({ layout: { leftWidth: 260, rightWidth: 300, outputHeight: 150, leftCollapsed: false, rightCollapsed: false, outputCollapsed: false, templatePanelCollapsed: false } });
     });
     vi.clearAllMocks();
   });
