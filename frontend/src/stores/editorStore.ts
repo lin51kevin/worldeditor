@@ -53,6 +53,10 @@ interface EditorState {
   mirrorRoad: (id: string) => void;
   optimizeRoad: (id: string) => void;
   swapCenterline: (id: string, targetLaneId: number) => void;
+  /** Translate a road's plan_view by (dx, dy). */
+  moveRoad: (id: string, dx: number, dy: number) => void;
+  /** Rotate a road's plan_view by `angle` radians around the point (cx, cy). */
+  rotateRoad: (id: string, angle: number, cx: number, cy: number) => void;
   updateJunction: (id: string, updates: Partial<Pick<Junction, 'name'>>) => void;
   /** Add multiple roads and a junction record in a single undoable operation */
   addJunctionWithRoads: (junction: Junction, roads: Road[]) => void;
@@ -561,6 +565,53 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         plan_view: newPlanView,
         lane_sections: newSections,
         link: null,
+      };
+      return {
+        ...pushUndo(state),
+        project: {
+          ...state.project,
+          roads: state.project.roads.map((r) => (r.id === id ? updatedRoad : r)),
+        },
+        isDirty: true,
+      };
+    }),
+
+  moveRoad: (id, dx, dy) =>
+    set((state) => {
+      const road = state.project.roads.find((r) => r.id === id);
+      if (!road) return state;
+      const updatedRoad: Road = {
+        ...road,
+        plan_view: road.plan_view.map((g) => ({ ...g, x: g.x + dx, y: g.y + dy })),
+      };
+      return {
+        ...pushUndo(state),
+        project: {
+          ...state.project,
+          roads: state.project.roads.map((r) => (r.id === id ? updatedRoad : r)),
+        },
+        isDirty: true,
+      };
+    }),
+
+  rotateRoad: (id, angle, cx, cy) =>
+    set((state) => {
+      const road = state.project.roads.find((r) => r.id === id);
+      if (!road || road.plan_view.length === 0) return state;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      const updatedRoad: Road = {
+        ...road,
+        plan_view: road.plan_view.map((g) => {
+          const rx = g.x - cx;
+          const ry = g.y - cy;
+          return {
+            ...g,
+            x: cx + rx * cosA - ry * sinA,
+            y: cy + rx * sinA + ry * cosA,
+            hdg: g.hdg + angle,
+          };
+        }),
       };
       return {
         ...pushUndo(state),

@@ -514,5 +514,88 @@ describe('editorStore', () => {
       expect(useEditorStore.getState().undoStack.length).toBeGreaterThan(undoBefore);
     });
   });
+
+  describe('moveRoad', () => {
+    it('should translate all plan_view geometry by (dx, dy)', () => {
+      const road = makeRoad({
+        plan_view: [
+          { s: 0, x: 10, y: 20, hdg: 0, length: 50, geo_type: 'Line' },
+          { s: 50, x: 60, y: 20, hdg: 0, length: 50, geo_type: 'Line' },
+        ],
+      });
+      useEditorStore.getState().addRoad(road);
+      useEditorStore.getState().moveRoad('r1', 5, -3);
+      const moved = useEditorStore.getState().project.roads[0]!;
+      expect(moved.plan_view[0]!.x).toBeCloseTo(15);
+      expect(moved.plan_view[0]!.y).toBeCloseTo(17);
+      expect(moved.plan_view[1]!.x).toBeCloseTo(65);
+      expect(moved.plan_view[1]!.y).toBeCloseTo(17);
+    });
+
+    it('should not change heading or length when moving', () => {
+      const road = makeRoad({
+        plan_view: [{ s: 0, x: 0, y: 0, hdg: 1.0, length: 100, geo_type: 'Line' }],
+      });
+      useEditorStore.getState().addRoad(road);
+      useEditorStore.getState().moveRoad('r1', 10, 10);
+      const seg = useEditorStore.getState().project.roads[0]!.plan_view[0]!;
+      expect(seg.hdg).toBeCloseTo(1.0);
+      expect(seg.length).toBeCloseTo(100);
+    });
+
+    it('should push undo on moveRoad', () => {
+      useEditorStore.getState().addRoad(makeRoad({
+        plan_view: [{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }],
+      }));
+      useEditorStore.getState().moveRoad('r1', 1, 1);
+      expect(useEditorStore.getState().canUndo()).toBe(true);
+    });
+
+    it('should do nothing when road id not found', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      const before = useEditorStore.getState().project.roads[0];
+      useEditorStore.getState().moveRoad('nonexistent', 10, 10);
+      expect(useEditorStore.getState().project.roads[0]).toBe(before);
+    });
+  });
+
+  describe('rotateRoad', () => {
+    it('should rotate plan_view geometry around the given pivot', () => {
+      // Road starting at (10, 0), pivot at origin → rotated 90° → should be at (0, 10)
+      const road = makeRoad({
+        plan_view: [{ s: 0, x: 10, y: 0, hdg: 0, length: 10, geo_type: 'Line' }],
+      });
+      useEditorStore.getState().addRoad(road);
+      useEditorStore.getState().rotateRoad('r1', Math.PI / 2, 0, 0);
+      const seg = useEditorStore.getState().project.roads[0]!.plan_view[0]!;
+      expect(seg.x).toBeCloseTo(0, 5);
+      expect(seg.y).toBeCloseTo(10, 5);
+    });
+
+    it('should add angle delta to segment headings', () => {
+      const road = makeRoad({
+        plan_view: [{ s: 0, x: 10, y: 0, hdg: 0, length: 10, geo_type: 'Line' }],
+      });
+      useEditorStore.getState().addRoad(road);
+      useEditorStore.getState().rotateRoad('r1', Math.PI / 4, 0, 0);
+      const seg = useEditorStore.getState().project.roads[0]!.plan_view[0]!;
+      expect(seg.hdg).toBeCloseTo(Math.PI / 4, 5);
+    });
+
+    it('should push undo on rotateRoad', () => {
+      useEditorStore.getState().addRoad(makeRoad({
+        plan_view: [{ s: 0, x: 10, y: 0, hdg: 0, length: 10, geo_type: 'Line' }],
+      }));
+      useEditorStore.getState().rotateRoad('r1', 0.1, 0, 0);
+      expect(useEditorStore.getState().canUndo()).toBe(true);
+    });
+
+    it('should do nothing when road id not found', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      const before = useEditorStore.getState().project.roads[0];
+      useEditorStore.getState().rotateRoad('nonexistent', 1.0, 0, 0);
+      expect(useEditorStore.getState().project.roads[0]).toBe(before);
+    });
+  });
 });
 
