@@ -35,7 +35,15 @@
     "versionInfo": "Version Info",
     "plugins": "Plugins",
     "pluginManager": "Plugin Manager...",
-    "settings": "Settings..."
+    "settings": "Settings...",
+    "import": "Import",
+    "export": "Export",
+    "recentFiles": "Recent Files",
+    "noRecentFiles": "(No Recent Files)",
+    "clearRecentFiles": "Clear Recent Files",
+    "exit": "Exit",
+    "help": "Help",
+    "userManual": "User Manual"
   },
   "toolbar": {
     "select": "Select",
@@ -367,7 +375,9 @@
     "aboutTitle": "About World Editor",
     "versionTitle": "Version Info",
     "version": "Version",
-    "buildDate": "Build Date"
+    "buildDate": "Build Date",
+    "userManualTitle": "User Manual",
+    "userManualContent": "User manual coming soon.\n\nVisit the project repository for documentation and guides."
   },
   "snapping": {
     "enabled": "Snap",
@@ -403,5 +413,35 @@
     "toggleOutput": "Toggle Output Panel",
     "toggleTheme": "Toggle Theme",
     "noResults": "No results"
+  },
+  "advancedEditing": {
+    "splitRoad": "Split Road at Midpoint…",
+    "weldRoads": "Weld Roads…",
+    "optimiseLanes": "Optimise Lane Geometry",
+    "applyStandardMarkings": "Apply Standard Markings",
+    "autoBuildConnecting": "Auto-Build Connecting Roads…",
+    "buildJunctionPolygon": "Build Junction Polygon",
+    "autoDeploySidewalks": "Auto-Deploy Sidewalks",
+    "autoDeployCrosswalks": "Auto-Deploy Crosswalks",
+    "autoDeployStopLines": "Auto-Deploy Stop Lines",
+    "addBridge": "Add Bridge Section",
+    "addTunnel": "Add Tunnel Section"
+  },
+  "converter": { "batchConvert": "Batch Convert…" },
+  "ecosystem": { "placeTrees": "Place Trees" },
+  "gisTools": {
+    "coordConverter": "Coordinate Converter…",
+    "setCrs": "Set CRS…"
+  },
+  "laneDetect": { "autoDetect": "Auto-Detect Lanes" },
+  "satellite": { "toggle": "Satellite Imagery" },
+  "scripting": { "runScript": "Run Script" },
+  "traffic": {
+    "autoDeploySignals": "Auto-Deploy Signals",
+    "computePhases": "Compute Signal Phases"
+  },
+  "validation": {
+    "validateProject": "Validate Project",
+    "checkTopology": "Check Topology"
   }
 }

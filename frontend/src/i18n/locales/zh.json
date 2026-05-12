@@ -35,7 +35,15 @@
     "versionInfo": "版本信息",
     "plugins": "插件",
     "pluginManager": "插件管理器...",
-    "settings": "设置..."
+    "settings": "设置...",
+    "import": "导入",
+    "export": "导出",
+    "recentFiles": "最近打开文件",
+    "noRecentFiles": "（暂无最近文件）",
+    "clearRecentFiles": "清除最近文件",
+    "exit": "退出",
+    "help": "帮助",
+    "userManual": "用户手册"
   },
   "toolbar": {
     "select": "选择",
@@ -367,7 +375,9 @@
     "aboutTitle": "关于 World Editor",
     "versionTitle": "版本信息",
     "version": "版本",
-    "buildDate": "构建日期"
+    "buildDate": "构建日期",
+    "userManualTitle": "用户手册",
+    "userManualContent": "用户手册即将上线，敬请期待。\n\n请访问项目仓库获取文档和使用指南。"
   },
   "snapping": {
     "enabled": "吸附",
@@ -403,5 +413,35 @@
     "toggleOutput": "切换输出面板",
     "toggleTheme": "切换主题",
     "noResults": "无结果"
+  },
+  "advancedEditing": {
+    "splitRoad": "从中点分割道路...",
+    "weldRoads": "焊接道路...",
+    "optimiseLanes": "优化车道几何",
+    "applyStandardMarkings": "应用标准标线",
+    "autoBuildConnecting": "自动构建连接道路...",
+    "buildJunctionPolygon": "构建路口多边形",
+    "autoDeploySidewalks": "自动铺设人行道",
+    "autoDeployCrosswalks": "自动铺设斑马线",
+    "autoDeployStopLines": "自动铺设停车线",
+    "addBridge": "添加桥梁段",
+    "addTunnel": "添加隧道段"
+  },
+  "converter": { "batchConvert": "批量转换..." },
+  "ecosystem": { "placeTrees": "放置树木" },
+  "gisTools": {
+    "coordConverter": "坐标转换器...",
+    "setCrs": "设置坐标系..."
+  },
+  "laneDetect": { "autoDetect": "自动检测车道" },
+  "satellite": { "toggle": "卫星影像" },
+  "scripting": { "runScript": "运行脚本" },
+  "traffic": {
+    "autoDeploySignals": "自动部署信号",
+    "computePhases": "计算信号相位"
+  },
+  "validation": {
+    "validateProject": "校验项目",
+    "checkTopology": "检查拓扑"
   }
 }

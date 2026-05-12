@@ -148,7 +148,7 @@ describe('MenuBar', () => {
     const hamburger = screen.getByTitle('文件');
     fireEvent.click(hamburger);
 
-    ['文件', '编辑', '视图', '工具', '关于'].forEach((label) => {
+    ['文件', '编辑', '导入', '导出', '最近打开文件', '视图', '工具', '帮助'].forEach((label) => {
       expect(screen.getByText(label)).toBeInTheDocument();
     });
   });
@@ -179,6 +179,11 @@ describe('MenuBar', () => {
     fireEvent.click(hamburger);
     fireEvent.click(screen.getByText('文件'));
     expect(screen.getByText('保存').closest('button')).toBeDisabled();
+
+    // '导出 OpenDRIVE...' is now in the Export menu — check that menu
+    fireEvent.mouseDown(document.body);
+    fireEvent.click(hamburger);
+    fireEvent.click(screen.getByText('导出'));
     expect(screen.getByText('导出 OpenDRIVE...').closest('button')).toBeDisabled();
 
     act(() => {
@@ -193,6 +198,11 @@ describe('MenuBar', () => {
     fireEvent.click(hamburger);
     fireEvent.click(screen.getByText('文件'));
     expect(screen.getByText('保存').closest('button')).toBeEnabled();
+
+    // Check Export menu is now enabled
+    fireEvent.mouseDown(document.body);
+    fireEvent.click(hamburger);
+    fireEvent.click(screen.getByText('导出'));
     expect(screen.getByText('导出 OpenDRIVE...').closest('button')).toBeEnabled();
   });
 
@@ -216,15 +226,15 @@ describe('MenuBar', () => {
     ));
   });
 
-  it('shows about and version dialogs from the about menu', async () => {
+  it('shows about and version dialogs from the help menu', async () => {
     render(<MenuBar />);
 
     const hamburger = screen.getByTitle('文件');
     fireEvent.click(hamburger);
-    fireEvent.click(screen.getByText('关于'));
+    fireEvent.click(screen.getByText('帮助'));
     fireEvent.click(screen.getByText('关于 WorldEditor'));
     fireEvent.click(hamburger);
-    fireEvent.click(screen.getByText('关于'));
+    fireEvent.click(screen.getByText('帮助'));
     fireEvent.click(screen.getByText('版本信息'));
 
     await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalledTimes(2));
@@ -357,7 +367,7 @@ describe('MenuBar', () => {
   });
 
   describe('plugin importer/exporter menu items', () => {
-    it('shows plugin importer item in File menu when an importer is registered', async () => {
+    it('shows plugin importer item in Import menu when an importer is registered', async () => {
       const { usePluginContribStore } = await import('../stores/pluginContribStore');
       const { act: reactAct } = await import('@testing-library/react');
       reactAct(() => {
@@ -369,7 +379,7 @@ describe('MenuBar', () => {
 
       render(<MenuBar />);
       fireEvent.click(screen.getByTitle('文件'));
-      fireEvent.click(screen.getByText('文件'));
+      fireEvent.click(screen.getByText('导入'));
 
       expect(screen.getByText('导入 Lanelet2...')).toBeInTheDocument();
 
@@ -379,7 +389,7 @@ describe('MenuBar', () => {
       });
     });
 
-    it('shows plugin exporter item in File menu when an exporter is registered', async () => {
+    it('shows plugin exporter item in Export menu when an exporter is registered', async () => {
       const { usePluginContribStore } = await import('../stores/pluginContribStore');
       const { act: reactAct } = await import('@testing-library/react');
       const onExport = vi.fn().mockResolvedValue(undefined);
@@ -392,7 +402,7 @@ describe('MenuBar', () => {
 
       render(<MenuBar />);
       fireEvent.click(screen.getByTitle('文件'));
-      fireEvent.click(screen.getByText('文件'));
+      fireEvent.click(screen.getByText('导出'));
 
       expect(screen.getByText('导出 Shapefile...')).toBeInTheDocument();
 
@@ -415,7 +425,7 @@ describe('MenuBar', () => {
 
       render(<MenuBar />);
       fireEvent.click(screen.getByTitle('文件'));
-      fireEvent.click(screen.getByText('文件'));
+      fireEvent.click(screen.getByText('导出'));
       fireEvent.click(screen.getByText('导出 DXF...'));
 
       await waitFor(() => expect(onExport).toHaveBeenCalled());

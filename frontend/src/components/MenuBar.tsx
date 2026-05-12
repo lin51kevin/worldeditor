@@ -48,6 +48,35 @@ async function showVersion(t: (key: string) => string) {
   );
 }
 
+// Show user manual
+async function showUserManual(t: (key: string) => string) {
+  await showAlert(t('dialog.userManualContent'), t('dialog.userManualTitle'));
+}
+
+// Recent files helpers
+const RECENT_FILES_KEY = 'we_recent_files';
+const MAX_RECENT = 10;
+
+function loadRecentFiles(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? '[]') as string[];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentFiles(files: string[]): void {
+  localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(files));
+}
+
+function pushRecentFile(name: string): string[] {
+  const files = loadRecentFiles().filter((f) => f !== name);
+  files.unshift(name);
+  const trimmed = files.slice(0, MAX_RECENT);
+  saveRecentFiles(trimmed);
+  return trimmed;
+}
+
 // Calculate total road length
 function calculateTotalRoadLength(project: Project): number {
   return project.roads.reduce((sum, road) => sum + (road.length || 0), 0);
@@ -61,8 +90,7 @@ function buildMenus(
   onOpen: () => void,
   onSave: () => void,
   onSaveAs: () => void,
-  onImportOpenDrive: () => void,
-  onExportOpenDrive: () => void,
+  onExit: () => void,
   onUndo: () => void,
   onRedo: () => void,
   onDelete: () => void,
@@ -107,8 +135,7 @@ function buildMenus(
         { label: t('menu.save'), shortcut: 'Ctrl+S', action: onSave, disabled: !isDirty },
         { label: t('menu.saveAs'), shortcut: 'Ctrl+Shift+S', action: onSaveAs },
         { separator: true, label: '' },
-        { label: t('menu.importOpenDrive'), action: onImportOpenDrive },
-        { label: t('menu.exportOpenDrive'), action: onExportOpenDrive, disabled: project.roads.length === 0 },
+        { label: t('menu.exit'), action: onExit },
       ],
     },
     {
@@ -161,10 +188,12 @@ function buildMenus(
       ],
     },
     {
-      label: t('menu.about'),
+      label: t('menu.help'),
       items: [
-        { label: t('menu.aboutWorldEditor'), action: () => showAbout(t) },
-        { label: t('menu.versionInfo'), action: () => showVersion(t) },
+        { label: t('menu.userManual'), action: () => void showUserManual(t) },
+        { separator: true, label: '' },
+        { label: t('menu.aboutWorldEditor'), action: () => void showAbout(t) },
+        { label: t('menu.versionInfo'), action: () => void showVersion(t) },
       ],
     },
   ];
@@ -225,6 +254,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
 
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const [hoveredMenu, setHoveredMenu] = useState<number | null>(null);
+  const [recentFiles, setRecentFiles] = useState<string[]>(loadRecentFiles);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
 
@@ -249,6 +279,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
       }
       proj.name = file.name;
       setProject(proj);
+      setRecentFiles(pushRecentFile(file.name));
     } catch (err) {
       console.error('[MenuBar] Failed to open file:', err);
       await showAlert(t('dialog.openError'));
@@ -287,6 +318,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
       }
       proj.name = file.name;
       setProject(proj);
+      setRecentFiles(pushRecentFile(file.name));
     } catch (err) {
       console.error('[MenuBar] Failed to import OpenDRIVE:', err);
       await showAlert(t('dialog.parseError'));
@@ -367,6 +399,11 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     resetToSaved();
   }, [isDirty, savedProject, resetToSaved, t]);
 
+  // Exit: close the application window
+  const handleExit = useCallback(() => {
+    window.close();
+  }, []);
+
   const staticMenus = buildMenus(
     project,
     isDirty,
@@ -374,8 +411,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     handleOpen,
     handleSave,
     handleSaveAs,
-    handleImportOpenDrive,
-    handleExportOpenDrive,
+    handleExit,
     undo,
     redo,
     handleDelete,
@@ -411,36 +447,62 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     t,
   );
 
-  // Inject plugin importers/exporters into File menu (index 0)
-  const pluginImportItems: MenuItem[] = importers.map((imp) => ({
-    label: `导入 ${imp.formatName}...`,
-    action: () => {
-      // Create a hidden file input and trigger it
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = imp.extensions.join(',');
-      input.onchange = async () => {
-        const file = input.files?.[0];
-        if (!file) return;
-        const content = await file.arrayBuffer();
-        const proj = await imp.onImport(content, file.name);
-        proj.name = file.name;
-        useEditorStore.getState().setProject(proj);
-      };
-      input.click();
-    },
-  }));
-  const pluginExportItems: MenuItem[] = exporters.map((exp) => ({
-    label: `导出 ${exp.formatName}...`,
-    action: () => void exp.onExport(project),
-  }));
+  // Import menu: OpenDRIVE + all plugin importers
+  const importMenu: Menu = {
+    label: t('menu.import'),
+    items: [
+      { label: t('menu.importOpenDrive'), action: handleImportOpenDrive },
+      ...(importers.length > 0 ? [{ separator: true, label: '' } as MenuItem] : []),
+      ...importers.map((imp): MenuItem => ({
+        label: `${t('menu.import')} ${imp.formatName}...`,
+        action: () => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = imp.extensions.join(',');
+          input.onchange = async () => {
+            const file = input.files?.[0];
+            if (!file) return;
+            const content = await file.arrayBuffer();
+            const proj = await imp.onImport(content, file.name);
+            proj.name = file.name;
+            useEditorStore.getState().setProject(proj);
+          };
+          input.click();
+        },
+      })),
+    ],
+  };
 
-  const fileMenuItems = [
-    ...(staticMenus[0]?.items ?? []),
-    ...(pluginImportItems.length > 0 ? [{ separator: true, label: '' }, ...pluginImportItems] : []),
-    ...(pluginExportItems.length > 0 ? [{ separator: true, label: '' }, ...pluginExportItems] : []),
-  ];
-  const fileMenu = { label: staticMenus[0]?.label ?? t('menu.file'), items: fileMenuItems };
+  // Export menu: OpenDRIVE + all plugin exporters
+  const exportMenu: Menu = {
+    label: t('menu.export'),
+    items: [
+      { label: t('menu.exportOpenDrive'), action: handleExportOpenDrive, disabled: project.roads.length === 0 },
+      ...(exporters.length > 0 ? [{ separator: true, label: '' } as MenuItem] : []),
+      ...exporters.map((exp): MenuItem => ({
+        label: `${t('menu.export')} ${exp.formatName}...`,
+        action: () => void exp.onExport(project),
+      })),
+    ],
+  };
+
+  // Recent files menu
+  const recentFilesMenu: Menu = {
+    label: t('menu.recentFiles'),
+    items: recentFiles.length === 0
+      ? [{ label: t('menu.noRecentFiles'), disabled: true }]
+      : [
+          ...recentFiles.map((name): MenuItem => ({
+            label: name,
+            action: handleOpen,
+          })),
+          { separator: true, label: '' },
+          {
+            label: t('menu.clearRecentFiles'),
+            action: () => { saveRecentFiles([]); setRecentFiles([]); },
+          },
+        ],
+  };
 
   // Insert plugin-contributed Road menu between Edit (index 1) and View (index 2)
   const roadMenu = roadMenuItems.length > 0
@@ -457,10 +519,13 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     : [];
 
   const menus = [
-    fileMenu,
-    ...staticMenus.slice(1, 2),  // Edit
-    ...roadMenu,
-    ...staticMenus.slice(2),     // View, Tools, About
+    staticMenus[0]!,           // File (with Exit)
+    staticMenus[1]!,           // Edit
+    importMenu,                // Import top-level menu
+    exportMenu,                // Export top-level menu
+    recentFilesMenu,           // Recent Files top-level menu
+    ...roadMenu,               // Road (dynamic, from plugins)
+    ...staticMenus.slice(2),   // View, Tools, Plugins, Help
   ];
 
   useEffect(() => {

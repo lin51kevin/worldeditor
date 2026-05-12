@@ -10,8 +10,6 @@ import { useEditorViewStore } from '../stores/editorViewStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { ToolbarButtonContrib, MenuItemContrib } from '../stores/pluginContribStore';
 import { FlipHorizontal2, Sparkles, ArrowUpDown } from 'lucide-react';
-import { showAlert } from '../utils/dialog';
-import i18next from 'i18next';
 
 const PLUGIN_ID = 'road-tools';
 
@@ -240,21 +238,6 @@ export function mountRoadToolsPlugin(): () => void {
       labelKey: '',
       separator: true,
       onClick: () => {},
-    },
-    {
-      id: `${PLUGIN_ID}:menu-calc-length`,
-      pluginId: PLUGIN_ID,
-      menu: 'road',
-      labelKey: 'menu.calculateRoadLength',
-      isDisabled: () => useEditorStore.getState().project.roads.length === 0,
-      onClick: () => {
-        const { project } = useEditorStore.getState();
-        const total = project.roads.reduce((sum, r) => sum + (r.length ?? 0), 0);
-        void showAlert(
-          `${total.toFixed(3)} ${i18next.t('dialog.meters')}`,
-          i18next.t('dialog.roadLengthTitle'),
-        );
-      },
     },
   ];
 
