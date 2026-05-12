@@ -1287,7 +1287,14 @@ export function Viewport() {
         return;
       }
       const junctionId = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
-      useEditorStore.getState().selectJunction(junctionId);
+      if (junctionId !== null) {
+        useEditorStore.getState().selectJunction(junctionId);
+        const rendererInst = rendererRef.current;
+        if (rendererInst) rendererInst.clearHover();
+        hoveredRoadRef.current = null;
+        hoveredJunctionRef.current = null;
+      }
+      // Clicking empty space: do NOT clear selection
     } catch (err) {
       console.error('[Viewport] Pick failed:', err);
     }

@@ -1166,20 +1166,64 @@ pub fn pick_junction_at_point(
 
     for junction in &project.junctions {
         let poly = build_junction_polygon_points(&project, junction);
-        if poly.len() < 3 {
-            continue;
-        }
-        if point_in_polygon(x, y, &poly) {
-            return Ok(JsValue::from_str(&junction.id));
-        }
-        let cx: f64 = poly.iter().map(|p| p[0] as f64).sum::<f64>() / poly.len() as f64;
-        let cy: f64 = poly.iter().map(|p| p[1] as f64).sum::<f64>() / poly.len() as f64;
-        let dx = cx - x;
-        let dy = cy - y;
-        let dist = (dx * dx + dy * dy).sqrt();
-        if dist < best_dist {
-            best_dist = dist;
-            best = Some(junction.id.clone());
+        if poly.len() >= 3 {
+            if point_in_polygon(x, y, &poly) {
+                return Ok(JsValue::from_str(&junction.id));
+            }
+            let cx: f64 = poly.iter().map(|p| p[0] as f64).sum::<f64>() / poly.len() as f64;
+            let cy: f64 = poly.iter().map(|p| p[1] as f64).sum::<f64>() / poly.len() as f64;
+            let dx = cx - x;
+            let dy = cy - y;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < best_dist {
+                best_dist = dist;
+                best = Some(junction.id.clone());
+            }
+        } else {
+            // Fallback for junctions with insufficient polygon points (e.g. missing
+            // or hidden connected roads): collect road endpoints from all connections
+            // and use their centroid for a proximity check.
+            let mut sum_x = 0.0f64;
+            let mut sum_y = 0.0f64;
+            let mut count = 0usize;
+            for conn in &junction.connections {
+                if let Some(road) = project.roads.iter().find(|r| r.id == conn.connecting_road) {
+                    if let Some(pt) = road_point_at_s(&road.plan_view, 0.0) {
+                        sum_x += pt.x;
+                        sum_y += pt.y;
+                        count += 1;
+                    }
+                    if let Some(pt) = road_point_at_s(&road.plan_view, road.length) {
+                        sum_x += pt.x;
+                        sum_y += pt.y;
+                        count += 1;
+                    }
+                }
+                if let Some(road) = project.roads.iter().find(|r| r.id == conn.incoming_road) {
+                    if let Some(pt) = road_point_at_s(&road.plan_view, 0.0) {
+                        sum_x += pt.x;
+                        sum_y += pt.y;
+                        count += 1;
+                    }
+                    if let Some(pt) = road_point_at_s(&road.plan_view, road.length) {
+                        sum_x += pt.x;
+                        sum_y += pt.y;
+                        count += 1;
+                    }
+                }
+            }
+            if count > 0 {
+                let cx = sum_x / count as f64;
+                let cy = sum_y / count as f64;
+                let dx = cx - x;
+                let dy = cy - y;
+                let dist = (dx * dx + dy * dy).sqrt();
+                // Use a larger effective radius for the fallback centroid check
+                if dist < best_dist * 2.0 && dist < best_dist {
+                    best_dist = dist;
+                    best = Some(junction.id.clone());
+                }
+            }
         }
     }
     match best {
