@@ -95,9 +95,9 @@ export function RoadEditToolbar() {
       icon: '⊞',
       labelKey: 'toolPanel.adjustEdge',
       kind: 'mode',
+      disabled: true,
       action: () => {
-        const isEntering = editMode !== 'adjust-edge';
-        setEditMode(isEntering ? 'adjust-edge' : 'select');
+        // Not yet implemented
       },
     },
     {
@@ -132,9 +132,9 @@ export function RoadEditToolbar() {
       icon: '▬',
       labelKey: 'toolPanel.editRoadMarkings',
       kind: 'mode',
+      disabled: true,
       action: () => {
-        const isEntering = editMode !== 'road-markings';
-        setEditMode(isEntering ? 'road-markings' : 'select');
+        // Not yet implemented
       },
     },
     {
