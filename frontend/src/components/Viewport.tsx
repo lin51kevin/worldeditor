@@ -892,7 +892,9 @@ export function Viewport() {
             if (newHoveredRoad) {
               const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
               if (road) {
-                const hoverVerts = await service.generateSingleRoadVertices(road, 2.0, [1.0, 0.85, 0.1, 0.5]);
+                // Use reference-line (centerline) geometry for a narrow hover band
+                const singleProject = { ...currentProject, roads: [road] };
+                const hoverVerts = await service.generateCenterLineVertices(singleProject, 0.5);
                 rendererInst.uploadHoverVertices(hoverVerts);
               }
               canvas.style.cursor = 'pointer';
@@ -1114,6 +1116,11 @@ export function Viewport() {
 
       if (roadId) {
         useEditorStore.getState().selectRoad(roadId);
+        // Clear hover highlight immediately after selection so the yellow doesn't linger
+        const rendererInst = rendererRef.current;
+        if (rendererInst) rendererInst.clearHover();
+        hoveredRoadRef.current = null;
+        hoveredJunctionRef.current = null;
         return;
       }
       const junctionId = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
