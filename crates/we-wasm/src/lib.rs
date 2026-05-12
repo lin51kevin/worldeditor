@@ -197,7 +197,7 @@ pub fn generate_junction_vertices(project_json: &str) -> Result<Vec<f32>, JsErro
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
 
     let mut all_floats = Vec::new();
-    let color = [0.88f32, 0.85, 0.98, 0.4];
+    let color = [0.88f32, 0.85, 0.98, 0.65];
 
     for junction in &project.junctions {
         append_junction_triangles(&mut all_floats, &project, junction, color);
@@ -1612,49 +1612,85 @@ fn emit_rect_outline(
     emit_transverse_bar(&perp_pt, 0.0, z, length, bar_thickness, color, offset_pt, out);
 }
 
-/// Emit crosswalk zebra stripes given corner polygon (local s,t coordinates).
+/// Emit crosswalk zebra stripes given corner polygon (road-local u/v coordinates).
+///
+/// `corners[i].x` = u offset along road from object centre (absolute s = obj_s + u).
+/// `corners[i].y` = v offset lateral from road centre line.
+///
+/// Generates white horizontal stripes (0.45 m wide, 1.0 m period) spanning the full
+/// u extent of the crosswalk, in the v (across-road) direction.
 fn emit_crosswalk_stripes(
     corners: &[we_core::model::Point3D],
     ref_pts: &[we_core::geometry::eval::RefLinePoint],
     elevations: &[we_core::model::Elevation],
-    _obj_s: f64,
+    obj_s: f64,
     z_base: f32,
     offset_pt: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
     out: &mut Vec<f32>,
 ) {
     use we_core::geometry::eval::evaluate_elevation;
 
-    if corners.len() < 3 { return; }
+    if corners.len() < 3 || ref_pts.is_empty() {
+        return;
+    }
 
-    // Convert corners (s, t) → world XY using ref_pts
-    let world_corners: Vec<(f32, f32, f32)> = corners.iter().map(|c| {
-        // Find nearest ref_pt by s
-        let nearest = ref_pts.iter().min_by(|a, b| {
-            (a.s - c.x).abs().partial_cmp(&(b.s - c.x).abs()).unwrap_or(std::cmp::Ordering::Equal)
+    // Compute AABB in road-local (u, v) space.
+    // c.x = u  (along-road offset from object centre; absolute road s = obj_s + u)
+    // c.y = v  (across-road / lateral offset)
+    let u_min = corners.iter().map(|c| c.x).fold(f64::INFINITY, f64::min);
+    let u_max = corners.iter().map(|c| c.x).fold(f64::NEG_INFINITY, f64::max);
+    let v_min = corners.iter().map(|c| c.y).fold(f64::INFINITY, f64::min);
+    let v_max = corners.iter().map(|c| c.y).fold(f64::NEG_INFINITY, f64::max);
+
+    if u_max <= u_min || v_max <= v_min {
+        return;
+    }
+
+    // Resolve (absolute_s, lateral_t) → world (x, y, z).
+    // abs_s must be the absolute road s-coordinate, not the u offset.
+    let world_at = |abs_s: f64, t: f64| -> (f32, f32, f32) {
+        let rp = ref_pts.iter().min_by(|a, b| {
+            (a.s - abs_s)
+                .abs()
+                .partial_cmp(&(b.s - abs_s).abs())
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
-        if let Some(rp) = nearest {
-            let (wx, wy, _) = offset_pt(rp, c.y, 0.0);
-            let z = evaluate_elevation(elevations, rp.s) as f32 + c.z as f32 + 0.02;
+        if let Some(rp) = rp {
+            let (wx, wy, _) = offset_pt(rp, t, 0.0);
+            let z = evaluate_elevation(elevations, rp.s) as f32 + 0.02;
             (wx as f32, wy as f32, z)
         } else {
-            (c.x as f32, c.y as f32, z_base)
+            (abs_s as f32, t as f32, z_base)
         }
-    }).collect();
+    };
 
-    // Simple fan triangulation for the polygon fill (alternating stripes)
-    // For now emit outline + filled polygon in navy
-    let color: [f32; 4] = [0.000, 0.000, 0.502, 1.0]; // navy
-    let n = world_corners.len();
-    let [r, g, b, a] = color;
+    // White zebra stripes in the v (across-road) direction.
+    // stripe_width ≈ 0.45 m; total period = 1.0 m (stripe + gap).
+    let stripe_width = 0.45_f64;
+    let stripe_period = 1.0_f64;
+    let [r, g, b, a]: [f32; 4] = [1.0, 1.0, 1.0, 1.0]; // white
 
-    // Full polygon fill with triangle fan (approximate zebra with dark fill)
-    let (x0, y0, z0) = world_corners[0];
-    for i in 1..n - 1 {
-        let (x1, y1, z1) = world_corners[i];
-        let (x2, y2, z2) = world_corners[i + 1];
-        out.extend_from_slice(&[x0, y0, z0, r, g, b, a]);
-        out.extend_from_slice(&[x1, y1, z1, r, g, b, a]);
-        out.extend_from_slice(&[x2, y2, z2, r, g, b, a]);
+    let abs_u_min = obj_s + u_min;
+    let abs_u_max = obj_s + u_max;
+
+    let mut v = v_min;
+    while v < v_max {
+        let v_end = (v + stripe_width).min(v_max);
+
+        let p00 = world_at(abs_u_min, v);
+        let p10 = world_at(abs_u_max, v);
+        let p11 = world_at(abs_u_max, v_end);
+        let p01 = world_at(abs_u_min, v_end);
+
+        out.extend_from_slice(&[p00.0, p00.1, p00.2, r, g, b, a]);
+        out.extend_from_slice(&[p10.0, p10.1, p10.2, r, g, b, a]);
+        out.extend_from_slice(&[p11.0, p11.1, p11.2, r, g, b, a]);
+
+        out.extend_from_slice(&[p00.0, p00.1, p00.2, r, g, b, a]);
+        out.extend_from_slice(&[p11.0, p11.1, p11.2, r, g, b, a]);
+        out.extend_from_slice(&[p01.0, p01.1, p01.2, r, g, b, a]);
+
+        v += stripe_period;
     }
 }
 
@@ -1663,7 +1699,7 @@ fn emit_polygon_outline(
     corners: &[we_core::model::Point3D],
     ref_pts: &[we_core::geometry::eval::RefLinePoint],
     elevations: &[we_core::model::Elevation],
-    _obj_s: f64,
+    obj_s: f64,
     z_base: f32,
     bar_thickness: f64,
     color: [f32; 4],
@@ -1675,8 +1711,10 @@ fn emit_polygon_outline(
     if corners.len() < 2 { return; }
 
     let world_corners: Vec<(f64, f64, f32)> = corners.iter().map(|c| {
+        // c.x = u offset; absolute road s = obj_s + c.x
+        let abs_s = obj_s + c.x;
         let nearest = ref_pts.iter().min_by(|a, b| {
-            (a.s - c.x).abs().partial_cmp(&(b.s - c.x).abs()).unwrap_or(std::cmp::Ordering::Equal)
+            (a.s - abs_s).abs().partial_cmp(&(b.s - abs_s).abs()).unwrap_or(std::cmp::Ordering::Equal)
         });
         if let Some(rp) = nearest {
             let (wx, wy, _) = offset_pt(rp, c.y, 0.0);

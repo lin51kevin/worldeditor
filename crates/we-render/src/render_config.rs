@@ -110,7 +110,7 @@ impl Default for RoadRenderConfig {
             color_surface_other: Vec4::new(0.40, 0.40, 0.35, 0.3),
 
             // Junction
-            color_junction_surface: Vec4::new(0.88, 0.85, 0.98, 0.3), // #e1d9fa
+            color_junction_surface: Vec4::new(0.88, 0.85, 0.98, 0.65), // #e1d9fa
             color_junction_surface_selected: Vec4::new(1.0, 0.59, 0.59, 0.3),
             color_junction_gizmo: Vec4::new(0.65, 0.55, 0.94, 1.0),
             color_junction_gizmo_selected: Vec4::new(1.0, 0.0, 0.0, 1.0),
@@ -279,7 +279,7 @@ mod tests {
         assert_eq!(config.color_surface_other, Vec4::new(0.40, 0.40, 0.35, 0.3));
         assert_eq!(
             config.color_junction_surface,
-            Vec4::new(0.88, 0.85, 0.98, 0.3)
+            Vec4::new(0.88, 0.85, 0.98, 0.65)
         );
         assert_eq!(
             config.color_junction_surface_selected,
