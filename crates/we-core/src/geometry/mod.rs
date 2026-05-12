@@ -2,14 +2,20 @@
 //!
 //! Pure Rust, WASM compatible.
 
+pub mod convex_hull;
+pub mod delaunay;
 pub mod eval;
+pub mod simplify;
 
 use nalgebra::Vector2;
 
+pub use convex_hull::{bounding_box, convex_hull};
+pub use delaunay::{Triangle, triangulate};
 pub use eval::{
     RefLinePoint, evaluate_elevation, evaluate_geometry, evaluate_lane_width, offset_point,
     sample_road_reference_line,
 };
+pub use simplify::{simplify_polyline, simplify_polyline_3d, simplify_polyline_indices};
 
 /// Check if a point is inside a polygon (2D, ray casting).
 pub fn point_in_polygon(point: &Vector2<f64>, polygon: &[Vector2<f64>]) -> bool {
