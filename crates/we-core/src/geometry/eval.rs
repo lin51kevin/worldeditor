@@ -121,9 +121,26 @@ pub fn evaluate_geometry(geo: &Geometry, ds: f64) -> RefLinePoint {
     }
 }
 
+/// Evaluate the road reference line at a specific absolute station `s`.
+///
+/// Finds the geometry element that contains `s` and evaluates it exactly,
+/// using the curve equations rather than linear interpolation.
+/// Returns `None` if the road has no geometry or `s` is out of range.
+pub fn evaluate_road_at_s(road: &Road, s: f64) -> Option<RefLinePoint> {
+    for geo in road.plan_view.iter().rev() {
+        if s >= geo.s - 1e-9 {
+            let ds = (s - geo.s).clamp(0.0, geo.length);
+            return Some(evaluate_geometry(geo, ds));
+        }
+    }
+    None
+}
+
 /// Sample the entire road reference line at a given step interval.
 ///
 /// Returns points along the centerline in world coordinates.
+/// Lane section boundaries are always included as exact evaluation points,
+/// preventing mesh gaps when a boundary falls between two sample positions.
 pub fn sample_road_reference_line(road: &Road, step: f64) -> Vec<RefLinePoint> {
     let mut points = Vec::new();
 
@@ -139,6 +156,35 @@ pub fn sample_road_reference_line(road: &Road, step: f64) -> Vec<RefLinePoint> {
 
     // Deduplicate consecutive near-identical points (geometry boundaries)
     points.dedup_by(|a, b| (a.s - b.s).abs() < 1e-9);
+
+    // Insert exact evaluation points at lane section boundaries.
+    //
+    // When a lane section boundary (section.s) does not coincide with a
+    // geometry-derived sample point, the two adjacent sections each lose
+    // their shared edge vertex: section N ends one sample *before* the
+    // boundary and section N+1 starts one sample *after* it, leaving a
+    // visible strip of unrendered road surface.
+    //
+    // Mirroring the C# approach (CurveLaneLine knots placed at every section
+    // boundary), we insert geometry-accurate points here so both sections
+    // share the exact boundary coordinate.
+    for section in &road.lane_sections {
+        let s = section.s;
+        if s <= 1e-9 || s >= road.length - 1e-9 {
+            continue; // first section (s=0) and road end are already covered
+        }
+        if points.iter().any(|p| (p.s - s).abs() < 1e-9) {
+            continue; // already present
+        }
+        let idx = points.partition_point(|p| p.s < s);
+        if idx == 0 || idx >= points.len() {
+            continue;
+        }
+        if let Some(pt) = evaluate_road_at_s(road, s) {
+            points.insert(idx, pt);
+        }
+    }
+
     points
 }
 
@@ -685,5 +731,68 @@ mod tests {
         let (ox, oy, _) = offset_point(&pt, 3.5, 0.0);
         assert!((ox + 3.5).abs() < 1e-9); // left of northbound = west
         assert!((oy).abs() < 1e-9);
+    }
+
+    /// When a lane section boundary falls between two geometry-derived sample
+    /// points, `sample_road_reference_line` must insert an exact point at that
+    /// boundary so that adjacent lane section meshes share a common edge and
+    /// produce no visible rendering gap.
+    #[test]
+    fn test_section_boundary_inserted_when_not_on_sample_grid() {
+        use crate::model::{Lane, LaneSection, LaneType, LaneWidth};
+
+        // 100 m straight road, two geometries: 0-60 m and 60-100 m.
+        let mut road = Road::new("test", 100.0);
+        road.plan_view.push(line_geometry(0.0, 0.0, 0.0, 0.0, 60.0));
+        road.plan_view.push(line_geometry(60.0, 60.0, 0.0, 0.0, 40.0));
+
+        // Lane section boundary at s=51.0 — midway between sample points 50 and 52.
+        let mut sec0 = LaneSection {
+            s: 0.0,
+            single_side: false,
+            left: vec![],
+            center: vec![],
+            right: vec![],
+            render_hidden: false,
+        };
+        sec0.right.push(Lane {
+            id: -1,
+            lane_type: LaneType::Driving,
+            level: 0,
+            link: None,
+            width: vec![LaneWidth { s_offset: 0.0, a: 3.5, b: 0.0, c: 0.0, d: 0.0 }],
+            borders: vec![],
+            road_marks: vec![],
+            render_hidden: false,
+        });
+        let mut sec1 = LaneSection {
+            s: 51.0, // does NOT coincide with any sample at step=2.0
+            single_side: false,
+            left: vec![],
+            center: vec![],
+            right: vec![],
+            render_hidden: false,
+        };
+        sec1.right.push(sec0.right[0].clone());
+        road.lane_sections.push(sec0);
+        road.lane_sections.push(sec1);
+
+        let pts = sample_road_reference_line(&road, 2.0);
+
+        // There must be a point with s exactly at the section boundary.
+        let has_boundary = pts.iter().any(|p| (p.s - 51.0).abs() < 1e-9);
+        assert!(
+            has_boundary,
+            "expected a sample point at s=51.0 (section boundary), got: {:?}",
+            pts.iter().map(|p| p.s).collect::<Vec<_>>()
+        );
+
+        // The boundary point's x should match the straight-line geometry.
+        let boundary_pt = pts.iter().find(|p| (p.s - 51.0).abs() < 1e-9).unwrap();
+        assert!(
+            (boundary_pt.x - 51.0).abs() < 1e-6,
+            "boundary point x should be 51.0 (straight road), got {}",
+            boundary_pt.x
+        );
     }
 }
