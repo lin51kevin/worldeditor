@@ -2,7 +2,9 @@
 //!
 //! Built on wgpu, supports both native and WebGPU (WASM) targets.
 
+pub mod bridge_tunnel_render;
 pub mod camera;
+pub mod endpoint_render;
 pub mod gpu;
 pub mod junction_render;
 pub mod mark_render;
@@ -14,6 +16,14 @@ pub mod road_mesh;
 pub mod signal_render;
 pub mod vertex;
 
+pub use bridge_tunnel_render::{
+    generate_bridge_deck, generate_bridge_tunnel_render_data, generate_tunnel_enclosure,
+    BridgeTunnelConfig, ReferenceSample, BRIDGE_COLOR, TUNNEL_COLOR,
+};
+pub use endpoint_render::{
+    generate_endpoint_markers, EndpointConfig, EndpointKind, RoadEndpoint,
+    CONNECTED_COLOR, DANGLING_COLOR, END_COLOR, START_COLOR,
+};
 pub use gpu::{GpuContext, GpuError};
 pub use renderer::{LaneLineMesh, RenderMesh, Renderer};
 pub use road_mesh::{generate_road_lane_lines, generate_road_mesh};
