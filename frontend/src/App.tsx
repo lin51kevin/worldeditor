@@ -9,7 +9,7 @@ import { PropertyPanel } from './components/PropertyPanel';
 import { TemplatePanel } from './components/TemplatePanel';
 import { StatusBar } from './components/StatusBar';
 import { CommandPalette } from './components/CommandPalette';
-import { OutputPanel } from './components/OutputPanel';
+// import { OutputPanel } from './components/OutputPanel';
 import { FloatingPanel } from './components/FloatingPanel';
 import { MeasurementPanel } from './components/MeasurementPanel';
 import { PluginManager } from './components/PluginManager';
@@ -33,7 +33,7 @@ export function App() {
     toggleOutputPanel,
     toggleTemplatePanel,
   } = useEditorViewStore();
-  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
+  // const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
 
   const disabledBuiltins = useBuiltinPluginStore((s) => s.disabledBuiltins);
@@ -119,11 +119,6 @@ export function App() {
         e.preventDefault();
         useEditorStore.getState().selectAll();
       }
-      // Ctrl+D: duplicate selected road
-      if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
-        e.preventDefault();
-        useEditorStore.getState().duplicateSelected();
-      }
       // Ctrl+C: copy selected road to clipboard
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
         e.preventDefault();
@@ -135,15 +130,15 @@ export function App() {
         useEditorStore.getState().pasteFromClipboard();
       }
       // ?: toggle shortcut help overlay (no modifier, not in input)
-      if (e.key === '?') {
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
-        setShowShortcutHelp((v) => !v);
-      }
-      // Escape: close shortcut help overlay (if open)
-      if (e.key === 'Escape') {
-        setShowShortcutHelp(false);
-      }
+      // if (e.key === '?') {
+      //   const target = e.target as HTMLElement;
+      //   if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+      //   setShowShortcutHelp((v) => !v);
+      // }
+      // // Escape: close shortcut help overlay (if open)
+      // if (e.key === 'Escape') {
+      //   setShowShortcutHelp(false);
+      // }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -217,11 +212,11 @@ export function App() {
       )}
 
       {/* Floating output panel */}
-      {!layout.outputCollapsed && (
+      {/* {!layout.outputCollapsed && (
         <div className="floating-output">
           <OutputPanel />
         </div>
-      )}
+      )} */}
 
       {/* Floating status chips */}
       <StatusBar />
@@ -232,7 +227,7 @@ export function App() {
       <PluginManager open={showPluginManager} onClose={() => setShowPluginManager(false)} />
 
       {/* Keyboard shortcut help overlay */}
-      {showShortcutHelp && (
+      {/* {showShortcutHelp && (
         <div className="shortcut-help-overlay" onClick={() => setShowShortcutHelp(false)}>
           <div className="shortcut-help-dialog" onClick={(e) => e.stopPropagation()}>
             <h3>键盘快捷键</h3>
@@ -258,7 +253,7 @@ export function App() {
             <button onClick={() => setShowShortcutHelp(false)}>关闭</button>
           </div>
         </div>
-      )}
+      )} */}
     </div>
     </ErrorBoundary>
   );

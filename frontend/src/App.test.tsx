@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import type { Project, Road } from './services/platform';
 import { useEditorStore } from './stores/editorStore';
+import { usePluginContribStore } from './stores/pluginContribStore';
 import { onViewportEvent } from './viewport/viewportEvents';
 
 function makeProject(name: string): Project {
@@ -39,15 +40,21 @@ function makeRoad(id: string): Road {
 
 describe('App', () => {
   beforeEach(() => {
+    // jsdom doesn't implement scrollIntoView; mock it
+    Element.prototype.scrollIntoView = vi.fn();
     act(() => {
       useEditorStore.setState({
         project: makeProject('Current'),
         isDirty: false,
         selectedRoadId: null,
+        selectedRoadIds: [],
+        selectedJunctionIds: [],
         selectedObjectType: null,
         undoStack: [],
         redoStack: [],
       });
+      // Clear plugin contrib store so road-tools Ctrl+D handler doesn't fire
+      usePluginContribStore.setState({ toolbarButtons: [], menuItems: [], templateSections: [] });
     });
   });
 

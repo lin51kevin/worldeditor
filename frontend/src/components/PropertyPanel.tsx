@@ -107,7 +107,7 @@ export function PropertyPanel() {
               </CardSection>
 
               {/* Geometry Card */}
-              <CardSection title={`${t('propertyPanel.geometry')} (${selectedRoad.plan_view.length})`}>
+              <CardSection title={`${t('propertyPanel.geometry')} (${selectedRoad.plan_view.length})`} defaultOpen={false}>
                 {selectedRoad.plan_view.map((geo, i) => (
                   <div key={i} className="property-row sub">
                     <span className="property-label">#{i + 1}</span>

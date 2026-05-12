@@ -100,6 +100,10 @@ describe('PropertyPanel', () => {
     expect(screen.getByDisplayValue('测试道路')).toBeInTheDocument();
     expect(screen.getByText('120.50 m')).toBeInTheDocument();
     expect(screen.getByText('j-1')).toBeInTheDocument();
+
+    // Geometry card is collapsed by default — expand it to reveal geometry items
+    const geometryHeader = screen.getByText(/几何/);
+    act(() => { geometryHeader.click(); });
     expect(screen.getByText('Line (50.0m)')).toBeInTheDocument();
     expect(screen.getByText('Arc (70.5m)')).toBeInTheDocument();
     // Per-lane editing: should show lane card header with count
