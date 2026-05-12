@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlipHorizontal2, Sparkles, ArrowUpDown } from 'lucide-react';
@@ -31,14 +31,13 @@ export function RoadEditToolbar() {
   const { editMode, setEditMode, clearSplineKnots, softSelectionRadius, setSoftSelectionRadius } =
     useEditorViewStore();
 
-  const [activeMode, setActiveMode] = useState<string | null>(null);
-
-  const toggleMode = useCallback(
-    (modeId: string) => {
-      setActiveMode((prev) => (prev === modeId ? null : modeId));
-    },
-    [],
-  );
+  // Derive the active tool from the global editMode so the toolbar stays in sync
+  // with the Toolbar plugin buttons (which also call setEditMode).
+  const activeMode =
+    editMode === 'spline' ? 'adjust-node' :
+    editMode === 'move-road' ? 'move-road' :
+    editMode === 'rotate-road' ? 'rotate-road' :
+    null;
 
   const selectedRoad = selectedRoadId
     ? project.roads.find((r) => r.id === selectedRoadId)
@@ -89,7 +88,6 @@ export function RoadEditToolbar() {
         const isEntering = editMode !== 'spline';
         setEditMode(isEntering ? 'spline' : 'select');
         if (isEntering) clearSplineKnots();
-        setActiveMode(isEntering ? 'adjust-node' : null);
       },
     },
     {
@@ -98,21 +96,27 @@ export function RoadEditToolbar() {
       labelKey: 'toolPanel.adjustEdge',
       kind: 'mode',
       disabled: true,
-      action: () => toggleMode('adjust-edge'),
+      action: () => {},
     },
     {
       id: 'move-road',
       icon: '⊕',
       labelKey: 'toolPanel.moveRoad',
       kind: 'mode',
-      action: () => toggleMode('move-road'),
+      action: () => {
+        const isEntering = editMode !== 'move-road';
+        setEditMode(isEntering ? 'move-road' : 'select');
+      },
     },
     {
       id: 'rotate-road',
       icon: '↺',
       labelKey: 'toolPanel.rotateRoad',
       kind: 'mode',
-      action: () => toggleMode('rotate-road'),
+      action: () => {
+        const isEntering = editMode !== 'rotate-road';
+        setEditMode(isEntering ? 'rotate-road' : 'select');
+      },
     },
     {
       id: 'optimize-node',
@@ -127,7 +131,7 @@ export function RoadEditToolbar() {
       labelKey: 'toolPanel.editRoadMarkings',
       kind: 'mode',
       disabled: true,
-      action: () => toggleMode('edit-markings'),
+      action: () => {},
     },
     {
       id: 'clone-road',
