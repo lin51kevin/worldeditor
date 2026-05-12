@@ -19,6 +19,12 @@ import { GRID_SHADER, BASIC_SHADER } from './viewportShaders';
 import { mouseButtonMask, resolveMouseDragAction, computeGroundPanOffset } from './viewportTypes';
 import type { MouseDragAction } from './viewportTypes';
 import {
+  computeControlPointPositions,
+  pickControlPoint as pickControlPointFn,
+  applyHandleDrag,
+} from './tangentHandleController';
+import type { ControlPointRef } from './tangentHandleController';
+import {
   perspectiveMatrix, lookAtMatrix, multiplyMatrices,
   arraysEqual, invertMatrix4, transformPoint, niceNumber,
 } from './viewportMath';
@@ -81,6 +87,13 @@ export class ViewportRenderer {
   // Hover / selection state for control points
   private hoveredControlPoint: { index: number; type: 'knot' | 'in' | 'out' } | null = null;
   private selectedControlPoint: { index: number; type: 'knot' | 'in' | 'out' } | null = null;
+
+  // Callbacks for tangent handle drag interaction (Phase 1.8)
+  private onTangentChanged: ((index: number, tangent: [number, number, number]) => void) | null = null;
+  private onControlPointHovered: ((ref: ControlPointRef | null) => void) | null = null;
+  private onControlPointSelected: ((ref: ControlPointRef | null) => void) | null = null;
+  // Active handle drag state
+  private activeDragHandle: ControlPointRef | null = null;
   private width = 0;
   private height = 0;
   private animFrameId = 0;
@@ -147,6 +160,37 @@ export class ViewportRenderer {
   ): void {
     this.overlayRenderers = renderers;
     if (canvas) this.overlayCanvas = canvas;
+  }
+
+  /**
+   * Register callbacks for tangent handle / knot drag interaction (Phase 1.8).
+   * Pass null to remove a callback.
+   */
+  setControlPointCallbacks(callbacks: {
+    onTangentChanged?: ((index: number, tangent: [number, number, number]) => void) | null;
+    onControlPointHovered?: ((ref: ControlPointRef | null) => void) | null;
+    onControlPointSelected?: ((ref: ControlPointRef | null) => void) | null;
+  }): void {
+    if ('onTangentChanged' in callbacks) this.onTangentChanged = callbacks.onTangentChanged ?? null;
+    if ('onControlPointHovered' in callbacks) this.onControlPointHovered = callbacks.onControlPointHovered ?? null;
+    if ('onControlPointSelected' in callbacks) this.onControlPointSelected = callbacks.onControlPointSelected ?? null;
+  }
+
+  /**
+   * Hit-test control points at the given screen pixel coordinates.
+   * Returns the nearest control point within ~10px, or null.
+   */
+  pickControlPointAtScreen(screenX: number, screenY: number): ControlPointRef | null {
+    if (this.splineKnotsCache.length === 0) return null;
+    const world = this.unprojectToGround(screenX, screenY);
+    if (!world) return null;
+    const mpp = this.getMetersPerPixel();
+    const thresholdMeters = 10.0 * mpp; // 10 pixel threshold
+    const positions = computeControlPointPositions(
+      this.splineKnotsCache as ReadonlyArray<readonly [number, number, number]>,
+      (this.splineTangentCache ?? {}) as Readonly<Record<number, readonly [number, number, number]>>,
+    );
+    return pickControlPointFn(world.x, world.y, positions, thresholdMeters);
   }
 
   /** Register a callback invoked on data load or camera change with grid info. */
@@ -1291,7 +1335,73 @@ export class ViewportRenderer {
       if (onDocUp)   { document.removeEventListener('mouseup',   onDocUp);   onDocUp   = null; }
     };
 
+    // Hover hit-test on mouse move (when not dragging camera or a handle)
+    canvas.addEventListener('mousemove', (e) => {
+      if (this.isDragging || this.activeDragHandle) return;
+      if (this.splineKnotsCache.length === 0) return;
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      const hit = this.pickControlPointAtScreen(sx, sy);
+      if (hit?.index !== this.hoveredControlPoint?.index || hit?.type !== this.hoveredControlPoint?.type) {
+        this.hoveredControlPoint = hit;
+        this.onControlPointHovered?.(hit);
+        this.refreshSplineMarkers();
+      }
+    });
+
     canvas.addEventListener('mousedown', (e) => {
+      // Phase 1.8: handle tangent drag on left-click when knots are displayed
+      if (e.button === 0 && this.splineKnotsCache.length >= 2) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = e.clientX - rect.left;
+        const sy = e.clientY - rect.top;
+        const hit = this.pickControlPointAtScreen(sx, sy);
+        if (hit && (hit.type === 'in' || hit.type === 'out')) {
+          // Start tangent handle drag
+          this.activeDragHandle = hit;
+          this.selectedControlPoint = hit;
+          this.onControlPointSelected?.(hit);
+          this.refreshSplineMarkers();
+          canvas.style.cursor = 'crosshair';
+          e.stopPropagation();
+
+          detachDocListeners();
+
+          onDocMove = (me: MouseEvent) => {
+            if (!this.activeDragHandle) return;
+            const rect2 = canvas.getBoundingClientRect();
+            const sx2 = me.clientX - rect2.left;
+            const sy2 = me.clientY - rect2.top;
+            const world = this.unprojectToGround(sx2, sy2);
+            if (!world) return;
+            const newOverrides = applyHandleDrag(
+              this.activeDragHandle,
+              world.x,
+              world.y,
+              this.splineKnotsCache as ReadonlyArray<readonly [number, number, number]>,
+              (this.splineTangentCache ?? {}) as Readonly<Record<number, readonly [number, number, number]>>,
+            );
+            this.splineTangentCache = newOverrides as Record<number, [number, number, number]>;
+            const idx = this.activeDragHandle.index;
+            const t = newOverrides[idx];
+            if (t) this.onTangentChanged?.(idx, t);
+            this.refreshSplineCurve();
+            this.refreshSplineMarkers();
+          };
+
+          onDocUp = () => {
+            canvas.style.cursor = '';
+            this.activeDragHandle = null;
+            detachDocListeners();
+          };
+
+          document.addEventListener('mousemove', onDocMove);
+          document.addEventListener('mouseup', onDocUp);
+          return;
+        }
+      }
+
       if (this._cameraLocked) return;
       const action = resolveMouseDragAction(e.button, e);
       if (!action) return;

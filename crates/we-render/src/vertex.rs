@@ -35,7 +35,51 @@ impl ColorVertex {
     }
 }
 
-/// A vertex for lane line rendering with dash pattern support.
+/// A vertex for textured road surface rendering (position + UV + color).
+///
+/// The UV coordinates carry road-space texture coordinates:
+/// - `u`: lateral offset (0 at left edge, 1 at right edge of lane section)
+/// - `v`: longitudinal distance along the road (meters)
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct SurfaceVertex {
+    pub position: [f32; 3],
+    pub uv: [f32; 2],
+    pub color: [f32; 4],
+}
+
+impl SurfaceVertex {
+    pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<SurfaceVertex>() as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[
+            // position @location(0)
+            wgpu::VertexAttribute {
+                offset: 0,
+                shader_location: 0,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            // uv @location(1)
+            wgpu::VertexAttribute {
+                offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                shader_location: 1,
+                format: wgpu::VertexFormat::Float32x2,
+            },
+            // color @location(2)
+            wgpu::VertexAttribute {
+                offset: (std::mem::size_of::<[f32; 3]>() + std::mem::size_of::<[f32; 2]>())
+                    as wgpu::BufferAddress,
+                shader_location: 2,
+                format: wgpu::VertexFormat::Float32x4,
+            },
+        ],
+    };
+
+    pub fn new(position: [f32; 3], uv: [f32; 2], color: [f32; 4]) -> Self {
+        Self { position, uv, color }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct LineVertex {
@@ -123,6 +167,19 @@ mod tests {
         let v = ColorVertex::new([1.0, 2.0, 3.0], [1.0, 0.0, 0.0, 1.0]);
         let bytes = bytemuck::bytes_of(&v);
         assert_eq!(bytes.len(), 28);
+    }
+
+    #[test]
+    fn test_surface_vertex_size() {
+        // 3*4 (pos) + 2*4 (uv) + 4*4 (color) = 12 + 8 + 16 = 36 bytes
+        assert_eq!(std::mem::size_of::<SurfaceVertex>(), 36);
+    }
+
+    #[test]
+    fn test_surface_vertex_is_pod() {
+        let v = SurfaceVertex::new([1.0, 0.0, 0.0], [0.5, 0.5], [0.3, 0.3, 0.3, 1.0]);
+        let bytes = bytemuck::bytes_of(&v);
+        assert_eq!(bytes.len(), 36);
     }
 
     #[test]
