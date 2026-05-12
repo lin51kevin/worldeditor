@@ -956,6 +956,11 @@ export class ViewportRenderer {
 
     this.camera.target = [cx, cy, cz];
     this.camera.position = [cx + offsetX, cy + offsetY, cz + offsetZ];
+    // Recalculate near/far based on the new camera distance so that objects
+    // aren't clipped when the user has zoomed in before navigating.
+    const camDist = Math.sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ);
+    this.camera.near = Math.max(0.1, camDist * 0.001);
+    this.camera.far = Math.max(100000, camDist * 100);
     this.cameraDirty = true;
     this.reportScale();
   }
@@ -1568,6 +1573,8 @@ export class ViewportRenderer {
       ty - (dy / norm) * dist,
       tz - (dz / norm) * dist,
     ];
+    this.camera.near = Math.max(0.1, dist * 0.001);
+    this.camera.far = Math.max(100000, dist * 100);
     this.cameraDirty = true;
     this.reportScale();
   }
