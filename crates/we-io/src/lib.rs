@@ -12,6 +12,7 @@ pub mod dxf_io;
 pub mod nio_proto;
 pub mod mif_io;
 pub mod signal_json;
+pub mod sumo;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod native;

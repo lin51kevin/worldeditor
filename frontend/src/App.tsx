@@ -33,6 +33,16 @@ import { mountIoMifPlugin } from './plugins/ioMif.plugin';
 import { mountIoOsmPlugin } from './plugins/ioOsm.plugin';
 import { mountIoSignalsPlugin } from './plugins/ioSignals.plugin';
 import { mountIoXodrExtPlugin } from './plugins/ioXodrExt.plugin';
+import { mountGisToolsPlugin } from './plugins/gisTools.plugin';
+import { mountValidationPlugin } from './plugins/validation.plugin';
+import { mountTrafficPlugin } from './plugins/traffic.plugin';
+import { mountPointcloudPlugin } from './plugins/pointcloud.plugin';
+import { mountSatellitePlugin } from './plugins/satellite.plugin';
+import { mountModels3dPlugin } from './plugins/models3d.plugin';
+import { mountScriptingPlugin } from './plugins/scripting.plugin';
+import { mountEcosystemPlugin } from './plugins/ecosystem.plugin';
+import { mountLaneDetectPlugin } from './plugins/laneDetect.plugin';
+import { mountConverterPlugin } from './plugins/converter.plugin';
 
 export function App() {
   const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
@@ -81,6 +91,16 @@ export function App() {
     if (!disabledBuiltins.includes('io-osm')) cleanups.push(mountIoOsmPlugin());
     if (!disabledBuiltins.includes('io-signals')) cleanups.push(mountIoSignalsPlugin());
     if (!disabledBuiltins.includes('io-xodr-ext')) cleanups.push(mountIoXodrExtPlugin());
+    if (!disabledBuiltins.includes('gis-tools')) cleanups.push(mountGisToolsPlugin());
+    if (!disabledBuiltins.includes('validation')) cleanups.push(mountValidationPlugin());
+    if (!disabledBuiltins.includes('traffic')) cleanups.push(mountTrafficPlugin());
+    if (!disabledBuiltins.includes('pointcloud')) cleanups.push(mountPointcloudPlugin());
+    if (!disabledBuiltins.includes('satellite')) cleanups.push(mountSatellitePlugin());
+    if (!disabledBuiltins.includes('3d-models')) cleanups.push(mountModels3dPlugin());
+    if (!disabledBuiltins.includes('scripting')) cleanups.push(mountScriptingPlugin());
+    if (!disabledBuiltins.includes('ecosystem')) cleanups.push(mountEcosystemPlugin());
+    if (!disabledBuiltins.includes('lane-detect')) cleanups.push(mountLaneDetectPlugin());
+    if (!disabledBuiltins.includes('converter')) cleanups.push(mountConverterPlugin());
     return () => cleanups.forEach((fn) => fn());
   }, [disabledBuiltins]);
 

@@ -1,0 +1,9 @@
+/** plugin-scripting: Embedded Rhai script console. Stub — Phase 3. */
+import { usePluginContribStore } from '../stores/pluginContribStore';
+const PLUGIN_ID = 'scripting';
+export function mountScriptingPlugin(): () => void {
+  const { registerPanel, registerMenuItem, unregisterPlugin } = usePluginContribStore.getState();
+  registerPanel({ id: `${PLUGIN_ID}:panel`, pluginId: PLUGIN_ID, title: 'Script Console', component: null as never, position: 'bottom' });
+  registerMenuItem({ id: `${PLUGIN_ID}:run`, pluginId: PLUGIN_ID, menu: 'tools', label: 'Run Script', labelKey: 'scripting.runScript', onClick: () => {} });
+  return () => unregisterPlugin(PLUGIN_ID);
+}

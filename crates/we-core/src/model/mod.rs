@@ -6,6 +6,7 @@
 pub(crate) mod crg;
 pub(crate) mod road;
 pub(crate) mod template;
+pub(crate) mod traffic;
 pub(crate) mod zone;
 
 pub use crg::{CrgOrientation, CrgProfile, CrgReference};
@@ -17,6 +18,7 @@ pub use road::{
     Validity,
 };
 pub use template::RoadTemplate;
+pub use traffic::{SignalController, SignalGroup, SignalPhase};
 pub use zone::{Zone, ZoneStatus, ZoneType, ZoneVertex};
 
 use serde::{Deserialize, Serialize};

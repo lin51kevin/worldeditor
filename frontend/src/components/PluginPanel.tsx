@@ -60,7 +60,7 @@ export function PluginPanels() {
               </button>
             </div>
             <div className="plugin-panel-body">
-              <Component />
+              {Component ? <Component /> : null}
             </div>
           </div>
         );

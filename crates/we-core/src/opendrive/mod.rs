@@ -4,6 +4,7 @@
 //! Pure Rust, WASM compatible.
 
 mod parser;
+pub mod validator;
 mod writer;
 
 use crate::model::Project;

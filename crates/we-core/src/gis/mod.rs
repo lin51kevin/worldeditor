@@ -1,10 +1,15 @@
 //! GIS coordinate system transformations.
 //!
-//! Supports WGS84, GCJ02, ECEF, ENU, UTM.
+//! Supports WGS84, GCJ02, ECEF, ENU, UTM, MGRS, Proj4, WKT, GCP.
 //! All implementations are pure Rust — WASM compatible.
 
+pub mod ecef;
+pub mod gcp;
 pub mod gcj02;
+pub mod mgrs;
+pub mod proj4;
 pub mod utm;
+pub mod wkt;
 mod wgs84;
 
 pub use gcj02::{gcj02_to_wgs84, is_in_china, wgs84_to_gcj02};
