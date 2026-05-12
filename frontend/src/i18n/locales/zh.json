@@ -309,14 +309,22 @@
     "close": "关闭面板"
   },
   "dialog": {
+    "ok": "确定",
+    "cancel": "取消",
+    "confirm": "确认",
     "confirmNew": "当前项目有未保存的更改，确定要新建项目吗？",
     "confirmReset": "重置会丢失所有未保存的修改，确定要重置吗？",
     "projectName": "输入项目名称:",
     "fileName": "输入文件名:",
-    "roadLength": "道路总长度:",
+    "roadLength": "道路总长度",
+    "roadLengthTitle": "道路长度统计",
     "meters": "米",
     "parseError": "文件解析失败，请检查文件格式是否正确。",
-    "openError": "打开文件失败，请重试。"
+    "openError": "打开文件失败，请重试。",
+    "aboutTitle": "关于 World Editor",
+    "versionTitle": "版本信息",
+    "version": "版本",
+    "buildDate": "构建日期"
   },
   "snapping": {
     "enabled": "吸附",

@@ -309,14 +309,22 @@
     "close": "Close panel"
   },
   "dialog": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
     "confirmNew": "Current project has unsaved changes, are you sure you want to create a new project?",
     "confirmReset": "This will discard all unsaved changes. Are you sure you want to reset?",
     "projectName": "Enter project name:",
     "fileName": "Enter file name:",
-    "roadLength": "Total road length:",
+    "roadLength": "Total road length",
+    "roadLengthTitle": "Road Length Statistics",
     "meters": "meters",
     "parseError": "Failed to parse file. Please check that the file format is valid.",
-    "openError": "Failed to open file. Please try again."
+    "openError": "Failed to open file. Please try again.",
+    "aboutTitle": "About World Editor",
+    "versionTitle": "Version Info",
+    "version": "Version",
+    "buildDate": "Build Date"
   },
   "snapping": {
     "enabled": "Snap",

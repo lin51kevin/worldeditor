@@ -14,6 +14,7 @@ import { useBuiltinPluginStore } from '../stores/builtinPluginStore';
 import { emitViewportEvent } from '../viewport/viewportEvents';
 import { getPlatformService } from '../services';
 import { resetAllPanels } from './FloatingPanel';
+import { showAlert, showConfirm, showPrompt } from '../utils/dialog';
 import type { Project } from '../services/platform';
 import './MenuBar.css';
 
@@ -32,16 +33,19 @@ interface Menu {
 }
 
 // Show About dialog
-function showAbout(t: (key: string) => string) {
+async function showAbout(t: (key: string) => string) {
   const version = '1.8.0430';
-  alert(`World Editor\n${t('app.title')}\n\n${version}`);
+  await showAlert(`${t('app.title')}\n\n${t('dialog.version')}: ${version}`, t('dialog.aboutTitle'));
 }
 
 // Show version info
-function showVersion(t: (key: string) => string) {
+async function showVersion(t: (key: string) => string) {
   const version = '1.8.0430';
   const buildDate = '2024-12-12';
-  alert(`${t('menu.versionInfo')}\n${version}\n${buildDate}`);
+  await showAlert(
+    `${t('dialog.version')}: ${version}\n${t('dialog.buildDate')}: ${buildDate}`,
+    t('dialog.versionTitle'),
+  );
 }
 
 // Calculate total road length
@@ -219,12 +223,12 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
   const { t } = useTranslation();
 
   // File: New
-  const handleNew = useCallback(() => {
+  const handleNew = useCallback(async () => {
     if (isDirty) {
-      if (!window.confirm(t('dialog.confirmNew'))) return;
+      if (!await showConfirm(t('dialog.confirmNew'))) return;
     }
     reset();
-  }, [isDirty, reset]);
+  }, [isDirty, reset, t]);
 
   // File: Open
   const handleOpen = useCallback(async () => {
@@ -234,14 +238,14 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
       if (!file) return;
       const proj = await platform.parseOpenDrive(file.content);
       if (!proj || !Array.isArray(proj.roads)) {
-        alert(t('dialog.parseError'));
+        await showAlert(t('dialog.parseError'));
         return;
       }
       proj.name = file.name;
       setProject(proj);
     } catch (err) {
       console.error('[MenuBar] Failed to open file:', err);
-      alert(t('dialog.openError'));
+      await showAlert(t('dialog.openError'));
     }
   }, [setProject, t]);
 
@@ -255,14 +259,14 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
 
   // File: Save As
   const handleSaveAs = useCallback(async () => {
-    const name = window.prompt(t('dialog.projectName'), project.name);
+    const name = await showPrompt(t('dialog.projectName'), project.name);
     if (!name) return;
     const platform = await getPlatformService();
     const xml = await platform.writeOpenDrive(project);
     await platform.saveFile(name, xml);
     setProject({ ...project, name });
     useEditorStore.getState().markClean();
-  }, [project, setProject]);
+  }, [project, setProject, t]);
 
   // Import OpenDRIVE
   const handleImportOpenDrive = useCallback(async () => {
@@ -272,14 +276,14 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
       if (!file) return;
       const proj = await platform.parseOpenDrive(file.content);
       if (!proj || !Array.isArray(proj.roads)) {
-        alert(t('dialog.parseError'));
+        await showAlert(t('dialog.parseError'));
         return;
       }
       proj.name = file.name;
       setProject(proj);
     } catch (err) {
       console.error('[MenuBar] Failed to import OpenDRIVE:', err);
-      alert(t('dialog.parseError'));
+      await showAlert(t('dialog.parseError'));
     }
   }, [setProject, t]);
 
@@ -287,10 +291,10 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
   const handleExportOpenDrive = useCallback(async () => {
     const platform = await getPlatformService();
     const xml = await platform.writeOpenDrive(project);
-    const name = window.prompt(t('dialog.fileName'), project.name + '.xodr');
+    const name = await showPrompt(t('dialog.fileName'), project.name + '.xodr');
     if (!name) return;
     await platform.saveFile(name, xml);
-  }, [project]);
+  }, [project, t]);
 
   // Edit: Delete
   const handleDelete = useCallback(() => {
@@ -342,15 +346,18 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
   }, [toggleAxis]);
 
   // Calculate road length
-  const handleCalculateRoadLength = useCallback(() => {
+  const handleCalculateRoadLength = useCallback(async () => {
     const total = calculateTotalRoadLength(project);
-    alert(`${t('dialog.roadLength')}: ${total.toFixed(3)} ${t('dialog.meters')}`);
-  }, [project]);
+    await showAlert(
+      `${total.toFixed(3)} ${t('dialog.meters')}`,
+      t('dialog.roadLengthTitle'),
+    );
+  }, [project, t]);
 
   // Reset unsaved changes
-  const handleResetToSaved = useCallback(() => {
+  const handleResetToSaved = useCallback(async () => {
     if (!isDirty || !savedProject) return;
-    if (!window.confirm(t('dialog.confirmReset'))) return;
+    if (!await showConfirm(t('dialog.confirmReset'))) return;
     resetToSaved();
   }, [isDirty, savedProject, resetToSaved, t]);
 

@@ -13,6 +13,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { FloatingPanel } from './components/FloatingPanel';
 import { MeasurementPanel } from './components/MeasurementPanel';
 import { PluginManager } from './components/PluginManager';
+import { DialogHost } from './components/common/Dialog';
 import { useEditorStore } from './stores/editorStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorViewStore } from './stores/editorViewStore';
@@ -225,6 +226,9 @@ export function App() {
 
       {/* Plugin Manager dialog */}
       <PluginManager open={showPluginManager} onClose={() => setShowPluginManager(false)} />
+
+      {/* Themed dialog host — renders alert/confirm/prompt dialogs */}
+      <DialogHost />
 
       {/* Keyboard shortcut help overlay */}
       {showShortcutHelp && (

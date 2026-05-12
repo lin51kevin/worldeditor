@@ -4,6 +4,7 @@ import type { GisCoord, PlatformService, Project, Road, UtmCoord } from '../serv
 import { useEditorStore } from '../stores/editorStore';
 import { getPlatformService } from '../services';
 import { emitViewportEvent } from '../viewport/viewportEvents';
+import { showAlert, showConfirm, showPrompt } from '../utils/dialog';
 import { MenuBar } from './MenuBar';
 
 vi.mock('../services', () => ({
@@ -12,6 +13,12 @@ vi.mock('../services', () => ({
 
 vi.mock('../viewport/viewportEvents', () => ({
   emitViewportEvent: vi.fn(),
+}));
+
+vi.mock('../utils/dialog', () => ({
+  showAlert: vi.fn().mockResolvedValue(undefined),
+  showConfirm: vi.fn().mockResolvedValue(true),
+  showPrompt: vi.fn().mockResolvedValue('renamed.xodr'),
 }));
 
 function makeProject(roads: Road[] = [], name = 'Untitled'): Project {
@@ -115,9 +122,10 @@ describe('MenuBar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.stubGlobal('alert', vi.fn());
-    vi.stubGlobal('confirm', vi.fn(() => true));
-    vi.stubGlobal('prompt', vi.fn(() => 'renamed.xodr'));
+    // Reset dialog mocks to their default resolved values
+    vi.mocked(showAlert).mockResolvedValue(undefined);
+    vi.mocked(showConfirm).mockResolvedValue(true);
+    vi.mocked(showPrompt).mockResolvedValue('renamed.xodr');
 
     act(() => {
       useEditorStore.setState({
@@ -188,9 +196,7 @@ describe('MenuBar', () => {
     expect(screen.getByText('导出 OpenDRIVE...').closest('button')).toBeEnabled();
   });
 
-  it('calculates and shows the total road length from the current project', () => {
-    const alertSpy = vi.mocked(window.alert);
-
+  it('calculates and shows the total road length from the current project', async () => {
     act(() => {
       useEditorStore.setState({
         project: makeProject([makeRoad('r-1', 100), makeRoad('r-2', 50.5)]),
@@ -204,11 +210,13 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByText('工具'));
     fireEvent.click(screen.getByText('计算道路总长度'));
 
-    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('150.500'));
+    await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalledWith(
+      expect.stringContaining('150.500'),
+      expect.any(String),
+    ));
   });
 
-  it('shows about and version dialogs from the about menu', () => {
-    const alertSpy = vi.mocked(window.alert);
+  it('shows about and version dialogs from the about menu', async () => {
     render(<MenuBar />);
 
     const hamburger = screen.getByTitle('文件');
@@ -219,8 +227,13 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByText('关于'));
     fireEvent.click(screen.getByText('版本信息'));
 
-    expect(alertSpy).toHaveBeenNthCalledWith(1, expect.stringContaining('1.8.0430'));
-    expect(alertSpy).toHaveBeenNthCalledWith(2, expect.stringContaining('2024-12-12'));
+    await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
+      1, expect.stringContaining('1.8.0430'), expect.any(String),
+    );
+    expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
+      2, expect.stringContaining('2024-12-12'), expect.any(String),
+    );
   });
 
   it('handles keyboard shortcuts for new, open, save, save as, and delete', async () => {
@@ -228,7 +241,7 @@ describe('MenuBar', () => {
     platform.openFile.mockResolvedValue({ name: 'loaded.xodr', content: '<OpenDRIVE />' });
     platform.parseOpenDrive.mockResolvedValue(makeProject([makeRoad('imported', 30)], 'Imported'));
     vi.mocked(getPlatformService).mockResolvedValue(platform.platform);
-    vi.mocked(window.confirm).mockReturnValue(false);
+    vi.mocked(showConfirm).mockResolvedValueOnce(false);
 
     act(() => {
       useEditorStore.setState({
@@ -241,10 +254,12 @@ describe('MenuBar', () => {
     render(<MenuBar />);
 
     dispatchWindowKey({ key: 'n', ctrlKey: true });
+    await act(async () => {});
     expect(useEditorStore.getState().project.name).toBe('Original');
 
-    vi.mocked(window.confirm).mockReturnValue(true);
+    // Default mock returns true — new project should succeed
     dispatchWindowKey({ key: 'n', ctrlKey: true });
+    await act(async () => {});
     expect(useEditorStore.getState().project.name).toBe('Untitled');
 
     act(() => {
@@ -306,7 +321,6 @@ describe('MenuBar', () => {
   });
 
   it('shows an error alert and does not update the project when parseOpenDrive rejects', async () => {
-    const alertSpy = vi.mocked(window.alert);
     const platform = createPlatformMock();
     platform.openFile.mockResolvedValue({ name: 'bad.xodr', content: '<bad />' });
     platform.parseOpenDrive.mockRejectedValue(new Error('parse failed'));
@@ -321,12 +335,11 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByText('文件'));
     fireEvent.click(screen.getByText('打开文件...'));
 
-    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalled());
     expect(useEditorStore.getState().project.name).toBe('Original');
   });
 
   it('shows a parse error alert when parseOpenDrive returns a non-Project value', async () => {
-    const alertSpy = vi.mocked(window.alert);
     const platform = createPlatformMock();
     platform.openFile.mockResolvedValue({ name: 'invalid.xodr', content: '<x/>' });
     platform.parseOpenDrive.mockResolvedValue(null as unknown as Project);
@@ -339,7 +352,7 @@ describe('MenuBar', () => {
     render(<MenuBar />);
     dispatchWindowKey({ key: 'o', ctrlKey: true });
 
-    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalled());
     expect(useEditorStore.getState().project.name).toBe('OriginalProject');
   });
 });
