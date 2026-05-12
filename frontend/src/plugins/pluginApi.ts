@@ -113,19 +113,20 @@ export function installPluginApi(): void {
         },
 
         onSelectionChanged: (callback) => {
-          return useEditorStore.subscribe((state) => ({
-            roadId: state.selectedRoadId,
-            junctionId: state.selectedJunctionId,
-            roadIds: state.selectedRoadIds,
-            junctionIds: state.selectedJunctionIds,
-          }), (sel) => callback(sel));
+          return useEditorStore.subscribe((state) => {
+            callback({
+              roadId: state.selectedRoadId,
+              junctionId: state.selectedJunctionId,
+              roadIds: state.selectedRoadIds,
+              junctionIds: state.selectedJunctionIds,
+            });
+          });
         },
 
         onProjectChanged: (callback) => {
-          return useEditorStore.subscribe(
-            (state) => state.project,
-            (project) => callback(project),
-          );
+          return useEditorStore.subscribe((state) => {
+            callback(state.project);
+          });
         },
       };
 

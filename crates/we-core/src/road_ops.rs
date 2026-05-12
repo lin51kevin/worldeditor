@@ -310,9 +310,7 @@ fn dp_recurse(
 
     if max_dist < epsilon {
         // All interior points can be removed
-        for i in (start + 1)..end {
-            keep[i] = false;
-        }
+        keep[(start + 1)..end].iter_mut().for_each(|k| *k = false);
     } else {
         dp_recurse(knots, keep, start, max_idx, epsilon);
         dp_recurse(knots, keep, max_idx, end, epsilon);
@@ -442,7 +440,7 @@ fn rebuild_sections_after_swap(sections: &[LaneSection], target_lane_id: i32) ->
                     .cloned()
                     .collect();
 
-                let orig_right: Vec<Lane> = sec.right.iter().cloned().collect();
+                let orig_right: Vec<Lane> = sec.right.to_vec();
                 let new_right: Vec<Lane> = inside_left
                     .into_iter()
                     .chain(orig_right)
@@ -479,7 +477,7 @@ fn rebuild_sections_after_swap(sections: &[LaneSection], target_lane_id: i32) ->
                     .cloned()
                     .collect();
 
-                let orig_left: Vec<Lane> = sec.left.iter().cloned().collect();
+                let orig_left: Vec<Lane> = sec.left.to_vec();
                 let new_left: Vec<Lane> = inside_right
                     .into_iter()
                     .chain(orig_left)

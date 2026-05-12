@@ -83,6 +83,7 @@ function buildMenus(
   onMeasureAngle: () => void,
   onMeasureArea: () => void,
   onOpenPluginManager: () => void,
+  onOpenSettings: () => void,
   canUndo: boolean,
   canRedo: boolean,
   showGrid: boolean,
@@ -155,6 +156,8 @@ function buildMenus(
       label: t('menu.plugins'),
       items: [
         { label: t('menu.pluginManager'), action: onOpenPluginManager },
+        { separator: true, label: '' },
+        { label: t('menu.settings'), action: onOpenSettings },
       ],
     },
     {
@@ -169,9 +172,10 @@ function buildMenus(
 
 interface MenuBarProps {
   onOpenPluginManager?: () => void;
+  onOpenSettings?: () => void;
 }
 
-export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
+export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () => {} }: MenuBarProps) {
   const project = useEditorStore((s) => s.project);
   const isDirty = useEditorStore((s) => s.isDirty);
   const savedProject = useEditorStore((s) => s.savedProject);
@@ -392,6 +396,7 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     () => setMeasureMode('angle'),
     () => setMeasureMode('area'),
     onOpenPluginManager,
+    onOpenSettings,
     canUndo(),
     canRedo(),
     showGrid,

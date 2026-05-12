@@ -13,6 +13,8 @@ import { CommandPalette } from './components/CommandPalette';
 import { FloatingPanel } from './components/FloatingPanel';
 import { MeasurementPanel } from './components/MeasurementPanel';
 import { PluginManager } from './components/PluginManager';
+import { PluginPanels } from './components/PluginPanel';
+import { SettingsDialog } from './components/SettingsDialog';
 import { DialogHost } from './components/common/Dialog';
 import { useEditorStore } from './stores/editorStore';
 import { useThemeStore } from './stores/themeStore';
@@ -36,6 +38,7 @@ export function App() {
   } = useEditorViewStore();
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const disabledBuiltins = useBuiltinPluginStore((s) => s.disabledBuiltins);
   const templatePluginEnabled = !disabledBuiltins.includes('builtin-templates');
@@ -157,7 +160,7 @@ export function App() {
       </div>
 
       {/* Floating UI layers on top of viewport */}
-      <MenuBar onOpenPluginManager={() => setShowPluginManager(true)} />
+      <MenuBar onOpenPluginManager={() => setShowPluginManager(true)} onOpenSettings={() => setShowSettings(true)} />
       <Toolbar />
 
       {/* Floating left panel */}
@@ -226,6 +229,12 @@ export function App() {
 
       {/* Plugin Manager dialog */}
       <PluginManager open={showPluginManager} onClose={() => setShowPluginManager(false)} />
+
+      {/* Settings dialog */}
+      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
+
+      {/* Plugin-contributed panels */}
+      <PluginPanels />
 
       {/* Themed dialog host — renders alert/confirm/prompt dialogs */}
       <DialogHost />

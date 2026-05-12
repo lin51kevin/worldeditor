@@ -136,6 +136,19 @@ export class ViewportRenderer {
   private lastReportedMpp = -1;
   private lastReportedGridSpacing = -1;
 
+  // Plugin viewport overlay renderers — called after main render pass
+  private overlayRenderers: Array<(ctx: { device?: GPUDevice; canvas?: HTMLCanvasElement }) => void> = [];
+  private overlayCanvas: HTMLCanvasElement | null = null;
+
+  /** Update the list of plugin overlay render functions (sorted by order). */
+  setOverlayRenderers(
+    renderers: Array<(ctx: { device?: GPUDevice; canvas?: HTMLCanvasElement }) => void>,
+    canvas?: HTMLCanvasElement,
+  ): void {
+    this.overlayRenderers = renderers;
+    if (canvas) this.overlayCanvas = canvas;
+  }
+
   /** Register a callback invoked on data load or camera change with grid info. */
   setScaleChangeCallback(cb: (info: { gridSpacing: number; mpp: number }) => void): void {
     this.onScaleChange = cb;
@@ -995,6 +1008,14 @@ export class ViewportRenderer {
     } catch {
       // Transient D3D swap-chain / device-context mismatch; skip frame.
       // This can occur during resize or when the window moves between monitors.
+    }
+
+    // Invoke plugin overlay renderers after main render pass
+    if (this.overlayRenderers.length > 0) {
+      const ctx = { device: this.device, canvas: this.overlayCanvas ?? undefined };
+      for (const render of this.overlayRenderers) {
+        try { render(ctx); } catch { /* plugin errors must not crash the render loop */ }
+      }
     }
   }
 

@@ -19,6 +19,13 @@ vi.mock('../services/contextMenu', () => ({
     { label: 'Paste', action: vi.fn() },
     { label: 'Disabled Item', disabled: true, action: vi.fn() },
   ]),
+  getMenuWithPlugins: vi.fn((_context: string, _x: number, _y: number) => [
+    { label: 'Cut', shortcut: 'Ctrl+X', action: vi.fn() },
+    { label: 'Copy', shortcut: 'Ctrl+C', action: vi.fn() },
+    { separator: true },
+    { label: 'Paste', action: vi.fn() },
+    { label: 'Disabled Item', disabled: true, action: vi.fn() },
+  ]),
 }));
 
 describe('ContextMenu', () => {

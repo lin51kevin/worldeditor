@@ -1,7 +1,10 @@
 /**
  * Context menu registry service.
  * Provides register/getMenu for right-click context menus.
+ * getMenuWithPlugins merges plugin-contributed items on top of static items.
  */
+
+import { usePluginContribStore } from '../stores/pluginContribStore';
 
 export interface MenuItem {
   label: string;
@@ -22,11 +25,38 @@ export function registerContextMenu(context: string, provider: MenuProvider): vo
   registry.set(context, provider);
 }
 
-/** Get menu items for a context at given screen position. */
+/** Get menu items for a context at given screen position (static items only). */
 export function getMenu(context: string, x: number, y: number): MenuItem[] {
   const provider = registry.get(context);
   if (!provider) return [];
   return provider(context, x, y);
+}
+
+/**
+ * Get merged menu items: static items + plugin-contributed items for the context.
+ * Plugin items that pass isVisible() are appended after a separator.
+ */
+export function getMenuWithPlugins(context: string, x: number, y: number): MenuItem[] {
+  const base = getMenu(context, x, y);
+
+  const pluginItems = usePluginContribStore
+    .getState()
+    .contextMenuItems
+    .filter((c) => c.menu === context && (c.isVisible?.() ?? true))
+    .map((c): MenuItem => ({
+      label: c.label,
+      shortcut: c.shortcut,
+      disabled: c.isDisabled?.() ?? false,
+      action: c.onClick,
+    }));
+
+  if (pluginItems.length === 0) return base;
+
+  return [
+    ...base,
+    ...(base.length > 0 ? [{ separator: true, label: '' }] : []),
+    ...pluginItems,
+  ];
 }
 
 // --- Core menu registrations ---
@@ -53,7 +83,7 @@ registerContextMenu('junction', (_ctx, _x, _y) => [
 ]);
 
 /**
- * Show context menu at screen position for given context.
+ * Show context menu at screen position for given context (with plugin items).
  */
 export function showContextMenu(x: number, y: number, context: string): void {
   document.dispatchEvent(new CustomEvent('contextmenu:show', { detail: { x, y, context } }));

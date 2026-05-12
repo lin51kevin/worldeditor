@@ -660,7 +660,11 @@ pub(crate) fn point_in_polygon(x: f64, y: f64, poly: &[[f32; 3]]) -> bool {
 
 // ── Object geometry helpers ───────────────────────────────────────────────────
 
+/// Function type for offsetting a reference line point by lateral (t) and vertical (z) offsets.
+type OffsetPtFn = dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64);
+
 /// Emit a transverse bar (stop line, yield line) perpendicular to the road direction.
+#[allow(clippy::too_many_arguments)]
 fn emit_transverse_bar(
     ref_pt: &we_core::geometry::eval::RefLinePoint,
     t: f64,
@@ -668,7 +672,7 @@ fn emit_transverse_bar(
     width: f64,  // lateral full-width
     thickness: f64, // along-road thickness
     color: [f32; 4],
-    offset_pt: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
+    offset_pt: &OffsetPtFn,
     out: &mut Vec<f32>,
 ) {
     let [r, g, b, a] = color;
@@ -708,7 +712,7 @@ fn emit_square_marker(
     z: f32,
     size: f64,
     color: [f32; 4],
-    offset_pt: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
+    offset_pt: &OffsetPtFn,
     out: &mut Vec<f32>,
 ) {
     // Treat the square as a transverse bar with equal width and thickness
@@ -716,6 +720,7 @@ fn emit_square_marker(
 }
 
 /// Emit a rectangle outline (4 thick sides) at (ref_pt offset by t, z).
+#[allow(clippy::too_many_arguments)]
 fn emit_rect_outline(
     ref_pt: &we_core::geometry::eval::RefLinePoint,
     t: f64,
@@ -724,7 +729,7 @@ fn emit_rect_outline(
     length: f64,
     bar_thickness: f64,
     color: [f32; 4],
-    offset_pt: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
+    offset_pt: &OffsetPtFn,
     out: &mut Vec<f32>,
 ) {
     let half_l = length / 2.0;
@@ -735,10 +740,10 @@ fn emit_rect_outline(
     let sin_h = hdg.sin();
     let (cx, cy, _) = offset_pt(ref_pt, t, 0.0);
     // Shift ref_pt ±half_l along road direction and emit transverse bars
-    let mut front = ref_pt.clone();
+    let mut front = *ref_pt;
     front.x = ref_pt.x + cos_h * half_l;
     front.y = ref_pt.y + sin_h * half_l;
-    let mut back = ref_pt.clone();
+    let mut back = *ref_pt;
     back.x = ref_pt.x - cos_h * half_l;
     back.y = ref_pt.y - sin_h * half_l;
     emit_transverse_bar(&front, t, z, width, bar_thickness, color, offset_pt, out);
@@ -746,14 +751,8 @@ fn emit_rect_outline(
 
     // Left and right longitudinal edges (length × bar_thickness)
     let half_w = width / 2.0;
-    let mut left_center = ref_pt.clone();
-    left_center.x = cx + (hdg + std::f64::consts::FRAC_PI_2).cos() * half_w;
-    left_center.y = cy + (hdg + std::f64::consts::FRAC_PI_2).sin() * half_w;
-    let mut right_center = ref_pt.clone();
-    right_center.x = cx - (hdg + std::f64::consts::FRAC_PI_2).cos() * half_w;
-    right_center.y = cy - (hdg + std::f64::consts::FRAC_PI_2).sin() * half_w;
     // Emit as longitudinal bars (rotate 90°): use the perpendicular direction as "forward"
-    let mut perp_pt = ref_pt.clone();
+    let mut perp_pt = *ref_pt;
     perp_pt.hdg = hdg + std::f64::consts::FRAC_PI_2;
     perp_pt.x = cx + (hdg + std::f64::consts::FRAC_PI_2).cos() * half_w;
     perp_pt.y = cy + (hdg + std::f64::consts::FRAC_PI_2).sin() * half_w;
@@ -776,7 +775,7 @@ fn emit_crosswalk_stripes(
     elevations: &[we_core::model::Elevation],
     obj_s: f64,
     z_base: f32,
-    offset_pt: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
+    offset_pt: &OffsetPtFn,
     out: &mut Vec<f32>,
 ) {
     use we_core::geometry::eval::evaluate_elevation;
@@ -846,6 +845,7 @@ fn emit_crosswalk_stripes(
 }
 
 /// Emit a polygon outline for area objects (parking space, cross-hatch, etc.)
+#[allow(clippy::too_many_arguments)]
 fn emit_polygon_outline(
     corners: &[we_core::model::Point3D],
     ref_pts: &[we_core::geometry::eval::RefLinePoint],
@@ -854,7 +854,7 @@ fn emit_polygon_outline(
     z_base: f32,
     bar_thickness: f64,
     color: [f32; 4],
-    offset_pt: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
+    offset_pt: &OffsetPtFn,
     out: &mut Vec<f32>,
 ) {
     use we_core::geometry::eval::evaluate_elevation;
@@ -904,6 +904,7 @@ fn emit_polygon_outline(
 }
 
 /// Emit a thin longitudinal strip (guardrail, barrier) along the road direction.
+#[allow(clippy::too_many_arguments)]
 fn emit_longitudinal_strip(
     ref_pts: &[we_core::geometry::eval::RefLinePoint],
     elevations: &[we_core::model::Elevation],
@@ -914,7 +915,7 @@ fn emit_longitudinal_strip(
     half_w: f64,
     color: [f32; 4],
     eval_elev: &dyn Fn(&[we_core::model::Elevation], f64) -> f64,
-    offset_pt: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
+    offset_pt: &OffsetPtFn,
     out: &mut Vec<f32>,
 ) {
     let [r, g, b, a] = color;
@@ -1102,7 +1103,7 @@ pub fn generate_lane_line_vertices(
     project_json: &str,
     sample_step: f64,
 ) -> Result<Vec<f32>, JsError> {
-    use we_core::geometry::eval::{evaluate_elevation, evaluate_lane_width, offset_point, sample_road_reference_line};
+    use we_core::geometry::eval::{evaluate_lane_width, sample_road_reference_line};
     use we_core::model::{Project, RoadMarkType};
 
     let project: Project =

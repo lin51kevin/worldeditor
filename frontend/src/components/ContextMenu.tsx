@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { getMenu } from '../services/contextMenu';
+import { getMenuWithPlugins } from '../services/contextMenu';
 import type { MenuItem } from '../services/contextMenu';
 
 interface ContextMenuState {
@@ -18,9 +18,8 @@ export function ContextMenu() {
     items: [],
     activeSubmenu: null,
   });
-  const { getMenu: _getMenu } = { getMenu };
   const show = useCallback((x: number, y: number, context: string) => {
-    const items = getMenu(context, x, y);
+    const items = getMenuWithPlugins(context, x, y);
     if (items.length === 0) return;
     setState({ visible: true, x, y, items, activeSubmenu: null });
   }, []);

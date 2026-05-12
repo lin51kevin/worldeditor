@@ -732,6 +732,17 @@ export function Viewport() {
     };
   }, []);
 
+  // Wire plugin viewport overlays to the renderer
+  const viewportOverlays = usePluginContribStore((s) => s.viewportOverlays);
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    renderer.setOverlayRenderers(
+      viewportOverlays.map((o) => o.render),
+      canvasRef.current ?? undefined,
+    );
+  }, [viewportOverlays]);
+
   // Handle mouse move for world coordinates (unproject to ground plane)
   const handleMouseMove = useCallback(async (e: React.MouseEvent) => {
     const gesture = mouseGestureRef.current;

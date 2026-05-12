@@ -34,7 +34,8 @@
     "aboutWorldEditor": "关于 WorldEditor",
     "versionInfo": "版本信息",
     "plugins": "插件",
-    "pluginManager": "插件管理器..."
+    "pluginManager": "插件管理器...",
+    "settings": "设置..."
   },
   "toolbar": {
     "select": "选择",

@@ -20,7 +20,7 @@ beforeEach(() => {
   });
   useEditorStore.getState().reset();
   // Re-install API (idempotent)
-  // @ts-expect-error: reset global for test isolation
+  // Reset global for test isolation
   delete (window as unknown as Record<string, unknown>)['__WE_PLUGIN_API__'];
   installPluginApi();
 });

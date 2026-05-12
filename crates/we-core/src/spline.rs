@@ -569,9 +569,9 @@ fn classify_param_poly3(
     let linear_fit_tol = 0.01;
 
     let mut curvatures = [0.0f64; CURVATURE_SAMPLES + 1];
-    for i in 0..=CURVATURE_SAMPLES {
+    for (i, kappa) in curvatures.iter_mut().enumerate() {
         let p = i as f64 / CURVATURE_SAMPLES as f64;
-        curvatures[i] = param_poly3_curvature(b_u, c_u, d_u, b_v, c_v, d_v, p);
+        *kappa = param_poly3_curvature(b_u, c_u, d_u, b_v, c_v, d_v, p);
     }
 
     let kappa_min = curvatures.iter().cloned().fold(f64::INFINITY, f64::min);
@@ -596,10 +596,10 @@ fn classify_param_poly3(
 
     // Check if all samples lie on the line κ(t) = κ_start + (κ_end - κ_start)·t
     let mut max_residual = 0.0f64;
-    for i in 0..=CURVATURE_SAMPLES {
+    for (i, &kappa) in curvatures.iter().enumerate() {
         let t = i as f64 / CURVATURE_SAMPLES as f64;
         let expected = curv_start + (curv_end - curv_start) * t;
-        let residual = (curvatures[i] - expected).abs();
+        let residual = (kappa - expected).abs();
         max_residual = max_residual.max(residual);
     }
 

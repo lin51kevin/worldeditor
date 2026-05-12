@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { registerContextMenu, getMenu, showContextMenu } from './contextMenu';
+import { registerContextMenu, getMenu, showContextMenu, getMenuWithPlugins } from './contextMenu';
 import type { MenuItem } from './contextMenu';
+import { usePluginContribStore } from '../stores/pluginContribStore';
 
 describe('contextMenu service', () => {
   beforeEach(() => {
-    // Clear any existing registrations by re-registering test providers
+    // Clear plugin context menu contributions
+    usePluginContribStore.setState({ contextMenuItems: [] });
   });
 
   it('should register and retrieve menu items', () => {
@@ -62,5 +64,60 @@ describe('contextMenu service', () => {
     registerContextMenu('sub-test', () => items);
     const result = getMenu('sub-test', 0, 0);
     expect(result[0]!.submenu).toHaveLength(1);
+  });
+
+  describe('getMenuWithPlugins', () => {
+    it('appends plugin context menu items for the matching menu key', () => {
+      const onClick = () => {};
+      usePluginContribStore.getState().registerContextMenuItem({
+        id: 'plugin-road-action', pluginId: 'adv', menu: 'road',
+        label: 'Split Road', onClick,
+      });
+      const base = getMenuWithPlugins('road', 0, 0);
+      expect(base.some((item) => item.label === 'Split Road')).toBe(true);
+    });
+
+    it('does not append items for a different menu key', () => {
+      usePluginContribStore.getState().registerContextMenuItem({
+        id: 'plugin-junction-action', pluginId: 'adv', menu: 'junction',
+        label: 'Junction Plugin Action', onClick: () => {},
+      });
+      const items = getMenuWithPlugins('road', 0, 0);
+      expect(items.some((i) => i.label === 'Junction Plugin Action')).toBe(false);
+    });
+
+    it('respects isVisible() — hides items when it returns false', () => {
+      usePluginContribStore.getState().registerContextMenuItem({
+        id: 'hidden-item', pluginId: 'adv', menu: 'viewport',
+        label: 'Should Not Appear', onClick: () => {},
+        isVisible: () => false,
+      });
+      const items = getMenuWithPlugins('viewport', 0, 0);
+      expect(items.some((i) => i.label === 'Should Not Appear')).toBe(false);
+    });
+
+    it('respects isDisabled()', () => {
+      usePluginContribStore.getState().registerContextMenuItem({
+        id: 'disabled-item', pluginId: 'adv', menu: 'road',
+        label: 'Disabled Action', onClick: () => {},
+        isDisabled: () => true,
+      });
+      const items = getMenuWithPlugins('road', 0, 0);
+      const found = items.find((i) => i.label === 'Disabled Action');
+      expect(found?.disabled).toBe(true);
+    });
+
+    it('adds a separator before plugin items when there are base items', () => {
+      registerContextMenu('road', () => [{ label: 'Base Item' }]);
+      usePluginContribStore.getState().registerContextMenuItem({
+        id: 'sep-plugin', pluginId: 'x', menu: 'road',
+        label: 'Plugin Item', onClick: () => {},
+      });
+      const items = getMenuWithPlugins('road', 0, 0);
+      const sepIdx = items.findIndex((i) => i.separator);
+      const pluginIdx = items.findIndex((i) => i.label === 'Plugin Item');
+      expect(sepIdx).toBeGreaterThanOrEqual(0);
+      expect(pluginIdx).toBeGreaterThan(sepIdx);
+    });
   });
 });

@@ -34,7 +34,8 @@
     "aboutWorldEditor": "About WorldEditor",
     "versionInfo": "Version Info",
     "plugins": "Plugins",
-    "pluginManager": "Plugin Manager..."
+    "pluginManager": "Plugin Manager...",
+    "settings": "Settings..."
   },
   "toolbar": {
     "select": "Select",
