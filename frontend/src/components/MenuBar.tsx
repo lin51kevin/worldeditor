@@ -83,6 +83,25 @@ function calculateTotalRoadLength(project: Project): number {
   return project.roads.reduce((sum, road) => sum + (road.length || 0), 0);
 }
 
+/** Convert a plugin menu contribution to a plain MenuItem. */
+function toPluginMenuItem(item: MenuItemContrib, t: (key: string) => string): MenuItem {
+  return {
+    label: t(item.labelKey),
+    shortcut: item.shortcut,
+    action: item.onClick,
+    disabled: item.isDisabled?.() ?? false,
+  };
+}
+
+/** Append plugin-contributed items to an existing static menu, with a separator. */
+function appendPluginItems(menu: Menu, items: MenuItemContrib[], t: (key: string) => string): Menu {
+  if (items.length === 0) return menu;
+  return {
+    ...menu,
+    items: [...menu.items, { separator: true, label: '' }, ...items.map((i) => toPluginMenuItem(i, t))],
+  };
+}
+
 // Group order for Road menu contributions
 const ROAD_GROUP_ORDER = ['', 'transform', 'edit', 'advanced', 'deploy', 'infrastructure', 'junction'];
 
@@ -288,6 +307,14 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
   const exporters = usePluginContribStore((s) => s.exporters);
   const roadMenuItems = useMemo(
     () => allMenuItems.filter((m) => m.menu === 'road'),
+    [allMenuItems],
+  );
+  const toolsPluginItems = useMemo(
+    () => allMenuItems.filter((m) => m.menu === 'tools'),
+    [allMenuItems],
+  );
+  const viewPluginItems = useMemo(
+    () => allMenuItems.filter((m) => m.menu === 'view'),
     [allMenuItems],
   );
   const templatePluginEnabled = useBuiltinPluginStore(
@@ -562,6 +589,10 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
       }]
     : [];
 
+  // Inject plugin-contributed items into View (index 2) and Tools (index 3)
+  const viewMenu = appendPluginItems(staticMenus[2]!, viewPluginItems, t);
+  const toolsMenu = appendPluginItems(staticMenus[3]!, toolsPluginItems, t);
+
   const menus = [
     staticMenus[0]!,           // File (with Exit)
     staticMenus[1]!,           // Edit
@@ -569,7 +600,10 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     exportMenu,                // Export top-level menu
     recentFilesMenu,           // Recent Files top-level menu
     ...roadMenu,               // Road (dynamic, from plugins)
-    ...staticMenus.slice(2),   // View, Tools, Plugins, Help
+    viewMenu,                  // View (with plugin items appended)
+    toolsMenu,                 // Tools (with plugin items appended)
+    staticMenus[4]!,           // Plugins
+    staticMenus[5]!,           // Help
   ];
 
   useEffect(() => {

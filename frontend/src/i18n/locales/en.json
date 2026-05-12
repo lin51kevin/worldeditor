@@ -221,6 +221,7 @@
     "reverseRoad": "Reverse Road",
     "mirrorRoad": "Mirror Road",
     "swapCenterlineAndEdge": "Swap Centerline & Edge",
+    "softSelectionRadius": "Soft selection radius: {{radius}} m",
     "noRoadSelected": "Select a road to use these tools"
   },
   "templatePanel": {

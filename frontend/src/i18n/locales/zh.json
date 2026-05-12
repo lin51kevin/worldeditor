@@ -221,6 +221,7 @@
     "reverseRoad": "反转道路",
     "mirrorRoad": "镜像道路",
     "swapCenterlineAndEdge": "交换道路中心线与边缘",
+    "softSelectionRadius": "软选择半径: {{radius}} 米",
     "noRoadSelected": "请选择一条道路以使用这些工具"
   },
   "templatePanel": {

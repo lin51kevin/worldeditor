@@ -197,7 +197,7 @@ export function RoadEditToolbar() {
                 step={1}
                 value={softSelectionRadius}
                 onChange={(e) => setSoftSelectionRadius(Number(e.target.value))}
-                title={`Soft selection radius: ${softSelectionRadius.toFixed(0)} m`}
+                title={t('toolPanel.softSelectionRadius', { radius: softSelectionRadius.toFixed(0) })}
               />
               <span className="road-edit-toolbar__soft-sel-value">
                 {softSelectionRadius.toFixed(0)} m
