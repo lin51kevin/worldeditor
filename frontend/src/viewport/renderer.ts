@@ -1381,6 +1381,16 @@ export class ViewportRenderer {
     return pipeline;
   }
   private setupMouseControls(canvas: HTMLCanvasElement): void {
+    // Document-level move/up handlers are attached on mousedown and removed on mouseup,
+    // so pan/orbit continues even when the cursor temporarily leaves the canvas.
+    let onDocMove: ((e: MouseEvent) => void) | null = null;
+    let onDocUp: (() => void) | null = null;
+
+    const detachDocListeners = () => {
+      if (onDocMove) { document.removeEventListener('mousemove', onDocMove); onDocMove = null; }
+      if (onDocUp)   { document.removeEventListener('mouseup',   onDocUp);   onDocUp   = null; }
+    };
+
     canvas.addEventListener('mousedown', (e) => {
       if (this._cameraLocked) return;
       const action = resolveMouseDragAction(e.button, e);
@@ -1389,31 +1399,39 @@ export class ViewportRenderer {
       this.activeMouseButton = e.button;
       this.activeDragAction = action;
       this.lastMouse = [e.clientX, e.clientY];
-    });
 
-    canvas.addEventListener('mousemove', (e) => {
-      if (!this.isDragging || this.activeMouseButton === null) return;
-      const requiredMask = mouseButtonMask(this.activeMouseButton);
-      if (requiredMask !== 0 && (e.buttons & requiredMask) === 0) {
+      detachDocListeners(); // guard against leaked listeners
+
+      onDocMove = (me: MouseEvent) => {
+        if (!this.isDragging || this.activeMouseButton === null) return;
+        const requiredMask = mouseButtonMask(this.activeMouseButton);
+        if (requiredMask !== 0 && (me.buttons & requiredMask) === 0) {
+          this.stopDragging();
+          detachDocListeners();
+          return;
+        }
+        const previousMouse = this.lastMouse;
+        this.lastMouse = [me.clientX, me.clientY];
+
+        const dragAction = resolveMouseDragAction(this.activeMouseButton, me) ?? this.activeDragAction;
+        this.activeDragAction = dragAction;
+        if (dragAction === 'orbit' && this._dimension !== '2d') {
+          const dx = (me.clientX - previousMouse[0]) * 0.005;
+          const dy = (me.clientY - previousMouse[1]) * 0.005;
+          this.orbit(dx, dy);
+        } else if (dragAction === 'pan' || (dragAction === 'orbit' && this._dimension === '2d')) {
+          this.pan(canvas, previousMouse, this.lastMouse);
+        }
+      };
+
+      onDocUp = () => {
         this.stopDragging();
-        return;
-      }
-      const previousMouse = this.lastMouse;
-      this.lastMouse = [e.clientX, e.clientY];
+        detachDocListeners();
+      };
 
-      const action = resolveMouseDragAction(this.activeMouseButton, e) ?? this.activeDragAction;
-      this.activeDragAction = action;
-      if (action === 'orbit' && this._dimension !== '2d') {
-        const dx = (e.clientX - previousMouse[0]) * 0.005;
-        const dy = (e.clientY - previousMouse[1]) * 0.005;
-        this.orbit(dx, dy);
-      } else if (action === 'pan' || (action === 'orbit' && this._dimension === '2d')) {
-        this.pan(canvas, previousMouse, this.lastMouse);
-      }
+      document.addEventListener('mousemove', onDocMove);
+      document.addEventListener('mouseup', onDocUp);
     });
-
-    canvas.addEventListener('mouseup', () => { this.stopDragging(); });
-    canvas.addEventListener('mouseleave', () => { this.stopDragging(); });
 
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
