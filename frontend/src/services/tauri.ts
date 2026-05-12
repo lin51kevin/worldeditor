@@ -83,9 +83,9 @@ export class TauriPlatformService implements PlatformService {
     return invoke('utm_to_geo', { easting, northing, zone, is_northern: isNorthern, alt });
   }
 
-  async generateRoadVertices(project: Project, sampleStep: number): Promise<Float32Array> {
+  async generateRoadVertices(project: Project, sampleStep: number, colorMode?: string): Promise<Float32Array> {
     const wasm = await this.getWasm();
-    return wasm.generate_road_vertices(JSON.stringify(project), sampleStep);
+    return wasm.generate_road_vertices(JSON.stringify(project), sampleStep, colorMode ?? 'byLaneType');
   }
 
   async generateSingleRoadVertices(

@@ -85,10 +85,12 @@ pub fn utm_to_geo(easting: f64, northing: f64, zone: u8, is_northern: bool, alt:
 /// Generate road mesh vertices from a project JSON. Returns vertex data as Float32Array.
 ///
 /// Each vertex is 7 floats: [x, y, z, r, g, b, a].
-/// Road surfaces are colored per lane type (Driving, Sidewalk, Parking, etc.).
-/// Falls back to a plain gray ribbon if no lane sections are defined.
+/// `color_mode` controls surface coloring:
+/// - `"byLaneType"` (default): per-lane-type palette
+/// - `"single"`: uniform asphalt gray for all lanes
+/// - `"byRoad"`: distinct hue per road (golden-angle HSV cycling)
 #[wasm_bindgen]
-pub fn generate_road_vertices(project_json: &str, sample_step: f64) -> Result<Vec<f32>, JsError> {
+pub fn generate_road_vertices(project_json: &str, sample_step: f64, color_mode: &str) -> Result<Vec<f32>, JsError> {
     use we_core::geometry::eval::{evaluate_elevation, evaluate_lane_width, offset_point, sample_road_reference_line};
     use we_core::model::Project;
 
@@ -97,7 +99,7 @@ pub fn generate_road_vertices(project_json: &str, sample_step: f64) -> Result<Ve
 
     let mut all_floats = Vec::new();
 
-    for road in &project.roads {
+    for (road_idx, road) in project.roads.iter().enumerate() {
         if road.render_hidden {
             continue;
         }
@@ -136,7 +138,7 @@ pub fn generate_road_vertices(project_json: &str, sample_step: f64) -> Result<Ve
             let mut right_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
             for lane in &right_sorted {
                 if !lane.render_hidden {
-                    let color = lane_surface_color(lane.lane_type);
+                    let color = select_lane_color(color_mode, lane.lane_type, road_idx);
                     road_verts.extend(gen_lane_strip(
                         &section_pts, &lane.width, section.s,
                         &road.elevation_profile, &road.lane_offsets, &right_prev_widths, false, color,
@@ -152,7 +154,7 @@ pub fn generate_road_vertices(project_json: &str, sample_step: f64) -> Result<Ve
             let mut left_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
             for lane in &left_sorted {
                 if !lane.render_hidden {
-                    let color = lane_surface_color(lane.lane_type);
+                    let color = select_lane_color(color_mode, lane.lane_type, road_idx);
                     road_verts.extend(gen_lane_strip(
                         &section_pts, &lane.width, section.s,
                         &road.elevation_profile, &road.lane_offsets, &left_prev_widths, true, color,
@@ -165,8 +167,13 @@ pub fn generate_road_vertices(project_json: &str, sample_step: f64) -> Result<Ve
 
         // Fall back to default gray ribbon when no lane sections are defined
         if road_verts.is_empty() && road.lane_sections.is_empty() {
+            let ribbon_color = match color_mode {
+                "single"  => [0.45f32, 0.45, 0.45, 1.0],
+                "byRoad"  => road_hue_color(road_idx),
+                _         => [0.35, 0.35, 0.38, 1.0],
+            };
             road_verts.extend(gen_default_ribbon(
-                &ref_pts, &road.elevation_profile, 3.5, [0.35, 0.35, 0.38, 1.0],
+                &ref_pts, &road.elevation_profile, 3.5, ribbon_color,
             ));
         }
 
@@ -415,6 +422,40 @@ pub fn generate_single_road_vertices(
 }
 
 // ── Geometry helpers (no wgpu dependency) ────────────────────────────────────
+
+/// Select a lane surface color based on the active color mode.
+fn select_lane_color(color_mode: &str, lane_type: we_core::model::LaneType, road_idx: usize) -> [f32; 4] {
+    match color_mode {
+        "single" => [0.45, 0.45, 0.45, 1.0],
+        "byRoad" => road_hue_color(road_idx),
+        _        => lane_surface_color(lane_type),
+    }
+}
+
+/// Generate a distinct color for a road by cycling hue using the golden angle.
+fn road_hue_color(road_idx: usize) -> [f32; 4] {
+    let hue = (road_idx as f32 * 137.508) % 360.0;
+    hsv_to_rgba(hue, 0.55, 0.62)
+}
+
+/// Convert HSV (h in degrees 0–360, s and v in 0–1) to RGBA (alpha = 1.0).
+fn hsv_to_rgba(h: f32, s: f32, v: f32) -> [f32; 4] {
+    let h6 = h / 60.0;
+    let i = h6.floor() as u32 % 6;
+    let f = h6 - h6.floor();
+    let p = v * (1.0 - s);
+    let q = v * (1.0 - s * f);
+    let t = v * (1.0 - s * (1.0 - f));
+    let (r, g, b) = match i {
+        0 => (v, t, p),
+        1 => (q, v, p),
+        2 => (p, v, t),
+        3 => (p, q, v),
+        4 => (t, p, v),
+        _ => (v, p, q),
+    };
+    [r, g, b, 1.0]
+}
 
 /// Lane surface color by lane type (RGBA).
 fn lane_surface_color(lane_type: we_core::model::LaneType) -> [f32; 4] {

@@ -264,7 +264,7 @@ export interface PlatformService {
   utmToGeo(easting: number, northing: number, zone: number, isNorthern: boolean, alt: number): Promise<GisCoord>;
 
   /** Generate road mesh vertices from a project. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
-  generateRoadVertices(project: Project, sampleStep: number): Promise<Float32Array>;
+  generateRoadVertices(project: Project, sampleStep: number, colorMode?: string): Promise<Float32Array>;
 
   /** Generate vertices for a single road with a custom color. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateSingleRoadVertices(road: Road, sampleStep: number, color: [number, number, number, number]): Promise<Float32Array>;
