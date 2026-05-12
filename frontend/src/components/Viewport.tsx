@@ -191,8 +191,12 @@ export function Viewport() {
         spline,
         viewState.splineTemplateId,
       );
-      editorState.setProject(nextProject);
-      editorState.markDirty();
+      // Use addRoad instead of setProject so the undo stack is preserved and
+      // projectLoadVersion is NOT incremented (which would trigger camera auto-fit).
+      const newRoad = nextProject.roads.find((r) => r.id === roadId);
+      if (newRoad) {
+        editorState.addRoad(newRoad);
+      }
       editorState.selectRoad(roadId);
       viewState.clearSplineKnots();
     } catch (err) {
