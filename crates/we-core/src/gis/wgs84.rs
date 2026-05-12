@@ -6,8 +6,6 @@ use super::GeoCoord;
 pub const WGS84_A: f64 = 6_378_137.0; // Semi-major axis (meters)
 pub const WGS84_F: f64 = 1.0 / 298.257_223_563; // Flattening
 /// Semi-minor axis (meters)
-#[allow(dead_code)]
-pub const WGS84_B: f64 = WGS84_A * (1.0 - WGS84_F);
 pub const WGS84_E2: f64 = 2.0 * WGS84_F - WGS84_F * WGS84_F; // Eccentricity squared
 
 /// A WGS84 coordinate with conversion utilities.
