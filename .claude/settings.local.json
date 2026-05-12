@@ -6,7 +6,9 @@
       "Bash(cargo test *)",
       "Bash(npx vitest *)",
       "Bash(node -e \"const d = require\\('./src/i18n/locales/zh.json'\\); console.log\\(JSON.stringify\\(d.toolPanel, null, 2\\)\\)\")",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
