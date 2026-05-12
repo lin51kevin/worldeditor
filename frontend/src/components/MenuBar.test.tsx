@@ -355,4 +355,75 @@ describe('MenuBar', () => {
     await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalled());
     expect(useEditorStore.getState().project.name).toBe('OriginalProject');
   });
+
+  describe('plugin importer/exporter menu items', () => {
+    it('shows plugin importer item in File menu when an importer is registered', async () => {
+      const { usePluginContribStore } = await import('../stores/pluginContribStore');
+      const { act: reactAct } = await import('@testing-library/react');
+      reactAct(() => {
+        usePluginContribStore.getState().registerImporter({
+          id: 'imp-test', pluginId: 'test-io', formatName: 'Lanelet2',
+          extensions: ['.osm'], onImport: async () => makeProject(),
+        });
+      });
+
+      render(<MenuBar />);
+      fireEvent.click(screen.getByTitle('文件'));
+      fireEvent.click(screen.getByText('文件'));
+
+      expect(screen.getByText('导入 Lanelet2...')).toBeInTheDocument();
+
+      // cleanup
+      reactAct(() => {
+        usePluginContribStore.getState().unregisterImporter('imp-test');
+      });
+    });
+
+    it('shows plugin exporter item in File menu when an exporter is registered', async () => {
+      const { usePluginContribStore } = await import('../stores/pluginContribStore');
+      const { act: reactAct } = await import('@testing-library/react');
+      const onExport = vi.fn().mockResolvedValue(undefined);
+      reactAct(() => {
+        usePluginContribStore.getState().registerExporter({
+          id: 'exp-test', pluginId: 'test-io', formatName: 'Shapefile',
+          onExport,
+        });
+      });
+
+      render(<MenuBar />);
+      fireEvent.click(screen.getByTitle('文件'));
+      fireEvent.click(screen.getByText('文件'));
+
+      expect(screen.getByText('导出 Shapefile...')).toBeInTheDocument();
+
+      // cleanup
+      reactAct(() => {
+        usePluginContribStore.getState().unregisterExporter('exp-test');
+      });
+    });
+
+    it('calls the exporter onExport handler when the export menu item is clicked', async () => {
+      const { usePluginContribStore } = await import('../stores/pluginContribStore');
+      const { act: reactAct } = await import('@testing-library/react');
+      const onExport = vi.fn().mockResolvedValue(undefined);
+      reactAct(() => {
+        usePluginContribStore.getState().registerExporter({
+          id: 'exp-click', pluginId: 'test-io', formatName: 'DXF',
+          onExport,
+        });
+      });
+
+      render(<MenuBar />);
+      fireEvent.click(screen.getByTitle('文件'));
+      fireEvent.click(screen.getByText('文件'));
+      fireEvent.click(screen.getByText('导出 DXF...'));
+
+      await waitFor(() => expect(onExport).toHaveBeenCalled());
+
+      // cleanup
+      reactAct(() => {
+        usePluginContribStore.getState().unregisterExporter('exp-click');
+      });
+    });
+  });
 });

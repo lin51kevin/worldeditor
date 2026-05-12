@@ -84,6 +84,15 @@ interface EditorState {
   redo: () => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
+  /**
+   * Execute a plugin-contributed command with undo support.
+   * The executeFn receives the current project and returns the modified project.
+   * The previous project is pushed onto the undo stack automatically.
+   */
+  executePluginCommand: (
+    description: string,
+    executeFn: (project: Project) => Project,
+  ) => void;
 }
 
 // Signal and Object types for store
@@ -893,4 +902,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   canUndo: () => get().undoStack.length > 0,
   canRedo: () => get().redoStack.length > 0,
+
+  executePluginCommand: (_description, executeFn) =>
+    set((state) => {
+      const newProject = executeFn(state.project);
+      return {
+        ...pushUndo(state),
+        project: newProject,
+        isDirty: true,
+      };
+    }),
 }));

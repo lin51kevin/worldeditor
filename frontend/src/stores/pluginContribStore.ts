@@ -7,9 +7,13 @@
  *
  * Template sections: plugins register TemplateSectionContrib to add
  * categorized template items to the TemplatePanel.
+ *
+ * Extended contributions: importers, exporters, panels, context menu items,
+ * viewport overlays, and settings tabs for the Phase 0 plugin API.
  */
 import { create } from 'zustand';
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
+import type { Project } from '../services/platform';
 
 export interface ToolbarButtonContrib {
   id: string;
@@ -66,10 +70,80 @@ export interface TemplateSectionContrib {
   items: TemplateItemDef[];
 }
 
+/** File importer contributed by a plugin — auto-populates File → Import submenu */
+export interface ImporterContrib {
+  id: string;
+  pluginId: string;
+  formatName: string;
+  extensions: string[];
+  /** Called with raw file content (text or ArrayBuffer); returns parsed Project */
+  onImport: (content: string | ArrayBuffer, fileName: string) => Promise<Project>;
+}
+
+/** File exporter contributed by a plugin — auto-populates File → Export submenu */
+export interface ExporterContrib {
+  id: string;
+  pluginId: string;
+  formatName: string;
+  /** Called with the current project; plugin handles file download/save */
+  onExport: (project: Project) => Promise<void>;
+}
+
+/** Dockable/floating panel contributed by a plugin */
+export interface PanelContrib {
+  id: string;
+  pluginId: string;
+  title: string;
+  /** React component rendered inside the panel */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  component: ComponentType<any>;
+  position: 'left' | 'right' | 'bottom' | 'float';
+  icon?: ReactNode;
+}
+
+/** Context menu item contributed by a plugin */
+export interface ContextMenuContrib {
+  id: string;
+  pluginId: string;
+  /** Which context menu this item appears in ('road', 'junction', 'viewport', etc.) */
+  menu: string;
+  label: string;
+  shortcut?: string;
+  onClick: () => void;
+  /** Return false to hide the item in the current context */
+  isVisible?: () => boolean;
+  isDisabled?: () => boolean;
+}
+
+/** Viewport overlay renderer contributed by a plugin */
+export interface ViewportOverlayContrib {
+  id: string;
+  pluginId: string;
+  /** Called after the main render pass; receives the GPUDevice and canvas if available */
+  render: (ctx?: { device?: GPUDevice; canvas?: HTMLCanvasElement }) => void;
+  /** Lower numbers render first */
+  order: number;
+}
+
+/** Settings tab contributed by a plugin — shown in the Settings dialog */
+export interface SettingsContrib {
+  id: string;
+  pluginId: string;
+  title: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  component: ComponentType<any>;
+}
+
 interface PluginContribState {
   toolbarButtons: ToolbarButtonContrib[];
   menuItems: MenuItemContrib[];
   templateSections: TemplateSectionContrib[];
+  importers: ImporterContrib[];
+  exporters: ExporterContrib[];
+  panels: PanelContrib[];
+  contextMenuItems: ContextMenuContrib[];
+  viewportOverlays: ViewportOverlayContrib[];
+  settingsContribs: SettingsContrib[];
 
   registerToolbarButton: (contrib: ToolbarButtonContrib) => void;
   unregisterToolbarButton: (id: string) => void;
@@ -77,6 +151,18 @@ interface PluginContribState {
   unregisterMenuItem: (id: string) => void;
   registerTemplateSection: (section: TemplateSectionContrib) => void;
   unregisterTemplateSection: (sectionId: string) => void;
+  registerImporter: (contrib: ImporterContrib) => void;
+  unregisterImporter: (id: string) => void;
+  registerExporter: (contrib: ExporterContrib) => void;
+  unregisterExporter: (id: string) => void;
+  registerPanel: (contrib: PanelContrib) => void;
+  unregisterPanel: (id: string) => void;
+  registerContextMenuItem: (contrib: ContextMenuContrib) => void;
+  unregisterContextMenuItem: (id: string) => void;
+  registerViewportOverlay: (contrib: ViewportOverlayContrib) => void;
+  unregisterViewportOverlay: (id: string) => void;
+  registerSettings: (contrib: SettingsContrib) => void;
+  unregisterSettings: (id: string) => void;
   /** Remove all contributions from a given plugin at once */
   unregisterPlugin: (pluginId: string) => void;
 }
@@ -85,6 +171,12 @@ export const usePluginContribStore = create<PluginContribState>((set) => ({
   toolbarButtons: [],
   menuItems: [],
   templateSections: [],
+  importers: [],
+  exporters: [],
+  panels: [],
+  contextMenuItems: [],
+  viewportOverlays: [],
+  settingsContribs: [],
 
   registerToolbarButton: (contrib) =>
     set((state) => ({
@@ -125,10 +217,67 @@ export const usePluginContribStore = create<PluginContribState>((set) => ({
       templateSections: state.templateSections.filter((s) => s.id !== sectionId),
     })),
 
+  registerImporter: (contrib) =>
+    set((state) => ({
+      importers: [...state.importers.filter((i) => i.id !== contrib.id), contrib],
+    })),
+
+  unregisterImporter: (id) =>
+    set((state) => ({ importers: state.importers.filter((i) => i.id !== id) })),
+
+  registerExporter: (contrib) =>
+    set((state) => ({
+      exporters: [...state.exporters.filter((e) => e.id !== contrib.id), contrib],
+    })),
+
+  unregisterExporter: (id) =>
+    set((state) => ({ exporters: state.exporters.filter((e) => e.id !== id) })),
+
+  registerPanel: (contrib) =>
+    set((state) => ({
+      panels: [...state.panels.filter((p) => p.id !== contrib.id), contrib],
+    })),
+
+  unregisterPanel: (id) =>
+    set((state) => ({ panels: state.panels.filter((p) => p.id !== id) })),
+
+  registerContextMenuItem: (contrib) =>
+    set((state) => ({
+      contextMenuItems: [...state.contextMenuItems.filter((c) => c.id !== contrib.id), contrib],
+    })),
+
+  unregisterContextMenuItem: (id) =>
+    set((state) => ({ contextMenuItems: state.contextMenuItems.filter((c) => c.id !== id) })),
+
+  registerViewportOverlay: (contrib) =>
+    set((state) => ({
+      viewportOverlays: [
+        ...state.viewportOverlays.filter((o) => o.id !== contrib.id),
+        contrib,
+      ].sort((a, b) => a.order - b.order),
+    })),
+
+  unregisterViewportOverlay: (id) =>
+    set((state) => ({ viewportOverlays: state.viewportOverlays.filter((o) => o.id !== id) })),
+
+  registerSettings: (contrib) =>
+    set((state) => ({
+      settingsContribs: [...state.settingsContribs.filter((s) => s.id !== contrib.id), contrib],
+    })),
+
+  unregisterSettings: (id) =>
+    set((state) => ({ settingsContribs: state.settingsContribs.filter((s) => s.id !== id) })),
+
   unregisterPlugin: (pluginId) =>
     set((state) => ({
       toolbarButtons: state.toolbarButtons.filter((b) => b.pluginId !== pluginId),
       menuItems: state.menuItems.filter((m) => m.pluginId !== pluginId),
       templateSections: state.templateSections.filter((s) => s.pluginId !== pluginId),
+      importers: state.importers.filter((i) => i.pluginId !== pluginId),
+      exporters: state.exporters.filter((e) => e.pluginId !== pluginId),
+      panels: state.panels.filter((p) => p.pluginId !== pluginId),
+      contextMenuItems: state.contextMenuItems.filter((c) => c.pluginId !== pluginId),
+      viewportOverlays: state.viewportOverlays.filter((o) => o.pluginId !== pluginId),
+      settingsContribs: state.settingsContribs.filter((s) => s.pluginId !== pluginId),
     })),
 }));

@@ -597,5 +597,46 @@ describe('editorStore', () => {
       expect(useEditorStore.getState().project.roads[0]).toBe(before);
     });
   });
+
+  describe('executePluginCommand', () => {
+    it('applies the execute function and updates the project', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().executePluginCommand(
+        'Add road via plugin',
+        (project) => ({ ...project, roads: [...project.roads, makeRoad({ id: 'r2' })] }),
+      );
+      expect(useEditorStore.getState().project.roads).toHaveLength(2);
+    });
+
+    it('pushes the previous project onto undo stack', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      const undoBefore = useEditorStore.getState().undoStack.length;
+      useEditorStore.getState().executePluginCommand(
+        'Plugin edit',
+        (project) => ({ ...project, name: 'Changed' }),
+      );
+      expect(useEditorStore.getState().undoStack.length).toBeGreaterThan(undoBefore);
+    });
+
+    it('can undo a plugin command', () => {
+      useEditorStore.getState().addRoad(makeRoad({ id: 'r1' }));
+      useEditorStore.getState().executePluginCommand(
+        'Add road',
+        (project) => ({ ...project, roads: [...project.roads, makeRoad({ id: 'r2' })] }),
+      );
+      expect(useEditorStore.getState().project.roads).toHaveLength(2);
+      useEditorStore.getState().undo();
+      expect(useEditorStore.getState().project.roads).toHaveLength(1);
+    });
+
+    it('marks the project dirty after execution', () => {
+      useEditorStore.getState().markClean();
+      useEditorStore.getState().executePluginCommand(
+        'Plugin dirty',
+        (project) => ({ ...project, name: 'Dirty' }),
+      );
+      expect(useEditorStore.getState().isDirty).toBe(true);
+    });
+  });
 });
 

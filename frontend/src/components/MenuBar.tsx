@@ -204,6 +204,8 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
   const { theme, toggleTheme } = useThemeStore();
   const { i18n } = useTranslation();
   const allMenuItems = usePluginContribStore((s) => s.menuItems);
+  const importers = usePluginContribStore((s) => s.importers);
+  const exporters = usePluginContribStore((s) => s.exporters);
   const roadMenuItems = useMemo(
     () => allMenuItems.filter((m) => m.menu === 'road'),
     [allMenuItems],
@@ -404,6 +406,37 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     t,
   );
 
+  // Inject plugin importers/exporters into File menu (index 0)
+  const pluginImportItems: MenuItem[] = importers.map((imp) => ({
+    label: `导入 ${imp.formatName}...`,
+    action: () => {
+      // Create a hidden file input and trigger it
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = imp.extensions.join(',');
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const content = await file.arrayBuffer();
+        const proj = await imp.onImport(content, file.name);
+        proj.name = file.name;
+        useEditorStore.getState().setProject(proj);
+      };
+      input.click();
+    },
+  }));
+  const pluginExportItems: MenuItem[] = exporters.map((exp) => ({
+    label: `导出 ${exp.formatName}...`,
+    action: () => void exp.onExport(project),
+  }));
+
+  const fileMenuItems = [
+    ...(staticMenus[0]?.items ?? []),
+    ...(pluginImportItems.length > 0 ? [{ separator: true, label: '' }, ...pluginImportItems] : []),
+    ...(pluginExportItems.length > 0 ? [{ separator: true, label: '' }, ...pluginExportItems] : []),
+  ];
+  const fileMenu = { label: staticMenus[0]?.label ?? t('menu.file'), items: fileMenuItems };
+
   // Insert plugin-contributed Road menu between Edit (index 1) and View (index 2)
   const roadMenu = roadMenuItems.length > 0
     ? [{
@@ -419,7 +452,8 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     : [];
 
   const menus = [
-    ...staticMenus.slice(0, 2),  // File, Edit
+    fileMenu,
+    ...staticMenus.slice(1, 2),  // Edit
     ...roadMenu,
     ...staticMenus.slice(2),     // View, Tools, About
   ];
