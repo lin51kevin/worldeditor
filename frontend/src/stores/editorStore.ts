@@ -110,7 +110,7 @@ const initialProject: Project = {
 
 /** Push current project onto undo stack, clear redo. */
 function pushUndo(state: EditorState): Partial<EditorState> {
-  const undoStack = [...state.undoStack.map(p => structuredClone(p)), structuredClone(state.project)].slice(-MAX_UNDO);
+  const undoStack = [...state.undoStack, structuredClone(state.project)].slice(-MAX_UNDO);
   return { undoStack, redoStack: [] };
 }
 
