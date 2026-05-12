@@ -164,6 +164,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 300px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.menubar-dirty-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-accent, #e8a844);
+  flex-shrink: 0;
 }
 
 .menubar-right {

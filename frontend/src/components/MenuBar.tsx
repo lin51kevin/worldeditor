@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Menu as MenuIcon, ChevronRight,
   FileText, FolderOpen, Save,
-  Undo2, Redo2, Trash2,
+  Undo2, Redo2,
   Grid, Crosshair, Magnet, Ruler, RotateCcw,
 } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
@@ -72,7 +72,7 @@ function buildMenus(
   onToggleLeftPanel: () => void,
   onToggleRightPanel: () => void,
   onToggleTemplatePanel: () => void,
-  onToggleOutputPanel: () => void,
+  // onToggleOutputPanel: () => void,
   onCalculateRoadLength: () => void,
   onToggleSnap: () => void,
   onMeasureDistance: () => void,
@@ -88,7 +88,7 @@ function buildMenus(
   leftCollapsed: boolean,
   rightCollapsed: boolean,
   templatePanelCollapsed: boolean,
-  outputCollapsed: boolean,
+  // outputCollapsed: boolean,
   templatePluginEnabled: boolean,
   t: (key: string) => string,
 ): Menu[] {
@@ -130,7 +130,7 @@ function buildMenus(
         { label: t('menu.showLayerPanel'), action: onToggleLeftPanel, checked: !leftCollapsed },
         { label: t('menu.showPropertyPanel'), action: onToggleRightPanel, checked: !rightCollapsed },
         { label: t('menu.showTemplatePanel'), action: onToggleTemplatePanel, checked: !templatePanelCollapsed, disabled: !templatePluginEnabled },
-        { label: t('menu.showOutputPanel'), action: onToggleOutputPanel, checked: !outputCollapsed },
+        // { label: t('menu.showOutputPanel'), action: onToggleOutputPanel, checked: !outputCollapsed },
         { separator: true, label: '' },
         { label: t('menu.resetPanels'), action: onResetPanels },
       ],
@@ -179,7 +179,6 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     reset,
     resetToSaved,
     setProject,
-    selectedRoadId,
   } = useEditorStore();
 
   const {
@@ -197,7 +196,7 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     toggleLeftPanel,
     toggleRightPanel,
     toggleTemplatePanel,
-    toggleOutputPanel,
+    // toggleOutputPanel,
   } = useEditorViewStore();
 
   const { theme, toggleTheme } = useThemeStore();
@@ -379,7 +378,7 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     toggleLeftPanel,
     toggleRightPanel,
     toggleTemplatePanel,
-    toggleOutputPanel,
+    // toggleOutputPanel,
     handleCalculateRoadLength,
     toggleSnap,
     () => setMeasureMode('distance'),
@@ -395,7 +394,7 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
     layout.leftCollapsed,
     layout.rightCollapsed,
     layout.templatePanelCollapsed,
-    layout.outputCollapsed,
+    // layout.outputCollapsed,
     templatePluginEnabled,
     t,
   );
@@ -629,7 +628,8 @@ export function MenuBar({ onOpenPluginManager = () => {} }: MenuBarProps) {
       {/* Center: project name */}
       <div className="menubar-center">
         <span className="menubar-project-name toolbar-title">
-          {project.name}{isDirty ? ' •' : ''}
+          {project.name}
+          {isDirty && <span className="menubar-dirty-dot" title="Unsaved changes" />}
         </span>
       </div>
 
