@@ -828,8 +828,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: true,
     })),
 
-  setCursorWorldPos: (pos) => set({ cursorWorldPos: pos }),
-  setViewportInfo: ({ gridSpacing, mpp }) => set({ gridSpacing, viewportMpp: mpp }),
+  setCursorWorldPos: (pos) => set((s) => {
+    if (s.cursorWorldPos.x === pos.x && s.cursorWorldPos.y === pos.y) return s;
+    return { cursorWorldPos: pos };
+  }),
+  setViewportInfo: ({ gridSpacing, mpp }) => set((s) => {
+    if (s.gridSpacing === gridSpacing && s.viewportMpp === mpp) return s;
+    return { gridSpacing, viewportMpp: mpp };
+  }),
 
   markDirty: () => set({ isDirty: true }),
   markClean: () => set((s) => ({ isDirty: false, savedProject: s.project })),

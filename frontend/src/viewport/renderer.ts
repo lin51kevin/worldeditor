@@ -318,6 +318,10 @@ export class ViewportRenderer {
   // Callback invoked after data load or camera changes
   private onScaleChange: ((info: { gridSpacing: number; mpp: number }) => void) | null = null;
 
+  // Guard: avoid redundant onScaleChange callbacks when values haven't changed
+  private lastReportedMpp = -1;
+  private lastReportedGridSpacing = -1;
+
   /** Register a callback invoked on data load or camera change with grid info. */
   setScaleChangeCallback(cb: (info: { gridSpacing: number; mpp: number }) => void): void {
     this.onScaleChange = cb;
@@ -334,7 +338,13 @@ export class ViewportRenderer {
   }
 
   private reportScale(): void {
-    this.onScaleChange?.({ gridSpacing: this.gridSpacing, mpp: this.getMetersPerPixel() });
+    const mpp = this.getMetersPerPixel();
+    const gs = this.gridSpacing;
+    // Skip callback + spline rebuild when nothing changed (e.g. pure pan)
+    if (mpp === this.lastReportedMpp && gs === this.lastReportedGridSpacing) return;
+    this.lastReportedMpp = mpp;
+    this.lastReportedGridSpacing = gs;
+    this.onScaleChange?.({ gridSpacing: gs, mpp });
     // Rebuild both curve (thinner at new zoom) and markers (screen-constant size)
     if (this.splineKnotsCache.length > 0) {
       this.refreshSplineCurve();
