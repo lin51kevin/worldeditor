@@ -55,10 +55,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let axis_width = 0.02 * scale;
     var color = vec3<f32>(0.35, 0.35, 0.35); // default grid color
     if abs(in.world_pos.x) < axis_width {
-        color = vec3<f32>(0.2, 0.7, 0.2); // Y-axis green
+        color = vec3<f32>(0.15, 0.82, 0.30); // Y-axis: bright green
     }
     if abs(in.world_pos.y) < axis_width {
-        color = vec3<f32>(0.7, 0.2, 0.2); // X-axis red
+        color = vec3<f32>(0.95, 0.55, 0.05); // X-axis: amber orange (avoids red selection highlight)
     }
 
     return vec4<f32>(color, alpha * fade * 0.6);
