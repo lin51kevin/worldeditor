@@ -51,7 +51,12 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - run: cargo install wasm-pack
-      - run: wasm-pack build crates/we-wasm --target web --release
+      - run: wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release
+      - name: Upload WASM pkg
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: frontend/wasm/pkg/
 
   # Compile-check WASM target without running tests (strict gate)
   wasm-compile-check:
@@ -68,8 +73,14 @@ jobs:
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-22.04
+    needs: [build-wasm]
     steps:
       - uses: actions/checkout@v4
+      - name: Download WASM pkg
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: frontend/wasm/pkg/
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -176,9 +187,14 @@ jobs:
   quality:
     name: Quality Gates
     runs-on: ubuntu-22.04
-    needs: [test-rust, test-frontend]
+    needs: [test-rust, test-frontend, build-wasm]
     steps:
       - uses: actions/checkout@v4
+      - name: Download WASM pkg
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: frontend/wasm/pkg/
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
