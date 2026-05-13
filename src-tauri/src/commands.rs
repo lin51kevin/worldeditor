@@ -152,22 +152,31 @@ pub fn plugin_install(src_path: String, registry: State<'_, SharedPluginRegistry
         return Err(format!("'{}' is not a directory", src_path));
     }
 
+    // Resolve canonical path to prevent traversal attacks (e.g. /path/to/../../etc)
+    let canonical = src.canonicalize()
+        .map_err(|e| format!("Cannot resolve path '{}': {}", src_path, e))?;
+
+    // Reject paths containing null bytes
+    if canonical.to_string_lossy().contains('\0') {
+        return Err("Invalid path: null byte detected".to_string());
+    }
+
     // Validate that the source contains a well-formed manifest before copying.
-    let manifest_path = src.join("manifest.json");
+    let manifest_path = canonical.join("manifest.json");
     let manifest = we_plugin_core::manifest::PluginManifest::from_path(&manifest_path)
         .map_err(|e| format!("Invalid plugin manifest: {}", e))?;
     manifest.validate().map_err(|e| e.to_string())?;
 
     let dest = {
         let inner = registry.read().map_err(|e| e.to_string())?;
-        let dir_name = src.file_name().ok_or("Invalid source path: no directory name")?;
+        let dir_name = canonical.file_name().ok_or("Invalid source path: no directory name")?;
         inner.plugins_dir().join(dir_name)
     };
 
     if dest.exists() {
         std::fs::remove_dir_all(&dest).map_err(|e| format!("Cannot remove existing plugin: {}", e))?;
     }
-    copy_dir_all(src, &dest).map_err(|e| format!("Cannot copy plugin files: {}", e))?;
+    copy_dir_all(&canonical, &dest).map_err(|e| format!("Cannot copy plugin files: {}", e))?;
 
     registry.write().map_err(|e| e.to_string())?.discover();
     log::info!("Installed plugin from: {}", src_path);
@@ -178,6 +187,11 @@ fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
+        // Skip symbolic links to prevent copying files outside the plugin directory
+        if entry.file_type()?.is_symlink() {
+            log::warn!("Skipping symlink during plugin install: {:?}", entry.path());
+            continue;
+        }
         let dest = dst.join(entry.file_name());
         if entry.file_type()?.is_dir() {
             copy_dir_all(&entry.path(), &dest)?;
