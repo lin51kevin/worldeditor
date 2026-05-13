@@ -267,6 +267,7 @@ mod tests {
                 make_road_with_link("r3", 15.0, None),
             ],
             junctions: vec![],
+            ..Default::default()
         }
     }
 

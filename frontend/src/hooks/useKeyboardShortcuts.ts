@@ -8,12 +8,14 @@ import { useEffect } from 'react';
 import { useEditorStore } from '../stores/editorStore';
 
 function isEditableTarget(e: KeyboardEvent): boolean {
-  const t = e.target as HTMLElement;
+  const t = e.target;
+  if (!(t instanceof Element)) return false;
+  const el = t as HTMLElement;
   return (
-    t.tagName === 'INPUT' ||
-    t.tagName === 'TEXTAREA' ||
-    t.tagName === 'SELECT' ||
-    !!t.closest('.cp-overlay, .menubar-dropdown, [role="dialog"], dialog')
+    el.tagName === 'INPUT' ||
+    el.tagName === 'TEXTAREA' ||
+    el.tagName === 'SELECT' ||
+    !!el.closest('.cp-overlay, .menubar-dropdown, [role="dialog"], dialog')
   );
 }
 

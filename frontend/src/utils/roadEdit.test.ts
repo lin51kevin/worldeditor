@@ -456,7 +456,7 @@ describe('deployCrosswalks', () => {
   it('does not mutate the original project', () => {
     const project = makeProject();
     deployCrosswalks(project, 'nonexistent');
-    expect(project.objects).toBeUndefined();
+    expect(project.objects).toEqual([]);
   });
 });
 

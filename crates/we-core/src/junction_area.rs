@@ -260,6 +260,7 @@ mod tests {
             header: Header::default(),
             roads: vec![road1, road2],
             junctions: vec![junction.clone()],
+            ..Default::default()
         };
         (project, junction)
     }

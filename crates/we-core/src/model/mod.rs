@@ -111,6 +111,7 @@ mod tests {
             header: Header::default(),
             roads: vec![],
             junctions: vec![],
+            ..Default::default()
         };
         let json = serde_json::to_string(&project).unwrap();
         let deserialized: Project = serde_json::from_str(&json).unwrap();
@@ -238,6 +239,7 @@ mod tests {
                     lane_links: vec![JunctionLaneLink { from: -1, to: 1 }],
                 }],
             }],
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&project).unwrap();

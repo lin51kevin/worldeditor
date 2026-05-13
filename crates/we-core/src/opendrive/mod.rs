@@ -347,6 +347,7 @@ mod tests {
                 objects: vec![],
             }],
             junctions: vec![],
+            ..Default::default()
         };
         let xml = write_xodr(&project).unwrap();
         assert!(xml.contains(r#"junction="10""#));
@@ -405,6 +406,7 @@ mod tests {
             header: Header::default(),
             roads,
             junctions,
+            ..Default::default()
         }
     }
 
@@ -1232,6 +1234,7 @@ mod tests {
             },
             roads: vec![],
             junctions: vec![],
+            ..Default::default()
         };
         let xml = write_xodr(&p).unwrap();
         // header should be self-closing without geoReference child
@@ -1254,6 +1257,7 @@ mod tests {
             },
             roads: vec![],
             junctions: vec![],
+            ..Default::default()
         };
         let xml = write_xodr(&p).unwrap();
         assert!(xml.contains("<geoReference"));

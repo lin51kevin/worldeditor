@@ -61,7 +61,7 @@ describe('WebPlatformService', () => {
   it('returns web platform info', () => {
     const service = new WebPlatformService();
 
-    expect(service.getPlatformInfo()).toEqual({ type: 'web', version: '0.1.0' });
+    expect(service.getPlatformInfo()).toEqual({ type: 'web', version: '0.1.1' });
   });
 
   it('lazy-loads the wasm module once and reuses it across methods', async () => {

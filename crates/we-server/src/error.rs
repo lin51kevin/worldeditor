@@ -37,7 +37,8 @@ impl Error {
             Error::NotFound(_) => StatusCode::NOT_FOUND,
             Error::Validation(_) => StatusCode::BAD_REQUEST,
             Error::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Error::Internal | Error::NotImplemented => StatusCode::NOT_IMPLEMENTED,
+            Error::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::NotImplemented => StatusCode::NOT_IMPLEMENTED,
         }
     }
 }

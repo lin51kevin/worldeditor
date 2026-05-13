@@ -9,6 +9,7 @@ fn make_project() -> Project {
         header: Header::default(),
         roads: vec![Road::new("1", 100.0), Road::new("2", 200.0)],
         junctions: vec![],
+        ..Default::default()
     }
 }
 
@@ -729,6 +730,7 @@ fn make_project_with_road() -> Project {
         header: Header::default(),
         roads: vec![make_road_with_geometry()],
         junctions: vec![],
+        ..Default::default()
     }
 }
 
@@ -1008,6 +1010,7 @@ fn make_project_two_sections() -> Project {
     Project {
         name: "test".into(), header: Header::default(),
         roads: vec![road], junctions: vec![],
+        ..Default::default()
     }
 }
 

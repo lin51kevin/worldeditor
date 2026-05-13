@@ -222,6 +222,7 @@ mod tests {
             header: Default::default(),
             roads,
             junctions: vec![junction],
+            ..Default::default()
         }
     }
 
