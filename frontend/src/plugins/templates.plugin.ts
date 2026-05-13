@@ -12,7 +12,7 @@
 import { useEditorStore } from '../stores/editorStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { TemplateSectionContrib } from '../stores/pluginContribStore';
-import type { Road, Lane, LaneSection, Geometry, RoadMark, Signal, Junction } from '../services/platform';
+import type { Road, Lane, LaneSection, Geometry, RoadMark, RoadSignal, Junction } from '../services/platform';
 
 const PLUGIN_ID = 'builtin-templates';
 const LANE_WIDTH = 3.5;
@@ -250,14 +250,20 @@ const junctionSection: TemplateSectionContrib = {
 // ── Signal Templates ─────────────────────────────────────────────────────────
 
 function applySignalTemplate(type: string, _opts?: { x?: number; y?: number }) {
-  const { selectedRoadId } = useEditorStore.getState();
-  const signal: Signal = {
+  const signal: RoadSignal = {
     id: `signal_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    roadId: selectedRoadId ?? '',
-    sPosition: 0,
-    laneId: -1,
-    type,
-    validity: 'all',
+    name: '',
+    s: 0,
+    t: 0,
+    z_offset: 0,
+    h_offset: 0,
+    width: 1.0,
+    height: 2.0,
+    signal_type: type,
+    signal_subtype: '-1',
+    value: null,
+    orientation: '+',
+    is_dynamic: false,
   };
   useEditorStore.getState().addSignal(signal);
 }

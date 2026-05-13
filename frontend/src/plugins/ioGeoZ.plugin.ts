@@ -20,7 +20,7 @@ import type {
   Road,
   RoadLink,
   RoadObject,
-  Signal,
+  RoadSignal,
 } from '../services/platform';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import mainProto from './proto/Main.proto?raw';
@@ -203,7 +203,7 @@ interface GeoRoadFile {
 
 interface ConvertedRoad {
   road: Road;
-  signals: Signal[];
+  signals: RoadSignal[];
   objects: RoadObject[];
 }
 
@@ -553,19 +553,21 @@ function protoSignalToSignal(
   signal: ProtoSignal,
   roadId: string,
   signalIndex: number,
-): Signal {
-  const validity = signal.validities?.[0];
-  const fromLane = normalizeOptionalString(validity?.from_lane_id);
-  const toLane = normalizeOptionalString(validity?.to_lane_id);
-  const validityText = [fromLane, toLane].filter((value): value is string => Boolean(value)).join('->') || 'all';
-
+): RoadSignal {
   return {
     id: normalizeOptionalString(signal.id) ?? `${roadId}:signal:${signalIndex}`,
-    roadId: normalizeOptionalString(signal.road_id) ?? normalizeOptionalString(validity?.road_id) ?? roadId,
-    sPosition: 0,
-    laneId: parseNumericLaneId(fromLane) ?? 0,
-    type: normalizeOptionalString(signal.type) ?? 'signal',
-    validity: validityText,
+    name: normalizeOptionalString(signal.type) ?? 'signal',
+    s: 0,
+    t: 0,
+    z_offset: 0,
+    h_offset: 0,
+    width: 1.0,
+    height: 2.0,
+    signal_type: normalizeOptionalString(signal.type) ?? '-1',
+    signal_subtype: '-1',
+    value: null,
+    orientation: '+',
+    is_dynamic: false,
   };
 }
 

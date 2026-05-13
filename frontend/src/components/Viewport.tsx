@@ -41,7 +41,6 @@ export function Viewport() {
   const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
   const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
   const selectedRoadIds = useEditorStore((s) => s.selectedRoadIds);
-  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
   const selectedJunctionIds = useEditorStore((s) => s.selectedJunctionIds);
   const { showGrid, showAxis, dimension, display, editMode } = useEditorViewStore();
   const splineKnots = useEditorViewStore((s) => s.splineKnots);
@@ -1546,8 +1545,6 @@ export function Viewport() {
       <div ref={rubberBandOverlayRef} className="selection-rect" />
       {/* Snap indicator: shown when cursor snaps to a nearby point */}
       <div ref={snapIndicatorDomRef} className="snap-indicator" style={{ display: 'none' }} />
-      {/* Context hints bar: shown when an element is selected */}
-      {selectedRoadId && <div className="viewport-context-hints" />}
       {status !== 'ready' && (
         <div className="viewport-overlay">
           <span className="viewport-label">

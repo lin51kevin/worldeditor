@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Elevation, Geometry, Project, Road, RoadObject, Signal, Junction, Lane, LaneLink, LaneWidth } from '../services/platform';
+import type { Elevation, Geometry, Project, Road, RoadObject, RoadSignal, Junction, Lane, LaneLink, LaneWidth } from '../services/platform';
 import type { LaneSide, SceneNodeSelection } from '../utils/sceneGraph';
 
 interface EditorState {
@@ -61,7 +61,7 @@ interface EditorState {
   updateJunction: (id: string, updates: Partial<Pick<Junction, 'name'>>) => void;
   /** Add multiple roads and a junction record in a single undoable operation */
   addJunctionWithRoads: (junction: Junction, roads: Road[]) => void;
-  addSignal: (signal: Signal) => void;
+  addSignal: (signal: RoadSignal) => void;
   addRoadMark: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, mark: import('../services/platform').RoadMark) => void;
   updateRoadMark: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, markIndex: number, updates: Partial<import('../services/platform').RoadMark>) => void;
   removeRoadMark: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, markIndex: number) => void;
@@ -69,7 +69,7 @@ interface EditorState {
   addLaneBorder: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, border: import('../services/platform').LaneBorder) => void;
   removeLaneBorder: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, borderIndex: number) => void;
   removeSignal: (id: string) => void;
-  updateSignal: (id: string, updates: Partial<Signal>) => void;
+  updateSignal: (id: string, updates: Partial<RoadSignal>) => void;
   addObject: (obj: RoadObject) => void;
   removeObject: (id: string) => void;
   updateObject: (id: string, updates: Partial<RoadObject>) => void;
@@ -104,7 +104,7 @@ interface EditorState {
 }
 
 // Signal and Object types for store
-export type { Signal, RoadObject };
+export type { RoadSignal, RoadObject };
 
 const MAX_UNDO = 50;
 

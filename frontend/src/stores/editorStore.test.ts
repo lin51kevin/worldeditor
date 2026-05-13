@@ -54,17 +54,17 @@ describe('editorStore', () => {
   describe('Signal CRUD', () => {
     it('should add and remove signals', () => {
       const store = useEditorStore.getState();
-      store.addSignal({ id: 's1', roadId: 'r1', sPosition: 10, laneId: -1, type: 'traffic_light', validity: '' });
+      store.addSignal({ id: 's1', name: '', s: 10, t: 0, z_offset: 0, h_offset: 0, width: 1, height: 2, signal_type: 'traffic_light', signal_subtype: '-1', value: null, orientation: '+', is_dynamic: false });
       expect(useEditorStore.getState().project.signals!.length).toBe(1);
       store.removeSignal('s1');
       expect(useEditorStore.getState().project.signals!.length).toBe(0);
     });
 
     it('should update signal', () => {
-      useEditorStore.getState().addSignal({ id: 's1', roadId: 'r1', sPosition: 10, laneId: -1, type: 'traffic_light', validity: '' });
-      useEditorStore.getState().updateSignal('s1', { type: 'stop_sign' });
+      useEditorStore.getState().addSignal({ id: 's1', name: '', s: 10, t: 0, z_offset: 0, h_offset: 0, width: 1, height: 2, signal_type: 'traffic_light', signal_subtype: '-1', value: null, orientation: '+', is_dynamic: false });
+      useEditorStore.getState().updateSignal('s1', { signal_type: 'stop_sign' });
       const sig = useEditorStore.getState().project.signals![0]!;
-      expect(sig.type).toBe('stop_sign');
+      expect(sig.signal_type).toBe('stop_sign');
     });
   });
 

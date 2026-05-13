@@ -27,7 +27,7 @@ export interface Project {
   header: Header;
   roads: Road[];
   junctions: Junction[];
-  signals: Signal[];
+  signals: RoadSignal[];
   objects: RoadObject[];
 }
 

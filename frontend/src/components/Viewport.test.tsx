@@ -545,38 +545,6 @@ describe('Viewport', () => {
     );
   });
 
-  it('shows context hints bar when a road is selected', async () => {
-    rendererMocks.isSupported.mockReturnValue(true);
-    rendererMocks.init.mockResolvedValue(true);
-    const platform = createPlatformMock();
-    vi.mocked(getPlatformService).mockResolvedValue(platform);
-
-    act(() => {
-      useEditorStore.setState({
-        project: makeProjectWithRoad(),
-        selectedRoadId: 'road-1',
-        selectedObjectType: 'road',
-      });
-    });
-
-    render(<Viewport />);
-    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
-
-    expect(document.querySelector('.viewport-context-hints')).not.toBeNull();
-  });
-
-  it('hides context hints bar when nothing is selected', async () => {
-    rendererMocks.isSupported.mockReturnValue(true);
-    rendererMocks.init.mockResolvedValue(true);
-    const platform = createPlatformMock();
-    vi.mocked(getPlatformService).mockResolvedValue(platform);
-
-    render(<Viewport />);
-    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
-
-    expect(document.querySelector('.viewport-context-hints')).toBeNull();
-  });
-
   it('shift+click adds a road to multi-selection', async () => {
     const platform = createPlatformMock();
     (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
