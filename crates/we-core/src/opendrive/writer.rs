@@ -7,7 +7,6 @@ use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, Event};
 use std::io::Cursor;
 
 use super::OpenDriveError;
-use crate::model::road::*;
 use crate::model::*;
 
 type W = Cursor<Vec<u8>>;

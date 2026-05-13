@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::road::{Lane, LaneSection, LaneType, LaneWidth};
+use super::lane::{Lane, LaneSection, LaneType, LaneWidth};
 
 /// A template describing a road's lane configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,3 +230,4 @@ mod tests {
         assert_eq!(ls.right[0].width[0].a, 3.5);
     }
 }
+
