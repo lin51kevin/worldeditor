@@ -3,10 +3,18 @@
 //! Pure algorithms for cloning, reversing, mirroring, and optimizing roads.
 //! All operations are WASM-compatible and side-effect free (return new Roads).
 
+pub mod split;
+pub mod weld;
+
+#[allow(unused_imports)]
+pub use split::*;
+#[allow(unused_imports)]
+pub use weld::*;
+
 use crate::{
     geometry::eval::evaluate_geometry,
     model::{Geometry, GeometryType, Lane, LaneSection, Road},
-    spline::{road_to_spline, spline_to_geometries, KnotType},
+    spline::{KnotType, road_to_spline, spline_to_geometries},
 };
 use std::f64::consts::PI;
 
@@ -397,11 +405,7 @@ fn compute_edge_offset(road: &Road, target_lane_id: i32) -> f64 {
         }
     }
 
-    if target_lane_id > 0 {
-        total
-    } else {
-        -total
-    }
+    if target_lane_id > 0 { total } else { -total }
 }
 
 /// Rebuild lane sections so lane IDs are valid after the centerline swap.
@@ -501,7 +505,10 @@ fn rebuild_sections_after_swap(sections: &[LaneSection], target_lane_id: i32) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Geometry, GeometryType, Lane, LaneSection, LaneType, LaneWidth, Road, RoadLink, LinkElement, LinkElementType};
+    use crate::model::{
+        Geometry, GeometryType, Lane, LaneSection, LaneType, LaneWidth, LinkElement,
+        LinkElementType, Road, RoadLink,
+    };
 
     fn make_link(pred: Option<&str>, succ: Option<&str>) -> Option<RoadLink> {
         let make_el = |id: &str| LinkElement {
@@ -535,7 +542,13 @@ mod tests {
             level: 0,
             render_hidden: false,
             link: None,
-            width: vec![LaneWidth { s_offset: 0.0, a: 3.5, b: 0.0, c: 0.0, d: 0.0 }],
+            width: vec![LaneWidth {
+                s_offset: 0.0,
+                a: 3.5,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            }],
             borders: vec![],
             road_marks: vec![],
         };
@@ -619,7 +632,11 @@ mod tests {
         // Line goes from (0,0) heading 0, length 100  → end at (100, 0)
         let rev = reverse_road(&road);
         assert_eq!(rev.plan_view.len(), 1);
-        assert!((rev.plan_view[0].x - 100.0).abs() < 1e-6, "start x should be 100, got {}", rev.plan_view[0].x);
+        assert!(
+            (rev.plan_view[0].x - 100.0).abs() < 1e-6,
+            "start x should be 100, got {}",
+            rev.plan_view[0].x
+        );
         assert!((rev.plan_view[0].y - 0.0).abs() < 1e-6);
     }
 
@@ -629,21 +646,50 @@ mod tests {
         let rev = reverse_road(&road);
         // Reversed heading should be ~π (pointing in -X direction)
         let hdg = rev.plan_view[0].hdg;
-        assert!((hdg.abs() - PI).abs() < 1e-6, "heading should be ±π, got {}", hdg);
+        assert!(
+            (hdg.abs() - PI).abs() < 1e-6,
+            "heading should be ±π, got {}",
+            hdg
+        );
     }
 
     #[test]
     fn test_reverse_road_multiple_segments_reorder() {
         let mut road = Road::new("r1", 30.0);
         road.plan_view = vec![
-            Geometry { s: 0.0,  x: 0.0,  y: 0.0, hdg: 0.0, length: 10.0, geo_type: GeometryType::Line },
-            Geometry { s: 10.0, x: 10.0, y: 0.0, hdg: 0.0, length: 10.0, geo_type: GeometryType::Line },
-            Geometry { s: 20.0, x: 20.0, y: 0.0, hdg: 0.0, length: 10.0, geo_type: GeometryType::Line },
+            Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 10.0,
+                geo_type: GeometryType::Line,
+            },
+            Geometry {
+                s: 10.0,
+                x: 10.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 10.0,
+                geo_type: GeometryType::Line,
+            },
+            Geometry {
+                s: 20.0,
+                x: 20.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 10.0,
+                geo_type: GeometryType::Line,
+            },
         ];
         let rev = reverse_road(&road);
         assert_eq!(rev.plan_view.len(), 3);
         // The first segment in reversed road starts near x=30 (end of original)
-        assert!((rev.plan_view[0].x - 30.0).abs() < 1e-6, "expected x≈30, got {}", rev.plan_view[0].x);
+        assert!(
+            (rev.plan_view[0].x - 30.0).abs() < 1e-6,
+            "expected x≈30, got {}",
+            rev.plan_view[0].x
+        );
         // s values must be monotone from 0
         assert!((rev.plan_view[0].s - 0.0).abs() < 1e-9);
         assert!((rev.plan_view[1].s - 10.0).abs() < 1e-9);
@@ -654,7 +700,11 @@ mod tests {
     fn test_reverse_road_arc_negates_curvature() {
         let mut road = Road::new("r1", 50.0);
         road.plan_view = vec![Geometry {
-            s: 0.0, x: 0.0, y: 0.0, hdg: 0.0, length: 50.0,
+            s: 0.0,
+            x: 0.0,
+            y: 0.0,
+            hdg: 0.0,
+            length: 50.0,
             geo_type: GeometryType::Arc { curvature: 0.02 },
         }];
         let rev = reverse_road(&road);
@@ -669,13 +719,32 @@ mod tests {
     fn test_reverse_road_spiral_swaps_curv() {
         let mut road = Road::new("r1", 60.0);
         road.plan_view = vec![Geometry {
-            s: 0.0, x: 0.0, y: 0.0, hdg: 0.0, length: 60.0,
-            geo_type: GeometryType::Spiral { curv_start: 0.0, curv_end: 0.02 },
+            s: 0.0,
+            x: 0.0,
+            y: 0.0,
+            hdg: 0.0,
+            length: 60.0,
+            geo_type: GeometryType::Spiral {
+                curv_start: 0.0,
+                curv_end: 0.02,
+            },
         }];
         let rev = reverse_road(&road);
-        if let GeometryType::Spiral { curv_start, curv_end } = rev.plan_view[0].geo_type {
-            assert!((curv_start - (-0.02)).abs() < 1e-9, "curv_start should be -0.02, got {}", curv_start);
-            assert!((curv_end - 0.0).abs() < 1e-9, "curv_end should be 0.0, got {}", curv_end);
+        if let GeometryType::Spiral {
+            curv_start,
+            curv_end,
+        } = rev.plan_view[0].geo_type
+        {
+            assert!(
+                (curv_start - (-0.02)).abs() < 1e-9,
+                "curv_start should be -0.02, got {}",
+                curv_start
+            );
+            assert!(
+                (curv_end - 0.0).abs() < 1e-9,
+                "curv_end should be 0.0, got {}",
+                curv_end
+            );
         } else {
             panic!("Expected Spiral");
         }
@@ -701,9 +770,17 @@ mod tests {
         let left_ids: Vec<i32> = sec.left.iter().map(|l| l.id).collect();
         let right_ids: Vec<i32> = sec.right.iter().map(|l| l.id).collect();
         // All left IDs should be positive (came from right, negated)
-        assert!(left_ids.iter().all(|&id| id > 0), "left IDs should be positive: {:?}", left_ids);
+        assert!(
+            left_ids.iter().all(|&id| id > 0),
+            "left IDs should be positive: {:?}",
+            left_ids
+        );
         // All right IDs should be negative
-        assert!(right_ids.iter().all(|&id| id < 0), "right IDs should be negative: {:?}", right_ids);
+        assert!(
+            right_ids.iter().all(|&id| id < 0),
+            "right IDs should be negative: {:?}",
+            right_ids
+        );
     }
 
     #[test]
@@ -723,16 +800,30 @@ mod tests {
         // After swap: left was [-1,-2] negated → [1,2]; right was [1,2] negated → [-1,-2]
         let left_ids: Vec<i32> = sec.left.iter().map(|l| l.id).collect();
         let right_ids: Vec<i32> = sec.right.iter().map(|l| l.id).collect();
-        assert!(left_ids.iter().all(|&id| id > 0), "left IDs should be positive: {:?}", left_ids);
-        assert!(right_ids.iter().all(|&id| id < 0), "right IDs should be negative: {:?}", right_ids);
+        assert!(
+            left_ids.iter().all(|&id| id > 0),
+            "left IDs should be positive: {:?}",
+            left_ids
+        );
+        assert!(
+            right_ids.iter().all(|&id| id < 0),
+            "right IDs should be negative: {:?}",
+            right_ids
+        );
     }
 
     #[test]
     fn test_mirror_road_preserves_lane_count() {
         let road = make_road_with_lane_sections("r1");
         let mirrored = mirror_road(&road);
-        assert_eq!(mirrored.lane_sections[0].left.len(), road.lane_sections[0].right.len());
-        assert_eq!(mirrored.lane_sections[0].right.len(), road.lane_sections[0].left.len());
+        assert_eq!(
+            mirrored.lane_sections[0].left.len(),
+            road.lane_sections[0].right.len()
+        );
+        assert_eq!(
+            mirrored.lane_sections[0].right.len(),
+            road.lane_sections[0].left.len()
+        );
     }
 
     #[test]
@@ -769,8 +860,14 @@ mod tests {
         let config = OptimizeConfig::default();
         let (optimized, _removed) = optimize_road_knots(&road, &config);
         // Result must still be a valid non-empty road
-        assert!(!optimized.plan_view.is_empty(), "optimized road should still have geometry");
-        assert!(optimized.length > 0.0, "optimized road should have positive length");
+        assert!(
+            !optimized.plan_view.is_empty(),
+            "optimized road should still have geometry"
+        );
+        assert!(
+            optimized.length > 0.0,
+            "optimized road should have positive length"
+        );
     }
 
     #[test]
@@ -787,11 +884,35 @@ mod tests {
         // Road with three collinear geometry segments — middle one is redundant
         let mut road = Road::new("r1", 30.0);
         road.plan_view = vec![
-            Geometry { s: 0.0,  x: 0.0,  y: 0.0, hdg: 0.0, length: 10.0, geo_type: GeometryType::Line },
-            Geometry { s: 10.0, x: 10.0, y: 0.0, hdg: 0.0, length: 10.0, geo_type: GeometryType::Line },
-            Geometry { s: 20.0, x: 20.0, y: 0.0, hdg: 0.0, length: 10.0, geo_type: GeometryType::Line },
+            Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 10.0,
+                geo_type: GeometryType::Line,
+            },
+            Geometry {
+                s: 10.0,
+                x: 10.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 10.0,
+                geo_type: GeometryType::Line,
+            },
+            Geometry {
+                s: 20.0,
+                x: 20.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 10.0,
+                geo_type: GeometryType::Line,
+            },
         ];
-        let config = OptimizeConfig { xy_threshold: 0.1, z_threshold: 0.005 };
+        let config = OptimizeConfig {
+            xy_threshold: 0.1,
+            z_threshold: 0.005,
+        };
         let (optimized, removed) = optimize_road_knots(&road, &config);
         // The resulting road should have fewer or equal geometry segments
         assert!(optimized.plan_view.len() <= road.plan_view.len());
@@ -807,9 +928,16 @@ mod tests {
         let road = make_road_with_lane_sections("r1");
         let swapped = swap_centerline_with_edge(&road, 1);
         // New plan_view start should be offset 3.5m perpendicular (heading=0, so +Y direction)
-        assert!(!swapped.plan_view.is_empty(), "swapped road should have geometry");
+        assert!(
+            !swapped.plan_view.is_empty(),
+            "swapped road should have geometry"
+        );
         let start_y = swapped.plan_view[0].y;
-        assert!((start_y - 3.5).abs() < 0.5, "start y should be ~3.5, got {}", start_y);
+        assert!(
+            (start_y - 3.5).abs() < 0.5,
+            "start y should be ~3.5, got {}",
+            start_y
+        );
     }
 
     #[test]
@@ -819,7 +947,11 @@ mod tests {
         assert!(!swapped.plan_view.is_empty());
         let start_y = swapped.plan_view[0].y;
         // New refline shifted 3.5m to the right → start_y should be ~-3.5
-        assert!((start_y - (-3.5)).abs() < 0.5, "start y should be ~-3.5, got {}", start_y);
+        assert!(
+            (start_y - (-3.5)).abs() < 0.5,
+            "start y should be ~-3.5, got {}",
+            start_y
+        );
     }
 
     #[test]
@@ -849,10 +981,18 @@ mod tests {
         let sec = &swapped.lane_sections[0];
         // All left IDs should be positive, right IDs negative (OpenDRIVE convention)
         for lane in &sec.left {
-            assert!(lane.id > 0, "Left lane id should be positive, got {}", lane.id);
+            assert!(
+                lane.id > 0,
+                "Left lane id should be positive, got {}",
+                lane.id
+            );
         }
         for lane in &sec.right {
-            assert!(lane.id < 0, "Right lane id should be negative, got {}", lane.id);
+            assert!(
+                lane.id < 0,
+                "Right lane id should be negative, got {}",
+                lane.id
+            );
         }
     }
 
