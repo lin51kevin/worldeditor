@@ -104,11 +104,11 @@
     "measure": "测量",
     "measureTitle": "测量工具",
     "drawLine": "直线",
-    "drawLineTitle": "绘制直线道路（点击2个点）",
+    "drawLineTitle": "绘制折线道路（连续点击添加点，Enter 完成，Backspace 撤销）",
     "drawArc": "圆弧",
-    "drawArcTitle": "绘制圆弧道路（点击3个点：起点、途经点、终点）",
+    "drawArcTitle": "绘制圆弧道路（交替点击锚点和途经点，Enter 完成，拖拽途经点改变曲率）",
     "drawSpiral": "回旋线",
-    "drawSpiralTitle": "绘制回旋线道路（点击2个点）"
+    "drawSpiralTitle": "绘制回旋线道路（连续点击添加点，Enter 完成，Backspace 撤销）"
   },
   "statusBar": {
     "roads": "道路",

@@ -11,13 +11,11 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Globe, FolderOpen, Plus, BookOpen, Home, Clock, Keyboard, X } from 'lucide-react';
+import type { RecentFile } from '../stores/recentFilesStore';
 import './WelcomePage.css';
 
-export interface RecentFile {
-  name: string;
-  path: string;
-  lastOpened: number;
-}
+// Re-export so existing imports of `RecentFile` from WelcomePage still work
+export type { RecentFile };
 
 export interface WelcomePageProps {
   recentFiles: RecentFile[];
@@ -30,12 +28,6 @@ export interface WelcomePageProps {
 }
 
 const SHORTCUTS = [
-  { labelKey: 'toolbar.new',           key: 'Ctrl+N' },
-  { labelKey: 'toolbar.open',          key: 'Ctrl+O' },
-  { labelKey: 'toolbar.save',          key: 'Ctrl+S' },
-  { labelKey: 'toolbar.undo',          key: 'Ctrl+Z' },
-  { labelKey: 'toolbar.redo',          key: 'Ctrl+Y' },
-  { labelKey: 'toolbar.delete',        key: 'Del' },
   { labelKey: 'toolbar.selectMode',    key: 'S' },
   { labelKey: 'toolbar.roadEdit',      key: 'R' },
   { labelKey: 'toolbar.laneEdit',      key: 'L' },
@@ -47,7 +39,6 @@ const SHORTCUTS = [
 
 const PROJECT_HOMEPAGE = 'https://github.com/worldeditor/worldeditor-next';
 const USER_MANUAL_URL = 'https://github.com/worldeditor/worldeditor-next/blob/main/docs/user-manual.md';
-const APP_VERSION = '0.1.1';
 
 /** Shorten a file path to show only the last 2 or 3 path segments. */
 function shortenPath(fullPath: string): string {
@@ -81,7 +72,7 @@ export function WelcomePage({
       {/* ── Header ── */}
       <header className="wp-header">
         <div className="wp-logo">
-          <Globe size={28} />
+          <Globe size={120} />
         </div>
         <h1 className="wp-title">{t('welcomePage.title', 'WorldEditor Next')}</h1>
         <p className="wp-subtitle">{t('welcomePage.subtitle', 'Autonomous driving road network editor')}</p>
@@ -184,7 +175,6 @@ export function WelcomePage({
           />
           {t('welcomePage.showOnStartup', 'Show this page on startup')}
         </label>
-        <span className="wp-version">v{APP_VERSION}</span>
       </footer>
     </div>
   );

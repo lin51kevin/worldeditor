@@ -16,53 +16,17 @@ import { PluginPanels } from './components/PluginPanel';
 import { SettingsDialog } from './components/SettingsDialog';
 import { DialogHost } from './components/common/Dialog';
 import { WelcomePage } from './components/WelcomePage';
-import type { RecentFile } from './components/WelcomePage';
 import { useEditorStore } from './stores/editorStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorViewStore } from './stores/editorViewStore';
 import { useBuiltinPluginStore } from './stores/builtinPluginStore';
+import { useRecentFilesStore } from './stores/recentFilesStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { BUILTIN_PLUGINS } from './plugins/builtinRegistry';
 import { getPlatformService } from './services';
+import { showAlert } from './utils/dialog';
 
-// ── Recent files persistence ───────────────────────────────────────────────
-
-const RECENT_FILES_KEY = 'we_recent_files';
 const STARTUP_WELCOME_KEY = 'we-show-welcome-on-startup';
-const MAX_RECENT = 10;
-
-function loadRecentFiles(): RecentFile[] {
-  try {
-    const raw = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? '[]') as unknown[];
-    if (!Array.isArray(raw)) return [];
-    return raw.filter(
-      (f: unknown): f is RecentFile =>
-        typeof f === 'object' && f !== null &&
-        typeof (f as Record<string, unknown>).path === 'string' &&
-        typeof (f as Record<string, unknown>).name === 'string',
-    );
-  } catch {
-    return [];
-  }
-}
-
-function saveRecentFiles(files: RecentFile[]): void {
-  localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(files.slice(0, MAX_RECENT)));
-}
-
-function pushRecentFile(files: RecentFile[], name: string, path: string): RecentFile[] {
-  const deduped = files.filter((f) => f.path !== path);
-  deduped.unshift({ name, path, lastOpened: Date.now() });
-  const result = deduped.slice(0, MAX_RECENT);
-  saveRecentFiles(result);
-  return result;
-}
-
-function removeRecentFile(files: RecentFile[], path: string): RecentFile[] {
-  const result = files.filter((f) => f.path !== path);
-  saveRecentFiles(result);
-  return result;
-}
 
 // ── App component ──────────────────────────────────────────────────────────
 
@@ -80,12 +44,21 @@ export function App() {
     toggleOutputPanel,
     toggleTemplatePanel,
   } = useEditorViewStore();
+  const { recentFiles, push: pushRecentFile, remove: removeRecentFile } = useRecentFilesStore();
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [recentFiles, setRecentFiles] = useState<RecentFile[]>(loadRecentFiles);
+
+  // showOnStartup: when false, skip welcome page on next launch
   const [showOnStartup, setShowOnStartup] = useState<boolean>(
     () => localStorage.getItem(STARTUP_WELCOME_KEY) !== 'false',
+  );
+  // isEditorOpen: show editor when:
+  //   • startup welcome is disabled (stored 'false'), OR
+  //   • the store already has a named project (e.g. set by tests / Tauri deep-link)
+  const [isEditorOpen, setIsEditorOpen] = useState<boolean>(
+    () => localStorage.getItem(STARTUP_WELCOME_KEY) === 'false' ||
+          useEditorStore.getState().project.name !== 'Untitled',
   );
 
   const handleToggleShowOnStartup = useCallback((value: boolean) => {
@@ -95,9 +68,6 @@ export function App() {
 
   const disabledBuiltins = useBuiltinPluginStore((s) => s.disabledBuiltins);
   const templatePluginEnabled = !disabledBuiltins.includes('builtin-templates');
-
-  // Whether the user has opened a real project (not Untitled)
-  const hasProject = projectName !== 'Untitled';
 
   useEffect(() => {
     initTheme();
@@ -121,14 +91,16 @@ export function App() {
 
   // Sync native window title and document.title with the current language
   useEffect(() => {
-    const title = hasProject ? `${projectName} — ${t('app.brand', 'WorldEditor')}` : t('app.brand', 'WorldEditor');
+    const title = projectName !== 'Untitled'
+      ? `${projectName} — ${t('app.brand', 'WorldEditor')}`
+      : t('app.brand', 'WorldEditor');
     document.title = title;
     if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
       import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
         void getCurrentWindow().setTitle(title);
       }).catch(() => {/* non-critical */});
     }
-  }, [t, i18n.language, projectName, hasProject]);
+  }, [t, i18n.language, projectName]);
 
   // Centralised keyboard shortcuts
   useKeyboardShortcuts({
@@ -149,40 +121,51 @@ export function App() {
       const result = await ps.openFile();
       if (!result) return;
       const project = await ps.parseOpenDrive(result.content);
+      project.name = result.name;
       useEditorStore.getState().setProject(project);
-      setRecentFiles((prev) => pushRecentFile(prev, result.name ?? "untitled", result.path ?? ""));
+      pushRecentFile(result.name, result.path ?? result.name);
+      setIsEditorOpen(true);
     } catch (err) {
       console.error('Failed to open file:', err);
     }
-  }, []);
+  }, [pushRecentFile]);
 
-  const handleNewProject = useCallback(() => {
+  /** Create a new empty project and enter the editor. */
+  const handleNew = useCallback(() => {
     useEditorStore.getState().reset();
+    setIsEditorOpen(true);
   }, []);
 
-  const handleOpenRecent = useCallback(async (_recentFile: RecentFile) => {
+  /** Open a recent file by path; fall back to alert + remove if not found. */
+  const handleOpenRecent = useCallback(async (recentFile: { name: string; path: string }) => {
     try {
       const ps = await getPlatformService();
-      // Web platform doesn't support opening by path, so fall back to file picker.
-      const result = await ps.openFile();
-      if (!result) return;
+      const result = await ps.openFileByPath(recentFile.path);
+      if (!result) {
+        removeRecentFile(recentFile.path);
+        await showAlert(`${t('dialog.fileNotFound')}: ${recentFile.name}`);
+        return;
+      }
       const project = await ps.parseOpenDrive(result.content);
+      project.name = result.name;
       useEditorStore.getState().setProject(project);
-      setRecentFiles((prev) => pushRecentFile(prev, result.name ?? "untitled", result.path ?? ""));
-    } catch (err) {
-      console.error('Failed to open recent file:', err);
+      pushRecentFile(result.name, recentFile.path);
+      setIsEditorOpen(true);
+    } catch {
+      removeRecentFile(recentFile.path);
+      await showAlert(`${t('dialog.fileNotFound')}: ${recentFile.name}`);
     }
-  }, []);
+  }, [pushRecentFile, removeRecentFile, t]);
 
   const handleRemoveRecent = useCallback((path: string) => {
-    setRecentFiles((prev) => removeRecentFile(prev, path));
-  }, []);
+    removeRecentFile(path);
+  }, [removeRecentFile]);
 
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <ErrorBoundary t={(key, fallback) => t(key) || fallback || key}>
-    {hasProject ? (
+    {isEditorOpen ? (
       <div className="app-container" onContextMenu={(e) => e.preventDefault()}>
         {/* Full-bleed viewport as base layer */}
         <div className="canvas-viewport">
@@ -193,6 +176,7 @@ export function App() {
         <MenuBar
           onOpenPluginManager={() => setShowPluginManager(true)}
           onOpenSettings={() => setShowSettings(true)}
+          onOpenWelcome={() => setIsEditorOpen(false)}
         />
         <Toolbar />
 
@@ -297,7 +281,7 @@ export function App() {
     ) : (
       <WelcomePage
         recentFiles={recentFiles}
-        onNew={handleNewProject}
+        onNew={handleNew}
         onOpenFile={handleOpenFile}
         onOpenRecent={handleOpenRecent}
         onRemoveRecent={handleRemoveRecent}

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GisCoord, PlatformService, Project, Road, UtmCoord } from '../services/platform';
 import { useEditorStore } from '../stores/editorStore';
+import { useRecentFilesStore } from '../stores/recentFilesStore';
 import { getPlatformService } from '../services';
 import { emitViewportEvent } from '../viewport/viewportEvents';
 import { showAlert, showConfirm, showPrompt } from '../utils/dialog';
@@ -141,6 +142,8 @@ describe('MenuBar', () => {
         undoStack: [],
         redoStack: [],
       });
+      // Reset recent files store between tests
+      useRecentFilesStore.setState({ recentFiles: [] });
     });
 
     vi.mocked(getPlatformService).mockResolvedValue(createPlatformMock().platform);
@@ -275,9 +278,11 @@ describe('MenuBar', () => {
     platform.openFileByPath.mockResolvedValue({ name: 'recent.xodr', content: '<OpenDRIVE />' });
     platform.parseOpenDrive.mockResolvedValue(makeProject([makeRoad('r-recent', 10)], 'Recent'));
     vi.mocked(getPlatformService).mockResolvedValue(platform.platform);
-    localStorage.setItem('we_recent_files', JSON.stringify([
-      { displayName: 'recent.xodr', path: 'C:\\maps\\recent.xodr' },
-    ]));
+    act(() => {
+      useRecentFilesStore.setState({
+        recentFiles: [{ name: 'recent.xodr', path: 'C:\\maps\\recent.xodr', lastOpened: 0 }],
+      });
+    });
 
     render(<MenuBar />);
     fireEvent.click(screen.getByTitle('文件'));
@@ -293,9 +298,11 @@ describe('MenuBar', () => {
     const platform = createPlatformMock();
     platform.openFileByPath.mockResolvedValue(null);
     vi.mocked(getPlatformService).mockResolvedValue(platform.platform);
-    localStorage.setItem('we_recent_files', JSON.stringify([
-      { displayName: 'missing.xodr', path: 'C:\\maps\\missing.xodr' },
-    ]));
+    act(() => {
+      useRecentFilesStore.setState({
+        recentFiles: [{ name: 'missing.xodr', path: 'C:\\maps\\missing.xodr', lastOpened: 0 }],
+      });
+    });
 
     render(<MenuBar />);
     fireEvent.click(screen.getByTitle('文件'));
@@ -304,7 +311,7 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByText('missing.xodr'));
 
     await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalledWith('文件不存在: missing.xodr'));
-    expect(JSON.parse(localStorage.getItem('we_recent_files') ?? '[]')).toEqual([]);
+    expect(useRecentFilesStore.getState().recentFiles).toEqual([]);
   });
 
   it('handles keyboard shortcuts for new, open, save, save as, and delete', async () => {

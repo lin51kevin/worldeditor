@@ -104,11 +104,11 @@
     "measure": "Measure",
     "measureTitle": "Measure Tool",
     "drawLine": "Line",
-    "drawLineTitle": "Draw Line Road (click 2 points)",
+    "drawLineTitle": "Draw Polyline Road (click points, Enter to finish, Backspace to undo)",
     "drawArc": "Arc",
-    "drawArcTitle": "Draw Arc Road (click 3 points: start, through, end)",
+    "drawArcTitle": "Draw Arc Road (click points in groups: anchor, through, anchor... then Enter to finish)",
     "drawSpiral": "Spiral",
-    "drawSpiralTitle": "Draw Spiral Road (click 2 points)"
+    "drawSpiralTitle": "Draw Spiral Road (click points, Enter to finish, Backspace to undo)"
   },
   "statusBar": {
     "roads": "Roads",

@@ -16,10 +16,10 @@ import {
   tintVertices,
 } from '../utils/sceneGraph';
 import {
-  buildLineGeometry,
-  buildArcGeometry,
-  buildSpiralGeometry,
-  buildRoadFromGeometry,
+  buildMultiLineGeometries,
+  buildMultiArcGeometries,
+  buildMultiSpiralGeometries,
+  buildRoadFromGeometries,
 } from '../utils/geometryBuilder';
 import './Viewport.css';
 
@@ -47,7 +47,6 @@ export function Viewport() {
   const splineKnots = useEditorViewStore((s) => s.splineKnots);
   const splineTangentOverrides = useEditorViewStore((s) => s.splineTangentOverrides);
   const geometryEditSpline = useEditorViewStore((s) => s.geometryEditSpline);
-  const drawPoints = useEditorViewStore((s) => s.drawPoints);
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
@@ -112,21 +111,32 @@ export function Viewport() {
     const editorState = useEditorStore.getState();
     const viewState = useEditorViewStore.getState();
 
-    const roadId = nextSplineRoadId(editorState.project.roads.map((r) => r.id));
-
-    let geometry;
-    if (mode === 'line') {
-      geometry = buildLineGeometry(points[0]!, points[1]!);
-    } else if (mode === 'arc') {
-      geometry = buildArcGeometry(points[0]!, points[1]!, points[2]!);
-    } else {
-      geometry = buildSpiralGeometry(points[0]!, points[1]!);
+    const minPoints = mode === 'arc' ? 3 : 2;
+    if (points.length < minPoints) {
+      console.warn(`[Viewport] ${mode} mode needs at least ${minPoints} points.`);
+      return;
     }
 
-    const road = buildRoadFromGeometry(roadId, geometry);
+    const roadId = nextSplineRoadId(editorState.project.roads.map((r) => r.id));
+
+    let geometries;
+    if (mode === 'line') {
+      geometries = buildMultiLineGeometries(points);
+    } else if (mode === 'arc') {
+      geometries = buildMultiArcGeometries(points);
+    } else {
+      geometries = buildMultiSpiralGeometries(points);
+    }
+
+    if (geometries.length === 0) {
+      console.warn(`[Viewport] ${mode} produced no geometry segments from ${points.length} points.`);
+      return;
+    }
+
+    const road = buildRoadFromGeometries(roadId, geometries);
     editorState.addRoad(road);
     editorState.selectRoad(roadId);
-    viewState.clearDrawPoints();
+    viewState.clearSplineKnots();
   }, []);
 
   /** Enter geometry edit mode for the given road. */
@@ -161,11 +171,8 @@ export function Viewport() {
   }, []);
 
   useEffect(() => {
-    if (editMode !== 'spline') {
+    if (editMode !== 'spline' && editMode !== 'line' && editMode !== 'arc' && editMode !== 'spiral') {
       useEditorViewStore.getState().clearSplineKnots();
-    }
-    if (editMode !== 'line' && editMode !== 'arc' && editMode !== 'spline' && editMode !== 'spiral') {
-      useEditorViewStore.getState().clearDrawPoints();
     }
   }, [editMode]);
 
@@ -185,9 +192,9 @@ export function Viewport() {
           viewState.clearSplineKnots();
           return;
         }
-        // If in geometry draw mode, clear draw points
+        // If in geometry draw mode, clear knots (line/arc/spiral all use splineKnots)
         if (viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral') {
-          viewState.clearDrawPoints();
+          viewState.clearSplineKnots();
           return;
         }
         // If in a transient edit mode (move/rotate), return to default mode
@@ -227,12 +234,17 @@ export function Viewport() {
         return;
       }
 
-      if (editMode !== 'spline') return;
+      if (editMode !== 'spline' && editMode !== 'line' && editMode !== 'arc' && editMode !== 'spiral') return;
       if (event.key === 'Backspace') {
         useEditorViewStore.getState().popSplineKnot();
       } else if (event.key === 'Enter') {
         event.preventDefault();
-        void finalizeSplineCreation();
+        const mode = viewState.editMode;
+        if (mode === 'spline') {
+          void finalizeSplineCreation();
+        } else if (mode === 'line' || mode === 'arc' || mode === 'spiral') {
+          void finalizeDrawGeometry(mode, viewState.splineKnots);
+        }
       }
     };
 
@@ -240,7 +252,7 @@ export function Viewport() {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [editMode, finalizeSplineCreation, finalizeGeometryEdit, enterGeometryEditMode]);
+  }, [editMode, finalizeSplineCreation, finalizeDrawGeometry, finalizeGeometryEdit, enterGeometryEditMode]);
 
   // Sync spline knot preview into the WebGPU renderer each time knots or tangents change
   useEffect(() => {
@@ -254,14 +266,11 @@ export function Viewport() {
       return;
     }
 
+    // All draw modes (spline, line, arc, spiral) use splineKnots for control points
+    const isDrawMode = editMode === 'spline' || editMode === 'line' || editMode === 'arc' || editMode === 'spiral';
     const overrides = Object.keys(splineTangentOverrides).length > 0 ? splineTangentOverrides : undefined;
-    renderer.setSplinePreviewKnots(editMode === 'spline' ? splineKnots : [], overrides);
-
-    // For geometry draw modes, show draw points as preview knots (reuse spline markers)
-    if (editMode === 'line' || editMode === 'arc' || editMode === 'spiral') {
-      renderer.setSplinePreviewKnots(drawPoints, undefined);
-    }
-  }, [splineKnots, splineTangentOverrides, editMode, status, geometryEditSpline, drawPoints]);
+    renderer.setSplinePreviewKnots(isDrawMode ? splineKnots : [], overrides);
+  }, [splineKnots, splineTangentOverrides, editMode, status, geometryEditSpline]);
 
   // Regenerate road mesh when project or display settings change
   const updateMesh = useCallback(async () => {
@@ -819,7 +828,10 @@ export function Viewport() {
     // Hover cursor: check if mouse is over a draggable knot
     const isGeometryEdit = !!viewState.geometryEditSpline;
     const isSplineCreate = viewState.editMode === 'spline' && viewState.splineKnots.length > 0;
-    if (isGeometryEdit || isSplineCreate) {
+    const isDrawModeActive =
+      (viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral') &&
+      viewState.splineKnots.length > 0;
+    if (isGeometryEdit || isSplineCreate || isDrawModeActive) {
       const mpp = renderer.getMetersPerPixel();
       const knotHitSq   = (8.0 * mpp) ** 2;  // match knotHalfSize (6*mpp) + small margin
       const handleHitSq = (6.0 * mpp) ** 2;  // match handleHalfSize (4*mpp) + small margin
@@ -856,13 +868,20 @@ export function Viewport() {
         renderer.refreshSplineMarkers(newHover, undefined);
       }
 
-      canvas.style.cursor = newHover ? 'grab' : '';
+      // grab when over a control point, crosshair otherwise (still in a draw/edit mode)
+      canvas.style.cursor = newHover ? 'grab' : 'crosshair';
     } else {
       if (hoveredControlPointRef.current !== null) {
         hoveredControlPointRef.current = null;
         renderer.refreshSplineMarkers(null, undefined);
       }
-      canvas.style.cursor = '';
+      // In draw modes show crosshair even before the first point is placed
+      const isAnyDrawMode =
+        viewState.editMode === 'line' ||
+        viewState.editMode === 'arc' ||
+        viewState.editMode === 'spiral' ||
+        viewState.editMode === 'spline';
+      canvas.style.cursor = isAnyDrawMode ? 'crosshair' : '';
     }
 
     if (viewState.snapEnabled) {
@@ -919,12 +938,11 @@ export function Viewport() {
       !viewState.draggingKnot &&
       !rubberBandRef.current;
 
-    // Set mode-specific cursor when no drag is active
+    // Set mode-specific cursor when no drag is active.
+    // Note: line/arc/spiral/spline cursors are handled above in the hover block.
     if (viewState.editMode === 'move-road') {
       canvas.style.cursor = 'move';
     } else if (viewState.editMode === 'rotate-road') {
-      canvas.style.cursor = 'crosshair';
-    } else if (viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral') {
       canvas.style.cursor = 'crosshair';
     }
 
@@ -1017,10 +1035,16 @@ export function Viewport() {
       const fmt = splineToRendererFormat(viewState.geometryEditSpline);
       hitKnots = fmt.knots;
       hitOverrides = fmt.tangentOverrides;
-    } else if (viewState.editMode === 'spline' && viewState.splineKnots.length > 0) {
-      // Spline creation mode
+    } else if (
+      (viewState.editMode === 'spline' ||
+       viewState.editMode === 'line' ||
+       viewState.editMode === 'arc' ||
+       viewState.editMode === 'spiral') &&
+      viewState.splineKnots.length > 0
+    ) {
+      // All draw modes use splineKnots for control points
       hitKnots = viewState.splineKnots;
-      hitOverrides = viewState.splineTangentOverrides;
+      hitOverrides = viewState.editMode === 'spline' ? viewState.splineTangentOverrides : {};
     }
 
     if (!hitKnots || hitKnots.length === 0) {
@@ -1057,15 +1081,14 @@ export function Viewport() {
       }
 
       // Shift+left-drag starts rubber-band multi-select (plain left-drag still pans)
-      if (e.shiftKey && viewState.editMode !== 'spline' && !viewState.geometryEditSpline) {
+      if (e.shiftKey && viewState.editMode !== 'spline' && viewState.editMode !== 'line' && viewState.editMode !== 'arc' && viewState.editMode !== 'spiral' && !viewState.geometryEditSpline) {
         rubberBandRef.current = { startClientX: e.clientX, startClientY: e.clientY, active: false };
         renderer.lockCamera();
       }
 
-      // In draw modes, lock camera so left-click doesn't start a pan
-      if (viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral') {
-        renderer.lockCamera();
-      }
+      // NOTE: draw modes (line/arc/spiral) no longer lock the camera unconditionally.
+      // Camera locking only happens when dragging an existing control point (handled
+      // by the hit-test above). Click-to-add-point uses gesture.dragged detection.
       return;
     }
 
@@ -1094,8 +1117,8 @@ export function Viewport() {
       }
     }
 
-    // Check tangent handle positions — only for spline creation mode
-    if (!viewState.geometryEditSpline) {
+    // Check tangent handle positions — only for spline creation mode (not line/arc/spiral draw modes)
+    if (!viewState.geometryEditSpline && viewState.editMode === 'spline') {
       const handles = getSplineHandlePoints(hitKnots, hitOverrides);
       for (const h of handles) {
         const dx = worldPos.x - h.x;
@@ -1190,18 +1213,16 @@ export function Viewport() {
       return;
     }
 
-    // Geometry draw modes: line, arc, spiral
+    // Geometry draw modes: line, arc, spiral — accumulate points like spline
     if (splineState.editMode === 'line' || splineState.editMode === 'arc' || splineState.editMode === 'spiral') {
-      const renderer = rendererRef.current;
-      if (renderer) renderer.unlockCamera();
-
       const point: [number, number, number] = [worldPos.x, worldPos.y, 0];
-      const nextPoints = [...splineState.drawPoints, point];
-      splineState.appendDrawPoint(point);
+      const nextKnots: Array<[number, number, number]> = [...splineState.splineKnots, point];
+      splineState.setSplineKnots(nextKnots);
 
-      const requiredPoints = splineState.editMode === 'arc' ? 3 : 2;
-      if (nextPoints.length >= requiredPoints) {
-        await finalizeDrawGeometry(splineState.editMode, nextPoints);
+      // Double-click finalizes (same UX as spline mode)
+      const minPoints = splineState.editMode === 'arc' ? 3 : 2;
+      if (e.detail >= 2 && nextKnots.length >= minPoints) {
+        await finalizeDrawGeometry(splineState.editMode, nextKnots);
       }
       return;
     }
@@ -1326,12 +1347,6 @@ export function Viewport() {
 
     const viewState = useEditorViewStore.getState();
     const { draggingKnot } = viewState;
-
-    // Unlock camera for draw modes (locked in handleMouseDown to prevent pan)
-    if (viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral') {
-      const renderer = rendererRef.current;
-      if (renderer) renderer.unlockCamera();
-    }
 
     if (draggingKnot) {
       viewState.setDraggingKnot(null);

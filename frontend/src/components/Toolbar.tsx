@@ -25,7 +25,6 @@ export function Toolbar() {
     editMode,
     setEditMode,
     clearSplineKnots,
-    clearDrawPoints,
   } = useEditorViewStore();
 
   // Subscribe so toolbar re-renders when selectedRoadId changes (plugin buttons may react to selection state)
@@ -73,8 +72,8 @@ export function Toolbar() {
 
   const handleDrawMode = useCallback((mode: DrawMode) => {
     setEditMode(mode);
-    clearDrawPoints();
-  }, [setEditMode, clearDrawPoints]);
+    clearSplineKnots();
+  }, [setEditMode, clearSplineKnots]);
 
   // Subscribe so toolbar re-renders when selectedRoadId changes (used by plugin buttons that read selection state)
   // Note: selectedRoadId is intentionally subscribed even if not directly referenced here
@@ -92,7 +91,7 @@ export function Toolbar() {
       <div className="toolbar-group">
         <button
           className={`toolbar-btn toolbar-toggle ${editMode === 'default' ? 'active' : ''}`}
-          onClick={() => { setEditMode('default'); clearDrawPoints(); }}
+          onClick={() => { setEditMode('default'); clearSplineKnots(); }}
           title={t('toolbar.selectModeTitle')}
           aria-label={t('toolbar.selectMode')}
           aria-pressed={editMode === 'default'}

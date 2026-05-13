@@ -156,6 +156,112 @@ export function buildRoadFromGeometry(roadId: string, geometry: Geometry): Road 
   };
 }
 
+// ─── Multi-segment geometry builders ─────────────────────────────────────────
+
+/**
+ * Build N-1 Line geometry segments from N control points (polyline).
+ * Returns segments with cumulative `s` values.
+ */
+export function buildMultiLineGeometries(
+  points: Array<[number, number, number]>,
+): Geometry[] {
+  const geometries: Geometry[] = [];
+  let s = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const geo = buildLineGeometry(points[i]!, points[i + 1]!);
+    geometries.push({ ...geo, s });
+    s += geo.length;
+  }
+  return geometries;
+}
+
+/**
+ * Build arc geometry segments from N control points.
+ *
+ * Points are grouped as [0,1,2], [2,3,4], [4,5,6], ...
+ * where even-indexed points are anchors and odd-indexed points are
+ * through-points that control curvature. Requires N >= 3; incomplete
+ * trailing groups (i.e. dangling points when N is even) are ignored.
+ */
+export function buildMultiArcGeometries(
+  points: Array<[number, number, number]>,
+): Geometry[] {
+  const geometries: Geometry[] = [];
+  let s = 0;
+  for (let i = 0; i + 2 < points.length; i += 2) {
+    const geo = buildArcGeometry(points[i]!, points[i + 1]!, points[i + 2]!);
+    geometries.push({ ...geo, s });
+    s += geo.length;
+  }
+  return geometries;
+}
+
+/**
+ * Build N-1 Spiral geometry segments from N control points.
+ * Returns segments with cumulative `s` values.
+ */
+export function buildMultiSpiralGeometries(
+  points: Array<[number, number, number]>,
+): Geometry[] {
+  const geometries: Geometry[] = [];
+  let s = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const geo = buildSpiralGeometry(points[i]!, points[i + 1]!);
+    geometries.push({ ...geo, s });
+    s += geo.length;
+  }
+  return geometries;
+}
+
+/**
+ * Create a default single-lane road from multiple geometry segments.
+ * The `s` value on each geometry is expected to be cumulative (pre-set by callers).
+ */
+export function buildRoadFromGeometries(roadId: string, geometries: Geometry[]): Road {
+  const totalLength = geometries.reduce((sum, g) => sum + g.length, 0);
+
+  const defaultLane = {
+    id: 0,
+    lane_type: 'Driving',
+    level: 0,
+    link: null,
+    width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }],
+    borders: [],
+    road_marks: [],
+  };
+
+  const defaultElevation: Elevation = {
+    s: 0,
+    a: 0,
+    b: 0,
+    c: 0,
+    d: 0,
+  };
+
+  return {
+    id: roadId,
+    name: '',
+    length: totalLength,
+    junction_id: null,
+    link: null,
+    plan_view: geometries,
+    elevation_profile: [defaultElevation],
+    lane_offsets: [],
+    lateral_profile: { superelevations: [], crossfalls: [] },
+    bridges: [],
+    tunnels: [],
+    signals: [],
+    objects: [],
+    lane_sections: [{
+      s: 0,
+      single_side: false,
+      left: [{ ...defaultLane, id: 1 }],
+      center: [{ ...defaultLane, id: 0, lane_type: 'None', width: [{ s_offset: 0, a: 0, b: 0, c: 0, d: 0 }] }],
+      right: [{ ...defaultLane, id: -1 }],
+    }],
+  };
+}
+
 /** Sample points along a geometry for preview rendering. */
 export function sampleGeometryPoints(
   geometry: Geometry,

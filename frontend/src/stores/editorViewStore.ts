@@ -130,7 +130,7 @@ interface EditorViewState {
   geometryEditSpline: EditableSpline | null;
 
   // Geometry drawing (draw-line / draw-arc / draw-spiral)
-  drawPoints: Array<[number, number, number]>;
+  // NOTE: line/arc/spiral modes now reuse splineKnots for control points.
 
   // Soft selection radius for knot editing
   softSelectionRadius: number;
@@ -168,8 +168,10 @@ interface EditorViewState {
   setGeometryEditSpline: (spline: EditableSpline) => void;
   setSoftSelectionRadius: (radius: number) => void;
 
-  // Geometry drawing actions
+  // Geometry drawing actions (deprecated — line/arc/spiral now use splineKnots/appendSplineKnot/clearSplineKnots)
+  /** @deprecated Use appendSplineKnot instead */
   appendDrawPoint: (point: [number, number, number]) => void;
+  /** @deprecated Use clearSplineKnots instead */
   clearDrawPoints: () => void;
 
   // Display settings actions
@@ -265,7 +267,6 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   lastMeasurement: null,
   geometryEditRoadId: null,
   geometryEditSpline: null,
-  drawPoints: [],
   softSelectionRadius: 50.0,
 
   setDimension: (dimension) => set({ dimension }),
@@ -313,10 +314,10 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   setSoftSelectionRadius: (softSelectionRadius) =>
     set({ softSelectionRadius: Math.max(0.1, softSelectionRadius) }),
 
-  // Geometry drawing actions
+  // Geometry drawing actions (deprecated — now delegates to splineKnots)
   appendDrawPoint: (point) =>
-    set((state) => ({ drawPoints: [...state.drawPoints, point] })),
-  clearDrawPoints: () => set({ drawPoints: [] }),
+    set((state) => ({ splineKnots: [...state.splineKnots, point] })),
+  clearDrawPoints: () => set({ splineKnots: [], splineTangentOverrides: {}, draggingKnot: null }),
 
   toggleDisplaySetting: (key) =>
     set((state) => {

@@ -12,6 +12,7 @@ import { useThemeStore } from '../stores/themeStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { MenuItemContrib } from '../stores/pluginContribStore';
 import { useBuiltinPluginStore } from '../stores/builtinPluginStore';
+import { useRecentFilesStore } from '../stores/recentFilesStore';
 import { emitViewportEvent } from '../viewport/viewportEvents';
 import { getPlatformService } from '../services';
 import { resetAllPanels } from './FloatingPanel';
@@ -32,11 +33,6 @@ interface MenuItem {
 interface Menu {
   label: string;
   items: MenuItem[];
-}
-
-interface RecentFile {
-  displayName: string;
-  path: string;
 }
 
 // Show About dialog
@@ -63,37 +59,6 @@ async function showUserManual(t: (key: string) => string) {
 async function checkForUpdates(t: (key: string) => string) {
   // TODO: [Phase D4] Implement real version check via GitHub Releases API
   await showAlert('Update check: coming in a future version.', t('menu.checkForUpdates'));
-}
-
-// Recent files helpers
-const RECENT_FILES_KEY = 'we_recent_files';
-const MAX_RECENT = 10;
-
-function loadRecentFiles(): RecentFile[] {
-  try {
-    const raw = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? '[]') as unknown[];
-    return raw.map((item): RecentFile | null => {
-      if (typeof item === 'string') return { displayName: item, path: item };
-      if (typeof item === 'object' && item !== null && 'displayName' in item && 'path' in item) {
-        return item as RecentFile;
-      }
-      return null;
-    }).filter((x): x is RecentFile => x !== null);
-  } catch {
-    return [];
-  }
-}
-
-function saveRecentFiles(files: RecentFile[]): void {
-  localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(files));
-}
-
-function pushRecentFile(file: RecentFile): RecentFile[] {
-  const files = loadRecentFiles().filter((f) => f.path !== file.path);
-  files.unshift(file);
-  const trimmed = files.slice(0, MAX_RECENT);
-  saveRecentFiles(trimmed);
-  return trimmed;
 }
 
 // Calculate total road length
@@ -348,7 +313,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings: _onOpe
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const [hoveredMenu, setHoveredMenu] = useState<number | null>(null);
   const [hoveredSubItem, setHoveredSubItem] = useState<number | null>(null);
-  const [recentFiles, setRecentFiles] = useState<RecentFile[]>(loadRecentFiles);
+  const { recentFiles, push: pushRecentFile, remove: removeRecentFile, clear: clearRecentFiles } = useRecentFilesStore();
   const menuBarRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
 
@@ -371,12 +336,12 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings: _onOpe
       }
       proj.name = file.name;
       setProject(proj);
-      setRecentFiles(pushRecentFile({ displayName: file.name, path: file.path ?? file.name }));
+      pushRecentFile(file.name, file.path ?? file.name);
     } catch (err) {
       console.error('[MenuBar] Failed to open file:', err);
       await showAlert(t('dialog.openError'));
     }
-  }, [setProject, t]);
+  }, [setProject, pushRecentFile, t]);
 
   const handleSave = useCallback(async () => {
     const platform = await getPlatformService();
@@ -407,24 +372,20 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings: _onOpe
       }
       proj.name = file.name;
       setProject(proj);
-      setRecentFiles(pushRecentFile({ displayName: file.name, path: file.path ?? file.name }));
+      pushRecentFile(file.name, file.path ?? file.name);
     } catch (err) {
       console.error('[MenuBar] Failed to import OpenDRIVE:', err);
       await showAlert(t('dialog.parseError'));
     }
-  }, [setProject, t]);
+  }, [setProject, pushRecentFile, t]);
 
-  const handleOpenRecentFile = useCallback(async (recent: RecentFile) => {
+  const handleOpenRecentFile = useCallback(async (recent: { name: string; path: string }) => {
     try {
       const platform = await getPlatformService();
       const result = await platform.openFileByPath(recent.path);
       if (!result) {
-        if (recent.path !== recent.displayName) {
-          const updated = loadRecentFiles().filter((f) => f.path !== recent.path);
-          saveRecentFiles(updated);
-          setRecentFiles(updated);
-          await showAlert(`${t('dialog.fileNotFound')}: ${recent.displayName}`);
-        }
+        removeRecentFile(recent.path);
+        await showAlert(`${t('dialog.fileNotFound')}: ${recent.name}`);
         return;
       }
       const proj = await platform.parseOpenDrive(result.content);
@@ -434,14 +395,12 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings: _onOpe
       }
       proj.name = result.name;
       setProject(proj);
-      setRecentFiles(pushRecentFile({ displayName: result.name, path: recent.path }));
+      pushRecentFile(result.name, recent.path);
     } catch {
-      const updated = loadRecentFiles().filter((f) => f.path !== recent.path);
-      saveRecentFiles(updated);
-      setRecentFiles(updated);
-      await showAlert(`${t('dialog.fileNotFound')}: ${recent.displayName}`);
+      removeRecentFile(recent.path);
+      await showAlert(`${t('dialog.fileNotFound')}: ${recent.name}`);
     }
-  }, [setProject, t]);
+  }, [setProject, pushRecentFile, removeRecentFile, t]);
 
   const handleExportOpenDrive = useCallback(async () => {
     const platform = await getPlatformService();
@@ -560,11 +519,11 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings: _onOpe
     ? [{ label: t('menu.noRecentFiles'), disabled: true }]
     : [
         ...recentFiles.map((f): MenuItem => ({
-          label: f.displayName,
+          label: f.name,
           action: () => { void handleOpenRecentFile(f); },
         })),
         { separator: true, label: '' },
-        { label: t('menu.clearRecentFiles'), action: () => { saveRecentFiles([]); setRecentFiles([]); } },
+        { label: t('menu.clearRecentFiles'), action: clearRecentFiles },
       ];
 
   const importSubmenu: MenuItem[] = [
