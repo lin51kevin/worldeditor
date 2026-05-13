@@ -1,0 +1,382 @@
+/* tslint:disable */
+/* eslint-disable */
+
+/**
+ * Add an elevation point to a road and return the modified project.
+ */
+export function add_elevation_point(project_json: string, road_id: string, s: number, height: number): string;
+
+/**
+ * Compute the boundary area of a junction from its connecting roads.
+ *
+ * Returns JSON with `{ id, center, boundary, area }` or null if
+ * the junction has insufficient connections.
+ */
+export function compute_junction_area(project_json: string, junction_id: string): any;
+
+/**
+ * Compute total road width (left, right) at a given s position.
+ *
+ * Returns JSON: `{ "left": number, "right": number }`.
+ */
+export function compute_road_width(road_json: string, s: number): any;
+
+/**
+ * Compute soft selection factors for a given knot.
+ *
+ * Returns JSON array of `[index, factor]` pairs.
+ */
+export function compute_soft_selection(spline_json: string, selected_index: number, radius: number, falloff_type: string): string;
+
+/**
+ * Create a road from a spline and lane template, returning the modified project.
+ *
+ * - `spline_json`: JSON representation of EditableSpline
+ * - `template_id`: Template ID (e.g., "single", "dual2", "dual4", "dual6")
+ * - `road_id`: Unique ID for the new road
+ */
+export function create_road_from_spline(project_json: string, road_id: string, spline_json: string, template_id: string): string;
+
+/**
+ * Delete an elevation point from a road and return the modified project.
+ */
+export function delete_elevation_point(project_json: string, road_id: string, s: number, tolerance: number): string;
+
+/**
+ * Convert GCJ-02 coordinates to WGS84.
+ */
+export function gcj02_to_wgs84(lat: number, lon: number, alt: number): any;
+
+/**
+ * Generate reference line (centerline) visualization vertices from a project JSON.
+ *
+ * Each vertex is 7 floats: [x, y, z, r, g, b, a].
+ * Draws a thin colored ribbon along each road's reference line:
+ * blue for regular roads, orange for roads inside junctions.
+ */
+export function generate_center_line_vertices(project_json: string, sample_step: number): Float32Array;
+
+/**
+ * Generate a default lane section as JSON.
+ *
+ * Creates symmetric layout with `n_lanes` per side at `lane_width` meters.
+ */
+export function generate_default_lane_section(s: number, n_lanes_per_side: number, lane_width: number, with_shoulder: boolean): string;
+
+/**
+ * Generate junction surface mesh vertices from a project JSON. Returns Float32Array.
+ *
+ * Each vertex is 7 floats: [x, y, z, r, g, b, a].
+ * Junction areas are rendered as semi-transparent lavender polygons.
+ */
+export function generate_junction_vertices(project_json: string): Float32Array;
+
+/**
+ * Generate lane boundary line vertices from a project JSON. Returns Float32Array.
+ *
+ * Each vertex is 7 floats: [x, y, z, r, g, b, a].
+ * Generates colored road markings (solid/dashed lines) at each lane boundary.
+ * Color and dash pattern are driven by each lane's `road_marks` data.
+ */
+export function generate_lane_line_vertices(project_json: string, sample_step: number): Float32Array;
+
+/**
+ * Generate road mesh data as JSON from a single road's geometry.
+ *
+ * Generate road object vertices from a project JSON. Returns vertex data as Float32Array.
+ *
+ * Each vertex is 7 floats: [x, y, z, r, g, b, a].
+ *
+ * Renders the following object types:
+ * - `StopLine`: white transverse bar (0.4 m thick) across the road.
+ * - `Crosswalk`: navy-blue zebra stripes (0.45 m stripes / 0.6 m gaps) or outline box.
+ * - `ParkingSpace`: olive-green boundary polygon.
+ * - `CrossHatchArea`: orange boundary polygon.
+ * - `WovenArea`: hot-pink boundary polygon.
+ * - `ForwardWaitingArea`, `TurnLeftWaitingArea`: white boundary box.
+ * - `SlowDownToYieldLine`: sky-blue transverse bar.
+ * - `StopToYieldLine`: red transverse bar.
+ * - `Guardrail`, `Barrier`: colored thin strip along the road direction.
+ * - Other: small colored square marker.
+ */
+export function generate_object_vertices(project_json: string): Float32Array;
+
+/**
+ * Progressive WASM data pipeline (#6): validates that we-core geometry types
+ * can be deserialized from JSON, mesh-generated, and returned as JSON vertices.
+ * Returns a JSON object with "vertices" (array of [x,y,z,r,g,b,a]) and "count".
+ *
+ * Input JSON: serialized `we_core::model::Road`.
+ * Output JSON: `{ "vertices": [[x,y,z,r,g,b,a], ...], "count": N }`
+ */
+export function generate_road_mesh_from_json(road_json: string, sample_step: number): string;
+
+/**
+ * Generate road mesh vertices from a project JSON. Returns vertex data as Float32Array.
+ *
+ * Each vertex is 7 floats: [x, y, z, r, g, b, a].
+ * `color_mode` controls surface coloring:
+ * - `"byLaneType"` (default): per-lane-type palette
+ * - `"single"`: uniform asphalt gray for all lanes
+ * - `"byRoad"`: distinct hue per road (golden-angle HSV cycling)
+ */
+export function generate_road_vertices(project_json: string, sample_step: number, color_mode: string): Float32Array;
+
+/**
+ * Generate signal paint mark vertices from a project JSON. Returns Float32Array.
+ *
+ * Each vertex is 7 floats: [x, y, z, r, g, b, a].
+ *
+ * For `type="Graphics"` signals (road paint arrows), the corresponding arrow
+ * polygon is triangulated and placed on the road surface using the signal's
+ * s/t position and h_offset heading.
+ *
+ * For other signal types (vertical signs), a small colored diamond marker is
+ * placed at the signal position slightly above the road surface.
+ */
+export function generate_signal_paint_vertices(project_json: string, _sample_step: number): Float32Array;
+
+/**
+ * Generate highlight mesh vertices for a single junction.
+ */
+export function generate_single_junction_vertices(project_json: string, junction_id: string, r: number, g: number, b: number, a: number): Float32Array;
+
+/**
+ * Generate road mesh vertices for a single road. Returns Float32Array.
+ *
+ * Each vertex is 7 floats: [x, y, z, r, g, b, a].
+ * The `color` parameter is [r, g, b, a] in 0..1 range.
+ * Used for selection highlight rendering (overrides per-lane colors).
+ */
+export function generate_single_road_vertices(road_json: string, sample_step: number, r: number, g: number, b: number, a: number): Float32Array;
+
+/**
+ * Convert WGS84 to UTM.
+ */
+export function geo_to_utm(lat: number, lon: number, alt: number): any;
+
+/**
+ * List built-in road templates available for spline-based road creation.
+ */
+export function get_road_templates(): any;
+
+export function init(): void;
+
+/**
+ * Measure the angle at a vertex (p2) formed by p1-p2-p3.
+ *
+ * Returns JSON `{ radians, degrees }`.
+ */
+export function measure_angle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number): any;
+
+/**
+ * Measure the area and perimeter of a polygon.
+ *
+ * `points_json` is a JSON array of `[x, y]` pairs.
+ * Returns JSON `{ area, perimeter }`.
+ */
+export function measure_area(points_json: string): any;
+
+/**
+ * Measure the distance between two 3D points.
+ *
+ * Returns JSON `{ straight, horizontal, vertical }`.
+ */
+export function measure_distance(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number): any;
+
+/**
+ * Measure the arc length along a road between two stations.
+ */
+export function measure_road_length(road_json: string, s_start: number, s_end: number): number;
+
+/**
+ * Move a knot in a spline and return the updated spline as JSON.
+ *
+ * `spline_json`: the current spline state.
+ * `knot_index`: index of the knot to move.
+ * `new_x, new_y, new_z`: new position for the knot.
+ */
+export function move_spline_knot(spline_json: string, knot_index: number, new_x: number, new_y: number, new_z: number): string;
+
+/**
+ * Parse an OpenDRIVE XML string and return the project as JSON.
+ */
+export function parse_opendrive(xml: string): any;
+
+/**
+ * Find the closest junction to a world-space point.
+ */
+export function pick_junction_at_point(project_json: string, x: number, y: number, threshold: number): any;
+
+/**
+ * Find the closest road to a world-space point.
+ *
+ * Returns the road ID as a string, or null if no road is within the threshold.
+ * Hit-testing uses the full road surface width (sum of all lane widths), not just
+ * the reference line centre.
+ */
+export function pick_road_at_point(project_json: string, x: number, y: number, threshold: number): any;
+
+/**
+ * Pick the closest knot to a point.
+ *
+ * Returns JSON: `{ "index": number, "distance": number }` or `null` if none within threshold.
+ */
+export function pick_spline_knot(spline_json: string, x: number, y: number, threshold: number): any;
+
+/**
+ * Test if a point is inside a junction's computed area.
+ */
+export function point_in_junction(project_json: string, junction_id: string, x: number, y: number): boolean;
+
+/**
+ * Query the elevation and grade at a station on a road.
+ *
+ * Returns JSON `{ elevation, grade, grade_pct }`.
+ */
+export function query_elevation(road_json: string, s: number): any;
+
+/**
+ * Convert a road (as JSON) to an editable spline (as JSON).
+ *
+ * `sample_step`: distance between intermediate sample points (0 = no intermediates).
+ */
+export function road_to_spline(road_json: string, sample_step: number): string;
+
+/**
+ * Rotate a road around a pivot point and return the modified project JSON.
+ */
+export function rotate_road(project_json: string, road_id: string, pivot_x: number, pivot_y: number, angle_rad: number): string;
+
+/**
+ * Sample a lane boundary polyline as JSON.
+ *
+ * Returns JSON array of `{ x, y, z, s, t }` points.
+ */
+export function sample_lane_boundary(road_json: string, section_s: number, lane_id: number, step: number): string;
+
+/**
+ * Smooth a road's elevation profile.
+ */
+export function smooth_elevation(project_json: string, road_id: string, iterations: number): string;
+
+/**
+ * Snap a point to the nearest grid/endpoint/etc.
+ *
+ * Returns JSON `{ x, y, snapped, snap_type, target_id }`.
+ */
+export function snap_point(project_json: string, x: number, y: number, config_json: string, exclude_road_id?: string | null): any;
+
+/**
+ * Query elements near a point using a spatial index.
+ *
+ * Returns JSON array of `{ id, kind, aabb }`.
+ */
+export function spatial_query_point(project_json: string, x: number, y: number, radius: number): any;
+
+/**
+ * Convert an editable spline (as JSON) back to OpenDRIVE geometry segments (as JSON).
+ */
+export function spline_to_geometries(spline_json: string): string;
+
+/**
+ * Translate a road by (dx, dy, dz) and return the modified project JSON.
+ */
+export function translate_road(project_json: string, road_id: string, dx: number, dy: number, dz: number): string;
+
+/**
+ * Convert UTM to WGS84.
+ */
+export function utm_to_geo(easting: number, northing: number, zone: number, is_northern: boolean, alt: number): any;
+
+/**
+ * Get the core library version.
+ */
+export function version(): string;
+
+/**
+ * Convert WGS84 coordinates to GCJ-02.
+ */
+export function wgs84_to_gcj02(lat: number, lon: number, alt: number): any;
+
+/**
+ * Serialize a project (as JSON) to OpenDRIVE XML.
+ */
+export function write_opendrive(project_json: string): string;
+
+export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
+
+export interface InitOutput {
+    readonly memory: WebAssembly.Memory;
+    readonly add_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+    readonly compute_junction_area: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly compute_road_width: (a: number, b: number, c: number) => [number, number, number];
+    readonly compute_soft_selection: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+    readonly create_road_from_spline: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly delete_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+    readonly gcj02_to_wgs84: (a: number, b: number, c: number) => any;
+    readonly generate_center_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly generate_default_lane_section: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly generate_junction_vertices: (a: number, b: number) => [number, number, number, number];
+    readonly generate_lane_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly generate_object_vertices: (a: number, b: number) => [number, number, number, number];
+    readonly generate_road_mesh_from_json: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly generate_road_vertices: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly generate_signal_paint_vertices: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly generate_single_junction_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly generate_single_road_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+    readonly geo_to_utm: (a: number, b: number, c: number) => any;
+    readonly get_road_templates: () => [number, number, number];
+    readonly init: () => void;
+    readonly measure_angle: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly measure_area: (a: number, b: number) => [number, number, number];
+    readonly measure_distance: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly measure_road_length: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly move_spline_knot: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+    readonly parse_opendrive: (a: number, b: number) => [number, number, number];
+    readonly pick_junction_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pick_road_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pick_spline_knot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly point_in_junction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly query_elevation: (a: number, b: number, c: number) => [number, number, number];
+    readonly road_to_spline: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly rotate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+    readonly sample_lane_boundary: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly smooth_elevation: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly snap_point: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
+    readonly spatial_query_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly spline_to_geometries: (a: number, b: number) => [number, number, number, number];
+    readonly translate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+    readonly utm_to_geo: (a: number, b: number, c: number, d: number, e: number) => any;
+    readonly version: () => [number, number];
+    readonly wgs84_to_gcj02: (a: number, b: number, c: number) => any;
+    readonly write_opendrive: (a: number, b: number) => [number, number, number, number];
+    readonly __wbindgen_malloc: (a: number, b: number) => number;
+    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __wbindgen_externrefs: WebAssembly.Table;
+    readonly __externref_table_dealloc: (a: number) => void;
+    readonly __wbindgen_start: () => void;
+}
+
+export type SyncInitInput = BufferSource | WebAssembly.Module;
+
+/**
+ * Instantiates the given `module`, which can either be bytes or
+ * a precompiled `WebAssembly.Module`.
+ *
+ * @param {{ module: SyncInitInput }} module - Passing `SyncInitInput` directly is deprecated.
+ *
+ * @returns {InitOutput}
+ */
+export function initSync(module: { module: SyncInitInput } | SyncInitInput): InitOutput;
+
+/**
+ * If `module_or_path` is {RequestInfo} or {URL}, makes a request and
+ * for everything else, calls `WebAssembly.instantiate` directly.
+ *
+ * @param {{ module_or_path: InitInput | Promise<InitInput> }} module_or_path - Passing `InitInput` directly is deprecated.
+ *
+ * @returns {Promise<InitOutput>}
+ */
+export default function __wbg_init (module_or_path?: { module_or_path: InitInput | Promise<InitInput> } | InitInput | Promise<InitInput>): Promise<InitOutput>;

@@ -25,11 +25,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install yarn
-        run: corepack enable && corepack prepare yarn@stable --activate
-
       - name: Install dependencies
-        run: cd frontend && yarn install --immutable
+        run: npm install -g yarn@1 && cd frontend && yarn install --frozen-lockfile
 
       - name: Install Rust toolchain for WASM
         uses: dtolnay/rust-toolchain@stable

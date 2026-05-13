@@ -5,6 +5,7 @@ import { getPlatformService } from '../services';
 import { showContextMenu } from '../services/contextMenu';
 import { useEditorStore } from '../stores/editorStore';
 import { DEFAULT_DISPLAY, useEditorViewStore } from '../stores/editorViewStore';
+import { usePluginContribStore } from '../stores/pluginContribStore';
 import { Viewport } from './Viewport';
 
 const rendererMocks = vi.hoisted(() => ({
@@ -675,5 +676,153 @@ describe('Viewport', () => {
     });
 
     expect(rendererMocks.applyZoomFactor).toHaveBeenCalled();
+  });
+
+  describe('template drag-and-drop', () => {
+    function setupDragDropTest() {
+      rendererMocks.isSupported.mockReturnValue(true);
+      rendererMocks.init.mockResolvedValue(true);
+      rendererMocks.unprojectToGround.mockReturnValue({ x: 42, y: -7 });
+      const platform = createPlatformMock();
+      vi.mocked(getPlatformService).mockResolvedValue(platform);
+      return platform;
+    }
+
+    const templateDt = {
+      types: ['application/we-template-id'],
+      getData: () => '',
+      dropEffect: '',
+    };
+
+    beforeEach(() => {
+      act(() => {
+        usePluginContribStore.setState({ templateSections: [] });
+      });
+    });
+
+    it('adds viewport-drag-over class on dragenter with a template payload', async () => {
+      setupDragDropTest();
+      render(<Viewport />);
+      await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+      const viewport = document.querySelector('.viewport')!;
+      fireEvent.dragEnter(viewport, { dataTransfer: templateDt });
+
+      expect(viewport.classList.contains('viewport-drag-over')).toBe(true);
+    });
+
+    it('preserves viewport-drag-over class during dragover (set by dragenter)', async () => {
+      setupDragDropTest();
+      render(<Viewport />);
+      await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+      const viewport = document.querySelector('.viewport')!;
+      fireEvent.dragEnter(viewport, { dataTransfer: templateDt });
+      expect(viewport.classList.contains('viewport-drag-over')).toBe(true);
+
+      // dragover should not clear the class
+      fireEvent.dragOver(viewport, { dataTransfer: templateDt });
+      expect(viewport.classList.contains('viewport-drag-over')).toBe(true);
+    });
+
+    it('removes viewport-drag-over class when drag leaves the viewport', async () => {
+      setupDragDropTest();
+      render(<Viewport />);
+      await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+      const viewport = document.querySelector('.viewport')!;
+      fireEvent.dragEnter(viewport, { dataTransfer: templateDt });
+      expect(viewport.classList.contains('viewport-drag-over')).toBe(true);
+
+      // relatedTarget=null means leaving to outside (not a child element)
+      fireEvent.dragLeave(viewport, { relatedTarget: null });
+      expect(viewport.classList.contains('viewport-drag-over')).toBe(false);
+    });
+
+    it('calls onApply with world coordinates when a template is dropped', async () => {
+      setupDragDropTest();
+      const onApply = vi.fn();
+      act(() => {
+        usePluginContribStore.getState().registerTemplateSection({
+          id: 'test-section',
+          pluginId: 'test-plugin',
+          categoryKey: 'Test',
+          order: 0,
+          items: [{ id: 'tpl:test:road', labelKey: 'Test Road', icon: '╺', onApply }],
+        });
+      });
+
+      render(<Viewport />);
+      await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+      const viewport = document.querySelector('.viewport')!;
+      fireEvent.drop(viewport, {
+        clientX: 100,
+        clientY: 80,
+        dataTransfer: {
+          types: ['application/we-template-id'],
+          getData: (key: string) => key === 'application/we-template-id' ? 'tpl:test:road' : '',
+          dropEffect: '',
+        },
+      });
+
+      expect(rendererMocks.unprojectToGround).toHaveBeenCalled();
+      expect(onApply).toHaveBeenCalledWith({ x: 42, y: -7, hdg: 0 });
+    });
+
+    it('does not call onApply when an unknown template id is dropped', async () => {
+      setupDragDropTest();
+      const onApply = vi.fn();
+      act(() => {
+        usePluginContribStore.getState().registerTemplateSection({
+          id: 'test-section',
+          pluginId: 'test-plugin',
+          categoryKey: 'Test',
+          order: 0,
+          items: [{ id: 'tpl:test:road', labelKey: 'Test Road', icon: '╺', onApply }],
+        });
+      });
+
+      render(<Viewport />);
+      await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+      const viewport = document.querySelector('.viewport')!;
+      fireEvent.drop(viewport, {
+        dataTransfer: {
+          types: ['application/we-template-id'],
+          getData: (key: string) => key === 'application/we-template-id' ? 'tpl:unknown:item' : '',
+        },
+      });
+
+      expect(onApply).not.toHaveBeenCalled();
+    });
+
+    it('does not apply template when unprojectToGround returns null', async () => {
+      setupDragDropTest();
+      rendererMocks.unprojectToGround.mockReturnValue(null);
+      const onApply = vi.fn();
+      act(() => {
+        usePluginContribStore.getState().registerTemplateSection({
+          id: 'test-section',
+          pluginId: 'test-plugin',
+          categoryKey: 'Test',
+          order: 0,
+          items: [{ id: 'tpl:test:road', labelKey: 'Test Road', icon: '╺', onApply }],
+        });
+      });
+
+      render(<Viewport />);
+      await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+      const viewport = document.querySelector('.viewport')!;
+      fireEvent.drop(viewport, {
+        dataTransfer: {
+          types: ['application/we-template-id'],
+          getData: (key: string) => key === 'application/we-template-id' ? 'tpl:test:road' : '',
+        },
+      });
+
+      expect(onApply).not.toHaveBeenCalled();
+    });
   });
 });

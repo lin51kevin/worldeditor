@@ -1375,11 +1375,21 @@ export function Viewport() {
     }
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes('application/we-template-id')) {
+  const hasTemplateDrag = (e: React.DragEvent) =>
+    Array.from(e.dataTransfer.types).includes('application/we-template-id');
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    if (hasTemplateDrag(e)) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
       setIsDragOver(true);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (hasTemplateDrag(e)) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
     }
   }, []);
 
@@ -1490,6 +1500,7 @@ export function Viewport() {
     <div
       className={`viewport${isDragOver ? ' viewport-drag-over' : ''}`}
       onMouseUp={handleMouseUp}
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
