@@ -25,6 +25,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { BUILTIN_PLUGINS } from './plugins/builtinRegistry';
 import { getPlatformService } from './services';
 import { showAlert } from './utils/dialog';
+import { emitViewportEvent } from './viewport/viewportEvents';
 
 const STARTUP_WELCOME_KEY = 'we-show-welcome-on-startup';
 
@@ -43,6 +44,8 @@ export function App() {
     toggleRightPanel,
     toggleOutputPanel,
     toggleTemplatePanel,
+    setEditMode,
+    clearSplineKnots,
   } = useEditorViewStore();
   const { recentFiles, push: pushRecentFile, remove: removeRecentFile } = useRecentFilesStore();
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
@@ -108,6 +111,35 @@ export function App() {
     toggleRightPanel,
     toggleOutputPanel,
     onShowShortcutHelp: setShowShortcutHelp,
+    onSetEditMode: (mode) => {
+      // EditModes (move-road, rotate-road): toggle back to default if already active.
+      // DrawModes: always enter the mode and reset in-progress knots.
+      const isEditMode = mode === 'move-road' || mode === 'rotate-road';
+      const current = useEditorViewStore.getState().editMode;
+      if (isEditMode && current === mode) {
+        setEditMode('default');
+      } else {
+        setEditMode(mode);
+        if (mode === 'spline' || mode === 'line' || mode === 'arc' || mode === 'spiral') {
+          clearSplineKnots();
+        }
+      }
+    },
+    onEscape: () => {
+      // In draw modes: 1st Escape clears in-progress knots (stays in mode),
+      //               2nd Escape (no knots left) returns to default.
+      // In all other modes: immediately return to default.
+      const drawModes = new Set(['line', 'arc', 'spiral', 'spline']);
+      const { editMode: current, splineKnots } = useEditorViewStore.getState();
+      if (drawModes.has(current) && splineKnots.length > 0) {
+        clearSplineKnots();
+      } else {
+        setEditMode('default');
+        clearSplineKnots();
+      }
+    },
+    onDeleteSelected: () => useEditorStore.getState().deleteSelected(),
+    onZoomToFit: () => emitViewportEvent({ type: 'zoom-to-fit' }),
   });
 
   // Show right panel only when something is selected (Quick Inspector behavior)
@@ -253,27 +285,26 @@ export function App() {
         {showShortcutHelp && (
           <div className="shortcut-help-overlay" onClick={() => setShowShortcutHelp(false)}>
             <div className="shortcut-help-dialog" onClick={(e) => e.stopPropagation()}>
-              <h3>键盘快捷键</h3>
+              <h3>{t('help.title', 'Keyboard Shortcuts')}</h3>
               <table>
                 <tbody>
-                  <tr><td><kbd>Ctrl+Z</kbd></td><td>撤销</td></tr>
-                  <tr><td><kbd>Ctrl+Y</kbd></td><td>重做</td></tr>
-                  <tr><td><kbd>Ctrl+A</kbd></td><td>全选</td></tr>
-                  <tr><td><kbd>Ctrl+D</kbd></td><td>复制选中道路</td></tr>
-                  <tr><td><kbd>Ctrl+C</kbd></td><td>复制到剪贴板</td></tr>
-                  <tr><td><kbd>Ctrl+V</kbd></td><td>粘贴</td></tr>
-                  <tr><td><kbd>Delete</kbd></td><td>删除选中</td></tr>
-                  <tr><td><kbd>Esc</kbd></td><td>取消选择</td></tr>
-                  <tr><td><kbd>E</kbd></td><td>进入几何编辑</td></tr>
-                  <tr><td><kbd>Shift+拖拽</kbd></td><td>框选多个元素</td></tr>
-                  <tr><td><kbd>Shift+点击</kbd></td><td>切换多选</td></tr>
-                  <tr><td><kbd>Home</kbd></td><td>视图缩放到全部</td></tr>
-                  <tr><td><kbd>L</kbd></td><td>显示/隐藏图层面板</td></tr>
-                  <tr><td><kbd>I</kbd></td><td>显示/隐藏检查面板</td></tr>
-                  <tr><td><kbd>?</kbd></td><td>显示此帮助</td></tr>
+                  <tr><td><kbd>L</kbd></td><td>{t('toolbar.drawLineTitle', 'Draw Line (L)')}</td></tr>
+                  <tr><td><kbd>A</kbd></td><td>{t('toolbar.drawArcTitle', 'Draw Arc (A)')}</td></tr>
+                  <tr><td><kbd>P</kbd></td><td>{t('toolbar.drawSpiralTitle', 'Draw Spiral (P)')}</td></tr>
+                  <tr><td><kbd>S</kbd></td><td>{t('toolbar.splineEditTitle', 'Spline (S)')}</td></tr>
+                  <tr><td><kbd>M</kbd></td><td>{t('statusBar.modes.move-road', 'Move Road (M)')}</td></tr>
+                  <tr><td><kbd>R</kbd></td><td>{t('statusBar.modes.rotate-road', 'Rotate Road (R)')}</td></tr>
+                  <tr><td><kbd>Esc</kbd></td><td>{t('help.shortcuts.Escape', 'Cancel / return to Select')}</td></tr>
+                  <tr><td><kbd>Delete</kbd></td><td>{t('help.shortcuts.Delete / Backspace', 'Delete selected')}</td></tr>
+                  <tr><td><kbd>F</kbd></td><td>{t('help.shortcuts.F', 'Zoom to fit')}</td></tr>
+                  <tr><td><kbd>Ctrl+Z</kbd></td><td>{t('toolbar.undoTitle', 'Undo')}</td></tr>
+                  <tr><td><kbd>Ctrl+Y</kbd></td><td>{t('toolbar.redoTitle', 'Redo')}</td></tr>
+                  <tr><td><kbd>Ctrl+A</kbd></td><td>{t('help.shortcuts.Ctrl+A', 'Select all')}</td></tr>
+                  <tr><td><kbd>I</kbd></td><td>{t('help.shortcuts.I', 'Toggle Inspector')}</td></tr>
+                  <tr><td><kbd>?</kbd></td><td>{t('help.shortcuts.?', 'Show shortcuts')}</td></tr>
                 </tbody>
               </table>
-              <button onClick={() => setShowShortcutHelp(false)}>关闭</button>
+              <button onClick={() => setShowShortcutHelp(false)}>{t('dialog.ok', 'OK')}</button>
             </div>
           </div>
         )}

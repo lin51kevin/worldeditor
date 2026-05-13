@@ -52,8 +52,8 @@ describe('RoadEditToolbar', () => {
     render(<RoadEditToolbar />);
     expect(screen.getByTitle('Adjust Node')).toBeInTheDocument();
     expect(screen.getByTitle('Adjust Edge Line')).toBeInTheDocument();
-    expect(screen.getByTitle('Move Road')).toBeInTheDocument();
-    expect(screen.getByTitle('Rotate Road')).toBeInTheDocument();
+    expect(screen.getByTitle('Move Road [M]')).toBeInTheDocument();
+    expect(screen.getByTitle('Rotate Road [R]')).toBeInTheDocument();
     expect(screen.getByTitle('Road Markings')).toBeInTheDocument();
     expect(screen.getByTitle('Optimize Nodes')).toBeInTheDocument();
   });

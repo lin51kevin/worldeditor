@@ -28,9 +28,16 @@ describe('Toolbar', () => {
   it('renders edit mode buttons', () => {
     render(<Toolbar />);
 
-    ['默认', '道路', '样条', '车道', '车道簇'].forEach((label) => {
+    // Only default/select and draw mode buttons are shown.
+    // Road/Lane/LaneSection select modes are hidden.
+    expect(screen.getByRole('button', { name: '默认' })).toBeInTheDocument();
+    ['样条', '直线', '圆弧', '回旋线'].forEach((label) => {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     });
+    // Hidden buttons must NOT be present
+    expect(screen.queryByRole('button', { name: '道路' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '车道' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '车道簇' })).not.toBeInTheDocument();
   });
 
   it('renders view mode buttons', () => {
@@ -57,13 +64,16 @@ describe('Toolbar', () => {
     expect(screen.queryByRole('button', { name: '坐标轴' })).not.toBeInTheDocument();
   });
 
-  it('updates edit mode via toolbar buttons', () => {
+  it('updates edit mode via draw mode toolbar buttons', () => {
     render(<Toolbar />);
 
-    fireEvent.click(screen.getByRole('button', { name: '道路' }));
-    fireEvent.click(screen.getByRole('button', { name: '车道' }));
-    fireEvent.click(screen.getByRole('button', { name: '车道簇' }));
+    fireEvent.click(screen.getByRole('button', { name: '直线' }));
+    expect(useEditorViewStore.getState().editMode).toBe('line');
 
-    expect(useEditorViewStore.getState().editMode).toBe('lanesection');
+    fireEvent.click(screen.getByRole('button', { name: '圆弧' }));
+    expect(useEditorViewStore.getState().editMode).toBe('arc');
+
+    fireEvent.click(screen.getByRole('button', { name: '回旋线' }));
+    expect(useEditorViewStore.getState().editMode).toBe('spiral');
   });
 });

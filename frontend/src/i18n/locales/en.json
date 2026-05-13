@@ -70,11 +70,11 @@
     "delete": "Delete",
     "resetTitle": "Reset unsaved changes",
     "selectMode": "Default",
-    "selectModeTitle": "Select Mode (S)",
+    "selectModeTitle": "Select (Esc)",
     "roadEdit": "Road",
     "roadEditTitle": "Road Edit (R)",
     "splineEdit": "Spline",
-    "splineEditTitle": "Spline Draw Mode (P)",
+    "splineEditTitle": "Spline (S)",
     "splineTemplateTitle": "Road Template",
     "splineTemplateDefault": "Single Lane",
     "laneEdit": "Lane",
@@ -104,11 +104,11 @@
     "measure": "Measure",
     "measureTitle": "Measure Tool",
     "drawLine": "Line",
-    "drawLineTitle": "Draw Polyline Road (click points, Enter to finish, Backspace to undo)",
+    "drawLineTitle": "Draw Line (L)",
     "drawArc": "Arc",
-    "drawArcTitle": "Draw Arc Road (click points in groups: anchor, through, anchor... then Enter to finish)",
+    "drawArcTitle": "Draw Arc (A)",
     "drawSpiral": "Spiral",
-    "drawSpiralTitle": "Draw Spiral Road (click points, Enter to finish, Backspace to undo)"
+    "drawSpiralTitle": "Draw Spiral (P)"
   },
   "statusBar": {
     "roads": "Roads",
@@ -116,7 +116,22 @@
     "worldCoord": "World Coordinates",
     "localPos": "Local Position",
     "modified": "Modified",
-    "saved": "Saved"
+    "saved": "Saved",
+    "mode": "Mode",
+    "modes": {
+      "default": "Select",
+      "road": "Road Edit",
+      "lane": "Lane Edit",
+      "lanesection": "LaneSection Edit",
+      "line": "Draw Line [L]",
+      "arc": "Draw Arc [A]",
+      "spiral": "Draw Spiral [P]",
+      "spline": "Spline [S]",
+      "move-road": "Move Road [M]",
+      "rotate-road": "Rotate Road [R]",
+      "adjust-edge": "Adjust Edge",
+      "road-markings": "Road Markings"
+    }
   },
   "propertyPanel": {
     "properties": "Properties",

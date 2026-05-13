@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { MapPin } from 'lucide-react';
+import { MapPin, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useEditorStore } from '../stores/editorStore';
+import { useEditorViewStore } from '../stores/editorViewStore';
 import { onCursorMove } from '../viewport/cursorEvents';
 import './StatusBar.css';
 
@@ -15,6 +16,7 @@ export function StatusBar() {
   const gridSpacing = useEditorStore((s) => s.gridSpacing);
   const viewportMpp = useEditorStore((s) => s.viewportMpp);
   const roadCount = useEditorStore((s) => s.project.roads.length);
+  const editMode = useEditorViewStore((s) => s.editMode);
   const { t } = useTranslation();
   const coordRef = useRef<HTMLSpanElement>(null);
 
@@ -28,12 +30,17 @@ export function StatusBar() {
   }, [t]);
 
   const barPx = Math.min(180, Math.max(20, Math.round(gridSpacing / viewportMpp)));
+  const modeLabel = t(`statusBar.modes.${editMode}`, editMode);
 
   return (
     <div className="statusbar">
       <span className="statusbar-item">
         <MapPin size={11} />
         <span ref={coordRef}>{t('statusBar.worldCoord')}: 0.000, 0.000</span>
+      </span>
+      <span className="statusbar-item">
+        <Pencil size={11} />
+        <span className="statusbar-mode">{t('statusBar.mode')}: {modeLabel}</span>
       </span>
       <span className="statusbar-item">{t('statusBar.roads')}: {roadCount}</span>
       <span className="statusbar-item statusbar-scale">

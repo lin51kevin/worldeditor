@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  MousePointer, Route, AlignJustify, GitMerge,
+  MousePointer,
   Spline, Minus, Circle, Waves,
 } from 'lucide-react';
 import { useEditorViewStore } from '../stores/editorViewStore';
@@ -87,7 +87,7 @@ export function Toolbar() {
       style={{ transform: `translateX(calc(-50% + ${tx}px)) translateY(${ty}px)` }}
       onMouseDown={handleMouseDown}
     >
-      {/* SelectMode group: default / road / lane / lanesection */}
+      {/* SelectMode group: only default/select — road/lane/lanesection hidden for now */}
       <div className="toolbar-group">
         <button
           className={`toolbar-btn toolbar-toggle ${editMode === 'default' ? 'active' : ''}`}
@@ -98,36 +98,6 @@ export function Toolbar() {
         >
           <MousePointer size={16} className="tb-icon" />
           <span className="tb-label">{t('toolbar.selectMode')}</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${editMode === 'road' ? 'active' : ''}`}
-          onClick={() => setEditMode('road')}
-          title={t('toolbar.roadEditTitle')}
-          aria-label={t('toolbar.roadEdit')}
-          aria-pressed={editMode === 'road'}
-        >
-          <Route size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.roadEdit')}</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${editMode === 'lane' ? 'active' : ''}`}
-          onClick={() => setEditMode('lane')}
-          title={t('toolbar.laneEditTitle')}
-          aria-label={t('toolbar.laneEdit')}
-          aria-pressed={editMode === 'lane'}
-        >
-          <AlignJustify size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.laneEdit')}</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${editMode === 'lanesection' ? 'active' : ''}`}
-          onClick={() => setEditMode('lanesection')}
-          title={t('toolbar.laneSectionEditTitle')}
-          aria-label={t('toolbar.laneSectionEdit')}
-          aria-pressed={editMode === 'lanesection'}
-        >
-          <GitMerge size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.laneSectionEdit')}</span>
         </button>
       </div>
 

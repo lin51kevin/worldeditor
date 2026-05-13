@@ -106,7 +106,7 @@ export function RoadEditToolbar() {
         </button>
         <button
           className={`toolbar-btn ${editMode === 'move-road' ? 'active' : ''}`}
-          title={t('toolPanel.moveRoad')}
+          title={`${t('toolPanel.moveRoad')} [M]`}
           onClick={() => setEditMode(editMode === 'move-road' ? 'default' : 'move-road')}
           disabled={!hasRoad}
         >
@@ -114,7 +114,7 @@ export function RoadEditToolbar() {
         </button>
         <button
           className={`toolbar-btn ${editMode === 'rotate-road' ? 'active' : ''}`}
-          title={t('toolPanel.rotateRoad')}
+          title={`${t('toolPanel.rotateRoad')} [R]`}
           onClick={() => setEditMode(editMode === 'rotate-road' ? 'default' : 'rotate-road')}
           disabled={!hasRoad}
         >

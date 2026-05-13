@@ -1,0 +1,194 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="4" name="" version="2.00" date="2026-01-16T15:45:30" north="-30.681125998827959" west="-128.93591235926789" east="-59.374054387679251" south="-79.065772817148684" vendor="51World">
+    <geoReference />
+    <userData code="originLat" value="0" />
+    <userData code="originLong" value="0" />
+    <userData code="originAlt" value="0" />
+    <userData code="originHdg" value="0" />
+    <userData code="RnkMajorVersion" value="1" />
+    <userData code="RnkMinorVersion" value="1" />
+    <userData code="localEnuExt" value="6378137,0,0;0,1,0;0,0,1;1,0,0" />
+  </header>
+  <road id="547" junction="-1" length="72.98391591" name="Road (547)">
+    <link>
+      <successor contactPoint="end" elementId="515" elementType="junction" />
+    </link>
+    <type s="0" type="rural">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="0.54305581" length="14.43364293" s="0" x="-126.60984496" y="-71.48342579">
+        <paramPoly3 aU="0" aV="0" bU="6.97947" bV="0" cU="22.3321" cV="-1.48123" dU="-14.8885" dV="0.939033" pRange="normalized" />
+      </geometry>
+      <geometry hdg="0.52222871" length="41.29288899" s="14.43364293" x="-113.98166719" y="-64.49447388">
+        <paramPoly3 aU="0" aV="0" bU="41.2927" bV="0" cU="-0.00420486" cV="0.841502" dU="0.00239076" dV="-0.454442" pRange="normalized" />
+      </geometry>
+      <geometry hdg="0.52997051" length="17.25738398" s="55.72653192" x="-78.38756322" y="-43.56259385">
+        <paramPoly3 aU="0" aV="0" bU="17.2574" bV="2.13163E-14" cU="-0.0003861" cV="-0.184941" dU="0.000254538" dV="0.117556" pRange="normalized" />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="0" b="0" c="0" d="0" s="0" />
+      <elevation a="0" b="0" c="0" d="0" s="36.492" />
+    </elevationProfile>
+    <lanes>
+      <laneOffset a="4.7472" b="0.00936173197" c="0" d="0.000260901946" s="0" />
+      <laneOffset a="4.8228" b="0.0278915169" c="0.00380832913" d="-0.000455778254" s="4.8656" />
+      <laneOffset a="4.9961" b="0.0325807914" c="-0.00284456722" d="8.01341479E-05" s="9.7312" />
+      <laneOffset a="5.0965" b="0.0105910603" c="-0.00167486644" d="0.000107333158" s="14.5968" />
+      <laneOffset a="5.1208" b="0.00191563721" c="-0.000108147607" d="-6.21319436E-06" s="19.4624" />
+      <laneOffset a="5.1235" b="-0.00195426697" c="-0.000289532909" d="1.05413971E-05" s="29.1936" />
+      <laneOffset a="5.0535" b="-0.00124552247" c="0.00032594904" d="1.36764871E-05" s="48.6559" />
+      <laneOffset a="5.0567" b="0.002897681" c="0.000525581756" d="-3.26719169E-05" s="53.5215" />
+      <laneOffset a="5.1046" b="0.00384504861" c="-0.000428228017" d="1.4668575E-05" s="63.2527" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="none" material="" type="curb" weight="standard" width="0" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="shoulder">
+            <width a="0.2459" b="-0.00016948764318245026" c="-1.2273284967137829E-05" d="1.9375909967624095E-07" sOffset="0" />
+            <width a="0.23132382833685278" b="-0.00021538057773660334" c="1.8979919222420945E-05" d="-3.3187261818099753E-07" sOffset="43.000691346732147" />
+            <roadMark color="yellow" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.2" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="72.986262774994643" />
+          </lane>
+          <lane id="-2" level="false" type="driving">
+            <width a="2.9775" b="-0.0023427640842905205" c="-0.0037699155385772253" d="0.00079604568481065469" sOffset="0" />
+            <width a="2.9587575859931561" b="0.0057088482654062862" c="-0.00041336264757429867" d="0.00075296663817615026" sOffset="4.0000643113239214" />
+            <width a="3.0231715204104304" b="0.019272727370782266" c="0.0040170590644076571" d="-0.00032680002549045694" sOffset="8.0001286226478427" />
+            <width a="3.2671261817441235" b="0.023770380838861748" c="-0.0018238199675505795" d="3.4431959798315156E-05" sOffset="16.000257245295685" />
+            <width a="3.3559622026208111" b="0.0023087061323671708" c="-0.0010951539280886064" d="4.3768214886149027E-05" sOffset="23.000369790112543" />
+            <width a="3.3133010467712065" b="-0.0064638378953844758" c="-0.00080403915070636242" d="5.84254200759659E-05" sOffset="33.000530568422349" />
+            <width a="3.2266833662232584" b="-0.0041805748449041938" c="0.00033814450963719813" d="-7.08553746789153E-06" sOffset="43.000691346732147" />
+            <width a="3.2129656373436877" b="0.0020975358039627243" c="0.0018889488351465696" d="-0.0001841484207945284" sOffset="55.000884280703914" />
+            <width a="3.2476590615011469" b="0.0032617055400872117" c="0.00011132566481031049" d="-9.22940077640101E-06" sOffset="60.000964669858817" />
+            <width a="3.2847243129309147" b="0.013080430286003227" c="-0.0037466400324968024" d="0.00046855426729018064" sOffset="71.0011415259996" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <roadMark color="white" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.4" sOffset="14.433874991671459">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <speed sOffset="0" max="30" unit="km/h" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="72.986262774994643" />
+          </lane>
+          <lane id="-3" level="false" type="driving">
+            <width a="3.048" b="-0.010473227967936871" c="-0.0098320712815003347" d="0.002113649823833838" sOffset="0" />
+            <width a="2.9851596218716443" b="-0.012396223792105728" c="-0.0007503929305140945" d="0.0012001222011195302" sOffset="3.000048233492941" />
+            <width a="2.97362146142102" b="0.011629265718609422" c="0.0053515626436114955" d="-0.00043078835295785553" sOffset="6.0000964669858821" />
+            <width a="3.0781952434074689" b="0.033763949342672905" c="0.0084911938801598" d="-0.0016464718956406032" sOffset="10.000160778309803" />
+            <width a="3.2437373989709695" b="0.022661400249715892" c="-0.0079390047733221766" d="0.00081453983266182987" sOffset="14.000225089633725" />
+            <width a="3.2594893601745" b="-0.0017524898755613663" c="-0.0043847507610399088" d="0.00074053044819721956" sOffset="18.000289400957644" />
+            <width a="3.2297172545565904" b="-0.00042815181054453984" c="0.00048422178419683297" d="-2.6095950658220893E-05" sOffset="22.000353712281566" />
+            <width a="3.2492135515113723" b="-4.3884729104397972E-05" c="-0.00011018518800576912" d="3.0867753547479123E-06" sOffset="34.000546646253326" />
+            <width a="3.2277862954308616" b="-0.00081993802241499356" c="0.000494451824127138" d="-3.5627734371650048E-05" sOffset="56.0009003585349" />
+            <width a="3.2311746249960938" b="-0.005284160204499933" c="-0.0028850866695111833" d="0.00031872472987065555" sOffset="67.001077214675675" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <roadMark color="white" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.4" sOffset="14.433874991671459">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <speed sOffset="0" max="30" unit="km/h" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="72.986262774994643" />
+          </lane>
+          <lane id="-4" level="false" type="driving">
+            <width a="3.4567999999999994" b="0.0069482026593555716" c="0.0086793737362979278" d="-0.0021210803709361251" sOffset="0" />
+            <width a="3.4984898862283007" b="0.0017542707920163664" c="-0.0023619390668903162" d="-0.00056178231331175462" sOffset="3.000048233492941" />
+            <width a="3.4673257939813134" b="-0.027586201662825417" c="-0.004365988080651177" d="-0.00045555902878435247" sOffset="6.0000964669858821" />
+            <width a="3.3329700150936219" b="-0.049562280463843214" c="-0.013201677845288303" d="0.0023020312653107122" sOffset="9.0001447004788222" />
+            <width a="3.0708211754388213" b="-0.059568463169535318" c="0.011351531337365422" d="-0.00069354026076292122" sOffset="13.000209011802744" />
+            <width a="2.9755534896863143" b="-0.00611062156584948" c="0.0064661562553858182" d="-0.00077552273578214274" sOffset="16.000257245295685" />
+            <width a="3.0097139773249193" b="0.000160793791027642" c="-0.00062389432353486866" d="3.3339098150485366E-05" sOffset="21.000337634450585" />
+            <width a="2.9794126027161472" b="-0.00030746789121255413" c="0.00018295459902550534" d="-5.2380467027652967E-06" sOffset="33.000530568422349" />
+            <width a="2.9998748466167804" b="0.003483940984740648" c="0.0005106850153894075" d="-6.1509089474241869E-05" sOffset="49.000787813718034" />
+            <width a="3.0281885607015164" b="0.00065590674993027331" c="-0.00012950265220802495" d="4.1199233592785305E-06" sOffset="56.0009003585349" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <roadMark color="white" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.4" sOffset="14.433874991671459">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <speed sOffset="0" max="30" unit="km/h" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="72.986262774994643" />
+          </lane>
+          <lane id="-5" level="false" type="driving">
+            <width a="3.5156000000000009" b="0.0010027623989383486" c="0.0023212626116035692" d="-0.00042413585205803694" sOffset="0" />
+            <width a="3.5256277852118281" b="-0.0063295417221699377" c="-0.0024746319527695739" d="0.00019019438550879893" sOffset="5.0000803891549017" />
+            <width a="3.4396442781503378" b="-0.018580738135762078" c="-0.00017406318878852078" d="-2.0558669634752974E-05" sOffset="11.000176856140783" />
+            <width a="3.3398174164745349" b="-0.0060731521702943386" c="-0.00019115111999504398" d="8.99190500362349E-06" sOffset="16.000257245295685" />
+            <width a="3.2210072848676337" b="-0.00361224892992831" c="0.00022265664204631236" d="-5.9648404756096914E-06" sOffset="34.000546646253326" />
+            <width a="3.18810052217818" b="-0.0030131602452546633" c="-0.00024217436119933664" d="1.2502986781106366E-05" sOffset="55.000884280703914" />
+            <width a="3.1306110241575595" b="-0.0092395246552615454" c="0.0068431924895316389" d="-0.001168080380422396" sOffset="70.001125448168622" />
+            <roadMark color="yellow" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.2" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <speed sOffset="0" max="30" unit="km/h" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="72.986262774994643" />
+          </lane>
+          <lane id="-6" level="false" type="shoulder">
+            <width a="0.35989999999999966" b="1.7777888393907731E-05" c="7.3073566386242622E-07" d="-6.6746410998388478E-09" sOffset="0" />
+            <roadMark color="standard" height="0" laneChange="none" material="" type="curb" weight="standard" width="0" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="72.986262774994643" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <signals>
+      <signal s="7.3435242860427785E-15" t="1.2166389883481417E-14" id="755" name="Speed Limit Sign(755)" dynamic="no" orientation="none" zOffset="3.0000000000000009" country="CHN" type="1010203800001413" subtype="none" value="30" unit="km/h" height="0" width="0.00827076" text="" hOffset="3.1415926535897838" pitch="3.1676304053005641E-14" roll="-2.5206586886038354E-15">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="7.3435242860427785E-15" t="1.2166389883481417E-14" id="756" name="TrafficSign(756)" dynamic="no" orientation="none" zOffset="3.0000000000000009" country="CN" type="200" subtype="0" value="0" unit="" height="0" width="0.0160921" text="" hOffset="3.1415926535897838" pitch="3.1676304053005641E-14" roll="-2.5206586886038354E-15">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="17.414172983856698" t="-3.0392449999999958" id="746" name="Forward Arrow Paint(746)(746)" dynamic="no" orientation="none" zOffset="0.01" country="CHN" type="Graphics" subtype="StraightAheadArrow" value="0" unit="m" height="0" width="3" text="" hOffset="3.1415926535843739" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+        <userData code="_Custom_Data_Prefix_attachedPole" value="-1" />
+        <userData code="_Custom_Data_Prefix_length" value="3" />
+        <userData code="_Custom_Data_Prefix_color" value="#FFFFFF" />
+      </signal>
+      <signal s="28.32285961169686" t="-0.066812940729882156" id="1" name="Straight Arrow Paint(1)" dynamic="no"      orientation="none" zOffset="0.01" country="CHN" type="Graphics" subtype="StraightAheadArrow" value="0" unit="m" height="0" width="3" text="" hOffset="3.1414458273782864" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="66.678372034985586" t="-8.7671800000000069" id="757" name="TrafficSign(757)" dynamic="no" orientation="none" zOffset="2.9999999990872364" country="CN" type="400" subtype="0" value="0" unit="" height="0" width="0.0621548" text="" hOffset="3.1415926535875549" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+    </signals>
+    <userData code="layer" value="Unknow" />
+  </road>
+</OpenDRIVE>

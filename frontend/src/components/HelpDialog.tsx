@@ -5,22 +5,67 @@ interface ShortcutEntry {
   description: string;
 }
 
-const SHORTCUTS: ShortcutEntry[] = [
-  { keys: 'Ctrl+O', description: 'Open file' },
-  { keys: 'Ctrl+S', description: 'Save file' },
-  { keys: 'Ctrl+Z', description: 'Undo' },
-  { keys: 'Ctrl+Y / Ctrl+Shift+Z', description: 'Redo' },
-  { keys: 'Ctrl+A', description: 'Select all' },
-  { keys: 'Delete / Backspace', description: 'Delete selected' },
-  { keys: 'Ctrl+D', description: 'Duplicate selected' },
-  { keys: 'Escape', description: 'Deselect / cancel' },
-  { keys: 'F', description: 'Frame selected in viewport' },
-  { keys: 'R', description: 'Toggle road edit mode' },
-  { keys: 'G', description: 'Toggle geometry edit mode' },
-  { keys: 'Ctrl+Shift+P', description: 'Open command palette' },
-  { keys: 'Mouse wheel', description: 'Zoom viewport' },
-  { keys: 'Middle mouse / Space+drag', description: 'Pan viewport' },
-  { keys: 'Left click', description: 'Select element' },
+interface ShortcutGroup {
+  group: string;
+  entries: ShortcutEntry[];
+}
+
+const SHORTCUT_GROUPS: ShortcutGroup[] = [
+  {
+    group: 'Drawing Modes',
+    entries: [
+      { keys: 'L', description: 'Draw Line road' },
+      { keys: 'A', description: 'Draw Arc road' },
+      { keys: 'P', description: 'Draw Spiral road' },
+      { keys: 'S', description: 'Spline draw mode' },
+      { keys: 'Enter', description: 'Finish current drawing' },
+      { keys: 'Backspace', description: 'Undo last draw point' },
+    ],
+  },
+  {
+    group: 'Transform',
+    entries: [
+      { keys: 'M', description: 'Move road (toggle)' },
+      { keys: 'R', description: 'Rotate road (toggle)' },
+    ],
+  },
+  {
+    group: 'Universal',
+    entries: [
+      { keys: 'Escape', description: 'Cancel / return to Select mode' },
+      { keys: 'Delete / Backspace', description: 'Delete selected' },
+      { keys: 'F', description: 'Zoom to fit / frame selected' },
+      { keys: '?', description: 'Show keyboard shortcuts' },
+    ],
+  },
+  {
+    group: 'Panels',
+    entries: [
+      { keys: 'I', description: 'Toggle Inspector panel' },
+      { keys: 'Ctrl+B', description: 'Toggle Layer panel' },
+      { keys: 'Ctrl+J', description: 'Toggle Output panel' },
+    ],
+  },
+  {
+    group: 'Edit',
+    entries: [
+      { keys: 'Ctrl+Z', description: 'Undo' },
+      { keys: 'Ctrl+Y / Ctrl+Shift+Z', description: 'Redo' },
+      { keys: 'Ctrl+A', description: 'Select all' },
+      { keys: 'Ctrl+C', description: 'Copy selected' },
+      { keys: 'Ctrl+V', description: 'Paste' },
+    ],
+  },
+  {
+    group: 'Viewport',
+    entries: [
+      { keys: 'Mouse wheel', description: 'Zoom' },
+      { keys: 'Middle mouse / Space+drag', description: 'Pan' },
+      { keys: 'Shift+drag', description: 'Box select multiple' },
+      { keys: 'Shift+click', description: 'Toggle multi-select' },
+      { keys: 'Left click', description: 'Select element' },
+    ],
+  },
 ];
 
 export interface HelpDialogProps {
@@ -53,26 +98,27 @@ export function HelpDialog({ onClose }: HelpDialogProps) {
         </div>
 
         <div className="help-dialog-body">
-          <table className="help-shortcuts-table">
-            <thead>
-              <tr>
-                <th>{t('help.shortcut', 'Shortcut')}</th>
-                <th>{t('help.description', 'Description')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SHORTCUTS.map((entry) => (
-                <tr key={entry.keys}>
-                  <td className="help-shortcut-keys">
-                    <kbd>{entry.keys}</kbd>
-                  </td>
-                  <td className="help-shortcut-desc">
-                    {t(`help.shortcuts.${entry.keys}`, entry.description)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {SHORTCUT_GROUPS.map((group) => (
+            <div key={group.group} className="help-shortcut-group">
+              <div className="help-shortcut-group-title">
+                {t(`help.groups.${group.group}`, group.group)}
+              </div>
+              <table className="help-shortcuts-table">
+                <tbody>
+                  {group.entries.map((entry) => (
+                    <tr key={entry.keys}>
+                      <td className="help-shortcut-keys">
+                        <kbd>{entry.keys}</kbd>
+                      </td>
+                      <td className="help-shortcut-desc">
+                        {t(`help.shortcuts.${entry.keys}`, entry.description)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
         </div>
 
         <div className="help-dialog-footer">

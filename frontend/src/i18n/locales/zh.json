@@ -70,11 +70,11 @@
     "delete": "删除",
     "resetTitle": "重置未保存修改",
     "selectMode": "默认",
-    "selectModeTitle": "选择模式 (S)",
+    "selectModeTitle": "选择 (Esc)",
     "roadEdit": "道路",
     "roadEditTitle": "道路编辑 (R)",
     "splineEdit": "样条",
-    "splineEditTitle": "样条绘制模式 (P)",
+    "splineEditTitle": "样条线 (S)",
     "splineTemplateTitle": "道路模板",
     "splineTemplateDefault": "单车道双向",
     "laneEdit": "车道",
@@ -104,11 +104,11 @@
     "measure": "测量",
     "measureTitle": "测量工具",
     "drawLine": "直线",
-    "drawLineTitle": "绘制折线道路（连续点击添加点，Enter 完成，Backspace 撤销）",
+    "drawLineTitle": "绘制直线 (L)",
     "drawArc": "圆弧",
-    "drawArcTitle": "绘制圆弧道路（交替点击锚点和途经点，Enter 完成，拖拽途经点改变曲率）",
+    "drawArcTitle": "绘制圆弧 (A)",
     "drawSpiral": "回旋线",
-    "drawSpiralTitle": "绘制回旋线道路（连续点击添加点，Enter 完成，Backspace 撤销）"
+    "drawSpiralTitle": "绘制回旋线 (P)"
   },
   "statusBar": {
     "roads": "道路",
@@ -116,7 +116,22 @@
     "worldCoord": "世界坐标系",
     "localPos": "局部位置",
     "modified": "已修改",
-    "saved": "已保存"
+    "saved": "已保存",
+    "mode": "模式",
+    "modes": {
+      "default": "选择",
+      "road": "道路编辑",
+      "lane": "车道编辑",
+      "lanesection": "车道簇编辑",
+      "line": "绘制直线 [L]",
+      "arc": "绘制圆弧 [A]",
+      "spiral": "绘制回旋线 [P]",
+      "spline": "样条线 [S]",
+      "move-road": "移动道路 [M]",
+      "rotate-road": "旋转道路 [R]",
+      "adjust-edge": "调整边缘",
+      "road-markings": "道路标记"
+    }
   },
   "propertyPanel": {
     "properties": "属性",
