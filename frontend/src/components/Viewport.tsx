@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ViewportRenderer, getSplineHandlePoints } from '../viewport/renderer';
+import { ViewportRenderer } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
-import { onViewportEvent, emitViewportEvent } from '../viewport/viewportEvents';
+import { onViewportEvent } from '../viewport/viewportEvents';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { useThemeStore } from '../stores/themeStore';
@@ -18,14 +18,15 @@ import {
 import { useViewportDrop } from '../hooks/useViewportDrop';
 import { useRubberBandSelect } from '../hooks/useRubberBandSelect';
 import { useMoveRotateMode } from '../hooks/useMoveRotateMode';
-import { useSplineOperations } from '../hooks/useSplineOperations';
+import { useSplineDrawMode } from '../hooks/useSplineDrawMode';
+import { useGeometryEditMode } from '../hooks/useGeometryEditMode';
 import './Viewport.css';
 
 import {
   HOVER_HIGHLIGHT_COLOR, HOVER_HIGHLIGHT_Z_LIFT,
   MouseGestureState,
   mergeFloat32Arrays, liftMeshZ, exceededDragThreshold,
-  splineToRendererFormat,
+  type SplineControlPoint,
 } from './viewportUtils';
 
 
@@ -39,68 +40,68 @@ export function Viewport() {
   const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
   const selectedRoadIds = useEditorStore((s) => s.selectedRoadIds);
   const selectedJunctionIds = useEditorStore((s) => s.selectedJunctionIds);
-  const { showGrid, showAxis, dimension, display, editMode } = useEditorViewStore();
-  const splineKnots = useEditorViewStore((s) => s.splineKnots);
-  const splineTangentOverrides = useEditorViewStore((s) => s.splineTangentOverrides);
-  const geometryEditSpline = useEditorViewStore((s) => s.geometryEditSpline);
+  const { showGrid, showAxis, dimension, display } = useEditorViewStore();
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
-  /** Guards against concurrent road-preview regenerations during knot drag. */
   const isPreviewingRoadRef = useRef(false);
   const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
-  /** Tracks the currently hovered control point to avoid redundant refreshSplineMarkers calls. */
-  const hoveredControlPointRef = useRef<{ index: number; type: 'knot' | 'in' | 'out' } | null>(null);
-  /** Rubber-band selection state: tracks drag start and whether the overlay is active. */
+  const hoveredControlPointRef = useRef<SplineControlPoint | null>(null);
   const { rubberBandRef, rubberBandOverlayRef, startRubberBand, updateRubberBand, commitRubberBand } = useRubberBandSelect(rendererRef, canvasRef);
-  /** Active move-road / rotate-road drag state. */
   const { startMoveRotateDrag, updateMoveRotateDrag, commitMoveRotateDrag } = useMoveRotateMode(rendererRef, canvasRef, isPreviewingRoadRef, pendingCursorRef);
-  /** Tracks the road/junction currently under the cursor for hover highlighting. */
   const hoveredRoadRef = useRef<string | null>(null);
   const hoveredJunctionRef = useRef<string | null>(null);
-  /** Snap indicator DOM element — positioned imperatively to avoid React re-renders on every mousemove. */
   const snapIndicatorDomRef = useRef<HTMLDivElement | null>(null);
-  /** Touch gesture state: tracks start positions for pan and pinch. */
   const touchStateRef = useRef<{
     touches: Array<{ id: number; x: number; y: number }>;
     lastPinchDist: number | null;
   }>({ touches: [], lastPinchDist: null });
 
-  const { finalizeSplineCreation, finalizeDrawGeometry, enterGeometryEditMode, finalizeGeometryEdit } = useSplineOperations();
+  const {
+    clearSplineDrawHover,
+    handleSplineDrawMouseMove,
+    handleSplineDrawMouseDown,
+    handleSplineDrawClick,
+    handleSplineDrawMouseUp,
+  } = useSplineDrawMode({
+    canvasRef,
+    rendererRef,
+    pendingCursorRef,
+    hoveredControlPointRef,
+    status,
+  });
+  const {
+    clearGeometryEditHover,
+    handleGeometryEditMouseMove,
+    handleGeometryEditMouseDown,
+    handleGeometryEditMouseUp,
+    handleRoadDoubleClick,
+  } = useGeometryEditMode({
+    canvasRef,
+    rendererRef,
+    isPreviewingRoadRef,
+    pendingCursorRef,
+    hoveredControlPointRef,
+    status,
+  });
 
-  useEffect(() => {
-    if (editMode !== 'spline' && editMode !== 'line' && editMode !== 'arc' && editMode !== 'spiral') {
-      useEditorViewStore.getState().clearSplineKnots();
-    }
-  }, [editMode]);
-
-  // Keyboard handling for spline creation, geometry editing, and select-mode shortcuts
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const viewState = useEditorViewStore.getState();
+      const isDrawMode =
+        viewState.editMode === 'spline' ||
+        viewState.editMode === 'line' ||
+        viewState.editMode === 'arc' ||
+        viewState.editMode === 'spiral';
 
       if (event.key === 'Escape') {
-        // If in geometry edit mode, finalize and exit
-        if (viewState.geometryEditRoadId) {
-          void finalizeGeometryEdit();
+        if (viewState.geometryEditRoadId || isDrawMode) {
           return;
         }
-        // If in spline creation mode, clear knots
-        if (viewState.editMode === 'spline') {
-          viewState.clearSplineKnots();
-          return;
-        }
-        // If in geometry draw mode, clear knots (line/arc/spiral all use splineKnots)
-        if (viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral') {
-          viewState.clearSplineKnots();
-          return;
-        }
-        // If in a transient edit mode (move/rotate), return to default mode
         if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
           viewState.setEditMode('default');
           return;
         }
-        // Normal select mode: clear any active selection
         const editorState = useEditorStore.getState();
         if (
           editorState.selectedRoadId ||
@@ -113,62 +114,14 @@ export function Viewport() {
         return;
       }
 
-      // Delete selected element(s) — only in select mode (not spline / geometry edit)
-      if (event.key === 'Delete') {
-        if (!viewState.geometryEditRoadId && viewState.editMode !== 'spline') {
-          useEditorStore.getState().deleteSelected();
-        }
-        return;
-      }
-
-      // E: enter geometry edit mode for selected road (normal select mode only)
-      if (event.key === 'e' || event.key === 'E') {
-        if (!viewState.geometryEditRoadId && viewState.editMode !== 'spline' && !event.ctrlKey && !event.metaKey && !event.altKey) {
-          const { selectedRoadId } = useEditorStore.getState();
-          if (selectedRoadId) {
-            void enterGeometryEditMode(selectedRoadId);
-          }
-        }
-        return;
-      }
-
-      if (editMode !== 'spline' && editMode !== 'line' && editMode !== 'arc' && editMode !== 'spiral') return;
-      if (event.key === 'Backspace') {
-        useEditorViewStore.getState().popSplineKnot();
-      } else if (event.key === 'Enter') {
-        event.preventDefault();
-        const mode = viewState.editMode;
-        if (mode === 'spline') {
-          void finalizeSplineCreation();
-        } else if (mode === 'line' || mode === 'arc' || mode === 'spiral') {
-          void finalizeDrawGeometry(mode, viewState.splineKnots);
-        }
+      if (event.key === 'Delete' && !viewState.geometryEditRoadId && !isDrawMode) {
+        useEditorStore.getState().deleteSelected();
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [editMode, finalizeSplineCreation, finalizeDrawGeometry, finalizeGeometryEdit, enterGeometryEditMode]);
-
-  // Sync spline knot preview into the WebGPU renderer each time knots or tangents change
-  useEffect(() => {
-    const renderer = rendererRef.current;
-    if (!renderer || status !== 'ready') return;
-
-    // Geometry edit mode takes priority: render editable spline knots
-    if (geometryEditSpline) {
-      const { knots, tangentOverrides } = splineToRendererFormat(geometryEditSpline);
-      renderer.setSplinePreviewKnots(knots, tangentOverrides);
-      return;
-    }
-
-    // All draw modes (spline, line, arc, spiral) use splineKnots for control points
-    const isDrawMode = editMode === 'spline' || editMode === 'line' || editMode === 'arc' || editMode === 'spiral';
-    const overrides = Object.keys(splineTangentOverrides).length > 0 ? splineTangentOverrides : undefined;
-    renderer.setSplinePreviewKnots(isDrawMode ? splineKnots : [], overrides);
-  }, [splineKnots, splineTangentOverrides, editMode, status, geometryEditSpline]);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   // Regenerate road mesh when project or display settings change
   const updateMesh = useCallback(async () => {
@@ -549,7 +502,6 @@ export function Viewport() {
     );
   }, [viewportOverlays]);
 
-  // Handle mouse move for world coordinates (unproject to ground plane)
   const handleMouseMove = useCallback(async (e: React.MouseEvent) => {
     const gesture = mouseGestureRef.current;
     if (gesture && !gesture.dragged && exceededDragThreshold(gesture.startX, gesture.startY, e.clientX, e.clientY)) {
@@ -559,7 +511,6 @@ export function Viewport() {
     const renderer = rendererRef.current;
     if (!canvas || !renderer) return;
 
-    // Rubber-band selection: update overlay position
     if (rubberBandRef.current) {
       updateRubberBand(e, canvas);
       return;
@@ -571,156 +522,11 @@ export function Viewport() {
     const worldPos = renderer.unprojectToGround(screenX, screenY);
     if (!worldPos) return;
 
-    // Move/Rotate road drag: compute transform and generate preview vertices
     if (updateMoveRotateDrag(worldPos)) return;
 
-    // Spline knot dragging: update knot position
     const viewState = useEditorViewStore.getState();
-    const drag = viewState.draggingKnot;
-    if (drag) {
-      // Geometry edit mode: move knot via WASM
-      if (viewState.geometryEditSpline) {
-        const spline = viewState.geometryEditSpline;
-        if (drag.type === 'knot' && drag.index >= 0 && drag.index < spline.knots.length) {
-          // Skip if previous frame's update hasn't completed
-          if (isPreviewingRoadRef.current) {
-            emitCursorMove(worldPos.x, worldPos.y);
-            pendingCursorRef.current = worldPos;
-            return;
-          }
-          try {
-            const service = await getPlatformService();
-            const updated = await service.moveSplineKnot(
-              spline, drag.index, worldPos.x, worldPos.y, spline.knots[drag.index]!.position[2],
-            );
-            viewState.setGeometryEditSpline(updated);
-
-            // Real-time road mesh preview: regenerate geometry for the edited road only.
-            const editRoadId = viewState.geometryEditRoadId;
-            const renderer = rendererRef.current;
-            if (editRoadId && renderer) {
-              isPreviewingRoadRef.current = true;
-              void (async () => {
-                try {
-                  const liveRenderer = rendererRef.current;
-                  if (!liveRenderer) return;
-                  // Incremental update: convert spline to geometries, then generate only the changed road's vertices
-                  const geometries = await service.splineToGeometries(updated);
-                  const totalLength = geometries.reduce((s, g) => s + g.length, 0);
-                  const currentProject = useEditorStore.getState().project;
-                  const previewRoad = { ...currentProject.roads.find((r) => r.id === editRoadId)!, plan_view: geometries, length: totalLength };
-                  // Only generate vertices for the single changed road
-                  const singleRoadVerts = await service.generateSingleRoadVertices(previewRoad, 2.0, [0.35, 0.35, 0.35, 1.0]);
-                  // For lane lines, only include the edited road
-                  const singleProject = { ...currentProject, roads: [previewRoad] };
-                  const singleLaneLineVerts = await service.generateLaneLineVertices(singleProject, 2.0);
-                  liveRenderer.uploadRoadVertices(singleRoadVerts);
-                  liveRenderer.uploadLaneLineVertices(singleLaneLineVerts);
-                } catch { /* ignore preview errors during drag */ }
-                finally { isPreviewingRoadRef.current = false; }
-              })();
-            }
-          } catch {
-            // Ignore move errors during drag
-          }
-        }
-        emitCursorMove(worldPos.x, worldPos.y);
-        pendingCursorRef.current = worldPos;
-        return;
-      }
-
-      // Spline creation mode: direct position update
-      const knots = viewState.splineKnots;
-      if (drag.index >= 0 && drag.index < knots.length) {
-        if (drag.type === 'knot') {
-          // Move knot directly to cursor
-          const updated: Array<[number, number, number]> = knots.map((k, i) =>
-            i === drag.index ? [worldPos.x, worldPos.y, k[2]] : k
-          );
-          viewState.setSplineKnots(updated);
-        } else {
-          // Tangent handle drag: compute new tangent vector from knot→cursor
-          // so the handle visually tracks the cursor and the curve curvature changes.
-          const kn = knots[drag.index]!;
-          const handleVec: [number, number, number] = [
-            worldPos.x - kn[0],
-            worldPos.y - kn[1],
-            0,
-          ];
-          // Convert handle display offset to actual tangent vector.
-          // Display uses scale = min(4/|t|, 0.3), so tangent = handleVec / 0.3
-          // for handles within visual range.
-          const DISPLAY_SCALE = 0.3;
-          const tangent: [number, number, number] = drag.type === 'out'
-            ? [handleVec[0] / DISPLAY_SCALE, handleVec[1] / DISPLAY_SCALE, 0]
-            : [-handleVec[0] / DISPLAY_SCALE, -handleVec[1] / DISPLAY_SCALE, 0];
-          viewState.setSplineTangentOverride(drag.index, tangent);
-        }
-      }
-      // Update cursor position but skip snapping during drag
-      emitCursorMove(worldPos.x, worldPos.y);
-      pendingCursorRef.current = worldPos;
-      return;
-    }
-
-    // Hover cursor: check if mouse is over a draggable knot
-    const isGeometryEdit = !!viewState.geometryEditSpline;
-    const isSplineCreate = viewState.editMode === 'spline' && viewState.splineKnots.length > 0;
-    const isDrawModeActive =
-      (viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral') &&
-      viewState.splineKnots.length > 0;
-    if (isGeometryEdit || isSplineCreate || isDrawModeActive) {
-      const mpp = renderer.getMetersPerPixel();
-      const knotHitSq   = (8.0 * mpp) ** 2;  // match knotHalfSize (6*mpp) + small margin
-      const handleHitSq = (6.0 * mpp) ** 2;  // match handleHalfSize (4*mpp) + small margin
-      let newHover: { index: number; type: 'knot' | 'in' | 'out' } | null = null;
-
-      // Get knot positions and tangent overrides based on mode
-      const hoverKnots = isGeometryEdit
-        ? splineToRendererFormat(viewState.geometryEditSpline!).knots
-        : viewState.splineKnots;
-      const hoverOverrides = isGeometryEdit
-        ? splineToRendererFormat(viewState.geometryEditSpline!).tangentOverrides
-        : viewState.splineTangentOverrides;
-
-      for (let ki = 0; ki < hoverKnots.length; ki++) {
-        const k = hoverKnots[ki]!;
-        const dx = worldPos.x - k[0];
-        const dy = worldPos.y - k[1];
-        if (dx * dx + dy * dy < knotHitSq) { newHover = { index: ki, type: 'knot' }; break; }
-      }
-      if (!newHover) {
-        const handles = getSplineHandlePoints(hoverKnots, hoverOverrides);
-        for (const h of handles) {
-          const dx = worldPos.x - h.x;
-          const dy = worldPos.y - h.y;
-          if (dx * dx + dy * dy < handleHitSq) { newHover = { index: h.knotIndex, type: h.type }; break; }
-        }
-      }
-
-      // Update marker visuals only when hover changes (avoids per-frame GPU buffer rebuild)
-      const prev = hoveredControlPointRef.current;
-      const changed = newHover?.index !== prev?.index || newHover?.type !== prev?.type;
-      if (changed) {
-        hoveredControlPointRef.current = newHover;
-        renderer.refreshSplineMarkers(newHover, undefined);
-      }
-
-      // grab when over a control point, crosshair otherwise (still in a draw/edit mode)
-      canvas.style.cursor = newHover ? 'grab' : 'crosshair';
-    } else {
-      if (hoveredControlPointRef.current !== null) {
-        hoveredControlPointRef.current = null;
-        renderer.refreshSplineMarkers(null, undefined);
-      }
-      // In draw modes show crosshair even before the first point is placed
-      const isAnyDrawMode =
-        viewState.editMode === 'line' ||
-        viewState.editMode === 'arc' ||
-        viewState.editMode === 'spiral' ||
-        viewState.editMode === 'spline';
-      canvas.style.cursor = isAnyDrawMode ? 'crosshair' : '';
-    }
+    if (await handleGeometryEditMouseMove(worldPos, canvas, renderer)) return;
+    if (handleSplineDrawMouseMove(worldPos, canvas, renderer)) return;
 
     if (viewState.snapEnabled) {
       try {
@@ -741,30 +547,24 @@ export function Viewport() {
           excludeId ?? undefined,
         );
         if (snapResult.snapped) {
-          // Show snap indicator at the snapped world position
-          const renderer = rendererRef.current;
           const snapEl = snapIndicatorDomRef.current;
-          if (renderer && snapEl) {
-            const screenPos = renderer.projectWorldToScreen(snapResult.x, snapResult.y);
-            if (screenPos) {
-              snapEl.style.left = `${screenPos.x}px`;
-              snapEl.style.top = `${screenPos.y}px`;
-              snapEl.style.display = 'block';
-            }
+          const screenPos = renderer.projectWorldToScreen(snapResult.x, snapResult.y);
+          if (snapEl && screenPos) {
+            snapEl.style.left = `${screenPos.x}px`;
+            snapEl.style.top = `${screenPos.y}px`;
+            snapEl.style.display = 'block';
           }
           emitCursorMove(snapResult.x, snapResult.y);
           pendingCursorRef.current = { x: snapResult.x, y: snapResult.y };
           return;
         }
       } catch {
-        // Fall through to raw position on snap error
+        // Fall through to raw position on snap error.
       }
-      // Not snapped — hide snap indicator
       const snapEl = snapIndicatorDomRef.current;
       if (snapEl) snapEl.style.display = 'none';
     }
 
-    // Hover detection: opaque yellow highlight for road/junction under cursor in select mode
     const isInSelectMode =
       viewState.editMode !== 'spline' &&
       viewState.editMode !== 'move-road' &&
@@ -776,8 +576,6 @@ export function Viewport() {
       !viewState.draggingKnot &&
       !rubberBandRef.current;
 
-    // Set mode-specific cursor when no drag is active.
-    // Note: line/arc/spiral/spline cursors are handled above in the hover block.
     if (viewState.editMode === 'move-road') {
       canvas.style.cursor = 'move';
     } else if (viewState.editMode === 'rotate-road') {
@@ -791,61 +589,57 @@ export function Viewport() {
         const { display: currentDisplay } = useEditorViewStore.getState();
         const visibleProject = buildRenderableProject(currentProject, currentDisplay);
         const rendererInst = rendererRef.current;
-
         const newHoveredRoad = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
-          if (newHoveredRoad !== hoveredRoadRef.current || hoveredJunctionRef.current !== null) {
-            hoveredRoadRef.current = newHoveredRoad;
-            hoveredJunctionRef.current = null;
-            if (rendererInst) {
-              if (newHoveredRoad) {
-                // Only show yellow hover highlight if not already selected
-                const { selectedRoadId } = useEditorStore.getState();
-                if (newHoveredRoad !== selectedRoadId) {
-                  const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
-                  if (road) {
-                    const singleRoadProject = { ...currentProject, roads: [road], junctions: [] };
-                    const hoverVerts = tintVertices(
-                      await service.generateRoadVertices(singleRoadProject, 2.0),
-                      HOVER_HIGHLIGHT_COLOR,
-                    );
-                    rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
-                  }
-                } else {
-                  rendererInst.clearHover();
-                }
-                if (!rendererInst.pointerDragging) {
-                  canvas.style.cursor = 'pointer';
-                }
-              } else {
-                rendererInst.clearHover();
-                const newHoveredJunction = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
-                hoveredJunctionRef.current = newHoveredJunction;
-                if (newHoveredJunction) {
-                  const hoverVerts = await service.generateSingleJunctionVertices(
-                    currentProject,
-                    newHoveredJunction,
+        if (newHoveredRoad !== hoveredRoadRef.current || hoveredJunctionRef.current !== null) {
+          hoveredRoadRef.current = newHoveredRoad;
+          hoveredJunctionRef.current = null;
+          if (rendererInst) {
+            if (newHoveredRoad) {
+              const { selectedRoadId } = useEditorStore.getState();
+              if (newHoveredRoad !== selectedRoadId) {
+                const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
+                if (road) {
+                  const singleRoadProject = { ...currentProject, roads: [road], junctions: [] };
+                  const hoverVerts = tintVertices(
+                    await service.generateRoadVertices(singleRoadProject, 2.0),
                     HOVER_HIGHLIGHT_COLOR,
                   );
                   rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
-                  if (!rendererInst.pointerDragging) {
-                    canvas.style.cursor = 'pointer';
-                  }
-                } else {
-                  if (!rendererInst.pointerDragging) {
-                    canvas.style.cursor = '';
-                  }
                 }
+              } else {
+                rendererInst.clearHover();
+              }
+              if (!rendererInst.pointerDragging) {
+                canvas.style.cursor = 'pointer';
+              }
+            } else {
+              rendererInst.clearHover();
+              const newHoveredJunction = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
+              hoveredJunctionRef.current = newHoveredJunction;
+              if (newHoveredJunction) {
+                const hoverVerts = await service.generateSingleJunctionVertices(
+                  currentProject,
+                  newHoveredJunction,
+                  HOVER_HIGHLIGHT_COLOR,
+                );
+                rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
+                if (!rendererInst.pointerDragging) {
+                  canvas.style.cursor = 'pointer';
+                }
+              } else if (!rendererInst.pointerDragging) {
+                canvas.style.cursor = '';
               }
             }
           }
+        }
       } catch {
-        // Ignore hover detection errors
+        // Ignore hover detection errors.
       }
     }
 
     emitCursorMove(worldPos.x, worldPos.y);
     pendingCursorRef.current = worldPos;
-  }, []);
+  }, [handleGeometryEditMouseMove, handleSplineDrawMouseMove]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     mouseGestureRef.current = {
@@ -855,7 +649,6 @@ export function Viewport() {
       dragged: false,
     };
 
-    // Hit-test knots on left-button press
     if (e.button !== 0) return;
 
     const canvas = canvasRef.current;
@@ -863,91 +656,21 @@ export function Viewport() {
     if (!canvas || !renderer) return;
 
     const viewState = useEditorViewStore.getState();
-
-    // Determine knot positions to hit-test based on mode
-    let hitKnots: Array<[number, number, number]> | null = null;
-    let hitOverrides: Record<number, [number, number, number]> | undefined;
-
-    if (viewState.geometryEditSpline) {
-      // Geometry edit mode: hit-test the editable spline knots
-      const fmt = splineToRendererFormat(viewState.geometryEditSpline);
-      hitKnots = fmt.knots;
-      hitOverrides = fmt.tangentOverrides;
-    } else if (
-      (viewState.editMode === 'spline' ||
-       viewState.editMode === 'line' ||
-       viewState.editMode === 'arc' ||
-       viewState.editMode === 'spiral') &&
-      viewState.splineKnots.length > 0
-    ) {
-      // All draw modes use splineKnots for control points
-      hitKnots = viewState.splineKnots;
-      hitOverrides = viewState.editMode === 'spline' ? viewState.splineTangentOverrides : {};
-    }
-
-    if (!hitKnots || hitKnots.length === 0) {
-      // Move/Rotate road: start drag on the selected road
-      if (startMoveRotateDrag(e, renderer, canvas)) return;
-
-      // Shift+left-drag starts rubber-band multi-select (plain left-drag still pans)
-      if (e.shiftKey && viewState.editMode !== 'spline' && viewState.editMode !== 'line' && viewState.editMode !== 'arc' && viewState.editMode !== 'spiral' && !viewState.geometryEditSpline) {
-        startRubberBand(e, renderer);
-      }
-
-      // NOTE: draw modes (line/arc/spiral) no longer lock the camera unconditionally.
-      // Camera locking only happens when dragging an existing control point (handled
-      // by the hit-test above). Click-to-add-point uses gesture.dragged detection.
+    if (handleGeometryEditMouseDown(e, canvas, renderer) || handleSplineDrawMouseDown(e, canvas, renderer)) {
       return;
     }
-
-    const rect = canvas.getBoundingClientRect();
-    const screenX = (e.clientX - rect.left) * devicePixelRatio;
-    const screenY = (e.clientY - rect.top) * devicePixelRatio;
-    const worldPos = renderer.unprojectToGround(screenX, screenY);
-    if (!worldPos) return;
-
-    const mpp = renderer.getMetersPerPixel();
-    const knotHitSq   = (8.0 * mpp) ** 2;
-    const handleHitSq = (6.0 * mpp) ** 2;
-
-    // Check knot positions first
-    let bestDistSq = Infinity;
-    let bestHit: { index: number; type: 'knot' | 'in' | 'out' } | null = null;
-
-    for (let i = 0; i < hitKnots.length; i++) {
-      const [kx, ky] = hitKnots[i]!;
-      const dx = worldPos.x - kx;
-      const dy = worldPos.y - ky;
-      const dSq = dx * dx + dy * dy;
-      if (dSq < knotHitSq && dSq < bestDistSq) {
-        bestDistSq = dSq;
-        bestHit = { index: i, type: 'knot' };
-      }
+    if (startMoveRotateDrag(e, renderer, canvas)) return;
+    if (
+      e.shiftKey &&
+      viewState.editMode !== 'spline' &&
+      viewState.editMode !== 'line' &&
+      viewState.editMode !== 'arc' &&
+      viewState.editMode !== 'spiral' &&
+      !viewState.geometryEditSpline
+    ) {
+      startRubberBand(e, renderer);
     }
-
-    // Check tangent handle positions — only for spline creation mode (not line/arc/spiral draw modes)
-    if (!viewState.geometryEditSpline && viewState.editMode === 'spline') {
-      const handles = getSplineHandlePoints(hitKnots, hitOverrides);
-      for (const h of handles) {
-        const dx = worldPos.x - h.x;
-        const dy = worldPos.y - h.y;
-        const dSq = dx * dx + dy * dy;
-        if (dSq < handleHitSq && dSq < bestDistSq) {
-          bestDistSq = dSq;
-          bestHit = { index: h.knotIndex, type: h.type };
-        }
-      }
-    }
-
-    if (bestHit) {
-      viewState.setDraggingKnot(bestHit);
-      renderer.lockCamera();
-      canvas.style.cursor = 'grabbing';
-      // Show red selection highlight on the clicked control point
-      hoveredControlPointRef.current = null;
-      renderer.refreshSplineMarkers(null, bestHit);
-    }
-  }, []);
+  }, [handleGeometryEditMouseDown, handleSplineDrawMouseDown, startMoveRotateDrag, startRubberBand]);
 
   const handleClick = useCallback(async (e: React.MouseEvent) => {
     const gesture = mouseGestureRef.current;
@@ -967,7 +690,6 @@ export function Viewport() {
     const worldPos = renderer.unprojectToGround(screenX, screenY);
     if (!worldPos) return;
 
-    // Measurement mode: collect points instead of picking
     const { measureMode, measurePoints, addMeasurePoint, setMeasurementResult } = useEditorViewStore.getState();
     if (measureMode !== 'none') {
       const point = { x: worldPos.x, y: worldPos.y, z: 0 };
@@ -997,52 +719,24 @@ export function Viewport() {
       return;
     }
 
-    const splineState = useEditorViewStore.getState();
-
-    // In move/rotate mode, clicks do not change road selection
-    if (splineState.editMode === 'move-road' || splineState.editMode === 'rotate-road') {
+    const viewState = useEditorViewStore.getState();
+    if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
       return;
     }
-
-    // If in geometry edit mode, click outside knots → do nothing (stay in edit)
-    if (splineState.geometryEditRoadId) {
+    if (await handleSplineDrawClick(e, worldPos)) {
       return;
     }
-
-    if (splineState.editMode === 'spline') {
-      const nextKnots: Array<[number, number, number]> = [
-        ...splineState.splineKnots,
-        [worldPos.x, worldPos.y, 0],
-      ];
-      splineState.setSplineKnots(nextKnots);
-      if (e.detail >= 2 && nextKnots.length >= 2) {
-        await finalizeSplineCreation(nextKnots);
-      }
-      return;
-    }
-
-    // Geometry draw modes: line, arc, spiral — accumulate points like spline
-    if (splineState.editMode === 'line' || splineState.editMode === 'arc' || splineState.editMode === 'spiral') {
-      const point: [number, number, number] = [worldPos.x, worldPos.y, 0];
-      const nextKnots: Array<[number, number, number]> = [...splineState.splineKnots, point];
-      splineState.setSplineKnots(nextKnots);
-
-      // Double-click finalizes (same UX as spline mode)
-      const minPoints = splineState.editMode === 'arc' ? 3 : 2;
-      if (e.detail >= 2 && nextKnots.length >= minPoints) {
-        await finalizeDrawGeometry(splineState.editMode, nextKnots);
-      }
+    if (viewState.geometryEditRoadId) {
       return;
     }
 
     try {
       const service = await getPlatformService();
-      const { project: currentProject, selectedRoadId } = useEditorStore.getState();
+      const { project: currentProject } = useEditorStore.getState();
       const { display: currentDisplay } = useEditorViewStore.getState();
       const visibleProject = buildRenderableProject(currentProject, currentDisplay);
       const roadId = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
 
-      // Shift+click: toggle item in/out of multi-selection without clearing others
       if (e.shiftKey) {
         if (roadId) {
           const { selectedRoadIds, selectedJunctionIds } = useEditorStore.getState();
@@ -1063,15 +757,12 @@ export function Viewport() {
         return;
       }
 
-      // Double-click on already-selected road → enter geometry edit mode
-      if (e.detail >= 2 && roadId && roadId === selectedRoadId) {
-        void enterGeometryEditMode(roadId);
+      if (handleRoadDoubleClick(roadId, e.detail)) {
         return;
       }
 
       if (roadId) {
         useEditorStore.getState().selectRoad(roadId);
-        // Clear hover highlight immediately after selection so the yellow doesn't linger
         const rendererInst = rendererRef.current;
         if (rendererInst) rendererInst.clearHover();
         hoveredRoadRef.current = null;
@@ -1086,48 +777,17 @@ export function Viewport() {
         hoveredRoadRef.current = null;
         hoveredJunctionRef.current = null;
       }
-      // Clicking empty space: do NOT clear selection
     } catch (err) {
       console.error('[Viewport] Pick failed:', err);
     }
-  }, [finalizeSplineCreation, enterGeometryEditMode]);
+  }, [handleRoadDoubleClick, handleSplineDrawClick]);
 
   const handleMouseUp = useCallback(async (e: React.MouseEvent) => {
-    // Commit rubber-band multi-select
     if (commitRubberBand(e)) return;
-
-    // Commit move/rotate road drag
     if (commitMoveRotateDrag()) return;
-
-    const viewState = useEditorViewStore.getState();
-    const { draggingKnot } = viewState;
-
-    if (draggingKnot) {
-      viewState.setDraggingKnot(null);
-      const renderer = rendererRef.current;
-      if (renderer) {
-        renderer.unlockCamera();
-        // Clear red selection highlight when drag ends
-        renderer.refreshSplineMarkers(null, null);
-      }
-      hoveredControlPointRef.current = null;
-      const canvas = canvasRef.current;
-      if (canvas) canvas.style.cursor = '';
-
-      // In geometry edit mode, apply spline changes to road mesh immediately
-      const { geometryEditRoadId: roadId, geometryEditSpline: spline } = viewState;
-      if (roadId && spline) {
-        try {
-          const service = await getPlatformService();
-          const geometries = await service.splineToGeometries(spline);
-          const totalLength = geometries.reduce((sum, g) => sum + g.length, 0);
-          useEditorStore.getState().updateRoadGeometry(roadId, geometries, totalLength);
-        } catch (err) {
-          console.error('[Viewport] Failed to update road geometry:', err);
-        }
-      }
-    }
-  }, []);
+    if (await handleGeometryEditMouseUp()) return;
+    handleSplineDrawMouseUp();
+  }, [commitMoveRotateDrag, commitRubberBand, handleGeometryEditMouseUp, handleSplineDrawMouseUp]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -1149,10 +809,13 @@ export function Viewport() {
       hoveredJunctionRef.current = null;
       rendererRef.current?.clearHover();
     }
-    // Always hide snap indicator on leave
+    clearGeometryEditHover();
+    clearSplineDrawHover();
+    const canvas = canvasRef.current;
+    if (canvas) canvas.style.cursor = '';
     const snapEl = snapIndicatorDomRef.current;
     if (snapEl) snapEl.style.display = 'none';
-  }, []);
+  }, [clearGeometryEditHover, clearSplineDrawHover]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
