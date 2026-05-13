@@ -16,6 +16,7 @@ import { PluginPanels } from './components/PluginPanel';
 import { SettingsDialog } from './components/SettingsDialog';
 import { DialogHost } from './components/common/Dialog';
 import { WelcomePage } from './components/WelcomePage';
+import { ShortcutHelpOverlay } from './components/ShortcutHelpOverlay';
 import { useEditorStore } from './stores/editorStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorViewStore } from './stores/editorViewStore';
@@ -282,32 +283,10 @@ export function App() {
         <DialogHost />
 
         {/* Keyboard shortcut help overlay */}
-        {showShortcutHelp && (
-          <div className="shortcut-help-overlay" onClick={() => setShowShortcutHelp(false)}>
-            <div className="shortcut-help-dialog" onClick={(e) => e.stopPropagation()}>
-              <h3>{t('help.title', 'Keyboard Shortcuts')}</h3>
-              <table>
-                <tbody>
-                  <tr><td><kbd>L</kbd></td><td>{t('toolbar.drawLineTitle', 'Draw Line (L)')}</td></tr>
-                  <tr><td><kbd>A</kbd></td><td>{t('toolbar.drawArcTitle', 'Draw Arc (A)')}</td></tr>
-                  <tr><td><kbd>P</kbd></td><td>{t('toolbar.drawSpiralTitle', 'Draw Spiral (P)')}</td></tr>
-                  <tr><td><kbd>S</kbd></td><td>{t('toolbar.splineEditTitle', 'Spline (S)')}</td></tr>
-                  <tr><td><kbd>M</kbd></td><td>{t('statusBar.modes.move-road', 'Move Road (M)')}</td></tr>
-                  <tr><td><kbd>R</kbd></td><td>{t('statusBar.modes.rotate-road', 'Rotate Road (R)')}</td></tr>
-                  <tr><td><kbd>Esc</kbd></td><td>{t('help.shortcuts.Escape', 'Cancel / return to Select')}</td></tr>
-                  <tr><td><kbd>Delete</kbd></td><td>{t('help.shortcuts.Delete / Backspace', 'Delete selected')}</td></tr>
-                  <tr><td><kbd>F</kbd></td><td>{t('help.shortcuts.F', 'Zoom to fit')}</td></tr>
-                  <tr><td><kbd>Ctrl+Z</kbd></td><td>{t('toolbar.undoTitle', 'Undo')}</td></tr>
-                  <tr><td><kbd>Ctrl+Y</kbd></td><td>{t('toolbar.redoTitle', 'Redo')}</td></tr>
-                  <tr><td><kbd>Ctrl+A</kbd></td><td>{t('help.shortcuts.Ctrl+A', 'Select all')}</td></tr>
-                  <tr><td><kbd>I</kbd></td><td>{t('help.shortcuts.I', 'Toggle Inspector')}</td></tr>
-                  <tr><td><kbd>?</kbd></td><td>{t('help.shortcuts.?', 'Show shortcuts')}</td></tr>
-                </tbody>
-              </table>
-              <button onClick={() => setShowShortcutHelp(false)}>{t('dialog.ok', 'OK')}</button>
-            </div>
-          </div>
-        )}
+        <ShortcutHelpOverlay
+          open={showShortcutHelp}
+          onClose={() => setShowShortcutHelp(false)}
+        />
       </div>
     ) : (
       <WelcomePage

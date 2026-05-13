@@ -134,7 +134,10 @@ export function useKeyboardShortcuts({
       }
 
       // ?: open shortcut help
-      if (e.key === '?') {
+      // Use both key === '?' and code-based check (Slash + Shift) to handle
+      // cases where a Chinese IME produces a full-width ？ instead of ASCII ?.
+      // event.code refers to the physical key regardless of IME state.
+      if (e.key === '?' || (e.code === 'Slash' && e.shiftKey)) {
         onShowShortcutHelp(true);
         return;
       }

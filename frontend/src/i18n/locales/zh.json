@@ -72,15 +72,15 @@
     "selectMode": "默认",
     "selectModeTitle": "选择 (Esc)",
     "roadEdit": "道路",
-    "roadEditTitle": "道路编辑 (R)",
+    "roadEditTitle": "道路选择 (R)",
     "splineEdit": "样条",
     "splineEditTitle": "样条线 (S)",
     "splineTemplateTitle": "道路模板",
     "splineTemplateDefault": "单车道双向",
     "laneEdit": "车道",
-    "laneEditTitle": "车道编辑 (L)",
+    "laneEditTitle": "车道选择",
     "laneSectionEdit": "车道簇",
-    "laneSectionEditTitle": "车道簇选择 (J)",
+    "laneSectionEditTitle": "车道簇选择",
     "sketch": "草图",
     "sketchTitle": "草图视图",
     "wire": "线图",
@@ -413,7 +413,8 @@
     "userManualTitle": "用户手册",
     "userManualContent": "用户手册即将上线，敬请期待。\n\n请访问项目仓库获取文档和使用指南。",
     "exitUnsaved": "当前项目有未保存的更改，确定要退出吗？",
-    "fileNotFound": "文件不存在"
+    "fileNotFound": "文件不存在",
+    "close": "关闭"
   },
   "snapping": {
     "enabled": "吸附",
@@ -532,5 +533,34 @@
     "solid broken": "实虚线",
     "solid solid": "双实线",
     "botts dots": "突起路标"
+  },
+  "shortcutHelp": {
+    "title": "键盘快捷键",
+    "sections": {
+      "drawing": "绘图模式",
+      "transform": "变换工具",
+      "edit": "编辑操作",
+      "view": "视图",
+      "panels": "面板"
+    },
+    "keys": {
+      "drawLine": "绘制直线段",
+      "drawArc": "绘制圆弧",
+      "drawSpiral": "绘制回旋线（欧拉螺线）",
+      "drawSpline": "绘制样条道路",
+      "moveRoad": "移动道路",
+      "rotateRoad": "旋转道路",
+      "undo": "撤销",
+      "redo": "重做",
+      "selectAll": "全选",
+      "copy": "复制到剪贴板",
+      "paste": "从剪贴板粘贴",
+      "delete": "删除选中",
+      "zoomFit": "缩放到全部",
+      "escape": "取消 / 返回选择模式",
+      "inspector": "切换检查器面板",
+      "leftPanel": "切换图层面板",
+      "help": "显示快捷键帮助"
+    }
   }
 }

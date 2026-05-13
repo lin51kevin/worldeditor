@@ -72,15 +72,15 @@
     "selectMode": "Default",
     "selectModeTitle": "Select (Esc)",
     "roadEdit": "Road",
-    "roadEditTitle": "Road Edit (R)",
+    "roadEditTitle": "Road Select",
     "splineEdit": "Spline",
     "splineEditTitle": "Spline (S)",
     "splineTemplateTitle": "Road Template",
     "splineTemplateDefault": "Single Lane",
     "laneEdit": "Lane",
-    "laneEditTitle": "Lane Edit (L)",
+    "laneEditTitle": "Lane Select",
     "laneSectionEdit": "LaneSection",
-    "laneSectionEditTitle": "LaneSection Edit (J)",
+    "laneSectionEditTitle": "LaneSection Select",
     "sketch": "Sketch",
     "sketchTitle": "Sketch View",
     "wire": "Wire",
@@ -413,7 +413,8 @@
     "userManualTitle": "User Manual",
     "userManualContent": "User manual coming soon.\n\nVisit the project repository for documentation and guides.",
     "exitUnsaved": "You have unsaved changes. Exit without saving?",
-    "fileNotFound": "File not found"
+    "fileNotFound": "File not found",
+    "close": "Close"
   },
   "snapping": {
     "enabled": "Snap",
@@ -532,5 +533,34 @@
     "solid broken": "Solid Broken",
     "solid solid": "Double Solid",
     "botts dots": "Botts Dots"
+  },
+  "shortcutHelp": {
+    "title": "Keyboard Shortcuts",
+    "sections": {
+      "drawing": "Drawing",
+      "transform": "Transform",
+      "edit": "Edit",
+      "view": "View",
+      "panels": "Panels"
+    },
+    "keys": {
+      "drawLine": "Draw line segment",
+      "drawArc": "Draw arc",
+      "drawSpiral": "Draw spiral (Euler)",
+      "drawSpline": "Draw spline road",
+      "moveRoad": "Move road",
+      "rotateRoad": "Rotate road",
+      "undo": "Undo",
+      "redo": "Redo",
+      "selectAll": "Select all",
+      "copy": "Copy to clipboard",
+      "paste": "Paste from clipboard",
+      "delete": "Delete selected",
+      "zoomFit": "Zoom to fit",
+      "escape": "Cancel / return to select",
+      "inspector": "Toggle inspector panel",
+      "leftPanel": "Toggle layer panel",
+      "help": "Show this shortcut help"
+    }
   }
 }
