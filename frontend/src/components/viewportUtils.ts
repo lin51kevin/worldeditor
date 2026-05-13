@@ -5,6 +5,7 @@
  * Viewport component and related viewport modules.
  */
 
+import { getSplineHandlePoints } from '../viewport/splineUtils';
 import type { EditableSpline, Junction, Project, Road, SplineKnot } from '../services/platform';
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -39,6 +40,11 @@ export interface MoveRotateDragState {
   currentDx: number;
   currentDy: number;
   currentAngle: number;
+}
+
+export interface SplineControlPoint {
+  index: number;
+  type: 'knot' | 'in' | 'out';
 }
 
 // ── Utility functions ──────────────────────────────────────────────────────
@@ -157,4 +163,57 @@ export function splineToRendererFormat(spline: EditableSpline): {
     tangentOverrides[i] = k.tangent_out;
   }
   return { knots, tangentOverrides };
+}
+
+export function tangentFromHandlePosition(
+  knot: [number, number, number],
+  worldPos: { x: number; y: number },
+  type: 'in' | 'out',
+): [number, number, number] {
+  const dx = worldPos.x - knot[0];
+  const dy = worldPos.y - knot[1];
+  const displayScale = 0.3;
+  return type === 'out'
+    ? [dx / displayScale, dy / displayScale, 0]
+    : [-dx / displayScale, -dy / displayScale, 0];
+}
+
+export function findSplineControlPointHit(
+  worldPos: { x: number; y: number },
+  knots: Array<[number, number, number]>,
+  metersPerPixel: number,
+  tangentOverrides?: Record<number, [number, number, number]>,
+  allowHandles = true,
+): SplineControlPoint | null {
+  const knotHitSq = (8.0 * metersPerPixel) ** 2;
+  const handleHitSq = (6.0 * metersPerPixel) ** 2;
+  let bestDistSq = Infinity;
+  let bestHit: SplineControlPoint | null = null;
+
+  for (let index = 0; index < knots.length; index += 1) {
+    const knot = knots[index]!;
+    const dx = worldPos.x - knot[0];
+    const dy = worldPos.y - knot[1];
+    const distSq = dx * dx + dy * dy;
+    if (distSq < knotHitSq && distSq < bestDistSq) {
+      bestDistSq = distSq;
+      bestHit = { index, type: 'knot' };
+    }
+  }
+
+  if (!allowHandles) {
+    return bestHit;
+  }
+
+  for (const handle of getSplineHandlePoints(knots, tangentOverrides)) {
+    const dx = worldPos.x - handle.x;
+    const dy = worldPos.y - handle.y;
+    const distSq = dx * dx + dy * dy;
+    if (distSq < handleHitSq && distSq < bestDistSq) {
+      bestDistSq = distSq;
+      bestHit = { index: handle.knotIndex, type: handle.type };
+    }
+  }
+
+  return bestHit;
 }
