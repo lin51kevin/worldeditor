@@ -5,7 +5,7 @@
 //! - Generating default lane sections from road geometry
 //! - Lane width interpolation and rebasing
 
-use crate::geometry::eval::{evaluate_geometry, evaluate_lane_width, offset_point, RefLinePoint};
+use crate::geometry::eval::{RefLinePoint, evaluate_geometry, evaluate_lane_width, offset_point};
 use crate::model::{Lane, LaneSection, LaneType, LaneWidth, Road};
 
 /// A sampled point on a lane boundary.

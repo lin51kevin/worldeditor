@@ -27,16 +27,26 @@ mod tests {
 
     #[test]
     fn test_import_returns_not_implemented() {
-        assert!(matches!(import_from_shapefile(&[]), Err(ShapefileError::NotImplemented)));
+        assert!(matches!(
+            import_from_shapefile(&[]),
+            Err(ShapefileError::NotImplemented)
+        ));
     }
 
     #[test]
     fn test_export_returns_not_implemented() {
-        assert!(matches!(export_to_shapefile(&Project::default()), Err(ShapefileError::NotImplemented)));
+        assert!(matches!(
+            export_to_shapefile(&Project::default()),
+            Err(ShapefileError::NotImplemented)
+        ));
     }
 
     #[test]
     fn test_error_display() {
-        assert!(ShapefileError::NotImplemented.to_string().contains("not yet implemented"));
+        assert!(
+            ShapefileError::NotImplemented
+                .to_string()
+                .contains("not yet implemented")
+        );
     }
 }

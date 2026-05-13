@@ -421,9 +421,7 @@ impl Pipelines {
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("road_textured.wgsl"),
-                source: wgpu::ShaderSource::Wgsl(
-                    include_str!("shaders/road_textured.wgsl").into(),
-                ),
+                source: wgpu::ShaderSource::Wgsl(include_str!("shaders/road_textured.wgsl").into()),
             });
 
         let bind_group_layout =

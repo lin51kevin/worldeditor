@@ -10,7 +10,6 @@ use super::structure::{
 };
 use super::utils::{attr_str, parse_f64, skip_element};
 use crate::model::*;
-use crate::model::road::*;
 
 pub(super) fn parse_road(start: &BytesStart, reader: &mut Reader<&[u8]>) -> Result<Road, OpenDriveError> {
     let mut road = Road::new("", 0.0);

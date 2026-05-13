@@ -95,7 +95,12 @@ pub fn create_road_from_spline(
         "dual2" => we_core::model::RoadTemplate::dual_two_lane(),
         "dual4" => we_core::model::RoadTemplate::dual_four_lane(),
         "dual6" => we_core::model::RoadTemplate::dual_six_lane(),
-        _ => return Err(JsError::new(&format!("Unknown template ID: {}", template_id))),
+        _ => {
+            return Err(JsError::new(&format!(
+                "Unknown template ID: {}",
+                template_id
+            )));
+        }
     };
 
     let cmd = we_service::commands::CreateRoadFromSpline::new(road_id, spline, template);

@@ -27,16 +27,26 @@ mod tests {
 
     #[test]
     fn test_import_not_implemented() {
-        assert!(matches!(import_from_nio(&[]), Err(NioProtoError::NotImplemented)));
+        assert!(matches!(
+            import_from_nio(&[]),
+            Err(NioProtoError::NotImplemented)
+        ));
     }
 
     #[test]
     fn test_export_not_implemented() {
-        assert!(matches!(export_to_nio(&Project::default()), Err(NioProtoError::NotImplemented)));
+        assert!(matches!(
+            export_to_nio(&Project::default()),
+            Err(NioProtoError::NotImplemented)
+        ));
     }
 
     #[test]
     fn test_error_display() {
-        assert!(NioProtoError::NotImplemented.to_string().contains("not yet implemented"));
+        assert!(
+            NioProtoError::NotImplemented
+                .to_string()
+                .contains("not yet implemented")
+        );
     }
 }

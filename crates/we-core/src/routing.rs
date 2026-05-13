@@ -73,7 +73,9 @@ pub fn build_routing_graph(project: &Project) -> Vec<RouteEdge> {
 
         // Successor link
         if let Some(link) = &road.link {
-            if let Some(succ) = &link.successor && road_map.contains_key(succ.element_id.as_str()) {
+            if let Some(succ) = &link.successor
+                && road_map.contains_key(succ.element_id.as_str())
+            {
                 let contact = succ.contact_point.unwrap_or(ContactPoint::Start);
                 edges.push(RouteEdge {
                     from: from_end.clone(),
@@ -82,7 +84,9 @@ pub fn build_routing_graph(project: &Project) -> Vec<RouteEdge> {
                 });
             }
             // Predecessor link
-            if let Some(pred) = &link.predecessor && road_map.contains_key(pred.element_id.as_str()) {
+            if let Some(pred) = &link.predecessor
+                && road_map.contains_key(pred.element_id.as_str())
+            {
                 let contact = pred.contact_point.unwrap_or(ContactPoint::End);
                 edges.push(RouteEdge {
                     from: from_start.clone(),
@@ -108,7 +112,9 @@ pub fn find_shortest_route(
     // Build adjacency list
     let mut adj: HashMap<&RouteNode, Vec<(&RouteNode, f64)>> = HashMap::new();
     for edge in edges {
-        adj.entry(&edge.from).or_default().push((&edge.to, edge.weight));
+        adj.entry(&edge.from)
+            .or_default()
+            .push((&edge.to, edge.weight));
     }
 
     // Dijkstra
@@ -133,9 +139,7 @@ pub fn find_shortest_route(
         if let Some(neighbors) = adj.get(node) {
             for (next, weight) in neighbors {
                 let new_cost = cost + weight;
-                let is_better = dist
-                    .get(next)
-                    .is_none_or(|&d| new_cost < d - 1e-9);
+                let is_better = dist.get(next).is_none_or(|&d| new_cost < d - 1e-9);
                 if is_better {
                     dist.insert(next, new_cost);
                     prev.insert(next, node);
@@ -180,7 +184,9 @@ pub fn find_reachable_roads(
 ) -> Vec<(RouteNode, Route)> {
     let mut adj: HashMap<&RouteNode, Vec<(&RouteNode, f64)>> = HashMap::new();
     for edge in edges {
-        adj.entry(&edge.from).or_default().push((&edge.to, edge.weight));
+        adj.entry(&edge.from)
+            .or_default()
+            .push((&edge.to, edge.weight));
     }
 
     let mut visited: HashMap<&RouteNode, (f64, Vec<String>)> = HashMap::new();
@@ -227,11 +233,7 @@ mod tests {
     use super::*;
     use crate::model::{Geometry, GeometryType, LinkElement, LinkElementType, Road, RoadLink};
 
-    fn make_road_with_link(
-        id: &str,
-        length: f64,
-        succ_id: Option<&str>,
-    ) -> crate::model::Road {
+    fn make_road_with_link(id: &str, length: f64, succ_id: Option<&str>) -> crate::model::Road {
         let succ = succ_id.map(|s| LinkElement {
             element_id: s.to_string(),
             element_type: LinkElementType::Road,

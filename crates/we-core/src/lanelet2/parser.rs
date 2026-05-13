@@ -83,7 +83,10 @@ pub fn import_from_lanelet2(xml: &str) -> Result<Project, LaneletParseError> {
         return Err(LaneletParseError::NoLanelets);
     }
 
-    Ok(Project { roads, ..Default::default() })
+    Ok(Project {
+        roads,
+        ..Default::default()
+    })
 }
 
 fn parse_nodes(xml: &str) -> Vec<Ll2Node> {
@@ -92,8 +95,12 @@ fn parse_nodes(xml: &str) -> Vec<Ll2Node> {
         let t = line.trim();
         if t.starts_with("<node ") {
             let id = attr_value(t, "id").unwrap_or_default();
-            let lat = attr_value(t, "lat").and_then(|s| s.parse().ok()).unwrap_or(0.0);
-            let lon = attr_value(t, "lon").and_then(|s| s.parse().ok()).unwrap_or(0.0);
+            let lat = attr_value(t, "lat")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.0);
+            let lon = attr_value(t, "lon")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0.0);
             nodes.push(Ll2Node { id, lat, lon });
         }
     }
@@ -107,7 +114,11 @@ fn parse_ways(xml: &str) -> Vec<Ll2Way> {
         let t = line.trim();
         if t.starts_with("<way ") {
             let id = attr_value(t, "id").unwrap_or_default();
-            current = Some(Ll2Way { id, node_refs: vec![], tags: Default::default() });
+            current = Some(Ll2Way {
+                id,
+                node_refs: vec![],
+                tags: Default::default(),
+            });
         } else if t == "</way>" {
             if let Some(way) = current.take() {
                 ways.push(way);
@@ -195,8 +206,14 @@ mod tests {
 
     #[test]
     fn test_attr_value() {
-        assert_eq!(attr_value("<node id=\"42\" lat=\"1.5\"/>", "id").as_deref(), Some("42"));
-        assert_eq!(attr_value("<node id=\"42\" lat=\"1.5\"/>", "lat").as_deref(), Some("1.5"));
+        assert_eq!(
+            attr_value("<node id=\"42\" lat=\"1.5\"/>", "id").as_deref(),
+            Some("42")
+        );
+        assert_eq!(
+            attr_value("<node id=\"42\" lat=\"1.5\"/>", "lat").as_deref(),
+            Some("1.5")
+        );
         assert_eq!(attr_value("<node id=\"42\"/>", "missing"), None);
     }
 }

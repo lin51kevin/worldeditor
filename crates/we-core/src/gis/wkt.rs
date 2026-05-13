@@ -32,7 +32,11 @@ impl WktCrs {
         let name = after_start[..name_end].to_owned();
         // Extract EPSG code: look for AUTHORITY["EPSG","XXXX"]
         let epsg = extract_epsg(wkt);
-        Ok(Self { crs_type, name, epsg })
+        Ok(Self {
+            crs_type,
+            name,
+            epsg,
+        })
     }
 }
 

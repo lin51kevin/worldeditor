@@ -18,7 +18,9 @@ fn object_color(obj_type: &ObjectType) -> [f32; 4] {
         ObjectType::TrafficCone => [0.9, 0.5, 0.1, 1.0],
         ObjectType::ParkingSpace => [0.424, 0.549, 0.278, 1.0],
         ObjectType::Crosswalk => [0.000, 0.000, 0.502, 1.0],
-        ObjectType::StopLine | ObjectType::ForwardWaitingArea | ObjectType::TurnLeftWaitingArea => [1.0, 1.0, 1.0, 1.0],
+        ObjectType::StopLine | ObjectType::ForwardWaitingArea | ObjectType::TurnLeftWaitingArea => {
+            [1.0, 1.0, 1.0, 1.0]
+        }
         ObjectType::CrossHatchArea => [0.965, 0.651, 0.137, 1.0],
         ObjectType::WovenArea => [1.000, 0.051, 0.651, 1.0],
         ObjectType::SlowDownToYieldLine => [0.000, 0.749, 1.000, 1.0],
@@ -289,7 +291,10 @@ mod tests {
         assert_eq!(object_color(&ObjectType::Wall), [0.4, 0.4, 0.4, 1.0]);
         assert_eq!(object_color(&ObjectType::Pillar), [0.5, 0.5, 0.5, 1.0]);
         assert_eq!(object_color(&ObjectType::TrafficCone), [0.9, 0.5, 0.1, 1.0]);
-        assert_eq!(object_color(&ObjectType::Custom("foo".into())), [0.7, 0.7, 0.7, 1.0]);
+        assert_eq!(
+            object_color(&ObjectType::Custom("foo".into())),
+            [0.7, 0.7, 0.7, 1.0]
+        );
     }
 
     #[test]
@@ -322,7 +327,8 @@ mod tests {
         }
         // But XY should differ
         let differs = v0.iter().zip(v90.iter()).any(|(a, b)| {
-            (a.position[0] - b.position[0]).abs() > 1e-3 || (a.position[1] - b.position[1]).abs() > 1e-3
+            (a.position[0] - b.position[0]).abs() > 1e-3
+                || (a.position[1] - b.position[1]).abs() > 1e-3
         });
         assert!(differs);
     }

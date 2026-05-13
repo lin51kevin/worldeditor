@@ -123,9 +123,8 @@ impl Command for MoveKnot {
         let mut p = project.clone();
         let road = find_road_mut(&mut p, &self.road_id)?;
 
-        let mut spline = we_core::spline::EditableSpline::from_knots(
-            self.params.original_knots.clone(),
-        );
+        let mut spline =
+            we_core::spline::EditableSpline::from_knots(self.params.original_knots.clone());
 
         if self.params.knot_index >= spline.knots.len() {
             return Err(EditorError::OperationFailed(format!(
@@ -234,11 +233,8 @@ impl Command for InsertKnot {
             we_core::spline::find_insertion_index(&spline, self.position[0], self.position[1])
         });
 
-        let mut knot = we_core::spline::SplineKnot::new(
-            self.position[0],
-            self.position[1],
-            self.position[2],
-        );
+        let mut knot =
+            we_core::spline::SplineKnot::new(self.position[0], self.position[1], self.position[2]);
         knot.knot_type = we_core::spline::KnotType::Key;
         spline.insert(idx, knot);
         spline.recompute_stations();

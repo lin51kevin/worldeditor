@@ -127,7 +127,10 @@ mod tests {
             Vector2::new(3.0, 0.0),
         ];
         let hull = convex_hull(&points);
-        assert!(hull.len() <= 2, "Collinear hull should have at most 2 vertices");
+        assert!(
+            hull.len() <= 2,
+            "Collinear hull should have at most 2 vertices"
+        );
     }
 
     #[test]

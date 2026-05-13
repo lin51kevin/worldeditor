@@ -4,7 +4,7 @@
 //! reference line sampling and distance checks. Pure Rust, WASM compatible.
 
 use crate::geometry::eval::{
-    evaluate_lane_width, offset_point, sample_road_reference_line, RefLinePoint,
+    RefLinePoint, evaluate_lane_width, offset_point, sample_road_reference_line,
 };
 use crate::model::{Junction, Project, Road};
 
@@ -48,12 +48,7 @@ pub fn pick_road(project: &Project, x: f64, y: f64, threshold: f64) -> Option<Pi
 ///
 /// Uses the junction's connecting roads' endpoints to build a bounding region.
 /// Returns `None` if no junction is within `threshold` distance.
-pub fn pick_junction(
-    project: &Project,
-    x: f64,
-    y: f64,
-    threshold: f64,
-) -> Option<PickResult> {
+pub fn pick_junction(project: &Project, x: f64, y: f64, threshold: f64) -> Option<PickResult> {
     let mut best: Option<PickResult> = None;
     let mut best_dist = threshold;
 
@@ -227,11 +222,7 @@ fn distance_to_road(road: &Road, x: f64, y: f64) -> Option<PickResult> {
 /// Estimate the half-width of a road at a given station s.
 fn road_half_width_at(road: &Road, s: f64) -> f64 {
     // Find applicable lane section
-    let section = road
-        .lane_sections
-        .iter()
-        .rev()
-        .find(|ls| ls.s <= s + 1e-9);
+    let section = road.lane_sections.iter().rev().find(|ls| ls.s <= s + 1e-9);
 
     match section {
         Some(sec) => {
@@ -253,12 +244,7 @@ fn road_half_width_at(road: &Road, s: f64) -> f64 {
 }
 
 /// Compute the distance from a point to a junction's center.
-fn distance_to_junction(
-    project: &Project,
-    junction: &Junction,
-    x: f64,
-    y: f64,
-) -> Option<f64> {
+fn distance_to_junction(project: &Project, junction: &Junction, x: f64, y: f64) -> Option<f64> {
     // Approximate junction center from connecting road endpoints
     let mut cx = 0.0;
     let mut cy = 0.0;

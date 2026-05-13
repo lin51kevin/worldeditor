@@ -1,5 +1,5 @@
-use wasm_bindgen::prelude::*;
 use crate::render::{build_junction_polygon_points, point_in_polygon, road_point_at_s};
+use wasm_bindgen::prelude::*;
 
 /// Find the closest junction to a world-space point.
 #[wasm_bindgen]
@@ -111,8 +111,16 @@ pub fn pick_road_at_point(
 
         if let Some(ls) = section {
             let ds = (s - ls.s).max(0.0);
-            let left: f64 = ls.left.iter().map(|l| evaluate_lane_width(&l.width, ds)).sum();
-            let right: f64 = ls.right.iter().map(|l| evaluate_lane_width(&l.width, ds)).sum();
+            let left: f64 = ls
+                .left
+                .iter()
+                .map(|l| evaluate_lane_width(&l.width, ds))
+                .sum();
+            let right: f64 = ls
+                .right
+                .iter()
+                .map(|l| evaluate_lane_width(&l.width, ds))
+                .sum();
             (left, right)
         } else {
             (0.0, 0.0)
@@ -132,17 +140,17 @@ pub fn pick_road_at_point(
         for (i, pt) in ref_pts.iter().enumerate() {
             // Perpendicular (left-normal) and tangent directions at this station
             let nx = -(pt.hdg.sin()); // left normal x
-            let ny = pt.hdg.cos();    // left normal y
-            let tx = pt.hdg.cos();    // tangent x
-            let ty = pt.hdg.sin();    // tangent y
+            let ny = pt.hdg.cos(); // left normal y
+            let tx = pt.hdg.cos(); // tangent x
+            let ty = pt.hdg.sin(); // tangent y
 
             // Vector from ref point to query point
             let dx = x - pt.x;
             let dy = y - pt.y;
 
             // Decompose into lateral (across-road) and along-road components
-            let lateral = dx * nx + dy * ny;   // positive = left of ref line
-            let along = dx * tx + dy * ty;     // positive = forward along road
+            let lateral = dx * nx + dy * ny; // positive = left of ref line
+            let along = dx * tx + dy * ty; // positive = forward along road
 
             // Only consider this sample point if the click is "closest" to it along
             // the road — use half-step window to avoid double-counting neighbouring pts.
@@ -172,9 +180,9 @@ pub fn pick_road_at_point(
             let score = if lateral >= -right_w && lateral <= left_w {
                 0.0_f64 // inside road surface
             } else if lateral > left_w {
-                lateral - left_w  // outside left edge
+                lateral - left_w // outside left edge
             } else {
-                -right_w - lateral  // outside right edge
+                -right_w - lateral // outside right edge
             };
 
             if score < best_score {
@@ -269,10 +277,7 @@ pub fn point_in_junction(
 /// Returns JSON with `{ id, center, boundary, area }` or null if
 /// the junction has insufficient connections.
 #[wasm_bindgen]
-pub fn compute_junction_area(
-    project_json: &str,
-    junction_id: &str,
-) -> Result<JsValue, JsError> {
+pub fn compute_junction_area(project_json: &str, junction_id: &str) -> Result<JsValue, JsError> {
     let project: we_core::model::Project =
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
     let junction = project
@@ -281,9 +286,7 @@ pub fn compute_junction_area(
         .find(|j| j.id == junction_id)
         .ok_or_else(|| JsError::new(&format!("Junction '{}' not found", junction_id)))?;
     match we_core::junction_area::compute_junction_area(&project, junction) {
-        Some(area) => {
-            serde_wasm_bindgen::to_value(&area).map_err(|e| JsError::new(&e.to_string()))
-        }
+        Some(area) => serde_wasm_bindgen::to_value(&area).map_err(|e| JsError::new(&e.to_string())),
         None => Ok(JsValue::NULL),
     }
 }
@@ -303,12 +306,6 @@ pub fn snap_point(
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
     let config: we_core::snapping::SnapConfig =
         serde_json::from_str(config_json).map_err(|e| JsError::new(&e.to_string()))?;
-    let result = we_core::snapping::snap_point(
-        x,
-        y,
-        &config,
-        &project,
-        exclude_road_id.as_deref(),
-    );
+    let result = we_core::snapping::snap_point(x, y, &config, &project, exclude_road_id.as_deref());
     serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
 }

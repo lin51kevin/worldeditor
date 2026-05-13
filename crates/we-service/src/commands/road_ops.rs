@@ -286,11 +286,7 @@ impl SwapCenterline {
         }
     }
 
-    pub fn with_snapshot(
-        road_id: impl Into<String>,
-        target_lane_id: i32,
-        road: Road,
-    ) -> Self {
+    pub fn with_snapshot(road_id: impl Into<String>, target_lane_id: i32, road: Road) -> Self {
         Self {
             road_id: road_id.into(),
             target_lane_id,
@@ -467,7 +463,11 @@ mod tests {
             assert!(lane.id >= 0, "left lane id should be >= 0, got {}", lane.id);
         }
         for lane in &road.lane_sections[0].right {
-            assert!(lane.id <= 0, "right lane id should be <= 0, got {}", lane.id);
+            assert!(
+                lane.id <= 0,
+                "right lane id should be <= 0, got {}",
+                lane.id
+            );
         }
     }
 
@@ -486,7 +486,11 @@ mod tests {
         let cmd = MirrorRoad::with_snapshot("road-1", snap.clone());
         let after = cmd.execute(&project).unwrap();
         let undone = cmd.undo(&after).unwrap();
-        let restored_left_ids: Vec<i32> = undone.roads[0].lane_sections[0].left.iter().map(|l| l.id).collect();
+        let restored_left_ids: Vec<i32> = undone.roads[0].lane_sections[0]
+            .left
+            .iter()
+            .map(|l| l.id)
+            .collect();
         assert_eq!(restored_left_ids, original_left_ids);
     }
 

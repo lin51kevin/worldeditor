@@ -3,7 +3,7 @@ use quick_xml::events::{BytesStart, Event};
 
 use super::super::OpenDriveError;
 use super::utils::{attr_str, parse_f64, skip_element};
-use crate::model::road::*;
+use crate::model::*;
 
 pub(super) fn parse_lanes(reader: &mut Reader<&[u8]>) -> Result<(Vec<LaneSection>, Vec<LaneOffset>), OpenDriveError> {
     let mut sections = Vec::new();

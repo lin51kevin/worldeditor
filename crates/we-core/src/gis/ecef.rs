@@ -75,9 +75,21 @@ mod tests {
         let (lat0, lon0, alt0) = (39.9042, 116.4074, 50.0);
         let ecef = geodetic_to_ecef(lat0, lon0, alt0);
         let (lat1, lon1, alt1) = ecef_to_geodetic(ecef);
-        assert!((lat1 - lat0).abs() < 1e-8, "lat error={}", (lat1 - lat0).abs());
-        assert!((lon1 - lon0).abs() < 1e-8, "lon error={}", (lon1 - lon0).abs());
-        assert!((alt1 - alt0).abs() < 1e-3, "alt error={}", (alt1 - alt0).abs());
+        assert!(
+            (lat1 - lat0).abs() < 1e-8,
+            "lat error={}",
+            (lat1 - lat0).abs()
+        );
+        assert!(
+            (lon1 - lon0).abs() < 1e-8,
+            "lon error={}",
+            (lon1 - lon0).abs()
+        );
+        assert!(
+            (alt1 - alt0).abs() < 1e-3,
+            "alt error={}",
+            (alt1 - alt0).abs()
+        );
     }
 
     #[test]

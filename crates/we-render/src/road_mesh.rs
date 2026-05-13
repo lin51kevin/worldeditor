@@ -102,7 +102,8 @@ pub fn generate_road_mesh(
 
     // If no lanes, generate a default road surface ribbon (3.5m each side)
     if all_verts.is_empty() && ref_pts.len() >= 2 {
-        all_verts = generate_default_ribbon(&ref_pts, &road.elevation_profile, 3.5, alpha, z_offset);
+        all_verts =
+            generate_default_ribbon(&ref_pts, &road.elevation_profile, 3.5, alpha, z_offset);
     }
 
     all_verts
@@ -205,7 +206,10 @@ fn average_width(widths: &[we_core::model::LaneWidth]) -> f64 {
         return 0.0;
     }
     // Determine the range of s_offsets covered
-    let s_max = widths.iter().map(|w| w.s_offset + w.d * 100.0 + w.c * 100.0).fold(0.0_f64, f64::max);
+    let s_max = widths
+        .iter()
+        .map(|w| w.s_offset + w.d * 100.0 + w.c * 100.0)
+        .fold(0.0_f64, f64::max);
     let s_max = s_max.max(100.0); // at least 100m to sample
     const N: usize = 10;
     let mut sum = 0.0_f64;
@@ -546,7 +550,13 @@ mod tests {
 
     #[test]
     fn test_average_width_constant() {
-        let widths = vec![LaneWidth { s_offset: 0.0, a: 3.5, b: 0.0, c: 0.0, d: 0.0 }];
+        let widths = vec![LaneWidth {
+            s_offset: 0.0,
+            a: 3.5,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }];
         let avg = average_width(&widths);
         assert!((avg - 3.5).abs() < 0.01);
     }
@@ -554,7 +564,13 @@ mod tests {
     #[test]
     fn test_average_width_linear() {
         // Linearly increasing width: w(s) = 3.0 + 0.01*s, average over 100m = 3.5
-        let widths = vec![LaneWidth { s_offset: 0.0, a: 3.0, b: 0.01, c: 0.0, d: 0.0 }];
+        let widths = vec![LaneWidth {
+            s_offset: 0.0,
+            a: 3.0,
+            b: 0.01,
+            c: 0.0,
+            d: 0.0,
+        }];
         let avg = average_width(&widths);
         assert!((avg - 3.5).abs() < 0.1);
     }

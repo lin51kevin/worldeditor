@@ -55,7 +55,7 @@ pub fn parse(xml: &str) -> Result<Project, OpenDriveError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::road::*;
+    use crate::model::*;
 
     /// Verify that `<roadMark>` elements with child elements are parsed correctly.
     /// This is the fix for the bug where Start events for roadMark/width/border

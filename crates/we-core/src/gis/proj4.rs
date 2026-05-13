@@ -33,7 +33,10 @@ impl Proj4Crs {
         if !params.contains_key("proj") {
             return Err("Missing +proj parameter".into());
         }
-        Ok(Self { proj_string: proj.to_owned(), params })
+        Ok(Self {
+            proj_string: proj.to_owned(),
+            params,
+        })
     }
 
     /// Return the projection type (e.g. "utm", "longlat", "merc").

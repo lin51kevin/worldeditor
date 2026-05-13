@@ -46,11 +46,7 @@ impl Default for EndpointConfig {
 /// Generate a flat diamond marker centred at `position`.
 ///
 /// The diamond lies in the XY plane at the given Z height.
-pub fn generate_diamond_marker(
-    position: &Point3D,
-    size: f32,
-    color: [f32; 4],
-) -> Vec<ColorVertex> {
+pub fn generate_diamond_marker(position: &Point3D, size: f32, color: [f32; 4]) -> Vec<ColorVertex> {
     let cx = position.x as f32;
     let cy = position.y as f32;
     let cz = position.z as f32;
@@ -212,7 +208,11 @@ pub fn generate_endpoint_markers(
     for ep in endpoints {
         let color = ep.kind.color();
         // Diamond marker
-        vertices.extend(generate_diamond_marker(&ep.position, config.diamond_size, color));
+        vertices.extend(generate_diamond_marker(
+            &ep.position,
+            config.diamond_size,
+            color,
+        ));
         // Direction arrow for dangling endpoints (shows which way is unconnected)
         if ep.kind == EndpointKind::Dangling {
             vertices.extend(generate_arrow(

@@ -3,7 +3,7 @@ use quick_xml::events::{BytesStart, Event};
 
 use super::super::OpenDriveError;
 use super::utils::{attr_str, parse_f64};
-use crate::model::road::*;
+use crate::model::*;
 
 // ── Lateral Profile ─────────────────────────────────
 

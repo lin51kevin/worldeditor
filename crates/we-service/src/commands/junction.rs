@@ -119,10 +119,7 @@ impl Command for UpdateJunctionConnections {
             .iter_mut()
             .find(|j| j.id == self.junction_id)
             .ok_or_else(|| {
-                EditorError::OperationFailed(format!(
-                    "Junction '{}' not found",
-                    self.junction_id
-                ))
+                EditorError::OperationFailed(format!("Junction '{}' not found", self.junction_id))
             })?;
         junction.connections = self.new_connections.clone();
         Ok(p)
@@ -135,10 +132,7 @@ impl Command for UpdateJunctionConnections {
             .iter_mut()
             .find(|j| j.id == self.junction_id)
             .ok_or_else(|| {
-                EditorError::OperationFailed(format!(
-                    "Junction '{}' not found",
-                    self.junction_id
-                ))
+                EditorError::OperationFailed(format!("Junction '{}' not found", self.junction_id))
             })?;
         junction.connections = self.old_connections.clone();
         Ok(p)
@@ -181,10 +175,7 @@ impl Command for UpdateJunction {
             .iter_mut()
             .find(|j| j.id == self.junction_id)
             .ok_or_else(|| {
-                EditorError::OperationFailed(format!(
-                    "Junction '{}' not found",
-                    self.junction_id
-                ))
+                EditorError::OperationFailed(format!("Junction '{}' not found", self.junction_id))
             })?;
         junction.name = self.new_name.clone();
         Ok(p)
@@ -197,10 +188,7 @@ impl Command for UpdateJunction {
             .iter_mut()
             .find(|j| j.id == self.junction_id)
             .ok_or_else(|| {
-                EditorError::OperationFailed(format!(
-                    "Junction '{}' not found",
-                    self.junction_id
-                ))
+                EditorError::OperationFailed(format!("Junction '{}' not found", self.junction_id))
             })?;
         junction.name = self.old_name.clone();
         Ok(p)

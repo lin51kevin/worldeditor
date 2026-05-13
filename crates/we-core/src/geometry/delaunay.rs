@@ -281,9 +281,7 @@ mod tests {
         // For n points in general position, Delaunay gives 2n - h - 2 triangles
         // where h is the hull count. We just verify a reasonable count.
         let points: Vec<Vector2<f64>> = (0..5)
-            .flat_map(|i| {
-                (0..5).map(move |j| Vector2::new(i as f64, j as f64))
-            })
+            .flat_map(|i| (0..5).map(move |j| Vector2::new(i as f64, j as f64)))
             .collect();
         let tris = triangulate(&points);
         assert!(!tris.is_empty());

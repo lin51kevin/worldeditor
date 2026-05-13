@@ -3,7 +3,7 @@ use quick_xml::events::{BytesStart, Event};
 
 use super::super::OpenDriveError;
 use super::utils::{attr_str, parse_f64};
-use crate::model::road::*;
+use crate::model::*;
 
 pub(super) fn parse_plan_view(reader: &mut Reader<&[u8]>) -> Result<Vec<Geometry>, OpenDriveError> {
     let mut geometries = Vec::new();

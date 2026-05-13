@@ -32,11 +32,18 @@ mod tests {
 
     #[test]
     fn test_export_not_implemented() {
-        assert!(matches!(export_to_dxf(&Project::default()), Err(DxfError::NotImplemented)));
+        assert!(matches!(
+            export_to_dxf(&Project::default()),
+            Err(DxfError::NotImplemented)
+        ));
     }
 
     #[test]
     fn test_error_display() {
-        assert!(DxfError::NotImplemented.to_string().contains("not yet implemented"));
+        assert!(
+            DxfError::NotImplemented
+                .to_string()
+                .contains("not yet implemented")
+        );
     }
 }

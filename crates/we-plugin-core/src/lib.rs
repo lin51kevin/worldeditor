@@ -30,7 +30,9 @@ pub mod manifest;
 pub mod plugin;
 pub mod registry;
 
-pub use context::{Command, CoreApi, ExporterContrib, ImporterContrib, MenuItem, PluginContext, RenderPlugin};
+pub use context::{
+    Command, CoreApi, ExporterContrib, ImporterContrib, MenuItem, PluginContext, RenderPlugin,
+};
 pub use error::{PluginError, PluginResult};
 pub use manifest::PluginManifest;
 pub use plugin::EditorPlugin;

@@ -4,13 +4,13 @@
 //! All implementations are pure Rust — WASM compatible.
 
 pub mod ecef;
-pub mod gcp;
 pub mod gcj02;
+pub mod gcp;
 pub mod mgrs;
 pub mod proj4;
 pub mod utm;
-pub mod wkt;
 mod wgs84;
+pub mod wkt;
 
 pub use gcj02::{gcj02_to_wgs84, is_in_china, wgs84_to_gcj02};
 pub use utm::{UtmCoord, geo_to_utm, utm_to_geo};

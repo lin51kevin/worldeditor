@@ -15,10 +15,7 @@ const HEIGHT_OFFSET: f32 = -0.24;
 ///
 /// For each junction, computes the average center of connection road endpoints
 /// and fans out triangles to each endpoint, creating a polygonal coverage.
-pub fn generate_junction_meshes(
-    project: &Project,
-    config: &RoadRenderConfig,
-) -> Vec<ColorVertex> {
+pub fn generate_junction_meshes(project: &Project, config: &RoadRenderConfig) -> Vec<ColorVertex> {
     let mut all_verts = Vec::new();
 
     for junction in &project.junctions {
@@ -33,20 +30,12 @@ pub fn generate_junction_meshes(
         let mut points: Vec<[f32; 3]> = Vec::new();
         for conn in &junction.connections {
             // Find the incoming road and get its contact point position
-            if let Some(road) = project
-                .roads
-                .iter()
-                .find(|r| r.id == conn.incoming_road)
-            {
+            if let Some(road) = project.roads.iter().find(|r| r.id == conn.incoming_road) {
                 let (x, y, z) = road_contact_position(road);
                 points.push([x, y, z + HEIGHT_OFFSET]);
             }
             // Also get the connecting road endpoint
-            if let Some(road) = project
-                .roads
-                .iter()
-                .find(|r| r.id == conn.connecting_road)
-            {
+            if let Some(road) = project.roads.iter().find(|r| r.id == conn.connecting_road) {
                 let (x, y, z) = road_end_position(road);
                 points.push([x, y, z + HEIGHT_OFFSET]);
             }
@@ -93,8 +82,7 @@ fn road_end_position(road: &we_core::model::Road) -> (f32, f32, f32) {
     let _total_length = road.length;
     if let Some(geo) = road.plan_view.last() {
         let end_s = geo.s + geo.length;
-        let z =
-            we_core::geometry::eval::evaluate_elevation(&road.elevation_profile, end_s) as f32;
+        let z = we_core::geometry::eval::evaluate_elevation(&road.elevation_profile, end_s) as f32;
         // Approximate end position by linear extrapolation from geometry
         let dx = (geo.length as f32) * geo.hdg.cos() as f32;
         let dy = (geo.length as f32) * geo.hdg.sin() as f32;

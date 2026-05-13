@@ -87,14 +87,17 @@ impl Command for DeleteElevationPoint {
     fn execute(&self, project: &Project) -> Result<Project, EditorError> {
         let mut p = project.clone();
         let road = find_road_mut(&mut p, &self.road_id)?;
-        let new_profile =
-            we_core::elevation::delete_elevation_point(&road.elevation_profile, self.s, self.tolerance)
-                .ok_or_else(|| {
-                    EditorError::OperationFailed(format!(
-                        "No elevation point at s={} on road '{}'",
-                        self.s, self.road_id
-                    ))
-                })?;
+        let new_profile = we_core::elevation::delete_elevation_point(
+            &road.elevation_profile,
+            self.s,
+            self.tolerance,
+        )
+        .ok_or_else(|| {
+            EditorError::OperationFailed(format!(
+                "No elevation point at s={} on road '{}'",
+                self.s, self.road_id
+            ))
+        })?;
         road.elevation_profile = new_profile;
         Ok(p)
     }
@@ -188,11 +191,7 @@ pub struct SmoothElevation {
 }
 
 impl SmoothElevation {
-    pub fn new(
-        road_id: impl Into<String>,
-        iterations: u32,
-        old_profile: Vec<Elevation>,
-    ) -> Self {
+    pub fn new(road_id: impl Into<String>, iterations: u32, old_profile: Vec<Elevation>) -> Self {
         Self {
             road_id: road_id.into(),
             iterations,

@@ -32,11 +32,18 @@ mod tests {
 
     #[test]
     fn test_export_not_implemented() {
-        assert!(matches!(export_to_mif(&Project::default()), Err(MifError::NotImplemented)));
+        assert!(matches!(
+            export_to_mif(&Project::default()),
+            Err(MifError::NotImplemented)
+        ));
     }
 
     #[test]
     fn test_error_display() {
-        assert!(MifError::NotImplemented.to_string().contains("not yet implemented"));
+        assert!(
+            MifError::NotImplemented
+                .to_string()
+                .contains("not yet implemented")
+        );
     }
 }

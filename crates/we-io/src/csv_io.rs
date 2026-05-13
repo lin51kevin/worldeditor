@@ -204,9 +204,19 @@ mod tests {
 
     #[test]
     fn test_export_road_values() {
-        let geom = Geometry { s: 0.0, x: 5.0, y: 3.0, hdg: 0.0, length: 20.0, geo_type: GeometryType::Line };
+        let geom = Geometry {
+            s: 0.0,
+            x: 5.0,
+            y: 3.0,
+            hdg: 0.0,
+            length: 20.0,
+            geo_type: GeometryType::Line,
+        };
         let road = Road::from_centerline("r0", vec![geom]);
-        let project = Project { roads: vec![road], ..Default::default() };
+        let project = Project {
+            roads: vec![road],
+            ..Default::default()
+        };
         let csv = export_roads_to_csv(&project);
         let row = csv.lines().nth(1).unwrap();
         assert!(row.contains("r0"));
@@ -215,9 +225,19 @@ mod tests {
 
     #[test]
     fn test_export_header_row() {
-        let geom = Geometry { s: 0.0, x: 0.0, y: 0.0, hdg: 0.0, length: 10.0, geo_type: GeometryType::Line };
+        let geom = Geometry {
+            s: 0.0,
+            x: 0.0,
+            y: 0.0,
+            hdg: 0.0,
+            length: 10.0,
+            geo_type: GeometryType::Line,
+        };
         let road = Road::from_centerline("r1", vec![geom]);
-        let project = Project { roads: vec![road], ..Default::default() };
+        let project = Project {
+            roads: vec![road],
+            ..Default::default()
+        };
         let csv = export_roads_to_csv(&project);
         assert!(csv.starts_with("id,x,y,hdg,length"));
     }

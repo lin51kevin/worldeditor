@@ -92,10 +92,7 @@ pub fn signal_type_to_icon_path(signal: &Signal) -> String {
         "1000001" => "StandardTrafficLight.png".to_string(),
         "1000002" => "WalkingTrafficLight.png".to_string(),
         "1000013" => "BikingTrafficLight.png".to_string(),
-        "1010203800001413" => format!(
-            "speedlimit_{}.png",
-            signal.value.as_deref().unwrap_or("30")
-        ),
+        "1010203800001413" => format!("speedlimit_{}.png", signal.value.as_deref().unwrap_or("30")),
         "1010203900001613" => format!(
             "removespeedlimit_{}.png",
             signal.value.as_deref().unwrap_or("30")
@@ -108,7 +105,7 @@ pub fn signal_type_to_icon_path(signal: &Signal) -> String {
 /// Default billboard color for a signal based on its type string.
 pub fn signal_default_color(signal: &Signal) -> [f32; 4] {
     match signal.signal_type.as_str() {
-        "Graphics" => [1.0, 1.0, 1.0, 0.95],         // white paint mark
+        "Graphics" => [1.0, 1.0, 1.0, 0.95], // white paint mark
         "1010203800001413" | "1010203900001613" => [0.0, 0.0, 0.0, 1.0], // black text
         s if s.starts_with("1000") => [0.2, 0.8, 0.2, 1.0], // green traffic lights
         _ => [1.0, 1.0, 1.0, 1.0],
@@ -150,7 +147,8 @@ pub fn generate_signal_render_data(
         let vertices =
             generate_signal_billboard(&pos, signal.h_offset, icon_size, icon_size, color);
         data.billboard_vertices.extend(vertices);
-        data.transforms.push(build_signal_transform(&pos, signal.h_offset, 1.0));
+        data.transforms
+            .push(build_signal_transform(&pos, signal.h_offset, 1.0));
     }
 
     data
@@ -223,5 +221,3 @@ mod tests {
         assert_eq!(transform[3][2], 5.0);
     }
 }
-
-

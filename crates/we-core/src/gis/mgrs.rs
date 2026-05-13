@@ -3,7 +3,10 @@
 //! Converts between UTM and MGRS grid references.
 //! Supports 100km square identification and precision up to 1m.
 
-use crate::gis::{GeoCoord, utm::{UtmCoord, geo_to_utm}};
+use crate::gis::{
+    GeoCoord,
+    utm::{UtmCoord, geo_to_utm},
+};
 
 const COL_LETTERS: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ"; // 24 letters (I/O omitted)
 const ROW_LETTERS: &[u8] = b"ABCDEFGHJKLMNPQRSTUV"; // 20 letters
@@ -31,9 +34,20 @@ impl MgrsRef {
     /// Format as standard MGRS string, e.g. "50TMK12345678".
     pub fn format_ref(&self) -> String {
         let digits = self.precision as usize;
-        let e_str = format!("{:0>width$}", self.easting / 10u32.pow(5 - self.precision as u32), width = digits);
-        let n_str = format!("{:0>width$}", self.northing / 10u32.pow(5 - self.precision as u32), width = digits);
-        format!("{}{}{}{}{}{}", self.zone, self.band, self.col, self.row, e_str, n_str)
+        let e_str = format!(
+            "{:0>width$}",
+            self.easting / 10u32.pow(5 - self.precision as u32),
+            width = digits
+        );
+        let n_str = format!(
+            "{:0>width$}",
+            self.northing / 10u32.pow(5 - self.precision as u32),
+            width = digits
+        );
+        format!(
+            "{}{}{}{}{}{}",
+            self.zone, self.band, self.col, self.row, e_str, n_str
+        )
     }
 }
 
@@ -59,7 +73,15 @@ pub fn utm_to_mgrs(utm: &UtmCoord, lat_deg: f64, precision: u8) -> Option<MgrsRe
     let row = ROW_LETTERS[row_idx] as char;
     let easting = utm.easting as u32 % 100_000;
     let northing = utm.northing as u32 % 100_000;
-    Some(MgrsRef { zone: utm.zone, band, col, row, easting, northing, precision })
+    Some(MgrsRef {
+        zone: utm.zone,
+        band,
+        col,
+        row,
+        easting,
+        northing,
+        precision,
+    })
 }
 
 /// Latitude band letter (C–X, 8° bands, no I/O).

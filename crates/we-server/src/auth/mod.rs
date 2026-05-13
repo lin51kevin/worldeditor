@@ -1,10 +1,6 @@
 pub mod jwt;
 
-use axum::{
-    async_trait,
-    extract::FromRequestParts,
-    http::request::Parts,
-};
+use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
 use axum_extra::TypedHeader;
 use axum_extra::headers::{Authorization, authorization::Bearer};
 use jsonwebtoken::{Header, Validation, decode, encode};
@@ -64,9 +60,10 @@ impl FromRequestParts<Arc<AuthService>> for Claims {
     type Rejection = Error;
 
     async fn from_request_parts(parts: &mut Parts, state: &Arc<AuthService>) -> Result<Self> {
-        let TypedHeader(bearer) = TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
-            .await
-            .map_err(|_| Error::Auth)?;
+        let TypedHeader(bearer) =
+            TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
+                .await
+                .map_err(|_| Error::Auth)?;
 
         state.verify_token(bearer.token())
     }

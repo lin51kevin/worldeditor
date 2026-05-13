@@ -9,13 +9,41 @@ use super::{find_lane_mut, find_road_mut};
 /// A single entry in a batch command.
 #[derive(Debug, Clone)]
 pub enum BatchEntry {
-    UpdateRoadName { road_id: String, old_name: String, new_name: String },
-    UpdateLaneType { road_id: String, section_s: f64, lane_id: i32, old_type: LaneType, new_type: LaneType },
-    UpdateLaneWidth { road_id: String, section_s: f64, lane_id: i32, old_widths: Vec<LaneWidth>, new_widths: Vec<LaneWidth> },
-    DeleteRoad { road_id: String },
-    DeleteJunction { junction_id: String },
-    TransformRoad { road_id: String, dx: f64, dy: f64, dz: f64 },
-    TransformJunction { junction_id: String, new_name: String },
+    UpdateRoadName {
+        road_id: String,
+        old_name: String,
+        new_name: String,
+    },
+    UpdateLaneType {
+        road_id: String,
+        section_s: f64,
+        lane_id: i32,
+        old_type: LaneType,
+        new_type: LaneType,
+    },
+    UpdateLaneWidth {
+        road_id: String,
+        section_s: f64,
+        lane_id: i32,
+        old_widths: Vec<LaneWidth>,
+        new_widths: Vec<LaneWidth>,
+    },
+    DeleteRoad {
+        road_id: String,
+    },
+    DeleteJunction {
+        junction_id: String,
+    },
+    TransformRoad {
+        road_id: String,
+        dx: f64,
+        dy: f64,
+        dz: f64,
+    },
+    TransformJunction {
+        junction_id: String,
+        new_name: String,
+    },
 }
 
 /// Execute multiple commands as a single undoable operation.
@@ -47,15 +75,29 @@ impl Command for BatchCommand {
         let mut p = project.clone();
         for entry in &self.commands {
             match entry {
-                BatchEntry::UpdateRoadName { road_id, new_name, .. } => {
+                BatchEntry::UpdateRoadName {
+                    road_id, new_name, ..
+                } => {
                     let road = find_road_mut(&mut p, road_id)?;
                     road.name = new_name.clone();
                 }
-                BatchEntry::UpdateLaneType { road_id, section_s, lane_id, new_type, .. } => {
+                BatchEntry::UpdateLaneType {
+                    road_id,
+                    section_s,
+                    lane_id,
+                    new_type,
+                    ..
+                } => {
                     let lane = find_lane_mut(&mut p, road_id, *section_s, *lane_id)?;
                     lane.lane_type = *new_type;
                 }
-                BatchEntry::UpdateLaneWidth { road_id, section_s, lane_id, new_widths, .. } => {
+                BatchEntry::UpdateLaneWidth {
+                    road_id,
+                    section_s,
+                    lane_id,
+                    new_widths,
+                    ..
+                } => {
                     let lane = find_lane_mut(&mut p, road_id, *section_s, *lane_id)?;
                     lane.width = new_widths.clone();
                 }
@@ -65,7 +107,12 @@ impl Command for BatchCommand {
                 BatchEntry::DeleteJunction { junction_id } => {
                     p.junctions.retain(|j| j.id != *junction_id);
                 }
-                BatchEntry::TransformRoad { road_id, dx, dy, dz } => {
+                BatchEntry::TransformRoad {
+                    road_id,
+                    dx,
+                    dy,
+                    dz,
+                } => {
                     let road = find_road_mut(&mut p, road_id)?;
                     for geo in &mut road.plan_view {
                         geo.x += dx;
@@ -75,14 +122,18 @@ impl Command for BatchCommand {
                         ep.a += dz;
                     }
                 }
-                BatchEntry::TransformJunction { junction_id, new_name } => {
+                BatchEntry::TransformJunction {
+                    junction_id,
+                    new_name,
+                } => {
                     let junction = p
                         .junctions
                         .iter_mut()
                         .find(|j| j.id == *junction_id)
                         .ok_or_else(|| {
                             EditorError::OperationFailed(format!(
-                                "Junction '{}' not found", junction_id
+                                "Junction '{}' not found",
+                                junction_id
                             ))
                         })?;
                     junction.name = new_name.clone();

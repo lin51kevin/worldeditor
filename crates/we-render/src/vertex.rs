@@ -76,7 +76,11 @@ impl SurfaceVertex {
     };
 
     pub fn new(position: [f32; 3], uv: [f32; 2], color: [f32; 4]) -> Self {
-        Self { position, uv, color }
+        Self {
+            position,
+            uv,
+            color,
+        }
     }
 }
 

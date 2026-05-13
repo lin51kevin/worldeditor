@@ -58,7 +58,11 @@ pub fn run() {
                 .unwrap_or_else(|_| std::path::PathBuf::from("plugins"));
 
             if let Err(e) = std::fs::create_dir_all(&plugins_dir) {
-                log::warn!("Could not create plugins directory {:?}: {}", plugins_dir, e);
+                log::warn!(
+                    "Could not create plugins directory {:?}: {}",
+                    plugins_dir,
+                    e
+                );
             }
 
             let mut registry = we_plugin_core::PluginRegistry::new(&plugins_dir);
@@ -70,5 +74,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
-

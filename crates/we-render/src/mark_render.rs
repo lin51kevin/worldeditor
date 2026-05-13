@@ -492,14 +492,21 @@ mod tests {
 
         // The tip vertex (point [0.0, 0.6, 0.0]) appears in triangles
         // involving index 5.  After rotation it should land near (0.6, 0).
-        let tip_x = verts.iter().map(|v| v.position[0]).fold(f32::NEG_INFINITY, f32::max);
+        let tip_x = verts
+            .iter()
+            .map(|v| v.position[0])
+            .fold(f32::NEG_INFINITY, f32::max);
         let tip_y_at_max_x = verts
             .iter()
             .filter(|v| (v.position[0] - tip_x).abs() < 1e-4)
             .map(|v| v.position[1])
             .next()
             .unwrap();
-        assert!(tip_x > 0.5, "tip should be in +X for heading=0, got {}", tip_x);
+        assert!(
+            tip_x > 0.5,
+            "tip should be in +X for heading=0, got {}",
+            tip_x
+        );
         assert!(
             tip_y_at_max_x.abs() < 0.1,
             "tip Y should be near 0 for heading=0, got {}",
@@ -513,14 +520,21 @@ mod tests {
         let center = Point3D::new(0.0, 0.0, 0.0);
         let verts = generate_arrow(&center, std::f64::consts::FRAC_PI_2, 0, 1.0, [1.0; 4]);
 
-        let tip_y = verts.iter().map(|v| v.position[1]).fold(f32::NEG_INFINITY, f32::max);
+        let tip_y = verts
+            .iter()
+            .map(|v| v.position[1])
+            .fold(f32::NEG_INFINITY, f32::max);
         let tip_x_at_max_y = verts
             .iter()
             .filter(|v| (v.position[1] - tip_y).abs() < 1e-4)
             .map(|v| v.position[0])
             .next()
             .unwrap();
-        assert!(tip_y > 0.5, "tip should be in +Y for heading=π/2, got {}", tip_y);
+        assert!(
+            tip_y > 0.5,
+            "tip should be in +Y for heading=π/2, got {}",
+            tip_y
+        );
         assert!(
             tip_x_at_max_y.abs() < 0.1,
             "tip X should be near 0 for heading=π/2, got {}",

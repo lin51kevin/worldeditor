@@ -200,9 +200,7 @@ impl Command for DeleteLane {
             section.right.retain(|l| l.id != self.lane_id);
         } else {
             if !section.center.iter().any(|l| l.id == self.lane_id) {
-                return Err(EditorError::OperationFailed(
-                    "Center lane not found".into(),
-                ));
+                return Err(EditorError::OperationFailed("Center lane not found".into()));
             }
             section.center.retain(|l| l.id != self.lane_id);
         }
@@ -388,7 +386,9 @@ fn rebase_lane_widths(widths: &[LaneWidth], ds: f64) -> Vec<LaneWidth> {
     }
     let active = &widths[active_idx];
     let local_ds = ds - active.s_offset;
-    let new_a = active.a + active.b * local_ds + active.c * local_ds * local_ds
+    let new_a = active.a
+        + active.b * local_ds
+        + active.c * local_ds * local_ds
         + active.d * local_ds * local_ds * local_ds;
     let new_b = active.b + 2.0 * active.c * local_ds + 3.0 * active.d * local_ds * local_ds;
     let new_c = active.c + 3.0 * active.d * local_ds;
@@ -517,11 +517,7 @@ pub struct MergeLaneSections {
 }
 
 impl MergeLaneSections {
-    pub fn new(
-        road_id: impl Into<String>,
-        section_s: f64,
-        old_sections: Vec<LaneSection>,
-    ) -> Self {
+    pub fn new(road_id: impl Into<String>, section_s: f64, old_sections: Vec<LaneSection>) -> Self {
         Self {
             road_id: road_id.into(),
             section_s,
@@ -588,11 +584,7 @@ impl DeleteLaneSection {
         }
     }
 
-    pub fn with_snapshot(
-        road_id: impl Into<String>,
-        section_s: f64,
-        section: LaneSection,
-    ) -> Self {
+    pub fn with_snapshot(road_id: impl Into<String>, section_s: f64, section: LaneSection) -> Self {
         Self {
             road_id: road_id.into(),
             section_s,

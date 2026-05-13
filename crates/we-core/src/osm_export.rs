@@ -109,7 +109,14 @@ mod tests {
     use crate::model::{Geometry, GeometryType, Junction, Road};
 
     fn straight_road(id: &str, length: f64) -> Road {
-        let geom = Geometry { s: 0.0, x: 0.0, y: 0.0, hdg: 0.0, length, geo_type: GeometryType::Line };
+        let geom = Geometry {
+            s: 0.0,
+            x: 0.0,
+            y: 0.0,
+            hdg: 0.0,
+            length,
+            geo_type: GeometryType::Line,
+        };
         Road::from_centerline(id, vec![geom])
     }
 
@@ -126,14 +133,20 @@ mod tests {
 
     #[test]
     fn test_export_single_road_has_two_nodes() {
-        let project = Project { roads: vec![straight_road("r0", 50.0)], ..Default::default() };
+        let project = Project {
+            roads: vec![straight_road("r0", 50.0)],
+            ..Default::default()
+        };
         let osm = export_to_osm(&project);
         assert_eq!(osm.matches("<node").count(), 2);
     }
 
     #[test]
     fn test_export_single_road_has_way() {
-        let project = Project { roads: vec![straight_road("r0", 100.0)], ..Default::default() };
+        let project = Project {
+            roads: vec![straight_road("r0", 100.0)],
+            ..Default::default()
+        };
         let osm = export_to_osm(&project);
         assert!(osm.contains("<way"));
         assert!(osm.contains("</way>"));
@@ -141,7 +154,10 @@ mod tests {
 
     #[test]
     fn test_export_road_highway_tag() {
-        let project = Project { roads: vec![straight_road("r0", 100.0)], ..Default::default() };
+        let project = Project {
+            roads: vec![straight_road("r0", 100.0)],
+            ..Default::default()
+        };
         let osm = export_to_osm(&project);
         assert!(osm.contains("highway"));
     }
@@ -150,7 +166,11 @@ mod tests {
     fn test_export_junction_becomes_relation() {
         let project = Project {
             roads: vec![],
-            junctions: vec![Junction { id: "j0".to_string(), name: String::new(), connections: vec![] }],
+            junctions: vec![Junction {
+                id: "j0".to_string(),
+                name: String::new(),
+                connections: vec![],
+            }],
             ..Default::default()
         };
         let osm = export_to_osm(&project);
@@ -170,7 +190,10 @@ mod tests {
 
     #[test]
     fn test_export_is_valid_xml_structure() {
-        let project = Project { roads: vec![straight_road("r0", 50.0)], ..Default::default() };
+        let project = Project {
+            roads: vec![straight_road("r0", 50.0)],
+            ..Default::default()
+        };
         let osm = export_to_osm(&project);
         assert!(osm.starts_with("<?xml"));
         assert!(osm.ends_with("</osm>\n"));

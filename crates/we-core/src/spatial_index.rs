@@ -204,9 +204,7 @@ fn insert_into_grid(
 
     for cx in min_cx..=max_cx {
         for cy in min_cy..=max_cy {
-            grid.entry(CellKey { cx, cy })
-                .or_default()
-                .push(idx);
+            grid.entry(CellKey { cx, cy }).or_default().push(idx);
         }
     }
 }
@@ -236,10 +234,7 @@ fn compute_road_aabb(road: &crate::model::Road) -> Option<Aabb> {
     ))
 }
 
-fn compute_junction_aabb(
-    project: &Project,
-    junction: &crate::model::Junction,
-) -> Option<Aabb> {
+fn compute_junction_aabb(project: &Project, junction: &crate::model::Junction) -> Option<Aabb> {
     let mut min_x = f64::MAX;
     let mut min_y = f64::MAX;
     let mut max_x = f64::MIN;
@@ -264,7 +259,12 @@ fn compute_junction_aabb(
     if count == 0 {
         return None;
     }
-    Some(Aabb::new(min_x - 5.0, min_y - 5.0, max_x + 5.0, max_y + 5.0))
+    Some(Aabb::new(
+        min_x - 5.0,
+        min_y - 5.0,
+        max_x + 5.0,
+        max_y + 5.0,
+    ))
 }
 
 #[cfg(test)]
@@ -320,7 +320,9 @@ mod tests {
         let mut project = Project::default();
         project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
         project.roads.push(make_road_at("r2", 200.0, 0.0, 100.0));
-        project.roads.push(make_road_at("r3", 1000.0, 1000.0, 100.0));
+        project
+            .roads
+            .push(make_road_at("r3", 1000.0, 1000.0, 100.0));
         let idx = SpatialIndex::build(&project, 100.0);
         let region = Aabb::new(-20.0, -20.0, 320.0, 20.0);
         let results = idx.query_range(&region);

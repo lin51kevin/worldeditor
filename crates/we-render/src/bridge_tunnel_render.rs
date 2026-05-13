@@ -95,8 +95,16 @@ pub fn generate_bridge_deck(
         // Four corners of this quad segment
         let bl = [cx - perp_x * half_width, cy - perp_y * half_width, cz];
         let br = [cx + perp_x * half_width, cy + perp_y * half_width, cz];
-        let tl = [nx - perp_x_next * half_width, ny - perp_y_next * half_width, nz];
-        let tr = [nx + perp_x_next * half_width, ny + perp_y_next * half_width, nz];
+        let tl = [
+            nx - perp_x_next * half_width,
+            ny - perp_y_next * half_width,
+            nz,
+        ];
+        let tr = [
+            nx + perp_x_next * half_width,
+            ny + perp_y_next * half_width,
+            nz,
+        ];
 
         // Two triangles
         for &pos in &[bl, br, tl, br, tr, tl] {
@@ -155,9 +163,21 @@ pub fn generate_tunnel_enclosure(
 
         // Left wall
         let lbl = [cx - perp_x * half_width, cy - perp_y * half_width, cz];
-        let ltl = [cx - perp_x * half_width, cy - perp_y * half_width, cz + arch_height];
-        let lbl_n = [nx - perp_x_next * half_width, ny - perp_y_next * half_width, nz];
-        let ltl_n = [nx - perp_x_next * half_width, ny - perp_y_next * half_width, nz + arch_height];
+        let ltl = [
+            cx - perp_x * half_width,
+            cy - perp_y * half_width,
+            cz + arch_height,
+        ];
+        let lbl_n = [
+            nx - perp_x_next * half_width,
+            ny - perp_y_next * half_width,
+            nz,
+        ];
+        let ltl_n = [
+            nx - perp_x_next * half_width,
+            ny - perp_y_next * half_width,
+            nz + arch_height,
+        ];
 
         for &pos in &[lbl, ltl, lbl_n, ltl, ltl_n, lbl_n] {
             vertices.push(ColorVertex::new(pos, color));
@@ -165,9 +185,21 @@ pub fn generate_tunnel_enclosure(
 
         // Right wall
         let rbl = [cx + perp_x * half_width, cy + perp_y * half_width, cz];
-        let rtl = [cx + perp_x * half_width, cy + perp_y * half_width, cz + arch_height];
-        let rbl_n = [nx + perp_x_next * half_width, ny + perp_y_next * half_width, nz];
-        let rtl_n = [nx + perp_x_next * half_width, ny + perp_y_next * half_width, nz + arch_height];
+        let rtl = [
+            cx + perp_x * half_width,
+            cy + perp_y * half_width,
+            cz + arch_height,
+        ];
+        let rbl_n = [
+            nx + perp_x_next * half_width,
+            ny + perp_y_next * half_width,
+            nz,
+        ];
+        let rtl_n = [
+            nx + perp_x_next * half_width,
+            ny + perp_y_next * half_width,
+            nz + arch_height,
+        ];
 
         for &pos in &[rbl, rtl, rbl_n, rtl, rtl_n, rbl_n] {
             vertices.push(ColorVertex::new(pos, color));
@@ -257,7 +289,10 @@ mod tests {
         let samples = make_samples(21, 100.0);
         let full = generate_bridge_deck(&samples, 0.0, 100.0, 100.0, 6.0, 1.0, BRIDGE_COLOR);
         let half = generate_bridge_deck(&samples, 0.0, 50.0, 100.0, 6.0, 1.0, BRIDGE_COLOR);
-        assert!(half.len() < full.len(), "partial bridge should emit fewer vertices");
+        assert!(
+            half.len() < full.len(),
+            "partial bridge should emit fewer vertices"
+        );
     }
 
     #[test]
@@ -269,8 +304,7 @@ mod tests {
     #[test]
     fn test_tunnel_enclosure_generates_vertices() {
         let samples = make_samples(11, 50.0);
-        let vertices =
-            generate_tunnel_enclosure(&samples, 0.0, 50.0, 50.0, 6.0, 5.0, TUNNEL_COLOR);
+        let vertices = generate_tunnel_enclosure(&samples, 0.0, 50.0, 50.0, 6.0, 5.0, TUNNEL_COLOR);
         assert!(!vertices.is_empty(), "tunnel should emit vertices");
         // Each segment: 3 faces * 6 vertices = 18
         assert_eq!(vertices.len() % 18, 0);

@@ -18,12 +18,12 @@ pub mod signal_render;
 pub mod vertex;
 
 pub use bridge_tunnel_render::{
-    generate_bridge_deck, generate_bridge_tunnel_render_data, generate_tunnel_enclosure,
-    BridgeTunnelConfig, ReferenceSample, BRIDGE_COLOR, TUNNEL_COLOR,
+    BRIDGE_COLOR, BridgeTunnelConfig, ReferenceSample, TUNNEL_COLOR, generate_bridge_deck,
+    generate_bridge_tunnel_render_data, generate_tunnel_enclosure,
 };
 pub use endpoint_render::{
-    generate_endpoint_markers, EndpointConfig, EndpointKind, RoadEndpoint,
-    CONNECTED_COLOR, DANGLING_COLOR, END_COLOR, START_COLOR,
+    CONNECTED_COLOR, DANGLING_COLOR, END_COLOR, EndpointConfig, EndpointKind, RoadEndpoint,
+    START_COLOR, generate_endpoint_markers,
 };
 pub use gpu::{GpuContext, GpuError};
 pub use renderer::{LaneLineMesh, RenderMesh, Renderer};

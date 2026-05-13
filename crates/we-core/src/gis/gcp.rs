@@ -27,15 +27,21 @@ impl Gcp {
 /// A 2-D affine transformation: world = A * pixel + b.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AffineTransform {
-    pub a00: f64, pub a01: f64, pub b0: f64,
-    pub a10: f64, pub a11: f64, pub b1: f64,
+    pub a00: f64,
+    pub a01: f64,
+    pub b0: f64,
+    pub a10: f64,
+    pub a11: f64,
+    pub b1: f64,
 }
 
 impl AffineTransform {
     /// Apply this transform to an image coordinate.
     pub fn apply(&self, px: f64, py: f64) -> (f64, f64) {
-        (self.a00 * px + self.a01 * py + self.b0,
-         self.a10 * px + self.a11 * py + self.b1)
+        (
+            self.a00 * px + self.a01 * py + self.b0,
+            self.a10 * px + self.a11 * py + self.b1,
+        )
     }
 }
 
@@ -55,13 +61,18 @@ pub fn fit_affine(gcps: &[Gcp]) -> Result<AffineTransform, String> {
     // Using normal equations on 2×3 independent systems.
     // System 1: wx = a00*px + a01*py + b0
     // System 2: wy = a10*px + a11*py + b1
-    let (a00, a01, b0) = solve_least_squares(
-        &gcps.iter().map(|g| (g.px, g.py, g.wx)).collect::<Vec<_>>()
-    )?;
-    let (a10, a11, b1) = solve_least_squares(
-        &gcps.iter().map(|g| (g.px, g.py, g.wy)).collect::<Vec<_>>()
-    )?;
-    Ok(AffineTransform { a00, a01, b0, a10, a11, b1 })
+    let (a00, a01, b0) =
+        solve_least_squares(&gcps.iter().map(|g| (g.px, g.py, g.wx)).collect::<Vec<_>>())?;
+    let (a10, a11, b1) =
+        solve_least_squares(&gcps.iter().map(|g| (g.px, g.py, g.wy)).collect::<Vec<_>>())?;
+    Ok(AffineTransform {
+        a00,
+        a01,
+        b0,
+        a10,
+        a11,
+        b1,
+    })
 }
 
 /// Solve x = a*p + b*q + c by least squares over a slice of (p, q, x) triples.
@@ -71,9 +82,14 @@ fn solve_least_squares(points: &[(f64, f64, f64)]) -> Result<(f64, f64, f64), St
     let (mut sp2, mut sq2, mut spq) = (0.0_f64, 0.0_f64, 0.0_f64);
     let (mut spx, mut sqx) = (0.0_f64, 0.0_f64);
     for &(p, q, x) in points {
-        sp += p; sq += q; sx += x;
-        sp2 += p * p; sq2 += q * q; spq += p * q;
-        spx += p * x; sqx += q * x;
+        sp += p;
+        sq += q;
+        sx += x;
+        sp2 += p * p;
+        sq2 += q * q;
+        spq += p * q;
+        spx += p * x;
+        sqx += q * x;
     }
     // Normal equations: [sp2 spq sp] [a]   [spx]
     //                   [spq sq2 sq] [b] = [sqx]
@@ -93,13 +109,15 @@ fn solve_least_squares(points: &[(f64, f64, f64)]) -> Result<(f64, f64, f64), St
 
 fn det3(m: &[[f64; 3]; 3]) -> f64 {
     m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
-  - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
-  + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
 }
 
 fn replace_col(m: &[[f64; 3]; 3], col: usize, v: &[f64; 3]) -> [[f64; 3]; 3] {
     let mut r = *m;
-    for i in 0..3 { r[i][col] = v[i]; }
+    for i in 0..3 {
+        r[i][col] = v[i];
+    }
     r
 }
 

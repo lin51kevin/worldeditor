@@ -94,7 +94,11 @@ pub fn plugin_list(registry: State<'_, SharedPluginRegistry>) -> Vec<PluginInfoD
         }
     };
 
-    let ids: Vec<String> = inner.list_discovered().iter().map(|m| m.id.clone()).collect();
+    let ids: Vec<String> = inner
+        .list_discovered()
+        .iter()
+        .map(|m| m.id.clone())
+        .collect();
     ids.iter()
         .filter_map(|id| inner.plugin_info(id))
         .map(|info| {
@@ -119,7 +123,10 @@ pub fn plugin_list(registry: State<'_, SharedPluginRegistry>) -> Vec<PluginInfoD
 
 /// Read the plugin's compiled JS bundle (`dist/plugin.js`) and return its content.
 #[tauri::command]
-pub fn plugin_get_script(id: String, registry: State<'_, SharedPluginRegistry>) -> Result<String, String> {
+pub fn plugin_get_script(
+    id: String,
+    registry: State<'_, SharedPluginRegistry>,
+) -> Result<String, String> {
     // Reject any id that looks like a path traversal attempt.
     if id.contains('/') || id.contains('\\') || id.contains("..") || id.is_empty() {
         return Err("Invalid plugin id".to_string());
@@ -133,27 +140,43 @@ pub fn plugin_get_script(id: String, registry: State<'_, SharedPluginRegistry>) 
 /// Enable a previously-disabled plugin (makes it available again).
 #[tauri::command]
 pub fn plugin_enable(id: String, registry: State<'_, SharedPluginRegistry>) -> Result<(), String> {
-    registry.write().map_err(|e| e.to_string())?.enable(&id).map_err(|e| e.to_string())
+    registry
+        .write()
+        .map_err(|e| e.to_string())?
+        .enable(&id)
+        .map_err(|e| e.to_string())
 }
 
 /// Disable a plugin (will be skipped on next load).
 #[tauri::command]
-pub fn plugin_disable(id: String, reason: String, registry: State<'_, SharedPluginRegistry>) -> Result<(), String> {
-    registry.write().map_err(|e| e.to_string())?.disable(&id, &reason).map_err(|e| e.to_string())
+pub fn plugin_disable(
+    id: String,
+    reason: String,
+    registry: State<'_, SharedPluginRegistry>,
+) -> Result<(), String> {
+    registry
+        .write()
+        .map_err(|e| e.to_string())?
+        .disable(&id, &reason)
+        .map_err(|e| e.to_string())
 }
 
 /// Copy a plugin directory into the managed plugins folder and re-discover.
 ///
 /// `src_path` must be the path to a plugin directory containing a `manifest.json`.
 #[tauri::command]
-pub fn plugin_install(src_path: String, registry: State<'_, SharedPluginRegistry>) -> Result<(), String> {
+pub fn plugin_install(
+    src_path: String,
+    registry: State<'_, SharedPluginRegistry>,
+) -> Result<(), String> {
     let src = std::path::Path::new(&src_path);
     if !src.is_dir() {
         return Err(format!("'{}' is not a directory", src_path));
     }
 
     // Resolve canonical path to prevent traversal attacks (e.g. /path/to/../../etc)
-    let canonical = src.canonicalize()
+    let canonical = src
+        .canonicalize()
         .map_err(|e| format!("Cannot resolve path '{}': {}", src_path, e))?;
 
     // Reject paths containing null bytes
@@ -169,12 +192,15 @@ pub fn plugin_install(src_path: String, registry: State<'_, SharedPluginRegistry
 
     let dest = {
         let inner = registry.read().map_err(|e| e.to_string())?;
-        let dir_name = canonical.file_name().ok_or("Invalid source path: no directory name")?;
+        let dir_name = canonical
+            .file_name()
+            .ok_or("Invalid source path: no directory name")?;
         inner.plugins_dir().join(dir_name)
     };
 
     if dest.exists() {
-        std::fs::remove_dir_all(&dest).map_err(|e| format!("Cannot remove existing plugin: {}", e))?;
+        std::fs::remove_dir_all(&dest)
+            .map_err(|e| format!("Cannot remove existing plugin: {}", e))?;
     }
     copy_dir_all(&canonical, &dest).map_err(|e| format!("Cannot copy plugin files: {}", e))?;
 
@@ -283,12 +309,12 @@ mod tests {
         let reject = |id: &str| -> bool {
             id.contains('/') || id.contains('\\') || id.contains("..") || id.is_empty()
         };
-        assert!(reject("../secret"),          "dotdot prefix must be rejected");
-        assert!(reject("../../etc/passwd"),   "double dotdot must be rejected");
-        assert!(reject("foo/bar"),            "slash in id must be rejected");
-        assert!(reject("foo\\bar"),           "backslash in id must be rejected");
-        assert!(reject(""),                   "empty id must be rejected");
-        assert!(!reject("my-plugin-v1"),      "clean id must pass");
-        assert!(!reject("my_plugin_123"),     "underscore id must pass");
+        assert!(reject("../secret"), "dotdot prefix must be rejected");
+        assert!(reject("../../etc/passwd"), "double dotdot must be rejected");
+        assert!(reject("foo/bar"), "slash in id must be rejected");
+        assert!(reject("foo\\bar"), "backslash in id must be rejected");
+        assert!(reject(""), "empty id must be rejected");
+        assert!(!reject("my-plugin-v1"), "clean id must pass");
+        assert!(!reject("my_plugin_123"), "underscore id must pass");
     }
 }

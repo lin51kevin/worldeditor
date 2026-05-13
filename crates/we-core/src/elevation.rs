@@ -75,10 +75,12 @@ pub fn add_elevation_point(profile: &[Elevation], s: f64, height: f64) -> Vec<El
 /// Delete an elevation point at station s (within tolerance).
 ///
 /// Returns the new profile, or None if no point was found.
-pub fn delete_elevation_point(profile: &[Elevation], s: f64, tolerance: f64) -> Option<Vec<Elevation>> {
-    let idx = profile
-        .iter()
-        .position(|e| (e.s - s).abs() < tolerance)?;
+pub fn delete_elevation_point(
+    profile: &[Elevation],
+    s: f64,
+    tolerance: f64,
+) -> Option<Vec<Elevation>> {
+    let idx = profile.iter().position(|e| (e.s - s).abs() < tolerance)?;
     let mut result: Vec<Elevation> = profile.to_vec();
     result.remove(idx);
     recompute_elevation_tangents(&mut result);
@@ -102,10 +104,7 @@ pub fn move_elevation_point(
     result[idx].s = new_s;
     result[idx].a = new_height;
     // Re-sort by s
-    result.sort_by(|a, b| {
-        a.s.partial_cmp(&b.s)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    result.sort_by(|a, b| a.s.partial_cmp(&b.s).unwrap_or(std::cmp::Ordering::Equal));
     recompute_elevation_tangents(&mut result);
     Some(result)
 }
@@ -261,8 +260,20 @@ mod tests {
             }],
         );
         road.elevation_profile = vec![
-            Elevation { s: 0.0, a: 0.0, b: 0.05, c: 0.0, d: 0.0 },
-            Elevation { s: 50.0, a: 2.5, b: 0.0, c: 0.0, d: 0.0 },
+            Elevation {
+                s: 0.0,
+                a: 0.0,
+                b: 0.05,
+                c: 0.0,
+                d: 0.0,
+            },
+            Elevation {
+                s: 50.0,
+                a: 2.5,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
         ];
         road
     }
@@ -292,8 +303,20 @@ mod tests {
     #[test]
     fn test_add_elevation_point() {
         let profile = vec![
-            Elevation { s: 0.0, a: 0.0, b: 0.0, c: 0.0, d: 0.0 },
-            Elevation { s: 100.0, a: 5.0, b: 0.0, c: 0.0, d: 0.0 },
+            Elevation {
+                s: 0.0,
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            Elevation {
+                s: 100.0,
+                a: 5.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
         ];
         let new_profile = add_elevation_point(&profile, 50.0, 3.0);
         assert_eq!(new_profile.len(), 3);
@@ -304,8 +327,20 @@ mod tests {
     #[test]
     fn test_add_elevation_point_replace_existing() {
         let profile = vec![
-            Elevation { s: 0.0, a: 0.0, b: 0.0, c: 0.0, d: 0.0 },
-            Elevation { s: 50.0, a: 2.0, b: 0.0, c: 0.0, d: 0.0 },
+            Elevation {
+                s: 0.0,
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            Elevation {
+                s: 50.0,
+                a: 2.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
         ];
         let new_profile = add_elevation_point(&profile, 50.0, 5.0);
         assert_eq!(new_profile.len(), 2);
@@ -315,9 +350,27 @@ mod tests {
     #[test]
     fn test_delete_elevation_point() {
         let profile = vec![
-            Elevation { s: 0.0, a: 0.0, b: 0.0, c: 0.0, d: 0.0 },
-            Elevation { s: 50.0, a: 3.0, b: 0.0, c: 0.0, d: 0.0 },
-            Elevation { s: 100.0, a: 5.0, b: 0.0, c: 0.0, d: 0.0 },
+            Elevation {
+                s: 0.0,
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            Elevation {
+                s: 50.0,
+                a: 3.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            Elevation {
+                s: 100.0,
+                a: 5.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
         ];
         let result = delete_elevation_point(&profile, 50.0, 1.0);
         assert!(result.is_some());
@@ -326,9 +379,13 @@ mod tests {
 
     #[test]
     fn test_delete_elevation_point_not_found() {
-        let profile = vec![
-            Elevation { s: 0.0, a: 0.0, b: 0.0, c: 0.0, d: 0.0 },
-        ];
+        let profile = vec![Elevation {
+            s: 0.0,
+            a: 0.0,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }];
         let result = delete_elevation_point(&profile, 999.0, 1.0);
         assert!(result.is_none());
     }
@@ -336,9 +393,27 @@ mod tests {
     #[test]
     fn test_move_elevation_point() {
         let profile = vec![
-            Elevation { s: 0.0, a: 0.0, b: 0.0, c: 0.0, d: 0.0 },
-            Elevation { s: 50.0, a: 3.0, b: 0.0, c: 0.0, d: 0.0 },
-            Elevation { s: 100.0, a: 5.0, b: 0.0, c: 0.0, d: 0.0 },
+            Elevation {
+                s: 0.0,
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            Elevation {
+                s: 50.0,
+                a: 3.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            Elevation {
+                s: 100.0,
+                a: 5.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
         ];
         let result = move_elevation_point(&profile, 50.0, 60.0, 4.0, 1.0);
         assert!(result.is_some());
@@ -350,9 +425,27 @@ mod tests {
     #[test]
     fn test_smooth_elevation_profile() {
         let profile = vec![
-            Elevation { s: 0.0, a: 0.0, b: 0.0, c: 0.0, d: 0.0 },
-            Elevation { s: 50.0, a: 10.0, b: 0.0, c: 0.0, d: 0.0 }, // spike
-            Elevation { s: 100.0, a: 0.0, b: 0.0, c: 0.0, d: 0.0 },
+            Elevation {
+                s: 0.0,
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            Elevation {
+                s: 50.0,
+                a: 10.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            }, // spike
+            Elevation {
+                s: 100.0,
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
         ];
         let smoothed = smooth_elevation_profile(&profile, 1);
         // Middle point should be averaged: (0 + 10 + 0) / 3 ≈ 3.33
@@ -398,9 +491,27 @@ mod tests {
     #[test]
     fn test_recompute_tangents_smooth() {
         let profile = vec![
-            Elevation { s: 0.0, a: 0.0, b: 0.0, c: 0.0, d: 0.0 },
-            Elevation { s: 50.0, a: 5.0, b: 0.0, c: 0.0, d: 0.0 },
-            Elevation { s: 100.0, a: 5.0, b: 0.0, c: 0.0, d: 0.0 },
+            Elevation {
+                s: 0.0,
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            Elevation {
+                s: 50.0,
+                a: 5.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            Elevation {
+                s: 100.0,
+                a: 5.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
         ];
         let result = add_elevation_point(&profile, 25.0, 2.0);
         // After recompute, tangents should be non-zero for interior entries

@@ -38,18 +38,13 @@ pub(crate) fn find_lane_mut<'a>(
         .roads
         .iter_mut()
         .find(|r| r.id == road_id)
-        .ok_or_else(|| {
-            EditorError::OperationFailed(format!("Road '{}' not found", road_id))
-        })?;
+        .ok_or_else(|| EditorError::OperationFailed(format!("Road '{}' not found", road_id)))?;
     let section = road
         .lane_sections
         .iter_mut()
         .find(|s| (s.s - section_s).abs() < 1e-9)
         .ok_or_else(|| {
-            EditorError::OperationFailed(format!(
-                "Lane section at s={} not found",
-                section_s
-            ))
+            EditorError::OperationFailed(format!("Lane section at s={} not found", section_s))
         })?;
     let lane = if lane_id > 0 {
         section.left.iter_mut().find(|l| l.id == lane_id)
@@ -58,9 +53,7 @@ pub(crate) fn find_lane_mut<'a>(
     } else {
         section.center.iter_mut().find(|l| l.id == lane_id)
     };
-    lane.ok_or_else(|| {
-        EditorError::OperationFailed(format!("Lane {} not found", lane_id))
-    })
+    lane.ok_or_else(|| EditorError::OperationFailed(format!("Lane {} not found", lane_id)))
 }
 
 /// Find a mutable reference to a road within a project.
@@ -72,7 +65,5 @@ pub(crate) fn find_road_mut<'a>(
         .roads
         .iter_mut()
         .find(|r| r.id == road_id)
-        .ok_or_else(|| {
-            EditorError::OperationFailed(format!("Road '{}' not found", road_id))
-        })
+        .ok_or_else(|| EditorError::OperationFailed(format!("Road '{}' not found", road_id)))
 }

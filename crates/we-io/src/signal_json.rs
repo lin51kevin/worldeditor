@@ -22,8 +22,7 @@ pub struct SignalEntry {
 
 /// Import signal entries from a JSON string.
 pub fn import_signals_from_json(json: &str) -> Result<Vec<SignalEntry>, SignalIoError> {
-    serde_json::from_str::<Vec<SignalEntry>>(json)
-        .map_err(|e| SignalIoError::Json(e.to_string()))
+    serde_json::from_str::<Vec<SignalEntry>>(json).map_err(|e| SignalIoError::Json(e.to_string()))
 }
 
 /// Export a project's signals as JSON (stub — returns empty array).
@@ -65,7 +64,10 @@ mod tests {
 
     #[test]
     fn test_import_invalid_json_returns_error() {
-        assert!(matches!(import_signals_from_json("{invalid}"), Err(SignalIoError::Json(_))));
+        assert!(matches!(
+            import_signals_from_json("{invalid}"),
+            Err(SignalIoError::Json(_))
+        ));
     }
 
     #[test]
@@ -75,7 +77,14 @@ mod tests {
 
     #[test]
     fn test_export_hdmap_xml_structure() {
-        let geom = Geometry { s: 0.0, x: 0.0, y: 0.0, hdg: 0.0, length: 100.0, geo_type: GeometryType::Line };
+        let geom = Geometry {
+            s: 0.0,
+            x: 0.0,
+            y: 0.0,
+            hdg: 0.0,
+            length: 100.0,
+            geo_type: GeometryType::Line,
+        };
         let project = Project {
             roads: vec![Road::from_centerline("r0", vec![geom])],
             ..Default::default()

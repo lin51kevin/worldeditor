@@ -54,8 +54,7 @@ pub fn geo_to_mgrs(lat_deg: f64, lon_deg: f64, precision: u8) -> Result<String, 
 /// Returns JSON object like `{ "proj": "utm", "zone": "50", "datum": "WGS84", "units": "m" }`.
 #[wasm_bindgen]
 pub fn parse_proj4_crs(proj4_str: &str) -> Result<JsValue, JsError> {
-    let crs = we_core::gis::proj4::Proj4Crs::parse(proj4_str)
-        .map_err(|e| JsError::new(&e))?;
+    let crs = we_core::gis::proj4::Proj4Crs::parse(proj4_str).map_err(|e| JsError::new(&e))?;
     // Collect params into a serde_json::Value map
     let map: serde_json::Map<String, serde_json::Value> = crs
         .params
@@ -73,8 +72,7 @@ pub fn parse_proj4_crs(proj4_str: &str) -> Result<JsValue, JsError> {
 /// Returns JSON `{ crs_type, name, epsg }` where `epsg` may be null.
 #[wasm_bindgen]
 pub fn parse_wkt_crs(wkt_str: &str) -> Result<JsValue, JsError> {
-    let crs = we_core::gis::wkt::WktCrs::parse(wkt_str)
-        .map_err(|e| JsError::new(&e))?;
+    let crs = we_core::gis::wkt::WktCrs::parse(wkt_str).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&serde_json::json!({
         "crs_type": crs.crs_type,
         "name": crs.name,
@@ -96,8 +94,7 @@ pub fn parse_wkt_crs(wkt_str: &str) -> Result<JsValue, JsError> {
 pub fn fit_affine_from_gcps(gcps_json: &str) -> Result<JsValue, JsError> {
     let gcps: Vec<we_core::gis::gcp::Gcp> =
         serde_json::from_str(gcps_json).map_err(|e| JsError::new(&e.to_string()))?;
-    let t = we_core::gis::gcp::fit_affine(&gcps)
-        .map_err(|e| JsError::new(&e))?;
+    let t = we_core::gis::gcp::fit_affine(&gcps).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&serde_json::json!({
         "a00": t.a00, "a01": t.a01, "b0": t.b0,
         "a10": t.a10, "a11": t.a11, "b1": t.b1,
@@ -124,8 +121,12 @@ pub fn apply_affine_transform(
             .ok_or_else(|| JsError::new(&format!("Missing or invalid field '{key}'")))
     };
     let t = we_core::gis::gcp::AffineTransform {
-        a00: get("a00")?, a01: get("a01")?, b0: get("b0")?,
-        a10: get("a10")?, a11: get("a11")?, b1: get("b1")?,
+        a00: get("a00")?,
+        a01: get("a01")?,
+        b0: get("b0")?,
+        a10: get("a10")?,
+        a11: get("a11")?,
+        b1: get("b1")?,
     };
     let (tx, ty) = t.apply(source_x, source_y);
     serde_wasm_bindgen::to_value(&serde_json::json!({ "x": tx, "y": ty }))
@@ -181,4 +182,3 @@ mod tests {
         assert!((wy - 210.0).abs() < 1e-9);
     }
 }
-

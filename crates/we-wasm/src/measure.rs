@@ -5,8 +5,12 @@ use wasm_bindgen::prelude::*;
 /// Returns JSON `{ straight, horizontal, vertical }`.
 #[wasm_bindgen]
 pub fn measure_distance(
-    x1: f64, y1: f64, z1: f64,
-    x2: f64, y2: f64, z2: f64,
+    x1: f64,
+    y1: f64,
+    z1: f64,
+    x2: f64,
+    y2: f64,
+    z2: f64,
 ) -> Result<JsValue, JsError> {
     let result = we_core::measurement::measure_distance(x1, y1, z1, x2, y2, z2);
     serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
@@ -17,9 +21,12 @@ pub fn measure_distance(
 /// Returns JSON `{ radians, degrees }`.
 #[wasm_bindgen]
 pub fn measure_angle(
-    x1: f64, y1: f64,
-    x2: f64, y2: f64,
-    x3: f64, y3: f64,
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    x3: f64,
+    y3: f64,
 ) -> Result<JsValue, JsError> {
     let result = we_core::measurement::measure_angle(x1, y1, x2, y2, x3, y3);
     serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
@@ -42,7 +49,9 @@ pub fn measure_area(points_json: &str) -> Result<JsValue, JsError> {
 pub fn measure_road_length(road_json: &str, s_start: f64, s_end: f64) -> Result<f64, JsError> {
     let road: we_core::model::Road =
         serde_json::from_str(road_json).map_err(|e| JsError::new(&e.to_string()))?;
-    Ok(we_core::measurement::measure_road_length(&road, s_start, s_end))
+    Ok(we_core::measurement::measure_road_length(
+        &road, s_start, s_end,
+    ))
 }
 
 /// Sample a lane boundary polyline as JSON.

@@ -132,10 +132,7 @@ impl Command for UpdateSignal {
             .iter_mut()
             .find(|s| s.id == self.old_signal.id)
             .ok_or_else(|| {
-                EditorError::OperationFailed(format!(
-                    "Signal '{}' not found",
-                    self.old_signal.id
-                ))
+                EditorError::OperationFailed(format!("Signal '{}' not found", self.old_signal.id))
             })?;
         *sig = self.new_signal.clone();
         Ok(p)
@@ -149,10 +146,7 @@ impl Command for UpdateSignal {
             .iter_mut()
             .find(|s| s.id == self.new_signal.id)
             .ok_or_else(|| {
-                EditorError::OperationFailed(format!(
-                    "Signal '{}' not found",
-                    self.new_signal.id
-                ))
+                EditorError::OperationFailed(format!("Signal '{}' not found", self.new_signal.id))
             })?;
         *sig = self.old_signal.clone();
         Ok(p)
@@ -289,10 +283,7 @@ impl Command for UpdateObject {
             .iter_mut()
             .find(|o| o.id == self.old_object.id)
             .ok_or_else(|| {
-                EditorError::OperationFailed(format!(
-                    "Object '{}' not found",
-                    self.old_object.id
-                ))
+                EditorError::OperationFailed(format!("Object '{}' not found", self.old_object.id))
             })?;
         *obj = self.new_object.clone();
         Ok(p)
@@ -306,10 +297,7 @@ impl Command for UpdateObject {
             .iter_mut()
             .find(|o| o.id == self.new_object.id)
             .ok_or_else(|| {
-                EditorError::OperationFailed(format!(
-                    "Object '{}' not found",
-                    self.new_object.id
-                ))
+                EditorError::OperationFailed(format!("Object '{}' not found", self.new_object.id))
             })?;
         *obj = self.old_object.clone();
         Ok(p)

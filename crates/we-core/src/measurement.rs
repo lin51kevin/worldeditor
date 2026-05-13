@@ -37,7 +37,14 @@ pub struct AreaMeasurement {
 }
 
 /// Measure the straight-line distance between two 3D points.
-pub fn measure_distance(x1: f64, y1: f64, z1: f64, x2: f64, y2: f64, z2: f64) -> DistanceMeasurement {
+pub fn measure_distance(
+    x1: f64,
+    y1: f64,
+    z1: f64,
+    x2: f64,
+    y2: f64,
+    z2: f64,
+) -> DistanceMeasurement {
     let dx = x2 - x1;
     let dy = y2 - y1;
     let dz = z2 - z1;
@@ -51,11 +58,7 @@ pub fn measure_distance(x1: f64, y1: f64, z1: f64, x2: f64, y2: f64, z2: f64) ->
 /// Measure the angle formed by three points (vertex at p2).
 ///
 /// Returns the angle at p2 in the triangle p1-p2-p3.
-pub fn measure_angle(
-    x1: f64, y1: f64,
-    x2: f64, y2: f64,
-    x3: f64, y3: f64,
-) -> AngleMeasurement {
+pub fn measure_angle(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) -> AngleMeasurement {
     let v1x = x1 - x2;
     let v1y = y1 - y2;
     let v2x = x3 - x2;
@@ -140,7 +143,8 @@ pub fn measure_road_length_3d(road: &Road, s_start: f64, s_end: f64, step: f64) 
         let dx = relevant[i].x - relevant[i - 1].x;
         let dy = relevant[i].y - relevant[i - 1].y;
         // Evaluate elevation at both points
-        let z1 = crate::geometry::eval::evaluate_elevation(&road.elevation_profile, relevant[i - 1].s);
+        let z1 =
+            crate::geometry::eval::evaluate_elevation(&road.elevation_profile, relevant[i - 1].s);
         let z2 = crate::geometry::eval::evaluate_elevation(&road.elevation_profile, relevant[i].s);
         let dz = z2 - z1;
         total += (dx * dx + dy * dy + dz * dz).sqrt();

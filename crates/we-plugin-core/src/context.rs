@@ -200,7 +200,8 @@ pub struct PluginContext {
     pub update_project: Box<dyn Fn(Project) + Send + Sync>,
     /// Execute a mutation with undo support
     #[allow(clippy::type_complexity)]
-    pub execute_with_undo: Box<dyn Fn(&str, Box<dyn FnOnce(Project) -> Project + Send>) + Send + Sync>,
+    pub execute_with_undo:
+        Box<dyn Fn(&str, Box<dyn FnOnce(Project) -> Project + Send>) + Send + Sync>,
     /// Register an importer format
     pub register_importer: Box<dyn Fn(ImporterContrib) + Send + Sync>,
     /// Register an exporter format
@@ -237,7 +238,10 @@ impl PluginContext {
         get_core_api: impl Fn() -> &'static (dyn CoreApi + Send + Sync) + Send + Sync + 'static,
         get_project: impl Fn() -> Project + Send + Sync + 'static,
         update_project: impl Fn(Project) + Send + Sync + 'static,
-        execute_with_undo: impl Fn(&str, Box<dyn FnOnce(Project) -> Project + Send>) + Send + Sync + 'static,
+        execute_with_undo: impl Fn(&str, Box<dyn FnOnce(Project) -> Project + Send>)
+        + Send
+        + Sync
+        + 'static,
         register_importer: impl Fn(ImporterContrib) + Send + Sync + 'static,
         register_exporter: impl Fn(ExporterContrib) + Send + Sync + 'static,
     ) -> Self {
@@ -381,11 +385,10 @@ mod tests {
 
     #[test]
     fn test_importer_contrib_new() {
-        let importer = ImporterContrib::new(
-            "Test Format",
-            vec![".test", ".tst"],
-            |_data, _name| Ok(Project::default()),
-        );
+        let importer =
+            ImporterContrib::new("Test Format", vec![".test", ".tst"], |_data, _name| {
+                Ok(Project::default())
+            });
 
         assert_eq!(importer.format_name, "Test Format");
         assert_eq!(importer.extensions, vec![".test", ".tst"]);
@@ -393,15 +396,11 @@ mod tests {
 
     #[test]
     fn test_importer_contrib_import() {
-        let importer = ImporterContrib::new(
-            "Test Format",
-            vec![".test"],
-            |_data, _name| {
-                let mut proj = Project::default();
-                proj.name = "imported".to_string();
-                Ok(proj)
-            },
-        );
+        let importer = ImporterContrib::new("Test Format", vec![".test"], |_data, _name| {
+            let mut proj = Project::default();
+            proj.name = "imported".to_string();
+            Ok(proj)
+        });
 
         let result = importer.import(vec![1, 2, 3], "test.test").unwrap();
         assert_eq!(result.name, "imported");
@@ -416,9 +415,8 @@ mod tests {
 
     #[test]
     fn test_exporter_contrib_export() {
-        let exporter = ExporterContrib::new("Test Format", |proj| {
-            Ok(proj.name.as_bytes().to_vec())
-        });
+        let exporter =
+            ExporterContrib::new("Test Format", |proj| Ok(proj.name.as_bytes().to_vec()));
 
         let mut project = Project::default();
         project.name = "export_me".to_string();

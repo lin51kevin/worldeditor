@@ -187,29 +187,20 @@ mod tests {
 
     #[test]
     fn test_ray_new() {
-        let ray = Ray::new(
-            Vector3::new(0.0, 0.0, 10.0),
-            Vector3::new(0.0, 0.0, -1.0),
-        );
+        let ray = Ray::new(Vector3::new(0.0, 0.0, 10.0), Vector3::new(0.0, 0.0, -1.0));
         assert!((ray.direction.norm() - 1.0).abs() < 1e-10);
     }
 
     #[test]
     fn test_ray_at() {
-        let ray = Ray::new(
-            Vector3::new(0.0, 0.0, 10.0),
-            Vector3::new(0.0, 0.0, -1.0),
-        );
+        let ray = Ray::new(Vector3::new(0.0, 0.0, 10.0), Vector3::new(0.0, 0.0, -1.0));
         let p = ray.at(5.0);
         assert!((p.z - 5.0).abs() < 1e-10);
     }
 
     #[test]
     fn test_ray_plane_intersect_z() {
-        let ray = Ray::new(
-            Vector3::new(5.0, 3.0, 10.0),
-            Vector3::new(0.0, 0.0, -1.0),
-        );
+        let ray = Ray::new(Vector3::new(5.0, 3.0, 10.0), Vector3::new(0.0, 0.0, -1.0));
         let result = ray_plane_intersect_z(&ray, 0.0);
         assert!(result.is_some());
         let p = result.unwrap();
@@ -220,29 +211,20 @@ mod tests {
 
     #[test]
     fn test_ray_plane_intersect_z_parallel() {
-        let ray = Ray::new(
-            Vector3::new(0.0, 0.0, 10.0),
-            Vector3::new(1.0, 0.0, 0.0),
-        );
+        let ray = Ray::new(Vector3::new(0.0, 0.0, 10.0), Vector3::new(1.0, 0.0, 0.0));
         assert!(ray_plane_intersect_z(&ray, 0.0).is_none());
     }
 
     #[test]
     fn test_ray_plane_intersect_z_behind() {
-        let ray = Ray::new(
-            Vector3::new(0.0, 0.0, -5.0),
-            Vector3::new(0.0, 0.0, -1.0),
-        );
+        let ray = Ray::new(Vector3::new(0.0, 0.0, -5.0), Vector3::new(0.0, 0.0, -1.0));
         // Plane at z=0 is above origin, ray goes down → behind
         assert!(ray_plane_intersect_z(&ray, 0.0).is_none());
     }
 
     #[test]
     fn test_ray_plane_intersect() {
-        let ray = Ray::new(
-            Vector3::new(0.0, 0.0, 10.0),
-            Vector3::new(0.0, 0.0, -1.0),
-        );
+        let ray = Ray::new(Vector3::new(0.0, 0.0, 10.0), Vector3::new(0.0, 0.0, -1.0));
         let plane_point = Vector3::new(0.0, 0.0, 0.0);
         let plane_normal = Vector3::new(0.0, 0.0, 1.0);
         let result = ray_plane_intersect(&ray, &plane_point, &plane_normal);

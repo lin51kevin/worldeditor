@@ -3,7 +3,7 @@
 //! Constructs a polygon boundary for a junction from its connected road endpoints,
 //! then triangulates it using the Delaunay algorithm for rendering and area computation.
 
-use crate::geometry::{convex_hull, triangulate, Triangle};
+use crate::geometry::{Triangle, convex_hull, triangulate};
 use crate::model::{Junction, Project};
 use nalgebra::Vector2;
 use serde::{Deserialize, Serialize};
@@ -161,10 +161,7 @@ pub fn build_junction_polygon(
         .map(|Triangle { a, b, c }| [*a, *b, *c])
         .collect();
 
-    let boundary: Vec<PolyVertex> = hull
-        .iter()
-        .map(|p| PolyVertex::new(p.x, p.y))
-        .collect();
+    let boundary: Vec<PolyVertex> = hull.iter().map(|p| PolyVertex::new(p.x, p.y)).collect();
 
     Ok(JunctionPolygon {
         junction_id: junction_id.to_string(),
@@ -202,19 +199,16 @@ mod tests {
     fn make_project_with_junction() -> Project {
         // Create 4 roads radiating from origin
         let roads = vec![
-            make_road("r1", 0.0, 0.0, 0.0),         // East
-            make_road("r2", 0.0, 0.0, std::f64::consts::FRAC_PI_2), // North
-            make_road("r3", 0.0, 0.0, std::f64::consts::PI),        // West
+            make_road("r1", 0.0, 0.0, 0.0),                          // East
+            make_road("r2", 0.0, 0.0, std::f64::consts::FRAC_PI_2),  // North
+            make_road("r3", 0.0, 0.0, std::f64::consts::PI),         // West
             make_road("r4", 0.0, 0.0, -std::f64::consts::FRAC_PI_2), // South
         ];
 
         let junction = Junction {
             id: "jct-1".to_string(),
             name: "Test Junction".to_string(),
-            connections: vec![
-                make_conn("c1", "r1", "r2"),
-                make_conn("c2", "r3", "r4"),
-            ],
+            connections: vec![make_conn("c1", "r1", "r2"), make_conn("c2", "r3", "r4")],
         };
 
         Project {
@@ -266,7 +260,10 @@ mod tests {
         let project = Project::default();
         let result = build_junction_polygon(&project, "nonexistent");
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), JunctionPolygonError::JunctionNotFound));
+        assert!(matches!(
+            result.unwrap_err(),
+            JunctionPolygonError::JunctionNotFound
+        ));
     }
 
     #[test]
@@ -282,7 +279,10 @@ mod tests {
         };
         let result = build_junction_polygon(&project, "j1");
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), JunctionPolygonError::InsufficientPoints));
+        assert!(matches!(
+            result.unwrap_err(),
+            JunctionPolygonError::InsufficientPoints
+        ));
     }
 
     #[test]
@@ -313,10 +313,26 @@ mod tests {
         let project = make_project_with_junction();
         let poly = build_junction_polygon(&project, "jct-1").unwrap();
         // Centroid should be within the bounding box of boundary vertices
-        let min_x = poly.boundary.iter().map(|v| v.x).fold(f64::INFINITY, f64::min);
-        let max_x = poly.boundary.iter().map(|v| v.x).fold(f64::NEG_INFINITY, f64::max);
-        let min_y = poly.boundary.iter().map(|v| v.y).fold(f64::INFINITY, f64::min);
-        let max_y = poly.boundary.iter().map(|v| v.y).fold(f64::NEG_INFINITY, f64::max);
+        let min_x = poly
+            .boundary
+            .iter()
+            .map(|v| v.x)
+            .fold(f64::INFINITY, f64::min);
+        let max_x = poly
+            .boundary
+            .iter()
+            .map(|v| v.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let min_y = poly
+            .boundary
+            .iter()
+            .map(|v| v.y)
+            .fold(f64::INFINITY, f64::min);
+        let max_y = poly
+            .boundary
+            .iter()
+            .map(|v| v.y)
+            .fold(f64::NEG_INFINITY, f64::max);
         assert!(poly.centroid.x >= min_x - 0.01 && poly.centroid.x <= max_x + 0.01);
         assert!(poly.centroid.y >= min_y - 0.01 && poly.centroid.y <= max_y + 0.01);
     }

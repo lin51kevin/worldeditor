@@ -135,9 +135,7 @@ mod tests {
     #[test]
     fn test_simplify_straight_line_removes_midpoints() {
         // All points collinear → only endpoints kept
-        let points: Vec<Vector2<f64>> = (0..=10)
-            .map(|i| Vector2::new(i as f64, 0.0))
-            .collect();
+        let points: Vec<Vector2<f64>> = (0..=10).map(|i| Vector2::new(i as f64, 0.0)).collect();
         let simplified = simplify_polyline(&points, 0.01);
         assert_eq!(simplified.len(), 2);
         assert!((simplified[0].x - 0.0).abs() < f64::EPSILON);
@@ -232,9 +230,7 @@ mod tests {
 
     #[test]
     fn test_simplify_indices() {
-        let points: Vec<Vector2<f64>> = (0..=10)
-            .map(|i| Vector2::new(i as f64, 0.0))
-            .collect();
+        let points: Vec<Vector2<f64>> = (0..=10).map(|i| Vector2::new(i as f64, 0.0)).collect();
         let indices = simplify_polyline_indices(&points, 0.01);
         assert_eq!(indices, vec![0, 10]);
     }

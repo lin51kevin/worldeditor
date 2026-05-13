@@ -4,9 +4,7 @@
 //! connecting roads' endpoints and lane widths. Produces convex hull
 //! or ordered boundary for rendering and picking.
 
-use crate::geometry::eval::{
-    evaluate_lane_width, offset_point, sample_road_reference_line,
-};
+use crate::geometry::eval::{evaluate_lane_width, offset_point, sample_road_reference_line};
 use crate::model::{Junction, Project, Road};
 use serde::{Deserialize, Serialize};
 
@@ -108,11 +106,7 @@ fn collect_road_endpoints(road: &Road, pts: &mut Vec<[f64; 2]>) {
 
 /// Get half-width of a road at a given s position.
 fn half_width_at_s(road: &Road, s: f64) -> f64 {
-    let section = road
-        .lane_sections
-        .iter()
-        .rev()
-        .find(|ls| ls.s <= s + 1e-9);
+    let section = road.lane_sections.iter().rev().find(|ls| ls.s <= s + 1e-9);
     match section {
         Some(sec) => {
             let ds = s - sec.s;
@@ -245,15 +239,13 @@ mod tests {
         let junction = Junction {
             id: "j1".into(),
             name: "Test".into(),
-            connections: vec![
-                JunctionConnection {
-                    id: "c1".into(),
-                    incoming_road: "r1".into(),
-                    connecting_road: "r2".into(),
-                    contact_point: ContactPoint::Start,
-                    lane_links: vec![],
-                },
-            ],
+            connections: vec![JunctionConnection {
+                id: "c1".into(),
+                incoming_road: "r1".into(),
+                connecting_road: "r2".into(),
+                contact_point: ContactPoint::Start,
+                lane_links: vec![],
+            }],
         };
         let project = Project {
             name: "test".into(),
@@ -320,7 +312,11 @@ mod tests {
         let (project, junction) = make_junction_project();
         let area = compute_junction_area(&project, &junction).unwrap();
         // Center should be inside
-        assert!(point_in_junction_area(&area, area.center[0], area.center[1]));
+        assert!(point_in_junction_area(
+            &area,
+            area.center[0],
+            area.center[1]
+        ));
         // Far away should be outside
         assert!(!point_in_junction_area(&area, 1000.0, 1000.0));
     }

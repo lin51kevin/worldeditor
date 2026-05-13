@@ -78,21 +78,24 @@ pub fn snap_point(
 ) -> SnapResult {
     // 1. Try endpoint snap
     if config.endpoint_enabled
-        && let Some(result) = snap_to_endpoint(x, y, config.endpoint_threshold, project, exclude_road_id)
+        && let Some(result) =
+            snap_to_endpoint(x, y, config.endpoint_threshold, project, exclude_road_id)
     {
         return result;
     }
 
     // 2. Try midpoint snap
     if config.midpoint_enabled
-        && let Some(result) = snap_to_midpoint(x, y, config.endpoint_threshold, project, exclude_road_id)
+        && let Some(result) =
+            snap_to_midpoint(x, y, config.endpoint_threshold, project, exclude_road_id)
     {
         return result;
     }
 
     // 3. Try perpendicular snap
     if config.perpendicular_enabled
-        && let Some(result) = snap_to_perpendicular(x, y, config.endpoint_threshold, project, exclude_road_id)
+        && let Some(result) =
+            snap_to_perpendicular(x, y, config.endpoint_threshold, project, exclude_road_id)
     {
         return result;
     }

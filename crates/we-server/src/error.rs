@@ -93,7 +93,10 @@ mod tests {
 
     #[test]
     fn test_internal_maps_to_500() {
-        assert_eq!(Error::Internal.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            Error::Internal.status_code(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 
     #[test]
