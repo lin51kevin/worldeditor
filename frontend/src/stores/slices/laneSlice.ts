@@ -1,4 +1,4 @@
-import type { Elevation, Lane, LaneLink, LaneWidth, Road } from '../../services/platform';
+import type { Elevation, Lane, LaneLink, LaneWidth } from '../../services/platform';
 import type { EditorState, SliceCreator } from './types';
 import { pushUndo } from './types';
 
@@ -19,7 +19,7 @@ export interface LaneSlice {
   smoothElevation: (roadId: string, iterations?: number) => void;
 }
 
-export const createLaneSlice: SliceCreator<LaneSlice> = (set, get) => ({
+export const createLaneSlice: SliceCreator<LaneSlice> = (set, _get) => ({
   updateLaneType: (roadId, sectionIndex, side, laneId, laneType) =>
     set((state) => ({
       ...pushUndo(state),

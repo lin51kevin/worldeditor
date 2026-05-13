@@ -253,7 +253,7 @@ const junctionSection: TemplateSectionContrib = {
 
 // ── Signal Templates ─────────────────────────────────────────────────────────
 
-function applySignalTemplate(type: string, opts?: { x?: number; y?: number }) {
+function applySignalTemplate(type: string, _opts?: { x?: number; y?: number }) {
   // Signals don't require world position (they attach to selected road at s=0).
   // Guard: only create when a road is selected.
   const store = useEditorStore.getState();
