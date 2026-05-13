@@ -4,6 +4,7 @@
  */
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { Project } from '../services/platform';
+import { downloadBlob } from '../utils/download';
 
 const PLUGIN_ID = 'io-osm';
 
@@ -32,12 +33,7 @@ function exportToOsm(project: Project): Promise<void> {
   xml += '</osm>\n';
 
   const blob = new Blob([xml], { type: 'application/xml' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${project.name || 'export'}.osm`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, `${project.name || 'export'}.osm`);
   return Promise.resolve();
 }
 

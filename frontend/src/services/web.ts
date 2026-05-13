@@ -7,6 +7,7 @@
 import type { PlatformService, Project } from './platform';
 import { APP_VERSION } from './index';
 import { BasePlatformService } from './basePlatformService';
+import { downloadBlob } from '../utils/download';
 
 export class WebPlatformService extends BasePlatformService implements PlatformService {
   async parseOpenDrive(xml: string): Promise<Project> {
@@ -45,13 +46,7 @@ export class WebPlatformService extends BasePlatformService implements PlatformS
   }
 
   async saveFile(filename: string, content: string): Promise<void> {
-    const blob = new Blob([content], { type: 'application/xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(new Blob([content], { type: 'application/xml' }), filename);
   }
 
   getPlatformInfo() {

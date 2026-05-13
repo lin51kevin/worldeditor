@@ -4,6 +4,7 @@
  */
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { Project } from '../services/platform';
+import { downloadBlob } from '../utils/download';
 
 const PLUGIN_ID = 'io-obj3d';
 
@@ -35,12 +36,7 @@ function exportToObj(project: Project): Promise<void> {
     vOffset += 4;
   }
   const blob = new Blob([lines.join('\n')], { type: 'model/obj' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${project.name || 'export'}.obj`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, `${project.name || 'export'}.obj`);
   return Promise.resolve();
 }
 
