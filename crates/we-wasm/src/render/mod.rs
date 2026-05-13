@@ -1124,7 +1124,7 @@ mod tests {
             .chunks(7)
             .map(|v| v[0])
             .fold(f32::NEG_INFINITY, f32::max);
-        let left_tip_x = left
+        let _left_tip_x = left
             .chunks(7)
             .map(|v| v[0])
             .fold(f32::NEG_INFINITY, f32::max);

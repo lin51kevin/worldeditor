@@ -577,7 +577,7 @@ mod tests {
             s: 20.0,
             t: -1.5,
             z_offset: 0.0,
-            h_offset: 1.5708,
+            h_offset: std::f64::consts::FRAC_PI_2,
             width: 3.0,
             height: 0.0,
             signal_type: "Graphics".to_string(),
