@@ -197,29 +197,40 @@ export class ViewportRenderer {
     // Track whether this is a fresh load (previously empty) to decide on auto-fit
     const wasEmpty = this.lastVertexData === null || this.lastVertexData.length === 0;
 
-    // Clear old meshes
-    for (const m of this.meshes) {
-      m.vertexBuffer.destroy();
-    }
-    this.meshes = [];
-
     if (vertexData.length === 0) {
+      for (const m of this.meshes) { m.vertexBuffer.destroy(); }
+      this.meshes = [];
       this.lastVertexData = vertexData;
       return;
     }
 
-    const buffer = this.device.createBuffer({
-      size: vertexData.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      mappedAtCreation: true,
-    });
-    new Float32Array(buffer.getMappedRange()).set(vertexData);
-    buffer.unmap();
+    // Reuse existing buffer if large enough; otherwise allocate with 2x headroom
+    const requiredBytes = vertexData.byteLength;
+    const existing = this.meshes[0];
+    if (existing && existing.vertexBuffer.size >= requiredBytes) {
+      this.device.queue.writeBuffer(existing.vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+      existing.vertexCount = vertexData.length / 7;
+      // Drop extra mesh entries if they exist
+      for (let i = 1; i < this.meshes.length; i++) {
+        this.meshes[i]!.vertexBuffer.destroy();
+      }
+      this.meshes.length = 1;
+    } else {
+      for (const m of this.meshes) { m.vertexBuffer.destroy(); }
+      this.meshes = [];
 
-    this.meshes.push({
-      vertexBuffer: buffer,
-      vertexCount: vertexData.length / 7, // 7 floats per vertex
-    });
+      const allocBytes = requiredBytes * 2; // 2x headroom to reduce future re-allocs
+      const buffer = this.device.createBuffer({
+        size: allocBytes,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      });
+      this.device.queue.writeBuffer(buffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+
+      this.meshes.push({
+        vertexBuffer: buffer,
+        vertexCount: vertexData.length / 7,
+      });
+    }
 
     // Store for later zoomToFit calls
     this.lastVertexData = vertexData;
@@ -232,22 +243,32 @@ export class ViewportRenderer {
 
   /** Upload selection highlight vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
   uploadHighlightVertices(vertexData: Float32Array): void {
-    this.clearHighlight();
+    if (vertexData.length === 0) {
+      this.clearHighlight();
+      return;
+    }
 
-    if (vertexData.length === 0) return;
-
-    const buffer = this.device.createBuffer({
-      size: vertexData.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      mappedAtCreation: true,
-    });
-    new Float32Array(buffer.getMappedRange()).set(vertexData);
-    buffer.unmap();
-
-    this.highlightMeshes.push({
-      vertexBuffer: buffer,
-      vertexCount: vertexData.length / 7,
-    });
+    const requiredBytes = vertexData.byteLength;
+    const existing = this.highlightMeshes[0];
+    if (existing && existing.vertexBuffer.size >= requiredBytes) {
+      this.device.queue.writeBuffer(existing.vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+      existing.vertexCount = vertexData.length / 7;
+      for (let i = 1; i < this.highlightMeshes.length; i++) {
+        this.highlightMeshes[i]!.vertexBuffer.destroy();
+      }
+      this.highlightMeshes.length = 1;
+    } else {
+      this.clearHighlight();
+      const buffer = this.device.createBuffer({
+        size: requiredBytes * 2,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      });
+      this.device.queue.writeBuffer(buffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+      this.highlightMeshes.push({
+        vertexBuffer: buffer,
+        vertexCount: vertexData.length / 7,
+      });
+    }
   }
 
   /** Clear the selection highlight mesh. */
@@ -260,22 +281,32 @@ export class ViewportRenderer {
 
   /** Upload hover highlight vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
   uploadHoverVertices(vertexData: Float32Array): void {
-    this.clearHover();
+    if (vertexData.length === 0) {
+      this.clearHover();
+      return;
+    }
 
-    if (vertexData.length === 0) return;
-
-    const buffer = this.device.createBuffer({
-      size: vertexData.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      mappedAtCreation: true,
-    });
-    new Float32Array(buffer.getMappedRange()).set(vertexData);
-    buffer.unmap();
-
-    this.hoverMeshes.push({
-      vertexBuffer: buffer,
-      vertexCount: vertexData.length / 7,
-    });
+    const requiredBytes = vertexData.byteLength;
+    const existing = this.hoverMeshes[0];
+    if (existing && existing.vertexBuffer.size >= requiredBytes) {
+      this.device.queue.writeBuffer(existing.vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+      existing.vertexCount = vertexData.length / 7;
+      for (let i = 1; i < this.hoverMeshes.length; i++) {
+        this.hoverMeshes[i]!.vertexBuffer.destroy();
+      }
+      this.hoverMeshes.length = 1;
+    } else {
+      this.clearHover();
+      const buffer = this.device.createBuffer({
+        size: requiredBytes * 2,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      });
+      this.device.queue.writeBuffer(buffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+      this.hoverMeshes.push({
+        vertexBuffer: buffer,
+        vertexCount: vertexData.length / 7,
+      });
+    }
   }
 
   /** Clear the hover highlight mesh. */
@@ -330,25 +361,35 @@ export class ViewportRenderer {
 
   /** Upload lane line vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
   uploadLaneLineVertices(vertexData: Float32Array): void {
-    for (const m of this.laneLineMeshes) {
-      m.vertexBuffer.destroy();
+    if (vertexData.length === 0) {
+      for (const m of this.laneLineMeshes) { m.vertexBuffer.destroy(); }
+      this.laneLineMeshes = [];
+      return;
     }
-    this.laneLineMeshes = [];
 
-    if (vertexData.length === 0) return;
+    const requiredBytes = vertexData.byteLength;
+    const existing = this.laneLineMeshes[0];
+    if (existing && existing.vertexBuffer.size >= requiredBytes) {
+      this.device.queue.writeBuffer(existing.vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+      existing.vertexCount = vertexData.length / 7;
+      for (let i = 1; i < this.laneLineMeshes.length; i++) {
+        this.laneLineMeshes[i]!.vertexBuffer.destroy();
+      }
+      this.laneLineMeshes.length = 1;
+    } else {
+      for (const m of this.laneLineMeshes) { m.vertexBuffer.destroy(); }
+      this.laneLineMeshes = [];
 
-    const buffer = this.device.createBuffer({
-      size: vertexData.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      mappedAtCreation: true,
-    });
-    new Float32Array(buffer.getMappedRange()).set(vertexData);
-    buffer.unmap();
-
-    this.laneLineMeshes.push({
-      vertexBuffer: buffer,
-      vertexCount: vertexData.length / 7,
-    });
+      const buffer = this.device.createBuffer({
+        size: requiredBytes * 2,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      });
+      this.device.queue.writeBuffer(buffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+      this.laneLineMeshes.push({
+        vertexBuffer: buffer,
+        vertexCount: vertexData.length / 7,
+      });
+    }
   }
 
   /**
