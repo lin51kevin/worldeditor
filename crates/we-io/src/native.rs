@@ -155,12 +155,12 @@ mod tests {
         let base_dir = temp_dir.path().to_string_lossy().into_owned();
         let fs = NativeFileSystem::new(base_dir.clone());
 
-        let resolved = fs.resolve_path("nested\\file.txt");
+        let resolved = fs.resolve_path("nested/file.txt");
 
         assert_eq!(
             resolved,
             Path::new(&base_dir)
-                .join("nested\\file.txt")
+                .join("nested/file.txt")
                 .to_string_lossy()
                 .into_owned()
         );
@@ -183,7 +183,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let fs = NativeFileSystem::new(temp_dir.path().to_string_lossy().into_owned());
 
-        fs.write_bytes("nested\\folder\\file.txt", b"created")
+        fs.write_bytes("nested/folder/file.txt", b"created")
             .unwrap();
 
         let created_path = temp_dir
