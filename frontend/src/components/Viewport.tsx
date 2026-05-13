@@ -15,20 +15,17 @@ import {
   isSceneSelectionVisible,
   tintVertices,
 } from '../utils/sceneGraph';
-import {
-  buildMultiLineGeometries,
-  buildMultiArcGeometries,
-  buildMultiSpiralGeometries,
-  buildRoadFromGeometries,
-} from '../utils/geometryBuilder';
+import { useViewportDrop } from '../hooks/useViewportDrop';
+import { useRubberBandSelect } from '../hooks/useRubberBandSelect';
+import { useMoveRotateMode } from '../hooks/useMoveRotateMode';
+import { useSplineOperations } from '../hooks/useSplineOperations';
 import './Viewport.css';
 
 import {
-  DRAG_THRESHOLD_SQ, HOVER_HIGHLIGHT_COLOR, HOVER_HIGHLIGHT_Z_LIFT,
-  MouseGestureState, MoveRotateDragState,
+  HOVER_HIGHLIGHT_COLOR, HOVER_HIGHLIGHT_Z_LIFT,
+  MouseGestureState,
   mergeFloat32Arrays, liftMeshZ, exceededDragThreshold,
-  buildEditableSpline, roadIntersectsAABB, junctionIntersectsAABB,
-  nextSplineRoadId, splineToRendererFormat,
+  splineToRendererFormat,
 } from './viewportUtils';
 
 
@@ -36,7 +33,7 @@ export function Viewport() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ViewportRenderer | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
-  const [isDragOver, setIsDragOver] = useState(false);
+  const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useViewportDrop(rendererRef, canvasRef);
   const project = useEditorStore((s) => s.project);
   const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
   const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
@@ -55,10 +52,9 @@ export function Viewport() {
   /** Tracks the currently hovered control point to avoid redundant refreshSplineMarkers calls. */
   const hoveredControlPointRef = useRef<{ index: number; type: 'knot' | 'in' | 'out' } | null>(null);
   /** Rubber-band selection state: tracks drag start and whether the overlay is active. */
-  const rubberBandRef = useRef<{ startClientX: number; startClientY: number; active: boolean } | null>(null);
-  const rubberBandOverlayRef = useRef<HTMLDivElement>(null);
+  const { rubberBandRef, rubberBandOverlayRef, startRubberBand, updateRubberBand, commitRubberBand } = useRubberBandSelect(rendererRef, canvasRef);
   /** Active move-road / rotate-road drag state. */
-  const moveRotateDragRef = useRef<MoveRotateDragState | null>(null);
+  const { startMoveRotateDrag, updateMoveRotateDrag, commitMoveRotateDrag } = useMoveRotateMode(rendererRef, canvasRef, isPreviewingRoadRef, pendingCursorRef);
   /** Tracks the road/junction currently under the cursor for hover highlighting. */
   const hoveredRoadRef = useRef<string | null>(null);
   const hoveredJunctionRef = useRef<string | null>(null);
@@ -70,104 +66,7 @@ export function Viewport() {
     lastPinchDist: number | null;
   }>({ touches: [], lastPinchDist: null });
 
-  const finalizeSplineCreation = useCallback(async (overrideKnots?: Array<[number, number, number]>) => {
-    const viewState = useEditorViewStore.getState();
-    const knots = overrideKnots ?? viewState.splineKnots;
-    if (knots.length < 2) {
-      console.warn('[Viewport] Need at least 2 spline knots to create a road.');
-      return;
-    }
-
-    try {
-      const service = await getPlatformService();
-      const editorState = useEditorStore.getState();
-      const roadId = nextSplineRoadId(editorState.project.roads.map((road) => road.id));
-      const spline = buildEditableSpline(knots);
-      const nextProject = await service.createRoadFromSpline(
-        editorState.project,
-        roadId,
-        spline,
-        viewState.splineTemplateId,
-      );
-      // Use addRoad instead of setProject so the undo stack is preserved and
-      // projectLoadVersion is NOT incremented (which would trigger camera auto-fit).
-      const newRoad = nextProject.roads.find((r) => r.id === roadId);
-      if (newRoad) {
-        editorState.addRoad(newRoad);
-      }
-      editorState.selectRoad(roadId);
-      viewState.clearSplineKnots();
-    } catch (err) {
-      console.error('[Viewport] Failed to create road from spline:', err);
-    }
-  }, []);
-
-  /** Finalize geometry draw mode: create a road from the accumulated draw points. */
-  const finalizeDrawGeometry = useCallback(async (
-    mode: 'line' | 'arc' | 'spiral',
-    points: Array<[number, number, number]>,
-  ) => {
-    const editorState = useEditorStore.getState();
-    const viewState = useEditorViewStore.getState();
-
-    const minPoints = mode === 'arc' ? 3 : 2;
-    if (points.length < minPoints) {
-      console.warn(`[Viewport] ${mode} mode needs at least ${minPoints} points.`);
-      return;
-    }
-
-    const roadId = nextSplineRoadId(editorState.project.roads.map((r) => r.id));
-
-    let geometries;
-    if (mode === 'line') {
-      geometries = buildMultiLineGeometries(points);
-    } else if (mode === 'arc') {
-      geometries = buildMultiArcGeometries(points);
-    } else {
-      geometries = buildMultiSpiralGeometries(points);
-    }
-
-    if (geometries.length === 0) {
-      console.warn(`[Viewport] ${mode} produced no geometry segments from ${points.length} points.`);
-      return;
-    }
-
-    const road = buildRoadFromGeometries(roadId, geometries);
-    editorState.addRoad(road);
-    editorState.selectRoad(roadId);
-    viewState.clearSplineKnots();
-  }, []);
-
-  /** Enter geometry edit mode for the given road. */
-  const enterGeometryEditMode = useCallback(async (roadId: string) => {
-    const editorState = useEditorStore.getState();
-    const road = editorState.project.roads.find((r) => r.id === roadId);
-    if (!road || road.plan_view.length === 0) return;
-    try {
-      const service = await getPlatformService();
-      const spline = await service.roadToSpline(road, 2.0);
-      useEditorViewStore.getState().enterGeometryEdit(roadId, spline);
-    } catch (err) {
-      console.error('[Viewport] Failed to enter geometry edit:', err);
-    }
-  }, []);
-
-  /** Finalize geometry editing: convert spline back to road geometry and update project. */
-  const finalizeGeometryEdit = useCallback(async () => {
-    const viewState = useEditorViewStore.getState();
-    const { geometryEditRoadId: roadId, geometryEditSpline: spline } = viewState;
-    if (!roadId || !spline) return;
-    try {
-      const service = await getPlatformService();
-      const geometries = await service.splineToGeometries(spline);
-      // Compute total length from geometries
-      const totalLength = geometries.reduce((sum, g) => sum + g.length, 0);
-      useEditorStore.getState().updateRoadGeometry(roadId, geometries, totalLength);
-      viewState.exitGeometryEdit();
-    } catch (err) {
-      console.error('[Viewport] Failed to finalize geometry edit:', err);
-    }
-  }, []);
+  const { finalizeSplineCreation, finalizeDrawGeometry, enterGeometryEditMode, finalizeGeometryEdit } = useSplineOperations();
 
   useEffect(() => {
     if (editMode !== 'spline' && editMode !== 'line' && editMode !== 'arc' && editMode !== 'spiral') {
@@ -661,26 +560,8 @@ export function Viewport() {
     if (!canvas || !renderer) return;
 
     // Rubber-band selection: update overlay position
-    const rubberBand = rubberBandRef.current;
-    if (rubberBand) {
-      const dx = e.clientX - rubberBand.startClientX;
-      const dy = e.clientY - rubberBand.startClientY;
-      if (dx * dx + dy * dy > DRAG_THRESHOLD_SQ) {
-        rubberBand.active = true;
-        const overlay = rubberBandOverlayRef.current;
-        if (overlay) {
-          const canvasRect = canvas.getBoundingClientRect();
-          const x0 = rubberBand.startClientX - canvasRect.left;
-          const y0 = rubberBand.startClientY - canvasRect.top;
-          const x1 = e.clientX - canvasRect.left;
-          const y1 = e.clientY - canvasRect.top;
-          overlay.style.display = 'block';
-          overlay.style.left = `${Math.min(x0, x1)}px`;
-          overlay.style.top = `${Math.min(y0, y1)}px`;
-          overlay.style.width = `${Math.abs(x1 - x0)}px`;
-          overlay.style.height = `${Math.abs(y1 - y0)}px`;
-        }
-      }
+    if (rubberBandRef.current) {
+      updateRubberBand(e, canvas);
       return;
     }
 
@@ -691,67 +572,7 @@ export function Viewport() {
     if (!worldPos) return;
 
     // Move/Rotate road drag: compute transform and generate preview vertices
-    const moveRotateDrag = moveRotateDragRef.current;
-    if (moveRotateDrag) {
-      const { mode, roadId, startWorldX, startWorldY, centroidX, centroidY } = moveRotateDrag;
-      const { project: currentProject } = useEditorStore.getState();
-      const road = currentProject.roads.find((r) => r.id === roadId);
-      if (road) {
-        let previewRoad: typeof road;
-        if (mode === 'move-road') {
-          const dx = worldPos.x - startWorldX;
-          const dy = worldPos.y - startWorldY;
-          moveRotateDrag.currentDx = dx;
-          moveRotateDrag.currentDy = dy;
-          previewRoad = {
-            ...road,
-            plan_view: road.plan_view.map((g) => ({ ...g, x: g.x + dx, y: g.y + dy })),
-          };
-        } else {
-          // Angle from centroid to start vs centroid to current
-          const startAngle = Math.atan2(startWorldY - centroidY, startWorldX - centroidX);
-          const currentAngle = Math.atan2(worldPos.y - centroidY, worldPos.x - centroidX);
-          const angleDelta = currentAngle - startAngle;
-          moveRotateDrag.currentAngle = angleDelta;
-          const cosA = Math.cos(angleDelta);
-          const sinA = Math.sin(angleDelta);
-          previewRoad = {
-            ...road,
-            plan_view: road.plan_view.map((g) => {
-              const rx = g.x - centroidX;
-              const ry = g.y - centroidY;
-              return {
-                ...g,
-                x: centroidX + rx * cosA - ry * sinA,
-                y: centroidY + rx * sinA + ry * cosA,
-                hdg: g.hdg + angleDelta,
-              };
-            }),
-          };
-        }
-
-        // Upload async preview as highlight overlay (throttled like knot drag)
-        if (!isPreviewingRoadRef.current) {
-          isPreviewingRoadRef.current = true;
-          const liveRenderer = rendererRef.current;
-          if (liveRenderer) {
-            void (async () => {
-              try {
-                const service = await getPlatformService();
-                const verts = await service.generateSingleRoadVertices(
-                  previewRoad, 2.0, [0.95, 0.60, 0.10, 0.85],
-                );
-                rendererRef.current?.uploadHighlightVertices(verts);
-              } catch { /* ignore preview errors */ }
-              finally { isPreviewingRoadRef.current = false; }
-            })();
-          }
-        }
-      }
-      emitCursorMove(worldPos.x, worldPos.y);
-      pendingCursorRef.current = worldPos;
-      return;
-    }
+    if (updateMoveRotateDrag(worldPos)) return;
 
     // Spline knot dragging: update knot position
     const viewState = useEditorViewStore.getState();
@@ -1066,41 +887,11 @@ export function Viewport() {
 
     if (!hitKnots || hitKnots.length === 0) {
       // Move/Rotate road: start drag on the selected road
-      if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
-        const { selectedRoadId: selRoadId, project: currentProject } = useEditorStore.getState();
-        if (selRoadId) {
-          const road = currentProject.roads.find((r) => r.id === selRoadId);
-          if (road && road.plan_view.length > 0) {
-            const rect = canvas.getBoundingClientRect();
-            const screenX = (e.clientX - rect.left) * devicePixelRatio;
-            const screenY = (e.clientY - rect.top) * devicePixelRatio;
-            const worldPos = renderer.unprojectToGround(screenX, screenY);
-            if (worldPos) {
-              const cx = road.plan_view.reduce((sum, g) => sum + g.x, 0) / road.plan_view.length;
-              const cy = road.plan_view.reduce((sum, g) => sum + g.y, 0) / road.plan_view.length;
-              moveRotateDragRef.current = {
-                mode: viewState.editMode,
-                roadId: selRoadId,
-                startWorldX: worldPos.x,
-                startWorldY: worldPos.y,
-                centroidX: cx,
-                centroidY: cy,
-                currentDx: 0,
-                currentDy: 0,
-                currentAngle: 0,
-              };
-              renderer.lockCamera();
-              canvas.style.cursor = viewState.editMode === 'move-road' ? 'move' : 'crosshair';
-            }
-          }
-        }
-        return;
-      }
+      if (startMoveRotateDrag(e, renderer, canvas)) return;
 
       // Shift+left-drag starts rubber-band multi-select (plain left-drag still pans)
       if (e.shiftKey && viewState.editMode !== 'spline' && viewState.editMode !== 'line' && viewState.editMode !== 'arc' && viewState.editMode !== 'spiral' && !viewState.geometryEditSpline) {
-        rubberBandRef.current = { startClientX: e.clientX, startClientY: e.clientY, active: false };
-        renderer.lockCamera();
+        startRubberBand(e, renderer);
       }
 
       // NOTE: draw modes (line/arc/spiral) no longer lock the camera unconditionally.
@@ -1303,64 +1094,10 @@ export function Viewport() {
 
   const handleMouseUp = useCallback(async (e: React.MouseEvent) => {
     // Commit rubber-band multi-select
-    const rubberBand = rubberBandRef.current;
-    if (rubberBand) {
-      rubberBandRef.current = null;
-      const overlay = rubberBandOverlayRef.current;
-      if (overlay) overlay.style.display = 'none';
-      const rendererInst = rendererRef.current;
-      if (rendererInst) rendererInst.unlockCamera();
-
-      if (rubberBand.active) {
-        const canvas = canvasRef.current;
-        if (canvas && rendererInst) {
-          const canvasRect = canvas.getBoundingClientRect();
-          const dpr = devicePixelRatio;
-          const sx0 = (rubberBand.startClientX - canvasRect.left) * dpr;
-          const sy0 = (rubberBand.startClientY - canvasRect.top) * dpr;
-          const sx1 = (e.clientX - canvasRect.left) * dpr;
-          const sy1 = (e.clientY - canvasRect.top) * dpr;
-          const tl = rendererInst.unprojectToGround(Math.min(sx0, sx1), Math.min(sy0, sy1));
-          const br = rendererInst.unprojectToGround(Math.max(sx0, sx1), Math.max(sy0, sy1));
-          if (tl && br) {
-            const minX = Math.min(tl.x, br.x);
-            const maxX = Math.max(tl.x, br.x);
-            const minY = Math.min(tl.y, br.y);
-            const maxY = Math.max(tl.y, br.y);
-            const { project } = useEditorStore.getState();
-            const roadIds = project.roads
-              .filter((r) => roadIntersectsAABB(r, minX, minY, maxX, maxY))
-              .map((r) => r.id);
-            const junctionIds = project.junctions
-              .filter((j) => junctionIntersectsAABB(j, project, minX, minY, maxX, maxY))
-              .map((j) => j.id);
-            useEditorStore.getState().selectMultiple(roadIds, junctionIds);
-          }
-        }
-      }
-      return;
-    }
+    if (commitRubberBand(e)) return;
 
     // Commit move/rotate road drag
-    const moveRotateDrag = moveRotateDragRef.current;
-    if (moveRotateDrag) {
-      moveRotateDragRef.current = null;
-      const renderer = rendererRef.current;
-      if (renderer) {
-        renderer.unlockCamera();
-        renderer.clearHighlight();
-      }
-      const canvas = canvasRef.current;
-      if (canvas) canvas.style.cursor = '';
-      const { mode, roadId, currentDx, currentDy, currentAngle, centroidX, centroidY } = moveRotateDrag;
-      const store = useEditorStore.getState();
-      if (mode === 'move-road' && (currentDx !== 0 || currentDy !== 0)) {
-        store.moveRoad(roadId, currentDx, currentDy);
-      } else if (mode === 'rotate-road' && currentAngle !== 0) {
-        store.rotateRoad(roadId, currentAngle, centroidX, centroidY);
-      }
-      return;
-    }
+    if (commitMoveRotateDrag()) return;
 
     const viewState = useEditorViewStore.getState();
     const { draggingKnot } = viewState;
@@ -1388,62 +1125,6 @@ export function Viewport() {
         } catch (err) {
           console.error('[Viewport] Failed to update road geometry:', err);
         }
-      }
-    }
-  }, []);
-
-  const hasTemplateDrag = (e: React.DragEvent) =>
-    Array.from(e.dataTransfer.types).includes('application/we-template-id');
-
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    if (hasTemplateDrag(e)) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-      setIsDragOver(true);
-    }
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (hasTemplateDrag(e)) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    }
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    // Only clear when leaving the viewport div (not entering a child)
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setIsDragOver(false);
-    }
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const templateId = e.dataTransfer.getData('application/we-template-id');
-    if (!templateId) return;
-
-    const canvas = canvasRef.current;
-    const renderer = rendererRef.current;
-    if (!canvas || !renderer) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const screenX = (e.clientX - rect.left) * devicePixelRatio;
-    const screenY = (e.clientY - rect.top) * devicePixelRatio;
-    const worldPos = renderer.unprojectToGround(screenX, screenY);
-    if (!worldPos) return;
-
-    // Resolve the template item from the contrib store and let it handle creation
-    const sections = usePluginContribStore.getState().templateSections;
-    const item = sections.flatMap((s) => s.items).find((i) => i.id === templateId);
-    if (item) {
-      item.onApply({ x: worldPos.x, y: worldPos.y, hdg: 0 });
-      // Pan camera to the newly created element so it's visible immediately
-      const { selectedRoadId, selectedJunctionId } = useEditorStore.getState();
-      if (selectedRoadId) {
-        emitViewportEvent({ type: 'pan-to-road', roadId: selectedRoadId });
-      } else if (selectedJunctionId) {
-        emitViewportEvent({ type: 'pan-to-junction', junctionId: selectedJunctionId });
       }
     }
   }, []);
