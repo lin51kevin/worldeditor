@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="6" name="HighwayWithRamps" version="1.00" date="2024-01-01T00:00:00" north="80.0" south="-180.0" east="1000.0" west="0.0" vendor="WorldEditor Next">
+    <geoReference><![CDATA[+proj=tmerc +lat_0=0 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs]]></geoReference>
+  </header>
+  <road name="MainHighway" length="1000.0" id="1" junction="-1" rule="RHT">
+    <type s="0" type="motorway" country="DE"/>
+    <planView>
+      <geometry s="0" x="0.0" y="0.0" hdg="0.0" length="1000.0">
+        <line/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0" b="0" c="0" d="0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left>
+          <lane id="4" type="shoulder" level="false">
+            <link/>
+            <width sOffset="0" a="3.0" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.20" laneChange="none" material="standard"/>
+          </lane>
+          <lane id="3" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.75" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="white" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+          <lane id="2" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.75" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="white" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+          <lane id="1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.75" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="white" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+        </left>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="yellow" width="0.20" laneChange="none" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.75" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="white" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+          <lane id="-2" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.75" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="white" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+          <lane id="-3" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.75" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="white" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+          <lane id="-4" type="shoulder" level="false">
+            <link/>
+            <width sOffset="0" a="3.0" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.20" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+  <road name="OnRampApproach" length="180.0" id="2" junction="-1" rule="RHT">
+    <link>
+      <successor elementType="junction" elementId="100"/>
+    </link>
+    <type s="0" type="motorway" country="DE"/>
+    <planView>
+      <geometry s="0" x="260.0" y="-140.0" hdg="0.5235987756" length="180.0">
+        <line/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0" b="0" c="0" d="0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left/>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="4.0" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+  <road name="OnRampMerge" length="120.0" id="20" junction="100" rule="RHT">
+    <link>
+      <predecessor elementType="road" elementId="2" contactPoint="end"/>
+      <successor elementType="road" elementId="1" contactPoint="start"/>
+    </link>
+    <type s="0" type="motorway" country="DE"/>
+    <planView>
+      <geometry s="0" x="415.88457268" y="-50.0" hdg="0.5235987756" length="120.0">
+        <arc curvature="-0.005"/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0" b="0" c="0" d="0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left/>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="4.0" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+  <road name="OffRampConnector" length="120.0" id="30" junction="101" rule="RHT">
+    <link>
+      <predecessor elementType="road" elementId="1" contactPoint="end"/>
+      <successor elementType="road" elementId="3" contactPoint="start"/>
+    </link>
+    <type s="0" type="motorway" country="DE"/>
+    <planView>
+      <geometry s="0" x="600.0" y="0.0" hdg="0.0" length="120.0">
+        <arc curvature="-0.005"/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0" b="0" c="0" d="0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left/>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="4.0" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+  <road name="OffRampExit" length="180.0" id="3" junction="-1" rule="RHT">
+    <link>
+      <predecessor elementType="junction" elementId="101"/>
+    </link>
+    <type s="0" type="motorway" country="DE"/>
+    <planView>
+      <geometry s="0" x="720.0" y="-15.0" hdg="-0.5235987756" length="180.0">
+        <line/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0" b="0" c="0" d="0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left/>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="4.0" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+  <junction name="OnRampJunction" id="100">
+    <connection id="0" incomingRoad="2" connectingRoad="20" contactPoint="start">
+      <laneLink from="-1" to="-1"/>
+    </connection>
+    <connection id="1" incomingRoad="1" connectingRoad="20" contactPoint="end">
+      <laneLink from="-3" to="-1"/>
+    </connection>
+  </junction>
+  <junction name="OffRampJunction" id="101">
+    <connection id="0" incomingRoad="1" connectingRoad="30" contactPoint="start">
+      <laneLink from="-3" to="-1"/>
+    </connection>
+    <connection id="1" incomingRoad="3" connectingRoad="30" contactPoint="end">
+      <laneLink from="1" to="-1"/>
+    </connection>
+  </junction>
+</OpenDRIVE>

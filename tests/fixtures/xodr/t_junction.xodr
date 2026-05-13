@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="6" name="TJunction" version="1.00" date="2024-01-01T00:00:00" north="140.0" south="-140.0" east="240.0" west="0.0" vendor="WorldEditor Next">
+    <geoReference><![CDATA[+proj=tmerc +lat_0=0 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs]]></geoReference>
+  </header>
+  <road name="WestApproach" length="100.0" id="1" junction="-1" rule="RHT">
+    <link>
+      <successor elementType="junction" elementId="10"/>
+    </link>
+    <type s="0" type="town" country="DE"/>
+    <planView>
+      <geometry s="0" x="0.0" y="0.0" hdg="0.0" length="100.0">
+        <line/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0" b="0" c="0" d="0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left>
+          <lane id="1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </left>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="standard" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+  <road name="SouthBranch" length="100.0" id="2" junction="-1" rule="RHT">
+    <link>
+      <predecessor elementType="junction" elementId="10"/>
+    </link>
+    <type s="0" type="town" country="DE"/>
+    <planView>
+      <geometry s="0" x="120.0" y="-20.0" hdg="-1.57079632679" length="100.0">
+        <line/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0" b="0" c="0" d="0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left>
+          <lane id="1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </left>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="standard" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+  <road name="EastApproach" length="100.0" id="3" junction="-1" rule="RHT">
+    <link>
+      <predecessor elementType="junction" elementId="10"/>
+    </link>
+    <type s="0" type="town" country="DE"/>
+    <planView>
+      <geometry s="0" x="120.0" y="0.0" hdg="0.0" length="100.0">
+        <line/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0" b="0" c="0" d="0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left>
+          <lane id="1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </left>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="standard" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+  <road name="MainConnector" length="20.0" id="10" junction="10" rule="RHT">
+    <link>
+      <predecessor elementType="road" elementId="1" contactPoint="end"/>
+      <successor elementType="road" elementId="3" contactPoint="start"/>
+    </link>
+    <type s="0" type="town" country="DE"/>
+    <planView>
+      <geometry s="0" x="100.0" y="0.0" hdg="0.0" length="20.0">
+        <line/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0" b="0" c="0" d="0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left>
+          <lane id="1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </left>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="standard" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+  <road name="RightTurnConnector" length="31.4159265359" id="11" junction="10" rule="RHT">
+    <link>
+      <predecessor elementType="road" elementId="1" contactPoint="end"/>
+      <successor elementType="road" elementId="2" contactPoint="start"/>
+    </link>
+    <type s="0" type="town" country="DE"/>
+    <planView>
+      <geometry s="0" x="100.0" y="0.0" hdg="0.0" length="31.4159265359">
+        <arc curvature="-0.05"/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0" b="0" c="0" d="0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left>
+          <lane id="1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </left>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="standard" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+  <road name="EastToSouthConnector" length="20.0" id="12" junction="10" rule="RHT">
+    <link>
+      <predecessor elementType="road" elementId="3" contactPoint="start"/>
+      <successor elementType="road" elementId="2" contactPoint="start"/>
+    </link>
+    <type s="0" type="town" country="DE"/>
+    <planView>
+      <geometry s="0" x="120.0" y="0.0" hdg="-1.57079632679" length="20.0">
+        <line/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0" b="0" c="0" d="0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left>
+          <lane id="1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </left>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="standard" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+  <junction name="TJunction-10" id="10">
+    <connection id="0" incomingRoad="1" connectingRoad="10" contactPoint="start">
+      <laneLink from="1" to="1"/>
+      <laneLink from="-1" to="-1"/>
+    </connection>
+    <connection id="1" incomingRoad="1" connectingRoad="11" contactPoint="start">
+      <laneLink from="-1" to="-1"/>
+    </connection>
+    <connection id="2" incomingRoad="3" connectingRoad="10" contactPoint="end">
+      <laneLink from="1" to="1"/>
+      <laneLink from="-1" to="-1"/>
+    </connection>
+    <connection id="3" incomingRoad="3" connectingRoad="12" contactPoint="start">
+      <laneLink from="1" to="1"/>
+    </connection>
+    <connection id="4" incomingRoad="2" connectingRoad="11" contactPoint="end">
+      <laneLink from="1" to="1"/>
+    </connection>
+    <connection id="5" incomingRoad="2" connectingRoad="12" contactPoint="end">
+      <laneLink from="-1" to="-1"/>
+    </connection>
+  </junction>
+</OpenDRIVE>

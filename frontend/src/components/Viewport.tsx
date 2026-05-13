@@ -532,6 +532,23 @@ export function Viewport() {
         case 'set-show-axis':
           renderer.setShowAxis(event.show);
           break;
+        case 'capture-screenshot': {
+          // Capture the WebGPU canvas as PNG and trigger a browser download
+          const canvas = canvasRef.current;
+          if (!canvas) break;
+          try {
+            const dataUrl = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = event.filename ?? `worldeditor-${Date.now()}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          } catch (err) {
+            console.error('[Viewport] Screenshot capture failed:', err);
+          }
+          break;
+        }
       }
     });
     return unsubscribe;

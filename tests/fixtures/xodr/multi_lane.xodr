@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="6" name="FourLaneDividedHighway" version="1.00" date="2024-01-01T00:00:00" north="50.0" south="-50.0" east="500.0" west="0.0" vendor="WorldEditor Next">
+    <geoReference><![CDATA[+proj=tmerc +lat_0=0 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs]]></geoReference>
+  </header>
+  <road name="MultiLaneHighway" length="500.0" id="1" junction="-1" rule="RHT">
+    <type s="0" type="motorway" country="DE"/>
+    <planView>
+      <geometry s="0" x="0.0" y="0.0" hdg="0.0" length="500.0">
+        <line/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0.0" b="0.0" c="0.0" d="0.0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left>
+          <lane id="2" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.75" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+          <lane id="1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.75" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="standard" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+        </left>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="yellow" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.75" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="standard" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+          <lane id="-2" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.75" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+  </road>
+</OpenDRIVE>

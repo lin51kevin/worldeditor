@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="6" name="ParkingRoad" version="1.00" date="2024-01-01T00:00:00" north="25.0" south="-25.0" east="200.0" west="0.0" vendor="WorldEditor Next">
+    <geoReference><![CDATA[+proj=tmerc +lat_0=0 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs]]></geoReference>
+  </header>
+  <road name="ParkingAccessRoad" length="200.0" id="1" junction="-1" rule="RHT">
+    <type s="0" type="town" country="DE"/>
+    <planView>
+      <geometry s="0" x="0.0" y="0.0" hdg="0.0" length="200.0">
+        <line/>
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation s="0" a="0.0" b="0.0" c="0.0" d="0.0"/>
+    </elevationProfile>
+    <lateralProfile/>
+    <lanes>
+      <laneSection s="0">
+        <left>
+          <lane id="1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="standard" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+        </left>
+        <center>
+          <lane id="0" type="none" level="false">
+            <link/>
+            <roadMark sOffset="0" type="broken" weight="standard" color="standard" width="0.15" laneChange="both" material="standard"/>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" type="driving" level="false">
+            <link/>
+            <width sOffset="0" a="3.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="white" width="0.15" laneChange="none" material="standard"/>
+          </lane>
+          <lane id="-2" type="parking" level="false">
+            <link/>
+            <width sOffset="0" a="2.5" b="0" c="0" d="0"/>
+            <roadMark sOffset="0" type="solid" weight="standard" color="white" width="0.12" laneChange="none" material="standard"/>
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <object id="3001" name="ParkingSpace01" s="25.0" t="-5.25" zOffset="0.0" hdg="0.0" roll="0.0" pitch="0.0" orientation="+" type="parkingSpace" length="6.0" width="2.5" height="0.0"/>
+      <object id="3002" name="ParkingSpace02" s="33.0" t="-5.25" zOffset="0.0" hdg="0.0" roll="0.0" pitch="0.0" orientation="+" type="parkingSpace" length="6.0" width="2.5" height="0.0"/>
+      <object id="3003" name="ParkingSpace03" s="41.0" t="-5.25" zOffset="0.0" hdg="0.0" roll="0.0" pitch="0.0" orientation="+" type="parkingSpace" length="6.0" width="2.5" height="0.0"/>
+      <object id="3004" name="ParkingSpace04" s="49.0" t="-5.25" zOffset="0.0" hdg="0.0" roll="0.0" pitch="0.0" orientation="+" type="parkingSpace" length="6.0" width="2.5" height="0.0"/>
+    </objects>
+  </road>
+</OpenDRIVE>

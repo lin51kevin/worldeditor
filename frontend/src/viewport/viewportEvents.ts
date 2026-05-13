@@ -13,7 +13,8 @@ export type ViewportEvent =
   | { type: 'pan-to-junction'; junctionId: string }
   | { type: 'set-dimension'; dimension: '3d' | '2d' }
   | { type: 'set-show-grid'; show: boolean }
-  | { type: 'set-show-axis'; show: boolean };
+  | { type: 'set-show-axis'; show: boolean }
+  | { type: 'capture-screenshot'; filename?: string };
 
 type ViewportEventListener = (event: ViewportEvent) => void;
 
