@@ -13,6 +13,7 @@ export interface PluginInfo {
   name: string;
   version: string;
   description?: string;
+  author?: string;
   dependencies: string[];
   permissions: string[];
   status: 'available' | 'loaded' | 'disabled';

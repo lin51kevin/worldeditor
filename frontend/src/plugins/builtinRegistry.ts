@@ -15,6 +15,7 @@ import { mountIoLanelet2Plugin } from './ioLanelet2.plugin';
 import { mountIoShapefilePlugin } from './ioShapefile.plugin';
 import { mountIoDxfPlugin } from './ioDxf.plugin';
 import { mountIoNioPlugin } from './ioNio.plugin';
+import { mountIoGeoZPlugin } from './ioGeoZ.plugin';
 import { mountIoMifPlugin } from './ioMif.plugin';
 import { mountIoOsmPlugin } from './ioOsm.plugin';
 import { mountIoSignalsPlugin } from './ioSignals.plugin';
@@ -47,6 +48,7 @@ const MOUNT_MAP: Record<string, () => () => void> = {
   'io-shapefile': mountIoShapefilePlugin,
   'io-dxf': mountIoDxfPlugin,
   'io-nio': mountIoNioPlugin,
+  'io-geoz': mountIoGeoZPlugin,
   'io-mif': mountIoMifPlugin,
   'io-osm': mountIoOsmPlugin,
   'io-signals': mountIoSignalsPlugin,
@@ -107,6 +109,7 @@ const BUILTIN_META: PluginInfo[] = [
   { id: 'io-shapefile', name: 'Shapefile I/O', nameKey: 'pluginManager.builtinIoShapefileName', version: '1.0.0', description: 'Import/export Shapefile format (Phase 3)', descriptionKey: 'pluginManager.builtinIoShapefileDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'io-dxf', name: 'DXF I/O', nameKey: 'pluginManager.builtinIoDxfName', version: '1.0.0', description: 'Import/export AutoCAD DXF format (Phase 3)', descriptionKey: 'pluginManager.builtinIoDxfDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'io-nio', name: 'NIO Proto I/O', nameKey: 'pluginManager.builtinIoNioName', version: '1.0.0', description: 'Import/export NIO Protobuf maps (Phase 3)', descriptionKey: 'pluginManager.builtinIoNioDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'io-geoz', name: 'GeoZ Map Importer', version: '0.1.0', description: 'Import GeoZ format map files (ZIP + protobuf)', author: 'WorldEditor', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'io-mif', name: 'MIF/MID I/O', nameKey: 'pluginManager.builtinIoMifName', version: '1.0.0', description: 'Import/export MapInfo MIF/MID (Phase 3)', descriptionKey: 'pluginManager.builtinIoMifDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'io-osm', name: 'OSM Export', nameKey: 'pluginManager.builtinIoOsmName', version: '1.0.0', description: 'Export roads as OpenStreetMap XML', descriptionKey: 'pluginManager.builtinIoOsmDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'io-signals', name: 'Signal JSON I/O', nameKey: 'pluginManager.builtinIoSignalsName', version: '1.0.0', description: 'Import signal JSON / export HD Map XML', descriptionKey: 'pluginManager.builtinIoSignalsDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },

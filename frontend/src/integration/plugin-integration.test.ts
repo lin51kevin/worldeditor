@@ -186,6 +186,16 @@ describe('plugin-io-nio', () => {
   });
 });
 
+describe('plugin-io-geoz', () => {
+  it('mounts and registers importer', async () => {
+    const { mountIoGeoZPlugin } = await import('../plugins/ioGeoZ.plugin');
+    const unmount = mountIoGeoZPlugin();
+    expect(store.registerImporter).toHaveBeenCalledOnce();
+    unmount();
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-geoz');
+  });
+});
+
 describe('plugin-io-signals', () => {
   it('mounts and registers importer+exporter', async () => {
     const { mountIoSignalsPlugin } = await import('../plugins/ioSignals.plugin');
@@ -387,9 +397,9 @@ describe('plugin API context', () => {
 // ── Builtin registry ─────────────────────────────────────────────────────────
 
 describe('builtinRegistry', () => {
-  it('contains all 23 expected plugin entries', async () => {
+  it('contains all 24 expected plugin entries', async () => {
     const { BUILTIN_PLUGINS } = await import('../plugins/builtinRegistry');
-    expect(BUILTIN_PLUGINS.length).toBe(23);
+    expect(BUILTIN_PLUGINS.length).toBe(24);
   });
 
   it('every plugin entry has required fields', async () => {
