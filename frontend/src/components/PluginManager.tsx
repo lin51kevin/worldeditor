@@ -37,9 +37,6 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   const [activeTab, setActiveTab] = useState<TabId>('available');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
-  /** Plugin pending disable confirmation */
-  const [pendingDisableId, setPendingDisableId] = useState<string | null>(null);
-  const [disableReason, setDisableReason] = useState('');
   /** Hidden file input for web-mode plugin installation */
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -90,20 +87,7 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   const handleLoad   = (id: string) => withLoading(id, () => loadPlugin(id));
   const handleUnload = (id: string) => withLoading(id, () => unloadPlugin(id));
   const handleEnable = (id: string) => withLoading(id, () => enablePlugin(id));
-  const handleDisable = (id: string) => {
-    setPendingDisableId(id);
-    setDisableReason('');
-  };
-  const confirmDisable = () => {
-    if (!pendingDisableId) return;
-    const id = pendingDisableId;
-    setPendingDisableId(null);
-    void withLoading(id, () => disablePlugin(id, disableReason));
-  };
-  const cancelDisable = () => {
-    setPendingDisableId(null);
-    setDisableReason('');
-  };
+  const handleDisable = (id: string) => withLoading(id, () => disablePlugin(id));
 
   const handleInstallFromFile = async () => {
     if (typeof window !== 'undefined' && '__TAURI__' in window) {
@@ -273,39 +257,8 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
             </button>
           </div>
         </div>
-
       </div>
     </div>
-
-      {/* Disable reason dialog */}
-      {pendingDisableId && (
-        <div className="pm-overlay pm-overlay--dialog" onClick={cancelDisable} role="dialog" aria-modal="true">
-          <div className="pm-dialog pm-dialog--sm" onClick={(e) => e.stopPropagation()}>
-            <div className="pm-header">
-              <span>禁用插件</span>
-              <button className="pm-close-btn" onClick={cancelDisable}><X size={16} /></button>
-            </div>
-            <div className="pm-body" style={{ padding: '1rem' }}>
-              <p style={{ marginBottom: '0.5rem' }}>禁用原因（可选）：</p>
-              <input
-                className="pm-reason-input"
-                type="text"
-                placeholder="例如：不兼容当前版本"
-                value={disableReason}
-                onChange={(e) => setDisableReason(e.target.value)}
-                autoFocus
-              />
-            </div>
-            <div className="pm-footer">
-              <div />
-              <div className="pm-footer-actions">
-                <button className="pm-btn pm-btn-secondary" onClick={cancelDisable}>取消</button>
-                <button className="pm-btn pm-btn-danger" onClick={confirmDisable}>确认禁用</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -352,23 +305,23 @@ function PluginRow({ plugin, selected, isLoading, onSelect, onLoad, onUnload, on
         {isLoading ? (
           <Loader2 size={14} className="spin" />
         ) : plugin.status === 'available' && !plugin.isBuiltin ? (
-          <button className="pm-row-btn load" title={t('pluginManager.load')} onClick={onLoad}>
-            {t('pluginManager.load')}
+          <button className="pm-row-btn load" onClick={onLoad}>
+            {t('pluginManager.install')}
           </button>
         ) : plugin.status === 'loaded' ? (
           <div className="pm-row-btn-group">
-            <button className="pm-row-btn disable" title={t('pluginManager.disable')} onClick={onDisable}>
+            <button className="pm-row-btn disable" onClick={onDisable}>
               {t('pluginManager.disable')}
             </button>
             {!plugin.isBuiltin && (
-              <button className="pm-row-btn unload" title={t('pluginManager.unload')} onClick={onUnload}>
+              <button className="pm-row-btn unload" onClick={onUnload}>
                 <Trash2 size={12} />
                 {t('pluginManager.uninstall')}
               </button>
             )}
           </div>
         ) : plugin.status === 'disabled' ? (
-          <button className="pm-row-btn enable" title={t('pluginManager.enable')} onClick={onEnable}>
+          <button className="pm-row-btn enable" onClick={onEnable}>
             {t('pluginManager.enable')}
           </button>
         ) : null}

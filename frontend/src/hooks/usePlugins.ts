@@ -33,7 +33,7 @@ export interface UsePluginsReturn {
   loadPlugin: (id: string) => Promise<void>;
   unloadPlugin: (id: string) => Promise<void>;
   enablePlugin: (id: string) => Promise<void>;
-  disablePlugin: (id: string, reason?: string) => Promise<void>;
+  disablePlugin: (id: string) => Promise<void>;
   installPlugin: (srcPath: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -143,7 +143,7 @@ export function usePlugins(): UsePluginsReturn {
     }
   }, [invokeCommand, loadPlugin, refresh]);
 
-  const disablePlugin = useCallback(async (id: string, reason = '') => {
+  const disablePlugin = useCallback(async (id: string) => {
     // Builtin plugins: toggle via store (App.tsx unmounts the plugin)
     if (BUILTIN_PLUGINS.some((p) => p.id === id)) {
       useBuiltinPluginStore.getState().disableBuiltin(id);
@@ -154,7 +154,7 @@ export function usePlugins(): UsePluginsReturn {
       // Unload the JS bundle first so plugin contributions are removed from the UI
       unloadPluginBundle(id);
       setLoadedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
-      await invokeCommand<void>(TAURI_COMMANDS.disablePlugin, { id, reason });
+      await invokeCommand<void>(TAURI_COMMANDS.disablePlugin, { id, reason: '' });
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
