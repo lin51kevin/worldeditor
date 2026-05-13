@@ -427,7 +427,16 @@
     "userManualContent": "User manual coming soon.\n\nVisit the project repository for documentation and guides.",
     "exitUnsaved": "You have unsaved changes. Exit without saving?",
     "fileNotFound": "File not found",
-    "close": "Close"
+    "close": "Close",
+    "importSuccess": "Import successful",
+    "importError": "Import error",
+    "importInvalidProject": "Invalid project data",
+    "importEmptyProject": "Import completed with no roads. The file may not contain compatible data.",
+    "exportSuccess": "Export successful",
+    "exportError": "Export error",
+    "successTitle": "Success",
+    "errorTitle": "Error",
+    "warningTitle": "Warning"
   },
   "snapping": {
     "enabled": "Snap",

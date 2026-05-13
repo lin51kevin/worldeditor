@@ -3,39 +3,90 @@
  * Export only — roads are tessellated into triangulated quad-strips.
  */
 import { usePluginContribStore } from '../stores/pluginContribStore';
-import type { Project } from '../services/platform';
+import type { Project, Road } from '../services/platform';
 import { downloadBlob } from '../utils/download';
 
 const PLUGIN_ID = 'io-obj3d';
 
-function exportToObj(project: Project): Promise<void> {
-  const lines = ['# WorldEditor Next — OBJ Export', `# Roads: ${project.roads.length}`];
-  let vOffset = 0;
-  for (const road of project.roads) {
-    const g = road.plan_view[0];
-    if (!g) continue;
-    const hw = 3.5;
-    const perp = g.hdg + Math.PI / 2;
-    const lx = g.x + hw * Math.cos(perp);
-    const ly = g.y + hw * Math.sin(perp);
-    const rx = g.x - hw * Math.cos(perp);
-    const ry = g.y - hw * Math.sin(perp);
-    const ex = g.x + road.length * Math.cos(g.hdg);
-    const ey = g.y + road.length * Math.sin(g.hdg);
-    const elx = ex + hw * Math.cos(perp);
-    const ely = ey + hw * Math.sin(perp);
-    const erx = ex - hw * Math.cos(perp);
-    const ery = ey - hw * Math.sin(perp);
-    lines.push(`v ${lx} ${ly} 0`);
-    lines.push(`v ${rx} ${ry} 0`);
-    lines.push(`v ${elx} ${ely} 0`);
-    lines.push(`v ${erx} ${ery} 0`);
-    const b = vOffset + 1;
-    lines.push(`f ${b} ${b + 1} ${b + 2}`);
-    lines.push(`f ${b + 1} ${b + 3} ${b + 2}`);
-    vOffset += 4;
+function computeRoadWidth(road: Road): number {
+  const ls = road.lane_sections?.[0];
+  if (ls) {
+    const leftCount = ls.left?.length ?? 0;
+    const rightCount = ls.right?.length ?? 0;
+    if (leftCount + rightCount > 0) {
+      const firstLaneWidth = ls.left?.[0]?.width?.[0]?.a ?? ls.right?.[0]?.width?.[0]?.a ?? 3.5;
+      return (leftCount + rightCount) * firstLaneWidth;
+    }
   }
-  const blob = new Blob([lines.join('\n')], { type: 'model/obj' });
+  return 3.5;
+}
+
+/** Extract the actual export logic for testability. */
+export function generateObjContent(project: Project): string {
+  const lines = [
+    '# WorldEditor Next — OBJ Export',
+    `# Roads: ${project.roads.length}`,
+    `# Generated: ${new Date().toISOString()}`,
+  ];
+  let vOffset = 0;
+
+  for (const road of project.roads) {
+    const geo = road.plan_view;
+    if (geo.length === 0) continue;
+
+    const hw = computeRoadWidth(road) / 2;
+
+    for (let i = 0; i < geo.length; i++) {
+      const g = geo[i];
+      const nextG = geo[i + 1];
+
+      const sx = g!.x ?? 0;
+      const sy = g!.y ?? 0;
+      const shdg = g!.hdg ?? 0;
+
+      // End point: next geometry's start, or extrapolate from current
+      let ex: number, ey: number;
+      if (nextG) {
+        ex = nextG.x ?? sx + g!.length * Math.cos(shdg);
+        ey = nextG.y ?? sy + g!.length * Math.sin(shdg);
+      } else {
+        ex = sx + g!.length * Math.cos(shdg);
+        ey = sy + g!.length * Math.sin(shdg);
+      }
+
+      // Start perpendicular
+      const perpStart = shdg + Math.PI / 2;
+      const sLx = sx + hw * Math.cos(perpStart);
+      const sLy = sy + hw * Math.sin(perpStart);
+      const sRx = sx - hw * Math.cos(perpStart);
+      const sRy = sy - hw * Math.sin(perpStart);
+
+      // End heading & perpendicular
+      const eHdg = Math.atan2(ey - sy, ex - sx);
+      const perpEnd = eHdg + Math.PI / 2;
+      const eLx = ex + hw * Math.cos(perpEnd);
+      const eLy = ey + hw * Math.sin(perpEnd);
+      const eRx = ex - hw * Math.cos(perpEnd);
+      const eRy = ey - hw * Math.sin(perpEnd);
+
+      lines.push(`v ${sLx} ${sLy} 0`);
+      lines.push(`v ${sRx} ${sRy} 0`);
+      lines.push(`v ${eLx} ${eLy} 0`);
+      lines.push(`v ${eRx} ${eRy} 0`);
+
+      const b = vOffset + 1;
+      lines.push(`f ${b} ${b + 1} ${b + 2}`);
+      lines.push(`f ${b + 1} ${b + 3} ${b + 2}`);
+      vOffset += 4;
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function exportToObj(project: Project): Promise<void> {
+  const content = generateObjContent(project);
+  const blob = new Blob([content], { type: 'model/obj' });
   downloadBlob(blob, `${project.name || 'export'}.obj`);
   return Promise.resolve();
 }

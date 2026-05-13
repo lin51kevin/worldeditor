@@ -2,6 +2,7 @@ import type { Project } from '../../../services/platform';
 import { useEditorStore } from '../../../stores/editorStore';
 import type { ExporterContrib, ImporterContrib } from '../../../stores/pluginContribStore';
 import type { RecentFile } from '../../../stores/recentFilesStore';
+import { showAlert } from '../../../utils/dialog';
 import type { MenuItem, TranslateFn } from '../menuDefinitions';
 import { MenuSection, type MenuSectionInteractionProps } from './MenuSection';
 
@@ -72,10 +73,23 @@ export function FileMenu({
         input.onchange = async () => {
           const file = input.files?.[0];
           if (!file) return;
-          const content = await file.arrayBuffer();
-          const importedProject = await importer.onImport(content, file.name);
-          importedProject.name = file.name;
-          useEditorStore.getState().setProject(importedProject);
+          try {
+            const content = await file.arrayBuffer();
+            const importedProject = await importer.onImport(content, file.name);
+            if (!importedProject || !Array.isArray(importedProject.roads)) {
+              await showAlert(`${t('dialog.importError')}: ${t('dialog.importInvalidProject')}`, t('dialog.errorTitle') || 'Error');
+              return;
+            }
+            importedProject.name = file.name;
+            if (importedProject.roads.length === 0) {
+              await showAlert(t('dialog.importEmptyProject'), t('dialog.warningTitle'));
+            }
+            useEditorStore.getState().setProject(importedProject);
+            await showAlert(`${t('dialog.importSuccess')}: ${file.name}`, t('dialog.successTitle'));
+          } catch (err) {
+            console.error('[FileMenu] Import failed:', err);
+            await showAlert(`${t('dialog.importError')}: ${err instanceof Error ? err.message : String(err)}`, t('dialog.errorTitle') || 'Error');
+          }
         };
         input.click();
       },
@@ -92,8 +106,14 @@ export function FileMenu({
     },
     ...exporters.filter((exporter) => !exporter.disabled).map((exporter): MenuItem => ({
       label: `${t('menu.export')} ${exporter.formatName}...`,
-      action: () => {
-        void exporter.onExport(project);
+      action: async () => {
+        try {
+          await exporter.onExport(project);
+          await showAlert(`${t('dialog.exportSuccess')}: ${exporter.formatName}`, t('dialog.successTitle'));
+        } catch (err) {
+          console.error('[FileMenu] Export failed:', err);
+          await showAlert(`${t('dialog.exportError')}: ${exporter.formatName}: ${err instanceof Error ? err.message : String(err)}`, t('dialog.errorTitle') || 'Error');
+        }
       },
     })),
   ];

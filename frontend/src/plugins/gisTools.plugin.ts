@@ -1,4 +1,5 @@
 /** plugin-gis-tools: Advanced GIS coordinate system panel and tools. */
+import { showAlert } from '../utils/dialog';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 
 const PLUGIN_ID = 'gis-tools';
@@ -20,7 +21,7 @@ export function mountGisToolsPlugin(): () => void {
     menu: 'tools',
     label: 'Coordinate Converter',
     labelKey: 'gisTools.coordConverter',
-    onClick: () => { /* opens GIS Tools panel */ },
+    onClick: () => { void showAlert('GIS Tools is coming soon (Phase 3).', 'Coming Soon'); },
   });
 
   registerMenuItem({
@@ -29,7 +30,7 @@ export function mountGisToolsPlugin(): () => void {
     menu: 'tools',
     label: 'Set Project CRS…',
     labelKey: 'gisTools.setCrs',
-    onClick: () => { /* opens CRS picker dialog */ },
+    onClick: () => { void showAlert('GIS Tools is coming soon (Phase 3).', 'Coming Soon'); },
   });
 
   return () => unregisterPlugin(PLUGIN_ID);

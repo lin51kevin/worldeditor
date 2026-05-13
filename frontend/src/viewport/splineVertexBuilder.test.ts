@@ -2,13 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   buildSplineCurveVertices,
   buildSplineMarkerVertices,
-  type ControlPointState,
 } from './splineVertexBuilder';
 
 // Floats per vertex: x, y, z, r, g, b, a
 const FLOATS_PER_VERTEX = 7;
 // Floats per quad (2 triangles = 6 vertices)
-const FLOATS_PER_QUAD = 6 * FLOATS_PER_VERTEX;
+// const FLOATS_PER_QUAD = 6 * FLOATS_PER_VERTEX;
 
 // ── buildSplineCurveVertices ────────────────────────────────────────────────
 

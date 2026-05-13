@@ -8,28 +8,72 @@ import { downloadBlob } from '../utils/download';
 
 const PLUGIN_ID = 'io-osm';
 
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 function exportToOsm(project: Project): Promise<void> {
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6" generator="WorldEditor Next">\n';
   let nodeId = -1;
-  const roadNodes: Array<{ roadId: string; startId: number; endId: number }> = [];
+  const allWays: Array<{ roadId: string; length: number; nodes: number[] }> = [];
 
   for (const road of project.roads) {
-    const g = road.plan_view[0];
-    const sx = g?.x ?? 0;
-    const sy = g?.y ?? 0;
-    const ex = sx + road.length * Math.cos(g?.hdg ?? 0);
-    const ey = sy + road.length * Math.sin(g?.hdg ?? 0);
-    xml += `  <node id="${nodeId}" lat="${sy}" lon="${sx}"/>\n`;
-    const startId = nodeId--;
-    xml += `  <node id="${nodeId}" lat="${ey}" lon="${ex}"/>\n`;
-    const endId = nodeId--;
-    roadNodes.push({ roadId: road.id, startId, endId });
+    const geo = road.plan_view;
+    if (geo.length === 0) continue;
+
+    const roadNodes: number[] = [];
+    const nodeCoords: Array<{ id: number; lat: number; lon: number }> = [];
+
+    for (let i = 0; i < geo.length; i++) {
+      const g = geo[i]!;
+      const sx = g.x ?? 0;
+      const sy = g.y ?? 0;
+
+      // Only add start point for the first segment (subsequent start = previous end)
+      if (i === 0) {
+        const nId = nodeId--;
+        roadNodes.push(nId);
+        nodeCoords.push({ id: nId, lat: sy, lon: sx });
+      }
+
+      // Add end point
+      const nextG = geo[i + 1];
+      let ex: number, ey: number;
+      if (nextG) {
+        ex = nextG.x ?? (sx + (g.length ?? 0) * Math.cos(g.hdg ?? 0));
+        ey = nextG.y ?? (sy + (g.length ?? 0) * Math.sin(g.hdg ?? 0));
+      } else {
+        ex = sx + (g.length ?? 0) * Math.cos(g.hdg ?? 0);
+        ey = sy + (g.length ?? 0) * Math.sin(g.hdg ?? 0);
+      }
+      const nId = nodeId--;
+      roadNodes.push(nId);
+      nodeCoords.push({ id: nId, lat: ey, lon: ex });
+    }
+
+    for (const nc of nodeCoords) {
+      xml += `  <node id="${nc.id}" lat="${nc.lat}" lon="${nc.lon}"/>\n`;
+    }
+    allWays.push({ roadId: road.id, length: road.length, nodes: roadNodes });
   }
 
   let wayId = -1001;
-  for (const { roadId, startId, endId } of roadNodes) {
-    xml += `  <way id="${wayId--}">\n    <nd ref="${startId}"/>\n    <nd ref="${endId}"/>\n    <tag k="highway" v="residential"/>\n    <tag k="ref" v="${roadId}"/>\n  </way>\n`;
+  for (const way of allWays) {
+    xml += `  <way id="${wayId--}">\n`;
+    for (const nid of way.nodes) {
+      xml += `    <nd ref="${nid}"/>\n`;
+    }
+    xml += `    <tag k="highway" v="residential"/>\n`;
+    xml += `    <tag k="ref" v="${escapeXml(way.roadId)}"/>\n`;
+    xml += `    <tag k="length" v="${way.length}"/>\n`;
+    xml += `  </way>\n`;
   }
+
   xml += '</osm>\n';
 
   const blob = new Blob([xml], { type: 'application/xml' });

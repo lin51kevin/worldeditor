@@ -53,7 +53,9 @@ function makeProject(roadCount: number): Project {
     },
     roads: Array.from({ length: roadCount }, (_, i) => makeRoad(String(i))),
     junctions: [],
-  };
+    signals: [],
+    objects: [],
+  } as Project;
 }
 
 function makeState(roadCount: number): EditorState {

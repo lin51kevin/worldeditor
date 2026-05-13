@@ -1,4 +1,5 @@
 /** plugin-validation: OpenDRIVE validation panel and tools. */
+import { showAlert } from '../utils/dialog';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 
 const PLUGIN_ID = 'validation';
@@ -20,7 +21,7 @@ export function mountValidationPlugin(): () => void {
     menu: 'tools',
     label: 'Validate Project',
     labelKey: 'validation.validateProject',
-    onClick: () => { /* trigger validation run */ },
+    onClick: () => { void showAlert('Validation is coming soon (Phase 3).', 'Coming Soon'); },
   });
 
   registerMenuItem({
@@ -29,7 +30,7 @@ export function mountValidationPlugin(): () => void {
     menu: 'tools',
     label: 'Check Topology',
     labelKey: 'validation.checkTopology',
-    onClick: () => { /* topology check */ },
+    onClick: () => { void showAlert('Validation is coming soon (Phase 3).', 'Coming Soon'); },
   });
 
   return () => unregisterPlugin(PLUGIN_ID);

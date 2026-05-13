@@ -427,7 +427,16 @@
     "userManualContent": "用户手册即将上线，敬请期待。\n\n请访问项目仓库获取文档和使用指南。",
     "exitUnsaved": "当前项目有未保存的更改，确定要退出吗？",
     "fileNotFound": "文件不存在",
-    "close": "关闭"
+    "close": "关闭",
+    "importSuccess": "导入成功",
+    "importError": "导入错误",
+    "importInvalidProject": "项目数据无效",
+    "importEmptyProject": "导入完成但无道路数据，文件可能不包含兼容数据。",
+    "exportSuccess": "导出成功",
+    "exportError": "导出错误",
+    "successTitle": "成功",
+    "errorTitle": "错误",
+    "warningTitle": "警告"
   },
   "snapping": {
     "enabled": "吸附",

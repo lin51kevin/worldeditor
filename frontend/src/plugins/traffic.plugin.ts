@@ -1,5 +1,7 @@
 /** plugin-traffic: Traffic signal phasing, timing editor, and SUMO I/O. */
+import { showAlert } from '../utils/dialog';
 import { usePluginContribStore } from '../stores/pluginContribStore';
+import { createEmptyProject } from './emptyProject';
 
 const PLUGIN_ID = 'traffic';
 
@@ -21,7 +23,7 @@ export function mountTrafficPlugin(): () => void {
     menu: 'tools',
     label: 'Auto-Deploy Signals',
     labelKey: 'traffic.autoDeploySignals',
-    onClick: () => { /* auto-deploy signal logic */ },
+    onClick: () => { void showAlert('Traffic tools are coming soon (Phase 3).', 'Coming Soon'); },
   });
 
   registerMenuItem({
@@ -30,7 +32,7 @@ export function mountTrafficPlugin(): () => void {
     menu: 'tools',
     label: 'Compute Signal Phases',
     labelKey: 'traffic.computePhases',
-    onClick: () => { /* compute phase timing */ },
+    onClick: () => { void showAlert('Traffic tools are coming soon (Phase 3).', 'Coming Soon'); },
   });
 
   registerImporter({
@@ -38,14 +40,19 @@ export function mountTrafficPlugin(): () => void {
     pluginId: PLUGIN_ID,
     formatName: 'SUMO Network',
     extensions: ['.net.xml', '.xml'],
-    onImport: () => Promise.reject(new Error('SUMO import requires Phase 3')),
+    onImport: async () => {
+      await showAlert('SUMO import is coming soon (Phase 3).', 'Coming Soon');
+      return createEmptyProject('SUMO Import');
+    },
   });
 
   registerExporter({
     id: `${PLUGIN_ID}:sumo-exporter`,
     pluginId: PLUGIN_ID,
     formatName: 'SUMO Network',
-    onExport: () => Promise.reject(new Error('SUMO export requires Phase 3')),
+    onExport: async () => {
+      await showAlert('SUMO export is coming soon (Phase 3).', 'Coming Soon');
+    },
   });
 
   return () => unregisterPlugin(PLUGIN_ID);

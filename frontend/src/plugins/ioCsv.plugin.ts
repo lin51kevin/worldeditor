@@ -15,18 +15,34 @@ const PLUGIN_ID = 'io-csv';
 function parseCsvToProject(content: string | ArrayBuffer): Promise<Project> {
   const text = typeof content === 'string' ? content : new TextDecoder().decode(content);
   const lines = text.split('\n').filter((l) => l.trim() && !l.startsWith('#'));
+
+  if (lines.length <= 1) {
+    return Promise.reject(new Error('CSV file has no data rows (only header or empty)'));
+  }
+
   const dataLines = lines.slice(1); // skip header
+  const errors: string[] = [];
 
   const roads = dataLines.map((line, i) => {
-    const [x = '0', y = '0', hdg = '0', id] = line.split(',');
+    const parts = line.split(',').map((s) => s.trim());
+    const [xStr = '0', yStr = '0', hdgStr = '0', id] = parts;
+
+    const x = parseFloat(xStr);
+    const y = parseFloat(yStr);
+    const hdg = parseFloat(hdgStr);
+
+    if (Number.isNaN(x) || Number.isNaN(y)) {
+      errors.push(`Line ${i + 2}: invalid coordinates (x="${xStr}", y="${yStr}")`);
+    }
+
     return {
-      id: id?.trim() || `csv_${i + 1}`,
+      id: id || `csv_${i + 1}`,
       name: '',
       length: 10,
       junction_id: null,
       render_hidden: false,
       link: null,
-      plan_view: [{ s: 0, x: parseFloat(x), y: parseFloat(y), hdg: parseFloat(hdg), length: 10, geo_type: 'Line' as const }],
+      plan_view: [{ s: 0, x: Number.isNaN(x) ? 0 : x, y: Number.isNaN(y) ? 0 : y, hdg: Number.isNaN(hdg) ? 0 : hdg, length: 10, geo_type: 'Line' as const }],
       elevation_profile: [],
       lane_sections: [],
       lane_offsets: [],
@@ -38,16 +54,22 @@ function parseCsvToProject(content: string | ArrayBuffer): Promise<Project> {
     };
   });
 
-  return Promise.resolve({ name: 'CSV Import', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads, junctions: [], signals: [], objects: [] });
+  if (errors.length > 0) {
+    console.warn(`[CSV Import] ${errors.length} warning(s):`, errors.join('; '));
+  }
+
+  return Promise.resolve({ name: errors.length > 0 ? `CSV Import (${errors.length} warning(s))` : 'CSV Import', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads, junctions: [], signals: [], objects: [] });
 }
 
 function exportProjectToCsv(project: Project): Promise<void> {
-  const lines = ['id,x,y,hdg,length'];
+  const lines = ['id,segment,x,y,hdg,length'];
   for (const road of project.roads) {
-    const g = road.plan_view[0];
-    if (g) {
-      lines.push(`${road.id},${g.x},${g.y},${g.hdg},${road.length}`);
-    }
+    if (road.plan_view.length === 0) continue;
+    road.plan_view.forEach((g, idx) => {
+      if (g) {
+        lines.push(`${road.id},${idx},${g.x},${g.y},${g.hdg},${g.length}`);
+      }
+    });
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
   downloadBlob(blob, `${project.name || 'export'}.csv`);
