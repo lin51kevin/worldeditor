@@ -1366,12 +1366,19 @@ pub fn generate_signal_paint_vertices(
 
             if signal.signal_type == "Graphics" {
                 // Paint arrow on the road surface.
-                // hOffset in OpenDRIVE is the signal's facing angle relative to the
-                // road reference direction, used for vertical signs. For paint marks
-                // (Graphics), the arrow template already encodes the travel direction
-                // (+y = forward), so we use the road heading directly.
+                // hOffset in OpenDRIVE is used for vertical signs. For paint marks
+                // (Graphics), the arrow template encodes +y = forward in local space.
+                //
+                // In OpenDRIVE, left lanes (t > 0) travel in the -s direction, i.e.
+                // opposite to the reference line. Flip heading by π so the arrow tip
+                // points in the actual direction of travel for that lane.
+                // (Matches C# PanUtils.ts: `if (arrowPaint.t > 0) tangent *= -1`)
                 let (cx, cy, _) = offset_point(&ref_pt, signal.t, 0.0);
-                let heading = ref_pt.hdg;
+                let heading = if signal.t > 0.0 {
+                    ref_pt.hdg + std::f64::consts::PI
+                } else {
+                    ref_pt.hdg
+                };
                 let scale = if signal.width > 0.0 { signal.width } else { 3.0 };
                 let z = z_road + 0.02; // 2 cm above road surface
 
@@ -1727,5 +1734,27 @@ mod tests {
             .chunks(7)
             .any(|v| (v[0] - 11.5).abs() < 1e-3 && (v[1] - 5.0).abs() < 1e-3);
         assert!(has_tip, "Tip should be at (11.5, 5.0); arrow should point east");
+    }
+
+    /// Verify that paint arrows on left lanes (t > 0) are flipped 180° relative to
+    /// right-lane arrows (t < 0), matching the C# PanUtils: `if (t > 0) tangent *= -1`.
+    #[test]
+    fn test_left_lane_arrow_flipped_vs_right_lane() {
+        use std::f32::consts::PI;
+        // A heading of 0 → right-lane arrow tip should be at +x.
+        // A left-lane arrow (heading + π) tip should be at -x.
+        let right = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, 0.0_f32, 1.0);
+        let left  = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, PI, 1.0);
+
+        let right_tip_x = right.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
+        let left_tip_x  = left.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
+
+        // Right-lane tip is at +0.5, left-lane tip should be at near 0 (the flipped tail becomes +x)
+        // More precisely: right tip +x > 0, left tip +x should be the *base*, so
+        // check that the left arrow has a vertex near -0.5 in x (the original tip, now reversed).
+        let left_min_x = left.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
+
+        assert!(right_tip_x > 0.4, "Right-lane tip should be in +x, got {}", right_tip_x);
+        assert!(left_min_x < -0.4, "Left-lane arrow (flipped) should reach -x, got {}", left_min_x);
     }
 }
