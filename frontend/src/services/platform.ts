@@ -88,10 +88,11 @@ export interface Road {
   lateral_profile?: { superelevations: unknown[]; crossfalls: unknown[] };
   bridges?: unknown[];
   tunnels?: unknown[];
-  signals?: Signal[];
+  signals?: RoadSignal[];
   objects?: unknown[];
 }
 
+/** Project-level signal reference (simplified, for project.signals array). */
 export interface Signal {
   id: string;
   roadId: string;
@@ -99,6 +100,23 @@ export interface Signal {
   laneId: number;
   type: string;
   validity: string;
+}
+
+/** Road-level signal as parsed from OpenDRIVE `<signal>` elements (road.signals[]). */
+export interface RoadSignal {
+  id: string;
+  name: string;
+  s: number;
+  t: number;
+  z_offset: number;
+  h_offset: number;
+  width: number;
+  height: number;
+  signal_type: string;
+  signal_subtype: string;
+  value: string | null;
+  orientation: string;
+  is_dynamic: boolean;
 }
 
 export interface RoadObject {

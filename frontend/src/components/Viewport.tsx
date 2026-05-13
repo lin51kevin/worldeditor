@@ -532,6 +532,24 @@ export function Viewport() {
             }
           })();
           break;
+        case 'pan-to-signal': {
+          // Pan to the road containing the signal; this navigates close enough for inspection
+          const { project: currentProject } = useEditorStore.getState();
+          const road = currentProject.roads.find((r) => r.id === event.roadId);
+          const signal = road?.signals?.find((s) => s.id === event.signalId);
+          if (road && signal) {
+            (async () => {
+              try {
+                const service = await getPlatformService();
+                const verts = await service.generateSingleRoadVertices(road, 2.0, [0.2, 0.5, 1.0, 0.7]);
+                if (verts.length > 0) renderer.panToCenter(verts);
+              } catch (err) {
+                console.error('[Viewport] pan-to-signal failed:', err);
+              }
+            })();
+          }
+          break;
+        }
         case 'set-dimension':
           renderer.setDimension(event.dimension);
           break;

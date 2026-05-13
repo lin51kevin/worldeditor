@@ -11,6 +11,7 @@ export type ViewportEvent =
   | { type: 'zoom-to-junction'; junctionId: string }
   | { type: 'pan-to-road'; roadId: string }
   | { type: 'pan-to-junction'; junctionId: string }
+  | { type: 'pan-to-signal'; roadId: string; signalId: string }
   | { type: 'set-dimension'; dimension: '3d' | '2d' }
   | { type: 'set-show-grid'; show: boolean }
   | { type: 'set-show-axis'; show: boolean }

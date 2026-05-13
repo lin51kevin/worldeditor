@@ -38,6 +38,7 @@ interface EditorState {
   selectMultiple: (roadIds: string[], junctionIds: string[]) => void;
   selectLaneSection: (roadId: string, sectionIndex: number) => void;
   selectLane: (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => void;
+  selectSignal: (roadId: string, signalId: string) => void;
   addRoad: (road: Road) => void;
   removeRoad: (id: string) => void;
   removeJunction: (id: string) => void;
@@ -196,6 +197,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selectedJunctionId: null,
       selectedObjectType: 'road',
       selectedSceneNode: { type: 'lane', roadId, sectionIndex, side, laneId },
+    }),
+
+  selectSignal: (roadId, signalId) =>
+    set({
+      selectedRoadId: roadId,
+      selectedJunctionId: null,
+      selectedObjectType: 'road',
+      selectedSceneNode: { type: 'signal', roadId, signalId },
     }),
 
   addRoad: (road) =>

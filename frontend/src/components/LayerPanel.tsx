@@ -511,14 +511,29 @@ export function LayerPanel() {
                         </div>
                         {expandedRoadSignals.has(road.id) && (
                           <div className="lane-section-children">
-                            {(road.signals ?? []).map((sig) => (
-                              <div key={sig.id} className="layer-item layer-item-child layer-item-lane">
-                                <span className="layer-name">
-                                  {sig.id}
-                                  <span className="road-id"> ({sig.type})</span>
-                                </span>
-                              </div>
-                            ))}
+                            {(road.signals ?? []).map((sig) => {
+                              const isSignalSelected =
+                                selectedSceneNode?.type === 'signal'
+                                && selectedSceneNode.roadId === road.id
+                                && selectedSceneNode.signalId === sig.id;
+                              // Prefer XODR name, fall back to subtype/type + id
+                              const displayName = sig.name
+                                ? sig.name
+                                : `${sig.signal_subtype || sig.signal_type} (${sig.id})`;
+                              return (
+                                <div
+                                  key={sig.id}
+                                  className={`layer-item layer-item-child layer-item-lane ${isSignalSelected ? 'selected' : ''}`}
+                                  onClick={() => {
+                                    selectionSourceRef.current = 'panel';
+                                    useEditorStore.getState().selectSignal(road.id, sig.id);
+                                    emitViewportEvent({ type: 'pan-to-signal', roadId: road.id, signalId: sig.id });
+                                  }}
+                                >
+                                  <span className="layer-name">{displayName}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>

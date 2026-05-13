@@ -651,7 +651,7 @@ function convertRoad(
     lateral_profile: { superelevations: [], crossfalls: [] },
     bridges: [],
     tunnels: [],
-    signals,
+    signals: [],   // GeoZ signals are project-level; road-level signals come from OpenDRIVE parsing
     objects,
   };
 

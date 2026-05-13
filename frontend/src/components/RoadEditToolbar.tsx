@@ -69,7 +69,7 @@ export function RoadEditToolbar() {
 
   // ── Road name ────────────────────────────────────────────────────────────
   const project = useEditorStore((s) => s.project);
-  const selectedRoad = project.roads.find((r) => r.id === selectedRoadId);
+  const selectedRoad = project?.roads?.find((r) => r.id === selectedRoadId) ?? null;
 
   return (
     <div className="road-edit-toolbar">
@@ -77,96 +77,100 @@ export function RoadEditToolbar() {
         {t('toolPanel.roadEditSection')}
       </div>
 
-      {!hasRoad ? (
+      {selectedRoad && (
+        <div className="road-edit-toolbar__road-name">{selectedRoad.name}</div>
+      )}
+
+      {!hasRoad && (
         <div className="road-edit-toolbar__hint">
           {t('toolPanel.noRoadSelected')}
         </div>
-      ) : (
-        <>
-          {selectedRoad && (
-            <div className="road-edit-toolbar__road-name">{selectedRoad.name}</div>
-          )}
+      )}
 
-          {/* Mode buttons */}
-          <div className="road-edit-toolbar__mode-group">
-            <button
-              className={`toolbar-btn ${isAdjustNodeActive ? 'active' : ''}`}
-              title={t('toolPanel.adjustNode')}
-              onClick={handleAdjustNode}
-            >
-              {t('toolPanel.adjustNode')}
-            </button>
-            <button
-              className="toolbar-btn"
-              title={t('toolPanel.adjustEdge')}
-              disabled
-            >
-              {t('toolPanel.adjustEdge')}
-            </button>
-            <button
-              className={`toolbar-btn ${editMode === 'move-road' ? 'active' : ''}`}
-              title={t('toolPanel.moveRoad')}
-              onClick={() => setEditMode(editMode === 'move-road' ? 'default' : 'move-road')}
-            >
-              {t('toolPanel.moveRoad')}
-            </button>
-            <button
-              className={`toolbar-btn ${editMode === 'rotate-road' ? 'active' : ''}`}
-              title={t('toolPanel.rotateRoad')}
-              onClick={() => setEditMode(editMode === 'rotate-road' ? 'default' : 'rotate-road')}
-            >
-              {t('toolPanel.rotateRoad')}
-            </button>
-            <button
-              className="toolbar-btn"
-              title={t('toolPanel.optimizeNode')}
-              onClick={() => useEditorStore.getState().optimizeRoad(selectedRoadId)}
-            >
-              {t('toolPanel.optimizeNode')}
-            </button>
-            <button
-              className="toolbar-btn"
-              title={t('toolPanel.editRoadMarkings')}
-              disabled
-            >
-              {t('toolPanel.editRoadMarkings')}
-            </button>
-          </div>
+      {/* Mode buttons — always shown; disabled when no road is selected */}
+      <div className="road-edit-toolbar__mode-group">
+        <button
+          className={`toolbar-btn ${isAdjustNodeActive ? 'active' : ''}`}
+          title={t('toolPanel.adjustNode')}
+          onClick={handleAdjustNode}
+          disabled={!hasRoad}
+        >
+          {t('toolPanel.adjustNode')}
+        </button>
+        <button
+          className="toolbar-btn"
+          title={t('toolPanel.adjustEdge')}
+          disabled
+        >
+          {t('toolPanel.adjustEdge')}
+        </button>
+        <button
+          className={`toolbar-btn ${editMode === 'move-road' ? 'active' : ''}`}
+          title={t('toolPanel.moveRoad')}
+          onClick={() => setEditMode(editMode === 'move-road' ? 'default' : 'move-road')}
+          disabled={!hasRoad}
+        >
+          {t('toolPanel.moveRoad')}
+        </button>
+        <button
+          className={`toolbar-btn ${editMode === 'rotate-road' ? 'active' : ''}`}
+          title={t('toolPanel.rotateRoad')}
+          onClick={() => setEditMode(editMode === 'rotate-road' ? 'default' : 'rotate-road')}
+          disabled={!hasRoad}
+        >
+          {t('toolPanel.rotateRoad')}
+        </button>
+        <button
+          className="toolbar-btn"
+          title={t('toolPanel.optimizeNode')}
+          onClick={() => selectedRoadId && useEditorStore.getState().optimizeRoad(selectedRoadId)}
+          disabled={!hasRoad}
+        >
+          {t('toolPanel.optimizeNode')}
+        </button>
+        <button
+          className="toolbar-btn"
+          title={t('toolPanel.editRoadMarkings')}
+          disabled
+        >
+          {t('toolPanel.editRoadMarkings')}
+        </button>
+      </div>
 
-          {/* Action buttons */}
-          <div className="road-edit-toolbar__action-group">
-            <button className="toolbar-btn" title={t('toolPanel.cloneRoad')} onClick={handleClone}>
-              {t('toolPanel.cloneRoad')}
-            </button>
-            <button className="toolbar-btn" title={t('toolPanel.reverseRoad')} onClick={handleReverse}>
-              {t('toolPanel.reverseRoad')}
-            </button>
-            <button className="toolbar-btn" title={t('toolPanel.mirrorRoad')} onClick={handleMirror}>
-              {t('toolPanel.mirrorRoad')}
-            </button>
-            <button className="toolbar-btn" title={t('toolPanel.swapCenterlineAndEdge')} onClick={handleSwapCenterline}>
-              {t('toolPanel.swapCenterlineAndEdge')}
-            </button>
-          </div>
+      {/* Action buttons — only when a road is selected */}
+      {hasRoad && (
+        <div className="road-edit-toolbar__action-group">
+          <button className="toolbar-btn" title={t('toolPanel.cloneRoad')} onClick={handleClone}>
+            {t('toolPanel.cloneRoad')}
+          </button>
+          <button className="toolbar-btn" title={t('toolPanel.reverseRoad')} onClick={handleReverse}>
+            {t('toolPanel.reverseRoad')}
+          </button>
+          <button className="toolbar-btn" title={t('toolPanel.mirrorRoad')} onClick={handleMirror}>
+            {t('toolPanel.mirrorRoad')}
+          </button>
+          <button className="toolbar-btn" title={t('toolPanel.swapCenterlineAndEdge')} onClick={handleSwapCenterline}>
+            {t('toolPanel.swapCenterlineAndEdge')}
+          </button>
+        </div>
+      )}
 
-          {/* Soft selection radius — visible only when adjust-node (spline) mode is active */}
-          {isAdjustNodeActive && (
-            <div className="road-edit-toolbar__soft-sel">
-              <label>
-                {t('toolPanel.softSelectionRadius', { radius: softSelectionRadius.toFixed(0) })}
-              </label>
-              <input
-                type="range"
-                className="road-edit-toolbar__soft-sel-slider"
-                min={1}
-                max={200}
-                step={1}
-                value={softSelectionRadius}
-                onChange={(e) => setSoftSelectionRadius(Number(e.target.value))}
-              />
-            </div>
-          )}
-        </>
+      {/* Soft selection radius — visible only when adjust-node (spline) mode is active */}
+      {isAdjustNodeActive && (
+        <div className="road-edit-toolbar__soft-sel">
+          <label>
+            {t('toolPanel.softSelectionRadius', { radius: softSelectionRadius.toFixed(0) })}
+          </label>
+          <input
+            type="range"
+            className="road-edit-toolbar__soft-sel-slider"
+            min={1}
+            max={200}
+            step={1}
+            value={softSelectionRadius}
+            onChange={(e) => setSoftSelectionRadius(Number(e.target.value))}
+          />
+        </div>
       )}
     </div>
   );

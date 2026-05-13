@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { getPlatformService } from '../services';
+import type { RoadSignal } from '../services/platform';
 import './PropertyPanel.css';
 
 interface CardSectionProps {
@@ -32,12 +33,20 @@ export function PropertyPanel() {
   const project = useEditorStore((s) => s.project);
   const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
   const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
+  const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
   const selectedRoad = project.roads.find((r) => r.id === selectedRoadId);
   const selectedJunction = project.junctions.find((j) => j.id === selectedJunctionId);
   const geometryEditRoadId = useEditorViewStore((s) => s.geometryEditRoadId);
   const { t } = useTranslation();
   const [newElevationS, setNewElevationS] = useState(0);
   const [newElevationH, setNewElevationH] = useState(0);
+
+  // Resolve selected signal when a signal node is selected
+  const selectedSignal: RoadSignal | null = (() => {
+    if (selectedSceneNode?.type !== 'signal') return null;
+    const road = project.roads.find((r) => r.id === selectedSceneNode.roadId);
+    return (road?.signals ?? []).find((s) => s.id === selectedSceneNode.signalId) ?? null;
+  })();
 
   const isEditingGeometry = geometryEditRoadId === selectedRoadId;
 
@@ -308,6 +317,61 @@ export function PropertyPanel() {
                   >
                     {t('propertyPanel.smoothElevation')}
                   </button>
+                </div>
+              </CardSection>
+            </div>
+          ) : selectedSignal ? (
+            <div className="inspector-cards">
+              <CardSection title={t('propertyPanel.signalProperties', 'Signal Properties')}>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.id')}</span>
+                  <span className="property-value">{selectedSignal.id}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.name')}</span>
+                  <span className="property-value">{selectedSignal.name || '—'}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">Type</span>
+                  <span className="property-value">{selectedSignal.signal_type}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">Subtype</span>
+                  <span className="property-value">{selectedSignal.signal_subtype || '—'}</span>
+                </div>
+                {selectedSignal.value !== null && (
+                  <div className="property-row">
+                    <span className="property-label">Value</span>
+                    <span className="property-value">{selectedSignal.value}</span>
+                  </div>
+                )}
+                <div className="property-row">
+                  <span className="property-label">s (m)</span>
+                  <span className="property-value">{selectedSignal.s.toFixed(3)}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">t (m)</span>
+                  <span className="property-value">{selectedSignal.t.toFixed(3)}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">Orientation</span>
+                  <span className="property-value">{selectedSignal.orientation}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">Dynamic</span>
+                  <span className="property-value">{selectedSignal.is_dynamic ? 'Yes' : 'No'}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">Width (m)</span>
+                  <span className="property-value">{selectedSignal.width.toFixed(3)}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">Height (m)</span>
+                  <span className="property-value">{selectedSignal.height.toFixed(3)}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">Z Offset (m)</span>
+                  <span className="property-value">{selectedSignal.z_offset.toFixed(3)}</span>
                 </div>
               </CardSection>
             </div>
