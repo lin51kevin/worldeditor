@@ -15,7 +15,6 @@ export { resolveMouseDragAction, computeGroundPanOffset } from './viewportTypes'
  *   - See crates/we-wasm/src/lib.rs for the progressive WASM data pipeline.
  */
 
-import { GRID_SHADER, BASIC_SHADER } from './viewportShaders';
 import { mouseButtonMask, resolveMouseDragAction, computeGroundPanOffset } from './viewportTypes';
 import type { MouseDragAction } from './viewportTypes';
 import {
@@ -28,6 +27,13 @@ import {
   perspectiveMatrix, lookAtMatrix, multiplyMatrices,
   arraysEqual, invertMatrix4, transformPoint, niceNumber,
 } from './viewportMath';
+import { buildSplineCurveVertices, buildSplineMarkerVertices } from './splineVertexBuilder';
+import {
+  createGridPipeline as createGridPipelineFn,
+  createBasicPipelines,
+  createLaneLinePipeline as createLaneLinePipelineFn,
+  createBillboardPipeline as createBillboardPipelineFn,
+} from './pipelineFactory';
 
 /** Camera state for orbit controls. */
 interface CameraState {
@@ -530,80 +536,13 @@ export class ViewportRenderer {
     const knots = this.splineKnotsCache;
     if (knots.length < 2) return;
 
-    const tangentOverrides = this.splineTangentCache;
-    const zOffset = 0.15;
-    const STEPS = 24;
-    const mpp = this.getMetersPerPixel();
-    const lineHW = 1.0 * mpp; // ~2px screen width
-
-    // Yellow spline curve
-    const cR = 0.961, cG = 0.651, cB = 0.137, cA = 1.0; // #F5A623
-
-    const tangentAt = (i: number): [number, number, number] => {
-      if (tangentOverrides && i in tangentOverrides) return tangentOverrides[i]!;
-      const n = knots.length;
-      if (n === 1) return [0, 0, 0];
-      if (i === 0) return [knots[1]![0] - knots[0]![0], knots[1]![1] - knots[0]![1], knots[1]![2] - knots[0]![2]];
-      if (i === n - 1) return [knots[n - 1]![0] - knots[n - 2]![0], knots[n - 1]![1] - knots[n - 2]![1], knots[n - 1]![2] - knots[n - 2]![2]];
-      return [0.5 * (knots[i + 1]![0] - knots[i - 1]![0]), 0.5 * (knots[i + 1]![1] - knots[i - 1]![1]), 0.5 * (knots[i + 1]![2] - knots[i - 1]![2])];
-    };
-
-    const hermiteInterp = (
-      p1: [number, number, number], m1: [number, number, number],
-      p2: [number, number, number], m2: [number, number, number],
-      t: number,
-    ): [number, number, number] => {
-      const t2 = t * t, t3 = t2 * t;
-      const h00 = 2 * t3 - 3 * t2 + 1;
-      const h10 = t3 - 2 * t2 + t;
-      const h01 = -2 * t3 + 3 * t2;
-      const h11 = t3 - t2;
-      return [
-        h00 * p1[0] + h10 * m1[0] + h01 * p2[0] + h11 * m2[0],
-        h00 * p1[1] + h10 * m1[1] + h01 * p2[1] + h11 * m2[1],
-        h00 * p1[2] + h10 * m1[2] + h01 * p2[2] + h11 * m2[2],
-      ];
-    };
-
-    const addQuad = (
-      verts: number[],
-      ax: number, ay: number, bx: number, by: number, z: number,
-      hw: number, r: number, g: number, b: number, a: number,
-    ) => {
-      const dx = bx - ax, dy = by - ay;
-      const len = Math.hypot(dx, dy);
-      if (len < 1e-6) return;
-      const px = (-dy / len) * hw, py = (dx / len) * hw;
-      verts.push(
-        ax - px, ay - py, z, r, g, b, a,
-        ax + px, ay + py, z, r, g, b, a,
-        bx + px, by + py, z, r, g, b, a,
-        ax - px, ay - py, z, r, g, b, a,
-        bx + px, by + py, z, r, g, b, a,
-        bx - px, by - py, z, r, g, b, a,
-      );
-    };
-
-    const curveVerts: number[] = [];
-    let prev: [number, number, number] | null = null;
-    for (let i = 0; i < knots.length - 1; i++) {
-      const p1 = knots[i]!;
-      const p2 = knots[i + 1]!;
-      const m1 = tangentAt(i);
-      const m2 = tangentAt(i + 1);
-      for (let s = 0; s <= STEPS; s++) {
-        const pt = hermiteInterp(p1, m1, p2, m2, s / STEPS);
-        if (prev) addQuad(curveVerts, prev[0], prev[1], pt[0], pt[1], zOffset, lineHW, cR, cG, cB, cA);
-        prev = pt;
-      }
-    }
+    const curveVerts = buildSplineCurveVertices(knots, this.splineTangentCache, this.getMetersPerPixel());
     this.uploadToMeshArray(this.splineCurveMeshes, curveVerts);
   }
 
   /**
    * Rebuild spline control-point marker geometry with screen-space constant sizes.
    * Optionally updates hover/selection state before rebuilding.
-   * Call this on zoom/pan/orbit or on hover/click state changes.
    */
   refreshSplineMarkers(
     hovered?: { index: number; type: 'knot' | 'in' | 'out' } | null,
@@ -616,124 +555,14 @@ export class ViewportRenderer {
     const knots = this.splineKnotsCache;
     if (knots.length === 0) return;
 
-    const tangentOverrides = this.splineTangentCache;
-    const zOffset = 0.15;
-    const mpp = this.getMetersPerPixel();
-
-    // Screen-constant sizes (in world units)
-    const knotHalfSize = 6.0 * mpp;   // ~12px square
-    const handleHalfSize = 4.0 * mpp; // ~8px square
-    const lineHW = 1.5 * mpp;         // tangent line ~3px wide
-
-    const clearLuma = 0.2126 * this.clearColor.r + 0.7152 * this.clearColor.g + 0.0722 * this.clearColor.b;
-    const darkTheme = clearLuma < 0.5;
-
-    // Colors
-    const colYellow: [number,number,number,number] = darkTheme
-      ? [1.0, 0.82, 0.25, 0.92]
-      : [0.88, 0.56, 0.06, 0.9]; // tangent lines
-    const colDefaultKnot: [number,number,number,number] = darkTheme
-      ? [0.96, 0.96, 0.96, 1.0]
-      : [0.08, 0.08, 0.08, 1.0];
-    const colGreen:  [number,number,number,number] = [0.13,  0.78,  0.37,  1.0];  // hover
-    const colRed:    [number,number,number,number] = [0.91,  0.30,  0.24,  1.0];  // selected
-    const colBlue:   [number,number,number,number] = darkTheme
-      ? [0.42, 0.72, 1.0, 1.0]
-      : [0.10, 0.46, 0.82, 1.0]; // tangent handles
-
-    const tangentAt = (i: number): [number, number, number] => {
-      if (tangentOverrides && i in tangentOverrides) return tangentOverrides[i]!;
-      const n = knots.length;
-      if (n === 1) return [0, 0, 0];
-      if (i === 0) return [knots[1]![0] - knots[0]![0], knots[1]![1] - knots[0]![1], knots[1]![2] - knots[0]![2]];
-      if (i === n - 1) return [knots[n - 1]![0] - knots[n - 2]![0], knots[n - 1]![1] - knots[n - 2]![1], knots[n - 1]![2] - knots[n - 2]![2]];
-      return [0.5 * (knots[i + 1]![0] - knots[i - 1]![0]), 0.5 * (knots[i + 1]![1] - knots[i - 1]![1]), 0.5 * (knots[i + 1]![2] - knots[i - 1]![2])];
-    };
-
-    const markerVerts: number[] = [];
-
-    // Stroke half-width for marker lines: ~1px
-    const strokeHW = mpp * 1.0;
-
-    // Emit a thick line segment (quad) into markerVerts
-    const seg = (
-      ax: number, ay: number, bx: number, by: number, z: number,
-      hw: number, r: number, g: number, b: number, a: number,
-    ) => {
-      const dx = bx - ax, dy = by - ay;
-      const len = Math.hypot(dx, dy);
-      if (len < 1e-8) return;
-      const px = (-dy / len) * hw, py = (dx / len) * hw;
-      markerVerts.push(
-        ax - px, ay - py, z, r, g, b, a,
-        ax + px, ay + py, z, r, g, b, a,
-        bx + px, by + py, z, r, g, b, a,
-        ax - px, ay - py, z, r, g, b, a,
-        bx + px, by + py, z, r, g, b, a,
-        bx - px, by - py, z, r, g, b, a,
-      );
-    };
-
-    // Outlined square with two diagonals (X pattern)
-    const addXSquare = (
-      cx: number, cy: number, z: number, halfSize: number,
-      r: number, g: number, b: number, a: number,
-    ) => {
-      const x0 = cx - halfSize, x1 = cx + halfSize;
-      const y0 = cy - halfSize, y1 = cy + halfSize;
-      // 4 border edges
-      seg(x0, y0, x1, y0, z, strokeHW, r, g, b, a); // bottom
-      seg(x1, y0, x1, y1, z, strokeHW, r, g, b, a); // right
-      seg(x1, y1, x0, y1, z, strokeHW, r, g, b, a); // top
-      seg(x0, y1, x0, y0, z, strokeHW, r, g, b, a); // left
-      // 2 diagonal lines (X)
-      seg(x0, y0, x1, y1, z, strokeHW, r, g, b, a); // bottom-left → top-right
-      seg(x1, y0, x0, y1, z, strokeHW, r, g, b, a); // bottom-right → top-left
-    };
-
-    const hov = this.hoveredControlPoint;
-    const sel = this.selectedControlPoint;
-
-    const knotZ = zOffset + 0.04;
-    const handleZ = zOffset + 0.06;
-
-    // --- Tangent handle lines and endpoint X-squares ---
-    if (knots.length >= 2) {
-      for (let i = 0; i < knots.length; i++) {
-        const [kx, ky] = knots[i]!;
-        const [tvx, tvy] = tangentAt(i);
-        const tLen = Math.hypot(tvx, tvy);
-        if (tLen < 1e-6) continue;
-        const scale = Math.min(4.0 / tLen, 0.3);
-        const hx1 = kx + tvx * scale, hy1 = ky + tvy * scale; // 'out' handle
-        const hx2 = kx - tvx * scale, hy2 = ky - tvy * scale; // 'in'  handle
-
-        // Thin yellow tangent line
-        seg(hx2, hy2, hx1, hy1, handleZ - 0.01, lineHW, ...colYellow);
-
-        // 'out' handle X-square
-        const outColor = (hov?.index === i && hov?.type === 'out') ? colGreen
-          : (sel?.index === i && sel?.type === 'out') ? colRed
-          : colBlue;
-        addXSquare(hx1, hy1, handleZ, handleHalfSize, ...outColor);
-
-        // 'in' handle X-square
-        const inColor = (hov?.index === i && hov?.type === 'in') ? colGreen
-          : (sel?.index === i && sel?.type === 'in') ? colRed
-          : colBlue;
-        addXSquare(hx2, hy2, handleZ, handleHalfSize, ...inColor);
-      }
-    }
-
-    // --- Knot X-squares (drawn above handles so they appear on top) ---
-    for (let i = 0; i < knots.length; i++) {
-      const [kx, ky, kz] = knots[i]!;
-      const knotColor = (hov?.index === i && hov?.type === 'knot') ? colGreen
-        : (sel?.index === i && sel?.type === 'knot') ? colRed
-        : colDefaultKnot;
-      addXSquare(kx, ky, (kz ?? 0) + knotZ, knotHalfSize, ...knotColor);
-    }
-
+    const markerVerts = buildSplineMarkerVertices(
+      knots,
+      this.splineTangentCache,
+      this.getMetersPerPixel(),
+      this.clearColor,
+      this.hoveredControlPoint,
+      this.selectedControlPoint,
+    );
     this.uploadToMeshArray(this.splineMarkerMeshes, markerVerts);
   }
 
@@ -1102,145 +931,19 @@ export class ViewportRenderer {
   }
 
   private createGridPipeline(): void {
-    const shader = this.device.createShaderModule({ code: GRID_SHADER });
-
-    const bindGroupLayout = this.device.createBindGroupLayout({
-      entries: [{
-        binding: 0,
-        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-        buffer: { type: 'uniform' },
-      }],
-    });
-
-    this.gridUniformBuffer = this.device.createBuffer({
-      size: 112, // mat4x4(64) + vec3+f32(16) + vec3+f32(16) + show_grid+show_axis+pad(16)
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-
-    this.gridBindGroup = this.device.createBindGroup({
-      layout: bindGroupLayout,
-      entries: [{
-        binding: 0,
-        resource: { buffer: this.gridUniformBuffer },
-      }],
-    });
-
-    this.gridPipeline = this.device.createRenderPipeline({
-      layout: this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
-      vertex: { module: shader, entryPoint: 'vs_main' },
-      fragment: {
-        module: shader,
-        entryPoint: 'fs_main',
-        targets: [{
-          format: this.format,
-          blend: {
-            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
-            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-          },
-        }],
-      },
-      depthStencil: {
-        format: 'depth32float',
-        depthWriteEnabled: false,
-        depthCompare: 'less-equal',
-      },
-      multisample: { count: 4 },
-      primitive: { topology: 'triangle-list' },
-    });
+    const result = createGridPipelineFn(this.device, this.format);
+    this.gridPipeline = result.pipeline;
+    this.gridBindGroup = result.bindGroup;
+    this.gridUniformBuffer = result.uniformBuffer;
   }
 
   private createBasicPipeline(): void {
-    this.basicShaderModule = this.device.createShaderModule({ code: BASIC_SHADER });
-    const shader = this.basicShaderModule;
-
-    const bindGroupLayout = this.device.createBindGroupLayout({
-      entries: [{
-        binding: 0,
-        visibility: GPUShaderStage.VERTEX,
-        buffer: { type: 'uniform' },
-      }],
-    });
-
-    this.basicUniformBuffer = this.device.createBuffer({
-      size: 128, // 2 * mat4x4
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-
-    this.basicBindGroup = this.device.createBindGroup({
-      layout: bindGroupLayout,
-      entries: [{
-        binding: 0,
-        resource: { buffer: this.basicUniformBuffer },
-      }],
-    });
-
-    this.basicPipeline = this.device.createRenderPipeline({
-      layout: this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
-      vertex: {
-        module: shader,
-        entryPoint: 'vs_main',
-        buffers: [{
-          arrayStride: 28, // 7 * 4 bytes
-          attributes: [
-            { shaderLocation: 0, offset: 0, format: 'float32x3' },  // position
-            { shaderLocation: 1, offset: 12, format: 'float32x4' }, // color
-          ],
-        }],
-      },
-      fragment: {
-        module: this.basicShaderModule,
-        entryPoint: 'fs_main',
-        targets: [{
-          format: this.format,
-          blend: {
-            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
-            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-          },
-        }],
-      },
-      depthStencil: {
-        format: 'depth32float',
-        depthWriteEnabled: true,
-        depthCompare: 'less',
-      },
-      multisample: { count: 4 },
-      primitive: { topology: 'triangle-list' },
-    });
-
-    // Highlight is drawn after road surface; disable depth writes and allow
-    // equal-depth fragments so coplanar highlights remain visible.
-    this.highlightPipeline = this.device.createRenderPipeline({
-      layout: this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
-      vertex: {
-        module: this.basicShaderModule,
-        entryPoint: 'vs_main',
-        buffers: [{
-          arrayStride: 28, // 7 * 4 bytes
-          attributes: [
-            { shaderLocation: 0, offset: 0, format: 'float32x3' },  // position
-            { shaderLocation: 1, offset: 12, format: 'float32x4' }, // color
-          ],
-        }],
-      },
-      fragment: {
-        module: this.basicShaderModule,
-        entryPoint: 'fs_main',
-        targets: [{
-          format: this.format,
-          blend: {
-            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
-            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-          },
-        }],
-      },
-      depthStencil: {
-        format: 'depth32float',
-        depthWriteEnabled: false,
-        depthCompare: 'less-equal',
-      },
-      multisample: { count: 4 },
-      primitive: { topology: 'triangle-list' },
-    });
+    const result = createBasicPipelines(this.device, this.format);
+    this.basicShaderModule = result.shaderModule;
+    this.basicPipeline = result.pipeline;
+    this.highlightPipeline = result.highlightPipeline;
+    this.basicBindGroup = result.bindGroup;
+    this.basicUniformBuffer = result.uniformBuffer;
   }
 
   // @internal Pipeline factories available for future use
@@ -1252,77 +955,15 @@ export class ViewportRenderer {
   /** Create lane line pipeline (LineVertex layout: 10 floats). Lazy-created. */
   createLaneLinePipeline(): GPURenderPipeline {
     if (this._laneLinePipeline) return this._laneLinePipeline;
-    const shader = this.basicShaderModule;
-    const bindGroupLayout = this.device.createBindGroupLayout({
-      entries: [{
-        binding: 0,
-        visibility: GPUShaderStage.VERTEX,
-        buffer: { type: 'uniform' },
-      }],
-    });
-    const pipeline = this.device.createRenderPipeline({
-      layout: this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
-      vertex: {
-        module: shader, entryPoint: 'vs_main',
-        buffers: [{
-          arrayStride: 40, // LineVertex: 3(pos) + 2(uv) + 4(color) + 1(thickness)
-          attributes: [
-            { shaderLocation: 0, offset: 0, format: 'float32x3' },
-            { shaderLocation: 1, offset: 12, format: 'float32x4' },
-          ],
-        }],
-      },
-      fragment: {
-        module: shader, entryPoint: 'fs_main',
-        targets: [{ format: this.format, blend: {
-          color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
-          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-        }}],
-      },
-      depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' },
-      multisample: { count: 4 },
-      primitive: { topology: 'triangle-list' },
-    });
-    this._laneLinePipeline = pipeline;
-    return pipeline;
+    this._laneLinePipeline = createLaneLinePipelineFn(this.device, this.format, this.basicShaderModule);
+    return this._laneLinePipeline;
   }
 
   /** Create billboard pipeline (BillboardVertex layout: 11 floats). Lazy-created. */
   createBillboardPipeline(): GPURenderPipeline {
     if (this._billboardPipeline) return this._billboardPipeline;
-    const shader = this.basicShaderModule;
-    const bindGroupLayout = this.device.createBindGroupLayout({
-      entries: [{
-        binding: 0,
-        visibility: GPUShaderStage.VERTEX,
-        buffer: { type: 'uniform' },
-      }],
-    });
-    const pipeline = this.device.createRenderPipeline({
-      layout: this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
-      vertex: {
-        module: shader, entryPoint: 'vs_main',
-        buffers: [{
-          arrayStride: 44, // BillboardVertex: 3(pos) + 2(uv) + 4(color) + 1(rotation) + 1(scale)
-          attributes: [
-            { shaderLocation: 0, offset: 0, format: 'float32x3' },
-            { shaderLocation: 1, offset: 12, format: 'float32x4' },
-          ],
-        }],
-      },
-      fragment: {
-        module: shader, entryPoint: 'fs_main',
-        targets: [{ format: this.format, blend: {
-          color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
-          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-        }}],
-      },
-      depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'less' },
-      multisample: { count: 4 },
-      primitive: { topology: 'triangle-list' },
-    });
-    this._billboardPipeline = pipeline;
-    return pipeline;
+    this._billboardPipeline = createBillboardPipelineFn(this.device, this.format, this.basicShaderModule);
+    return this._billboardPipeline;
   }
   private setupMouseControls(canvas: HTMLCanvasElement): void {
     // Document-level move/up handlers are attached on mousedown and removed on mouseup,
