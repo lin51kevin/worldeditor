@@ -1,6 +1,7 @@
 use wasm_bindgen::prelude::*;
 
 /// Parse an OpenDRIVE XML string and return the project as JSON.
+// TODO: [Phase 3] 待实现 — expand the WASM OpenDRIVE import bridge for the full parsing pipeline
 #[wasm_bindgen]
 pub fn parse_opendrive(xml: &str) -> Result<JsValue, JsError> {
     let project = we_core::opendrive::parse_xodr(xml).map_err(|e| JsError::new(&e.to_string()))?;
@@ -8,6 +9,7 @@ pub fn parse_opendrive(xml: &str) -> Result<JsValue, JsError> {
 }
 
 /// Serialize a project (as JSON) to OpenDRIVE XML.
+// TODO: [Phase 3] 待实现 — expand the WASM OpenDRIVE export bridge for full round-trip support
 #[wasm_bindgen]
 pub fn write_opendrive(project_json: &str) -> Result<String, JsError> {
     let project: we_core::model::Project =

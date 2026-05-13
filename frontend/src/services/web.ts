@@ -37,6 +37,7 @@ export class WebPlatformService extends BasePlatformService implements PlatformS
     });
   }
 
+  // TODO: [Phase Web] 待实现 — web platform cannot access files by path; require user to re-pick
   async openFileByPath(_path: string): Promise<{ name: string; content: string } | null> {
     // Web cannot access files by path; fall back to file picker
     return this.openFile();

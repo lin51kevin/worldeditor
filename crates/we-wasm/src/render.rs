@@ -1577,6 +1577,7 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
 ///
 /// Input JSON: serialized `we_core::model::Road`.
 /// Output JSON: `{ "vertices": [[x,y,z,r,g,b,a], ...], "count": N }`
+// TODO: [Phase 3] 待实现 — replace the simple ribbon bridge with full WASM road mesh generation
 #[wasm_bindgen]
 pub fn generate_road_mesh_from_json(road_json: &str, sample_step: f64) -> Result<String, JsError> {
     use we_core::geometry::eval::{evaluate_elevation, offset_point, sample_road_reference_line};
