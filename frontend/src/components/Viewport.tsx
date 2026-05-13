@@ -7,7 +7,6 @@ import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getPlatformService } from '../services';
-import type { EditableSpline, SplineKnot, Road, Junction, Project } from '../services/platform';
 import { showContextMenu } from '../services/contextMenu';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import {
@@ -24,149 +23,14 @@ import {
 } from '../utils/geometryBuilder';
 import './Viewport.css';
 
-const DRAG_THRESHOLD_SQ = 9;
-const HOVER_HIGHLIGHT_COLOR: [number, number, number, number] = [0.95, 0.78, 0.20, 0.60];
-const HOVER_HIGHLIGHT_Z_LIFT = 0.03;
+import {
+  DRAG_THRESHOLD_SQ, HOVER_HIGHLIGHT_COLOR, HOVER_HIGHLIGHT_Z_LIFT,
+  MouseGestureState, MoveRotateDragState,
+  mergeFloat32Arrays, liftMeshZ, exceededDragThreshold,
+  buildEditableSpline, roadIntersectsAABB, junctionIntersectsAABB,
+  nextSplineRoadId, splineToRendererFormat,
+} from './viewportUtils';
 
-/** Concatenate two Float32Arrays into a single new array. */
-function mergeFloat32Arrays(a: Float32Array, b: Float32Array): Float32Array {
-  if (b.length === 0) return a;
-  if (a.length === 0) return b;
-  const merged = new Float32Array(a.length + b.length);
-  merged.set(a, 0);
-  merged.set(b, a.length);
-  return merged;
-}
-
-/** Raise mesh vertices along Z to avoid coplanar depth fighting with road surfaces. */
-function liftMeshZ(vertices: Float32Array, zLift: number): Float32Array {
-  if (vertices.length === 0) return vertices;
-  const lifted = new Float32Array(vertices);
-  for (let index = 2; index < lifted.length; index += 7) {
-    lifted[index] = (lifted[index] ?? 0) + zLift;
-  }
-  return lifted;
-}
-
-interface MouseGestureState {
-  button: number;
-  startX: number;
-  startY: number;
-  dragged: boolean;
-}
-
-/** Drag state for move-road and rotate-road modes. */
-interface MoveRotateDragState {
-  mode: 'move-road' | 'rotate-road';
-  roadId: string;
-  startWorldX: number;
-  startWorldY: number;
-  /** Road geometry centroid — rotation pivot for rotate-road mode. */
-  centroidX: number;
-  centroidY: number;
-  /** Accumulated delta / angle written on each mousemove and committed on mouseup. */
-  currentDx: number;
-  currentDy: number;
-  currentAngle: number;
-}
-
-function exceededDragThreshold(startX: number, startY: number, clientX: number, clientY: number): boolean {
-  const dx = clientX - startX;
-  const dy = clientY - startY;
-  return dx * dx + dy * dy > DRAG_THRESHOLD_SQ;
-}
-
-function makeSplineKnot(position: [number, number, number], s: number): SplineKnot {
-  return {
-    position,
-    tangent_in: [0, 0, 0],
-    tangent_out: [0, 0, 0],
-    s,
-    knot_type: 'Key',
-    tangent_mode: 'Auto',
-  };
-}
-
-function buildEditableSpline(points: Array<[number, number, number]>): EditableSpline {
-  const knots: SplineKnot[] = [];
-  let station = 0;
-  for (let i = 0; i < points.length; i += 1) {
-    if (i > 0) {
-      const prev = points[i - 1]!;
-      const curr = points[i]!;
-      const dx = curr[0] - prev[0];
-      const dy = curr[1] - prev[1];
-      const dz = curr[2] - prev[2];
-      station += Math.hypot(dx, dy, dz);
-    }
-    knots.push(makeSplineKnot(points[i]!, station));
-  }
-  if (knots.length > 0) {
-    const firstKnot = knots[0]!;
-    knots[0] = { ...firstKnot, knot_type: 'Anchor' };
-  }
-  if (knots.length > 1) {
-    const last = knots.length - 1;
-    const lastKnot = knots[last]!;
-    knots[last] = { ...lastKnot, knot_type: 'Anchor' };
-  }
-  return { knots };
-}
-
-/** Check if any geometry point (start or estimated end) of a road falls within the AABB. */
-function roadIntersectsAABB(road: Road, minX: number, minY: number, maxX: number, maxY: number): boolean {
-  for (const seg of road.plan_view) {
-    if (seg.x >= minX && seg.x <= maxX && seg.y >= minY && seg.y <= maxY) return true;
-    const endX = seg.x + Math.cos(seg.hdg) * seg.length;
-    const endY = seg.y + Math.sin(seg.hdg) * seg.length;
-    if (endX >= minX && endX <= maxX && endY >= minY && endY <= maxY) return true;
-  }
-  return false;
-}
-
-/** Check if any connecting road of a junction has geometry within the AABB. */
-function junctionIntersectsAABB(
-  junc: Junction,
-  project: Project,
-  minX: number,
-  minY: number,
-  maxX: number,
-  maxY: number,
-): boolean {
-  for (const conn of junc.connections) {
-    const r1 = project.roads.find((r) => r.id === conn.connecting_road);
-    if (r1 && roadIntersectsAABB(r1, minX, minY, maxX, maxY)) return true;
-    const r2 = project.roads.find((r) => r.id === conn.incoming_road);
-    if (r2 && roadIntersectsAABB(r2, minX, minY, maxX, maxY)) return true;
-  }
-  return false;
-}
-
-function nextSplineRoadId(existingRoadIds: string[]): string {
-  let index = existingRoadIds.length + 1;
-  let id = `road_spline_${index}`;
-  const idSet = new Set(existingRoadIds);
-  while (idSet.has(id)) {
-    index += 1;
-    id = `road_spline_${index}`;
-  }
-  return id;
-}
-
-/** Extract renderer-compatible knot positions and tangent overrides from an EditableSpline. */
-function splineToRendererFormat(spline: EditableSpline): {
-  knots: Array<[number, number, number]>;
-  tangentOverrides: Record<number, [number, number, number]>;
-} {
-  const knots = spline.knots.map((k) => k.position);
-  const tangentOverrides: Record<number, [number, number, number]> = {};
-  for (let i = 0; i < spline.knots.length; i++) {
-    const k = spline.knots[i]!;
-    // Always use the tangent_out from the EditableSpline (computed by backend)
-    tangentOverrides[i] = k.tangent_out;
-  }
-  return { knots, tangentOverrides };
-}
 
 export function Viewport() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
