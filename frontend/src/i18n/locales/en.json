@@ -45,7 +45,8 @@
     "help": "Help",
     "userManual": "User Manual",
     "openRecentFiles": "Open Recent Files...",
-    "checkForUpdates": "Check for Updates"
+    "checkForUpdates": "Check for Updates",
+    "welcome": "Welcome"
   },
   "toolbar": {
     "select": "Select",
@@ -464,5 +465,20 @@
     "copied": "Copied!",
     "showDetail": "Show Details",
     "hideDetail": "Hide Details"
+  },
+  "welcomePage": {
+    "title": "WorldEditor Next",
+    "subtitle": "Autonomous driving road network editor",
+    "start": "Start",
+    "help": "Help & Reference",
+    "newProject": "New Project",
+    "openFile": "Open File...",
+    "recentFiles": "Recent Files",
+    "noRecentFiles": "No recent files",
+    "shortcuts": "Keyboard Shortcuts",
+    "dontShowAgain": "Don't show this page on startup",
+    "close": "Close",
+    "learnMore": "User Manual",
+    "version": "Version"
   }
 }

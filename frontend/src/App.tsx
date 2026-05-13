@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MenuBar } from './components/MenuBar';
+import { WelcomePage, shouldShowWelcome } from './components/WelcomePage';
 import { Toolbar } from './components/Toolbar';
 import { LayerPanel } from './components/LayerPanel';
 import { Viewport } from './components/Viewport';
@@ -21,6 +22,47 @@ import { useEditorViewStore } from './stores/editorViewStore';
 import { useBuiltinPluginStore } from './stores/builtinPluginStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { BUILTIN_PLUGINS } from './plugins/builtinRegistry';
+import { getPlatformService } from './services';
+
+const RECENT_FILES_KEY = 'we_recent_files';
+type WelcomeRecentFile = { displayName: string; path: string };
+
+function loadWelcomeRecentFiles(): WelcomeRecentFile[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? '[]') as unknown[];
+    return raw
+      .map((item): WelcomeRecentFile | null => {
+        if (typeof item === 'string') return { displayName: item, path: item };
+        if (
+          typeof item === 'object'
+          && item !== null
+          && 'displayName' in item
+          && typeof item.displayName === 'string'
+          && 'path' in item
+          && typeof item.path === 'string'
+        ) {
+          return { displayName: item.displayName, path: item.path };
+        }
+        return null;
+      })
+      .filter((item): item is WelcomeRecentFile => item !== null)
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+function saveWelcomeRecentFiles(files: WelcomeRecentFile[]): void {
+  localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(files));
+}
+
+function pushWelcomeRecentFile(file: WelcomeRecentFile): WelcomeRecentFile[] {
+  const files = loadWelcomeRecentFiles().filter((entry) => entry.path !== file.path);
+  files.unshift(file);
+  const trimmed = files.slice(0, 5);
+  saveWelcomeRecentFiles(trimmed);
+  return trimmed;
+}
 
 export function App() {
   const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
@@ -38,6 +80,8 @@ export function App() {
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showWelcomePage, setShowWelcomePage] = useState(shouldShowWelcome);
+  const [welcomeRecentFiles, setWelcomeRecentFiles] = useState<WelcomeRecentFile[]>(loadWelcomeRecentFiles);
 
   const disabledBuiltins = useBuiltinPluginStore((s) => s.disabledBuiltins);
   const templatePluginEnabled = !disabledBuiltins.includes('builtin-templates');
@@ -81,6 +125,57 @@ export function App() {
     onShowShortcutHelp: setShowShortcutHelp,
   });
 
+  useEffect(() => {
+    if (showWelcomePage) {
+      setWelcomeRecentFiles(loadWelcomeRecentFiles());
+    }
+  }, [showWelcomePage]);
+
+  const handleWelcomeOpenFile = useCallback(async () => {
+    try {
+      const platform = await getPlatformService();
+      const file = await platform.openFile();
+      if (!file) return;
+      const proj = await platform.parseOpenDrive(file.content);
+      if (!proj || !Array.isArray(proj.roads)) return;
+      proj.name = file.name;
+      useEditorStore.getState().setProject(proj);
+      setWelcomeRecentFiles(pushWelcomeRecentFile({
+        displayName: file.name,
+        path: file.path ?? file.name,
+      }));
+      setShowWelcomePage(false);
+    } catch {
+      // non-critical
+    }
+  }, []);
+
+  const handleWelcomeOpenRecentFile = useCallback(async (file: WelcomeRecentFile) => {
+    try {
+      const platform = await getPlatformService();
+      const opened = await platform.openFileByPath(file.path);
+      if (!opened) {
+        const filtered = loadWelcomeRecentFiles().filter((entry) => entry.path !== file.path);
+        saveWelcomeRecentFiles(filtered);
+        setWelcomeRecentFiles(filtered);
+        return;
+      }
+      const proj = await platform.parseOpenDrive(opened.content);
+      if (!proj || !Array.isArray(proj.roads)) return;
+      proj.name = opened.name;
+      useEditorStore.getState().setProject(proj);
+      setWelcomeRecentFiles(pushWelcomeRecentFile({
+        displayName: opened.name,
+        path: file.path,
+      }));
+      setShowWelcomePage(false);
+    } catch {
+      const filtered = loadWelcomeRecentFiles().filter((entry) => entry.path !== file.path);
+      saveWelcomeRecentFiles(filtered);
+      setWelcomeRecentFiles(filtered);
+    }
+  }, []);
+
   // Show right panel only when something is selected (Quick Inspector behavior)
   const showRightPanel = !layout.rightCollapsed && (!!selectedRoadId || !!selectedJunctionId);
 
@@ -93,7 +188,10 @@ export function App() {
       </div>
 
       {/* Floating UI layers on top of viewport */}
-      <MenuBar onOpenPluginManager={() => setShowPluginManager(true)} />
+      <MenuBar
+        onOpenPluginManager={() => setShowPluginManager(true)}
+        onOpenWelcome={() => setShowWelcomePage(true)}
+      />
       <Toolbar />
 
       {/* Floating left panel */}
@@ -194,6 +292,18 @@ export function App() {
         </div>
       )}
     </div>
+    {showWelcomePage && (
+      <WelcomePage
+        onClose={() => setShowWelcomePage(false)}
+        onNewProject={() => {
+          useEditorStore.getState().reset();
+          setShowWelcomePage(false);
+        }}
+        onOpenFile={() => { void handleWelcomeOpenFile(); }}
+        recentFiles={welcomeRecentFiles}
+        onOpenRecentFile={(file) => { void handleWelcomeOpenRecentFile(file); }}
+      />
+    )}
     </ErrorBoundary>
   );
 }

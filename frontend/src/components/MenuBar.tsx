@@ -286,9 +286,11 @@ function buildMenus(
 interface MenuBarProps {
   onOpenPluginManager?: () => void;
   onOpenSettings?: () => void;
+  /** Opens the Welcome page overlay (D2). */
+  onOpenWelcome?: () => void;
 }
 
-export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings: _onOpenSettings = () => {} }: MenuBarProps) {
+export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings: _onOpenSettings = () => {}, onOpenWelcome = () => {} }: MenuBarProps) {
   const project = useEditorStore((s) => s.project);
   const isDirty = useEditorStore((s) => s.isDirty);
   const savedProject = useEditorStore((s) => s.savedProject);
@@ -615,13 +617,26 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings: _onOpe
   const viewMenu = appendPluginItems(staticMenus[2]!, viewPluginItems, t);
   const toolsMenu = appendPluginItems(staticMenus[3]!, toolsPluginItems, t);
 
+  // D2: build Help menu inline to inject "欢迎" item at top
+  const helpMenu: Menu = {
+    label: t('menu.help'),
+    items: [
+      { label: t('menu.welcome'), action: onOpenWelcome },
+      { separator: true, label: '' },
+      { label: t('menu.userManual'), action: () => void showUserManual(t) },
+      { label: t('menu.checkForUpdates'), action: () => void checkForUpdates(t) },
+      { separator: true, label: '' },
+      { label: t('menu.aboutWorldEditor'), action: () => void showAbout(t) },
+    ],
+  };
+
   const menus = [
     fileMenu,
     editMenu,
     viewMenu,
     toolsMenu,
     staticMenus[4]!,
-    staticMenus[5]!,
+    helpMenu,
   ];
 
   useEffect(() => {

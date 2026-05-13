@@ -45,7 +45,8 @@
     "help": "帮助",
     "userManual": "用户手册",
     "openRecentFiles": "打开最近文件...",
-    "checkForUpdates": "检查更新"
+    "checkForUpdates": "检查更新",
+    "welcome": "欢迎"
   },
   "toolbar": {
     "select": "选择",
@@ -464,5 +465,20 @@
     "copied": "已复制！",
     "showDetail": "显示详情",
     "hideDetail": "隐藏详情"
+  },
+  "welcomePage": {
+    "title": "WorldEditor Next",
+    "subtitle": "自动驾驶道路网络编辑器",
+    "start": "开始",
+    "help": "帮助 & 快捷键",
+    "newProject": "新建项目",
+    "openFile": "打开文件...",
+    "recentFiles": "最近文件",
+    "noRecentFiles": "暂无最近文件",
+    "shortcuts": "快捷键参考",
+    "dontShowAgain": "启动时不再显示此页面",
+    "close": "关闭",
+    "learnMore": "用户手册",
+    "version": "版本"
   }
 }
