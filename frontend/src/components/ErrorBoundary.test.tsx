@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ErrorBoundary } from './ErrorBoundary';
 
@@ -30,6 +30,7 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     expect(screen.getByText('test explosion')).toBeInTheDocument();
     expect(screen.getByText('Retry')).toBeInTheDocument();
+    expect(screen.getByText('Copy Error')).toBeInTheDocument();
   });
 
   it('renders custom fallback when provided', () => {
@@ -66,7 +67,8 @@ describe('ErrorBoundary', () => {
     );
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
 
-    // Click retry
+    // Use native .click() so state update + rerender are batched together
+    // (fireEvent.click flushes via act(), which causes children to re-throw before rerender)
     screen.getByText('Retry').click();
 
     // After reset, re-rendering with non-throwing child should work
@@ -76,5 +78,32 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>,
     );
     expect(screen.getByText('child ok')).toBeInTheDocument();
+  });
+
+  it('shows "Show Details" button and toggles detail view', () => {
+    render(
+      <ErrorBoundary>
+        <ProblemChild shouldThrow />
+      </ErrorBoundary>,
+    );
+    const showDetail = screen.getByText('Show Details');
+    expect(showDetail).toBeInTheDocument();
+
+    fireEvent.click(showDetail);
+    expect(screen.getByText('Hide Details')).toBeInTheDocument();
+  });
+
+  it('copies error to clipboard when "Copy Error" is clicked', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(
+      <ErrorBoundary>
+        <ProblemChild shouldThrow />
+      </ErrorBoundary>,
+    );
+
+    fireEvent.click(screen.getByText('Copy Error'));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
   });
 });

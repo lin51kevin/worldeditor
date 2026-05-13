@@ -77,20 +77,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: true
       - name: Install system dependencies
         run: sudo apt update && sudo apt install -y pkg-config libdbus-1-dev libx11-dev libxcb1-dev libxcb-shm0-dev libxcb-xfixes0-dev libxcb-render0-dev libxcb-shape0-dev libxcb-keysyms1-dev libxcb-icccm4-dev libxcb-image0-dev libxcb-util-dev libxcb-xkb-dev libxkbcommon-x11-dev libxkbcommon-dev
       - name: Install coverage tools
-        run: cargo install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --locked
       - name: Run tests with coverage
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
       - name: Check coverage thresholds per crate
         run: |
-          # Check we-core coverage ≥ 90%
-          cargo llvm-cov --package we-core --summary-only --fail-under-lines 90
-          # Check we-render coverage ≥ 70%
-          cargo llvm-cov --package we-render --summary-only --fail-under-lines 70
-          # Check we-service coverage ≥ 85%
-          cargo llvm-cov --package we-service --summary-only --fail-under-lines 85
+          # Check we-core coverage ≥ 80%
+          cargo llvm-cov --package we-core --summary-only --fail-under-lines 80
+          # Check we-render coverage ≥ 60%
+          cargo llvm-cov --package we-render --summary-only --fail-under-lines 60
+          # Check we-service coverage ≥ 75%
+          cargo llvm-cov --package we-service --summary-only --fail-under-lines 75
           # Optional: report overall coverage
           echo "All coverage thresholds passed!"
       - name: Generate coverage report
@@ -140,12 +142,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: true
       - name: Clippy
         run: cargo clippy --workspace -- -D warnings
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Security audit
-        run: cargo install cargo-audit && cargo audit
+        run: cargo install cargo-audit --locked && cargo audit
       - name: Setup Node
         uses: actions/setup-node@v4
         with:

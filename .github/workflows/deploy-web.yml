@@ -31,6 +31,24 @@ jobs:
       - name: Install dependencies
         run: cd frontend && yarn install --immutable
 
+      - name: Install Rust toolchain for WASM
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
+      - name: Build WASM package
+        run: wasm-pack build crates/we-wasm --target web --release
+
+      - name: Copy WASM to frontend
+        run: |
+          mkdir -p frontend/wasm/pkg
+          cp -r crates/we-wasm/pkg/* frontend/wasm/pkg/
+
       - name: Build Web
         run: cd frontend && yarn build:web
 

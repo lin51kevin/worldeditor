@@ -455,5 +455,14 @@
   "validation": {
     "validateProject": "Validate Project",
     "checkTopology": "Check Topology"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "unknownError": "An unexpected error occurred.",
+    "retry": "Retry",
+    "copyError": "Copy Error",
+    "copied": "Copied!",
+    "showDetail": "Show Details",
+    "hideDetail": "Hide Details"
   }
 }
