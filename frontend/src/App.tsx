@@ -28,6 +28,7 @@ import { getPlatformService } from './services';
 // ── Recent files persistence ───────────────────────────────────────────────
 
 const RECENT_FILES_KEY = 'we_recent_files';
+const STARTUP_WELCOME_KEY = 'we-show-welcome-on-startup';
 const MAX_RECENT = 10;
 
 function loadRecentFiles(): RecentFile[] {
@@ -83,6 +84,14 @@ export function App() {
   const [showPluginManager, setShowPluginManager] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>(loadRecentFiles);
+  const [showOnStartup, setShowOnStartup] = useState<boolean>(
+    () => localStorage.getItem(STARTUP_WELCOME_KEY) !== 'false',
+  );
+
+  const handleToggleShowOnStartup = useCallback((value: boolean) => {
+    setShowOnStartup(value);
+    localStorage.setItem(STARTUP_WELCOME_KEY, String(value));
+  }, []);
 
   const disabledBuiltins = useBuiltinPluginStore((s) => s.disabledBuiltins);
   const templatePluginEnabled = !disabledBuiltins.includes('builtin-templates');
@@ -288,10 +297,12 @@ export function App() {
     ) : (
       <WelcomePage
         recentFiles={recentFiles}
-        onNewProject={handleNewProject}
+        onNew={handleNewProject}
         onOpenFile={handleOpenFile}
         onOpenRecent={handleOpenRecent}
         onRemoveRecent={handleRemoveRecent}
+        showOnStartup={showOnStartup}
+        onToggleShowOnStartup={handleToggleShowOnStartup}
       />
     )}
     </ErrorBoundary>
