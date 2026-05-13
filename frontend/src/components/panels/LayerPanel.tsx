@@ -1,9 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Eye, EyeOff, ChevronRight, ChevronDown,
-  Crosshair, GitMerge, Search, X,
-} from 'lucide-react';
+import { ChevronRight, ChevronDown, Search, X } from 'lucide-react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useEditorViewStore } from '../../stores/editorViewStore';
 import {
@@ -12,6 +9,8 @@ import {
   type LaneSide,
 } from '../../utils/sceneGraph';
 import { emitViewportEvent } from '../../viewport/viewportEvents';
+import { JunctionLayerItem } from './layer/JunctionLayerItem';
+import { RoadLayerItem } from './layer/RoadLayerItem';
 import './LayerPanel.css';
 
 const DISPLAY_TOGGLES = [
@@ -38,6 +37,7 @@ export function LayerPanel() {
   const selectJunction = useEditorStore((s) => s.selectJunction);
   const selectLaneSection = useEditorStore((s) => s.selectLaneSection);
   const selectLane = useEditorStore((s) => s.selectLane);
+  const selectSignal = useEditorStore((s) => s.selectSignal);
   const {
     display,
     toggleDisplaySetting,
@@ -111,18 +111,15 @@ export function LayerPanel() {
     });
   };
 
-  const toggleRoadVisibility = (roadId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleRoadVisibility = (roadId: string) => {
     toggleRoadVisibilityInStore(roadId);
   };
 
-  const toggleJunctionVisibility = (junctionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleJunctionVisibility = (junctionId: string) => {
     toggleJunctionVisibilityInStore(junctionId);
   };
 
-  const toggleLaneSectionVisibility = (sectionKey: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleLaneSectionVisibility = (sectionKey: string) => {
     toggleLaneSectionVisibilityInStore(sectionKey);
   };
 
@@ -131,9 +128,7 @@ export function LayerPanel() {
     sectionIndex: number,
     side: LaneSide,
     laneId: number,
-    e: React.MouseEvent,
   ) => {
-    e.stopPropagation();
     toggleLaneVisibilityInStore(roadId, sectionIndex, side, laneId);
   };
 
@@ -188,14 +183,23 @@ export function LayerPanel() {
     emitViewportEvent({ type: 'pan-to-junction', junctionId });
   }, [selectJunction]);
 
-  const handleZoomToRoad = useCallback((roadId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleSelectSignal = useCallback((roadId: string, signalId: string) => {
+    selectionSourceRef.current = 'panel';
+    selectSignal(roadId, signalId);
+    emitViewportEvent({ type: 'pan-to-signal', roadId, signalId });
+  }, [selectSignal]);
+
+  const handleZoomToRoad = useCallback((roadId: string) => {
     emitViewportEvent({ type: 'zoom-to-selected', roadId });
   }, []);
 
-  const handleZoomToJunction = useCallback((junctionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleZoomToJunction = useCallback((junctionId: string) => {
     emitViewportEvent({ type: 'zoom-to-junction', junctionId });
+  }, []);
+
+  const registerRowRef = useCallback((id: string, element: HTMLElement | null) => {
+    if (element) rowRefs.current.set(id, element);
+    else rowRefs.current.delete(id);
   }, []);
 
   const filteredRoads = useMemo(() => {
@@ -375,239 +379,49 @@ export function LayerPanel() {
           <div className="road-list">
             {/* Roads */}
             {filteredRoads.map((road) => (
-              <div
+              <RoadLayerItem
                 key={`road-${road.id}`}
-                className="road-list-entry"
-                ref={(el) => {
-                  if (el) rowRefs.current.set(`road-${road.id}`, el);
-                  else rowRefs.current.delete(`road-${road.id}`);
-                }}
-              >
-                <div
-                  className={`layer-item ${isRoadSelected(road.id) ? 'selected' : ''} ${!isRoadVisible(road.id) ? 'layer-item-hidden' : ''}`}
-                  onClick={() => handleSelectRoad(road.id)}
-                >
-                  <button
-                    className="road-expand"
-                    onClick={(e) => { e.stopPropagation(); toggleRoadExpand(road.id); }}
-                  >
-                    {expandedRoads.has(road.id)
-                      ? <ChevronDown size={12} />
-                      : <ChevronRight size={12} />
-                    }
-                  </button>
-                  <span className="layer-name">
-                    {road.name || `Road(${road.id})`}
-                    <span className="road-id"> ({road.id})</span>
-                  </span>
-                  <button
-                    className="road-zoom-btn"
-                    onClick={(e) => handleZoomToRoad(road.id, e)}
-                    title={t('layerPanel.zoomTo')}
-                  >
-                    <Crosshair size={12} />
-                  </button>
-                  <button
-                    className={`road-visibility ${isRoadVisible(road.id) ? '' : 'off'}`}
-                    onClick={(e) => toggleRoadVisibility(road.id, e)}
-                    title={isRoadVisible(road.id) ? t('layerPanel.hideRoad') : t('layerPanel.showRoad')}
-                  >
-                    {isRoadVisible(road.id) ? <Eye size={12} /> : <EyeOff size={12} />}
-                  </button>
-                </div>
-                {expandedRoads.has(road.id) && (
-                  <div className="road-details">
-                    {road.lane_sections.map((ls, si) => (
-                      <div
-                        key={si}
-                        className={`road-detail-lane-section ${expandedLaneSections.has(makeLaneSectionKey(road.id, si)) ? 'expanded' : ''}`}
-                      >
-                        <div
-                          className={`layer-item layer-item-child layer-item-section ${isLaneSectionSelected(road.id, si) ? 'selected' : ''} ${!isLaneSectionVisible(road.id, si) ? 'layer-item-hidden' : ''}`}
-                          onClick={() => selectRoadChildSection(road.id, si)}
-                        >
-                          <button
-                            className="road-expand"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleLaneSectionExpand(makeLaneSectionKey(road.id, si));
-                            }}
-                          >
-                            {expandedLaneSections.has(makeLaneSectionKey(road.id, si))
-                              ? <ChevronDown size={12} />
-                              : <ChevronRight size={12} />
-                            }
-                          </button>
-                          <span className="layer-name">
-                            {t('layerPanel.laneSection')} #{si + 1}
-                            <span className="road-id"> (s={ls.s.toFixed(1)})</span>
-                          </span>
-                          <button
-                            className={`road-visibility ${isLaneSectionVisible(road.id, si) ? '' : 'off'}`}
-                            onClick={(e) => toggleLaneSectionVisibility(makeLaneSectionKey(road.id, si), e)}
-                            title={isLaneSectionVisible(road.id, si) ? t('layerPanel.hideLaneSection') : t('layerPanel.showLaneSection')}
-                          >
-                            {isLaneSectionVisible(road.id, si) ? <Eye size={12} /> : <EyeOff size={12} />}
-                          </button>
-                        </div>
-                        {expandedLaneSections.has(makeLaneSectionKey(road.id, si)) && (
-                          <div className="lane-section-children">
-                            {ls.left.map((lane) => (
-                              <div
-                                key={`l${lane.id}`}
-                                className={`layer-item layer-item-child layer-item-lane ${isLaneSelected(road.id, si, 'left', lane.id) ? 'selected' : ''} ${!isLaneVisible(road.id, si, 'left', lane.id) ? 'layer-item-hidden' : ''}`}
-                                onClick={() => selectRoadChildLane(road.id, si, 'left', lane.id)}
-                              >
-                                <span className="layer-name">
-                                  {t('layerPanel.lane')} L{Math.abs(lane.id)}
-                                  <span className="road-id"> ({lane.lane_type})</span>
-                                </span>
-                                <button
-                                  className={`road-visibility ${isLaneVisible(road.id, si, 'left', lane.id) ? '' : 'off'}`}
-                                  onClick={(e) => toggleLaneVisibility(road.id, si, 'left', lane.id, e)}
-                                  title={isLaneVisible(road.id, si, 'left', lane.id) ? t('layerPanel.hideLane') : t('layerPanel.showLane')}
-                                >
-                                  {isLaneVisible(road.id, si, 'left', lane.id) ? <Eye size={12} /> : <EyeOff size={12} />}
-                                </button>
-                              </div>
-                            ))}
-                            {ls.right.map((lane) => (
-                              <div
-                                key={`r${lane.id}`}
-                                className={`layer-item layer-item-child layer-item-lane ${isLaneSelected(road.id, si, 'right', lane.id) ? 'selected' : ''} ${!isLaneVisible(road.id, si, 'right', lane.id) ? 'layer-item-hidden' : ''}`}
-                                onClick={() => selectRoadChildLane(road.id, si, 'right', lane.id)}
-                              >
-                                <span className="layer-name">
-                                  {t('layerPanel.lane')} R{Math.abs(lane.id)}
-                                  <span className="road-id"> ({lane.lane_type})</span>
-                                </span>
-                                <button
-                                  className={`road-visibility ${isLaneVisible(road.id, si, 'right', lane.id) ? '' : 'off'}`}
-                                  onClick={(e) => toggleLaneVisibility(road.id, si, 'right', lane.id, e)}
-                                  title={isLaneVisible(road.id, si, 'right', lane.id) ? t('layerPanel.hideLane') : t('layerPanel.showLane')}
-                                >
-                                  {isLaneVisible(road.id, si, 'right', lane.id) ? <Eye size={12} /> : <EyeOff size={12} />}
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {/* Signals group */}
-                    {(road.signals ?? []).length > 0 && (
-                      <div className="road-sub-group">
-                        <div
-                          className="layer-item layer-item-child layer-item-section"
-                          onClick={() => toggleRoadSignalsExpand(road.id)}
-                        >
-                          <button className="road-expand" onClick={(e) => { e.stopPropagation(); toggleRoadSignalsExpand(road.id); }}>
-                            {expandedRoadSignals.has(road.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                          </button>
-                          <span className="layer-name">
-                            {t('layerPanel.roadSignals')}
-                            <span className="road-id"> ({(road.signals ?? []).length})</span>
-                          </span>
-                        </div>
-                        {expandedRoadSignals.has(road.id) && (
-                          <div className="lane-section-children">
-                            {(road.signals ?? []).map((sig) => {
-                              const isSignalSelected =
-                                selectedSceneNode?.type === 'signal'
-                                && selectedSceneNode.roadId === road.id
-                                && selectedSceneNode.signalId === sig.id;
-                              // Prefer XODR name, fall back to subtype/type + id
-                              const displayName = sig.name
-                                ? sig.name
-                                : `${sig.signal_subtype || sig.signal_type} (${sig.id})`;
-                              return (
-                                <div
-                                  key={sig.id}
-                                  className={`layer-item layer-item-child layer-item-lane ${isSignalSelected ? 'selected' : ''}`}
-                                  onClick={() => {
-                                    selectionSourceRef.current = 'panel';
-                                    useEditorStore.getState().selectSignal(road.id, sig.id);
-                                    emitViewportEvent({ type: 'pan-to-signal', roadId: road.id, signalId: sig.id });
-                                  }}
-                                >
-                                  <span className="layer-name">{displayName}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {/* Objects group */}
-                    {(project.objects ?? []).filter((o) => o.roadId === road.id).length > 0 && (
-                      <div className="road-sub-group">
-                        <div
-                          className="layer-item layer-item-child layer-item-section"
-                          onClick={() => toggleRoadObjectsExpand(road.id)}
-                        >
-                          <button className="road-expand" onClick={(e) => { e.stopPropagation(); toggleRoadObjectsExpand(road.id); }}>
-                            {expandedRoadObjects.has(road.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                          </button>
-                          <span className="layer-name">
-                            {t('layerPanel.roadObjects')}
-                            <span className="road-id"> ({(project.objects ?? []).filter((o) => o.roadId === road.id).length})</span>
-                          </span>
-                        </div>
-                        {expandedRoadObjects.has(road.id) && (
-                          <div className="lane-section-children">
-                            {(project.objects ?? []).filter((o) => o.roadId === road.id).map((obj) => (
-                              <div key={obj.id} className="layer-item layer-item-child layer-item-lane">
-                                <span className="layer-name">
-                                  {obj.id}
-                                  <span className="road-id"> ({obj.type})</span>
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                road={road}
+                roadObjects={(project.objects ?? []).filter((object) => object.roadId === road.id)}
+                selectedSceneNode={selectedSceneNode}
+                isSelected={isRoadSelected(road.id)}
+                isVisible={isRoadVisible(road.id)}
+                isExpanded={expandedRoads.has(road.id)}
+                signalsExpanded={expandedRoadSignals.has(road.id)}
+                objectsExpanded={expandedRoadObjects.has(road.id)}
+                laneSectionsExpanded={expandedLaneSections}
+                entryRef={(element) => registerRowRef(`road-${road.id}`, element)}
+                isLaneSectionSelected={(sectionIndex) => isLaneSectionSelected(road.id, sectionIndex)}
+                isLaneSelected={(sectionIndex, side, laneId) => isLaneSelected(road.id, sectionIndex, side, laneId)}
+                isLaneSectionVisible={(sectionIndex) => isLaneSectionVisible(road.id, sectionIndex)}
+                isLaneVisible={(sectionIndex, side, laneId) => isLaneVisible(road.id, sectionIndex, side, laneId)}
+                onSelect={() => handleSelectRoad(road.id)}
+                onToggleExpand={() => toggleRoadExpand(road.id)}
+                onZoom={() => handleZoomToRoad(road.id)}
+                onToggleVisibility={() => toggleRoadVisibility(road.id)}
+                onSelectLaneSection={(sectionIndex) => selectRoadChildSection(road.id, sectionIndex)}
+                onToggleLaneSectionExpand={(sectionIndex) => toggleLaneSectionExpand(makeLaneSectionKey(road.id, sectionIndex))}
+                onToggleLaneSectionVisibility={(sectionIndex) => toggleLaneSectionVisibility(makeLaneSectionKey(road.id, sectionIndex))}
+                onSelectLane={(sectionIndex, side, laneId) => selectRoadChildLane(road.id, sectionIndex, side, laneId)}
+                onToggleLaneVisibility={(sectionIndex, side, laneId) => toggleLaneVisibility(road.id, sectionIndex, side, laneId)}
+                onToggleSignalsExpand={() => toggleRoadSignalsExpand(road.id)}
+                onSelectSignal={(signalId) => handleSelectSignal(road.id, signalId)}
+                onToggleObjectsExpand={() => toggleRoadObjectsExpand(road.id)}
+              />
             ))}
 
             {/* Junctions (after roads, same level — flat tree) */}
             {filteredJunctions.map((junc) => (
-              <div
+              <JunctionLayerItem
                 key={`junc-${junc.id}`}
-                className="road-list-entry"
-                ref={(el) => {
-                  if (el) rowRefs.current.set(`junc-${junc.id}`, el);
-                  else rowRefs.current.delete(`junc-${junc.id}`);
-                }}
-              >
-                <div
-                  className={`layer-item ${isJunctionItemSelected(junc.id) ? 'selected' : ''} ${!isJunctionVisible(junc.id) ? 'layer-item-hidden' : ''}`}
-                  onClick={() => handleSelectJunction(junc.id)}
-                >
-                  <span className="road-expand road-expand-placeholder" />
-                  <GitMerge size={12} className="junction-icon" />
-                  <span className="layer-name">
-                    {junc.name || `Junction(${junc.id})`}
-                    <span className="road-id"> ({junc.id})</span>
-                  </span>
-                  <button
-                    className="road-zoom-btn"
-                    onClick={(e) => handleZoomToJunction(junc.id, e)}
-                    title={t('layerPanel.zoomTo')}
-                  >
-                    <Crosshair size={12} />
-                  </button>
-                  <button
-                    className={`road-visibility ${isJunctionVisible(junc.id) ? '' : 'off'}`}
-                    onClick={(e) => toggleJunctionVisibility(junc.id, e)}
-                    title={isJunctionVisible(junc.id) ? t('layerPanel.hideRoad') : t('layerPanel.showRoad')}
-                  >
-                    {isJunctionVisible(junc.id) ? <Eye size={12} /> : <EyeOff size={12} />}
-                  </button>
-                </div>
-              </div>
+                junction={junc}
+                isSelected={isJunctionItemSelected(junc.id)}
+                isVisible={isJunctionVisible(junc.id)}
+                entryRef={(element) => registerRowRef(`junc-${junc.id}`, element)}
+                onSelect={() => handleSelectJunction(junc.id)}
+                onZoom={() => handleZoomToJunction(junc.id)}
+                onToggleVisibility={() => toggleJunctionVisibility(junc.id)}
+              />
             ))}
           </div>
           {filteredRoads.length === 0 && filteredJunctions.length === 0 && searchQuery.trim() && (
