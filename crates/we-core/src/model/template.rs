@@ -229,5 +229,99 @@ mod tests {
         assert_eq!(ls.left[0].width[0].a, 3.5);
         assert_eq!(ls.right[0].width[0].a, 3.5);
     }
+
+    // ── Golden output tests ────────────────────────────────────────────────
+
+    /// Left lane IDs are positive (1, 2, …N), right lane IDs are negative (-1, -2, …-N).
+    #[test]
+    fn test_golden_lane_id_signs() {
+        for preset in [
+            RoadTemplate::single_lane(),
+            RoadTemplate::dual_two_lane(),
+            RoadTemplate::dual_four_lane(),
+            RoadTemplate::dual_six_lane(),
+        ] {
+            let ls = preset.to_lane_section();
+            for lane in &ls.left {
+                assert!(lane.id > 0, "left lane id must be positive, got {}", lane.id);
+            }
+            for lane in &ls.right {
+                assert!(lane.id < 0, "right lane id must be negative, got {}", lane.id);
+            }
+            assert_eq!(ls.center[0].id, 0, "center lane id must be 0");
+        }
+    }
+
+    /// Left lane IDs are sequential 1..N; right lane IDs are -1..-N.
+    #[test]
+    fn test_golden_lane_ids_are_sequential() {
+        let t = RoadTemplate::dual_four_lane();
+        let ls = t.to_lane_section();
+        let left_ids: Vec<i32> = ls.left.iter().map(|l| l.id).collect();
+        let right_ids: Vec<i32> = ls.right.iter().map(|l| l.id).collect();
+        assert_eq!(left_ids, vec![1, 2, 3, 4]);
+        assert_eq!(right_ids, vec![-1, -2, -3, -4]);
+    }
+
+    /// All template lanes have `Driving` type.
+    #[test]
+    fn test_golden_all_lanes_are_driving() {
+        for preset in [
+            RoadTemplate::single_lane(),
+            RoadTemplate::dual_two_lane(),
+            RoadTemplate::dual_four_lane(),
+            RoadTemplate::dual_six_lane(),
+        ] {
+            let ls = preset.to_lane_section();
+            for lane in ls.left.iter().chain(ls.right.iter()) {
+                assert_eq!(
+                    lane.lane_type, LaneType::Driving,
+                    "template lane {} should be Driving", lane.id
+                );
+            }
+            assert_eq!(ls.center[0].lane_type, LaneType::None, "center lane should be None");
+        }
+    }
+
+    /// Total road width = sum of all lane widths on left + right.
+    #[test]
+    fn test_golden_total_road_width() {
+        let cases = [
+            (RoadTemplate::single_lane(), 7.0_f64),     // 1+1 lanes × 3.5m
+            (RoadTemplate::dual_two_lane(), 14.0_f64),  // 2+2 lanes × 3.5m
+            (RoadTemplate::dual_four_lane(), 28.0_f64), // 4+4 lanes × 3.5m
+            (RoadTemplate::dual_six_lane(), 42.0_f64),  // 6+6 lanes × 3.5m
+        ];
+        for (preset, expected_width) in cases {
+            let ls = preset.to_lane_section();
+            let total: f64 = ls.left.iter().chain(ls.right.iter())
+                .map(|l| l.width.first().map(|w| w.a).unwrap_or(0.0))
+                .sum();
+            assert!(
+                (total - expected_width).abs() < 1e-9,
+                "total width {total} != expected {expected_width}"
+            );
+        }
+    }
+
+    /// `to_lane_section` result is at s=0.
+    #[test]
+    fn test_golden_lane_section_s_is_zero() {
+        let ls = RoadTemplate::dual_four_lane().to_lane_section();
+        assert_eq!(ls.s, 0.0);
+    }
+
+    /// Width polynomials b/c/d coefficients are all zero (constant width).
+    #[test]
+    fn test_golden_constant_width_polynomial() {
+        let ls = RoadTemplate::dual_six_lane().to_lane_section();
+        for lane in ls.left.iter().chain(ls.right.iter()) {
+            for w in &lane.width {
+                assert_eq!(w.b, 0.0, "b coefficient must be 0 for constant width");
+                assert_eq!(w.c, 0.0, "c coefficient must be 0 for constant width");
+                assert_eq!(w.d, 0.0, "d coefficient must be 0 for constant width");
+            }
+        }
+    }
 }
 

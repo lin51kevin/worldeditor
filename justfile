@@ -64,6 +64,26 @@ test-frontend-cov:
 # Run ALL tests
 test: test-rust test-frontend
 
+# ── Visual Regression ──────────────────────────────
+
+# Run Playwright visual regression tests only
+test-visual:
+    cd frontend && yarn playwright test e2e/visual-regression.spec.ts
+
+# Update visual regression baselines (regenerate all screenshots)
+update-snapshots:
+    cd frontend && yarn playwright test e2e/visual-regression.spec.ts --update-snapshots
+
+# Run all E2E tests (full suite)
+test-e2e:
+    cd frontend && yarn playwright test
+
+# ── Benchmarks ─────────────────────────────────────
+
+# Run frontend performance benchmarks
+bench:
+    cd frontend && yarn vitest bench
+
 # ── Lint ───────────────────────────────────────────
 
 # Lint Rust code

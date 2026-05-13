@@ -588,4 +588,111 @@ mod tests {
         let sidewalk = lane_color(LaneType::Sidewalk, &config);
         assert_ne!(driving, sidewalk);
     }
+
+    // ── Golden output tests ────────────────────────────────────────────────
+    // These tests verify that specific well-known inputs produce consistent,
+    // deterministic vertex outputs. When geometry generation logic changes
+    // intentionally, regenerate by running the test with a debugger or
+    // temporarily printing the values.
+
+    /// A straight 100 m road with step 50 produces exactly 3 sample points
+    /// (s=0, s=50, s=100), yielding 2 segments × 6 vertices = 12 vertices
+    /// for the default ribbon (no lane sections).
+    #[test]
+    fn test_golden_default_ribbon_vertex_count() {
+        let road = simple_road();
+        let verts = generate_road_mesh(&road, 50.0, &default_config());
+        // 3 points → 2 segments → 12 vertices
+        assert_eq!(verts.len(), 12, "default ribbon: expected 12 vertices for 50m step");
+    }
+
+    /// For a straight road along the +X axis, ribbon left edge (positive Y
+    /// perpendicular) must be symmetric to right edge (negative Y).
+    #[test]
+    fn test_golden_default_ribbon_symmetry() {
+        let road = simple_road();
+        let verts = generate_road_mesh(&road, 50.0, &default_config());
+        // Verts come in pairs: left (positive y) then right (negative y).
+        // For road along X, left = +Y, right = -Y.
+        for i in (0..verts.len()).step_by(6) {
+            let left_y = verts[i].position[1];
+            let right_y = verts[i + 1].position[1];
+            assert!(
+                (left_y + right_y).abs() < 1e-4,
+                "ribbon should be symmetric around Y=0, got left={left_y} right={right_y}"
+            );
+        }
+    }
+
+    /// A straight 100 m road along +X: the ribbon extends from x≈0 to x≈100.
+    #[test]
+    fn test_golden_default_ribbon_x_extent() {
+        let road = simple_road();
+        let verts = generate_road_mesh(&road, 10.0, &default_config());
+        let min_x = verts.iter().map(|v| v.position[0]).fold(f32::INFINITY, f32::min);
+        let max_x = verts.iter().map(|v| v.position[0]).fold(f32::NEG_INFINITY, f32::max);
+        assert!(min_x < 0.5, "ribbon should start near x=0, got {min_x}");
+        assert!(max_x > 99.0, "ribbon should reach x=100, got {max_x}");
+    }
+
+    /// Lane surface color for a `Driving` lane must match the config palette
+    /// (RGBA components should be the same values returned by `lane_color`).
+    #[test]
+    fn test_golden_lane_surface_color_matches_config() {
+        let road = road_with_lanes();
+        let config = default_config();
+        let verts = generate_road_mesh(&road, 10.0, &config);
+        let expected = lane_color(LaneType::Driving, &config);
+        // All vertices of a single-type road should share that color.
+        for v in &verts {
+            assert_eq!(
+                v.color, expected,
+                "vertex color {c:?} != expected driving color {expected:?}",
+                c = v.color
+            );
+        }
+    }
+
+    /// Lane lines for a simple road must produce a non-empty vertex list
+    /// and all positions must be finite.
+    #[test]
+    fn test_golden_lane_lines_finite_positions() {
+        let road = road_with_lanes();
+        let verts = generate_road_lane_lines(&road, 5.0);
+        assert!(!verts.is_empty(), "lane lines should not be empty for road_with_lanes");
+        for v in &verts {
+            assert!(v.position[0].is_finite(), "lane line x must be finite");
+            assert!(v.position[1].is_finite(), "lane line y must be finite");
+            assert!(v.position[2].is_finite(), "lane line z must be finite");
+        }
+    }
+
+    /// Z-coordinates of lane surface vertices must be zero for a flat road
+    /// (no elevation profile).
+    #[test]
+    fn test_golden_flat_road_z_is_zero() {
+        let road = road_with_lanes();
+        let verts = generate_road_mesh(&road, 10.0, &default_config());
+        for v in &verts {
+            assert!(
+                v.position[2].abs() < 1e-4,
+                "flat road z should be ~0, got {}",
+                v.position[2]
+            );
+        }
+    }
+
+    /// Lane line Z coordinates should sit slightly above road surface.
+    #[test]
+    fn test_golden_lane_lines_above_surface() {
+        let road = road_with_lanes();
+        let surface = generate_road_mesh(&road, 10.0, &default_config());
+        let lines = generate_road_lane_lines(&road, 10.0);
+        let max_surface_z = surface.iter().map(|v| v.position[2]).fold(f32::NEG_INFINITY, f32::max);
+        let min_line_z = lines.iter().map(|v| v.position[2]).fold(f32::INFINITY, f32::min);
+        assert!(
+            min_line_z >= max_surface_z - 1e-4,
+            "lane lines (min z={min_line_z}) should be at or above surface (max z={max_surface_z})"
+        );
+    }
 }
