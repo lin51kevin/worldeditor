@@ -14,7 +14,7 @@ describe('Toolbar', () => {
         dimension: '3d',
         showGrid: true,
         showAxis: true,
-        editMode: 'select',
+        editMode: 'default',
         splineTemplateId: 'single',
         splineKnots: [],
         viewMode: 'solid',

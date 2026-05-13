@@ -15,7 +15,7 @@ describe('CommandPalette', () => {
 
     act(() => {
       useEditorViewStore.setState({
-        editMode: 'select',
+        editMode: 'default',
         showGrid: true,
         showAxis: true,
         viewMode: 'solid',

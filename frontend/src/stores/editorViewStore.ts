@@ -17,7 +17,15 @@ export type MeasurementResult =
   | { type: 'area'; value: AreaMeasurement };
 
 type ViewDimension = '3d' | '2d';
-type EditMode = 'select' | 'road' | 'lane' | 'lanesection' | 'spline' | 'move-road' | 'rotate-road' | 'adjust-edge' | 'road-markings' | 'draw-line' | 'draw-arc' | 'draw-spiral';
+
+/** Selection-based interaction modes. */
+export type SelectMode = 'default' | 'road' | 'lane' | 'lanesection';
+/** Geometry manipulation modes (transform existing roads). */
+export type EditMode = 'move-road' | 'rotate-road' | 'adjust-edge' | 'road-markings';
+/** Road drawing / creation modes. */
+export type DrawMode = 'line' | 'arc' | 'spline' | 'spiral';
+/** Union of all active-mode categories. */
+export type ActiveMode = SelectMode | EditMode | DrawMode;
 
 const STORAGE_KEY = 'we-editor-view';
 
@@ -87,7 +95,7 @@ interface EditorViewState {
   showAxis: boolean;
 
   // Edit mode
-  editMode: EditMode;
+  editMode: ActiveMode;
 
   // Spline drawing
   splineTemplateId: string;
@@ -131,7 +139,7 @@ interface EditorViewState {
   setDimension: (d: ViewDimension) => void;
   toggleGrid: () => void;
   toggleAxis: () => void;
-  setEditMode: (m: EditMode) => void;
+  setEditMode: (m: ActiveMode) => void;
   setSplineTemplateId: (templateId: string) => void;
   setSplineKnots: (knots: Array<[number, number, number]>) => void;
   appendSplineKnot: (knot: [number, number, number]) => void;
@@ -240,7 +248,7 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   dimension: '2d',
   showGrid: true,
   showAxis: true,
-  editMode: 'select',
+  editMode: 'default',
   splineTemplateId: 'single',
   splineKnots: [],
   splineTangentOverrides: {},

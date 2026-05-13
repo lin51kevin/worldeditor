@@ -52,7 +52,7 @@ describe('RoadEditToolbar', () => {
     act(() => {
       useEditorStore.getState().reset();
       useEditorViewStore.setState({
-        editMode: 'select',
+        editMode: 'default',
         splineKnots: [],
         softSelectionRadius: 50,
       });
@@ -201,7 +201,7 @@ describe('RoadEditToolbar', () => {
       fireEvent.click(screen.getByTitle('调整节点'));
       expect(useEditorViewStore.getState().editMode).toBe('spline');
       fireEvent.click(screen.getByTitle('调整节点'));
-      expect(useEditorViewStore.getState().editMode).toBe('select');
+      expect(useEditorViewStore.getState().editMode).toBe('default');
     });
 
     it('soft selection radius slider is hidden until adjust-node is active', () => {

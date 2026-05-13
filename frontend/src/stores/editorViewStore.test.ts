@@ -8,7 +8,7 @@ describe('editorViewStore', () => {
       dimension: '3d',
       showGrid: true,
       showAxis: true,
-      editMode: 'select',
+      editMode: 'default',
       splineTemplateId: 'single',
       splineKnots: [],
       viewMode: 'solid',
@@ -39,7 +39,7 @@ describe('editorViewStore', () => {
     expect(state.dimension).toBe('3d');
     expect(state.showGrid).toBe(true);
     expect(state.showAxis).toBe(true);
-    expect(state.editMode).toBe('select');
+    expect(state.editMode).toBe('default');
     expect(state.viewMode).toBe('solid');
     expect(state.layout.leftWidth).toBe(260);
     expect(state.layout.rightWidth).toBe(300);
@@ -80,7 +80,7 @@ describe('editorViewStore', () => {
     expect(useEditorViewStore.getState().showAxis).toBe(false);
   });
 
-  it.each(['select', 'road', 'lane', 'lanesection', 'spline'] as const)(
+  it.each(['default', 'road', 'lane', 'lanesection', 'spline', 'line', 'arc', 'spiral', 'move-road', 'rotate-road'] as const)(
     'setEditMode changes editMode to %s',
     (editMode) => {
       act(() => {

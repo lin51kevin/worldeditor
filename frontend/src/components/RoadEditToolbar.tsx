@@ -86,7 +86,7 @@ export function RoadEditToolbar() {
       // Activates the global Spline Edit mode for interactive knot dragging
       action: () => {
         const isEntering = editMode !== 'spline';
-        setEditMode(isEntering ? 'spline' : 'select');
+        setEditMode(isEntering ? 'spline' : 'default');
         if (isEntering) clearSplineKnots();
       },
     },
@@ -107,7 +107,7 @@ export function RoadEditToolbar() {
       kind: 'mode',
       action: () => {
         const isEntering = editMode !== 'move-road';
-        setEditMode(isEntering ? 'move-road' : 'select');
+        setEditMode(isEntering ? 'move-road' : 'default');
       },
     },
     {
@@ -117,7 +117,7 @@ export function RoadEditToolbar() {
       kind: 'mode',
       action: () => {
         const isEntering = editMode !== 'rotate-road';
-        setEditMode(isEntering ? 'rotate-road' : 'select');
+        setEditMode(isEntering ? 'rotate-road' : 'default');
       },
     },
     {

@@ -20,21 +20,6 @@ export function mountRoadToolsPlugin(): () => void {
   // ── Toolbar: mode buttons ──────────────────────────────────────────────────
   const modeButtons: ToolbarButtonContrib[] = [
     {
-      id: `${PLUGIN_ID}:adjust-node`,
-      pluginId: PLUGIN_ID,
-      icon: '⌘',
-      labelKey: 'toolPanel.adjustNode',
-      group: 'mode',
-      isActive: () => useEditorViewStore.getState().editMode === 'spline',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
-      onClick: () => {
-        const vs = useEditorViewStore.getState();
-        const entering = vs.editMode !== 'spline';
-        vs.setEditMode(entering ? 'spline' : 'select');
-        if (entering) vs.clearSplineKnots();
-      },
-    },
-    {
       id: `${PLUGIN_ID}:move-road`,
       pluginId: PLUGIN_ID,
       icon: '⊕',
@@ -45,7 +30,7 @@ export function mountRoadToolsPlugin(): () => void {
       onClick: () => {
         const vs = useEditorViewStore.getState();
         const entering = vs.editMode !== 'move-road';
-        vs.setEditMode(entering ? 'move-road' : 'select');
+        vs.setEditMode(entering ? 'move-road' : 'default');
       },
     },
     {
@@ -59,7 +44,7 @@ export function mountRoadToolsPlugin(): () => void {
       onClick: () => {
         const vs = useEditorViewStore.getState();
         const entering = vs.editMode !== 'rotate-road';
-        vs.setEditMode(entering ? 'rotate-road' : 'select');
+        vs.setEditMode(entering ? 'rotate-road' : 'default');
       },
     },
     {

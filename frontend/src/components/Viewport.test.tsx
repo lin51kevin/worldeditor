@@ -231,7 +231,7 @@ describe('Viewport', () => {
         undoStack: [],
         redoStack: [],
       });
-      useEditorViewStore.setState({ display: { ...DEFAULT_DISPLAY }, geometryEditSpline: null, geometryEditRoadId: null, editMode: 'select', splineKnots: [] });
+      useEditorViewStore.setState({ display: { ...DEFAULT_DISPLAY }, geometryEditSpline: null, geometryEditRoadId: null, editMode: 'default', splineKnots: [] });
     });
   });
 

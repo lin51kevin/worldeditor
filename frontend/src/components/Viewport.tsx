@@ -106,7 +106,7 @@ export function Viewport() {
 
   /** Finalize geometry draw mode: create a road from the accumulated draw points. */
   const finalizeDrawGeometry = useCallback(async (
-    mode: 'draw-line' | 'draw-arc' | 'draw-spiral',
+    mode: 'line' | 'arc' | 'spiral',
     points: Array<[number, number, number]>,
   ) => {
     const editorState = useEditorStore.getState();
@@ -115,9 +115,9 @@ export function Viewport() {
     const roadId = nextSplineRoadId(editorState.project.roads.map((r) => r.id));
 
     let geometry;
-    if (mode === 'draw-line') {
+    if (mode === 'line') {
       geometry = buildLineGeometry(points[0]!, points[1]!);
-    } else if (mode === 'draw-arc') {
+    } else if (mode === 'arc') {
       geometry = buildArcGeometry(points[0]!, points[1]!, points[2]!);
     } else {
       geometry = buildSpiralGeometry(points[0]!, points[1]!);
@@ -164,7 +164,7 @@ export function Viewport() {
     if (editMode !== 'spline') {
       useEditorViewStore.getState().clearSplineKnots();
     }
-    if (editMode !== 'draw-line' && editMode !== 'draw-arc' && editMode !== 'draw-spiral') {
+    if (editMode !== 'line' && editMode !== 'arc' && editMode !== 'spline' && editMode !== 'spiral') {
       useEditorViewStore.getState().clearDrawPoints();
     }
   }, [editMode]);
@@ -186,13 +186,13 @@ export function Viewport() {
           return;
         }
         // If in geometry draw mode, clear draw points
-        if (viewState.editMode === 'draw-line' || viewState.editMode === 'draw-arc' || viewState.editMode === 'draw-spiral') {
+        if (viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral') {
           viewState.clearDrawPoints();
           return;
         }
-        // If in a transient edit mode (move/rotate), return to select mode
+        // If in a transient edit mode (move/rotate), return to default mode
         if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
-          viewState.setEditMode('select');
+          viewState.setEditMode('default');
           return;
         }
         // Normal select mode: clear any active selection
@@ -258,7 +258,7 @@ export function Viewport() {
     renderer.setSplinePreviewKnots(editMode === 'spline' ? splineKnots : [], overrides);
 
     // For geometry draw modes, show draw points as preview knots (reuse spline markers)
-    if (editMode === 'draw-line' || editMode === 'draw-arc' || editMode === 'draw-spiral') {
+    if (editMode === 'line' || editMode === 'arc' || editMode === 'spiral') {
       renderer.setSplinePreviewKnots(drawPoints, undefined);
     }
   }, [splineKnots, splineTangentOverrides, editMode, status, geometryEditSpline, drawPoints]);
@@ -912,9 +912,9 @@ export function Viewport() {
       viewState.editMode !== 'spline' &&
       viewState.editMode !== 'move-road' &&
       viewState.editMode !== 'rotate-road' &&
-      viewState.editMode !== 'draw-line' &&
-      viewState.editMode !== 'draw-arc' &&
-      viewState.editMode !== 'draw-spiral' &&
+      viewState.editMode !== 'line' &&
+      viewState.editMode !== 'arc' &&
+      viewState.editMode !== 'spiral' &&
       !viewState.geometryEditSpline &&
       !viewState.draggingKnot &&
       !rubberBandRef.current;
@@ -924,7 +924,7 @@ export function Viewport() {
       canvas.style.cursor = 'move';
     } else if (viewState.editMode === 'rotate-road') {
       canvas.style.cursor = 'crosshair';
-    } else if (viewState.editMode === 'draw-line' || viewState.editMode === 'draw-arc' || viewState.editMode === 'draw-spiral') {
+    } else if (viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral') {
       canvas.style.cursor = 'crosshair';
     }
 
@@ -1063,7 +1063,7 @@ export function Viewport() {
       }
 
       // In draw modes, lock camera so left-click doesn't start a pan
-      if (viewState.editMode === 'draw-line' || viewState.editMode === 'draw-arc' || viewState.editMode === 'draw-spiral') {
+      if (viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral') {
         renderer.lockCamera();
       }
       return;
@@ -1190,8 +1190,8 @@ export function Viewport() {
       return;
     }
 
-    // Geometry draw modes: draw-line, draw-arc, draw-spiral
-    if (splineState.editMode === 'draw-line' || splineState.editMode === 'draw-arc' || splineState.editMode === 'draw-spiral') {
+    // Geometry draw modes: line, arc, spiral
+    if (splineState.editMode === 'line' || splineState.editMode === 'arc' || splineState.editMode === 'spiral') {
       const renderer = rendererRef.current;
       if (renderer) renderer.unlockCamera();
 
@@ -1199,7 +1199,7 @@ export function Viewport() {
       const nextPoints = [...splineState.drawPoints, point];
       splineState.appendDrawPoint(point);
 
-      const requiredPoints = splineState.editMode === 'draw-arc' ? 3 : 2;
+      const requiredPoints = splineState.editMode === 'arc' ? 3 : 2;
       if (nextPoints.length >= requiredPoints) {
         await finalizeDrawGeometry(splineState.editMode, nextPoints);
       }
@@ -1328,7 +1328,7 @@ export function Viewport() {
     const { draggingKnot } = viewState;
 
     // Unlock camera for draw modes (locked in handleMouseDown to prevent pan)
-    if (viewState.editMode === 'draw-line' || viewState.editMode === 'draw-arc' || viewState.editMode === 'draw-spiral') {
+    if (viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral') {
       const renderer = rendererRef.current;
       if (renderer) renderer.unlockCamera();
     }
