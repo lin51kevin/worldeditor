@@ -33,41 +33,43 @@ WorldEditor Next 是 [WorldEditor](../WorldEditor) 的全新重写版本，从 C
 ```
 worldeditor-next/
 ├── crates/
-│   ├── we-core/        # 核心领域模型 (WASM 兼容)
-│   │   ├── gis/        #   GIS 坐标系 (WGS84, ENU, ECEF)
-│   │   ├── geometry/   #   几何算法 (点在多边形内, 面积等)
-│   │   ├── math/       #   数学工具 (向量, 矩阵, 插值)
-│   │   ├── model/      #   领域对象 (Project, Road, Lane, Junction)
-│   │   └── opendrive/  #   OpenDRIVE 标准读写
-│   ├── we-render/      # wgpu 渲染引擎
-│   │   ├── camera/     #   相机系统 (透视/正交, 轨道控制)
-│   │   ├── gpu/        #   GPU 上下文管理
-│   │   ├── pipeline/   #   渲染管线 (Basic + Grid)
-│   │   ├── renderer/   #   帧渲染调度
-│   │   ├── vertex/     #   顶点格式定义
-│   │   └── shaders/    #   WGSL 着色器
-│   ├── we-io/          # 平台抽象 I/O
-│   │   ├── native/     #   原生文件系统 (tokio)
-│   │   └── web/        #   Web 存储 (localStorage)
-│   ├── we-service/     # 编辑器业务逻辑
-│   │   └── editor/     #   Command 模式, Undo/Redo
-│   ├── we-native/      # 原生独占功能 (GDAL, 点云)
-│   └── we-wasm/        # WASM 入口 (wasm-bindgen)
-├── frontend/           # React 前端
+│   ├── we-core/           # 核心领域模型 (18 模块, WASM 兼容)
+│   │   ├── model/         #   领域对象 (Project, Road, Lane, Junction, Signal...)
+│   │   ├── geometry/      #   计算几何 (凸包, Delaunay, 曲线求值)
+│   │   ├── gis/           #   坐标系 (WGS84, GCJ-02, UTM, ECEF, ENU, MGRS)
+│   │   ├── opendrive/     #   OpenDRIVE 1.4-1.6 解析/写入
+│   │   ├── picking/       #   射线拾取 / 选择
+│   │   ├── snapping/      #   磁吸捕捉
+│   │   ├── spatial_index/ #   空间索引加速
+│   │   ├── spline/        #   B-spline / Catmull-Rom 曲线
+│   │   └── ...            #   elevation, routing, measurement, lane_ops 等
+│   ├── we-plugin-core/    # 插件系统框架 (manifest, registry, lifecycle)
+│   ├── we-render/         # wgpu 渲染引擎 (14 模块)
+│   │   ├── camera/        #   相机系统 (透视/正交, 轨道控制)
+│   │   ├── gizmo/         #   3D 变换手柄 (平移/旋转/缩放)
+│   │   ├── pipeline/      #   渲染管线 (grid, basic, lane_line, object)
+│   │   ├── road_mesh/     #   道路网格生成
+│   │   └── shaders/       #   WGSL 着色器
+│   ├── we-io/             # 平台 I/O + 多格式导入导出
+│   ├── we-service/        # 编辑器服务 (Command, Undo/Redo, 8 类命令)
+│   ├── we-native/         # 原生独占 (点云, GDAL — Phase 3)
+│   ├── we-wasm/           # WASM 入口 (9 模块, wasm-bindgen 导出)
+│   └── we-server/         # REST API (Axum + JWT + PostgreSQL)
+├── frontend/              # React SPA
 │   ├── src/
-│   │   ├── components/ #   UI 组件 (Toolbar, Viewport, LayerPanel...)
-│   │   ├── services/   #   平台适配器 (Tauri / Web)
-│   │   └── stores/     #   Zustand 状态管理
-│   └── package.json
-├── src-tauri/          # Tauri 2.0 桌面应用
-│   ├── src/
-│   │   ├── lib.rs      #   插件注册 + IPC 路由
-│   │   └── commands.rs #   Tauri 命令处理
-│   └── tauri.conf.json
-├── tests/              # 集成/E2E 测试
-├── .github/workflows/  # CI 流水线
-├── Cargo.toml          # Rust workspace 配置
-└── justfile            # 开发命令合集
+│   │   ├── components/    #   UI 组件 (shell, panels, dialogs, common)
+│   │   ├── plugins/       #   内置插件 (24+: I/O, 编辑, 分析, GIS)
+│   │   ├── viewport/      #   渲染控制器 (camera, gizmo, tangent, spline)
+│   │   ├── stores/        #   Zustand 状态 (slices 架构)
+│   │   └── services/      #   PlatformService 适配器
+│   └── e2e/               #   Playwright E2E 测试 (17 spec files)
+├── plugins/               # 外部插件目录
+├── src-tauri/             # Tauri 2.0 桌面应用
+├── tests/                 # 集成 / 性能 / 视觉测试
+├── docs/                  # 用户手册, 审计报告, 规划
+├── .github/workflows/     # CI 流水线
+├── Cargo.toml             # Rust workspace (9 crates)
+└── justfile               # 开发命令合集
 ```
 
 ## 架构设计
@@ -105,18 +107,20 @@ worldeditor-next/
 ### Crate 依赖图
 
 ```
-we-core ─────────────────────────────────┐
-   │                                      │
-   ├──> we-io (平台 I/O)                  │
-   │       │                              │
-   ├──> we-render (渲染引擎)              │
-   │                                      │
-   ├──> we-service (编辑器逻辑) ◄── we-io │
-   │                                      │
-   ├──> we-native (原生功能) ◄── we-io    │
-   │                                      │
-   └──> we-wasm (WASM 入口) ◄── we-service
+we-core ──→ we-io ──→ we-service ──→ we-wasm
+  │            │
+  ├──→ we-render
+  │            ↓
+  │        we-native (桌面独占)
+  │
+  ├──→ we-plugin-core
+  │
+  └──→ we-server (独立部署)
 ```
+
+- **we-core**: 零平台依赖, WASM 兼容
+- **we-native**: 仅桌面端, 禁止被 we-wasm 依赖
+- **we-server**: 独立部署, 禁止被客户端 crate 依赖
 
 ## 快速开始
 
@@ -230,33 +234,32 @@ git tag v0.2.0 && git push origin v0.2.0
 
 | 测试类型 | 工具 | 命令 | 覆盖率目标 |
 |---------|------|------|-----------|
-| Rust 单元测试 | cargo test | `just test-rust` | ≥ 90% |
+| Rust 单元测试 | cargo test | `just test-rust` | ≥ 90% (core/service) |
 | Rust 覆盖率 | cargo-llvm-cov | `just test-rust-cov` | — |
 | WASM 测试 | wasm-pack test | `just test-wasm` | — |
 | 前端单元测试 | Vitest | `just test-frontend` | ≥ 80% |
 | 前端覆盖率 | Vitest + v8 | `just test-frontend-cov` | — |
-| E2E 测试 | Playwright | *(计划中)* | 关键路径 |
-
-当前测试统计：**38 Rust + 7 Frontend = 45 tests green**
+| E2E 测试 | Playwright | `just test-e2e` | 17 spec files |
+| 视觉回归 | Playwright | `just test-visual` | 截图比对 |
 
 ## 部署目标
 
 | 目标 | 状态 | 说明 |
 |------|------|------|
-| 🖥️ Windows 桌面 | ✅ Phase 0 | Tauri 2.0 + wgpu |
+| 🖥️ Windows 桌面 | ✅ 可用 | Tauri 2.0 + wgpu |
 | 🖥️ macOS 桌面 | ✅ CI 通过 | 同上 |
 | 🐧 Linux 桌面 | ✅ CI 通过 | 同上 |
-| 🌐 Web 浏览器 | 🔧 Phase 1 | WASM + WebGPU |
-| 🤖 Headless CLI | 📋 计划中 | 批处理渲染 |
+| 🌐 Web 浏览器 | 🔧 进行中 | WASM + WebGPU |
+| 🖧 REST API | 🔧 基础就绪 | Axum + JWT + PostgreSQL |
 
 ## 从旧版迁移
 
 WorldEditor Next 将逐步替代 `WorldEditor` (C# 版本)。迁移路径：
 
-1. **Phase 0** (当前): 项目脚手架、核心领域模型、wgpu 渲染原型
-2. **Phase 1**: OpenDRIVE 完整解析、基础道路编辑、Web 端原型
-3. **Phase 2**: 点云可视化、3D 模型导入、高级编辑工具
-4. **Phase 3**: SUMO 仿真集成、插件系统、协作功能
+1. **Phase 0** (已完成): 项目脚手架、核心领域模型、wgpu 渲染原型
+2. **Phase 1** (当前): OpenDRIVE 完整解析、道路/车道/高程编辑、插件系统、E2E 测试、REST API
+3. **Phase 2**: 点云可视化、3D 模型导入、协作编辑
+4. **Phase 3**: SUMO 仿真集成、DXF/Shapefile 导入、高级 GIS
 
 ## 许可证
 

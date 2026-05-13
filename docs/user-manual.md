@@ -4,6 +4,18 @@
 
 WorldEditor Next is an autonomous driving road network editor that supports creating, editing, and exporting OpenDRIVE-format HD maps. It runs as a native desktop application (Tauri) and in web browsers (WASM).
 
+**Current Version**: 0.1.1 (Phase 1 — Feature Development)
+
+### Feature Status Legend
+
+Throughout this manual, features are marked with their current status:
+
+| Icon | Status | Description |
+|------|--------|-------------|
+| ✅ | Stable | Fully implemented and tested |
+| 🔧 | Experimental | Implemented but may have rough edges |
+| 📋 | Planned | Not yet available, coming in a future release |
+
 ---
 
 ## Interface Layout
@@ -112,17 +124,23 @@ WorldEditor Next is an autonomous driving road network editor that supports crea
 
 Found under **File > Import** and **File > Export**:
 
-| Format | Direction | Plugin |
-|--------|-----------|--------|
-| OpenDRIVE (.xodr) | Import / Export | Built-in |
-| CSV | Import / Export | CSV I/O |
-| Lanelet2 | Import / Export | Lanelet2 I/O |
-| OBJ 3D | Export | OBJ 3D Export |
-| OSM | Export | OSM Export |
-| Signal JSON | Import / Export | Signal JSON I/O |
-| GeoZ (ZIP+protobuf) | Import | GeoZ Importer |
+| Format | Direction | Plugin | Status |
+|--------|-----------|--------|--------|
+| OpenDRIVE (.xodr) | Import / Export | Built-in | ✅ |
+| CSV | Import / Export | CSV I/O | ✅ |
+| Lanelet2 | Import / Export | Lanelet2 I/O | 🔧 |
+| MIF (MapInfo) | Import / Export | MIF I/O | ✅ |
+| NIO (protobuf) | Import / Export | NIO I/O | 🔧 |
+| OBJ 3D | Export | OBJ 3D Export | ✅ |
+| OSM | Export | OSM Export | ✅ |
+| Signal JSON | Import / Export | Signal JSON I/O | ✅ |
+| GeoZ (ZIP+protobuf) | Import | GeoZ Importer | 🔧 |
+| XODR Extensions | Import / Export | XODR Ext | ✅ |
+| DXF (CAD) | Import / Export | DXF I/O | 📋 |
+| Shapefile | Import / Export | Shapefile I/O | 📋 |
+| SUMO | Import / Export | SUMO I/O | 📋 |
 
-> **Note**: Some formats are currently placeholder implementations and will be enabled in future releases.
+> **Note**: Items marked 📋 are planned for Phase 3 and not yet available.
 
 ---
 
@@ -183,6 +201,97 @@ In the Property Panel > Lanes section:
 | Parking | Parking area |
 | Median | Divided highway median |
 | None / Border | Non-drivable edge |
+
+---
+
+## Elevation Editing ✅
+
+Edit the vertical profile of roads using elevation control points.
+
+### Editing Elevation
+
+1. Select a road in Road Edit mode
+2. Open the **Property Panel > Elevation Profile** section
+3. Click **Edit Elevation** to enter elevation editing mode
+4. Existing elevation points appear along the road centerline
+5. **Add point**: Click on the road to insert a new elevation point
+6. **Move point**: Drag an elevation point up/down to change height
+7. **Delete point**: Select a point and press Delete
+8. **Smooth**: Use the smooth tool to interpolate between adjacent points
+
+### Elevation Properties
+
+Each elevation point has cubic polynomial parameters:
+- **s**: Station position along the road
+- **a, b, c, d**: Cubic coefficients defining the profile
+
+### Grade Display
+
+The Property Panel shows:
+- Current grade (slope) at the selected position
+- Maximum/minimum grade values for the road
+- Total elevation change
+
+---
+
+## Spline Editing ✅
+
+Edit road centerlines using B-spline or Catmull-Rom curves.
+
+1. Enter **Spline mode** (P key)
+2. Click to place control knots in the viewport
+3. The road reference line updates in real-time as you add knots
+4. **Tangent handles**: Drag the tangent handles on each knot to adjust curvature
+5. Press **Enter** to commit the spline as a road geometry
+
+### Tangent Handle Editing
+
+When editing spline knots, tangent handles allow fine control over curve direction:
+- Drag handle endpoints to change the tangent direction
+- Hold **Shift** while dragging to maintain symmetry between in/out tangents
+- The spline automatically re-evaluates as handles move
+
+---
+
+## Gizmo Transforms 🔧
+
+Interactive 3D transform handles for moving and rotating objects in the viewport.
+
+### Translation Gizmo
+
+- After selecting a road or object, the translation gizmo appears
+- Drag the colored arrows (red = X, green = Y, blue = Z) to move along an axis
+- Drag the colored planes between arrows to move in a plane
+
+### Rotation Gizmo
+
+- Switch to rotation mode via the toolbar or Edit menu
+- Drag the colored rings to rotate around an axis
+
+---
+
+## Snapping ✅
+
+Magnetic snapping helps align roads and geometry precisely.
+
+| Snap Target | Description |
+|-------------|-------------|
+| Road endpoint | Snap to the start/end of nearby roads |
+| Junction | Snap to junction connection points |
+| Grid | Snap to the viewport grid intersections |
+
+Snapping is enabled by default and can be toggled in the status bar or via **View > Snapping**.
+
+---
+
+## Soft Selection 🔧
+
+When editing multiple control points, soft selection applies a gaussian falloff influence to neighboring points.
+
+1. Enable soft selection in the **Advanced Editing** plugin panel
+2. Set the **brush radius** to control the area of influence
+3. Set the **falloff curve** to control how influence decreases with distance
+4. When moving a control point, nearby points move proportionally
 
 ---
 
@@ -248,18 +357,32 @@ Plugins extend the editor with additional functionality. Access via **Plugins > 
 
 ### Built-in Plugins
 
-| Plugin | Description |
-|--------|-------------|
-| Road Tools | Road editing toolbar and Edit menu items |
-| Built-in Templates | Road, junction, signal, marking templates |
-| Advanced Editing | Split, weld, optimize, deploy operations |
-| CSV I/O | Import/export roads as CSV |
-| Lanelet2 I/O | Import/export Lanelet2 HD maps |
-| GIS Tools | Coordinate converter, CRS setup |
-| Validation | OpenDRIVE data quality and topology checks |
-| Traffic | Signal phasing, timing, SUMO I/O |
-| Point Cloud | Point cloud loading (desktop only) |
-| Satellite | OSM/satellite imagery overlay (desktop only) |
+| Plugin | Description | Status |
+|--------|-------------|--------|
+| Road Tools | Road editing toolbar and Edit menu items | ✅ |
+| Built-in Templates | Road, junction, signal, marking templates | ✅ |
+| Advanced Editing | Soft selection, constraint movement, tangent handles | ✅ |
+| Scripting | JavaScript/Python scripting engine for automation | 🔧 |
+| CSV I/O | Import/export roads as CSV | ✅ |
+| Lanelet2 I/O | Import/export Lanelet2 HD maps | 🔧 |
+| MIF I/O | Import/export MapInfo MIF format | ✅ |
+| NIO I/O | Import/export NIO protocol buffer format | 🔧 |
+| OBJ 3D | Export 3D mesh to OBJ format | ✅ |
+| OSM Export | Export to OpenStreetMap format | ✅ |
+| Signal JSON | Import/export signal configuration JSON | ✅ |
+| GeoZ (ZIP+protobuf) | Import GeoZ archive format | 🔧 |
+| XODR Extensions | Extended OpenDRIVE operations | ✅ |
+| Converter | Format conversion pipeline | 🔧 |
+| DXF I/O | Import/export DXF CAD format | 📋 |
+| Shapefile I/O | Import/export Shapefile format | 📋 |
+| GIS Tools | Coordinate converter, CRS setup, projection | ✅ |
+| Validation | OpenDRIVE data quality and topology checks | ✅ |
+| Lane Detect | Automatic lane detection from road geometry | 🔧 |
+| Traffic | Signal phasing, timing analysis | 🔧 |
+| Ecosystem | Integration with external ecosystem tools | 🔧 |
+| Point Cloud | Point cloud loading and visualization (desktop only) | 📋 |
+| Satellite | OSM/satellite imagery overlay | 📋 |
+| 3D Models | 3D model import and placement | 📋 |
 
 ---
 
