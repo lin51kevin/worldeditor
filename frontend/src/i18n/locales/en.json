@@ -1,7 +1,10 @@
 {
   "app": {
     "title": "WorldEditor Next",
-    "brand": "World Editor"
+    "brand": "World Editor",
+    "updateAvailable": "New version {{version}} is available.",
+    "download": "Download",
+    "dismiss": "Dismiss"
   },
   "menu": {
     "file": "File",
@@ -76,8 +79,8 @@
     "splineTemplateDefault": "Single Lane",
     "laneEdit": "Lane",
     "laneEditTitle": "Lane Edit (L)",
-    "junctionEdit": "Junction",
-    "junctionEditTitle": "Junction Edit (J)",
+    "laneSectionEdit": "LaneSection",
+    "laneSectionEditTitle": "LaneSection Edit (J)",
     "sketch": "Sketch",
     "sketchTitle": "Sketch View",
     "wire": "Wire",
@@ -232,6 +235,10 @@
   "templatePanel": {
     "header": "Templates",
     "noTemplates": "No templates available",
+    "favorites": "Favorites",
+    "noFavorites": "No favorites yet. Click ⭐ on any template to add.",
+    "addFavorite": "Add to favorites",
+    "unfavorite": "Remove from favorites",
     "categories": {
       "roads": "Roads",
       "junctions": "Junctions",

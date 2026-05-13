@@ -80,7 +80,7 @@ describe('editorViewStore', () => {
     expect(useEditorViewStore.getState().showAxis).toBe(false);
   });
 
-  it.each(['select', 'road', 'lane', 'junction', 'spline'] as const)(
+  it.each(['select', 'road', 'lane', 'lanesection', 'spline'] as const)(
     'setEditMode changes editMode to %s',
     (editMode) => {
       act(() => {

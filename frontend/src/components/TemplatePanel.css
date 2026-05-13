@@ -128,3 +128,36 @@
   font-size: var(--font-size-sm);
   padding: var(--space-8);
 }
+
+.template-item {
+  position: relative;
+}
+
+.template-fav-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 1px;
+  color: var(--color-text-muted);
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+}
+
+.template-item:hover .template-fav-btn,
+.template-fav-btn.active {
+  opacity: 1;
+}
+
+.template-fav-btn.active {
+  color: #f5a623;
+}
+
+.template-fav-btn:hover {
+  color: #f5a623;
+  opacity: 1;
+}

@@ -127,12 +127,12 @@ export function Toolbar() {
           <span className="tb-label">{t('toolbar.laneEdit')}</span>
         </button>
         <button
-          className={`toolbar-btn toolbar-toggle ${editMode === 'junction' ? 'active' : ''}`}
-          onClick={() => setEditMode('junction')}
-          title={t('toolbar.junctionEditTitle')}
+          className={`toolbar-btn toolbar-toggle ${editMode === 'lanesection' ? 'active' : ''}`}
+          onClick={() => setEditMode('lanesection')}
+          title={t('toolbar.laneSectionEditTitle')}
         >
           <GitMerge size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.junctionEdit')}</span>
+          <span className="tb-label">{t('toolbar.laneSectionEdit')}</span>
         </button>
       </div>
 

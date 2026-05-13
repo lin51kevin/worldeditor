@@ -40,7 +40,7 @@ export function CommandPalette() {
       { id: 'mode-road', label: t('toolbar.road'), shortcut: 'R', category: 'Edit', action: () => setEditMode('road') },
       { id: 'mode-spline', label: t('toolbar.splineEdit'), shortcut: 'P', category: 'Edit', action: () => setEditMode('spline') },
       { id: 'mode-lane', label: t('toolbar.lane'), shortcut: 'L', category: 'Edit', action: () => setEditMode('lane') },
-      { id: 'mode-junction', label: t('toolbar.junction'), shortcut: 'J', category: 'Edit', action: () => setEditMode('junction') },
+      { id: 'mode-lanesection', label: t('toolbar.laneSectionEdit'), shortcut: 'J', category: 'Edit', action: () => setEditMode('lanesection') },
       { id: 'mode-draw-line', label: t('toolbar.drawLine'), shortcut: 'Shift+L', category: 'Edit', action: () => setEditMode('draw-line') },
       { id: 'mode-draw-arc', label: t('toolbar.drawArc'), shortcut: 'Shift+A', category: 'Edit', action: () => setEditMode('draw-arc') },
       { id: 'mode-draw-spiral', label: t('toolbar.drawSpiral'), shortcut: 'Shift+S', category: 'Edit', action: () => setEditMode('draw-spiral') },

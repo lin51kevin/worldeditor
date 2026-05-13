@@ -17,7 +17,7 @@ export type MeasurementResult =
   | { type: 'area'; value: AreaMeasurement };
 
 type ViewDimension = '3d' | '2d';
-type EditMode = 'select' | 'road' | 'lane' | 'junction' | 'spline' | 'move-road' | 'rotate-road' | 'adjust-edge' | 'road-markings' | 'draw-line' | 'draw-arc' | 'draw-spiral';
+type EditMode = 'select' | 'road' | 'lane' | 'lanesection' | 'spline' | 'move-road' | 'rotate-road' | 'adjust-edge' | 'road-markings' | 'draw-line' | 'draw-arc' | 'draw-spiral';
 
 const STORAGE_KEY = 'we-editor-view';
 

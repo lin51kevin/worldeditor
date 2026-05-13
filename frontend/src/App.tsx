@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ExternalLink, X } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MenuBar } from './components/MenuBar';
 import { WelcomePage, shouldShowWelcome } from './components/WelcomePage';
@@ -23,6 +24,8 @@ import { useBuiltinPluginStore } from './stores/builtinPluginStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { BUILTIN_PLUGINS } from './plugins/builtinRegistry';
 import { getPlatformService } from './services';
+import { checkForUpdate } from './services/updateService';
+import type { UpdateInfo } from './services/updateService';
 
 const RECENT_FILES_KEY = 'we_recent_files';
 type WelcomeRecentFile = { displayName: string; path: string };
@@ -82,6 +85,7 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showWelcomePage, setShowWelcomePage] = useState(shouldShowWelcome);
   const [welcomeRecentFiles, setWelcomeRecentFiles] = useState<WelcomeRecentFile[]>(loadWelcomeRecentFiles);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
 
   const disabledBuiltins = useBuiltinPluginStore((s) => s.disabledBuiltins);
   const templatePluginEnabled = !disabledBuiltins.includes('builtin-templates');
@@ -130,6 +134,13 @@ export function App() {
       setWelcomeRecentFiles(loadWelcomeRecentFiles());
     }
   }, [showWelcomePage]);
+
+  // Background update check — non-blocking, runs once on mount
+  useEffect(() => {
+    void checkForUpdate().then((info) => {
+      if (info) setUpdateInfo(info);
+    });
+  }, []);
 
   const handleWelcomeOpenFile = useCallback(async () => {
     try {
@@ -182,6 +193,23 @@ export function App() {
   return (
     <ErrorBoundary t={(key, fallback) => t(key) || fallback || key}>
     <div className="app-container" onContextMenu={(e) => e.preventDefault()}>
+      {/* Update notification banner */}
+      {updateInfo && (
+        <div className="update-banner" role="alert">
+          <ExternalLink size={13} />
+          <span>{t('app.updateAvailable', { version: updateInfo.latestVersion })}</span>
+          <a href={updateInfo.releaseUrl} target="_blank" rel="noreferrer" className="update-banner-link">
+            {t('app.download')}
+          </a>
+          <button
+            className="update-banner-dismiss"
+            onClick={() => setUpdateInfo(null)}
+            aria-label={t('app.dismiss')}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
       {/* Full-bleed viewport as base layer */}
       <div className="canvas-viewport">
         <Viewport />

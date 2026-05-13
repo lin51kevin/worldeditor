@@ -28,7 +28,7 @@ describe('Toolbar', () => {
   it('renders edit mode buttons', () => {
     render(<Toolbar />);
 
-    ['默认', '道路', '样条', '车道', '路口'].forEach((label) => {
+    ['默认', '道路', '样条', '车道', '车道簇'].forEach((label) => {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     });
   });
@@ -62,8 +62,8 @@ describe('Toolbar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '道路' }));
     fireEvent.click(screen.getByRole('button', { name: '车道' }));
-    fireEvent.click(screen.getByRole('button', { name: '路口' }));
+    fireEvent.click(screen.getByRole('button', { name: '车道簇' }));
 
-    expect(useEditorViewStore.getState().editMode).toBe('junction');
+    expect(useEditorViewStore.getState().editMode).toBe('lanesection');
   });
 });
