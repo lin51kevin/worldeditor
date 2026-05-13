@@ -87,7 +87,9 @@ function makeRoad(
 // ── Road Templates ───────────────────────────────────────────────────────────
 
 function applyRoadTemplate(laneSection: LaneSection, opts?: { x?: number; y?: number; hdg?: number }) {
-  const road = makeRoad(laneSection, opts?.x ?? 0, opts?.y ?? 0, opts?.hdg ?? 0);
+  // Guard: only create when explicit world coordinates are provided (drag-to-viewport).
+  if (opts?.x === undefined || opts?.y === undefined) return;
+  const road = makeRoad(laneSection, opts.x, opts.y, opts.hdg ?? 0);
   const store = useEditorStore.getState();
   store.addRoad(road);
   store.selectRoad(road.id);
@@ -184,8 +186,10 @@ const roadSection: TemplateSectionContrib = {
  * Roads are labelled as junction-member roads (junction_id is set).
  */
 function applyJunctionTemplate(armCount: number, armLength: number, opts?: { x?: number; y?: number }) {
-  const cx = opts?.x ?? 0;
-  const cy = opts?.y ?? 0;
+  // Guard: only create when explicit world coordinates are provided (drag-to-viewport).
+  if (opts?.x === undefined || opts?.y === undefined) return;
+  const cx = opts.x;
+  const cy = opts.y;
   const junctionId = `junction_${Date.now()}`;
   const junction: Junction = {
     id: junctionId,
@@ -249,7 +253,11 @@ const junctionSection: TemplateSectionContrib = {
 
 // ── Signal Templates ─────────────────────────────────────────────────────────
 
-function applySignalTemplate(type: string, _opts?: { x?: number; y?: number }) {
+function applySignalTemplate(type: string, opts?: { x?: number; y?: number }) {
+  // Signals don't require world position (they attach to selected road at s=0).
+  // Guard: only create when a road is selected.
+  const store = useEditorStore.getState();
+  if (!store.selectedRoadId) return;
   const signal: RoadSignal = {
     id: `signal_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     name: '',
@@ -265,7 +273,7 @@ function applySignalTemplate(type: string, _opts?: { x?: number; y?: number }) {
     orientation: '+',
     is_dynamic: false,
   };
-  useEditorStore.getState().addSignal(signal);
+  store.addSignal(signal);
 }
 
 const signalSection: TemplateSectionContrib = {
