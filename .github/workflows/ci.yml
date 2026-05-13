@@ -39,6 +39,18 @@ jobs:
       - name: Optimize WASM
         run: find crates/we-wasm/target -name "*.wasm" -exec wasm-opt -Oz -o {} {} \;
 
+  # Compile-check WASM target without running tests (strict gate)
+  wasm-compile-check:
+    name: WASM Compile Check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --target wasm32-unknown-unknown -p we-wasm
+
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-22.04
@@ -87,7 +99,7 @@ jobs:
   test-wasm:
     name: Test WASM
     runs-on: ubuntu-22.04
-    needs: build-wasm
+    needs: [build-wasm]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -97,10 +109,10 @@ jobs:
       - run: cargo install wasm-pack
       - name: Test we-core (WASM)
         run: wasm-pack test --headless --chrome crates/we-core
-        continue-on-error: true  # Phase 0: wasm-pack test setup in progress
+        continue-on-error: true  # Phase 0: wasm-pack headless Chrome is flaky in CI
       - name: Test we-wasm
         run: wasm-pack test --headless --chrome crates/we-wasm
-        continue-on-error: true
+        continue-on-error: true  # Phase 0: wasm-pack headless Chrome is flaky in CI
 
   test-frontend:
     name: Test Frontend
@@ -134,3 +146,15 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Security audit
         run: cargo install cargo-audit && cargo audit
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install yarn
+        run: corepack enable && corepack prepare yarn@stable --activate
+      - name: Install frontend dependencies
+        run: cd frontend && yarn install --immutable
+      - name: Frontend lint
+        run: cd frontend && yarn lint
+      - name: Frontend typecheck
+        run: cd frontend && yarn typecheck
