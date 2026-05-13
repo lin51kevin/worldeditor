@@ -10,7 +10,7 @@ test('toolbar mode buttons can be activated', async ({ page }) => {
   const toolbar = page.locator('.toolbar');
 
   for (const modeLabel of toolbarModes) {
-    const modeButton = toolbar.getByRole('button', { name: modeLabel });
+    const modeButton = toolbar.getByRole('button', { name: modeLabel, exact: true });
     await modeButton.click();
     await expect(modeButton).toHaveAttribute('aria-pressed', 'true');
   }
