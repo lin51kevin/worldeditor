@@ -1,14 +1,15 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WelcomePage } from './WelcomePage';
+import type { RecentFile } from './WelcomePage';
 
 describe('WelcomePage', () => {
   const baseProps = {
-    onClose: vi.fn(),
+    recentFiles: [] as RecentFile[],
     onNewProject: vi.fn(),
     onOpenFile: vi.fn(),
-    recentFiles: [] as Array<{ displayName: string; path: string }>,
-    onOpenRecentFile: vi.fn(),
+    onOpenRecent: vi.fn(),
+    onRemoveRecent: vi.fn(),
   };
 
   beforeEach(() => {
@@ -19,35 +20,47 @@ describe('WelcomePage', () => {
   it('renders without crashing', () => {
     render(<WelcomePage {...baseProps} />);
 
-    expect(screen.getByText('WorldEditor Next')).toBeInTheDocument();
+    expect(screen.getByText('WorldEditor')).toBeInTheDocument();
   });
 
-  it("has don't show again checkbox", () => {
+  it('shows the New Project and Open File buttons', () => {
     render(<WelcomePage {...baseProps} />);
 
-    expect(screen.getByRole('checkbox', { name: '启动时不再显示此页面' })).toBeInTheDocument();
+    expect(screen.getByText('New Project')).toBeInTheDocument();
+    expect(screen.getByText('Open File…')).toBeInTheDocument();
   });
 
-  it('calls onClose when close button is clicked', () => {
-    const onClose = vi.fn();
-    render(<WelcomePage {...baseProps} onClose={onClose} />);
-
-    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
+  it('shows the empty state message when no recent files', () => {
+    render(<WelcomePage {...baseProps} recentFiles={[]} />);
+    expect(screen.getByText('No recent files. Open a file to get started.')).toBeInTheDocument();
   });
 
-  it('shows recent files or the empty state message', () => {
-    const { rerender } = render(<WelcomePage {...baseProps} recentFiles={[]} />);
-    expect(screen.getByText('暂无最近文件')).toBeInTheDocument();
-
-    rerender(
-      <WelcomePage
-        {...baseProps}
-        recentFiles={[{ displayName: 'demo.xodr', path: 'C:\\maps\\demo.xodr' }]}
-      />,
-    );
+  it('shows recent files when provided', () => {
+    const recentFile: RecentFile = { name: 'demo.xodr', path: '/maps/demo.xodr', lastOpened: Date.now() };
+    render(<WelcomePage {...baseProps} recentFiles={[recentFile]} />);
 
     expect(screen.getAllByText('demo.xodr').length).toBeGreaterThan(0);
+  });
+
+  it('calls onNewProject when New Project button is clicked', () => {
+    render(<WelcomePage {...baseProps} />);
+
+    fireEvent.click(screen.getByText('New Project'));
+    expect(baseProps.onNewProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onOpenFile when Open File button is clicked', () => {
+    render(<WelcomePage {...baseProps} />);
+
+    fireEvent.click(screen.getByText('Open File…'));
+    expect(baseProps.onOpenFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onOpenRecent when a recent file is clicked', () => {
+    const recentFile: RecentFile = { name: 'demo.xodr', path: '/maps/demo.xodr', lastOpened: Date.now() };
+    render(<WelcomePage {...baseProps} recentFiles={[recentFile]} />);
+
+    fireEvent.click(screen.getByText('demo.xodr'));
+    expect(baseProps.onOpenRecent).toHaveBeenCalledWith(recentFile);
   });
 });
