@@ -1,13 +1,70 @@
 /**
- * Built-in plugin registry — static metadata for plugins compiled into the app.
+ * Built-in plugin registry — static metadata and mount functions for plugins compiled into the app.
  *
  * Built-ins are always loaded (they mount in App.tsx) and cannot be
  * uninstalled or disabled via the Plugin Manager UI.
  */
 
 import type { PluginInfo } from '../hooks/usePlugins';
+import { mountRoadToolsPlugin } from './roadTools.plugin';
+import { mountTemplatesPlugin } from './templates.plugin';
+import { mountAdvancedEditingPlugin } from './advancedEditing.plugin';
+import { mountIoCsvPlugin } from './ioCsv.plugin';
+import { mountIoObj3dPlugin } from './ioObj3d.plugin';
+import { mountIoLanelet2Plugin } from './ioLanelet2.plugin';
+import { mountIoShapefilePlugin } from './ioShapefile.plugin';
+import { mountIoDxfPlugin } from './ioDxf.plugin';
+import { mountIoNioPlugin } from './ioNio.plugin';
+import { mountIoMifPlugin } from './ioMif.plugin';
+import { mountIoOsmPlugin } from './ioOsm.plugin';
+import { mountIoSignalsPlugin } from './ioSignals.plugin';
+import { mountIoXodrExtPlugin } from './ioXodrExt.plugin';
+import { mountGisToolsPlugin } from './gisTools.plugin';
+import { mountValidationPlugin } from './validation.plugin';
+import { mountTrafficPlugin } from './traffic.plugin';
+import { mountPointcloudPlugin } from './pointcloud.plugin';
+import { mountSatellitePlugin } from './satellite.plugin';
+import { mountModels3dPlugin } from './models3d.plugin';
+import { mountScriptingPlugin } from './scripting.plugin';
+import { mountEcosystemPlugin } from './ecosystem.plugin';
+import { mountLaneDetectPlugin } from './laneDetect.plugin';
+import { mountConverterPlugin } from './converter.plugin';
 
-export const BUILTIN_PLUGINS: PluginInfo[] = [
+/** Plugin entry with a mount function for App.tsx registration. */
+export interface BuiltinPluginEntry extends PluginInfo {
+  /** Mount the plugin — returns a cleanup function. */
+  mount: () => () => void;
+}
+
+/** Mount functions keyed by plugin id for lookup. */
+const MOUNT_MAP: Record<string, () => () => void> = {
+  'road-tools': mountRoadToolsPlugin,
+  'builtin-templates': mountTemplatesPlugin,
+  'advanced-editing': mountAdvancedEditingPlugin,
+  'io-csv': mountIoCsvPlugin,
+  'io-obj3d': mountIoObj3dPlugin,
+  'io-lanelet2': mountIoLanelet2Plugin,
+  'io-shapefile': mountIoShapefilePlugin,
+  'io-dxf': mountIoDxfPlugin,
+  'io-nio': mountIoNioPlugin,
+  'io-mif': mountIoMifPlugin,
+  'io-osm': mountIoOsmPlugin,
+  'io-signals': mountIoSignalsPlugin,
+  'io-xodr-ext': mountIoXodrExtPlugin,
+  'gis-tools': mountGisToolsPlugin,
+  'validation': mountValidationPlugin,
+  'traffic': mountTrafficPlugin,
+  'pointcloud': mountPointcloudPlugin,
+  'satellite': mountSatellitePlugin,
+  '3d-models': mountModels3dPlugin,
+  'scripting': mountScriptingPlugin,
+  'ecosystem': mountEcosystemPlugin,
+  'lane-detect': mountLaneDetectPlugin,
+  'converter': mountConverterPlugin,
+};
+
+/** Static metadata for all built-in plugins. */
+const BUILTIN_META: PluginInfo[] = [
   {
     id: 'road-tools',
     name: 'Road Tools',
@@ -65,3 +122,9 @@ export const BUILTIN_PLUGINS: PluginInfo[] = [
   { id: 'lane-detect', name: 'Lane Detection', nameKey: 'pluginManager.builtinLaneDetectName', version: '1.0.0', description: 'Automated lane detection (Phase 3)', descriptionKey: 'pluginManager.builtinLaneDetectDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'converter', name: 'Batch Converter', nameKey: 'pluginManager.builtinConverterName', version: '1.0.0', description: 'Batch format conversion panel', descriptionKey: 'pluginManager.builtinConverterDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
 ];
+
+/** Builtin plugins with mount functions attached. */
+export const BUILTIN_PLUGINS: BuiltinPluginEntry[] = BUILTIN_META.map((meta) => ({
+  ...meta,
+  mount: MOUNT_MAP[meta.id] ?? (() => () => {}),
+}));

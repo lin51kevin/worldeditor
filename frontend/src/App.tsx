@@ -9,7 +9,6 @@ import { PropertyPanel } from './components/PropertyPanel';
 import { TemplatePanel } from './components/TemplatePanel';
 import { StatusBar } from './components/StatusBar';
 import { CommandPalette } from './components/CommandPalette';
-// import { OutputPanel } from './components/OutputPanel';
 import { FloatingPanel } from './components/FloatingPanel';
 import { MeasurementPanel } from './components/MeasurementPanel';
 import { PluginManager } from './components/PluginManager';
@@ -20,29 +19,8 @@ import { useEditorStore } from './stores/editorStore';
 import { useThemeStore } from './stores/themeStore';
 import { useEditorViewStore } from './stores/editorViewStore';
 import { useBuiltinPluginStore } from './stores/builtinPluginStore';
-import { mountRoadToolsPlugin } from './plugins/roadTools.plugin';
-import { mountTemplatesPlugin } from './plugins/templates.plugin';
-import { mountAdvancedEditingPlugin } from './plugins/advancedEditing.plugin';
-import { mountIoCsvPlugin } from './plugins/ioCsv.plugin';
-import { mountIoObj3dPlugin } from './plugins/ioObj3d.plugin';
-import { mountIoLanelet2Plugin } from './plugins/ioLanelet2.plugin';
-import { mountIoShapefilePlugin } from './plugins/ioShapefile.plugin';
-import { mountIoDxfPlugin } from './plugins/ioDxf.plugin';
-import { mountIoNioPlugin } from './plugins/ioNio.plugin';
-import { mountIoMifPlugin } from './plugins/ioMif.plugin';
-import { mountIoOsmPlugin } from './plugins/ioOsm.plugin';
-import { mountIoSignalsPlugin } from './plugins/ioSignals.plugin';
-import { mountIoXodrExtPlugin } from './plugins/ioXodrExt.plugin';
-import { mountGisToolsPlugin } from './plugins/gisTools.plugin';
-import { mountValidationPlugin } from './plugins/validation.plugin';
-import { mountTrafficPlugin } from './plugins/traffic.plugin';
-import { mountPointcloudPlugin } from './plugins/pointcloud.plugin';
-import { mountSatellitePlugin } from './plugins/satellite.plugin';
-import { mountModels3dPlugin } from './plugins/models3d.plugin';
-import { mountScriptingPlugin } from './plugins/scripting.plugin';
-import { mountEcosystemPlugin } from './plugins/ecosystem.plugin';
-import { mountLaneDetectPlugin } from './plugins/laneDetect.plugin';
-import { mountConverterPlugin } from './plugins/converter.plugin';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { BUILTIN_PLUGINS } from './plugins/builtinRegistry';
 
 export function App() {
   const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
@@ -69,38 +47,11 @@ export function App() {
     initLayout();
   }, [initTheme, initLayout]);
 
-  // Conditionally mount builtin plugins based on enabled state
+  // Conditionally mount enabled builtin plugins via registry
   useEffect(() => {
-    const cleanups: Array<() => void> = [];
-    if (!disabledBuiltins.includes('road-tools')) {
-      cleanups.push(mountRoadToolsPlugin());
-    }
-    if (!disabledBuiltins.includes('builtin-templates')) {
-      cleanups.push(mountTemplatesPlugin());
-    }
-    if (!disabledBuiltins.includes('advanced-editing')) {
-      cleanups.push(mountAdvancedEditingPlugin());
-    }
-    if (!disabledBuiltins.includes('io-csv')) cleanups.push(mountIoCsvPlugin());
-    if (!disabledBuiltins.includes('io-obj3d')) cleanups.push(mountIoObj3dPlugin());
-    if (!disabledBuiltins.includes('io-lanelet2')) cleanups.push(mountIoLanelet2Plugin());
-    if (!disabledBuiltins.includes('io-shapefile')) cleanups.push(mountIoShapefilePlugin());
-    if (!disabledBuiltins.includes('io-dxf')) cleanups.push(mountIoDxfPlugin());
-    if (!disabledBuiltins.includes('io-nio')) cleanups.push(mountIoNioPlugin());
-    if (!disabledBuiltins.includes('io-mif')) cleanups.push(mountIoMifPlugin());
-    if (!disabledBuiltins.includes('io-osm')) cleanups.push(mountIoOsmPlugin());
-    if (!disabledBuiltins.includes('io-signals')) cleanups.push(mountIoSignalsPlugin());
-    if (!disabledBuiltins.includes('io-xodr-ext')) cleanups.push(mountIoXodrExtPlugin());
-    if (!disabledBuiltins.includes('gis-tools')) cleanups.push(mountGisToolsPlugin());
-    if (!disabledBuiltins.includes('validation')) cleanups.push(mountValidationPlugin());
-    if (!disabledBuiltins.includes('traffic')) cleanups.push(mountTrafficPlugin());
-    if (!disabledBuiltins.includes('pointcloud')) cleanups.push(mountPointcloudPlugin());
-    if (!disabledBuiltins.includes('satellite')) cleanups.push(mountSatellitePlugin());
-    if (!disabledBuiltins.includes('3d-models')) cleanups.push(mountModels3dPlugin());
-    if (!disabledBuiltins.includes('scripting')) cleanups.push(mountScriptingPlugin());
-    if (!disabledBuiltins.includes('ecosystem')) cleanups.push(mountEcosystemPlugin());
-    if (!disabledBuiltins.includes('lane-detect')) cleanups.push(mountLaneDetectPlugin());
-    if (!disabledBuiltins.includes('converter')) cleanups.push(mountConverterPlugin());
+    const cleanups = BUILTIN_PLUGINS
+      .filter((p) => !disabledBuiltins.includes(p.id))
+      .map((p) => p.mount());
     return () => cleanups.forEach((fn) => fn());
   }, [disabledBuiltins]);
 
@@ -122,75 +73,13 @@ export function App() {
     }
   }, [t, i18n.language]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        const { canUndo, undo } = useEditorStore.getState();
-        if (canUndo()) undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        const { canRedo, redo } = useEditorStore.getState();
-        if (canRedo()) redo();
-      }
-      // Ctrl+B: toggle left panel
-      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
-        e.preventDefault();
-        toggleLeftPanel();
-      }
-      // L: toggle layer panel (Scheme B shortcut)
-      if (e.key === 'l' || e.key === 'L') {
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
-        if (e.ctrlKey || e.metaKey || e.altKey) return;
-        if (target.closest('.cp-overlay, .menubar-dropdown, [role="dialog"], dialog')) return;
-        e.preventDefault();
-        toggleLeftPanel();
-      }
-      // I: toggle inspector/right panel
-      if (e.key === 'i' || e.key === 'I') {
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
-        if (e.ctrlKey || e.metaKey || e.altKey) return;
-        if (target.closest('.cp-overlay, .menubar-dropdown, [role="dialog"], dialog')) return;
-        e.preventDefault();
-        toggleRightPanel();
-      }
-      // Ctrl+J: toggle output panel
-      if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
-        e.preventDefault();
-        toggleOutputPanel();
-      }
-      // Ctrl+A: select all roads and junctions
-      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
-        e.preventDefault();
-        useEditorStore.getState().selectAll();
-      }
-      // Ctrl+C: copy selected road to clipboard
-      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-        e.preventDefault();
-        useEditorStore.getState().copySelected();
-      }
-      // Ctrl+V: paste road from clipboard
-      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-        e.preventDefault();
-        useEditorStore.getState().pasteFromClipboard();
-      }
-      // ?: toggle shortcut help overlay (no modifier, not in input)
-      if (e.key === '?') {
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
-        setShowShortcutHelp((v) => !v);
-      }
-      // Escape: close shortcut help overlay (if open)
-      if (e.key === 'Escape') {
-        setShowShortcutHelp(false);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [toggleLeftPanel, toggleRightPanel, toggleOutputPanel]);
+  // Centralised keyboard shortcuts
+  useKeyboardShortcuts({
+    toggleLeftPanel,
+    toggleRightPanel,
+    toggleOutputPanel,
+    onShowShortcutHelp: setShowShortcutHelp,
+  });
 
   // Show right panel only when something is selected (Quick Inspector behavior)
   const showRightPanel = !layout.rightCollapsed && (!!selectedRoadId || !!selectedJunctionId);
@@ -258,13 +147,6 @@ export function App() {
           <PropertyPanel />
         </FloatingPanel>
       )}
-
-      {/* Floating output panel */}
-      {/* {!layout.outputCollapsed && (
-        <div className="floating-output">
-          <OutputPanel />
-        </div>
-      )} */}
 
       {/* Floating status chips */}
       <StatusBar />
