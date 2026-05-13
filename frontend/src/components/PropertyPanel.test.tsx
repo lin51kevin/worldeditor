@@ -168,4 +168,31 @@ describe('PropertyPanel', () => {
 
     expect(useEditorStore.getState().project.roads[0]?.elevation_profile.length).toBe(1);
   });
+
+  it('shows add lane buttons and clicking adds a lane to the correct side', () => {
+    const road = makeRoad();
+
+    act(() => {
+      useEditorStore.setState({
+        project: makeProject([road]),
+        selectedRoadId: road.id,
+        selectedObjectType: 'road',
+      });
+    });
+
+    render(<PropertyPanel />);
+
+    const addLaneButtons = screen.getAllByTitle('添加车道');
+    expect(addLaneButtons.length).toBeGreaterThan(0);
+
+    const leftBefore = useEditorStore.getState().project.roads[0]!.lane_sections[0]!.left.length;
+    fireEvent.click(addLaneButtons[0]!);
+    const leftAfter = useEditorStore.getState().project.roads[0]!.lane_sections[0]!.left.length;
+    expect(leftAfter).toBe(leftBefore + 1);
+
+    const leftLanes = useEditorStore.getState().project.roads[0]!.lane_sections[0]!.left;
+    const newLane = leftLanes[leftLanes.length - 1]!;
+    expect(newLane.id).toBeGreaterThan(0);
+    expect(newLane.lane_type).toBe('Driving');
+  });
 });

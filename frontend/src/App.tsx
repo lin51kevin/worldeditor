@@ -93,7 +93,7 @@ export function App() {
       </div>
 
       {/* Floating UI layers on top of viewport */}
-      <MenuBar onOpenPluginManager={() => setShowPluginManager(true)} onOpenSettings={() => setShowSettings(true)} />
+      <MenuBar onOpenPluginManager={() => setShowPluginManager(true)} />
       <Toolbar />
 
       {/* Floating left panel */}

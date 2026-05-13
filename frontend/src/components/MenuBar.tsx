@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Menu as MenuIcon, ChevronRight,
-  FileText, FolderOpen, Save,
+  FileText, FolderOpen, Save, Copy,
   Undo2, Redo2,
   Grid, Crosshair, Magnet, Ruler, RotateCcw,
 } from 'lucide-react';
@@ -26,11 +26,17 @@ interface MenuItem {
   separator?: boolean;
   disabled?: boolean;
   checked?: boolean;
+  submenu?: MenuItem[];
 }
 
 interface Menu {
   label: string;
   items: MenuItem[];
+}
+
+interface RecentFile {
+  displayName: string;
+  path: string;
 }
 
 // Show About dialog
@@ -40,7 +46,7 @@ async function showAbout(t: (key: string) => string) {
 }
 
 // Show version info
-async function showVersion(t: (key: string) => string) {
+export async function showVersion(t: (key: string) => string) {
   const version = '1.8.0430';
   const buildDate = '2024-12-12';
   await showAlert(
@@ -54,25 +60,37 @@ async function showUserManual(t: (key: string) => string) {
   await showAlert(t('dialog.userManualContent'), t('dialog.userManualTitle'));
 }
 
+async function checkForUpdates(t: (key: string) => string) {
+  // TODO: [Phase D4] Implement real version check via GitHub Releases API
+  await showAlert('Update check: coming in a future version.', t('menu.checkForUpdates'));
+}
+
 // Recent files helpers
 const RECENT_FILES_KEY = 'we_recent_files';
 const MAX_RECENT = 10;
 
-function loadRecentFiles(): string[] {
+function loadRecentFiles(): RecentFile[] {
   try {
-    return JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? '[]') as string[];
+    const raw = JSON.parse(localStorage.getItem(RECENT_FILES_KEY) ?? '[]') as unknown[];
+    return raw.map((item): RecentFile | null => {
+      if (typeof item === 'string') return { displayName: item, path: item };
+      if (typeof item === 'object' && item !== null && 'displayName' in item && 'path' in item) {
+        return item as RecentFile;
+      }
+      return null;
+    }).filter((x): x is RecentFile => x !== null);
   } catch {
     return [];
   }
 }
 
-function saveRecentFiles(files: string[]): void {
+function saveRecentFiles(files: RecentFile[]): void {
   localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(files));
 }
 
-function pushRecentFile(name: string): string[] {
-  const files = loadRecentFiles().filter((f) => f !== name);
-  files.unshift(name);
+function pushRecentFile(file: RecentFile): RecentFile[] {
+  const files = loadRecentFiles().filter((f) => f.path !== file.path);
+  files.unshift(file);
   const trimmed = files.slice(0, MAX_RECENT);
   saveRecentFiles(trimmed);
   return trimmed;
@@ -102,6 +120,14 @@ function appendPluginItems(menu: Menu, items: MenuItemContrib[], t: (key: string
   };
 }
 
+function appendRoadItemsToEdit(menu: Menu, items: MenuItemContrib[], t: (key: string) => string): Menu {
+  if (items.length === 0) return menu;
+  return {
+    ...menu,
+    items: [...menu.items, { separator: true, label: '' }, ...buildGroupedRoadItems(items, t)],
+  };
+}
+
 // Group order for Road menu contributions
 const ROAD_GROUP_ORDER = ['', 'transform', 'edit', 'advanced', 'deploy', 'infrastructure', 'junction'];
 
@@ -113,10 +139,8 @@ function buildGroupedRoadItems(
   items: MenuItemContrib[],
   t: (key: string) => string,
 ): MenuItem[] {
-  // Remove manual separator entries
   const realItems = items.filter((item) => !item.separator);
 
-  // Group by group field (undefined → '')
   const groups = new Map<string, MenuItemContrib[]>();
   for (const item of realItems) {
     const g = item.group ?? '';
@@ -124,7 +148,6 @@ function buildGroupedRoadItems(
     groups.get(g)!.push(item);
   }
 
-  // Sort group keys by predefined order
   const sortedKeys = [...groups.keys()].sort((a, b) => {
     const ai = ROAD_GROUP_ORDER.indexOf(a);
     const bi = ROAD_GROUP_ORDER.indexOf(b);
@@ -170,14 +193,13 @@ function buildMenus(
   onToggleLeftPanel: () => void,
   onToggleRightPanel: () => void,
   onToggleTemplatePanel: () => void,
-  // onToggleOutputPanel: () => void,
   onCalculateRoadLength: () => void,
   onToggleSnap: () => void,
   onMeasureDistance: () => void,
   onMeasureAngle: () => void,
   onMeasureArea: () => void,
   onOpenPluginManager: () => void,
-  onOpenSettings: () => void,
+  _onOpenSettings: () => void,
   canUndo: boolean,
   canRedo: boolean,
   showGrid: boolean,
@@ -187,7 +209,6 @@ function buildMenus(
   leftCollapsed: boolean,
   rightCollapsed: boolean,
   templatePanelCollapsed: boolean,
-  // outputCollapsed: boolean,
   templatePluginEnabled: boolean,
   t: (key: string) => string,
 ): Menu[] {
@@ -228,7 +249,6 @@ function buildMenus(
         { label: t('menu.showLayerPanel'), action: onToggleLeftPanel, checked: !leftCollapsed },
         { label: t('menu.showPropertyPanel'), action: onToggleRightPanel, checked: !rightCollapsed },
         { label: t('menu.showTemplatePanel'), action: onToggleTemplatePanel, checked: !templatePanelCollapsed, disabled: !templatePluginEnabled },
-        // { label: t('menu.showOutputPanel'), action: onToggleOutputPanel, checked: !outputCollapsed },
         { separator: true, label: '' },
         { label: t('menu.resetPanels'), action: onResetPanels },
       ],
@@ -249,17 +269,15 @@ function buildMenus(
       label: t('menu.plugins'),
       items: [
         { label: t('menu.pluginManager'), action: onOpenPluginManager },
-        { separator: true, label: '' },
-        { label: t('menu.settings'), action: onOpenSettings },
       ],
     },
     {
       label: t('menu.help'),
       items: [
         { label: t('menu.userManual'), action: () => void showUserManual(t) },
+        { label: t('menu.checkForUpdates'), action: () => void checkForUpdates(t) },
         { separator: true, label: '' },
         { label: t('menu.aboutWorldEditor'), action: () => void showAbout(t) },
-        { label: t('menu.versionInfo'), action: () => void showVersion(t) },
       ],
     },
   ];
@@ -270,7 +288,7 @@ interface MenuBarProps {
   onOpenSettings?: () => void;
 }
 
-export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () => {} }: MenuBarProps) {
+export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings: _onOpenSettings = () => {} }: MenuBarProps) {
   const project = useEditorStore((s) => s.project);
   const isDirty = useEditorStore((s) => s.isDirty);
   const savedProject = useEditorStore((s) => s.savedProject);
@@ -297,7 +315,6 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     toggleLeftPanel,
     toggleRightPanel,
     toggleTemplatePanel,
-    // toggleOutputPanel,
   } = useEditorViewStore();
 
   const { theme, toggleTheme } = useThemeStore();
@@ -328,11 +345,11 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
 
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const [hoveredMenu, setHoveredMenu] = useState<number | null>(null);
-  const [recentFiles, setRecentFiles] = useState<string[]>(loadRecentFiles);
+  const [hoveredSubItem, setHoveredSubItem] = useState<number | null>(null);
+  const [recentFiles, setRecentFiles] = useState<RecentFile[]>(loadRecentFiles);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
 
-  // File: New
   const handleNew = useCallback(async () => {
     if (isDirty) {
       if (!await showConfirm(t('dialog.confirmNew'))) return;
@@ -340,7 +357,6 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     reset();
   }, [isDirty, reset, t]);
 
-  // File: Open
   const handleOpen = useCallback(async () => {
     try {
       const platform = await getPlatformService();
@@ -353,14 +369,13 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
       }
       proj.name = file.name;
       setProject(proj);
-      setRecentFiles(pushRecentFile(file.name));
+      setRecentFiles(pushRecentFile({ displayName: file.name, path: file.path ?? file.name }));
     } catch (err) {
       console.error('[MenuBar] Failed to open file:', err);
       await showAlert(t('dialog.openError'));
     }
   }, [setProject, t]);
 
-  // File: Save
   const handleSave = useCallback(async () => {
     const platform = await getPlatformService();
     const xml = await platform.writeOpenDrive(project);
@@ -368,7 +383,6 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     useEditorStore.getState().markClean();
   }, [project]);
 
-  // File: Save As
   const handleSaveAs = useCallback(async () => {
     const name = await showPrompt(t('dialog.projectName'), project.name);
     if (!name) return;
@@ -379,7 +393,6 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     useEditorStore.getState().markClean();
   }, [project, setProject, t]);
 
-  // Import OpenDRIVE
   const handleImportOpenDrive = useCallback(async () => {
     try {
       const platform = await getPlatformService();
@@ -392,14 +405,42 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
       }
       proj.name = file.name;
       setProject(proj);
-      setRecentFiles(pushRecentFile(file.name));
+      setRecentFiles(pushRecentFile({ displayName: file.name, path: file.path ?? file.name }));
     } catch (err) {
       console.error('[MenuBar] Failed to import OpenDRIVE:', err);
       await showAlert(t('dialog.parseError'));
     }
   }, [setProject, t]);
 
-  // Export OpenDRIVE
+  const handleOpenRecentFile = useCallback(async (recent: RecentFile) => {
+    try {
+      const platform = await getPlatformService();
+      const result = await platform.openFileByPath(recent.path);
+      if (!result) {
+        if (recent.path !== recent.displayName) {
+          const updated = loadRecentFiles().filter((f) => f.path !== recent.path);
+          saveRecentFiles(updated);
+          setRecentFiles(updated);
+          await showAlert(`${t('dialog.fileNotFound')}: ${recent.displayName}`);
+        }
+        return;
+      }
+      const proj = await platform.parseOpenDrive(result.content);
+      if (!proj || !Array.isArray(proj.roads)) {
+        await showAlert(t('dialog.parseError'));
+        return;
+      }
+      proj.name = result.name;
+      setProject(proj);
+      setRecentFiles(pushRecentFile({ displayName: result.name, path: recent.path }));
+    } catch {
+      const updated = loadRecentFiles().filter((f) => f.path !== recent.path);
+      saveRecentFiles(updated);
+      setRecentFiles(updated);
+      await showAlert(`${t('dialog.fileNotFound')}: ${recent.displayName}`);
+    }
+  }, [setProject, t]);
+
   const handleExportOpenDrive = useCallback(async () => {
     const platform = await getPlatformService();
     const xml = await platform.writeOpenDrive(project);
@@ -408,7 +449,6 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     await platform.saveFile(name, xml);
   }, [project, t]);
 
-  // Edit: Delete
   const handleDelete = useCallback(() => {
     const { selectedRoadId, removeRoad } = useEditorStore.getState();
     if (selectedRoadId) {
@@ -416,24 +456,20 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     }
   }, []);
 
-  // View: 3D
   const handleView3D = useCallback(() => {
     setDimension('3d');
     emitViewportEvent({ type: 'set-dimension', dimension: '3d' });
   }, [setDimension]);
 
-  // View: 2D
   const handleView2D = useCallback(() => {
     setDimension('2d');
     emitViewportEvent({ type: 'set-dimension', dimension: '2d' });
   }, [setDimension]);
 
-  // Zoom to fit
   const handleZoomToFit = useCallback(() => {
     emitViewportEvent({ type: 'zoom-to-fit' });
   }, []);
 
-  // Zoom to selected
   const handleZoomToSelected = useCallback(() => {
     const { selectedRoadId, selectedJunctionId } = useEditorStore.getState();
     if (selectedRoadId) {
@@ -443,21 +479,18 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     }
   }, []);
 
-  // Toggle grid
   const handleToggleGrid = useCallback(() => {
     const newVal = !useEditorViewStore.getState().showGrid;
     toggleGrid();
     emitViewportEvent({ type: 'set-show-grid', show: newVal });
   }, [toggleGrid]);
 
-  // Toggle axis
   const handleToggleAxis = useCallback(() => {
     const newVal = !useEditorViewStore.getState().showAxis;
     toggleAxis();
     emitViewportEvent({ type: 'set-show-axis', show: newVal });
   }, [toggleAxis]);
 
-  // Calculate road length
   const handleCalculateRoadLength = useCallback(async () => {
     const total = calculateTotalRoadLength(project);
     await showAlert(
@@ -466,17 +499,19 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     );
   }, [project, t]);
 
-  // Reset unsaved changes
   const handleResetToSaved = useCallback(async () => {
     if (!isDirty || !savedProject) return;
     if (!await showConfirm(t('dialog.confirmReset'))) return;
     resetToSaved();
   }, [isDirty, savedProject, resetToSaved, t]);
 
-  // Exit: close the application window
-  const handleExit = useCallback(() => {
+  const handleExit = useCallback(async () => {
+    if (isDirty) {
+      const confirmed = await showConfirm(t('dialog.exitUnsaved'));
+      if (!confirmed) return;
+    }
     window.close();
-  }, []);
+  }, [isDirty, t]);
 
   const staticMenus = buildMenus(
     project,
@@ -485,7 +520,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     handleOpen,
     handleSave,
     handleSaveAs,
-    handleExit,
+    () => { void handleExit(); },
     undo,
     redo,
     handleDelete,
@@ -499,14 +534,13 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     toggleLeftPanel,
     toggleRightPanel,
     toggleTemplatePanel,
-    // toggleOutputPanel,
     handleCalculateRoadLength,
     toggleSnap,
     () => setMeasureMode('distance'),
     () => setMeasureMode('angle'),
     () => setMeasureMode('area'),
     onOpenPluginManager,
-    onOpenSettings,
+    _onOpenSettings,
     canUndo(),
     canRedo(),
     showGrid,
@@ -516,127 +550,114 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
     layout.leftCollapsed,
     layout.rightCollapsed,
     layout.templatePanelCollapsed,
-    // layout.outputCollapsed,
     templatePluginEnabled,
     t,
   );
 
-  // Import menu: OpenDRIVE + all plugin importers (disabled stubs shown greyed out)
-  const importMenu: Menu = {
-    label: t('menu.import'),
+  const recentSubmenu: MenuItem[] = recentFiles.length === 0
+    ? [{ label: t('menu.noRecentFiles'), disabled: true }]
+    : [
+        ...recentFiles.map((f): MenuItem => ({
+          label: f.displayName,
+          action: () => { void handleOpenRecentFile(f); },
+        })),
+        { separator: true, label: '' },
+        { label: t('menu.clearRecentFiles'), action: () => { saveRecentFiles([]); setRecentFiles([]); } },
+      ];
+
+  const importSubmenu: MenuItem[] = [
+    { label: t('menu.importOpenDrive'), action: handleImportOpenDrive },
+    ...importers.filter((imp) => !imp.disabled).map((imp): MenuItem => ({
+      label: `${t('menu.import')} ${imp.formatName}...`,
+      action: () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = imp.extensions.join(',');
+        input.onchange = async () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          const content = await file.arrayBuffer();
+          const proj = await imp.onImport(content, file.name);
+          proj.name = file.name;
+          useEditorStore.getState().setProject(proj);
+        };
+        input.click();
+      },
+    })),
+  ];
+
+  const exportSubmenu: MenuItem[] = [
+    { label: t('menu.exportOpenDrive'), action: handleExportOpenDrive, disabled: project.roads.length === 0 },
+    ...exporters.filter((exp) => !exp.disabled).map((exp): MenuItem => ({
+      label: `${t('menu.export')} ${exp.formatName}...`,
+      action: () => { void exp.onExport(project); },
+    })),
+  ];
+
+  const fileMenu: Menu = {
+    label: t('menu.file'),
     items: [
-      { label: t('menu.importOpenDrive'), action: handleImportOpenDrive },
-      ...(importers.length > 0 ? [{ separator: true, label: '' } as MenuItem] : []),
-      ...importers.map((imp): MenuItem => ({
-        label: `${t('menu.import')} ${imp.formatName}...`,
-        disabled: imp.disabled === true,
-        action: imp.disabled ? undefined : () => {
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = imp.extensions.join(',');
-          input.onchange = async () => {
-            const file = input.files?.[0];
-            if (!file) return;
-            const content = await file.arrayBuffer();
-            const proj = await imp.onImport(content, file.name);
-            proj.name = file.name;
-            useEditorStore.getState().setProject(proj);
-          };
-          input.click();
-        },
-      })),
+      { label: t('menu.newProject'), shortcut: 'Ctrl+N', action: handleNew },
+      { label: t('menu.openFile'), shortcut: 'Ctrl+O', action: handleOpen },
+      { label: t('menu.openRecentFiles'), submenu: recentSubmenu },
+      { separator: true, label: '' },
+      { label: t('menu.import'), submenu: importSubmenu },
+      { label: t('menu.export'), submenu: exportSubmenu },
+      { separator: true, label: '' },
+      { label: t('menu.save'), shortcut: 'Ctrl+S', action: handleSave, disabled: !isDirty },
+      { label: t('menu.saveAs'), shortcut: 'Ctrl+Shift+S', action: handleSaveAs },
+      { separator: true, label: '' },
+      { label: t('menu.exit'), action: () => { void handleExit(); } },
     ],
   };
 
-  // Export menu: OpenDRIVE + all plugin exporters (disabled stubs shown greyed out)
-  const exportMenu: Menu = {
-    label: t('menu.export'),
-    items: [
-      { label: t('menu.exportOpenDrive'), action: handleExportOpenDrive, disabled: project.roads.length === 0 },
-      ...(exporters.length > 0 ? [{ separator: true, label: '' } as MenuItem] : []),
-      ...exporters.map((exp): MenuItem => ({
-        label: `${t('menu.export')} ${exp.formatName}...`,
-        disabled: exp.disabled === true,
-        action: exp.disabled ? undefined : () => void exp.onExport(project),
-      })),
-    ],
-  };
-
-  // Recent files menu
-  const recentFilesMenu: Menu = {
-    label: t('menu.recentFiles'),
-    items: recentFiles.length === 0
-      ? [{ label: t('menu.noRecentFiles'), disabled: true }]
-      : [
-          ...recentFiles.map((name): MenuItem => ({
-            label: name,
-            action: handleOpen,
-          })),
-          { separator: true, label: '' },
-          {
-            label: t('menu.clearRecentFiles'),
-            action: () => { saveRecentFiles([]); setRecentFiles([]); },
-          },
-        ],
-  };
-
-  // Insert plugin-contributed Road menu between Edit (index 1) and View (index 2)
-  // Items are grouped by their `group` field with separators between groups.
-  const roadMenu = roadMenuItems.length > 0
-    ? [{
-        label: t('menu.road'),
-        items: buildGroupedRoadItems(roadMenuItems, t),
-      }]
-    : [];
-
-  // Inject plugin-contributed items into View (index 2) and Tools (index 3)
+  const editMenu = appendRoadItemsToEdit(staticMenus[1]!, roadMenuItems, t);
   const viewMenu = appendPluginItems(staticMenus[2]!, viewPluginItems, t);
   const toolsMenu = appendPluginItems(staticMenus[3]!, toolsPluginItems, t);
 
   const menus = [
-    staticMenus[0]!,           // File (with Exit)
-    staticMenus[1]!,           // Edit
-    importMenu,                // Import top-level menu
-    exportMenu,                // Export top-level menu
-    recentFilesMenu,           // Recent Files top-level menu
-    ...roadMenu,               // Road (dynamic, from plugins)
-    viewMenu,                  // View (with plugin items appended)
-    toolsMenu,                 // Tools (with plugin items appended)
-    staticMenus[4]!,           // Plugins
-    staticMenus[5]!,           // Help
+    fileMenu,
+    editMenu,
+    viewMenu,
+    toolsMenu,
+    staticMenus[4]!,
+    staticMenus[5]!,
   ];
+
+  useEffect(() => {
+    setHoveredSubItem(null);
+  }, [hoveredMenu]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (menuBarRef.current && !menuBarRef.current.contains(e.target as Node)) {
         setOpenMenu(null);
         setHoveredMenu(null);
+        setHoveredSubItem(null);
       }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isCtrl = e.ctrlKey || e.metaKey;
       if (isCtrl && e.key === 'n') {
         e.preventDefault();
-        handleNew();
+        void handleNew();
       } else if (isCtrl && e.key === 'o') {
         e.preventDefault();
-        handleOpen();
+        void handleOpen();
       } else if (isCtrl && e.key === 's') {
         e.preventDefault();
         if (e.shiftKey) {
-          handleSaveAs();
+          void handleSaveAs();
         } else {
-          handleSave();
+          void handleSave();
         }
       } else if (isCtrl && e.key === 'd') {
         e.preventDefault();
-        // Clone road shortcut — delegate to plugin contrib action
         const roadClone = usePluginContribStore.getState().menuItems.find(
           (m) => m.id === 'road-tools:menu-clone',
         );
@@ -663,9 +684,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
 
   return (
     <div className="menubar" ref={menuBarRef}>
-      {/* Left: hamburger menu + quick action buttons */}
       <div className="menubar-left">
-        {/* Hamburger menu button */}
         <div className="menubar-item-wrapper">
           <button
             className={`menubar-hamburger ${openMenu !== null ? 'active' : ''}`}
@@ -673,6 +692,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
               if (openMenu !== null) {
                 setOpenMenu(null);
                 setHoveredMenu(null);
+                setHoveredSubItem(null);
               } else {
                 setOpenMenu(0);
               }
@@ -682,13 +702,13 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
             <MenuIcon size={16} />
           </button>
           {openMenu !== null && (
-            <div className="menubar-mega-dropdown" onMouseLeave={() => setHoveredMenu(null)}>
+            <div className="menubar-mega-dropdown" onMouseLeave={() => { setHoveredMenu(null); setHoveredSubItem(null); }}>
               {menus.map((menu, idx) => (
                 <div
                   key={menu.label}
                   className={`menubar-mega-item ${hoveredMenu === idx ? 'active' : ''}`}
                   onMouseEnter={() => setHoveredMenu(idx)}
-                  onClick={() => setHoveredMenu(hoveredMenu === idx ? null : idx)}
+                  onClick={() => { setHoveredMenu(hoveredMenu === idx ? null : idx); setHoveredSubItem(null); }}
                 >
                   <span>{menu.label}</span>
                   <ChevronRight size={14} className="menubar-mega-arrow" />
@@ -697,6 +717,46 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
                       {menu.items.map((item, i) =>
                         item.separator ? (
                           <div key={i} className="menubar-separator" />
+                        ) : item.submenu ? (
+                          <div
+                            key={i}
+                            className={`menubar-dropdown-item menubar-has-sub ${hoveredSubItem === i ? 'sub-active' : ''}`}
+                            onMouseEnter={() => setHoveredSubItem(i)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setHoveredSubItem(hoveredSubItem === i ? null : i);
+                            }}
+                          >
+                            <span>{item.label}</span>
+                            <ChevronRight size={10} className="menubar-sub-arrow" />
+                            {hoveredSubItem === i && (
+                              <div className="menubar-flyout">
+                                {item.submenu.map((sub, j) =>
+                                  sub.separator ? (
+                                    <div key={j} className="menubar-separator" />
+                                  ) : (
+                                    <button
+                                      key={j}
+                                      className={`menubar-dropdown-item ${sub.disabled ? 'disabled' : ''}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!sub.disabled && sub.action) {
+                                          sub.action();
+                                          setOpenMenu(null);
+                                          setHoveredMenu(null);
+                                          setHoveredSubItem(null);
+                                        }
+                                      }}
+                                      disabled={sub.disabled}
+                                    >
+                                      <span>{sub.label}</span>
+                                      {sub.shortcut && <span className="menubar-shortcut">{sub.shortcut}</span>}
+                                    </button>
+                                  ),
+                                )}
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <button
                             key={i}
@@ -707,6 +767,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
                                 item.action?.();
                                 setOpenMenu(null);
                                 setHoveredMenu(null);
+                                setHoveredSubItem(null);
                               }
                             }}
                             disabled={item.disabled}
@@ -727,19 +788,24 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
           )}
         </div>
 
-        {/* Separator */}
         <div className="menubar-action-separator" />
 
-        {/* Quick action buttons */}
         <div className="menubar-quick-actions">
-          <button className="menubar-action-btn" onClick={handleNew} title={t('toolbar.newTitle')}>
+          <button className="menubar-action-btn" onClick={() => { void handleNew(); }} title={t('toolbar.newTitle')}>
             <FileText size={14} />
           </button>
-          <button className="menubar-action-btn" onClick={handleOpen} title={t('toolbar.openTitle')}>
+          <button className="menubar-action-btn" onClick={() => { void handleOpen(); }} title={t('toolbar.openTitle')}>
             <FolderOpen size={14} />
           </button>
-          <button className="menubar-action-btn" onClick={handleSave} title={t('toolbar.saveTitle')} disabled={!isDirty}>
+          <button className="menubar-action-btn" onClick={() => { void handleSave(); }} title={t('toolbar.saveTitle')} disabled={!isDirty}>
             <Save size={14} />
+          </button>
+          <button
+            className="menubar-action-btn"
+            onClick={() => { void handleSaveAs(); }}
+            title={t('toolbar.saveAsTitle')}
+          >
+            <Copy size={14} />
           </button>
 
           <div className="menubar-action-separator" />
@@ -752,7 +818,7 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
           </button>
           <button
             className="menubar-action-btn"
-            onClick={handleResetToSaved}
+            onClick={() => { void handleResetToSaved(); }}
             title={t('toolbar.resetTitle')}
             disabled={!isDirty || !savedProject}
           >
@@ -761,7 +827,6 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
 
           <div className="menubar-action-separator" />
 
-          {/* View toggles: 3D/2D/Grid/Axis */}
           <button
             className={`menubar-action-btn ${dimension === '3d' ? 'active' : ''}`}
             onClick={handleView3D}
@@ -794,7 +859,6 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
 
           <div className="menubar-action-separator" />
 
-          {/* Snap / Measure */}
           <button
             className={`menubar-action-btn ${snapEnabled ? 'active' : ''}`}
             onClick={toggleSnap}
@@ -812,14 +876,12 @@ export function MenuBar({ onOpenPluginManager = () => {}, onOpenSettings = () =>
         </div>
       </div>
 
-      {/* Center: project name */}
       <div className="menubar-center">
         <span className="menubar-project-name">
           <>{project.name}</><>{isDirty ? ' •' : ''}</>
         </span>
       </div>
 
-      {/* Right: language + theme toggle */}
       <div className="menubar-right">
         <button
           className="menubar-icon-btn"

@@ -38,7 +38,7 @@ function makeProject(roads: Road[] = [], name = 'Untitled'): Project {
     roads,
     junctions: [],
     signals: [],
-    objects: []
+    objects: [],
   };
 }
 
@@ -68,12 +68,14 @@ function createPlatformMock() {
   const writeOpenDrive = vi.fn<PlatformService['writeOpenDrive']>().mockResolvedValue('<OpenDRIVE />');
   const openFile = vi.fn<PlatformService['openFile']>().mockResolvedValue(null);
   const saveFile = vi.fn<PlatformService['saveFile']>().mockResolvedValue(undefined);
+  const openFileByPath = vi.fn<PlatformService['openFileByPath']>().mockResolvedValue(null);
 
   const platform: PlatformService = {
     parseOpenDrive,
     writeOpenDrive,
     openFile,
     saveFile,
+    openFileByPath,
     getPlatformInfo: () => ({ type: 'web', version: '0.1.0' }),
     wgs84ToGcj02: vi.fn<PlatformService['wgs84ToGcj02']>().mockResolvedValue(makeCoord()),
     gcj02ToWgs84: vi.fn<PlatformService['gcj02ToWgs84']>().mockResolvedValue(makeCoord()),
@@ -113,6 +115,7 @@ function createPlatformMock() {
     writeOpenDrive,
     openFile,
     saveFile,
+    openFileByPath,
   };
 }
 
@@ -123,8 +126,8 @@ function dispatchWindowKey(init: KeyboardEventInit) {
 describe('MenuBar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    // Reset dialog mocks to their default resolved values
     vi.mocked(showAlert).mockResolvedValue(undefined);
     vi.mocked(showConfirm).mockResolvedValue(true);
     vi.mocked(showPrompt).mockResolvedValue('renamed.xodr');
@@ -146,11 +149,10 @@ describe('MenuBar', () => {
   it('renders all top-level menu labels', () => {
     render(<MenuBar />);
 
-    // Click the hamburger menu button to open the mega dropdown
     const hamburger = screen.getByTitle('文件');
     fireEvent.click(hamburger);
 
-    ['文件', '编辑', '导入', '导出', '最近打开文件', '视图', '工具', '帮助'].forEach((label) => {
+    ['文件', '编辑', '视图', '工具', '插件', '帮助'].forEach((label) => {
       expect(screen.getByText(label)).toBeInTheDocument();
     });
   });
@@ -160,7 +162,6 @@ describe('MenuBar', () => {
 
     const hamburger = screen.getByTitle('文件');
     fireEvent.click(hamburger);
-    // Click the "文件" first-level item to expand its submenu
     fireEvent.click(screen.getByText('文件'));
     expect(screen.getByText('新建项目')).toBeInTheDocument();
     expect(screen.getByText('Ctrl+N')).toBeInTheDocument();
@@ -182,9 +183,9 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByText('文件'));
     expect(screen.getByText('保存').closest('button')).toBeDisabled();
 
-    // '导出 OpenDRIVE...' is now in the Export menu — check that menu
     fireEvent.mouseDown(document.body);
     fireEvent.click(hamburger);
+    fireEvent.click(screen.getByText('文件'));
     fireEvent.click(screen.getByText('导出'));
     expect(screen.getByText('导出 OpenDRIVE...').closest('button')).toBeDisabled();
 
@@ -201,9 +202,9 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByText('文件'));
     expect(screen.getByText('保存').closest('button')).toBeEnabled();
 
-    // Check Export menu is now enabled
     fireEvent.mouseDown(document.body);
     fireEvent.click(hamburger);
+    fireEvent.click(screen.getByText('文件'));
     fireEvent.click(screen.getByText('导出'));
     expect(screen.getByText('导出 OpenDRIVE...').closest('button')).toBeEnabled();
   });
@@ -228,24 +229,82 @@ describe('MenuBar', () => {
     ));
   });
 
-  it('shows about and version dialogs from the help menu', async () => {
+  it('shows about dialog and check-for-updates item in help menu', async () => {
     render(<MenuBar />);
 
     const hamburger = screen.getByTitle('文件');
     fireEvent.click(hamburger);
     fireEvent.click(screen.getByText('帮助'));
-    fireEvent.click(screen.getByText('关于 WorldEditor'));
-    fireEvent.click(hamburger);
-    fireEvent.click(screen.getByText('帮助'));
-    fireEvent.click(screen.getByText('版本信息'));
 
-    await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalledTimes(2));
-    expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
-      1, expect.stringContaining('1.8.0430'), expect.any(String),
+    expect(screen.queryByText('版本信息')).not.toBeInTheDocument();
+    expect(screen.getByText('检查更新')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('关于 WorldEditor'));
+
+    await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(showAlert)).toHaveBeenCalledWith(
+      expect.stringContaining('1.8.0430'),
+      expect.any(String),
     );
-    expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
-      2, expect.stringContaining('2024-12-12'), expect.any(String),
-    );
+  });
+
+  it('shows confirm dialog when exit is clicked with unsaved changes', async () => {
+    const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {});
+
+    act(() => {
+      useEditorStore.setState({ isDirty: true });
+    });
+
+    render(<MenuBar />);
+    const hamburger = screen.getByTitle('文件');
+    fireEvent.click(hamburger);
+    fireEvent.click(screen.getByText('文件'));
+    fireEvent.click(screen.getByText('退出'));
+
+    await waitFor(() => expect(vi.mocked(showConfirm)).toHaveBeenCalled());
+    closeSpy.mockRestore();
+  });
+
+  it('renders a save-as quick-action button in the toolbar', () => {
+    render(<MenuBar />);
+    expect(screen.getByTitle(/另存为/)).toBeInTheDocument();
+  });
+
+  it('opens recent files directly by stored path', async () => {
+    const platform = createPlatformMock();
+    platform.openFileByPath.mockResolvedValue({ name: 'recent.xodr', content: '<OpenDRIVE />' });
+    platform.parseOpenDrive.mockResolvedValue(makeProject([makeRoad('r-recent', 10)], 'Recent'));
+    vi.mocked(getPlatformService).mockResolvedValue(platform.platform);
+    localStorage.setItem('we_recent_files', JSON.stringify([
+      { displayName: 'recent.xodr', path: 'C:\\maps\\recent.xodr' },
+    ]));
+
+    render(<MenuBar />);
+    fireEvent.click(screen.getByTitle('文件'));
+    fireEvent.click(screen.getByText('文件'));
+    fireEvent.click(screen.getByText('打开最近文件...'));
+    fireEvent.click(screen.getByText('recent.xodr'));
+
+    await waitFor(() => expect(platform.openFileByPath).toHaveBeenCalledWith('C:\\maps\\recent.xodr'));
+    expect(useEditorStore.getState().project.name).toBe('recent.xodr');
+  });
+
+  it('removes missing recent files from storage', async () => {
+    const platform = createPlatformMock();
+    platform.openFileByPath.mockResolvedValue(null);
+    vi.mocked(getPlatformService).mockResolvedValue(platform.platform);
+    localStorage.setItem('we_recent_files', JSON.stringify([
+      { displayName: 'missing.xodr', path: 'C:\\maps\\missing.xodr' },
+    ]));
+
+    render(<MenuBar />);
+    fireEvent.click(screen.getByTitle('文件'));
+    fireEvent.click(screen.getByText('文件'));
+    fireEvent.click(screen.getByText('打开最近文件...'));
+    fireEvent.click(screen.getByText('missing.xodr'));
+
+    await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalledWith('文件不存在: missing.xodr'));
+    expect(JSON.parse(localStorage.getItem('we_recent_files') ?? '[]')).toEqual([]);
   });
 
   it('handles keyboard shortcuts for new, open, save, save as, and delete', async () => {
@@ -269,7 +328,6 @@ describe('MenuBar', () => {
     await act(async () => {});
     expect(useEditorStore.getState().project.name).toBe('Original');
 
-    // Default mock returns true — new project should succeed
     dispatchWindowKey({ key: 'n', ctrlKey: true });
     await act(async () => {});
     expect(useEditorStore.getState().project.name).toBe('Untitled');
@@ -381,11 +439,11 @@ describe('MenuBar', () => {
 
       render(<MenuBar />);
       fireEvent.click(screen.getByTitle('文件'));
+      fireEvent.click(screen.getByText('文件'));
       fireEvent.click(screen.getByText('导入'));
 
       expect(screen.getByText('导入 Lanelet2...')).toBeInTheDocument();
 
-      // cleanup
       reactAct(() => {
         usePluginContribStore.getState().unregisterImporter('imp-test');
       });
@@ -404,11 +462,11 @@ describe('MenuBar', () => {
 
       render(<MenuBar />);
       fireEvent.click(screen.getByTitle('文件'));
+      fireEvent.click(screen.getByText('文件'));
       fireEvent.click(screen.getByText('导出'));
 
       expect(screen.getByText('导出 Shapefile...')).toBeInTheDocument();
 
-      // cleanup
       reactAct(() => {
         usePluginContribStore.getState().unregisterExporter('exp-test');
       });
@@ -427,12 +485,12 @@ describe('MenuBar', () => {
 
       render(<MenuBar />);
       fireEvent.click(screen.getByTitle('文件'));
+      fireEvent.click(screen.getByText('文件'));
       fireEvent.click(screen.getByText('导出'));
       fireEvent.click(screen.getByText('导出 DXF...'));
 
       await waitFor(() => expect(onExport).toHaveBeenCalled());
 
-      // cleanup
       reactAct(() => {
         usePluginContribStore.getState().unregisterExporter('exp-click');
       });

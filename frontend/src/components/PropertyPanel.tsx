@@ -209,6 +209,22 @@ export function PropertyPanel() {
                         );
                       }),
                     )}
+                    <div className="property-row sub lane-add-row">
+                      <button
+                        className="property-btn property-btn-add-lane"
+                        title={t('propertyPanel.addLane')}
+                        onClick={() => useEditorStore.getState().addLane(selectedRoad.id, si, 'left')}
+                      >
+                        +L
+                      </button>
+                      <button
+                        className="property-btn property-btn-add-lane"
+                        title={t('propertyPanel.addLane')}
+                        onClick={() => useEditorStore.getState().addLane(selectedRoad.id, si, 'right')}
+                      >
+                        +R
+                      </button>
+                    </div>
                   </div>
                 ))}
               </CardSection>

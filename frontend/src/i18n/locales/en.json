@@ -43,7 +43,9 @@
     "clearRecentFiles": "Clear Recent Files",
     "exit": "Exit",
     "help": "Help",
-    "userManual": "User Manual"
+    "userManual": "User Manual",
+    "openRecentFiles": "Open Recent Files...",
+    "checkForUpdates": "Check for Updates"
   },
   "toolbar": {
     "select": "Select",
@@ -56,6 +58,7 @@
     "openTitle": "Open File (Ctrl+O)",
     "save": "Save...",
     "saveTitle": "Save (Ctrl+S)",
+    "saveAsTitle": "Save As (Ctrl+Shift+S)",
     "undo": "Undo",
     "undoTitle": "Undo (Ctrl+Z)",
     "redo": "Redo",
@@ -126,6 +129,7 @@
     "laneSection": "Lane Section",
     "laneSections": "Lane Sections",
     "deleteLane": "Delete Lane",
+    "addLane": "Add Lane",
     "totalLanes": "Total Lanes",
     "elevation": "Elevation",
     "elevationSegments": "Elevation Segments",
@@ -378,7 +382,9 @@
     "version": "Version",
     "buildDate": "Build Date",
     "userManualTitle": "User Manual",
-    "userManualContent": "User manual coming soon.\n\nVisit the project repository for documentation and guides."
+    "userManualContent": "User manual coming soon.\n\nVisit the project repository for documentation and guides.",
+    "exitUnsaved": "You have unsaved changes. Exit without saving?",
+    "fileNotFound": "File not found"
   },
   "snapping": {
     "enabled": "Snap",

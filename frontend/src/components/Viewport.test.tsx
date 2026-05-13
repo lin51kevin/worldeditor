@@ -161,6 +161,7 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     parseOpenDrive: vi.fn().mockResolvedValue(makeProject()),
     writeOpenDrive: vi.fn().mockResolvedValue('<OpenDRIVE />'),
     openFile: vi.fn().mockResolvedValue(null),
+    openFileByPath: vi.fn().mockResolvedValue(null),
     saveFile: vi.fn().mockResolvedValue(undefined),
     getPlatformInfo: () => ({ type: 'web', version: '0.1.0' }),
     wgs84ToGcj02: vi.fn().mockResolvedValue(makeCoord()),

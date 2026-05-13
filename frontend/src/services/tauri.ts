@@ -19,7 +19,7 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
     return invoke('write_opendrive', { project });
   }
 
-  async openFile(): Promise<{ name: string; content: string } | null> {
+  async openFile(): Promise<{ name: string; content: string; path?: string } | null> {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const { readTextFile } = await import('@tauri-apps/plugin-fs');
 
@@ -29,9 +29,21 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
 
     if (!path) return null;
 
-    const content = await readTextFile(path);
-    const name = path.split(/[/\\]/).pop() ?? 'untitled';
-    return { name, content };
+    const filePath = path as string;
+    const content = await readTextFile(filePath);
+    const name = filePath.split(/[/\\]/).pop() ?? 'untitled';
+    return { name, content, path: filePath };
+  }
+
+  async openFileByPath(filePath: string): Promise<{ name: string; content: string } | null> {
+    try {
+      const { readTextFile } = await import('@tauri-apps/plugin-fs');
+      const content = await readTextFile(filePath);
+      const name = filePath.split(/[/\\]/).pop() ?? filePath;
+      return { name, content };
+    } catch {
+      return null;
+    }
   }
 
   async saveFile(filename: string, content: string): Promise<void> {

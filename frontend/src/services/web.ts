@@ -19,7 +19,7 @@ export class WebPlatformService extends BasePlatformService implements PlatformS
     return wasm.write_opendrive(JSON.stringify(project));
   }
 
-  async openFile(): Promise<{ name: string; content: string } | null> {
+  async openFile(): Promise<{ name: string; content: string; path?: string } | null> {
     return new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -35,6 +35,11 @@ export class WebPlatformService extends BasePlatformService implements PlatformS
       };
       input.click();
     });
+  }
+
+  async openFileByPath(_path: string): Promise<{ name: string; content: string } | null> {
+    // Web cannot access files by path; fall back to file picker
+    return this.openFile();
   }
 
   async saveFile(filename: string, content: string): Promise<void> {

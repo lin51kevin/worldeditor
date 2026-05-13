@@ -43,7 +43,9 @@
     "clearRecentFiles": "清除最近文件",
     "exit": "退出",
     "help": "帮助",
-    "userManual": "用户手册"
+    "userManual": "用户手册",
+    "openRecentFiles": "打开最近文件...",
+    "checkForUpdates": "检查更新"
   },
   "toolbar": {
     "select": "选择",
@@ -56,6 +58,7 @@
     "openTitle": "打开文件 (Ctrl+O)",
     "save": "保存...",
     "saveTitle": "保存 (Ctrl+S)",
+    "saveAsTitle": "另存为 (Ctrl+Shift+S)",
     "undo": "撤销",
     "undoTitle": "撤销 (Ctrl+Z)",
     "redo": "重做",
@@ -126,6 +129,7 @@
     "laneSection": "车道段",
     "laneSections": "车道段列表",
     "deleteLane": "删除车道",
+    "addLane": "添加车道",
     "totalLanes": "总车道数",
     "elevation": "高程",
     "elevationSegments": "高程段",
@@ -378,7 +382,9 @@
     "version": "版本",
     "buildDate": "构建日期",
     "userManualTitle": "用户手册",
-    "userManualContent": "用户手册即将上线，敬请期待。\n\n请访问项目仓库获取文档和使用指南。"
+    "userManualContent": "用户手册即将上线，敬请期待。\n\n请访问项目仓库获取文档和使用指南。",
+    "exitUnsaved": "当前项目有未保存的更改，确定要退出吗？",
+    "fileNotFound": "文件不存在"
   },
   "snapping": {
     "enabled": "吸附",

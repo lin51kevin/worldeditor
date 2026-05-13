@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Elevation, Geometry, Project, Road, RoadObject, Signal, Junction, LaneWidth } from '../services/platform';
+import type { Elevation, Geometry, Project, Road, RoadObject, Signal, Junction, Lane, LaneLink, LaneWidth } from '../services/platform';
 import type { LaneSide, SceneNodeSelection } from '../utils/sceneGraph';
 
 interface EditorState {
@@ -69,6 +69,7 @@ interface EditorState {
   updateLaneType: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, laneType: string) => void;
   updateLaneWidth: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, width: LaneWidth) => void;
   removeLane: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number) => void;
+  addLane: (roadId: string, sectionIndex: number, side: 'left' | 'right') => void;
   addElevationPoint: (roadId: string, s: number, height: number) => void;
   updateElevationPoint: (roadId: string, index: number, updates: Partial<Elevation>) => void;
   removeElevationPoint: (roadId: string, index: number) => void;
@@ -834,6 +835,48 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       },
       isDirty: true,
     })),
+
+  addLane: (roadId, sectionIndex, side) =>
+    set((state) => {
+      const road = state.project.roads.find((r) => r.id === roadId);
+      if (!road) return state;
+      const section = road.lane_sections[sectionIndex];
+      if (!section) return state;
+
+      const existingIds = section[side].map((l) => l.id);
+      const newId = side === 'left'
+        ? (existingIds.length === 0 ? 1 : Math.max(...existingIds) + 1)
+        : (existingIds.length === 0 ? -1 : Math.min(...existingIds) - 1);
+
+      const link: LaneLink = { predecessor: null, successor: null };
+      const newLane: Lane = {
+        id: newId,
+        lane_type: 'Driving',
+        level: 0,
+        link,
+        width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }],
+        borders: [],
+        road_marks: [],
+      };
+
+      return {
+        ...pushUndo(state),
+        project: {
+          ...state.project,
+          roads: state.project.roads.map((r) => {
+            if (r.id !== roadId) return r;
+            return {
+              ...r,
+              lane_sections: r.lane_sections.map((ls, si) => {
+                if (si !== sectionIndex) return ls;
+                return { ...ls, [side]: [...ls[side], newLane] };
+              }),
+            };
+          }),
+        },
+        isDirty: true,
+      };
+    }),
 
   smoothElevation: (roadId, iterations = 1) =>
     set((state) => ({

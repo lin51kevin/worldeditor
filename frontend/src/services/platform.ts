@@ -264,7 +264,10 @@ export interface PlatformService {
   writeOpenDrive(project: Project): Promise<string>;
 
   /** Open a file picker and return the file contents. */
-  openFile(): Promise<{ name: string; content: string } | null>;
+  openFile(): Promise<{ name: string; content: string; path?: string } | null>;
+
+  /** Open a file directly by path when the platform supports it. */
+  openFileByPath(path: string): Promise<{ name: string; content: string } | null>;
 
   /** Save content to a file. */
   saveFile(filename: string, content: string): Promise<void>;
