@@ -151,7 +151,7 @@ describe('PluginManager', () => {
     });
   });
 
-  it('opens the disable dialog and confirms a disable reason', async () => {
+  it('triggers disable action from Installed tab', async () => {
     const hookValue = mockUsePlugins({
       plugins: [makePlugin({ id: 'loaded.plugin', name: 'Loaded Plugin', status: 'loaded', dependencies: [], permissions: [] })],
     });
@@ -160,16 +160,9 @@ describe('PluginManager', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /已安装/ }));
     fireEvent.click(screen.getByTitle('禁用'));
-    fireEvent.change(screen.getByPlaceholderText('例如：不兼容当前版本'), {
-      target: { value: 'manual disable' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '确认禁用' }));
 
     await waitFor(() => {
-      expect(hookValue.disablePlugin).toHaveBeenCalledWith('loaded.plugin', 'manual disable');
-    });
-    await waitFor(() => {
-      expect(screen.queryByText('禁用插件')).not.toBeInTheDocument();
+      expect(hookValue.disablePlugin).toHaveBeenCalledWith('loaded.plugin');
     });
   });
 

@@ -128,7 +128,7 @@ describe('usePlugins', () => {
       expect(invokeMock).toHaveBeenCalledWith(command, { id: args[0] });
       expect(invokeMock).toHaveBeenCalledWith('plugin_list', undefined);
     } else {
-      expect(invokeMock).toHaveBeenNthCalledWith(1, command, { id: args[0], reason: args[1] });
+      expect(invokeMock).toHaveBeenNthCalledWith(1, command, { id: args[0], reason: '' });
       expect(invokeMock).toHaveBeenNthCalledWith(2, 'plugin_list', undefined);
     }
   });

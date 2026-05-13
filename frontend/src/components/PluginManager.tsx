@@ -305,23 +305,23 @@ function PluginRow({ plugin, selected, isLoading, onSelect, onLoad, onUnload, on
         {isLoading ? (
           <Loader2 size={14} className="spin" />
         ) : plugin.status === 'available' && !plugin.isBuiltin ? (
-          <button className="pm-row-btn load" onClick={onLoad}>
-            {t('pluginManager.install')}
+          <button className="pm-row-btn load" title={t('pluginManager.load')} onClick={onLoad}>
+            {t('pluginManager.load')}
           </button>
         ) : plugin.status === 'loaded' ? (
           <div className="pm-row-btn-group">
-            <button className="pm-row-btn disable" onClick={onDisable}>
+            <button className="pm-row-btn disable" title={t('pluginManager.disable')} onClick={onDisable}>
               {t('pluginManager.disable')}
             </button>
             {!plugin.isBuiltin && (
-              <button className="pm-row-btn unload" onClick={onUnload}>
+              <button className="pm-row-btn unload" title={t('pluginManager.unload')} onClick={onUnload}>
                 <Trash2 size={12} />
-                {t('pluginManager.uninstall')}
+                {t('pluginManager.unload')}
               </button>
             )}
           </div>
         ) : plugin.status === 'disabled' ? (
-          <button className="pm-row-btn enable" onClick={onEnable}>
+          <button className="pm-row-btn enable" title={t('pluginManager.enable')} onClick={onEnable}>
             {t('pluginManager.enable')}
           </button>
         ) : null}
