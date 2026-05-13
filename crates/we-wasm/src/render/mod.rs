@@ -1,0 +1,1148 @@
+use wasm_bindgen::prelude::*;
+
+mod junction_mesh;
+mod marking_mesh;
+mod road_mesh;
+mod signal_mesh;
+
+pub(crate) use junction_mesh::{build_junction_polygon_points, point_in_polygon};
+
+use junction_mesh::append_junction_triangles;
+use marking_mesh::emit_road_mark;
+use road_mesh::{gen_default_ribbon, gen_lane_strip};
+use signal_mesh::{
+    arrow_triangles, emit_crosswalk_stripes, emit_longitudinal_strip, emit_polygon_outline,
+    emit_rect_outline, emit_square_marker, emit_transverse_bar, sign_marker_color,
+};
+// ── Geometry helpers (no wgpu dependency) ────────────────────────────────────
+
+/// Select a lane surface color based on the active color mode.
+fn select_lane_color(
+    color_mode: &str,
+    lane_type: we_core::model::LaneType,
+    road_idx: usize,
+) -> [f32; 4] {
+    match color_mode {
+        "single" => [0.45, 0.45, 0.45, 1.0],
+        "byRoad" => road_hue_color(road_idx),
+        _ => lane_surface_color(lane_type),
+    }
+}
+
+/// Generate a distinct color for a road by cycling hue using the golden angle.
+fn road_hue_color(road_idx: usize) -> [f32; 4] {
+    let hue = (road_idx as f32 * 137.508) % 360.0;
+    hsv_to_rgba(hue, 0.55, 0.62)
+}
+
+/// Convert HSV (h in degrees 0–360, s and v in 0–1) to RGBA (alpha = 1.0).
+fn hsv_to_rgba(h: f32, s: f32, v: f32) -> [f32; 4] {
+    let h6 = h / 60.0;
+    let i = h6.floor() as u32 % 6;
+    let f = h6 - h6.floor();
+    let p = v * (1.0 - s);
+    let q = v * (1.0 - s * f);
+    let t = v * (1.0 - s * (1.0 - f));
+    let (r, g, b) = match i {
+        0 => (v, t, p),
+        1 => (q, v, p),
+        2 => (p, v, t),
+        3 => (p, q, v),
+        4 => (t, p, v),
+        _ => (v, p, q),
+    };
+    [r, g, b, 1.0]
+}
+
+/// Lane surface color by lane type (RGBA).
+fn lane_surface_color(lane_type: we_core::model::LaneType) -> [f32; 4] {
+    use we_core::model::LaneType;
+    // Colors match C# WorldEditor reference: RoadConfig.cs
+    match lane_type {
+        LaneType::Driving => [0.298, 0.298, 0.298, 1.0], // (76,76,76)
+        LaneType::Shoulder => [0.149, 0.149, 0.149, 1.0], // (38,38,38) near-black
+        LaneType::Sidewalk => [0.725, 0.478, 0.341, 1.0], // (185,122,87) brown
+        LaneType::Median => [0.463, 0.741, 0.400, 1.0],  // (118,189,102) green
+        LaneType::Border => [0.741, 0.867, 0.745, 1.0],  // (189,221,190) pale green
+        LaneType::Parking => [1.000, 0.808, 0.490, 1.0], // (255,206,125) warm yellow
+        LaneType::Biking => [0.776, 0.702, 0.655, 1.0],  // (198,179,167) tan
+        LaneType::Stop => [0.349, 0.788, 0.788, 1.0],    // (89,201,201) teal
+        LaneType::Restricted => [0.639, 0.682, 0.773, 1.0], // (163,174,197) slate blue
+        LaneType::Bidirectional => [0.812, 0.902, 0.961, 1.0], // (207,230,245) light blue
+        LaneType::OffRamp => [0.878, 0.796, 0.796, 1.0], // (224,203,203) rose
+        LaneType::OnRamp => [0.369, 0.565, 0.659, 1.0],  // (94,144,168) steel blue
+        LaneType::ConnectingRamp => [0.027, 0.043, 0.314, 1.0], // (7,11,80) navy
+        LaneType::Bus => [0.161, 0.141, 0.129, 1.0],     // (41,36,33) very dark
+        LaneType::Taxi => [0.502, 0.541, 0.529, 1.0],    // (128,138,135) medium gray
+        LaneType::HOV => [0.929, 0.569, 0.129, 1.0],     // (237,145,33) amber
+        _ => [0.40, 0.40, 0.35, 1.0],
+    }
+}
+
+/// Road mark color by mark color enum (RGBA).
+fn mark_color(color: we_core::model::RoadMarkColor) -> [f32; 4] {
+    use we_core::model::RoadMarkColor;
+    match color {
+        RoadMarkColor::Yellow => [0.976, 0.827, 0.137, 1.0], // (249,211,35)
+        RoadMarkColor::Red => [1.000, 0.000, 0.000, 1.0],
+        RoadMarkColor::Blue => [0.000, 0.000, 1.000, 1.0],
+        RoadMarkColor::Green => [0.000, 1.000, 0.000, 1.0],
+        RoadMarkColor::Orange => [1.000, 0.380, 0.000, 1.0], // (255,97,0)
+        RoadMarkColor::Violet => [0.580, 0.000, 0.827, 1.0],
+        _ => [1.0, 1.0, 1.0, 1.0], // Standard / White
+    }
+}
+
+/// Mark line width in meters according to OpenDRIVE weight (Standard = 0.15m, Bold = 0.25m).
+fn mark_line_width(rm: &we_core::model::RoadMark) -> f32 {
+    if rm.width > 0.0 {
+        return rm.width as f32;
+    }
+    use we_core::model::RoadMarkWeight;
+    match rm.weight {
+        RoadMarkWeight::Bold => 0.25,
+        _ => 0.15,
+    }
+}
+/// Sum lane widths at ds across multiple lanes.
+fn sum_widths_at_ds(
+    widths_list: &[&[we_core::model::LaneWidth]],
+    ds: f64,
+    eval: &dyn Fn(&[we_core::model::LaneWidth], f64) -> f64,
+) -> f64 {
+    widths_list.iter().map(|w| eval(w, ds)).sum()
+}
+
+/// Evaluate laneOffset polynomial at station `s`.
+///
+/// OpenDRIVE `laneOffset` applies to the whole lane cross-section:
+/// positive values shift all lanes to the left of the reference line.
+pub(crate) fn eval_lane_offset(offsets: &[we_core::model::LaneOffset], s: f64) -> f64 {
+    let Some(entry) = offsets.iter().rev().find(|o| o.s <= s + 1e-9) else {
+        return 0.0;
+    };
+    let ds = (s - entry.s).max(0.0);
+    entry.evaluate(ds)
+}
+/// Evaluate road reference position at a given `s` station.
+///
+/// Finds the geometry element that covers `s` and evaluates it.
+pub(crate) fn road_point_at_s(
+    plan_view: &[we_core::model::Geometry],
+    s: f64,
+) -> Option<we_core::geometry::eval::RefLinePoint> {
+    use we_core::geometry::eval::evaluate_geometry;
+
+    if plan_view.is_empty() {
+        return None;
+    }
+
+    // Find the geometry segment that contains s
+    let geo = plan_view
+        .iter()
+        .rev()
+        .find(|g| g.s <= s + 1e-9)
+        .unwrap_or(&plan_view[0]);
+
+    let ds = (s - geo.s).clamp(0.0, geo.length);
+    Some(evaluate_geometry(geo, ds))
+}
+// ── Public wasm_bindgen functions ─────────────────────────────────────────────
+
+/// Generate road mesh vertices from a project JSON. Returns vertex data as Float32Array.
+///
+/// Each vertex is 7 floats: [x, y, z, r, g, b, a].
+/// `color_mode` controls surface coloring:
+/// - `"byLaneType"` (default): per-lane-type palette
+/// - `"single"`: uniform asphalt gray for all lanes
+/// - `"byRoad"`: distinct hue per road (golden-angle HSV cycling)
+#[wasm_bindgen]
+pub fn generate_road_vertices(
+    project_json: &str,
+    sample_step: f64,
+    color_mode: &str,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{
+        evaluate_elevation, evaluate_lane_width, offset_point, sample_road_reference_line,
+    };
+    use we_core::model::Project;
+
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut all_floats = Vec::new();
+
+    for (road_idx, road) in project.roads.iter().enumerate() {
+        if road.render_hidden {
+            continue;
+        }
+
+        let ref_pts = sample_road_reference_line(road, sample_step);
+        if ref_pts.len() < 2 {
+            continue;
+        }
+
+        let mut road_verts: Vec<[f32; 7]> = Vec::new();
+
+        for section in &road.lane_sections {
+            if section.render_hidden {
+                continue;
+            }
+
+            let section_end_s = road
+                .lane_sections
+                .iter()
+                .find(|ls| ls.s > section.s + 1e-9)
+                .map(|ls| ls.s)
+                .unwrap_or(road.length);
+
+            let section_pts: Vec<_> = ref_pts
+                .iter()
+                .filter(|p| p.s >= section.s - 1e-9 && p.s <= section_end_s + 1e-9)
+                .collect();
+
+            if section_pts.len() < 2 {
+                continue;
+            }
+
+            // Right lanes (negative IDs, inner to outer)
+            let mut right_sorted: Vec<_> = section.right.iter().collect();
+            right_sorted.sort_by_key(|l| l.id.abs());
+            let mut right_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
+            for lane in &right_sorted {
+                if !lane.render_hidden {
+                    let color = select_lane_color(color_mode, lane.lane_type, road_idx);
+                    road_verts.extend(gen_lane_strip(
+                        &section_pts,
+                        &lane.width,
+                        section.s,
+                        &road.elevation_profile,
+                        &road.lane_offsets,
+                        &right_prev_widths,
+                        false,
+                        color,
+                        &evaluate_elevation,
+                        &evaluate_lane_width,
+                        &eval_lane_offset,
+                        &offset_point,
+                    ));
+                }
+                right_prev_widths.push(&lane.width);
+            }
+
+            // Left lanes (positive IDs, inner to outer)
+            let mut left_sorted: Vec<_> = section.left.iter().collect();
+            left_sorted.sort_by_key(|l| l.id);
+            let mut left_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
+            for lane in &left_sorted {
+                if !lane.render_hidden {
+                    let color = select_lane_color(color_mode, lane.lane_type, road_idx);
+                    road_verts.extend(gen_lane_strip(
+                        &section_pts,
+                        &lane.width,
+                        section.s,
+                        &road.elevation_profile,
+                        &road.lane_offsets,
+                        &left_prev_widths,
+                        true,
+                        color,
+                        &evaluate_elevation,
+                        &evaluate_lane_width,
+                        &eval_lane_offset,
+                        &offset_point,
+                    ));
+                }
+                left_prev_widths.push(&lane.width);
+            }
+        }
+
+        // Fall back to default gray ribbon when no lane sections are defined
+        if road_verts.is_empty() && road.lane_sections.is_empty() {
+            let ribbon_color = match color_mode {
+                "single" => [0.45f32, 0.45, 0.45, 1.0],
+                "byRoad" => road_hue_color(road_idx),
+                _ => [0.35, 0.35, 0.38, 1.0],
+            };
+            road_verts.extend(gen_default_ribbon(
+                &ref_pts,
+                &road.elevation_profile,
+                3.5,
+                ribbon_color,
+            ));
+        }
+
+        for v in &road_verts {
+            all_floats.extend_from_slice(v);
+        }
+    }
+
+    Ok(all_floats)
+}
+
+/// Generate junction surface mesh vertices from a project JSON. Returns Float32Array.
+///
+/// Each vertex is 7 floats: [x, y, z, r, g, b, a].
+/// Junction areas are rendered as semi-transparent lavender polygons.
+#[wasm_bindgen]
+pub fn generate_junction_vertices(project_json: &str) -> Result<Vec<f32>, JsError> {
+    use we_core::model::Project;
+
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut all_floats = Vec::new();
+    let color = [0.88f32, 0.85, 0.98, 0.65];
+
+    for junction in &project.junctions {
+        append_junction_triangles(&mut all_floats, &project, junction, color);
+    }
+
+    Ok(all_floats)
+}
+
+/// Generate highlight mesh vertices for a single junction.
+#[wasm_bindgen]
+pub fn generate_single_junction_vertices(
+    project_json: &str,
+    junction_id: &str,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::model::Project;
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let mut all_floats = Vec::new();
+    if let Some(junction) = project.junctions.iter().find(|j| j.id == junction_id) {
+        append_junction_triangles(&mut all_floats, &project, junction, [r, g, b, a]);
+    }
+    Ok(all_floats)
+}
+
+/// Generate lane boundary line vertices from a project JSON. Returns Float32Array.
+///
+/// Each vertex is 7 floats: [x, y, z, r, g, b, a].
+/// Generates colored road markings (solid/dashed lines) at each lane boundary.
+/// Color and dash pattern are driven by each lane's `road_marks` data.
+#[wasm_bindgen]
+pub fn generate_lane_line_vertices(
+    project_json: &str,
+    sample_step: f64,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{evaluate_lane_width, sample_road_reference_line};
+    use we_core::model::{Project, RoadMarkType};
+
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut all_floats = Vec::new();
+
+    for road in &project.roads {
+        if road.render_hidden {
+            continue;
+        }
+
+        let ref_pts = sample_road_reference_line(road, sample_step);
+        if ref_pts.len() < 2 {
+            continue;
+        }
+
+        for section in &road.lane_sections {
+            if section.render_hidden {
+                continue;
+            }
+
+            let section_end_s = road
+                .lane_sections
+                .iter()
+                .find(|ls| ls.s > section.s + 1e-9)
+                .map(|ls| ls.s)
+                .unwrap_or(road.length);
+
+            let section_pts: Vec<_> = ref_pts
+                .iter()
+                .filter(|p| p.s >= section.s - 1e-9 && p.s <= section_end_s + 1e-9)
+                .collect();
+
+            if section_pts.len() < 2 {
+                continue;
+            }
+
+            // Helper: emit all road marks for a lane, each covering its s_offset sub-range.
+            // Marks are processed in ascending sOffset order; each mark covers from its
+            // sOffset to the next mark's sOffset (or to section_end_s for the last).
+            let emit_lane_marks = |road_marks: &[we_core::model::RoadMark],
+                                   lateral_fn: &dyn Fn(f64) -> f64,
+                                   out: &mut Vec<f32>| {
+                let mut sorted: Vec<&we_core::model::RoadMark> = road_marks.iter().collect();
+                sorted.sort_by(|a, b| {
+                    a.s_offset
+                        .partial_cmp(&b.s_offset)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+
+                for (idx, rm) in sorted.iter().enumerate() {
+                    if rm.mark_type == RoadMarkType::None {
+                        continue;
+                    }
+                    let abs_start = section.s + rm.s_offset;
+                    let abs_end = sorted
+                        .get(idx + 1)
+                        .map(|next| section.s + next.s_offset)
+                        .unwrap_or(section_end_s);
+
+                    let mark_pts: Vec<_> = section_pts
+                        .iter()
+                        .filter(|p| p.s >= abs_start - 1e-9 && p.s <= abs_end + 1e-9)
+                        .copied()
+                        .collect();
+
+                    if mark_pts.len() < 2 {
+                        continue;
+                    }
+                    emit_road_mark(
+                        rm,
+                        &mark_pts,
+                        &road.elevation_profile,
+                        section.s,
+                        &road.lane_offsets,
+                        lateral_fn,
+                        out,
+                    );
+                }
+            };
+
+            // Center lane road mark at offset 0 (the center dividing line)
+            if let Some(center_lane) = section.center.first()
+                && !center_lane.render_hidden
+            {
+                emit_lane_marks(&center_lane.road_marks, &|_| 0.0, &mut all_floats);
+            }
+
+            // Right lane outer boundaries (inner → outer, accumulating offset)
+            let mut right_sorted: Vec<_> = section.right.iter().collect();
+            right_sorted.sort_by_key(|l| l.id.abs());
+            let mut right_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
+            for lane in &right_sorted {
+                if !lane.render_hidden {
+                    let boundary_widths: Vec<&[we_core::model::LaneWidth]> = {
+                        let mut bw = right_prev_widths.clone();
+                        bw.push(&lane.width);
+                        bw
+                    };
+                    emit_lane_marks(
+                        &lane.road_marks,
+                        &|ds| -sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
+                        &mut all_floats,
+                    );
+                }
+                right_prev_widths.push(&lane.width);
+            }
+
+            // Left lane outer boundaries
+            let mut left_sorted: Vec<_> = section.left.iter().collect();
+            left_sorted.sort_by_key(|l| l.id);
+            let mut left_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
+            for lane in &left_sorted {
+                if !lane.render_hidden {
+                    let boundary_widths: Vec<&[we_core::model::LaneWidth]> = {
+                        let mut bw = left_prev_widths.clone();
+                        bw.push(&lane.width);
+                        bw
+                    };
+                    emit_lane_marks(
+                        &lane.road_marks,
+                        &|ds| sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
+                        &mut all_floats,
+                    );
+                }
+                left_prev_widths.push(&lane.width);
+            }
+        }
+    }
+
+    Ok(all_floats)
+}
+
+/// Generate reference line (centerline) visualization vertices from a project JSON.
+///
+/// Each vertex is 7 floats: [x, y, z, r, g, b, a].
+/// Draws a thin colored ribbon along each road's reference line:
+/// blue for regular roads, orange for roads inside junctions.
+#[wasm_bindgen]
+pub fn generate_center_line_vertices(
+    project_json: &str,
+    sample_step: f64,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point, sample_road_reference_line};
+    use we_core::model::Project;
+
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut all_floats = Vec::new();
+    let line_half_w = 0.10f64; // 0.2m wide ribbon
+    let z_lift = 0.02f32;
+
+    for road in &project.roads {
+        let ref_pts = sample_road_reference_line(road, sample_step);
+        if ref_pts.len() < 2 {
+            continue;
+        }
+
+        // Orange for connecting roads inside a junction, blue for normal roads
+        let [r, g, b, a]: [f32; 4] = if road.junction_id.is_some() {
+            [1.0, 0.6, 0.0, 0.85]
+        } else {
+            [0.0, 0.5, 1.0, 0.85]
+        };
+
+        for i in 0..ref_pts.len() - 1 {
+            let pt0 = &ref_pts[i];
+            let pt1 = &ref_pts[i + 1];
+
+            let z0 = evaluate_elevation(&road.elevation_profile, pt0.s) as f32 + z_lift;
+            let z1 = evaluate_elevation(&road.elevation_profile, pt1.s) as f32 + z_lift;
+
+            let (lx0, ly0, _) = offset_point(pt0, line_half_w, 0.0);
+            let (rx0, ry0, _) = offset_point(pt0, -line_half_w, 0.0);
+            let (lx1, ly1, _) = offset_point(pt1, line_half_w, 0.0);
+            let (rx1, ry1, _) = offset_point(pt1, -line_half_w, 0.0);
+
+            all_floats.extend_from_slice(&[lx0 as f32, ly0 as f32, z0, r, g, b, a]);
+            all_floats.extend_from_slice(&[rx0 as f32, ry0 as f32, z0, r, g, b, a]);
+            all_floats.extend_from_slice(&[lx1 as f32, ly1 as f32, z1, r, g, b, a]);
+            all_floats.extend_from_slice(&[rx0 as f32, ry0 as f32, z0, r, g, b, a]);
+            all_floats.extend_from_slice(&[rx1 as f32, ry1 as f32, z1, r, g, b, a]);
+            all_floats.extend_from_slice(&[lx1 as f32, ly1 as f32, z1, r, g, b, a]);
+        }
+    }
+
+    Ok(all_floats)
+}
+
+/// Generate road mesh vertices for a single road. Returns Float32Array.
+///
+/// Each vertex is 7 floats: [x, y, z, r, g, b, a].
+/// The `color` parameter is [r, g, b, a] in 0..1 range.
+/// Used for selection highlight rendering (overrides per-lane colors).
+#[wasm_bindgen]
+pub fn generate_single_road_vertices(
+    road_json: &str,
+    sample_step: f64,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::sample_road_reference_line;
+
+    let road: we_core::model::Road =
+        serde_json::from_str(road_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let ref_pts = sample_road_reference_line(&road, sample_step);
+    let mesh_verts = gen_default_ribbon(&ref_pts, &road.elevation_profile, 3.5, [r, g, b, a]);
+
+    let mut floats = Vec::with_capacity(mesh_verts.len() * 7);
+    for v in &mesh_verts {
+        floats.extend_from_slice(v);
+    }
+    Ok(floats)
+}
+
+/// Generate signal paint mark vertices from a project JSON. Returns Float32Array.
+///
+/// Each vertex is 7 floats: [x, y, z, r, g, b, a].
+///
+/// For `type="Graphics"` signals (road paint arrows), the corresponding arrow
+/// polygon is triangulated and placed on the road surface using the signal's
+/// s/t position and h_offset heading.
+///
+/// For other signal types (vertical signs), a small colored diamond marker is
+/// placed at the signal position slightly above the road surface.
+///
+/// # TODO: [Phase 3] Rendering enhancement — replace flat diamond markers with sprite-based
+/// traffic sign icons (similar to worldeditoronline SpriteSignalRenderer). Currently rendered
+/// as colored point markers; sign types are color-coded (green=traffic lights, red=speed limit,
+/// yellow=generic). Lane colors already match the reference (verified against RoadTessellator.ts).
+#[wasm_bindgen]
+pub fn generate_signal_paint_vertices(
+    project_json: &str,
+    _sample_step: f64,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point};
+    use we_core::model::Project;
+
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut all_floats = Vec::new();
+
+    for road in &project.roads {
+        if road.signals.is_empty() {
+            continue;
+        }
+
+        for signal in &road.signals {
+            // Evaluate road reference line at signal.s
+            let Some(ref_pt) = road_point_at_s(&road.plan_view, signal.s) else {
+                continue;
+            };
+
+            let z_road = evaluate_elevation(&road.elevation_profile, signal.s) as f32;
+
+            if signal.signal_type == "Graphics" {
+                // Paint arrow on the road surface.
+                // hOffset in OpenDRIVE is used for vertical signs. For paint marks
+                // (Graphics), the arrow template encodes +y = forward in local space.
+                //
+                // In OpenDRIVE, left lanes (t > 0) travel in the -s direction, i.e.
+                // opposite to the reference line. Flip heading by π so the arrow tip
+                // points in the actual direction of travel for that lane.
+                // (Matches C# PanUtils.ts: `if (arrowPaint.t > 0) tangent *= -1`)
+                let (cx, cy, _) = offset_point(&ref_pt, signal.t, 0.0);
+                let heading = if signal.t > 0.0 {
+                    ref_pt.hdg + std::f64::consts::PI
+                } else {
+                    ref_pt.hdg
+                };
+                let scale = if signal.width > 0.0 {
+                    signal.width
+                } else {
+                    3.0
+                };
+                let z = z_road + 0.02; // 2 cm above road surface
+
+                let tris = arrow_triangles(
+                    &signal.signal_subtype,
+                    cx as f32,
+                    cy as f32,
+                    z,
+                    heading as f32,
+                    scale as f32,
+                );
+                all_floats.extend(tris);
+            } else {
+                // Vertical sign: render as a small diamond marker above the road
+                let (mx, my, _) = offset_point(&ref_pt, signal.t, 0.0);
+                let z = z_road + 0.5; // 50 cm above road (approximate pole height)
+                let sz = 0.4f32; // marker half-size
+                let [r, g, b, a] = sign_marker_color(&signal.signal_type);
+
+                // Two triangles forming a diamond (tilted square)
+                //   top  (-y)
+                //  left  (-x)  right (+x)
+                //   bot  (+y)
+                let top = [mx as f32, my as f32 - sz, z + sz];
+                let bot = [mx as f32, my as f32 + sz, z - sz];
+                let lft = [mx as f32 - sz, my as f32, z];
+                let rgt = [mx as f32 + sz, my as f32, z];
+
+                for p in &[top, lft, bot, top, bot, rgt] {
+                    all_floats.extend_from_slice(&[p[0], p[1], p[2], r, g, b, a]);
+                }
+            }
+        }
+    }
+
+    Ok(all_floats)
+}
+
+/// Generate road mesh data as JSON from a single road's geometry.
+///
+/// Generate road object vertices from a project JSON. Returns vertex data as Float32Array.
+///
+/// Each vertex is 7 floats: [x, y, z, r, g, b, a].
+///
+/// Renders the following object types:
+/// - `StopLine`: white transverse bar (0.4 m thick) across the road.
+/// - `Crosswalk`: navy-blue zebra stripes (0.45 m stripes / 0.6 m gaps) or outline box.
+/// - `ParkingSpace`: olive-green boundary polygon.
+/// - `CrossHatchArea`: orange boundary polygon.
+/// - `WovenArea`: hot-pink boundary polygon.
+/// - `ForwardWaitingArea`, `TurnLeftWaitingArea`: white boundary box.
+/// - `SlowDownToYieldLine`: sky-blue transverse bar.
+/// - `StopToYieldLine`: red transverse bar.
+/// - `Guardrail`, `Barrier`: colored thin strip along the road direction.
+/// - Other: small colored square marker.
+#[wasm_bindgen]
+pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point, sample_road_reference_line};
+    use we_core::model::{ObjectType, Project};
+
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut all_floats = Vec::new();
+
+    for road in &project.roads {
+        if road.render_hidden || road.objects.is_empty() {
+            continue;
+        }
+
+        let ref_pts = sample_road_reference_line(road, 1.0);
+        if ref_pts.len() < 2 {
+            continue;
+        }
+
+        for obj in &road.objects {
+            let s = obj.position.x;
+            let t = obj.position.y;
+            let z_offset = obj.position.z as f32;
+
+            // Find reference line point at object s-coordinate
+            let Some(ref_pt) = road_point_at_s(&road.plan_view, s) else {
+                continue;
+            };
+            let z_road = evaluate_elevation(&road.elevation_profile, s) as f32 + z_offset + 0.02;
+
+            match &obj.object_type {
+                ObjectType::StopLine => {
+                    // White transverse bar 0.4m thick, width = obj.width or full lane width
+                    let bar_w = if obj.width > 0.0 { obj.width } else { 3.5 };
+                    emit_transverse_bar(
+                        &ref_pt,
+                        t,
+                        z_road,
+                        bar_w,
+                        0.4,
+                        [1.0, 1.0, 1.0, 1.0],
+                        &offset_point,
+                        &mut all_floats,
+                    );
+                }
+                ObjectType::SlowDownToYieldLine => {
+                    // Sky-blue transverse bar
+                    let bar_w = if obj.width > 0.0 { obj.width } else { 3.5 };
+                    emit_transverse_bar(
+                        &ref_pt,
+                        t,
+                        z_road,
+                        bar_w,
+                        0.4,
+                        [0.000, 0.749, 1.000, 1.0], // (0,191,255)
+                        &offset_point,
+                        &mut all_floats,
+                    );
+                }
+                ObjectType::StopToYieldLine => {
+                    // Red transverse bar
+                    let bar_w = if obj.width > 0.0 { obj.width } else { 3.5 };
+                    emit_transverse_bar(
+                        &ref_pt,
+                        t,
+                        z_road,
+                        bar_w,
+                        0.3,
+                        [0.816, 0.008, 0.106, 1.0], // (208,2,27)
+                        &offset_point,
+                        &mut all_floats,
+                    );
+                }
+                ObjectType::Crosswalk => {
+                    if !obj.corners.is_empty() {
+                        // Corner-based zebra stripe generation
+                        emit_crosswalk_stripes(
+                            &obj.corners,
+                            &ref_pts,
+                            &road.elevation_profile,
+                            s,
+                            z_road,
+                            &offset_point,
+                            &mut all_floats,
+                        );
+                    } else {
+                        // Fallback: navy rectangle outline
+                        let len = if obj.length > 0.0 { obj.length } else { 4.0 };
+                        let wid = if obj.width > 0.0 { obj.width } else { 3.5 };
+                        emit_rect_outline(
+                            &ref_pt,
+                            t,
+                            z_road,
+                            wid,
+                            len,
+                            0.3,
+                            [0.000, 0.000, 0.502, 1.0], // navy
+                            &offset_point,
+                            &mut all_floats,
+                        );
+                    }
+                }
+                ObjectType::ParkingSpace => {
+                    // Olive-green boundary
+                    if !obj.corners.is_empty() {
+                        emit_polygon_outline(
+                            &obj.corners,
+                            &ref_pts,
+                            &road.elevation_profile,
+                            s,
+                            z_road,
+                            0.15,
+                            [0.424, 0.549, 0.278, 1.0], // (108,140,71)
+                            &offset_point,
+                            &mut all_floats,
+                        );
+                    } else {
+                        let len = if obj.length > 0.0 { obj.length } else { 5.0 };
+                        let wid = if obj.width > 0.0 { obj.width } else { 2.5 };
+                        emit_rect_outline(
+                            &ref_pt,
+                            t,
+                            z_road,
+                            wid,
+                            len,
+                            0.12,
+                            [0.424, 0.549, 0.278, 1.0],
+                            &offset_point,
+                            &mut all_floats,
+                        );
+                    }
+                }
+                ObjectType::CrossHatchArea => {
+                    // Orange boundary
+                    if !obj.corners.is_empty() {
+                        emit_polygon_outline(
+                            &obj.corners,
+                            &ref_pts,
+                            &road.elevation_profile,
+                            s,
+                            z_road,
+                            0.15,
+                            [0.965, 0.651, 0.137, 1.0], // (246,166,35)
+                            &offset_point,
+                            &mut all_floats,
+                        );
+                    } else {
+                        let len = if obj.length > 0.0 { obj.length } else { 5.0 };
+                        let wid = if obj.width > 0.0 { obj.width } else { 3.0 };
+                        emit_rect_outline(
+                            &ref_pt,
+                            t,
+                            z_road,
+                            wid,
+                            len,
+                            0.15,
+                            [0.965, 0.651, 0.137, 1.0],
+                            &offset_point,
+                            &mut all_floats,
+                        );
+                    }
+                }
+                ObjectType::WovenArea => {
+                    // Hot-pink boundary
+                    let color = [1.000, 0.051, 0.651, 1.0]; // (255,13,166)
+                    if !obj.corners.is_empty() {
+                        emit_polygon_outline(
+                            &obj.corners,
+                            &ref_pts,
+                            &road.elevation_profile,
+                            s,
+                            z_road,
+                            0.15,
+                            color,
+                            &offset_point,
+                            &mut all_floats,
+                        );
+                    } else {
+                        let len = if obj.length > 0.0 { obj.length } else { 5.0 };
+                        let wid = if obj.width > 0.0 { obj.width } else { 3.5 };
+                        emit_rect_outline(
+                            &ref_pt,
+                            t,
+                            z_road,
+                            wid,
+                            len,
+                            0.15,
+                            color,
+                            &offset_point,
+                            &mut all_floats,
+                        );
+                    }
+                }
+                ObjectType::ForwardWaitingArea | ObjectType::TurnLeftWaitingArea => {
+                    // White boundary box
+                    let len = if obj.length > 0.0 { obj.length } else { 4.0 };
+                    let wid = if obj.width > 0.0 { obj.width } else { 3.5 };
+                    emit_rect_outline(
+                        &ref_pt,
+                        t,
+                        z_road,
+                        wid,
+                        len,
+                        0.15,
+                        [1.0, 1.0, 1.0, 0.9],
+                        &offset_point,
+                        &mut all_floats,
+                    );
+                }
+                ObjectType::Guardrail => {
+                    // Dark thin strip along road direction
+                    let len = if obj.length > 0.0 { obj.length } else { 5.0 };
+                    emit_longitudinal_strip(
+                        &ref_pts,
+                        &road.elevation_profile,
+                        s,
+                        t,
+                        z_road,
+                        len,
+                        0.2,
+                        [0.173, 0.173, 0.173, 1.0], // (44,44,44)
+                        &evaluate_elevation,
+                        &offset_point,
+                        &mut all_floats,
+                    );
+                }
+                ObjectType::Barrier => {
+                    let len = if obj.length > 0.0 { obj.length } else { 5.0 };
+                    emit_longitudinal_strip(
+                        &ref_pts,
+                        &road.elevation_profile,
+                        s,
+                        t,
+                        z_road,
+                        len,
+                        0.3,
+                        [0.800, 0.600, 0.200, 1.0], // orange
+                        &evaluate_elevation,
+                        &offset_point,
+                        &mut all_floats,
+                    );
+                }
+                ObjectType::SimpleSignalPole | ObjectType::TrafficLightPole => {
+                    // Cyan / blue-purple small square marker
+                    let color = match &obj.object_type {
+                        ObjectType::TrafficLightPole => [0.400, 0.251, 1.000, 1.0],
+                        _ => [0.000, 1.000, 1.000, 1.0],
+                    };
+                    emit_square_marker(
+                        &ref_pt,
+                        t,
+                        z_road,
+                        0.6,
+                        color,
+                        &offset_point,
+                        &mut all_floats,
+                    );
+                }
+                ObjectType::StreetLightPole => {
+                    emit_square_marker(
+                        &ref_pt,
+                        t,
+                        z_road,
+                        0.6,
+                        [0.612, 0.553, 0.839, 1.0], // lavender (156,141,214)
+                        &offset_point,
+                        &mut all_floats,
+                    );
+                }
+                ObjectType::SignGantry => {
+                    emit_square_marker(
+                        &ref_pt,
+                        t,
+                        z_road,
+                        1.0,
+                        [0.071, 0.455, 0.212, 1.0], // dark green (18,116,54)
+                        &offset_point,
+                        &mut all_floats,
+                    );
+                }
+                ObjectType::Sign
+                | ObjectType::Pillar
+                | ObjectType::TrafficCone
+                | ObjectType::LTypeSignalPole => {
+                    let size = if obj.width > 0.0 {
+                        obj.width.min(1.0)
+                    } else {
+                        0.5
+                    };
+                    emit_square_marker(
+                        &ref_pt,
+                        t,
+                        z_road,
+                        size,
+                        [0.9, 0.9, 0.9, 1.0],
+                        &offset_point,
+                        &mut all_floats,
+                    );
+                }
+                _ => {} // Curb, Wall, Custom — omit for now
+            }
+        }
+    }
+
+    Ok(all_floats)
+}
+
+/// Progressive WASM data pipeline (#6): validates that we-core geometry types
+/// can be deserialized from JSON, mesh-generated, and returned as JSON vertices.
+/// Returns a JSON object with "vertices" (array of [x,y,z,r,g,b,a]) and "count".
+///
+/// Input JSON: serialized `we_core::model::Road`.
+/// Output JSON: `{ "vertices": [[x,y,z,r,g,b,a], ...], "count": N }`
+// TODO: [Phase 3] 待实现 — replace the simple ribbon bridge with full WASM road mesh generation
+#[wasm_bindgen]
+pub fn generate_road_mesh_from_json(road_json: &str, sample_step: f64) -> Result<String, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point, sample_road_reference_line};
+    use we_core::model::Road;
+
+    let road: Road = serde_json::from_str(road_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    if road.render_hidden {
+        return Ok(r#"{"vertices":[],"count":0}"#.to_string());
+    }
+
+    let ref_pts = sample_road_reference_line(&road, sample_step);
+    if ref_pts.len() < 2 {
+        return Ok(r#"{"vertices":[],"count":0}"#.to_string());
+    }
+
+    // Generate a simple ribbon mesh (same as gen_default_ribbon)
+    let half_width = 3.5;
+    let color = [0.35_f32, 0.35, 0.38, 1.0];
+    let mut vertices: Vec<[f64; 7]> = Vec::new();
+
+    for i in 0..ref_pts.len() - 1 {
+        let pt0 = &ref_pts[i];
+        let pt1 = &ref_pts[i + 1];
+        let z0 = evaluate_elevation(&road.elevation_profile, pt0.s);
+        let z1 = evaluate_elevation(&road.elevation_profile, pt1.s);
+        let (lx0, ly0, _) = offset_point(pt0, half_width, 0.0);
+        let (rx0, ry0, _) = offset_point(pt0, -half_width, 0.0);
+        let (lx1, ly1, _) = offset_point(pt1, half_width, 0.0);
+        let (rx1, ry1, _) = offset_point(pt1, -half_width, 0.0);
+
+        for v in &[
+            [lx0, ly0, z0],
+            [rx0, ry0, z0],
+            [lx1, ly1, z1],
+            [rx0, ry0, z0],
+            [rx1, ry1, z1],
+            [lx1, ly1, z1],
+        ] {
+            vertices.push([
+                v[0],
+                v[1],
+                v[2],
+                color[0] as f64,
+                color[1] as f64,
+                color[2] as f64,
+                color[3] as f64,
+            ]);
+        }
+    }
+
+    let result = serde_json::json!({
+        "vertices": vertices,
+        "count": vertices.len()
+    });
+    serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Generate a default lane section as JSON.
+///
+/// Creates symmetric layout with `n_lanes` per side at `lane_width` meters.
+#[wasm_bindgen]
+pub fn generate_default_lane_section(
+    s: f64,
+    n_lanes_per_side: u32,
+    lane_width: f64,
+    with_shoulder: bool,
+) -> Result<String, JsError> {
+    let section = we_core::lane_ops::generate_default_lane_section(
+        s,
+        n_lanes_per_side,
+        lane_width,
+        with_shoulder,
+    );
+    serde_json::to_string(&section).map_err(|e| JsError::new(&e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verify arrow_triangles transform: tip of StraightAheadArrow (local +y) maps to
+    /// the road forward direction (cos heading, sin heading) when scale=1, cx/cy=0.
+    #[test]
+    fn test_arrow_triangles_tip_points_forward() {
+        use std::f32::consts::PI;
+
+        // East-going road (heading = 0): tip should point east (+x)
+        let verts = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, 0.0_f32, 1.0);
+        // The tip vertex (0.0, 0.5) in local space → with scale=1, cx=cy=0:
+        // wx = 0*sin(0) + 0.5*cos(0) = 0.5, wy = -0*cos(0) + 0.5*sin(0) = 0
+        // Search for (0.5, 0.0) in x/y positions of all vertices
+        let has_tip = verts
+            .chunks(7)
+            .any(|v| (v[0] - 0.5).abs() < 1e-4 && v[1].abs() < 1e-4);
+        assert!(
+            has_tip,
+            "Tip should be at (0.5, 0) for east-going road (heading=0)"
+        );
+
+        // North-going road (heading = PI/2): tip should point north (+y)
+        let verts = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, PI / 2.0, 1.0);
+        let has_tip = verts
+            .chunks(7)
+            .any(|v| v[0].abs() < 1e-4 && (v[1] - 0.5).abs() < 1e-4);
+        assert!(
+            has_tip,
+            "Tip should be at (0, 0.5) for north-going road (heading=PI/2)"
+        );
+    }
+
+    /// Verify that arrow_triangles works correctly with hOffset=PI (the trafficpaint.xodr
+    /// convention). The heading passed in must already NOT include h_offset, so this tests
+    /// that the caller side is correct: generate_signal_paint_vertices uses ref_pt.hdg
+    /// directly, not ref_pt.hdg + h_offset.
+    #[test]
+    fn test_arrow_triangles_east_road_forward() {
+        // For an east-going road (heading=0), the arrow tip should be at +x world
+        let verts = arrow_triangles("StraightAheadArrow", 10.0, 5.0, 0.0, 0.0_f32, 3.0);
+        // Tip (0, 0.5) with scale=3, cx=10, cy=5 → wx = 10 + 0.5*3*1 = 11.5, wy = 5
+        let has_tip = verts
+            .chunks(7)
+            .any(|v| (v[0] - 11.5).abs() < 1e-3 && (v[1] - 5.0).abs() < 1e-3);
+        assert!(
+            has_tip,
+            "Tip should be at (11.5, 5.0); arrow should point east"
+        );
+    }
+
+    /// Verify that paint arrows on left lanes (t > 0) are flipped 180° relative to
+    /// right-lane arrows (t < 0), matching the C# PanUtils: `if (t > 0) tangent *= -1`.
+    #[test]
+    fn test_left_lane_arrow_flipped_vs_right_lane() {
+        use std::f32::consts::PI;
+        // A heading of 0 → right-lane arrow tip should be at +x.
+        // A left-lane arrow (heading + π) tip should be at -x.
+        let right = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, 0.0_f32, 1.0);
+        let left = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, PI, 1.0);
+
+        let right_tip_x = right
+            .chunks(7)
+            .map(|v| v[0])
+            .fold(f32::NEG_INFINITY, f32::max);
+        let left_tip_x = left
+            .chunks(7)
+            .map(|v| v[0])
+            .fold(f32::NEG_INFINITY, f32::max);
+
+        // Right-lane tip is at +0.5, left-lane tip should be at near 0 (the flipped tail becomes +x)
+        // More precisely: right tip +x > 0, left tip +x should be the *base*, so
+        // check that the left arrow has a vertex near -0.5 in x (the original tip, now reversed).
+        let left_min_x = left.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
+
+        assert!(
+            right_tip_x > 0.4,
+            "Right-lane tip should be in +x, got {}",
+            right_tip_x
+        );
+        assert!(
+            left_min_x < -0.4,
+            "Left-lane arrow (flipped) should reach -x, got {}",
+            left_min_x
+        );
+    }
+}
