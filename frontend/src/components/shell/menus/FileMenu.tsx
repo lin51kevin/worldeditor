@@ -1,0 +1,149 @@
+import type { Project } from '../../../services/platform';
+import { useEditorStore } from '../../../stores/editorStore';
+import type { ExporterContrib, ImporterContrib } from '../../../stores/pluginContribStore';
+import type { RecentFile } from '../../../stores/recentFilesStore';
+import type { MenuItem, TranslateFn } from '../menuDefinitions';
+import { MenuSection, type MenuSectionInteractionProps } from './MenuSection';
+
+type MenuAction = () => void | Promise<void>;
+
+interface FileMenuProps extends MenuSectionInteractionProps {
+  t: TranslateFn;
+  project: Project;
+  isDirty: boolean;
+  recentFiles: RecentFile[];
+  importers: ImporterContrib[];
+  exporters: ExporterContrib[];
+  clearRecentFiles: () => void;
+  onNew: MenuAction;
+  onOpen: MenuAction;
+  onSave: MenuAction;
+  onSaveAs: MenuAction;
+  onExit: MenuAction;
+  onImportOpenDrive: MenuAction;
+  onOpenRecentFile: (file: RecentFile) => Promise<void>;
+  onExportOpenDrive: MenuAction;
+}
+
+export function FileMenu({
+  t,
+  project,
+  isDirty,
+  recentFiles,
+  importers,
+  exporters,
+  clearRecentFiles,
+  onNew,
+  onOpen,
+  onSave,
+  onSaveAs,
+  onExit,
+  onImportOpenDrive,
+  onOpenRecentFile,
+  onExportOpenDrive,
+  ...menuProps
+}: FileMenuProps) {
+  const recentSubmenu: MenuItem[] = recentFiles.length === 0
+    ? [{ label: t('menu.noRecentFiles'), disabled: true }]
+    : [
+        ...recentFiles.map((file): MenuItem => ({
+          label: file.name,
+          action: () => {
+            void onOpenRecentFile(file);
+          },
+        })),
+        { separator: true, label: '' },
+        { label: t('menu.clearRecentFiles'), action: clearRecentFiles },
+      ];
+
+  const importSubmenu: MenuItem[] = [
+    {
+      label: t('menu.importOpenDrive'),
+      action: () => {
+        void onImportOpenDrive();
+      },
+    },
+    ...importers.filter((importer) => !importer.disabled).map((importer): MenuItem => ({
+      label: `${t('menu.import')} ${importer.formatName}...`,
+      action: () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = importer.extensions.join(',');
+        input.onchange = async () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          const content = await file.arrayBuffer();
+          const importedProject = await importer.onImport(content, file.name);
+          importedProject.name = file.name;
+          useEditorStore.getState().setProject(importedProject);
+        };
+        input.click();
+      },
+    })),
+  ];
+
+  const exportSubmenu: MenuItem[] = [
+    {
+      label: t('menu.exportOpenDrive'),
+      action: () => {
+        void onExportOpenDrive();
+      },
+      disabled: project.roads.length === 0,
+    },
+    ...exporters.filter((exporter) => !exporter.disabled).map((exporter): MenuItem => ({
+      label: `${t('menu.export')} ${exporter.formatName}...`,
+      action: () => {
+        void exporter.onExport(project);
+      },
+    })),
+  ];
+
+  const menu = {
+    label: t('menu.file'),
+    items: [
+      {
+        label: t('menu.newProject'),
+        shortcut: 'Ctrl+N',
+        action: () => {
+          void onNew();
+        },
+      },
+      {
+        label: t('menu.openFile'),
+        shortcut: 'Ctrl+O',
+        action: () => {
+          void onOpen();
+        },
+      },
+      { label: t('menu.openRecentFiles'), submenu: recentSubmenu },
+      { separator: true, label: '' },
+      { label: t('menu.import'), submenu: importSubmenu },
+      { label: t('menu.export'), submenu: exportSubmenu },
+      { separator: true, label: '' },
+      {
+        label: t('menu.save'),
+        shortcut: 'Ctrl+S',
+        action: () => {
+          void onSave();
+        },
+        disabled: !isDirty,
+      },
+      {
+        label: t('menu.saveAs'),
+        shortcut: 'Ctrl+Shift+S',
+        action: () => {
+          void onSaveAs();
+        },
+      },
+      { separator: true, label: '' },
+      {
+        label: t('menu.exit'),
+        action: () => {
+          void onExit();
+        },
+      },
+    ],
+  };
+
+  return <MenuSection menu={menu} {...menuProps} />;
+}
