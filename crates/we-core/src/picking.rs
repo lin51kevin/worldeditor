@@ -7,6 +7,7 @@ use crate::geometry::eval::{
     RefLinePoint, evaluate_lane_width, offset_point, sample_road_reference_line,
 };
 use crate::model::{Junction, Project, Road};
+use crate::spatial_index::{ElementKind, SpatialIndex};
 
 /// Result of a pick operation.
 #[derive(Debug, Clone)]
@@ -23,13 +24,24 @@ pub struct PickResult {
 
 /// Pick the nearest road to a world-space point.
 ///
-/// Considers the full road width (all lane sections) for accurate hit detection.
+/// Uses a spatial index for fast candidate filtering, then performs
+/// detailed distance checks only on nearby roads.
 /// Returns `None` if no road is within `threshold` distance.
 pub fn pick_road(project: &Project, x: f64, y: f64, threshold: f64) -> Option<PickResult> {
+    let index = SpatialIndex::build(project, 100.0);
+    let candidates = index.query_point(x, y, threshold);
+
     let mut best: Option<PickResult> = None;
     let mut best_dist = threshold;
 
-    for road in &project.roads {
+    for candidate in &candidates {
+        if candidate.kind != ElementKind::Road {
+            continue;
+        }
+        let road = match project.roads.iter().find(|r| r.id == candidate.id) {
+            Some(r) => r,
+            None => continue,
+        };
         if road.render_hidden {
             continue;
         }
@@ -46,13 +58,23 @@ pub fn pick_road(project: &Project, x: f64, y: f64, threshold: f64) -> Option<Pi
 
 /// Pick the nearest junction to a world-space point.
 ///
-/// Uses the junction's connecting roads' endpoints to build a bounding region.
+/// Uses a spatial index for fast candidate filtering.
 /// Returns `None` if no junction is within `threshold` distance.
 pub fn pick_junction(project: &Project, x: f64, y: f64, threshold: f64) -> Option<PickResult> {
+    let index = SpatialIndex::build(project, 100.0);
+    let candidates = index.query_point(x, y, threshold);
+
     let mut best: Option<PickResult> = None;
     let mut best_dist = threshold;
 
-    for junction in &project.junctions {
+    for candidate in &candidates {
+        if candidate.kind != ElementKind::Junction {
+            continue;
+        }
+        let junction = match project.junctions.iter().find(|j| j.id == candidate.id) {
+            Some(j) => j,
+            None => continue,
+        };
         if let Some(dist) = distance_to_junction(project, junction, x, y)
             && dist < best_dist
         {
@@ -71,6 +93,8 @@ pub fn pick_junction(project: &Project, x: f64, y: f64, threshold: f64) -> Optio
 
 /// Pick a specific lane at a world-space point.
 ///
+/// Uses a spatial index for fast candidate filtering, then performs
+/// detailed per-lane distance checks on nearby roads.
 /// Returns `(road_id, section_index, lane_id)` if a lane is found within threshold.
 pub fn pick_lane(
     project: &Project,
@@ -78,10 +102,20 @@ pub fn pick_lane(
     y: f64,
     threshold: f64,
 ) -> Option<(String, usize, i32)> {
+    let index = SpatialIndex::build(project, 100.0);
+    let candidates = index.query_point(x, y, threshold);
+
     let mut best_dist = threshold;
     let mut best_result: Option<(String, usize, i32)> = None;
 
-    for road in &project.roads {
+    for candidate in &candidates {
+        if candidate.kind != ElementKind::Road {
+            continue;
+        }
+        let road = match project.roads.iter().find(|r| r.id == candidate.id) {
+            Some(r) => r,
+            None => continue,
+        };
         if road.render_hidden {
             continue;
         }

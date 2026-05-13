@@ -6,7 +6,7 @@
 use crate::geometry::eval::sample_road_reference_line;
 use crate::model::Project;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Axis-aligned bounding box.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -147,7 +147,7 @@ impl SpatialIndex {
         let min_cy = (region.min_y / self.cell_size).floor() as i64;
         let max_cy = (region.max_y / self.cell_size).floor() as i64;
 
-        let mut seen = Vec::new();
+        let mut seen = HashSet::new();
         let mut results = Vec::new();
 
         for cx in min_cx..=max_cx {
@@ -155,12 +155,11 @@ impl SpatialIndex {
                 let key = CellKey { cx, cy };
                 if let Some(indices) = self.grid.get(&key) {
                     for &idx in indices {
-                        if seen.contains(&idx) {
+                        if !seen.insert(idx) {
                             continue;
                         }
                         let entry = &self.entries[idx];
                         if entry.aabb.intersects(region) {
-                            seen.push(idx);
                             results.push(SpatialQueryResult {
                                 id: entry.id.clone(),
                                 kind: entry.kind,

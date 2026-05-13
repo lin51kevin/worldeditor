@@ -3,8 +3,9 @@
 //! Provides grid snapping, endpoint snapping, and perpendicular snapping
 //! for precise editing operations. Pure Rust, WASM compatible.
 
-use crate::geometry::eval::sample_road_reference_line;
+use crate::geometry::eval::{evaluate_road_at_s, sample_road_reference_line};
 use crate::model::{Project, Road};
+use crate::spatial_index::SpatialIndex;
 use serde::{Deserialize, Serialize};
 
 /// Snap configuration.
@@ -134,13 +135,20 @@ fn snap_to_endpoint(
     project: &Project,
     exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
+    let index = SpatialIndex::build(project, 100.0);
+    let candidates = index.query_point(x, y, threshold);
+
     let mut best_dist = threshold;
     let mut best: Option<SnapResult> = None;
 
-    for road in &project.roads {
-        if exclude_road_id == Some(road.id.as_str()) {
+    for candidate in &candidates {
+        if exclude_road_id == Some(candidate.id.as_str()) {
             continue;
         }
+        let road = match project.roads.iter().find(|r| r.id == candidate.id) {
+            Some(r) => r,
+            None => continue,
+        };
         let endpoints = get_road_endpoints(road);
         for (ex, ey) in endpoints {
             let dx = x - ex;
@@ -170,13 +178,20 @@ fn snap_to_midpoint(
     project: &Project,
     exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
+    let index = SpatialIndex::build(project, 100.0);
+    let candidates = index.query_point(x, y, threshold);
+
     let mut best_dist = threshold;
     let mut best: Option<SnapResult> = None;
 
-    for road in &project.roads {
-        if exclude_road_id == Some(road.id.as_str()) {
+    for candidate in &candidates {
+        if exclude_road_id == Some(candidate.id.as_str()) {
             continue;
         }
+        let road = match project.roads.iter().find(|r| r.id == candidate.id) {
+            Some(r) => r,
+            None => continue,
+        };
         if let Some((mx, my)) = get_road_midpoint(road) {
             let dx = x - mx;
             let dy = y - my;
@@ -205,13 +220,20 @@ fn snap_to_perpendicular(
     project: &Project,
     exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
+    let index = SpatialIndex::build(project, 100.0);
+    let candidates = index.query_point(x, y, threshold);
+
     let mut best_dist = threshold;
     let mut best: Option<SnapResult> = None;
 
-    for road in &project.roads {
-        if exclude_road_id == Some(road.id.as_str()) {
+    for candidate in &candidates {
+        if exclude_road_id == Some(candidate.id.as_str()) {
             continue;
         }
+        let road = match project.roads.iter().find(|r| r.id == candidate.id) {
+            Some(r) => r,
+            None => continue,
+        };
         let pts = sample_road_reference_line(road, 2.0);
         for pt in &pts {
             let dx = x - pt.x;
@@ -234,36 +256,28 @@ fn snap_to_perpendicular(
 }
 
 /// Get the start and end points of a road.
+///
+/// Uses direct curve evaluation at s=0 and s=length instead of
+/// sampling the entire reference line.
 fn get_road_endpoints(road: &Road) -> Vec<(f64, f64)> {
-    let pts = sample_road_reference_line(road, road.length.max(1.0));
-    let mut endpoints = Vec::new();
-    if let Some(first) = pts.first() {
-        endpoints.push((first.x, first.y));
+    let mut endpoints = Vec::with_capacity(2);
+    if let Some(pt) = evaluate_road_at_s(road, 0.0) {
+        endpoints.push((pt.x, pt.y));
     }
-    if let Some(last) = pts.last()
-        && pts.len() > 1
-    {
-        endpoints.push((last.x, last.y));
+    if road.length > 1e-9 {
+        if let Some(pt) = evaluate_road_at_s(road, road.length) {
+            endpoints.push((pt.x, pt.y));
+        }
     }
     endpoints
 }
 
 /// Get the midpoint of a road's reference line.
+///
+/// Uses direct curve evaluation at s=length/2.
 fn get_road_midpoint(road: &Road) -> Option<(f64, f64)> {
-    let pts = sample_road_reference_line(road, 2.0);
-    if pts.is_empty() {
-        return None;
-    }
-    // Find the point closest to s = length/2
     let mid_s = road.length / 2.0;
-    pts.iter()
-        .min_by(|a, b| {
-            (a.s - mid_s)
-                .abs()
-                .partial_cmp(&(b.s - mid_s).abs())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .map(|p| (p.x, p.y))
+    evaluate_road_at_s(road, mid_s).map(|p| (p.x, p.y))
 }
 
 #[cfg(test)]
