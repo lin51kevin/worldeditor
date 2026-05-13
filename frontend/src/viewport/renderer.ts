@@ -15,41 +15,17 @@ export { resolveMouseDragAction, computeGroundPanOffset } from './viewportTypes'
  *   - See crates/we-wasm/src/lib.rs for the progressive WASM data pipeline.
  */
 
-import { mouseButtonMask, resolveMouseDragAction, computeGroundPanOffset } from './viewportTypes';
-import type { MouseDragAction } from './viewportTypes';
-import {
-  computeControlPointPositions,
-  pickControlPoint as pickControlPointFn,
-  applyHandleDrag,
-} from './tangentHandleController';
+import { applyHandleDrag } from './tangentHandleController';
 import type { ControlPointRef } from './tangentHandleController';
-import {
-  perspectiveMatrix, lookAtMatrix, multiplyMatrices,
-  arraysEqual, invertMatrix4, transformPoint, niceNumber,
-} from './viewportMath';
-import { buildSplineCurveVertices, buildSplineMarkerVertices } from './splineVertexBuilder';
 import {
   createGridPipeline as createGridPipelineFn,
   createBasicPipelines,
   createLaneLinePipeline as createLaneLinePipelineFn,
   createBillboardPipeline as createBillboardPipelineFn,
 } from './pipelineFactory';
-
-/** Camera state for orbit controls. */
-interface CameraState {
-  position: [number, number, number];
-  target: [number, number, number];
-  up: [number, number, number];
-  fovY: number;
-  near: number;
-  far: number;
-}
-
-/** A mesh to render. */
-interface RenderableMesh {
-  vertexBuffer: GPUBuffer;
-  vertexCount: number;
-}
+import { CameraController } from './cameraController';
+import { MarkerRenderer } from './markerRenderer';
+import type { RenderableMesh } from './markerRenderer';
 
 export class ViewportRenderer {
   private device!: GPUDevice;
@@ -69,30 +45,13 @@ export class ViewportRenderer {
   private basicBindGroup!: GPUBindGroup;
   private basicUniformBuffer!: GPUBuffer;
 
-  // Camera
-  private camera: CameraState = {
-    position: [0, -100, 50],
-    target: [0, 0, 0],
-    up: [0, 0, 1],
-    fovY: Math.PI / 4,
-    near: 0.1,
-    far: 100000,
-  };
+  private cameraController = new CameraController();
+  private markerRenderer = new MarkerRenderer();
 
   // Road meshes
   private meshes: RenderableMesh[] = [];
   // Lane line meshes
   private laneLineMeshes: RenderableMesh[] = [];
-  // Spline curve geometry (screen-size independent — rebuilt on knot change only)
-  private splineCurveMeshes: RenderableMesh[] = [];
-  // Spline marker geometry (screen-size dependent — rebuilt on zoom AND knot change)
-  private splineMarkerMeshes: RenderableMesh[] = [];
-  // Cached knot data so markers can be rebuilt on zoom without re-calling setSplinePreviewKnots
-  private splineKnotsCache: Array<[number, number, number]> = [];
-  private splineTangentCache: Record<number, [number, number, number]> | undefined = undefined;
-  // Hover / selection state for control points
-  private hoveredControlPoint: { index: number; type: 'knot' | 'in' | 'out' } | null = null;
-  private selectedControlPoint: { index: number; type: 'knot' | 'in' | 'out' } | null = null;
 
   // Callbacks for tangent handle drag interaction (Phase 1.8)
   private onTangentChanged: ((index: number, tangent: [number, number, number]) => void) | null = null;
@@ -106,14 +65,6 @@ export class ViewportRenderer {
   private deviceLost = false;
   // Set to true by dispose(); guards against async init() completing after cleanup
   private disposed = false;
-
-  // Mouse interaction
-  private isDragging = false;
-  private activeMouseButton: number | null = null;
-  private activeDragAction: MouseDragAction | null = null;
-  private lastMouse: [number, number] = [0, 0];
-  private _cameraLocked = false;
-  private _dimension: '3d' | '2d' = '3d';
 
   // Visibility flags for grid/axis
   private showGrid = true;
@@ -132,32 +83,22 @@ export class ViewportRenderer {
   // Last uploaded vertex data (needed for zoomToFit re-trigger)
   private lastVertexData: Float32Array | null = null;
 
-  // Grid spacing in world units (1 cell = gridSpacing meters), auto-set from data extent
-  private gridSpacing = 10.0;
-
   // Pre-allocated uniform buffers (avoid per-frame GC)
   // 28 floats = 112 bytes: mat4x4(16) + vec3(3)+f32(1) + vec3(3)+f32(1) + f32 show_grid + f32 show_axis + 2 pad
   private gridUniformData = new Float32Array(28);
   private basicUniformData = new Float32Array(32);
 
-  // Matrix inverse cache (avoid redundant inversion on static camera)
-  private cachedViewProj: Float32Array | null = null;
-  private cachedInverseViewProj: Float32Array | null = null;
-
-  // Camera dirty flag — skip viewProj recomputation when camera hasn't moved
-  private cameraDirty = true;
-  private cachedViewProjForRender: Float32Array | null = null;
-
-  // Callback invoked after data load or camera changes
-  private onScaleChange: ((info: { gridSpacing: number; mpp: number }) => void) | null = null;
-
-  // Guard: avoid redundant onScaleChange callbacks when values haven't changed
-  private lastReportedMpp = -1;
-  private lastReportedGridSpacing = -1;
-
   // Plugin viewport overlay renderers — called after main render pass
   private overlayRenderers: Array<(ctx: { device?: GPUDevice; canvas?: HTMLCanvasElement }) => void> = [];
   private overlayCanvas: HTMLCanvasElement | null = null;
+
+  constructor() {
+    this.cameraController.setScaleMetricsChangedCallback(({ mpp }) => {
+      if (this.markerRenderer.knotCount === 0) return;
+      this.markerRenderer.refreshSplineCurve(mpp);
+      this.markerRenderer.refreshSplineMarkers(mpp, this.clearColor);
+    });
+  }
 
   /** Update the list of plugin overlay render functions (sorted by order). */
   setOverlayRenderers(
@@ -187,46 +128,20 @@ export class ViewportRenderer {
    * Returns the nearest control point within ~10px, or null.
    */
   pickControlPointAtScreen(screenX: number, screenY: number): ControlPointRef | null {
-    if (this.splineKnotsCache.length === 0) return null;
+    if (this.markerRenderer.knotCount === 0) return null;
     const world = this.unprojectToGround(screenX, screenY);
     if (!world) return null;
-    const mpp = this.getMetersPerPixel();
-    const thresholdMeters = 10.0 * mpp; // 10 pixel threshold
-    const positions = computeControlPointPositions(
-      this.splineKnotsCache as ReadonlyArray<readonly [number, number, number]>,
-      (this.splineTangentCache ?? {}) as Readonly<Record<number, readonly [number, number, number]>>,
-    );
-    return pickControlPointFn(world.x, world.y, positions, thresholdMeters);
+    return this.markerRenderer.pickControlPoint(world.x, world.y, this.getMetersPerPixel());
   }
 
   /** Register a callback invoked on data load or camera change with grid info. */
   setScaleChangeCallback(cb: (info: { gridSpacing: number; mpp: number }) => void): void {
-    this.onScaleChange = cb;
-    this.reportScale();
+    this.cameraController.setScaleChangeCallback(cb);
   }
 
   /** Compute current meters-per-pixel (perspective approximation at target distance). */
   getMetersPerPixel(): number {
-    const [px, py, pz] = this.camera.position;
-    const [tx, ty, tz] = this.camera.target;
-    const camDist = Math.sqrt((px - tx) ** 2 + (py - ty) ** 2 + (pz - tz) ** 2);
-    const halfWorldWidth = camDist * Math.tan(this.camera.fovY / 2);
-    return (halfWorldWidth * 2) / Math.max(1, this.width);
-  }
-
-  private reportScale(): void {
-    const mpp = this.getMetersPerPixel();
-    const gs = this.gridSpacing;
-    // Skip callback + spline rebuild when nothing changed (e.g. pure pan)
-    if (mpp === this.lastReportedMpp && gs === this.lastReportedGridSpacing) return;
-    this.lastReportedMpp = mpp;
-    this.lastReportedGridSpacing = gs;
-    this.onScaleChange?.({ gridSpacing: gs, mpp });
-    // Rebuild both curve (thinner at new zoom) and markers (screen-constant size)
-    if (this.splineKnotsCache.length > 0) {
-      this.refreshSplineCurve();
-      this.refreshSplineMarkers();
-    }
+    return this.cameraController.getMetersPerPixel();
   }
 
   /** Check if WebGPU is available. */
@@ -265,6 +180,8 @@ export class ViewportRenderer {
 
     this.width = canvas.width;
     this.height = canvas.height;
+    this.cameraController.setViewportSize(this.width, this.height);
+    this.markerRenderer.setDevice(this.device);
 
     this.createDepthTexture();
     this.createMsaaTexture();
@@ -372,111 +289,42 @@ export class ViewportRenderer {
   /** Set visibility of the grid. */
   setShowGrid(show: boolean): void {
     this.showGrid = show;
-    this.cameraDirty = true;
+    this.cameraController.markDirty();
   }
 
   /** Set visibility of the axis indicator. */
   setShowAxis(show: boolean): void {
     this.showAxis = show;
-    this.cameraDirty = true;
+    this.cameraController.markDirty();
   }
 
   /** Set the WebGPU clear (background) color. */
   setClearColor(r: number, g: number, b: number): void {
     this.clearColor = { r, g, b, a: 1.0 };
-    if (this.splineKnotsCache.length > 0) {
-      this.refreshSplineMarkers();
+    if (this.markerRenderer.knotCount > 0) {
+      this.markerRenderer.refreshSplineMarkers(this.getMetersPerPixel(), this.clearColor);
     }
   }
 
   /** Set the grid line color. */
   setGridColor(r: number, g: number, b: number): void {
     this.gridColor = [r, g, b];
-    this.cameraDirty = true;
+    this.cameraController.markDirty();
   }
 
-  /** Switch between 3D perspective and 2D top-down orthographic view. */
+  /** Switch between 3D perspective and 2D top-down view. */
   setDimension(dimension: '3d' | '2d'): void {
-    if (dimension === '2d') {
-      // Top-down view: camera straight above target, looking down
-      const [tx, ty, tz] = this.camera.target;
-      const dist = Math.sqrt(
-        (this.camera.position[0] - tx) ** 2 +
-        (this.camera.position[1] - ty) ** 2 +
-        (this.camera.position[2] - tz) ** 2,
-      );
-      this.camera.position = [tx, ty, tz + dist];
-      this.camera.up = [0, 1, 0];
-    } else {
-      // 3D: restore angled view
-      const [tx, ty, tz] = this.camera.target;
-      const dist = Math.sqrt(
-        (this.camera.position[0] - tx) ** 2 +
-        (this.camera.position[1] - ty) ** 2 +
-        (this.camera.position[2] - tz) ** 2,
-      );
-      this.camera.position = [tx, ty - dist * 0.5, tz + dist * 0.7];
-      this.camera.up = [0, 0, 1];
-    }
-    this._dimension = dimension;
-    this.cameraDirty = true;
+    this.cameraController.setDimension(dimension);
   }
 
   /** Unproject a screen pixel to world-space coordinates on the Z=0 ground plane. */
   unprojectToGround(screenX: number, screenY: number): { x: number; y: number } | null {
-    if (this.width === 0 || this.height === 0) return null;
-
-    // Normalized device coordinates [-1, 1]
-    const ndcX = (screenX / this.width) * 2 - 1;
-    const ndcY = 1 - (screenY / this.height) * 2;
-
-    const viewProj = this.computeViewProj();
-    // Use cached inverse if viewProj hasn't changed
-    if (!this.cachedViewProj || !arraysEqual(this.cachedViewProj, viewProj)) {
-      this.cachedViewProj = new Float32Array(viewProj);
-      const inv = invertMatrix4(viewProj);
-      if (!inv) return null;
-      this.cachedInverseViewProj = inv;
-    }
-    const inv = this.cachedInverseViewProj;
-    if (!inv) return null;
-
-    // Near and far points in world space
-    const nearPt = transformPoint(inv, [ndcX, ndcY, 0]);
-    const farPt = transformPoint(inv, [ndcX, ndcY, 1]);
-
-    // Ray direction
-    const dx = farPt[0] - nearPt[0];
-    const dy = farPt[1] - nearPt[1];
-    const dz = farPt[2] - nearPt[2];
-
-    // Intersect with Z=0 plane
-    if (Math.abs(dz) < 1e-10) return null;
-    const t = -nearPt[2] / dz;
-    if (t < 0) return null;
-
-    return {
-      x: nearPt[0] + dx * t,
-      y: nearPt[1] + dy * t,
-    };
+    return this.cameraController.unprojectToGround(screenX, screenY);
   }
 
   /** Project a world-space XY point (Z=0) to canvas pixel coordinates. Returns null if off-screen. */
   projectWorldToScreen(wx: number, wy: number): { x: number; y: number } | null {
-    if (this.width === 0 || this.height === 0) return null;
-    const viewProj = this.computeViewProj();
-    // Multiply [wx, wy, 0, 1] by viewProj (column-major)
-    const x = wx, y = wy, z = 0, w = 1;
-    const px = viewProj[0]! * x + viewProj[4]! * y + viewProj[8]! * z + viewProj[12]! * w;
-    const py = viewProj[1]! * x + viewProj[5]! * y + viewProj[9]! * z + viewProj[13]! * w;
-    const pw = viewProj[3]! * x + viewProj[7]! * y + viewProj[11]! * z + viewProj[15]! * w;
-    if (Math.abs(pw) < 1e-10) return null;
-    const ndcX = px / pw;
-    const ndcY = py / pw;
-    return {
-      x: (ndcX + 1) * 0.5 * this.width,
-      y: (1 - ndcY) * 0.5 * this.height,
-    };
+    return this.cameraController.projectWorldToScreen(wx, wy);
   }
 
 
@@ -512,32 +360,7 @@ export class ViewportRenderer {
     knots: Array<[number, number, number]>,
     tangentOverrides?: Record<number, [number, number, number]>,
   ): void {
-    this.disposeMeshes(this.splineCurveMeshes);
-    this.disposeMeshes(this.splineMarkerMeshes);
-
-    // Cache for zoom-driven refresh
-    this.splineKnotsCache = knots;
-    this.splineTangentCache = tangentOverrides;
-    // Reset interaction states when knots change
-    this.hoveredControlPoint = null;
-    this.selectedControlPoint = null;
-
-    if (knots.length === 0) return;
-
-    this.refreshSplineCurve();
-    this.refreshSplineMarkers();
-  }
-
-  /**
-   * Rebuild the Hermite curve geometry using current mpp (called on zoom too).
-   */
-  private refreshSplineCurve(): void {
-    this.disposeMeshes(this.splineCurveMeshes);
-    const knots = this.splineKnotsCache;
-    if (knots.length < 2) return;
-
-    const curveVerts = buildSplineCurveVertices(knots, this.splineTangentCache, this.getMetersPerPixel());
-    this.uploadToMeshArray(this.splineCurveMeshes, curveVerts);
+    this.markerRenderer.setSplinePreviewKnots(knots, tangentOverrides, this.getMetersPerPixel(), this.clearColor);
   }
 
   /**
@@ -548,87 +371,14 @@ export class ViewportRenderer {
     hovered?: { index: number; type: 'knot' | 'in' | 'out' } | null,
     selected?: { index: number; type: 'knot' | 'in' | 'out' } | null,
   ): void {
-    if (hovered !== undefined) this.hoveredControlPoint = hovered;
-    if (selected !== undefined) this.selectedControlPoint = selected;
-
-    this.disposeMeshes(this.splineMarkerMeshes);
-    const knots = this.splineKnotsCache;
-    if (knots.length === 0) return;
-
-    const markerVerts = buildSplineMarkerVertices(
-      knots,
-      this.splineTangentCache,
-      this.getMetersPerPixel(),
-      this.clearColor,
-      this.hoveredControlPoint,
-      this.selectedControlPoint,
-    );
-    this.uploadToMeshArray(this.splineMarkerMeshes, markerVerts);
-  }
-
-  /** Upload a vertex array into a mesh array, clearing existing meshes first. */
-  private uploadToMeshArray(meshArray: RenderableMesh[], vertices: number[]): void {
-    if (vertices.length === 0) return;
-    const vertexData = new Float32Array(vertices);
-    const buffer = this.device.createBuffer({
-      size: vertexData.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      mappedAtCreation: true,
-    });
-    new Float32Array(buffer.getMappedRange()).set(vertexData);
-    buffer.unmap();
-    meshArray.push({ vertexBuffer: buffer, vertexCount: vertices.length / 7 });
+    this.markerRenderer.refreshSplineMarkers(this.getMetersPerPixel(), this.clearColor, hovered, selected);
   }
 
   /** Compute bounding box of vertex data and move camera to see all geometry. */
   fitToVertices(vertexData?: Float32Array): void {
     const data = vertexData ?? this.lastVertexData;
     if (!data) return;
-    const stride = 7;
-    const count = data.length / stride;
-    if (count === 0) return;
-
-    let minX = Infinity, minY = Infinity, minZ = Infinity;
-    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-
-    for (let i = 0; i < count; i++) {
-      const x = data[i * stride]!;
-      const y = data[i * stride + 1]!;
-      const z = data[i * stride + 2]!;
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (z < minZ) minZ = z;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-      if (z > maxZ) maxZ = z;
-    }
-
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    const cz = (minZ + maxZ) / 2;
-
-    const extentX = maxX - minX;
-    const extentY = maxY - minY;
-    const extentZ = maxZ - minZ;
-    const maxExtent = Math.max(extentX, extentY, extentZ, 1);
-
-    // Derive a nice grid spacing from the data extent (~10 divisions)
-    this.gridSpacing = niceNumber(Math.max(maxExtent / 10, 0.5));
-
-    // Place camera above the center, respecting the current dimension mode
-    const dist = maxExtent * 0.8;
-    this.camera.target = [cx, cy, cz];
-    if (this._dimension === '2d') {
-      this.camera.position = [cx, cy, cz + dist];
-      this.camera.up = [0, 1, 0];
-    } else {
-      this.camera.position = [cx, cy - dist * 0.5, cz + dist];
-      this.camera.up = [0, 0, 1];
-    }
-    this.camera.near = Math.max(0.1, maxExtent * 0.001);
-    this.camera.far = Math.max(100000, maxExtent * 10);
-    this.cameraDirty = true;
-    this.reportScale();
+    this.cameraController.fitToVertices(data);
   }
 
   /**
@@ -636,45 +386,7 @@ export class ViewportRenderer {
    * Unlike fitToVertices, the camera distance (zoom level) is preserved.
    */
   panToCenter(vertexData: Float32Array): void {
-    const stride = 7;
-    const count = vertexData.length / stride;
-    if (count === 0) return;
-
-    let minX = Infinity, minY = Infinity, minZ = Infinity;
-    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-
-    for (let i = 0; i < count; i++) {
-      const x = vertexData[i * stride]!;
-      const y = vertexData[i * stride + 1]!;
-      const z = vertexData[i * stride + 2]!;
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (z < minZ) minZ = z;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-      if (z > maxZ) maxZ = z;
-    }
-
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    const cz = (minZ + maxZ) / 2;
-
-    // Preserve the camera → target offset vector (keeps zoom level)
-    const [px, py, pz] = this.camera.position;
-    const [tx, ty, tz] = this.camera.target;
-    const offsetX = px - tx;
-    const offsetY = py - ty;
-    const offsetZ = pz - tz;
-
-    this.camera.target = [cx, cy, cz];
-    this.camera.position = [cx + offsetX, cy + offsetY, cz + offsetZ];
-    // Recalculate near/far based on the new camera distance so that objects
-    // aren't clipped when the user has zoomed in before navigating.
-    const camDist = Math.sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ);
-    this.camera.near = Math.max(0.1, camDist * 0.001);
-    this.camera.far = Math.max(100000, camDist * 100);
-    this.cameraDirty = true;
-    this.reportScale();
+    this.cameraController.panToCenter(vertexData);
   }
 
   /** Resize the viewport. */
@@ -682,17 +394,17 @@ export class ViewportRenderer {
     if (width <= 0 || height <= 0) return;
     this.width = width;
     this.height = height;
+    this.cameraController.setViewportSize(width, height);
     this.depthTexture?.destroy();
     this.msaaTexture?.destroy();
     this.msaaTexture = null;
     this.createDepthTexture();
     this.createMsaaTexture();
-    this.cameraDirty = true;
   }
 
   /** Start the render loop. */
   start(): void {
-    this.reportScale();
+    this.cameraController.reportScale();
     const loop = () => {
       this.renderFrame();
       this.animFrameId = requestAnimationFrame(loop);
@@ -721,8 +433,7 @@ export class ViewportRenderer {
     this.stop();
     this.disposeMeshes(this.meshes);
     this.disposeMeshes(this.laneLineMeshes);
-    this.disposeMeshes(this.splineCurveMeshes);
-    this.disposeMeshes(this.splineMarkerMeshes);
+    this.markerRenderer.dispose();
     this.disposeMeshes(this.highlightMeshes);
     this.disposeMeshes(this.hoverMeshes);
     this.depthTexture?.destroy();
@@ -756,24 +467,18 @@ export class ViewportRenderer {
       return;
     }
 
-    const wasDirty = this.cameraDirty;
-    const viewProj = this.computeViewProj();
+    const camera = this.cameraController.state;
+    const wasDirty = this.cameraController.isViewDirty;
+    const viewProj = this.cameraController.computeViewProj();
 
     // Only update uniforms when camera has changed (skip redundant GPU writes)
     if (wasDirty) {
       // Update grid uniforms (96 bytes: mat4x4 + vec3 + f32 + vec3 + f32)
       const gridData = this.gridUniformData;
       gridData.set(viewProj, 0);
-      gridData.set(this.camera.position, 16);
-      // Auto-scale grid based on camera distance
-      const camDist = Math.sqrt(
-        (this.camera.position[0] - this.camera.target[0]) ** 2 +
-        (this.camera.position[1] - this.camera.target[1]) ** 2 +
-        (this.camera.position[2] - this.camera.target[2]) ** 2,
-      );
-      // Grid scale from data extent (nice number, auto-computed in fitToVertices)
-      const gridScale = this.gridSpacing;
-      gridData[19] = gridScale;
+      gridData.set(camera.position, 16);
+      const camDist = this.cameraController.getCameraDistance();
+      gridData[19] = this.cameraController.currentGridSpacing;
       gridData.set(this.gridColor, 20);
       gridData[23] = camDist; // cam_dist for fade radius calculation
       gridData[24] = this.showGrid ? 1.0 : 0.0;
@@ -856,20 +561,20 @@ export class ViewportRenderer {
     }
 
     // Draw spline preview curve on top of road surface
-    if (this.splineCurveMeshes.length > 0) {
+    if (this.markerRenderer.curveMeshes.length > 0) {
       pass.setPipeline(this.basicPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
-      for (const mesh of this.splineCurveMeshes) {
+      for (const mesh of this.markerRenderer.curveMeshes) {
         pass.setVertexBuffer(0, mesh.vertexBuffer);
         pass.draw(mesh.vertexCount);
       }
     }
 
     // Draw spline control point markers (screen-size constant squares)
-    if (this.splineMarkerMeshes.length > 0) {
+    if (this.markerRenderer.markerMeshes.length > 0) {
       pass.setPipeline(this.basicPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
-      for (const mesh of this.splineMarkerMeshes) {
+      for (const mesh of this.markerRenderer.markerMeshes) {
         pass.setVertexBuffer(0, mesh.vertexBuffer);
         pass.draw(mesh.vertexCount);
       }
@@ -890,26 +595,6 @@ export class ViewportRenderer {
         try { render(ctx); } catch { /* plugin errors must not crash the render loop */ }
       }
     }
-  }
-
-  private computeViewProj(): Float32Array {
-    if (!this.cameraDirty && this.cachedViewProjForRender) {
-      return this.cachedViewProjForRender;
-    }
-    const aspect = this.width / this.height;
-    const proj = perspectiveMatrix(this.camera.fovY, aspect, this.camera.near, this.camera.far);
-    const view = lookAtMatrix(this.camera.position, this.camera.target, this.camera.up);
-    // depth correction: wgpu uses [0,1] depth
-    const correction = new Float32Array([
-      1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 0.5, 0,
-      0, 0, 0.5, 1,
-    ]);
-    const result = multiplyMatrices(correction, multiplyMatrices(proj, view));
-    this.cachedViewProjForRender = result;
-    this.cameraDirty = false;
-    return result;
   }
 
   private createDepthTexture(): void {
@@ -965,6 +650,7 @@ export class ViewportRenderer {
     this._billboardPipeline = createBillboardPipelineFn(this.device, this.format, this.basicShaderModule);
     return this._billboardPipeline;
   }
+
   private setupMouseControls(canvas: HTMLCanvasElement): void {
     // Document-level move/up handlers are attached on mousedown and removed on mouseup,
     // so pan/orbit continues even when the cursor temporarily leaves the canvas.
@@ -973,42 +659,36 @@ export class ViewportRenderer {
 
     const detachDocListeners = () => {
       if (onDocMove) { document.removeEventListener('mousemove', onDocMove); onDocMove = null; }
-      if (onDocUp)   { document.removeEventListener('mouseup',   onDocUp);   onDocUp   = null; }
+      if (onDocUp)   { document.removeEventListener('mouseup', onDocUp); onDocUp = null; }
     };
 
-    // Hover hit-test on mouse move (when not dragging camera or a handle)
     canvas.addEventListener('mousemove', (e) => {
-      if (this.isDragging || this.activeDragHandle) return;
-      if (this.splineKnotsCache.length === 0) return;
+      if (this.cameraController.pointerDragging || this.activeDragHandle) return;
+      if (this.markerRenderer.knotCount === 0) return;
       const rect = canvas.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
       const hit = this.pickControlPointAtScreen(sx, sy);
-      if (hit?.index !== this.hoveredControlPoint?.index || hit?.type !== this.hoveredControlPoint?.type) {
-        this.hoveredControlPoint = hit;
+      if (hit?.index !== this.markerRenderer.hovered?.index || hit?.type !== this.markerRenderer.hovered?.type) {
         this.onControlPointHovered?.(hit);
-        this.refreshSplineMarkers();
+        this.refreshSplineMarkers(hit, undefined);
       }
     });
 
     canvas.addEventListener('mousedown', (e) => {
-      // Phase 1.8: handle tangent drag on left-click when knots are displayed
-      if (e.button === 0 && this.splineKnotsCache.length >= 2) {
+      if (e.button === 0 && this.markerRenderer.knotCount >= 2) {
         const rect = canvas.getBoundingClientRect();
         const sx = e.clientX - rect.left;
         const sy = e.clientY - rect.top;
         const hit = this.pickControlPointAtScreen(sx, sy);
         if (hit && (hit.type === 'in' || hit.type === 'out')) {
-          // Start tangent handle drag
           this.activeDragHandle = hit;
-          this.selectedControlPoint = hit;
           this.onControlPointSelected?.(hit);
-          this.refreshSplineMarkers();
+          this.refreshSplineMarkers(undefined, hit);
           canvas.style.cursor = 'crosshair';
           e.stopPropagation();
 
           detachDocListeners();
-
           onDocMove = (me: MouseEvent) => {
             if (!this.activeDragHandle) return;
             const rect2 = canvas.getBoundingClientRect();
@@ -1020,15 +700,16 @@ export class ViewportRenderer {
               this.activeDragHandle,
               world.x,
               world.y,
-              this.splineKnotsCache as ReadonlyArray<readonly [number, number, number]>,
-              (this.splineTangentCache ?? {}) as Readonly<Record<number, readonly [number, number, number]>>,
+              this.markerRenderer.knots,
+              this.markerRenderer.tangentOverrides,
             );
-            this.splineTangentCache = newOverrides as Record<number, [number, number, number]>;
+            this.markerRenderer.setTangentOverrides(newOverrides);
             const idx = this.activeDragHandle.index;
-            const t = newOverrides[idx];
-            if (t) this.onTangentChanged?.(idx, t);
-            this.refreshSplineCurve();
-            this.refreshSplineMarkers();
+            const tangent = newOverrides[idx];
+            if (tangent) this.onTangentChanged?.(idx, tangent);
+            const mpp = this.getMetersPerPixel();
+            this.markerRenderer.refreshSplineCurve(mpp);
+            this.markerRenderer.refreshSplineMarkers(mpp, this.clearColor);
           };
 
           onDocUp = () => {
@@ -1043,42 +724,20 @@ export class ViewportRenderer {
         }
       }
 
-      if (this._cameraLocked) return;
-      const action = resolveMouseDragAction(e.button, e);
-      if (!action) return;
-      this.isDragging = true;
-      this.activeMouseButton = e.button;
-      this.activeDragAction = action;
-      this.lastMouse = [e.clientX, e.clientY];
+      if (!this.cameraController.beginPointerDrag(e.button, e)) return;
       canvas.style.cursor = 'grabbing';
-
-      detachDocListeners(); // guard against leaked listeners
+      detachDocListeners();
 
       onDocMove = (me: MouseEvent) => {
-        if (!this.isDragging || this.activeMouseButton === null) return;
-        const requiredMask = mouseButtonMask(this.activeMouseButton);
-        if (requiredMask !== 0 && (me.buttons & requiredMask) === 0) {
-          this.stopDragging();
+        if (!this.cameraController.updatePointerDrag(canvas, me)) {
+          canvas.style.cursor = '';
           detachDocListeners();
-          return;
-        }
-        const previousMouse = this.lastMouse;
-        this.lastMouse = [me.clientX, me.clientY];
-
-        const dragAction = resolveMouseDragAction(this.activeMouseButton, me) ?? this.activeDragAction;
-        this.activeDragAction = dragAction;
-        if (dragAction === 'orbit' && this._dimension !== '2d') {
-          const dx = (me.clientX - previousMouse[0]) * 0.005;
-          const dy = (me.clientY - previousMouse[1]) * 0.005;
-          this.orbit(dx, dy);
-        } else if (dragAction === 'pan' || (dragAction === 'orbit' && this._dimension === '2d')) {
-          this.pan(canvas, previousMouse, this.lastMouse);
         }
       };
 
       onDocUp = () => {
         canvas.style.cursor = '';
-        this.stopDragging();
+        this.cameraController.endPointerDrag();
         detachDocListeners();
       };
 
@@ -1088,122 +747,40 @@ export class ViewportRenderer {
 
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const factor = e.deltaY > 0 ? 1.1 : 0.9;
-      this.zoom(factor);
+      this.cameraController.handleWheel(e.deltaY);
     }, { passive: false });
 
-    // Prevent context menu on right-click
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  }
-
-  private stopDragging(): void {
-    this.isDragging = false;
-    this.activeMouseButton = null;
-    this.activeDragAction = null;
   }
 
   /** Lock camera controls (pan/orbit/zoom) — used during spline knot dragging. */
   lockCamera(): void {
-    this._cameraLocked = true;
-    this.stopDragging();
+    this.cameraController.lock();
   }
 
   /** Unlock camera controls. */
   unlockCamera(): void {
-    this._cameraLocked = false;
+    this.cameraController.unlock();
   }
 
   /** True while the user is panning/orbiting with a mouse button held down. */
   get pointerDragging(): boolean {
-    return this.isDragging;
+    return this.cameraController.pointerDragging;
   }
 
   /** Return the distance from camera to its target point. */
   getCameraDistance(): number {
-    const [px, py, pz] = this.camera.position;
-    const [tx, ty, tz] = this.camera.target;
-    return Math.sqrt(
-      (px - tx) ** 2 + (py - ty) ** 2 + (pz - tz) ** 2,
-    );
+    return this.cameraController.getCameraDistance();
   }
 
   /** Apply a screen-space pan delta (client pixel coordinates). Used by touch gesture handler. */
   applyPan(canvas: HTMLCanvasElement, prevClientXY: [number, number], currClientXY: [number, number]): void {
-    if (this._cameraLocked) return;
-    this.pan(canvas, prevClientXY, currClientXY);
+    this.cameraController.applyPan(canvas, prevClientXY, currClientXY);
   }
 
   /** Apply a zoom scale factor (>1 zooms out, <1 zooms in). Used by touch pinch gesture handler. */
   applyZoomFactor(factor: number): void {
-    if (this._cameraLocked) return;
-    this.zoom(factor);
-  }
-
-  private orbit(dx: number, dy: number): void {
-    const [px, py, pz] = this.camera.position;
-    const [tx, ty, tz] = this.camera.target;
-    const ox = px - tx, oy = py - ty, oz = pz - tz;
-    const r = Math.sqrt(ox * ox + oy * oy + oz * oz);
-    let theta = Math.atan2(oy, ox) + dx;
-    let phi = Math.acos(Math.min(1, Math.max(-1, oz / r))) - dy;
-    phi = Math.max(0.01, Math.min(Math.PI - 0.01, phi));
-
-    this.camera.position = [
-      tx + r * Math.sin(phi) * Math.cos(theta),
-      ty + r * Math.sin(phi) * Math.sin(theta),
-      tz + r * Math.cos(phi),
-    ];
-    this.cameraDirty = true;
-    this.reportScale();
-  }
-
-  private zoom(factor: number): void {
-    const MIN_CAM_DIST = 2.0;    // zoom limit: ~1m visible scale
-    const MAX_CAM_DIST = 2000.0; // zoom limit: ~1000m visible scale
-    const [px, py, pz] = this.camera.position;
-    const [tx, ty, tz] = this.camera.target;
-    const dx = tx - px, dy = ty - py, dz = tz - pz;
-    const currentDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    const dist = Math.min(MAX_CAM_DIST, Math.max(MIN_CAM_DIST, currentDist * factor));
-    const norm = currentDist;
-    this.camera.position = [
-      tx - (dx / norm) * dist,
-      ty - (dy / norm) * dist,
-      tz - (dz / norm) * dist,
-    ];
-    this.camera.near = Math.max(0.1, dist * 0.001);
-    this.camera.far = Math.max(100000, dist * 100);
-    this.cameraDirty = true;
-    this.reportScale();
-  }
-
-  private pan(
-    canvas: HTMLCanvasElement,
-    previousMouse: [number, number],
-    currentMouse: [number, number],
-  ): void {
-    const [px, py, pz] = this.camera.position;
-    const [tx, ty, tz] = this.camera.target;
-    const previousWorld = this.unprojectClientToGround(canvas, previousMouse);
-    const currentWorld = this.unprojectClientToGround(canvas, currentMouse);
-    const offset = computeGroundPanOffset(previousWorld, currentWorld);
-    if (!offset) return;
-
-    this.camera.position = [px + offset.x, py + offset.y, pz];
-    this.camera.target = [tx + offset.x, ty + offset.y, tz];
-    this.cameraDirty = true;
-    this.reportScale();
-  }
-
-  private unprojectClientToGround(
-    canvas: HTMLCanvasElement,
-    clientPoint: [number, number],
-  ): { x: number; y: number } | null {
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return null;
-    const screenX = (clientPoint[0] - rect.left) * (canvas.width / rect.width);
-    const screenY = (clientPoint[1] - rect.top) * (canvas.height / rect.height);
-    return this.unprojectToGround(screenX, screenY);
+    this.cameraController.applyZoomFactor(factor);
   }
 }
 
