@@ -4,19 +4,24 @@
 //! All types are serializable and WASM compatible.
 
 pub(crate) mod crg;
+pub mod lane;
 pub(crate) mod road;
+pub mod road_link;
 pub(crate) mod template;
 pub(crate) mod traffic;
 pub(crate) mod zone;
 
 pub use crg::{CrgOrientation, CrgProfile, CrgReference};
-pub use road::{
-    Bridge, Crossfall, CrossfallSide, Elevation, Geometry, GeometryType, Lane, LaneBorder,
-    LaneLink, LaneSection, LaneType, LaneWidth, LaneOffset, LateralProfile, LinkElement,
-    LinkElementType, ObjectType, ParamPoly3Range, Point3D, Road, RoadLink, RoadMark,
-    RoadMarkColor, RoadMarkType, RoadMarkWeight, RoadObject, Signal, Superelevation, Tunnel,
-    Validity,
+pub use lane::{
+    Lane, LaneBorder, LaneLink, LaneSection, LaneType, LaneWidth, RoadMark, RoadMarkColor,
+    RoadMarkType, RoadMarkWeight,
 };
+pub use road::{
+    Bridge, Crossfall, CrossfallSide, Elevation, Geometry, GeometryType, LaneOffset,
+    LateralProfile, ObjectType, ParamPoly3Range, Point3D, Road, RoadObject, Signal, Superelevation,
+    Tunnel, Validity,
+};
+pub use road_link::{ContactPoint, LinkElement, LinkElementType, RoadLink};
 pub use template::RoadTemplate;
 pub use traffic::{SignalController, SignalGroup, SignalPhase};
 pub use zone::{Zone, ZoneStatus, ZoneType, ZoneVertex};
@@ -84,13 +89,6 @@ pub struct JunctionConnection {
 pub struct JunctionLaneLink {
     pub from: i32,
     pub to: i32,
-}
-
-/// Contact point on a road.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum ContactPoint {
-    Start,
-    End,
 }
 
 #[cfg(test)]
@@ -172,23 +170,6 @@ mod tests {
     }
 
     #[test]
-    fn test_contact_point_serialization() {
-        let start_json = serde_json::to_string(&ContactPoint::Start).unwrap();
-        let end_json = serde_json::to_string(&ContactPoint::End).unwrap();
-
-        assert_eq!(start_json, "\"Start\"");
-        assert_eq!(end_json, "\"End\"");
-        assert_eq!(
-            serde_json::from_str::<ContactPoint>(&start_json).unwrap(),
-            ContactPoint::Start
-        );
-        assert_eq!(
-            serde_json::from_str::<ContactPoint>(&end_json).unwrap(),
-            ContactPoint::End
-        );
-    }
-
-    #[test]
     fn test_junction_lane_link() {
         let lane_link = JunctionLaneLink { from: -2, to: 2 };
         let json = serde_json::to_string(&lane_link).unwrap();
@@ -257,3 +238,4 @@ mod tests {
         assert!(deserialized.header.geo_reference.is_some());
     }
 }
+
