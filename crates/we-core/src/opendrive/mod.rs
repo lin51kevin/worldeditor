@@ -33,7 +33,6 @@ pub fn write_xodr(project: &Project) -> Result<String, OpenDriveError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::road::*;
     use crate::model::*;
 
     // ── Minimal file ─────────────────────────────────
