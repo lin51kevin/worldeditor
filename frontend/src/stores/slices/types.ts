@@ -132,9 +132,15 @@ export const initialProject: Project = {
   objects: [],
 };
 
-/** Push current project onto undo stack, clear redo. */
+/** Push current project onto undo stack, clear redo.
+ *
+ * Since Zustand state updates always produce new immutable objects via
+ * spread operator, the current `state.project` reference is already a
+ * safe snapshot — no deep clone needed. This avoids the O(n) cost of
+ * `structuredClone` on every edit operation.
+ */
 export function pushUndo(state: EditorState): Partial<EditorState> {
-  const undoStack = [...state.undoStack, structuredClone(state.project)].slice(-MAX_UNDO);
+  const undoStack = [...state.undoStack, state.project].slice(-MAX_UNDO);
   return { undoStack, redoStack: [] };
 }
 
