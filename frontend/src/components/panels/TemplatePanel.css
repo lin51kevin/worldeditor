@@ -1,0 +1,168 @@
+.template-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+}
+
+.template-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  background: transparent;
+  border-bottom: 1px solid var(--glass-border);
+  cursor: move;
+  user-select: none;
+  position: relative;
+}
+
+
+
+.template-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.template-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-secondary);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  border-radius: 0;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.template-tab:hover {
+  color: var(--color-text-primary);
+  background: transparent;
+}
+
+[data-theme="light"] .template-tab:hover {
+  background: transparent;
+}
+
+.template-tab.active {
+  color: var(--color-text-primary);
+  background: transparent;
+  border-bottom-color: var(--color-accent);
+}
+
+.template-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  overflow-y: auto;
+  max-height: 260px;
+  justify-content: center;
+}
+
+.template-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 80px;
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-1);
+  cursor: pointer;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.template-item:hover {
+  border-color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.template-item[draggable="true"] {
+  cursor: grab;
+}
+
+.template-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.template-item.selected {
+  border-color: var(--color-accent);
+  background: var(--color-bg-tertiary);
+}
+
+[data-theme="light"] .template-item.selected {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.template-thumb {
+  font-size: 14px;
+  height: 26px;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.template-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.template-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  padding: var(--space-8);
+}
+
+.template-item {
+  position: relative;
+}
+
+.template-fav-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 1px;
+  color: var(--color-text-muted);
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+}
+
+.template-item:hover .template-fav-btn,
+.template-fav-btn.active {
+  opacity: 1;
+}
+
+.template-fav-btn.active {
+  color: #f5a623;
+}
+
+.template-fav-btn:hover {
+  color: #f5a623;
+  opacity: 1;
+}
