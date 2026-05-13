@@ -100,7 +100,7 @@ export function RoadEditToolbar() {
         <button
           className="toolbar-btn"
           title={t('toolPanel.adjustEdge')}
-          disabled
+          disabled={!hasRoad}
         >
           {t('toolPanel.adjustEdge')}
         </button>
@@ -131,7 +131,7 @@ export function RoadEditToolbar() {
         <button
           className="toolbar-btn"
           title={t('toolPanel.editRoadMarkings')}
-          disabled
+          disabled={!hasRoad}
         >
           {t('toolPanel.editRoadMarkings')}
         </button>
