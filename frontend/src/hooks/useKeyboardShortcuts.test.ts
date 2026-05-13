@@ -19,6 +19,15 @@ vi.mock('../stores/editorStore', () => ({
   },
 }));
 
+vi.mock('../stores/editorViewStore', () => ({
+  useEditorViewStore: {
+    getState: () => ({
+      editMode: null,
+      setEditMode: vi.fn(),
+    }),
+  },
+}));
+
 function makeConfig(overrides?: Partial<ShortcutsConfig>): ShortcutsConfig {
   return {
     toggleLeftPanel: vi.fn(),

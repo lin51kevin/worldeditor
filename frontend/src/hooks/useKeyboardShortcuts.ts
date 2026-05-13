@@ -13,6 +13,7 @@
  */
 import { useEffect } from 'react';
 import { useEditorStore } from '../stores/editorStore';
+import { useEditorViewStore } from '../stores/editorViewStore';
 import type { ActiveMode } from '../stores/editorViewStore';
 
 function isEditableTarget(e: KeyboardEvent): boolean {
@@ -130,6 +131,16 @@ export function useKeyboardShortcuts({
       if (e.key === 'i' || e.key === 'I') {
         e.preventDefault();
         toggleRightPanel();
+        return;
+      }
+
+      // V: exit to select mode (force return to default tool)
+      if (e.key === 'v' || e.key === 'V') {
+        e.preventDefault();
+        const { editMode, setEditMode } = useEditorViewStore.getState();
+        if (editMode !== null && editMode !== 'default') {
+          setEditMode('default');
+        }
         return;
       }
 
