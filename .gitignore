@@ -10,7 +10,6 @@ lerna-debug.log*
 # Rust
 /target/
 **/*.rs.bk
-Cargo.lock
 
 # Frontend
 frontend/node_modules/

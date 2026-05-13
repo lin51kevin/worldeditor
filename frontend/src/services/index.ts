@@ -4,6 +4,9 @@
  */
 import type { PlatformService } from './platform';
 
+/** Application version — single source of truth for frontend version display. */
+export const APP_VERSION = '0.1.1';
+
 let instance: PlatformService | null = null;
 
 function isTauri(): boolean {

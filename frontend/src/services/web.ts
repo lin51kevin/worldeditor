@@ -3,6 +3,7 @@
  * Uses WASM for core logic, browser APIs for file I/O.
  */
 import type { GisCoord, PlatformService, Project, RoadTemplate, UtmCoord } from './platform';
+import { APP_VERSION } from './index';
 
 export class WebPlatformService implements PlatformService {
   private wasmModule: typeof import('../../wasm/pkg/we_wasm') | null = null;
@@ -57,7 +58,7 @@ export class WebPlatformService implements PlatformService {
   }
 
   getPlatformInfo() {
-    return { type: 'web' as const, version: '0.1.0' };
+    return { type: 'web' as const, version: APP_VERSION };
   }
 
   async wgs84ToGcj02(lat: number, lon: number, alt: number): Promise<GisCoord> {

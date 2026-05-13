@@ -6,6 +6,7 @@
  * just like in WebPlatformService.
  */
 import type { GisCoord, PlatformService, Project, RoadTemplate, UtmCoord } from './platform';
+import { APP_VERSION } from './index';
 
 export class TauriPlatformService implements PlatformService {
   private wasmModule: typeof import('../../wasm/pkg/we_wasm') | null = null;
@@ -60,7 +61,7 @@ export class TauriPlatformService implements PlatformService {
   }
 
   getPlatformInfo() {
-    return { type: 'tauri' as const, version: '0.1.0' };
+    return { type: 'tauri' as const, version: APP_VERSION };
   }
 
   async wgs84ToGcj02(lat: number, lon: number, alt: number): Promise<GisCoord> {
