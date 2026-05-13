@@ -37,10 +37,11 @@ export class WebPlatformService extends BasePlatformService implements PlatformS
     });
   }
 
-  // TODO: [Phase Web] 待实现 — web platform cannot access files by path; require user to re-pick
+  // TODO: [Phase Web] 待实现 — web platform cannot access files by path without user gesture.
+  // Returning null lets callers display a proper "file not found / not accessible" message
+  // rather than silently opening a generic file picker, which is confusing for recent-file clicks.
   async openFileByPath(_path: string): Promise<{ name: string; content: string } | null> {
-    // Web cannot access files by path; fall back to file picker
-    return this.openFile();
+    return null;
   }
 
   async saveFile(filename: string, content: string): Promise<void> {
