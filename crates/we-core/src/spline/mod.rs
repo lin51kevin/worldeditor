@@ -15,6 +15,16 @@
 
 use serde::{Deserialize, Serialize};
 
+mod arc_length;
+mod catmull_rom;
+mod cubic_bezier;
+
+use arc_length::param_poly3_arc_length;
+pub use catmull_rom::compute_catmull_rom_tangent;
+#[cfg(test)]
+use cubic_bezier::param_poly3_curvature;
+use cubic_bezier::{CurveClassification, classify_param_poly3, fit_hermite_param_poly3};
+
 /// Type of a spline knot — determines how it participates in tangent computation.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KnotType {
@@ -198,8 +208,11 @@ impl EditableSpline {
 
             // Preserve tangent orientation if existing tangent is non-zero
             let existing = &self.knots[i].tangent_out;
-            let dot = existing[0] * tangent[0] + existing[1] * tangent[1] + existing[2] * tangent[2];
-            let tangent = if dot < 0.0 && (existing[0].abs() + existing[1].abs() + existing[2].abs()) > 1e-12 {
+            let dot =
+                existing[0] * tangent[0] + existing[1] * tangent[1] + existing[2] * tangent[2];
+            let tangent = if dot < 0.0
+                && (existing[0].abs() + existing[1].abs() + existing[2].abs()) > 1e-12
+            {
                 [-tangent[0], -tangent[1], -tangent[2]]
             } else {
                 tangent
@@ -247,43 +260,6 @@ impl Default for EditableSpline {
     fn default() -> Self {
         Self::new()
     }
-}
-
-// ── Catmull-Rom Tangent ──────────────────────────────
-
-/// Compute a Catmull-Rom tangent at position `i` from a list of positions.
-///
-/// For interior points: tangent = normalize(P[i+1] - P[i-1])
-/// For endpoints: tangent = normalize(P[i+1] - P[i]) or normalize(P[i] - P[i-1])
-///
-/// Port of C# `UtilEditTangent.ComputeTangent`.
-pub fn compute_catmull_rom_tangent(positions: &[[f64; 3]], i: usize) -> [f64; 3] {
-    let n = positions.len();
-    if n < 2 {
-        return [1.0, 0.0, 0.0]; // default tangent
-    }
-
-    let (prev, next) = if i == 0 {
-        // First point: use forward difference
-        (positions[0], positions[1])
-    } else if i >= n - 1 {
-        // Last point: use backward difference
-        (positions[n - 2], positions[n - 1])
-    } else {
-        // Interior point: use central difference (Catmull-Rom)
-        (positions[i - 1], positions[i + 1])
-    };
-
-    let dx = next[0] - prev[0];
-    let dy = next[1] - prev[1];
-    let dz = next[2] - prev[2];
-    let len = (dx * dx + dy * dy + dz * dz).sqrt();
-
-    if len < 1e-12 {
-        return [1.0, 0.0, 0.0];
-    }
-
-    [dx / len, dy / len, dz / len]
 }
 
 // ── Soft Selection ───────────────────────────────────
@@ -510,138 +486,6 @@ pub fn road_to_spline(road: &crate::model::Road, sample_step: f64) -> EditableSp
     EditableSpline::from_knots(knots)
 }
 
-/// Curvature analysis result for a ParamPoly3 segment.
-///
-/// By sampling curvature along a parametric cubic curve, we can classify
-/// the curve as a Line, Arc (constant curvature), Spiral (linearly varying
-/// curvature), or general ParamPoly3.
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum CurveClassification {
-    /// Nearly zero curvature everywhere → Line
-    Line,
-    /// Constant non-zero curvature → Arc { curvature }
-    Arc { curvature: f64 },
-    /// Linearly varying curvature → Spiral { curv_start, curv_end }
-    Spiral { curv_start: f64, curv_end: f64 },
-    /// General parametric cubic — keep as ParamPoly3
-    ParamPoly3,
-}
-
-/// Compute signed curvature of a parametric cubic at parameter `p`.
-///
-/// For a curve (u(p), v(p)), curvature κ = (u'·v'' - v'·u'') / (u'² + v'²)^(3/2)
-fn param_poly3_curvature(
-    b_u: f64, c_u: f64, d_u: f64,
-    b_v: f64, c_v: f64, d_v: f64,
-    p: f64,
-) -> f64 {
-    let du = b_u + 2.0 * c_u * p + 3.0 * d_u * p * p;
-    let dv = b_v + 2.0 * c_v * p + 3.0 * d_v * p * p;
-    let ddu = 2.0 * c_u + 6.0 * d_u * p;
-    let ddv = 2.0 * c_v + 6.0 * d_v * p;
-
-    let speed_sq = du * du + dv * dv;
-    if speed_sq < 1e-30 {
-        return 0.0;
-    }
-    (du * ddv - dv * ddu) / speed_sq.powf(1.5)
-}
-
-/// Number of curvature samples for classification analysis.
-const CURVATURE_SAMPLES: usize = 16;
-
-/// Classify a ParamPoly3 segment by analyzing its curvature profile.
-///
-/// Samples curvature at evenly spaced parameter values and checks:
-/// 1. If all curvatures ≈ 0 → Line
-/// 2. If curvature is approximately constant → Arc
-/// 3. If curvature varies linearly → Spiral (clothoid)
-/// 4. Otherwise → keep as ParamPoly3
-fn classify_param_poly3(
-    b_u: f64, c_u: f64, d_u: f64,
-    b_v: f64, c_v: f64, d_v: f64,
-    chord_len: f64,
-) -> CurveClassification {
-    // Curvature threshold scaled by segment length.
-    // Shorter segments need looser tolerance; longer segments can be tighter.
-    let kappa_tol = 0.002 / chord_len.max(1.0);
-    // Maximum relative residual for linear-curvature (Spiral) fit.
-    let linear_fit_tol = 0.01;
-
-    let mut curvatures = [0.0f64; CURVATURE_SAMPLES + 1];
-    for (i, kappa) in curvatures.iter_mut().enumerate() {
-        let p = i as f64 / CURVATURE_SAMPLES as f64;
-        *kappa = param_poly3_curvature(b_u, c_u, d_u, b_v, c_v, d_v, p);
-    }
-
-    let kappa_min = curvatures.iter().cloned().fold(f64::INFINITY, f64::min);
-    let kappa_max = curvatures.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    let kappa_range = kappa_max - kappa_min;
-
-    // 1) Nearly zero curvature everywhere → Line
-    if kappa_max.abs() < kappa_tol && kappa_min.abs() < kappa_tol {
-        return CurveClassification::Line;
-    }
-
-    // 2) Constant curvature → Arc
-    if kappa_range < kappa_tol {
-        let mean_kappa = curvatures.iter().sum::<f64>() / curvatures.len() as f64;
-        return CurveClassification::Arc { curvature: mean_kappa };
-    }
-
-    // 3) Linear curvature variation → Spiral
-    // Fit κ(s) = κ_start + (κ_end - κ_start) · t using endpoint values.
-    let curv_start = curvatures[0];
-    let curv_end = curvatures[CURVATURE_SAMPLES];
-
-    // Check if all samples lie on the line κ(t) = κ_start + (κ_end - κ_start)·t
-    let mut max_residual = 0.0f64;
-    for (i, &kappa) in curvatures.iter().enumerate() {
-        let t = i as f64 / CURVATURE_SAMPLES as f64;
-        let expected = curv_start + (curv_end - curv_start) * t;
-        let residual = (kappa - expected).abs();
-        max_residual = max_residual.max(residual);
-    }
-
-    let ref_scale = kappa_range.max(kappa_max.abs()).max(1e-10);
-    if max_residual / ref_scale < linear_fit_tol {
-        // Make sure the curvature actually changes (not just noise)
-        if kappa_range > kappa_tol * 2.0 {
-            return CurveClassification::Spiral { curv_start, curv_end };
-        }
-        // Tiny range but passed linear test: constant curvature
-        let mean_kappa = (curv_start + curv_end) * 0.5;
-        return CurveClassification::Arc { curvature: mean_kappa };
-    }
-
-    CurveClassification::ParamPoly3
-}
-
-/// Compute the arc length of a ParamPoly3 segment with normalized parameter range.
-///
-/// Uses Gauss-Legendre quadrature for speed integral ∫₀¹ √(u'² + v'²) dp.
-fn param_poly3_arc_length(
-    b_u: f64, c_u: f64, d_u: f64,
-    b_v: f64, c_v: f64, d_v: f64,
-) -> f64 {
-    // 5-point Gauss-Legendre nodes/weights on [0, 1]
-    const NODES: [(f64, f64); 5] = [
-        (0.04691007703067, 0.11846344252810),
-        (0.23076534494716, 0.23931433524968),
-        (0.50000000000000, 0.28444444444444),
-        (0.76923465505284, 0.23931433524968),
-        (0.95308992296933, 0.11846344252810),
-    ];
-
-    let mut length = 0.0;
-    for &(p, w) in &NODES {
-        let du = b_u + 2.0 * c_u * p + 3.0 * d_u * p * p;
-        let dv = b_v + 2.0 * c_v * p + 3.0 * d_v * p * p;
-        length += w * (du * du + dv * dv).sqrt();
-    }
-    length
-}
-
 /// Convert an EditableSpline back to OpenDRIVE geometry segments (plan_view).
 ///
 /// Generates optimal geometry types between consecutive key knots:
@@ -688,8 +532,10 @@ pub fn spline_to_geometries(spline: &EditableSpline) -> Vec<crate::model::Geomet
         let hdg = k0.tangent_out[1].atan2(k0.tangent_out[0]);
 
         // Check if this segment can be approximated as a line
-        let tangent_alignment_start = k0.tangent_out[0] * dx / chord_len + k0.tangent_out[1] * dy / chord_len;
-        let tangent_alignment_end = k1.tangent_in[0] * dx / chord_len + k1.tangent_in[1] * dy / chord_len;
+        let tangent_alignment_start =
+            k0.tangent_out[0] * dx / chord_len + k0.tangent_out[1] * dy / chord_len;
+        let tangent_alignment_end =
+            k1.tangent_in[0] * dx / chord_len + k1.tangent_in[1] * dy / chord_len;
 
         if tangent_alignment_start.abs() > 0.9999 && tangent_alignment_end.abs() > 0.9999 {
             // Nearly straight — use Line geometry
@@ -710,28 +556,32 @@ pub fn spline_to_geometries(spline: &EditableSpline) -> Vec<crate::model::Geomet
             let arc_len = param_poly3_arc_length(b_u, c_u, d_u, b_v, c_v, d_v);
 
             // Classify curvature profile to pick optimal geometry type
-            let classification = classify_param_poly3(
-                b_u, c_u, d_u, b_v, c_v, d_v, arc_len,
-            );
+            let classification = classify_param_poly3(b_u, c_u, d_u, b_v, c_v, d_v, arc_len);
 
             let geo_type = match classification {
                 CurveClassification::Line => GeometryType::Line,
 
-                CurveClassification::Arc { curvature } => {
-                    GeometryType::Arc { curvature }
-                }
+                CurveClassification::Arc { curvature } => GeometryType::Arc { curvature },
 
-                CurveClassification::Spiral { curv_start, curv_end } => {
-                    GeometryType::Spiral { curv_start, curv_end }
-                }
+                CurveClassification::Spiral {
+                    curv_start,
+                    curv_end,
+                } => GeometryType::Spiral {
+                    curv_start,
+                    curv_end,
+                },
 
-                CurveClassification::ParamPoly3 => {
-                    GeometryType::ParamPoly3 {
-                        a_u, b_u, c_u, d_u,
-                        a_v, b_v, c_v, d_v,
-                        p_range: ParamPoly3Range::Normalized,
-                    }
-                }
+                CurveClassification::ParamPoly3 => GeometryType::ParamPoly3 {
+                    a_u,
+                    b_u,
+                    c_u,
+                    d_u,
+                    a_v,
+                    b_v,
+                    c_v,
+                    d_v,
+                    p_range: ParamPoly3Range::Normalized,
+                },
             };
 
             geometries.push(Geometry {
@@ -750,69 +600,10 @@ pub fn spline_to_geometries(spline: &EditableSpline) -> Vec<crate::model::Geomet
     geometries
 }
 
-/// Fit a Hermite interpolation as ParamPoly3 coefficients.
-///
-/// Given two knots with position and tangent, compute the cubic polynomial
-/// coefficients in the local frame of the first knot.
-///
-/// The local frame has:
-/// - Origin at k0.position
-/// - U-axis along the chord direction (k0 → k1)
-/// - V-axis perpendicular to chord
-///
-/// Returns (a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v) for normalized parameter range [0, 1].
-fn fit_hermite_param_poly3(
-    k0: &SplineKnot,
-    k1: &SplineKnot,
-    chord_len: f64,
-) -> (f64, f64, f64, f64, f64, f64, f64, f64) {
-    let dx = k1.position[0] - k0.position[0];
-    let dy = k1.position[1] - k0.position[1];
-
-    // Local frame rotation
-    let cos_h = dx / chord_len;
-    let sin_h = dy / chord_len;
-
-    // Transform endpoint to local frame
-    let end_u = dx * cos_h + dy * sin_h; // should be ~chord_len
-    let end_v = -dx * sin_h + dy * cos_h; // should be ~0 for aligned
-
-    // Transform tangents to local frame and scale by chord length
-    let t0_u = (k0.tangent_out[0] * cos_h + k0.tangent_out[1] * sin_h) * chord_len;
-    let t0_v = (-k0.tangent_out[0] * sin_h + k0.tangent_out[1] * cos_h) * chord_len;
-    let t1_u = (k1.tangent_in[0] * cos_h + k1.tangent_in[1] * sin_h) * chord_len;
-    let t1_v = (-k1.tangent_in[0] * sin_h + k1.tangent_in[1] * cos_h) * chord_len;
-
-    // Hermite basis: p(t) = a + b*t + c*t^2 + d*t^3
-    // p(0) = start_pos, p(1) = end_pos, p'(0) = start_tangent, p'(1) = end_tangent
-    //
-    // a = p(0)
-    // b = p'(0)
-    // c = 3*(p(1) - p(0)) - 2*p'(0) - p'(1)
-    // d = 2*(p(0) - p(1)) + p'(0) + p'(1)
-
-    let a_u = 0.0; // start at origin in local frame
-    let b_u = t0_u;
-    let c_u = 3.0 * end_u - 2.0 * t0_u - t1_u;
-    let d_u = -2.0 * end_u + t0_u + t1_u;
-
-    let a_v = 0.0;
-    let b_v = t0_v;
-    let c_v = 3.0 * end_v - 2.0 * t0_v - t1_v;
-    let d_v = -2.0 * end_v + t0_v + t1_v;
-
-    (a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v)
-}
-
 /// Pick the closest knot to a world-space point.
 ///
 /// Returns `(knot_index, distance)` or `None` if no knot is within threshold.
-pub fn pick_knot(
-    spline: &EditableSpline,
-    x: f64,
-    y: f64,
-    threshold: f64,
-) -> Option<(usize, f64)> {
+pub fn pick_knot(spline: &EditableSpline, x: f64, y: f64, threshold: f64) -> Option<(usize, f64)> {
     let mut best: Option<(usize, f64)> = None;
     let mut best_dist = threshold;
 
@@ -832,11 +623,7 @@ pub fn pick_knot(
 /// Find the best insertion point for a new knot at the given world position.
 ///
 /// Returns the index where the new knot should be inserted (between existing knots).
-pub fn find_insertion_index(
-    spline: &EditableSpline,
-    x: f64,
-    y: f64,
-) -> usize {
+pub fn find_insertion_index(spline: &EditableSpline, x: f64, y: f64) -> usize {
     if spline.knots.len() < 2 {
         return spline.knots.len();
     }
@@ -972,11 +759,7 @@ mod tests {
 
     #[test]
     fn test_catmull_rom_tangent_straight_line() {
-        let positions = vec![
-            [0.0, 0.0, 0.0],
-            [10.0, 0.0, 0.0],
-            [20.0, 0.0, 0.0],
-        ];
+        let positions = vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [20.0, 0.0, 0.0]];
         let tangent = compute_catmull_rom_tangent(&positions, 1);
         // Interior point on straight line → tangent along X
         assert!((tangent[0] - 1.0).abs() < 1e-10);
@@ -985,10 +768,7 @@ mod tests {
 
     #[test]
     fn test_catmull_rom_tangent_first_point() {
-        let positions = vec![
-            [0.0, 0.0, 0.0],
-            [10.0, 5.0, 0.0],
-        ];
+        let positions = vec![[0.0, 0.0, 0.0], [10.0, 5.0, 0.0]];
         let tangent = compute_catmull_rom_tangent(&positions, 0);
         // First point uses forward difference
         let expected_len = (10.0f64 * 10.0 + 5.0 * 5.0).sqrt();
@@ -998,10 +778,7 @@ mod tests {
 
     #[test]
     fn test_catmull_rom_tangent_last_point() {
-        let positions = vec![
-            [0.0, 0.0, 0.0],
-            [10.0, 5.0, 0.0],
-        ];
+        let positions = vec![[0.0, 0.0, 0.0], [10.0, 5.0, 0.0]];
         let tangent = compute_catmull_rom_tangent(&positions, 1);
         // Last point uses backward difference (same as forward here with 2 points)
         let expected_len = (10.0f64 * 10.0 + 5.0 * 5.0).sqrt();
@@ -1010,11 +787,7 @@ mod tests {
 
     #[test]
     fn test_catmull_rom_tangent_90_degree_turn() {
-        let positions = vec![
-            [0.0, 0.0, 0.0],
-            [10.0, 0.0, 0.0],
-            [10.0, 10.0, 0.0],
-        ];
+        let positions = vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 10.0, 0.0]];
         let tangent = compute_catmull_rom_tangent(&positions, 1);
         // At the turn point, tangent should point toward (10, 10) from (0, 0)
         // = normalize(10, 10, 0) = (1/sqrt(2), 1/sqrt(2), 0)
@@ -1033,7 +806,11 @@ mod tests {
         spline.compute_tangents();
         // All on a straight line → tangent should be (1, 0, 0)
         for knot in &spline.knots {
-            assert!((knot.tangent_out[0] - 1.0).abs() < 1e-10, "tangent_out[0] = {}", knot.tangent_out[0]);
+            assert!(
+                (knot.tangent_out[0] - 1.0).abs() < 1e-10,
+                "tangent_out[0] = {}",
+                knot.tangent_out[0]
+            );
             assert!(knot.tangent_out[1].abs() < 1e-10);
         }
     }
@@ -1127,7 +904,11 @@ mod tests {
         let factors = collect_soft_selection(&spline, 1, &config);
         // Should include knots 0 (dist=10), 1 (selected, factor=1.0), 2 (dist=20)
         // Should NOT include knot 3 (dist=190)
-        assert!(factors.iter().any(|(idx, f)| *idx == 1 && (*f - 1.0).abs() < 1e-10));
+        assert!(
+            factors
+                .iter()
+                .any(|(idx, f)| *idx == 1 && (*f - 1.0).abs() < 1e-10)
+        );
         assert!(factors.iter().any(|(idx, _)| *idx == 0));
         assert!(factors.iter().any(|(idx, _)| *idx == 2));
         assert!(!factors.iter().any(|(idx, _)| *idx == 3));
@@ -1178,14 +959,17 @@ mod tests {
     #[test]
     fn test_road_to_spline_straight() {
         use crate::model::*;
-        let road = Road::from_centerline("1", vec![Geometry {
-            s: 0.0,
-            x: 0.0,
-            y: 0.0,
-            hdg: 0.0,
-            length: 100.0,
-            geo_type: GeometryType::Line,
-        }]);
+        let road = Road::from_centerline(
+            "1",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 100.0,
+                geo_type: GeometryType::Line,
+            }],
+        );
         let spline = road_to_spline(&road, 50.0);
         assert!(spline.len() >= 2); // at least start + end
         // First knot at origin
@@ -1200,14 +984,17 @@ mod tests {
     #[test]
     fn test_road_to_spline_arc() {
         use crate::model::*;
-        let road = Road::from_centerline("1", vec![Geometry {
-            s: 0.0,
-            x: 0.0,
-            y: 0.0,
-            hdg: 0.0,
-            length: 50.0,
-            geo_type: GeometryType::Arc { curvature: 0.02 },
-        }]);
+        let road = Road::from_centerline(
+            "1",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 50.0,
+                geo_type: GeometryType::Arc { curvature: 0.02 },
+            }],
+        );
         let spline = road_to_spline(&road, 25.0);
         assert!(spline.len() >= 2);
         // Arc should produce a curved path
@@ -1243,21 +1030,25 @@ mod tests {
         // Non-aligned tangent should produce a curve (Arc, Spiral, or ParamPoly3)
         assert!(
             !matches!(geos[0].geo_type, crate::model::GeometryType::Line),
-            "Curved segment should not be Line, got {:?}", geos[0].geo_type
+            "Curved segment should not be Line, got {:?}",
+            geos[0].geo_type
         );
     }
 
     #[test]
     fn test_roundtrip_straight_road() {
         use crate::model::*;
-        let road = Road::from_centerline("1", vec![Geometry {
-            s: 0.0,
-            x: 0.0,
-            y: 0.0,
-            hdg: 0.0,
-            length: 100.0,
-            geo_type: GeometryType::Line,
-        }]);
+        let road = Road::from_centerline(
+            "1",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 100.0,
+                geo_type: GeometryType::Line,
+            }],
+        );
 
         let spline = road_to_spline(&road, 200.0); // large step = no intermediate knots
         let geos = spline_to_geometries(&spline);
@@ -1369,7 +1160,10 @@ mod tests {
                 );
             }
             // For small arcs, Spiral is also acceptable (curvature nearly constant)
-            CurveClassification::Spiral { curv_start, curv_end } => {
+            CurveClassification::Spiral {
+                curv_start,
+                curv_end,
+            } => {
                 let mean = (curv_start + curv_end) * 0.5;
                 assert!(
                     (mean - kappa).abs() < 0.003,
@@ -1406,12 +1200,20 @@ mod tests {
         let class = classify_param_poly3(b_u, c_u, d_u, b_v, c_v, d_v, arc_len);
         match class {
             CurveClassification::Arc { curvature } => {
-                assert!(curvature < 0.0, "Expected negative curvature for right turn, got {curvature}");
+                assert!(
+                    curvature < 0.0,
+                    "Expected negative curvature for right turn, got {curvature}"
+                );
             }
-            CurveClassification::Spiral { curv_start, curv_end } => {
+            CurveClassification::Spiral {
+                curv_start,
+                curv_end,
+            } => {
                 // Near-constant negative curvature → Spiral is acceptable
-                assert!(curv_start < 0.0 && curv_end < 0.0,
-                    "Expected negative curvatures, got start={curv_start}, end={curv_end}");
+                assert!(
+                    curv_start < 0.0 && curv_end < 0.0,
+                    "Expected negative curvatures, got start={curv_start}, end={curv_end}"
+                );
             }
             other => panic!("Expected Arc or Spiral, got {:?}", other),
         }
@@ -1429,8 +1231,12 @@ mod tests {
         assert_eq!(geos.len(), 1);
         // S-curve should NOT be classified as Arc or Spiral
         assert!(
-            matches!(geos[0].geo_type, crate::model::GeometryType::ParamPoly3 { .. }),
-            "S-curve should remain ParamPoly3, got {:?}", geos[0].geo_type
+            matches!(
+                geos[0].geo_type,
+                crate::model::GeometryType::ParamPoly3 { .. }
+            ),
+            "S-curve should remain ParamPoly3, got {:?}",
+            geos[0].geo_type
         );
     }
 
@@ -1439,14 +1245,17 @@ mod tests {
         // Create a road with an Arc segment, convert to spline and back.
         // The output should be classified as Arc (not ParamPoly3).
         use crate::model::*;
-        let road = Road::from_centerline("1", vec![Geometry {
-            s: 0.0,
-            x: 0.0,
-            y: 0.0,
-            hdg: 0.0,
-            length: 40.0,
-            geo_type: GeometryType::Arc { curvature: 0.02 },
-        }]);
+        let road = Road::from_centerline(
+            "1",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 40.0,
+                geo_type: GeometryType::Arc { curvature: 0.02 },
+            }],
+        );
 
         let spline = road_to_spline(&road, 200.0); // large step = no intermediate knots
         let geos = spline_to_geometries(&spline);
@@ -1502,12 +1311,17 @@ mod tests {
         spline.recompute_stations();
 
         let geos = spline_to_geometries(&spline);
-        assert!(geos.len() >= 3, "Expected at least 3 segments, got {}", geos.len());
+        assert!(
+            geos.len() >= 3,
+            "Expected at least 3 segments, got {}",
+            geos.len()
+        );
 
         // First segment should be Line
         assert!(
             matches!(geos[0].geo_type, crate::model::GeometryType::Line),
-            "First segment should be Line, got {:?}", geos[0].geo_type
+            "First segment should be Line, got {:?}",
+            geos[0].geo_type
         );
     }
 }
