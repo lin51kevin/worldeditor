@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package rt.hdmap;
+// A general 3D point. Its meaning and units depend on context, and must be
+// explained in comments.
+message Point3D {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+// Polygon, not necessary convex.
+message Polygon {
+  repeated Point3D point = 1;
+}
+
+// Straight line segment.
+message LineSegment {
+  repeated Point3D point = 1;
+}
+
+// Generalization of a line.
+message CurveSegment {
+  oneof curve_type {
+    LineSegment line_segment = 1;
+  }
+  double s = 2;  // start position (s-coordinate)
+  Point3D start_position = 3;
+  //double heading = 4;  // start orientation
+  double length = 4;
+}
+
+// An object similar to a line but that need not be straight.
+message Curve {
+  repeated CurveSegment segment = 1;
+}
+
+message Propertie{
+  string name = 1;
+  string value = 2;
+}

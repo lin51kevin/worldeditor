@@ -1298,6 +1298,11 @@ pub fn generate_single_road_vertices(
 ///
 /// For other signal types (vertical signs), a small colored diamond marker is
 /// placed at the signal position slightly above the road surface.
+///
+/// # TODO: [Phase 3] Rendering enhancement — replace flat diamond markers with sprite-based
+/// traffic sign icons (similar to worldeditoronline SpriteSignalRenderer). Currently rendered
+/// as colored point markers; sign types are color-coded (green=traffic lights, red=speed limit,
+/// yellow=generic). Lane colors already match the reference (verified against RoadTessellator.ts).
 #[wasm_bindgen]
 pub fn generate_signal_paint_vertices(
     project_json: &str,

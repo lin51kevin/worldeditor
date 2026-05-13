@@ -28,10 +28,9 @@ describe('StatusBar', () => {
     expect(screen.getByText(/世界坐标系:\s*123\.457,\s*-9\.100/)).toBeInTheDocument();
   });
 
-  it('renders coordinate chip and scale bar', () => {
+  it('renders coordinate chip, road count, and scale bar', () => {
     const { container } = render(<StatusBar />);
-    // Now 2 items: coords, scale
-    expect(container.querySelectorAll('.statusbar-item').length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelectorAll('.statusbar-item').length).toBeGreaterThanOrEqual(3);
   });
 
   it('shows saved status when not dirty', () => {
@@ -56,8 +55,7 @@ describe('StatusBar', () => {
       });
     });
     render(<StatusBar />);
-    // Road count is no longer shown in StatusBar
-    expect(screen.queryByText(/道路:\s*1/)).not.toBeInTheDocument();
+    expect(screen.getByText(/道路:\s*1/)).toBeInTheDocument();
   });
 
   it('renders scale bar label matching grid spacing', () => {

@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package rt.hdmap;
+
+// import "map_geometry.proto";
+import "map_geometry.proto";
+
+message JunctionGeometry {
+  string id = 1;
+  Polygon polygon = 2;
+}

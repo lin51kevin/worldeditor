@@ -1,16 +1,15 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './tests/e2e',
+  outputDir: 'test-results',
+  timeout: 30_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: [['html', { open: 'never' }], ['list']],
-  timeout: 30_000,
-
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://127.0.0.1:5173',
     locale: 'zh-CN',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
@@ -18,17 +17,15 @@ export default defineConfig({
       args: ['--enable-unsafe-webgpu'],
     },
   },
-
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-
   webServer: {
-    command: 'yarn dev',
-    url: 'http://localhost:5173',
+    command: 'yarn dev --host 127.0.0.1 --strictPort',
+    url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   },

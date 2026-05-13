@@ -1,0 +1,12 @@
+
+            syntax = "proto3";
+            import "map.proto";
+            import "map_geometry.proto";
+            import "map_junction_geo.proto";
+            import "map_junction_topo.proto";
+            import "map_lane_geo.proto";
+            import "map_lane_topo.proto";
+            import "map_object.proto";
+            import "map_road_geo.proto";
+            import "map_road_topo.proto";
+        

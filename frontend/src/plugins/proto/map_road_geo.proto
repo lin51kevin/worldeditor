@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package rt.hdmap;
+import "map_geometry.proto";
+import "map_lane_geo.proto";
+// A junction is the junction at-grade of two or more roads crossing.
+
+message RoadSectionGeometry {
+  string id = 1;
+  uint32 index = 2;
+  // lanes contained in this section
+  enum Type {
+    UNKNOWN = 0;
+    LEFT_SECTION = 1;
+    RIGHT_SECTION = 2;
+  };
+
+  Curve left_boundary = 3;
+  Curve right_boundary = 4;
+  Type  section_direction_type = 5;
+  uint32 length = 6;
+  repeated LaneGeometry lane_geometrys = 7;
+  // boundary of section
+}
+
+message RoadBoundary {
+  // Curve curve = 1;
+  repeated Point3D point = 1;
+}
+
+message RoadGeometry {
+  string id = 1;
+  RoadBoundary reference_line = 2;
+  RoadBoundary center_line = 3;
+  repeated LaneGeometry lane_geometrys = 4;
+  // repeated RoadSectionGeometry section_geometrys = 4;
+}

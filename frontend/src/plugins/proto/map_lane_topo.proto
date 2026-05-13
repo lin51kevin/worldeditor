@@ -1,0 +1,152 @@
+syntax = "proto3";
+
+package rt.hdmap;
+
+
+
+
+
+
+// Association between central point to closest boundary.
+// message LaneSampleAssociation {
+//   double s = 1;
+//   double width = 2;
+// }
+
+// A lane is part of a roadway, that is designated for use by a single line of
+// vehicles.
+// Most public roads (include highways) have more than two lanes.
+// message Lane {
+//   Id id = 1;
+
+//   // Central lane as reference trajectory, not necessary to be the geometry
+//   // central.
+//   Curve central_curve = 2;
+
+//   // Lane boundary curve.
+//   LaneBoundary left_boundary = 3;
+//   LaneBoundary right_boundary = 4;
+
+//   // in meters.
+//   double length = 5;
+
+//   // Speed limit of the lane, in meters per second.
+//   double speed_limit = 6;
+
+//   repeated Id overlap_id = 7;
+
+//   // All lanes can be driving into (or from).
+//   repeated Id predecessor_id = 8;
+//   repeated Id successor_id = 9;
+
+//   // Neighbor lanes on the same direction.
+//   repeated Id left_neighbor_forward_lane_id = 10;
+//   repeated Id right_neighbor_forward_lane_id = 11;
+
+//   enum LaneType {
+//     NONE = 0;
+//     CITY_DRIVING = 1;
+//     BIKING = 2;
+//     SIDEWALK = 3;
+//     PARKING = 4;
+//     SHOULDER = 5;
+//   };
+//   LaneType type = 12;
+
+//   enum LaneTurn {
+//     NO_TURN = 0;
+//     LEFT_TURN = 1;
+//     RIGHT_TURN = 2;
+//     U_TURN = 3;
+//   };
+//   LaneTurn turn = 13;
+
+//   repeated Id left_neighbor_reverse_lane_id = 14;
+//   repeated Id right_neighbor_reverse_lane_id = 15;
+
+//   Id junction_id = 16;
+
+//   // Association between central point to closest boundary.
+//   repeated LaneSampleAssociation left_sample = 17;
+//   repeated LaneSampleAssociation right_sample = 18;
+
+//   enum LaneDirection {
+//     FORWARD = 0;
+//     BACKWARD = 1;
+//     BIDIRECTION = 2;
+//   }
+//   LaneDirection direction = 19;
+
+//   // Association between central point to closest road boundary.
+//   repeated LaneSampleAssociation left_road_sample = 20;
+//   repeated LaneSampleAssociation right_road_sample = 21;
+
+//   repeated Id self_reverse_lane_id = 22;
+// }
+
+
+
+message LaneHeader{
+  string id = 1;
+  double length = 2;
+
+  enum LaneType {
+    none = 0;
+    driving = 1;
+    stop = 2;
+    shoulder = 3;
+    biking = 4;
+    sidewalk=5;
+    border=6;
+    restricted =7;
+    parking = 8;
+    bidirectional = 9;
+    median = 10;
+    special1 = 11;
+    special2 = 12;
+    special3 = 13;
+    roadWorks = 14;
+    tram =15;
+    rail =16;
+    entry =17;
+    exit =18;
+    offRamp=19;
+    onRamp=20;
+    mwyEntry =21;
+    mwyExit=22;
+  };
+
+  enum LaneTurn {
+    NO_TURN = 0;
+    LEFT_TURN = 1;
+    RIGHT_TURN = 2;
+    U_TURN = 3;
+  };
+  enum SpeedUnit{
+    mpS = 0;
+    mph = 1;
+    kmph = 2;
+  }
+  enum LaneVirtualType{
+    NO_VIRTUAL = 0;
+    CENTER_LINE = 1;
+  }
+  LaneType lane_type = 3;
+  LaneTurn lane_Turn = 4;
+  double speed_limit = 5;
+  SpeedUnit speed_unit = 6;
+  LaneVirtualType virtual_type = 7;
+  string name = 8;
+}
+message LaneLink{
+  string id = 1;
+}
+
+message LaneTopo{
+  LaneHeader  header = 1;
+  repeated LaneLink predecessors = 2;
+  repeated LaneLink successors = 3;
+  repeated LaneLink left_neighbors = 4;
+  repeated LaneLink right_neighbors = 5;
+}
+

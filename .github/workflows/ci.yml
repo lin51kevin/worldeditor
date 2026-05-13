@@ -134,6 +134,21 @@ jobs:
       - name: Run coverage
         run: cd frontend && yarn test:coverage
 
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [test-frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+          cache-dependency-path: frontend/yarn.lock
+      - run: cd frontend && yarn install --frozen-lockfile
+      - run: cd frontend && yarn playwright install chromium
+      - run: cd frontend && yarn test:e2e
+
   # Stage 3: Quality Gates
   quality:
     name: Quality Gates

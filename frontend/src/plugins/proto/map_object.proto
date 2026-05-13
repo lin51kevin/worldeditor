@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package rt.hdmap;
+import "map_geometry.proto";
+import "map_lane_geo.proto";
+
+message Object{
+    string id = 1;
+    string type = 2;
+    string sub_type = 3;
+    string road_id = 4;
+    Point3D pt = 5;
+    Point3D heading = 6;
+    Point3D up = 7;
+    repeated Point3D boundary_knots = 8;
+    repeated Propertie userDataList = 9;
+}
+message ObjectReference{
+    string id = 1;
+    string type = 2;
+    string road_id = 3;
+    repeated Propertie properties = 4;
+}
+message ParkingSpaceMarking{
+    string side = 1;
+    rt.hdmap.RoadMark.LaneMarkType type = 2;
+    rt.hdmap.RoadMark.LaneMarkColor color = 3;
+    double width = 4;
+}
+
+message ParkingSpace{
+  Object obj = 1;
+  ParkingSpaceMarking front = 2;
+  ParkingSpaceMarking rear = 3;
+  ParkingSpaceMarking left = 4;
+  ParkingSpaceMarking right = 5;
+}
+
+message SignalValidity{
+    string road_id = 1;
+    string from_lane_id = 2;
+    string to_lane_id = 3;
+    repeated string stop_line_ids =4;
+    repeated string crosswalk_ids = 5;
+}
+
+message Signal{
+    string id = 1;
+    string type = 2;
+    string sub_type = 3;
+    string road_id = 4;
+    Point3D pt = 5;
+    Point3D heading = 6;
+    string value = 7;
+    string unit = 8;
+    bool   dynamic = 9;
+    double width = 10;
+    double length = 11;
+    double height = 12;
+    repeated SignalValidity validities = 13;
+    repeated Propertie userDataList = 14;
+
+}
+
+message SignalReference{
+    string id = 1;
+    string type = 2;
+    string road_id = 3;
+    repeated Propertie properties = 4;
+}
