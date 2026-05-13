@@ -132,6 +132,7 @@ export interface RoadMark {
   material: string;
   width: number;
   lane_change: string;
+  height?: number;
 }
 
 export interface LaneBorder {

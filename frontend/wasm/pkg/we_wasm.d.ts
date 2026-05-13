@@ -7,6 +7,14 @@
 export function add_elevation_point(project_json: string, road_id: string, s: number, height: number): string;
 
 /**
+ * Apply a previously fitted affine transform to a point.
+ *
+ * `transform_json`: JSON `{ a00, a01, b0, a10, a11, b1 }`.
+ * Returns JSON `{ x, y }`.
+ */
+export function apply_affine_transform(transform_json: string, source_x: number, source_y: number): any;
+
+/**
  * Compute the boundary area of a junction from its connecting roads.
  *
  * Returns JSON with `{ id, center, boundary, area }` or null if
@@ -41,6 +49,24 @@ export function create_road_from_spline(project_json: string, road_id: string, s
  * Delete an elevation point from a road and return the modified project.
  */
 export function delete_elevation_point(project_json: string, road_id: string, s: number, tolerance: number): string;
+
+/**
+ * Convert ECEF coordinates to WGS84 geodetic.
+ *
+ * Returns JSON `{ lat, lon, alt }` (lat/lon in degrees, alt in metres).
+ */
+export function ecef_to_geodetic(x: number, y: number, z: number): any;
+
+/**
+ * Fit an affine transform from Ground Control Points (GCPs).
+ *
+ * `gcps_json`: JSON array of `{ px, py, wx, wy }`.
+ * Returns JSON `{ a00, a01, b0, a10, a11, b1 }` where the transform is:
+ *   `world_x = a00*px + a01*py + b0`
+ *   `world_y = a10*px + a11*py + b1`
+ * Returns an error if fewer than 3 GCPs are provided.
+ */
+export function fit_affine_from_gcps(gcps_json: string): any;
 
 /**
  * Convert GCJ-02 coordinates to WGS84.
@@ -133,6 +159,11 @@ export function generate_road_vertices(project_json: string, sample_step: number
  *
  * For other signal types (vertical signs), a small colored diamond marker is
  * placed at the signal position slightly above the road surface.
+ *
+ * # TODO: [Phase 3] Rendering enhancement — replace flat diamond markers with sprite-based
+ * traffic sign icons (similar to worldeditoronline SpriteSignalRenderer). Currently rendered
+ * as colored point markers; sign types are color-coded (green=traffic lights, red=speed limit,
+ * yellow=generic). Lane colors already match the reference (verified against RoadTessellator.ts).
  */
 export function generate_signal_paint_vertices(project_json: string, _sample_step: number): Float32Array;
 
@@ -151,9 +182,25 @@ export function generate_single_junction_vertices(project_json: string, junction
 export function generate_single_road_vertices(road_json: string, sample_step: number, r: number, g: number, b: number, a: number): Float32Array;
 
 /**
+ * Convert WGS84 geodetic coordinates to an MGRS grid reference string.
+ *
+ * `precision`: number of digits per easting/northing component (1–5).
+ * Returns the MGRS string (e.g. `"50TML1234056780"`) or an error if coordinates
+ * are in a polar region (not supported by MGRS).
+ */
+export function geo_to_mgrs(lat_deg: number, lon_deg: number, precision: number): string;
+
+/**
  * Convert WGS84 to UTM.
  */
 export function geo_to_utm(lat: number, lon: number, alt: number): any;
+
+/**
+ * Convert WGS84 geodetic coordinates to ECEF (Earth-Centered, Earth-Fixed).
+ *
+ * Returns JSON `{ x, y, z }` in metres.
+ */
+export function geodetic_to_ecef(lat_deg: number, lon_deg: number, alt_m: number): any;
 
 /**
  * List built-in road templates available for spline-based road creation.
@@ -204,6 +251,21 @@ export function move_spline_knot(spline_json: string, knot_index: number, new_x:
 export function parse_opendrive(xml: string): any;
 
 /**
+ * Parse a Proj4 CRS string and return a JSON object with key-value pairs.
+ *
+ * Example input: `"+proj=utm +zone=50 +datum=WGS84 +units=m"`
+ * Returns JSON object like `{ "proj": "utm", "zone": "50", "datum": "WGS84", "units": "m" }`.
+ */
+export function parse_proj4_crs(proj4_str: string): any;
+
+/**
+ * Parse a WKT (Well-Known Text) CRS string and return metadata as JSON.
+ *
+ * Returns JSON `{ crs_type, name, epsg }` where `epsg` may be null.
+ */
+export function parse_wkt_crs(wkt_str: string): any;
+
+/**
  * Find the closest junction to a world-space point.
  */
 export function pick_junction_at_point(project_json: string, x: number, y: number, threshold: number): any;
@@ -228,6 +290,11 @@ export function pick_spline_knot(spline_json: string, x: number, y: number, thre
  * Test if a point is inside a junction's computed area.
  */
 export function point_in_junction(project_json: string, junction_id: string, x: number, y: number): boolean;
+
+/**
+ * Return true if a project (JSON) passes all validation checks (no errors, warnings allowed).
+ */
+export function project_is_valid(project_json: string): boolean;
 
 /**
  * Query the elevation and grade at a station on a road.
@@ -290,6 +357,17 @@ export function translate_road(project_json: string, road_id: string, dx: number
 export function utm_to_geo(easting: number, northing: number, zone: number, is_northern: boolean, alt: number): any;
 
 /**
+ * Validate a project (JSON) using the built-in OpenDRIVE validator.
+ *
+ * Returns a JSON array of issues, each with:
+ * - `code`: e.g. `"E001"`, `"W001"`
+ * - `severity`: `"error"` | `"warning"`
+ * - `message`: human-readable description
+ * - `road_id`: the affected road ID (may be null for project-level issues)
+ */
+export function validate_project(project_json: string): any;
+
+/**
  * Get the core library version.
  */
 export function version(): string;
@@ -309,11 +387,14 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly add_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+    readonly apply_affine_transform: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly compute_junction_area: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly compute_road_width: (a: number, b: number, c: number) => [number, number, number];
     readonly compute_soft_selection: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly create_road_from_spline: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly delete_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+    readonly ecef_to_geodetic: (a: number, b: number, c: number) => [number, number, number];
+    readonly fit_affine_from_gcps: (a: number, b: number) => [number, number, number];
     readonly gcj02_to_wgs84: (a: number, b: number, c: number) => any;
     readonly generate_center_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_default_lane_section: (a: number, b: number, c: number, d: number) => [number, number, number, number];
@@ -325,7 +406,9 @@ export interface InitOutput {
     readonly generate_signal_paint_vertices: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_single_junction_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly generate_single_road_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+    readonly geo_to_mgrs: (a: number, b: number, c: number) => [number, number, number, number];
     readonly geo_to_utm: (a: number, b: number, c: number) => any;
+    readonly geodetic_to_ecef: (a: number, b: number, c: number) => [number, number, number];
     readonly get_road_templates: () => [number, number, number];
     readonly init: () => void;
     readonly measure_angle: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
@@ -334,10 +417,13 @@ export interface InitOutput {
     readonly measure_road_length: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly move_spline_knot: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly parse_opendrive: (a: number, b: number) => [number, number, number];
+    readonly parse_proj4_crs: (a: number, b: number) => [number, number, number];
+    readonly parse_wkt_crs: (a: number, b: number) => [number, number, number];
     readonly pick_junction_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pick_road_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pick_spline_knot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly point_in_junction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly project_is_valid: (a: number, b: number) => [number, number, number];
     readonly query_elevation: (a: number, b: number, c: number) => [number, number, number];
     readonly road_to_spline: (a: number, b: number, c: number) => [number, number, number, number];
     readonly rotate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
@@ -348,6 +434,7 @@ export interface InitOutput {
     readonly spline_to_geometries: (a: number, b: number) => [number, number, number, number];
     readonly translate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly utm_to_geo: (a: number, b: number, c: number, d: number, e: number) => any;
+    readonly validate_project: (a: number, b: number) => [number, number, number];
     readonly version: () => [number, number];
     readonly wgs84_to_gcj02: (a: number, b: number, c: number) => any;
     readonly write_opendrive: (a: number, b: number) => [number, number, number, number];

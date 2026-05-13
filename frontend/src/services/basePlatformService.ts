@@ -21,15 +21,26 @@ type WasmModule = typeof import('../../wasm/pkg/we_wasm');
 /** Base class providing all WASM-delegated PlatformService methods. */
 export abstract class BasePlatformService implements PlatformService {
   private wasmModule: WasmModule | null = null;
+  private wasmInitPromise: Promise<WasmModule> | null = null;
 
-  /** Lazy-initialise the WASM module exactly once. */
+  /** Lazy-initialise the WASM module exactly once.
+   * Concurrent callers share the same in-flight promise to avoid double-init.
+   * On failure the promise is cleared so subsequent calls can retry. */
   protected async getWasm(): Promise<WasmModule> {
-    if (!this.wasmModule) {
-      const wasm = await import('../../wasm/pkg/we_wasm') as WasmModule;
-      await (wasm.default as unknown as () => Promise<void>)();
-      this.wasmModule = wasm;
+    if (this.wasmModule) return this.wasmModule;
+    if (!this.wasmInitPromise) {
+      this.wasmInitPromise = (async () => {
+        const wasm = await import('../../wasm/pkg/we_wasm') as WasmModule;
+        await (wasm.default as unknown as () => Promise<void>)();
+        this.wasmModule = wasm;
+        return wasm;
+      })().catch((err) => {
+        // Clear the cached promise so callers can retry after a transient failure.
+        this.wasmInitPromise = null;
+        throw err;
+      });
     }
-    return this.wasmModule;
+    return this.wasmInitPromise;
   }
 
   // --- Platform-specific methods (implemented by subclasses) ---

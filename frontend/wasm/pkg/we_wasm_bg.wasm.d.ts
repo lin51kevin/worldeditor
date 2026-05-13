@@ -2,11 +2,14 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const add_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+export const apply_affine_transform: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const compute_junction_area: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const compute_road_width: (a: number, b: number, c: number) => [number, number, number];
 export const compute_soft_selection: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
 export const create_road_from_spline: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
 export const delete_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+export const ecef_to_geodetic: (a: number, b: number, c: number) => [number, number, number];
+export const fit_affine_from_gcps: (a: number, b: number) => [number, number, number];
 export const gcj02_to_wgs84: (a: number, b: number, c: number) => any;
 export const generate_center_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
 export const generate_default_lane_section: (a: number, b: number, c: number, d: number) => [number, number, number, number];
@@ -18,7 +21,9 @@ export const generate_road_vertices: (a: number, b: number, c: number, d: number
 export const generate_signal_paint_vertices: (a: number, b: number, c: number) => [number, number, number, number];
 export const generate_single_junction_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
 export const generate_single_road_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+export const geo_to_mgrs: (a: number, b: number, c: number) => [number, number, number, number];
 export const geo_to_utm: (a: number, b: number, c: number) => any;
+export const geodetic_to_ecef: (a: number, b: number, c: number) => [number, number, number];
 export const get_road_templates: () => [number, number, number];
 export const init: () => void;
 export const measure_angle: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
@@ -27,10 +32,13 @@ export const measure_distance: (a: number, b: number, c: number, d: number, e: n
 export const measure_road_length: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const move_spline_knot: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
 export const parse_opendrive: (a: number, b: number) => [number, number, number];
+export const parse_proj4_crs: (a: number, b: number) => [number, number, number];
+export const parse_wkt_crs: (a: number, b: number) => [number, number, number];
 export const pick_junction_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const pick_road_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const pick_spline_knot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const point_in_junction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+export const project_is_valid: (a: number, b: number) => [number, number, number];
 export const query_elevation: (a: number, b: number, c: number) => [number, number, number];
 export const road_to_spline: (a: number, b: number, c: number) => [number, number, number, number];
 export const rotate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
@@ -41,6 +49,7 @@ export const spatial_query_point: (a: number, b: number, c: number, d: number, e
 export const spline_to_geometries: (a: number, b: number) => [number, number, number, number];
 export const translate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
 export const utm_to_geo: (a: number, b: number, c: number, d: number, e: number) => any;
+export const validate_project: (a: number, b: number) => [number, number, number];
 export const version: () => [number, number];
 export const wgs84_to_gcj02: (a: number, b: number, c: number) => any;
 export const write_opendrive: (a: number, b: number) => [number, number, number, number];

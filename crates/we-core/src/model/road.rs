@@ -250,6 +250,9 @@ pub struct RoadMark {
     pub material: String,
     pub width: f64,
     pub lane_change: String,
+    /// Vertical height of the road mark above the road surface.
+    /// Defaults to 0 when omitted (standard flush marking).
+    #[serde(default)]
     pub height: f64,
 }
 

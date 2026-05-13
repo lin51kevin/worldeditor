@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ViewportRenderer, getSplineHandlePoints } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
-import { onViewportEvent } from '../viewport/viewportEvents';
+import { onViewportEvent, emitViewportEvent } from '../viewport/viewportEvents';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { useThemeStore } from '../stores/themeStore';
@@ -301,8 +301,8 @@ export function Viewport() {
 
       const [roadVerts, junctionVerts, laneLineVerts, centerLineVerts, signalVerts, objectVerts] =
         await Promise.all([
-          service.generateRoadVertices(visibleProject, 2.0, display.colorMode).catch(() => new Float32Array(0)),
-          service.generateJunctionVertices(visibleProject).catch(() => new Float32Array(0)),
+          service.generateRoadVertices(visibleProject, 2.0, display.colorMode).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); }),
+          service.generateJunctionVertices(visibleProject).catch((e) => { console.warn('[Viewport] generateJunctionVertices failed:', e); return new Float32Array(0); }),
           laneLineProm,
           centerLineProm,
           signalProm,
@@ -1421,6 +1421,13 @@ export function Viewport() {
     const item = sections.flatMap((s) => s.items).find((i) => i.id === templateId);
     if (item) {
       item.onApply({ x: worldPos.x, y: worldPos.y, hdg: 0 });
+      // Pan camera to the newly created element so it's visible immediately
+      const { selectedRoadId, selectedJunctionId } = useEditorStore.getState();
+      if (selectedRoadId) {
+        emitViewportEvent({ type: 'pan-to-road', roadId: selectedRoadId });
+      } else if (selectedJunctionId) {
+        emitViewportEvent({ type: 'pan-to-junction', junctionId: selectedJunctionId });
+      }
     }
   }, []);
 
