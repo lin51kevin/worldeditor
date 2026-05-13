@@ -27,12 +27,27 @@ pub fn run() {
             commands::plugin_unload,
         ])
         .setup(|app| {
+            // Create the main window programmatically so we can call
+            // disable_drag_drop_handler(), which prevents WebView2 from intercepting
+            // OS-level file drops. Without this, HTML5 dragenter/dragover events for
+            // in-app drag-and-drop (e.g. template panel → viewport) never fire in Tauri.
+            let window = tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::App("index.html".into()),
+            )
+            .title("WorldEditor")
+            .inner_size(1400.0, 900.0)
+            .min_inner_size(800.0, 600.0)
+            .maximized(true)
+            .resizable(true)
+            .disable_drag_drop_handler()
+            .build()?;
+
             // Set window icon explicitly so dev mode also shows the correct taskbar icon.
-            if let Some(window) = app.get_webview_window("main") {
-                let icon_bytes = include_bytes!("../icons/icon.ico");
-                if let Ok(icon) = tauri::image::Image::from_bytes(icon_bytes) {
-                    let _ = window.set_icon(icon);
-                }
+            let icon_bytes = include_bytes!("../icons/icon.ico");
+            if let Ok(icon) = tauri::image::Image::from_bytes(icon_bytes) {
+                let _ = window.set_icon(icon);
             }
 
             // Initialize plugin registry in the app data directory

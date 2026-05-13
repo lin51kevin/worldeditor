@@ -9,18 +9,6 @@
     "beforeBuildCommand": "cd ../frontend && yarn build"
   },
   "app": {
-    "windows": [
-      {
-        "title": "WorldEditor",
-        "width": 1400,
-        "height": 900,
-        "maximized": true,
-        "resizable": true,
-        "fullscreen": false,
-        "minWidth": 800,
-        "minHeight": 600
-      }
-    ],
     "security": {
       "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' asset: https://asset.localhost data: blob:; font-src 'self' data:; connect-src ipc: http://ipc.localhost 'self'"
     }
