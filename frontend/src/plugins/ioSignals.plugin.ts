@@ -12,7 +12,7 @@ async function importSignals(content: string | ArrayBuffer): Promise<Project> {
   const signals = JSON.parse(text) as unknown[];
   if (!Array.isArray(signals)) throw new Error('Expected JSON array of signal entries');
   // Signals are not stored in Project yet — return empty project
-  return { name: 'Signal Import', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads: [], junctions: [] };
+  return { name: 'Signal Import', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads: [], junctions: [], signals: [], objects: [] };
 }
 
 function exportHdMapXml(project: Project): Promise<void> {

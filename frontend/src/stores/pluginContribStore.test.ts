@@ -92,7 +92,7 @@ describe('usePluginContribStore', () => {
   it('registers and unregisters an importer', () => {
     const importer: ImporterContrib = {
       id: 'imp-1', pluginId: 'plugin-io', formatName: 'Lanelet2',
-      extensions: ['.osm'], onImport: async () => ({ name: 'P', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads: [], junctions: [] }),
+      extensions: ['.osm'], onImport: async () => ({ name: 'P', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads: [], junctions: [], signals: [], objects: [] }),
     };
     usePluginContribStore.getState().registerImporter(importer);
     expect(usePluginContribStore.getState().importers).toHaveLength(1);
@@ -169,7 +169,7 @@ describe('usePluginContribStore', () => {
   it('unregisterPlugin removes importers, exporters, panels, context menu items, overlays, settings', () => {
     usePluginContribStore.getState().registerImporter({
       id: 'imp-a', pluginId: 'plugin-a', formatName: 'Fmt', extensions: ['.fmt'],
-      onImport: async () => ({ name: 'P', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads: [], junctions: [] }),
+      onImport: async () => ({ name: 'P', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads: [], junctions: [], signals: [], objects: [] }),
     });
     usePluginContribStore.getState().registerExporter({
       id: 'exp-a', pluginId: 'plugin-a', formatName: 'Fmt', onExport: async () => {},

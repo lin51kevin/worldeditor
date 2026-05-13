@@ -38,6 +38,8 @@ function makeProject(): Project {
     },
     roads: [],
     junctions: [],
+    signals: [],
+    objects: []
   };
 }
 

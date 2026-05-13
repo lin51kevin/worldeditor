@@ -47,6 +47,8 @@ function makeProject(): Project {
     },
     roads: [makeRoad()],
     junctions: [],
+    signals: [],
+    objects: []
   };
 }
 

@@ -143,6 +143,8 @@ export function buildHighlightProject(
     ...project,
     roads: [cloneRoad(road, hiddenLaneSectionKeys, hiddenLaneKeys)],
     junctions: [],
+    signals: [],
+    objects: []
   };
 }
 

@@ -22,6 +22,8 @@ function makeProject(roads: Road[] = []): Project {
     },
     roads,
     junctions: [],
+    signals: [],
+    objects: []
   };
 }
 

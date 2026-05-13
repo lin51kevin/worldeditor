@@ -22,6 +22,8 @@ function makeProject(name: string): Project {
     },
     roads: [],
     junctions: [],
+    signals: [],
+    objects: []
   };
 }
 
@@ -91,6 +93,8 @@ describe('App', () => {
           ...makeProject('Test'),
           roads: [makeRoad('r1'), makeRoad('r2')],
           junctions: [],
+    signals: [],
+    objects: []
         },
       });
     });

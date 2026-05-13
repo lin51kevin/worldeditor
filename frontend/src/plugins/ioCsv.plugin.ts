@@ -37,7 +37,7 @@ function parseCsvToProject(content: string | ArrayBuffer): Promise<Project> {
     };
   });
 
-  return Promise.resolve({ name: 'CSV Import', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads, junctions: [] });
+  return Promise.resolve({ name: 'CSV Import', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads, junctions: [], signals: [], objects: [] });
 }
 
 function exportProjectToCsv(project: Project): Promise<void> {

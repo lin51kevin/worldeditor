@@ -115,6 +115,8 @@ const initialProject: Project = {
   },
   roads: [],
   junctions: [],
+  signals: [],
+  objects: [],
 };
 
 /** Push current project onto undo stack, clear redo. */

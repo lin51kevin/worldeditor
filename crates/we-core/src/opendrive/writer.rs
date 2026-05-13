@@ -56,6 +56,16 @@ pub fn write(project: &Project) -> Result<String, OpenDriveError> {
         write_junction(&mut writer, junction)?;
     }
 
+    // Project-level signals
+    if !project.signals.is_empty() {
+        write_signals(&mut writer, &project.signals)?;
+    }
+
+    // Project-level objects
+    if !project.objects.is_empty() {
+        write_objects(&mut writer, &project.objects)?;
+    }
+
     writer
         .write_event(Event::End(BytesEnd::new("OpenDRIVE".to_string())))
         .map_err(w_err)?;

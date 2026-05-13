@@ -53,6 +53,12 @@ pub struct Project {
     pub header: Header,
     pub roads: Vec<Road>,
     pub junctions: Vec<Junction>,
+    /// Project-level traffic signals (not road-local).
+    #[serde(default)]
+    pub signals: Vec<Signal>,
+    /// Project-level road objects.
+    #[serde(default)]
+    pub objects: Vec<RoadObject>,
 }
 
 /// A junction connecting multiple roads.

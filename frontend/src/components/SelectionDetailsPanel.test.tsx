@@ -35,6 +35,8 @@ describe('SelectionDetailsPanel', () => {
         project: {
           roads: [{ id: 'road-1', name: 'Main St', length: 123.4, lane_sections: [], plan_view: [], elevation_profile: [] }],
           junctions: [],
+    signals: [],
+    objects: []
         },
       }),
     );
@@ -66,6 +68,8 @@ describe('SelectionDetailsPanel', () => {
         project: {
           roads: [{ id: 'road-99', name: 'Highway 99', length: 500, lane_sections: [], plan_view: [], elevation_profile: [] }],
           junctions: [],
+    signals: [],
+    objects: []
         },
       }),
     );
