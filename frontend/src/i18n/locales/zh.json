@@ -1,4 +1,17 @@
 {
+  "common": {
+    "undo": "撤销",
+    "redo": "重做",
+    "delete": "删除",
+    "close": "关闭",
+    "cancel": "取消",
+    "ok": "确定",
+    "confirm": "确认",
+    "save": "保存",
+    "newProject": "新建项目",
+    "showGrid": "显示网格",
+    "showAxis": "显示坐标轴"
+  },
   "app": {
     "title": "WorldEditor Next",
     "brand": "世界编辑器",
@@ -139,7 +152,7 @@
     "id": "ID",
     "name": "名称",
     "length": "长度",
-    "junction": "Junction",
+    "junction": "路口",
     "geometry": "几何",
     "editGeometry": "编辑几何",
     "finishEditGeometry": "完成编辑",

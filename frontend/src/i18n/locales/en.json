@@ -1,4 +1,17 @@
 {
+  "common": {
+    "undo": "Undo",
+    "redo": "Redo",
+    "delete": "Delete",
+    "close": "Close",
+    "cancel": "Cancel",
+    "ok": "OK",
+    "confirm": "Confirm",
+    "save": "Save",
+    "newProject": "New Project",
+    "showGrid": "Show Grid",
+    "showAxis": "Show Axis"
+  },
   "app": {
     "title": "WorldEditor Next",
     "brand": "World Editor",
