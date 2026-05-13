@@ -123,26 +123,43 @@ export function Viewport() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Regenerate road mesh when project or display settings change
-  const updateMesh = useCallback(async () => {
+  // ── Surface mesh (roads + junctions + signals + objects) ──
+  // Only regenerates when geometry-affecting deps change; toggling
+  // lane-line or reference-line visibility does NOT trigger this.
+  const surfaceDepsRef = useRef<{
+    roadRefs: Map<string, unknown>;
+    junctionRefs: Map<string, unknown>;
+  }>({ roadRefs: new Map(), junctionRefs: new Map() });
+  const cachedSurfaceRef = useRef<Float32Array>(new Float32Array(0));
+
+  const updateSurfaceMesh = useCallback(async () => {
     const renderer = rendererRef.current;
     if (!renderer || status !== 'ready' || !project) return;
 
-      try {
-        const service = await getPlatformService();
-        const visibleProject = buildRenderableProject(project, display);
+    try {
+      const service = await getPlatformService();
+      const visibleProject = buildRenderableProject(project, display);
 
-      // Run all needed generators in parallel; use empty fallbacks for disabled layers.
-      // Each optional generator is individually guarded with .catch() so a missing or
-      // unimplemented WASM export (e.g. when the WASM binary is stale) cannot abort
-      // core road/junction rendering.
+      // Detect whether any road/junction actually changed via reference equality.
+      const prev = surfaceDepsRef.current;
+      const newRoadRefs = new Map(visibleProject.roads.map((r) => [r.id, r]));
+      const newJunctionRefs = new Map(visibleProject.junctions.map((j) => [j.id, j]));
+
+      const roadsChanged =
+        newRoadRefs.size !== prev.roadRefs.size ||
+        [...newRoadRefs].some(([id, ref]) => prev.roadRefs.get(id) !== ref);
+      const junctionsChanged =
+        newJunctionRefs.size !== prev.junctionRefs.size ||
+        [...newJunctionRefs].some(([id, ref]) => prev.junctionRefs.get(id) !== ref);
+
+      surfaceDepsRef.current = { roadRefs: newRoadRefs, junctionRefs: newJunctionRefs };
+
+      if (!roadsChanged && !junctionsChanged && cachedSurfaceRef.current.length > 0) {
+        // Nothing geometry-related changed — skip WASM calls entirely.
+        return;
+      }
+
       const empty = Promise.resolve(new Float32Array(0));
-      const centerLineProm = display.showReferenceLine
-        ? service.generateCenterLineVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
-        : empty;
-      const laneLineProm = display.showLaneLines
-        ? service.generateLaneLineVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
-        : empty;
       const signalProm = display.showSignals
         ? service.generateSignalPaintVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
         : empty;
@@ -150,28 +167,58 @@ export function Viewport() {
         ? service.generateObjectVertices(visibleProject).catch(() => new Float32Array(0))
         : empty;
 
-      const [roadVerts, junctionVerts, laneLineVerts, centerLineVerts, signalVerts, objectVerts] =
-        await Promise.all([
-          service.generateRoadVertices(visibleProject, 2.0, display.colorMode).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); }),
-          service.generateJunctionVertices(visibleProject).catch((e) => { console.warn('[Viewport] generateJunctionVertices failed:', e); return new Float32Array(0); }),
-          laneLineProm,
-          centerLineProm,
-          signalProm,
-          objectProm,
-        ]);
+      const [roadVerts, junctionVerts, signalVerts, objectVerts] = await Promise.all([
+        service.generateRoadVertices(visibleProject, 2.0, display.colorMode).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); }),
+        service.generateJunctionVertices(visibleProject).catch((e) => { console.warn('[Viewport] generateJunctionVertices failed:', e); return new Float32Array(0); }),
+        signalProm,
+        objectProm,
+      ]);
 
-      // Merge road surfaces + junction surfaces + signal paint marks + objects into one upload
       const surfaceVerts = mergeFloat32Arrays(
         mergeFloat32Arrays(mergeFloat32Arrays(roadVerts, junctionVerts), signalVerts),
         objectVerts,
       );
+      cachedSurfaceRef.current = surfaceVerts;
       renderer.uploadRoadVertices(surfaceVerts);
+    } catch (err) {
+      console.error('[Viewport] Failed to generate surface mesh:', err);
+    }
+  }, [
+    project,
+    status,
+    display.showSignals,
+    display.showObjects,
+    display.colorMode,
+    display.hiddenRoadIds,
+    display.hiddenJunctionIds,
+    display.hiddenLaneSectionKeys,
+    display.hiddenLaneKeys,
+  ]);
 
-      // Merge lane boundary lines + reference centerlines into lane line upload
+  // ── Line mesh (lane lines + center/reference lines) ──
+  // Only regenerates when line-related deps change; road surface color
+  // mode changes do NOT trigger this.
+  const updateLineMesh = useCallback(async () => {
+    const renderer = rendererRef.current;
+    if (!renderer || status !== 'ready' || !project) return;
+
+    try {
+      const service = await getPlatformService();
+      const visibleProject = buildRenderableProject(project, display);
+
+      const empty = Promise.resolve(new Float32Array(0));
+      const centerLineProm = display.showReferenceLine
+        ? service.generateCenterLineVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
+        : empty;
+      const laneLineProm = display.showLaneLines
+        ? service.generateLaneLineVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
+        : empty;
+
+      const [laneLineVerts, centerLineVerts] = await Promise.all([laneLineProm, centerLineProm]);
       const lineVerts = mergeFloat32Arrays(laneLineVerts, centerLineVerts);
       renderer.uploadLaneLineVertices(lineVerts);
     } catch (err) {
-      console.error('[Viewport] Failed to generate road mesh:', err);
+      console.error('[Viewport] Failed to generate line mesh:', err);
     }
   }, [
     project,
@@ -179,9 +226,6 @@ export function Viewport() {
     display.showLaneLines,
     display.showRoadMarks,
     display.showReferenceLine,
-    display.showSignals,
-    display.showObjects,
-    display.colorMode,
     display.hiddenRoadIds,
     display.hiddenJunctionIds,
     display.hiddenLaneSectionKeys,
@@ -197,7 +241,8 @@ export function Viewport() {
     renderer?.clearVertexCache();
   }, [projectLoadVersion, status]);
 
-  useEffect(() => { updateMesh(); }, [updateMesh]);
+  useEffect(() => { updateSurfaceMesh(); }, [updateSurfaceMesh]);
+  useEffect(() => { updateLineMesh(); }, [updateLineMesh]);
 
   // Update selection highlight when scene selection changes
   useEffect(() => {
