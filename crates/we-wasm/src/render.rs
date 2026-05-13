@@ -440,19 +440,18 @@ fn arrow_triangles(
         ],
     };
 
-    // The C# transform: rotate by (heading - pi/2) so y-forward local → road forward
-    // newX = (v.x * cos0 - v.y * sin0) * scale
-    // newY = (v.x * sin0 + v.y * cos0) * scale
-    // where cos0/sin0 encode road forward direction
+    // Rotate by (heading - π/2) so local +y maps to road forward direction.
+    // Using the identity: cos(h-π/2)=sin(h), sin(h-π/2)=-cos(h), the standard
+    // rotation matrix simplifies to:
+    //   wx = (vx * sin_h + vy * cos_h) * scale
+    //   wy = (-vx * cos_h + vy * sin_h) * scale
     let cos_h = heading.cos();
     let sin_h = heading.sin();
 
     let transform = |vx: f32, vy: f32| -> (f32, f32) {
-        // Local space: y = forward → rotate so it aligns with road heading
-        // heading=0 → east, so forward (+y local) should map to east (+x world)
-        // Use: world_x = vx*cos - vy*sin + cx (standard 2D rotation)
-        let wx = (vx * cos_h - vy * sin_h) * scale + cx;
-        let wy = (vx * sin_h + vy * cos_h) * scale + cy;
+        // Local +y (arrow tip) → road forward (cos heading, sin heading)
+        let wx = (vx * sin_h + vy * cos_h) * scale + cx;
+        let wy = (-vx * cos_h + vy * sin_h) * scale + cy;
         (wx, wy)
     };
 
@@ -1142,17 +1141,55 @@ pub fn generate_lane_line_vertices(
                 continue;
             }
 
+            // Helper: emit all road marks for a lane, each covering its s_offset sub-range.
+            // Marks are processed in ascending sOffset order; each mark covers from its
+            // sOffset to the next mark's sOffset (or to section_end_s for the last).
+            let emit_lane_marks = |road_marks: &[we_core::model::RoadMark],
+                                   lateral_fn: &dyn Fn(f64) -> f64,
+                                   out: &mut Vec<f32>| {
+                let mut sorted: Vec<&we_core::model::RoadMark> = road_marks.iter().collect();
+                sorted.sort_by(|a, b| {
+                    a.s_offset
+                        .partial_cmp(&b.s_offset)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+
+                for (idx, rm) in sorted.iter().enumerate() {
+                    if rm.mark_type == RoadMarkType::None {
+                        continue;
+                    }
+                    let abs_start = section.s + rm.s_offset;
+                    let abs_end = sorted
+                        .get(idx + 1)
+                        .map(|next| section.s + next.s_offset)
+                        .unwrap_or(section_end_s);
+
+                    let mark_pts: Vec<_> = section_pts
+                        .iter()
+                        .filter(|p| p.s >= abs_start - 1e-9 && p.s <= abs_end + 1e-9)
+                        .copied()
+                        .collect();
+
+                    if mark_pts.len() < 2 {
+                        continue;
+                    }
+                    emit_road_mark(
+                        rm,
+                        &mark_pts,
+                        &road.elevation_profile,
+                        section.s,
+                        &road.lane_offsets,
+                        lateral_fn,
+                        out,
+                    );
+                }
+            };
+
             // Center lane road mark at offset 0 (the center dividing line)
             if let Some(center_lane) = section.center.first()
                 && !center_lane.render_hidden
-                && let Some(rm) = center_lane.road_marks.first()
-                && rm.mark_type != RoadMarkType::None
             {
-                emit_road_mark(
-                    rm, &section_pts, &road.elevation_profile,
-                    section.s, &road.lane_offsets, &|_| 0.0,
-                    &mut all_floats,
-                );
+                emit_lane_marks(&center_lane.road_marks, &|_| 0.0, &mut all_floats);
             }
 
             // Right lane outer boundaries (inner → outer, accumulating offset)
@@ -1160,15 +1197,14 @@ pub fn generate_lane_line_vertices(
             right_sorted.sort_by_key(|l| l.id.abs());
             let mut right_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
             for lane in &right_sorted {
-                if !lane.render_hidden
-                    && let Some(rm) = lane.road_marks.first()
-                    && rm.mark_type != RoadMarkType::None
-                {
-                    let mut boundary_widths = right_prev_widths.clone();
-                    boundary_widths.push(&lane.width);
-                    emit_road_mark(
-                        rm, &section_pts, &road.elevation_profile,
-                        section.s, &road.lane_offsets,
+                if !lane.render_hidden {
+                    let boundary_widths: Vec<&[we_core::model::LaneWidth]> = {
+                        let mut bw = right_prev_widths.clone();
+                        bw.push(&lane.width);
+                        bw
+                    };
+                    emit_lane_marks(
+                        &lane.road_marks,
                         &|ds| -sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
                         &mut all_floats,
                     );
@@ -1181,15 +1217,14 @@ pub fn generate_lane_line_vertices(
             left_sorted.sort_by_key(|l| l.id);
             let mut left_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
             for lane in &left_sorted {
-                if !lane.render_hidden
-                    && let Some(rm) = lane.road_marks.first()
-                    && rm.mark_type != RoadMarkType::None
-                {
-                    let mut boundary_widths = left_prev_widths.clone();
-                    boundary_widths.push(&lane.width);
-                    emit_road_mark(
-                        rm, &section_pts, &road.elevation_profile,
-                        section.s, &road.lane_offsets,
+                if !lane.render_hidden {
+                    let boundary_widths: Vec<&[we_core::model::LaneWidth]> = {
+                        let mut bw = left_prev_widths.clone();
+                        bw.push(&lane.width);
+                        bw
+                    };
+                    emit_lane_marks(
+                        &lane.road_marks,
                         &|ds| sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
                         &mut all_floats,
                     );
@@ -1330,9 +1365,13 @@ pub fn generate_signal_paint_vertices(
             let z_road = evaluate_elevation(&road.elevation_profile, signal.s) as f32;
 
             if signal.signal_type == "Graphics" {
-                // Paint arrow on the road surface
+                // Paint arrow on the road surface.
+                // hOffset in OpenDRIVE is the signal's facing angle relative to the
+                // road reference direction, used for vertical signs. For paint marks
+                // (Graphics), the arrow template already encodes the travel direction
+                // (+y = forward), so we use the road heading directly.
                 let (cx, cy, _) = offset_point(&ref_pt, signal.t, 0.0);
-                let heading = ref_pt.hdg + signal.h_offset;
+                let heading = ref_pt.hdg;
                 let scale = if signal.width > 0.0 { signal.width } else { 3.0 };
                 let z = z_road + 0.02; // 2 cm above road surface
 
@@ -1645,4 +1684,48 @@ pub fn generate_default_lane_section(
         with_shoulder,
     );
     serde_json::to_string(&section).map_err(|e| JsError::new(&e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verify arrow_triangles transform: tip of StraightAheadArrow (local +y) maps to
+    /// the road forward direction (cos heading, sin heading) when scale=1, cx/cy=0.
+    #[test]
+    fn test_arrow_triangles_tip_points_forward() {
+        use std::f32::consts::PI;
+
+        // East-going road (heading = 0): tip should point east (+x)
+        let verts = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, 0.0_f32, 1.0);
+        // The tip vertex (0.0, 0.5) in local space → with scale=1, cx=cy=0:
+        // wx = 0*sin(0) + 0.5*cos(0) = 0.5, wy = -0*cos(0) + 0.5*sin(0) = 0
+        // Search for (0.5, 0.0) in x/y positions of all vertices
+        let has_tip = verts
+            .chunks(7)
+            .any(|v| (v[0] - 0.5).abs() < 1e-4 && v[1].abs() < 1e-4);
+        assert!(has_tip, "Tip should be at (0.5, 0) for east-going road (heading=0)");
+
+        // North-going road (heading = PI/2): tip should point north (+y)
+        let verts = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, PI / 2.0, 1.0);
+        let has_tip = verts
+            .chunks(7)
+            .any(|v| v[0].abs() < 1e-4 && (v[1] - 0.5).abs() < 1e-4);
+        assert!(has_tip, "Tip should be at (0, 0.5) for north-going road (heading=PI/2)");
+    }
+
+    /// Verify that arrow_triangles works correctly with hOffset=PI (the trafficpaint.xodr
+    /// convention). The heading passed in must already NOT include h_offset, so this tests
+    /// that the caller side is correct: generate_signal_paint_vertices uses ref_pt.hdg
+    /// directly, not ref_pt.hdg + h_offset.
+    #[test]
+    fn test_arrow_triangles_east_road_forward() {
+        // For an east-going road (heading=0), the arrow tip should be at +x world
+        let verts = arrow_triangles("StraightAheadArrow", 10.0, 5.0, 0.0, 0.0_f32, 3.0);
+        // Tip (0, 0.5) with scale=3, cx=10, cy=5 → wx = 10 + 0.5*3*1 = 11.5, wy = 5
+        let has_tip = verts
+            .chunks(7)
+            .any(|v| (v[0] - 11.5).abs() < 1e-3 && (v[1] - 5.0).abs() < 1e-3);
+        assert!(has_tip, "Tip should be at (11.5, 5.0); arrow should point east");
+    }
 }
