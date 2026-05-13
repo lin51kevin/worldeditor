@@ -155,7 +155,7 @@ export function splitRoadAt(
   const road1: Road = {
     ...road,
     id: id1,
-    name: `${road.name} (1/2)`,
+    name: `${road.name}_A`,
     length: splitS,
     plan_view: pv1,
     lane_sections: ls1,
@@ -168,7 +168,7 @@ export function splitRoadAt(
   const road2: Road = {
     ...road,
     id: id2,
-    name: `${road.name} (2/2)`,
+    name: `${road.name}_B`,
     length: road.length - splitS,
     plan_view: pv2,
     lane_sections: ls2,
@@ -180,7 +180,7 @@ export function splitRoadAt(
 
   const junction: Junction = {
     id: junctionId,
-    name: `Junction at ${road.name}`,
+    name: `${road.name}_Junction`,
     connections: [
       {
         id: `conn-${ts}`,
