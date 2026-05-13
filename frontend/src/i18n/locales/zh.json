@@ -230,7 +230,13 @@
     "mirrorRoad": "镜像道路",
     "swapCenterlineAndEdge": "交换道路中心线与边缘",
     "softSelectionRadius": "软选择半径: {{radius}} 米",
-    "noRoadSelected": "请选择一条道路以使用这些工具"
+    "noRoadSelected": "请选择一条道路以使用这些工具",
+    "adjustEdgeTitle": "调整车道宽度",
+    "decreaseWidth": "减小宽度",
+    "increaseWidth": "增加宽度",
+    "widenBy1m": "加宽1米",
+    "narrowBy1m": "减窄1米",
+    "selectLaneHint": "选择一条车道以应用"
   },
   "templatePanel": {
     "header": "模板",
@@ -447,15 +453,25 @@
     "selectTwoRoads": "请至少选择 2 条道路才能焊接。",
     "requiresWasm": "此功能需要 WASM 后端支持，将在未来版本中提供。"
   },
-  "converter": { "batchConvert": "批量转换..." },
-  "ecosystem": { "placeTrees": "放置树木" },
+  "converter": {
+    "batchConvert": "批量转换..."
+  },
+  "ecosystem": {
+    "placeTrees": "放置树木"
+  },
   "gisTools": {
     "coordConverter": "坐标转换器...",
     "setCrs": "设置坐标系..."
   },
-  "laneDetect": { "autoDetect": "自动检测车道" },
-  "satellite": { "toggle": "卫星影像" },
-  "scripting": { "runScript": "运行脚本" },
+  "laneDetect": {
+    "autoDetect": "自动检测车道"
+  },
+  "satellite": {
+    "toggle": "卫星影像"
+  },
+  "scripting": {
+    "runScript": "运行脚本"
+  },
   "traffic": {
     "autoDeploySignals": "自动部署信号",
     "computePhases": "计算信号相位"
@@ -494,5 +510,12 @@
     "close": "关闭",
     "learnMore": "用户手册",
     "version": "版本"
+  },
+  "roadMarkType": {
+    "solid": "实线",
+    "broken": "虚线",
+    "solid broken": "实虚线",
+    "solid solid": "双实线",
+    "botts dots": "突起路标"
   }
 }

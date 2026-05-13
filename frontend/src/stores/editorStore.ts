@@ -61,6 +61,12 @@ interface EditorState {
   /** Add multiple roads and a junction record in a single undoable operation */
   addJunctionWithRoads: (junction: Junction, roads: Road[]) => void;
   addSignal: (signal: Signal) => void;
+  addRoadMark: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, mark: import('../services/platform').RoadMark) => void;
+  updateRoadMark: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, markIndex: number, updates: Partial<import('../services/platform').RoadMark>) => void;
+  removeRoadMark: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, markIndex: number) => void;
+  updateLaneBorder: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, borderIndex: number, updates: Partial<import('../services/platform').LaneBorder>) => void;
+  addLaneBorder: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, border: import('../services/platform').LaneBorder) => void;
+  removeLaneBorder: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, borderIndex: number) => void;
   removeSignal: (id: string) => void;
   updateSignal: (id: string, updates: Partial<Signal>) => void;
   addObject: (obj: RoadObject) => void;
@@ -687,6 +693,146 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         signals: (state.project.signals || []).map((s) =>
           s.id === id ? { ...s, ...updates } : s,
         ),
+      },
+      isDirty: true,
+    })),
+
+  // ── Road Mark operations ──────────────────────────────────────────────────
+
+  addRoadMark: (roadId, sectionIndex, side, laneId, mark) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          const sections = [...r.lane_sections];
+          const section = sections[sectionIndex];
+          if (!section) return r;
+          const lanes = section[side].map((l) =>
+            l.id === laneId
+              ? { ...l, road_marks: [...l.road_marks, mark].sort((a, b) => a.s_offset - b.s_offset) }
+              : l,
+          );
+          sections[sectionIndex] = { ...section, [side]: lanes };
+          return { ...r, lane_sections: sections };
+        }),
+      },
+      isDirty: true,
+    })),
+
+  updateRoadMark: (roadId, sectionIndex, side, laneId, markIndex, updates) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          const sections = [...r.lane_sections];
+          const section = sections[sectionIndex];
+          if (!section) return r;
+          const lanes = section[side].map((l) => {
+            if (l.id !== laneId) return l;
+            const marks = [...l.road_marks];
+            if (markIndex >= 0 && markIndex < marks.length) {
+              marks[markIndex] = { ...marks[markIndex]!, ...updates };
+            }
+            return { ...l, road_marks: marks };
+          });
+          sections[sectionIndex] = { ...section, [side]: lanes };
+          return { ...r, lane_sections: sections };
+        }),
+      },
+      isDirty: true,
+    })),
+
+  removeRoadMark: (roadId, sectionIndex, side, laneId, markIndex) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          const sections = [...r.lane_sections];
+          const section = sections[sectionIndex];
+          if (!section) return r;
+          const lanes = section[side].map((l) => {
+            if (l.id !== laneId) return l;
+            return { ...l, road_marks: l.road_marks.filter((_, i) => i !== markIndex) };
+          });
+          sections[sectionIndex] = { ...section, [side]: lanes };
+          return { ...r, lane_sections: sections };
+        }),
+      },
+      isDirty: true,
+    })),
+
+  // ── Lane Border operations (adjust-edge mode) ─────────────────────────────
+
+  addLaneBorder: (roadId, sectionIndex, side, laneId, border) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          const sections = [...r.lane_sections];
+          const section = sections[sectionIndex];
+          if (!section) return r;
+          const lanes = section[side].map((l) => {
+            if (l.id !== laneId) return l;
+            const borders = l.borders ? [...l.borders, border].sort((a, b) => a.s_offset - b.s_offset) : [border];
+            return { ...l, borders };
+          });
+          sections[sectionIndex] = { ...section, [side]: lanes };
+          return { ...r, lane_sections: sections };
+        }),
+      },
+      isDirty: true,
+    })),
+
+  updateLaneBorder: (roadId, sectionIndex, side, laneId, borderIndex, updates) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          const sections = [...r.lane_sections];
+          const section = sections[sectionIndex];
+          if (!section) return r;
+          const lanes = section[side].map((l) => {
+            if (l.id !== laneId || !l.borders) return l;
+            const borders = [...l.borders];
+            if (borderIndex >= 0 && borderIndex < borders.length) {
+              borders[borderIndex] = { ...borders[borderIndex]!, ...updates };
+            }
+            return { ...l, borders };
+          });
+          sections[sectionIndex] = { ...section, [side]: lanes };
+          return { ...r, lane_sections: sections };
+        }),
+      },
+      isDirty: true,
+    })),
+
+  removeLaneBorder: (roadId, sectionIndex, side, laneId, borderIndex) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          const sections = [...r.lane_sections];
+          const section = sections[sectionIndex];
+          if (!section) return r;
+          const lanes = section[side].map((l) => {
+            if (l.id !== laneId || !l.borders) return l;
+            return { ...l, borders: l.borders.filter((_, i) => i !== borderIndex) };
+          });
+          sections[sectionIndex] = { ...section, [side]: lanes };
+          return { ...r, lane_sections: sections };
+        }),
       },
       isDirty: true,
     })),

@@ -128,3 +128,65 @@
   min-width: 38px;
   text-align: right;
 }
+
+/* Adjust Edge sub-toolbar */
+.road-edit-toolbar .adjust-edge-controls,
+.road-edit-toolbar .road-marking-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.road-edit-toolbar .toolbar-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.road-edit-toolbar .toolbar-hint {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.road-edit-toolbar .adjust-edge-controls .toolbar-btn,
+.road-edit-toolbar .road-marking-controls .toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.road-edit-toolbar .adjust-edge-controls .toolbar-btn:hover,
+.road-edit-toolbar .road-marking-controls .toolbar-btn:hover {
+  background: var(--color-bg-elevated);
+}
+
+/* Mark type buttons */
+.road-edit-toolbar .mark-type-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.road-edit-toolbar .mark-type-btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
