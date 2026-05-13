@@ -7,21 +7,23 @@ use std::error::Error as StdError;
 
 use crate::storage::StorageBackend;
 
+/// S3 storage backend — not yet implemented.
+/// Enable with `cargo run --features server-s3` once implemented.
 pub struct S3Storage {
-    // TODO: implement S3 client
+    _private: (),
 }
 
 #[async_trait]
 impl StorageBackend for S3Storage {
     async fn put(&self, _name: &str, _data: &[u8]) -> Result<String, Box<dyn StdError>> {
-        todo!("Implement S3 upload")
+        Err("S3 storage is not yet implemented".into())
     }
 
     async fn get(&self, _key: &str) -> Result<Vec<u8>, Box<dyn StdError>> {
-        todo!("Implement S3 download")
+        Err("S3 storage is not yet implemented".into())
     }
 
     async fn delete(&self, _key: &str) -> Result<(), Box<dyn StdError>> {
-        todo!("Implement S3 delete")
+        Err("S3 storage is not yet implemented".into())
     }
 }

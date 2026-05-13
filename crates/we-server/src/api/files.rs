@@ -85,13 +85,11 @@ impl<B: StorageBackend> FileService<B> {
 }
 
 async fn upload_file(
-    State((pool, storage)): State<(sqlx::PgPool, impl StorageBackend)>,
+    State((_pool, _storage)): State<(sqlx::PgPool, impl StorageBackend)>,
     Path(_project_id): Path<Uuid>,
-    // TODO: implement multipart extraction
 ) -> Result<Json<File>> {
-    let _service = FileService::new(storage, pool);
-    // Placeholder: need actual multipart handling
-    Err(Error::Internal)
+    // Multipart upload not yet implemented — returns 501
+    Err(Error::NotImplemented)
 }
 
 async fn download_file(

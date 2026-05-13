@@ -67,6 +67,17 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/auth/login", post(login_handler))
         .with_state(state.clone());
 
+    // CORS configuration — restrict to known origins in production
+    let allowed_origins = std::env::var("CORS_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:5173,http://localhost:3000".to_string());
+    let origins: Vec<axum::http::HeaderValue> = allowed_origins
+        .split(',')
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
+    if origins.is_empty() {
+        anyhow::bail!("CORS_ORIGINS environment variable is set but contains no valid origins");
+    }
+
     // Combine all routes
     let app = Router::new()
         .merge(protected_routes)
@@ -74,14 +85,19 @@ async fn main() -> anyhow::Result<()> {
         .merge(auth_routes)
         .layer(
             CorsLayer::new()
-                .allow_origin(tower_http::cors::AllowOrigin::any())
+                .allow_origin(origins)
                 .allow_methods(vec![
                     axum::http::Method::GET,
                     axum::http::Method::POST,
                     axum::http::Method::PUT,
                     axum::http::Method::DELETE,
+                    axum::http::Method::OPTIONS,
                 ])
-                .allow_headers(tower_http::cors::Any),
+                .allow_headers([
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::AUTHORIZATION,
+                    axum::http::header::ACCEPT,
+                ]),
         );
 
     // Start server
