@@ -11,6 +11,24 @@ import {
 import { buildEditableSpline, nextSplineRoadId } from '../components/viewportUtils';
 
 /**
+ * Maps a template item ID (as stored in the panel) to the WASM template ID
+ * accepted by `createRoadFromSpline`. Falls back to the input unchanged.
+ */
+const WASM_TEMPLATE_ID_MAP: Record<string, string> = {
+  'tpl:road:single':  'single',
+  'tpl:road:dual2':   'dual2',
+  'tpl:road:dual4':   'dual4',
+  'tpl:road:dual6':   'dual6',
+  'tpl:road:highway': 'dual6',
+  'tpl:road:ramp':    'single',
+  'tpl:road:urban':   'dual4',
+};
+
+export function resolveWasmTemplateId(templateId: string): string {
+  return WASM_TEMPLATE_ID_MAP[templateId] ?? templateId;
+}
+
+/**
  * Encapsulates spline/geometry creation and geometry-edit mode callbacks.
  */
 export function useSplineOperations() {
@@ -27,11 +45,12 @@ export function useSplineOperations() {
       const editorState = useEditorStore.getState();
       const roadId = nextSplineRoadId(editorState.project.roads.map((road) => road.id));
       const spline = buildEditableSpline(knots);
+      const wasmTemplateId = resolveWasmTemplateId(viewState.splineTemplateId);
       const nextProject = await service.createRoadFromSpline(
         editorState.project,
         roadId,
         spline,
-        viewState.splineTemplateId,
+        wasmTemplateId,
       );
       const newRoad = nextProject.roads.find((r) => r.id === roadId);
       if (newRoad) {
@@ -41,6 +60,8 @@ export function useSplineOperations() {
       viewState.clearSplineKnots();
     } catch (err) {
       console.error('[Viewport] Failed to create road from spline:', err);
+      // Clear knots so the user isn't stuck in draw mode on error
+      useEditorViewStore.getState().clearSplineKnots();
     }
   }, []);
 
