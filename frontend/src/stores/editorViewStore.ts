@@ -99,6 +99,12 @@ interface EditorViewState {
 
   // Spline drawing
   splineTemplateId: string;
+  /**
+   * When non-null, the viewport is in "click-to-place" mode for this template.
+   * A single left-click in the viewport will instantiate the template at that
+   * world position and then clear this field.
+   */
+  pendingTemplateId: string | null;
   splineKnots: Array<[number, number, number]>;
   splineTangentOverrides: Record<number, [number, number, number]>;
 
@@ -141,6 +147,8 @@ interface EditorViewState {
   toggleAxis: () => void;
   setEditMode: (m: ActiveMode) => void;
   setSplineTemplateId: (templateId: string) => void;
+  setPendingTemplate: (id: string | null) => void;
+  clearPendingTemplate: () => void;
   setSplineKnots: (knots: Array<[number, number, number]>) => void;
   appendSplineKnot: (knot: [number, number, number]) => void;
   popSplineKnot: () => void;
@@ -251,7 +259,8 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   showGrid: true,
   showAxis: true,
   editMode: 'default',
-  splineTemplateId: 'single',
+  splineTemplateId: 'tpl:road:single',
+  pendingTemplateId: null,
   splineKnots: [],
   splineTangentOverrides: {},
   draggingKnot: null,
@@ -274,6 +283,8 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   toggleAxis: () => set((state) => ({ showAxis: !state.showAxis })),
   setEditMode: (editMode) => set({ editMode }),
   setSplineTemplateId: (splineTemplateId) => set({ splineTemplateId }),
+  setPendingTemplate: (pendingTemplateId) => set({ pendingTemplateId }),
+  clearPendingTemplate: () => set({ pendingTemplateId: null }),
   setSplineKnots: (splineKnots) => set({ splineKnots }),
   appendSplineKnot: (knot) =>
     set((state) => ({ splineKnots: [...state.splineKnots, knot] })),

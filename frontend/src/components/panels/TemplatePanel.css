@@ -100,6 +100,13 @@
   background: var(--color-bg-tertiary);
 }
 
+/* Click-to-place pending state (junction templates awaiting viewport click) */
+.template-item.pending {
+  border-color: #f0a500;
+  background: rgba(240, 165, 0, 0.12);
+  box-shadow: 0 0 0 1px #f0a500;
+}
+
 [data-theme="light"] .template-item.selected {
   background: rgba(0, 0, 0, 0.04);
 }

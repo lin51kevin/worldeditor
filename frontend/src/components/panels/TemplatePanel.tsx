@@ -56,6 +56,8 @@ export function TemplatePanel() {
   const isFavoritesActive = resolvedId === FAVORITES_TAB_ID;
   const activeSection = sorted.find((s) => s.id === resolvedId) ?? null;
   const selectedTemplateId = useEditorViewStore((s) => s.splineTemplateId);
+  const pendingTemplateId = useEditorViewStore((s) => s.pendingTemplateId);
+  const editMode = useEditorViewStore((s) => s.editMode);
 
   const favoriteItems = useMemo(
     () => allItems.filter((item) => favorites.includes(item.id)),
@@ -90,8 +92,31 @@ export function TemplatePanel() {
   const handleItemClick = (itemId: string) => {
     const item = isFavoritesActive ? findItem(itemId) : activeSection?.items.find((i) => i.id === itemId);
     if (!item) return;
-    // Only select/highlight — placement happens via drag-to-viewport
-    useEditorViewStore.getState().setSplineTemplateId(itemId);
+    const viewStore = useEditorViewStore.getState();
+    viewStore.setSplineTemplateId(itemId);
+    if (itemId.startsWith('tpl:road:')) {
+      // Road cross-section templates: enter draw mode.
+      // Respect whichever draw mode is currently active in the toolbar;
+      // default to 'spline' (Hermite cubic spline) if none is active.
+      viewStore.clearPendingTemplate();
+      const current = viewStore.editMode;
+      const inDrawMode =
+        current === 'spline' || current === 'line' || current === 'arc' || current === 'spiral';
+      if (!inDrawMode) {
+        viewStore.setEditMode('spline');
+      } else {
+        // Already in a draw mode — start fresh with new template, keep same mode
+        viewStore.clearSplineKnots();
+      }
+    } else if (itemId.startsWith('tpl:jct:')) {
+      // Junction templates: enter click-to-place mode.
+      // The next single left-click in the viewport will instantiate the template.
+      viewStore.setPendingTemplate(itemId);
+    } else {
+      // Signal / marking templates apply to the currently selected road immediately.
+      viewStore.clearPendingTemplate();
+      item.onApply?.();
+    }
   };
 
   const handleDragStart = (e: React.DragEvent, itemId: string) => {
@@ -136,10 +161,15 @@ export function TemplatePanel() {
 
       <div className="template-grid">
         {displayedItems.length > 0 ? (
-          displayedItems.map((item) => (
+          displayedItems.map((item) => {
+            const isSelected = selectedTemplateId === item.id &&
+              (!item.id.startsWith('tpl:jct:') || pendingTemplateId === item.id) &&
+              (!item.id.startsWith('tpl:road:') || editMode === 'spline' || editMode === 'line' || editMode === 'arc' || editMode === 'spiral');
+            const isPending = pendingTemplateId === item.id;
+            return (
             <div
               key={item.id}
-              className={`template-item ${selectedTemplateId === item.id ? 'selected' : ''}`}
+              className={`template-item${isSelected ? ' selected' : ''}${isPending ? ' pending' : ''}`}
               title={t(item.labelKey, item.labelKey)}
               draggable
               onDragStart={(e) => handleDragStart(e, item.id)}
@@ -167,7 +197,8 @@ export function TemplatePanel() {
                 <Star size={11} fill={favorites.includes(item.id) ? 'currentColor' : 'none'} />
               </button>
             </div>
-          ))
+            );
+          })
         ) : isFavoritesActive ? (
           <div className="template-empty">{t('templatePanel.noFavorites')}</div>
         ) : (
