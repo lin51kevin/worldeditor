@@ -161,4 +161,16 @@ test.describe('Visual regression — rendering', () => {
     await waitForRender(page);
     await canvasScreenshot(page, 'trafficpaint.png');
   });
+
+  test('parking lot renders spaces perpendicular to road', async ({ editorPage: page }) => {
+    const xml = readXodrFixture('parkinglot.xodr');
+    await openXodrInBrowser(page, xml, 'parkinglot.xodr');
+    await waitForRender(page);
+    await page.evaluate(() => {
+      const events = (window as Record<string, any>).__viewportEvents;
+      if (events) events.emit('zoom-to-fit');
+    });
+    await waitForRender(page, 600);
+    await canvasScreenshot(page, 'parkinglot.png');
+  });
 });
