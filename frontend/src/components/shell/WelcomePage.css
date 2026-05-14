@@ -64,7 +64,9 @@
 
 .wp-col {
   flex: 1;
+  min-width: 0; /* allow flex items to shrink below content size */
   padding: 0 24px;
+  overflow: hidden;
 }
 
 .wp-col+.wp-col {
@@ -187,6 +189,7 @@
   cursor: pointer;
   transition: background-color 0.12s;
   position: relative;
+  min-width: 0;
 }
 
 .wp-recent-item:hover {

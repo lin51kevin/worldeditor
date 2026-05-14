@@ -53,3 +53,6 @@ plan.md
 
 #docs
 docs/reference/
+
+#e2e
+frontend/e2e/__snapshots__/

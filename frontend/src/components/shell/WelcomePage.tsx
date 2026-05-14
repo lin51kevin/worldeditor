@@ -145,8 +145,8 @@ export function WelcomePage({
                   className="wp-recent-item"
                   onClick={() => onOpenRecent(file)}
                 >
-                  <div className="wp-recent-name">{file.name}</div>
-                  <div className="wp-recent-path">{shortenPath(file.path)}</div>
+                  <div className="wp-recent-name" title={file.name}>{file.name}</div>
+                  <div className="wp-recent-path" title={file.path}>{shortenPath(file.path)}</div>
                   <button
                     className="wp-recent-remove"
                     title={t('welcomePage.removeFromRecent', 'Remove from recent')}
