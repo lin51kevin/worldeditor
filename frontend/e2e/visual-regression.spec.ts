@@ -137,4 +137,28 @@ test.describe('Visual regression — rendering', () => {
     await waitForRender(page);
     await canvasScreenshot(page, '2d-mode.png');
   });
+
+  test('junction with crosswalk and traffic signals renders correctly', async ({ editorPage: page }) => {
+    const xml = readXodrFixture('junction_crosswalk_signal.xodr');
+    await openXodrInBrowser(page, xml, 'junction_crosswalk_signal.xodr');
+    await waitForRender(page);
+    await page.evaluate(() => {
+      const events = (window as Record<string, any>).__viewportEvents;
+      if (events) events.emit('zoom-to-fit');
+    });
+    await waitForRender(page);
+    await canvasScreenshot(page, 'junction-crosswalk-signal.png');
+  });
+
+  test('road with traffic paint markings (arrows, lane marks) renders correctly', async ({ editorPage: page }) => {
+    const xml = readXodrFixture('trafficpaint.xodr');
+    await openXodrInBrowser(page, xml, 'trafficpaint.xodr');
+    await waitForRender(page);
+    await page.evaluate(() => {
+      const events = (window as Record<string, any>).__viewportEvents;
+      if (events) events.emit('zoom-to-fit');
+    });
+    await waitForRender(page);
+    await canvasScreenshot(page, 'trafficpaint.png');
+  });
 });

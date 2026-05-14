@@ -17,16 +17,19 @@ export default defineConfig({
     },
   },
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: 'http://localhost:5173',
     locale: 'zh-CN',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     launchOptions: {
+      // CI: headless with SwiftShader software renderer.
+      // Local: headed so the OS compositor exposes hardware WebGPU to Chromium.
+      headless: !!process.env.CI,
       args: [
         '--enable-unsafe-webgpu',
-        // Use software (SwiftShader) renderer so WebGPU works in headless CI.
-        '--use-gl=angle',
-        '--use-angle=swiftshader',
+        ...(process.env.CI
+          ? ['--use-gl=angle', '--use-angle=swiftshader']
+          : ['--disable-gpu-sandbox']),
       ],
     },
   },
@@ -37,8 +40,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'yarn dev --host 127.0.0.1 --strictPort',
-    url: 'http://127.0.0.1:5173',
+    command: 'yarn dev',
+    url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   },

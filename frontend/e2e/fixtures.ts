@@ -14,6 +14,10 @@ export const test = base.extend<{
   editorPage: Page;
 }>({
   editorPage: async ({ page }, use) => {
+    // Bypass the welcome splash screen so the editor opens immediately.
+    await page.addInitScript(() => {
+      localStorage.setItem('we-show-welcome-on-startup', 'false');
+    });
     await page.goto('/');
     // Wait for the app shell to render
     await page.waitForSelector('.toolbar');
