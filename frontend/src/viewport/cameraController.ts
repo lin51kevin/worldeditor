@@ -230,6 +230,11 @@ export class CameraController {
   }
 
   fitToVertices(vertexData: Float32Array): void {
+    // Cancel any in-progress dimension-switch animation so it cannot override
+    // the camera position we are about to set (e.g. animation started at app
+    // startup against target [0,0,0] while the file loads asynchronously).
+    this._animatingDimension = false;
+
     const stride = 7;
     const count = vertexData.length / stride;
     if (count === 0) return;
