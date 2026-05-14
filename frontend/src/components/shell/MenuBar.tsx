@@ -247,10 +247,6 @@ export function MenuBar({
           {openMenu !== null && (
             <div
               className="menubar-mega-dropdown"
-              onMouseLeave={() => {
-                setHoveredMenu(null);
-                setHoveredSubItem(null);
-              }}
             >
               <FileMenu
                 {...getMenuSectionProps(0)}

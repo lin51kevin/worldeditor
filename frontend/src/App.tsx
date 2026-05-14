@@ -156,7 +156,9 @@ export function App() {
       const project = await ps.parseOpenDrive(result.content);
       project.name = result.name;
       useEditorStore.getState().setProject(project);
-      pushRecentFile(result.name, result.path ?? result.name);
+      if (result.path) {
+        pushRecentFile(result.name, result.path);
+      }
       setIsEditorOpen(true);
     } catch (err) {
       console.error('Failed to open file:', err);
@@ -279,9 +281,6 @@ export function App() {
         {/* Plugin-contributed panels */}
         <PluginPanels />
 
-        {/* Themed dialog host — renders alert/confirm/prompt dialogs */}
-        <DialogHost />
-
         {/* Keyboard shortcut help overlay */}
         <ShortcutHelpOverlay
           open={showShortcutHelp}
@@ -299,6 +298,8 @@ export function App() {
         onToggleShowOnStartup={handleToggleShowOnStartup}
       />
     )}
+    {/* Themed dialog host — always mounted so dialogs show on WelcomePage too */}
+    <DialogHost />
     </ErrorBoundary>
   );
 }

@@ -47,7 +47,9 @@ export function useMenuActions() {
       }
       proj.name = file.name;
       setProject(proj);
-      pushRecentFile(file.name, file.path ?? file.name);
+      if (file.path) {
+        pushRecentFile(file.name, file.path);
+      }
     } catch (err) {
       console.error('[MenuBar] Failed to open file:', err);
       await showAlert(t('dialog.openError'));
@@ -83,7 +85,9 @@ export function useMenuActions() {
       }
       proj.name = file.name;
       setProject(proj);
-      pushRecentFile(file.name, file.path ?? file.name);
+      if (file.path) {
+        pushRecentFile(file.name, file.path);
+      }
     } catch (err) {
       console.error('[MenuBar] Failed to import OpenDRIVE:', err);
       await showAlert(t('dialog.parseError'));
