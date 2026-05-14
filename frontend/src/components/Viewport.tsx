@@ -19,6 +19,7 @@ import { useViewportDrop } from '../hooks/useViewportDrop';
 import { useRubberBandSelect } from '../hooks/useRubberBandSelect';
 import { useMoveRotateMode } from '../hooks/useMoveRotateMode';
 import { useSplineDrawMode } from '../hooks/useSplineDrawMode';
+import { useSplineDrawPreview } from '../hooks/useSplineDrawPreview';
 import { useGeometryEditMode } from '../hooks/useGeometryEditMode';
 import './Viewport.css';
 
@@ -63,6 +64,7 @@ export function Viewport() {
     handleSplineDrawMouseDown,
     handleSplineDrawClick,
     handleSplineDrawMouseUp,
+    handleSplineDrawRightClick,
   } = useSplineDrawMode({
     canvasRef,
     rendererRef,
@@ -95,6 +97,11 @@ export function Viewport() {
         viewState.editMode === 'spiral';
 
       if (event.key === 'Escape') {
+        // Pending click-to-place mode takes priority — cancel it first
+        if (viewState.pendingTemplateId) {
+          viewState.clearPendingTemplate();
+          return;
+        }
         if (viewState.geometryEditRoadId || isDrawMode) {
           return;
         }
@@ -114,7 +121,7 @@ export function Viewport() {
         return;
       }
 
-      if (event.key === 'Delete' && !viewState.geometryEditRoadId && !isDrawMode) {
+      if (event.key === 'Delete' && !viewState.geometryEditRoadId && !isDrawMode && !viewState.pendingTemplateId) {
         useEditorStore.getState().deleteSelected();
       }
     };
@@ -243,6 +250,16 @@ export function Viewport() {
 
   useEffect(() => { updateSurfaceMesh(); }, [updateSurfaceMesh]);
   useEffect(() => { updateLineMesh(); }, [updateLineMesh]);
+
+  // Real-time road mesh preview while adding knots in draw mode
+  useSplineDrawPreview({
+    rendererRef,
+    status,
+    onPreviewEnd: useCallback(() => {
+      void updateSurfaceMesh();
+      void updateLineMesh();
+    }, [updateSurfaceMesh, updateLineMesh]),
+  });
 
   // Update selection highlight when scene selection changes
   useEffect(() => {
@@ -573,6 +590,12 @@ export function Viewport() {
     if (await handleGeometryEditMouseMove(worldPos, canvas, renderer)) return;
     if (handleSplineDrawMouseMove(worldPos, canvas, renderer)) return;
 
+    // In click-to-place mode show crosshair and skip normal hover picking
+    if (viewState.pendingTemplateId) {
+      canvas.style.cursor = 'crosshair';
+      return;
+    }
+
     if (viewState.snapEnabled) {
       try {
         const service = await getPlatformService();
@@ -768,6 +791,19 @@ export function Viewport() {
     if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
       return;
     }
+
+    // Click-to-place mode: instantiate the pending template at the clicked world position
+    if (viewState.pendingTemplateId) {
+      const templateId = viewState.pendingTemplateId;
+      viewState.clearPendingTemplate();
+      const allItems = usePluginContribStore.getState().templateSections.flatMap((s) => s.items);
+      const item = allItems.find((i) => i.id === templateId);
+      if (item) {
+        item.onApply({ x: worldPos.x, y: worldPos.y, hdg: 0 });
+      }
+      return;
+    }
+
     if (await handleSplineDrawClick(e, worldPos)) {
       return;
     }
@@ -845,8 +881,16 @@ export function Viewport() {
     ) {
       return;
     }
+    // Cancel pending template placement on right-click
+    const viewState = useEditorViewStore.getState();
+    if (viewState.pendingTemplateId) {
+      viewState.clearPendingTemplate();
+      return;
+    }
+    // Right-click in draw mode finalizes (or cancels) the road being drawn
+    if (handleSplineDrawRightClick()) return;
     showContextMenu(e.clientX, e.clientY, 'viewport');
-  }, []);
+  }, [handleSplineDrawRightClick]);
 
   const handleMouseLeave = useCallback(() => {
     if (hoveredRoadRef.current !== null || hoveredJunctionRef.current !== null) {
