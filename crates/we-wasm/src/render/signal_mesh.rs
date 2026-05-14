@@ -282,19 +282,29 @@ pub(super) fn emit_rect_outline(
     );
 }
 
-/// Emit crosswalk zebra stripes given corner polygon (road-local u/v coordinates).
+/// Emit crosswalk zebra stripes given `cornerLocal` polygon data and the object's heading.
 ///
-/// `corners[i].x` = u offset along road from object centre (absolute s = obj_s + u).
-/// `corners[i].y` = v offset lateral from road centre line.
+/// Uses a **single reference-point lookup** at `obj_s`, then builds all stripe vertices from
+/// the road tangent at that point. This avoids the "abs_s overflow" problem where
+/// `obj_s + ds` would exceed the road length for crosswalks placed at or near road endpoints.
 ///
-/// Generates white horizontal stripes (0.45 m wide, 1.0 m period) spanning the full
-/// u extent of the crosswalk, in the v (across-road) direction.
+/// Algorithm:
+/// 1. Find the reference point nearest to `obj_s`.
+/// 2. Compute the object world-space origin `(Ox, Oy)` including the `obj_t` lateral offset.
+/// 3. Rotate `cornerLocal (u, v)` by `obj_hdg` to get road-frame `(alpha, beta)`:
+///    `alpha = u·cos(obj_hdg) − v·sin(obj_hdg)`  (along-road offset from origin)
+///    `beta  = u·sin(obj_hdg) + v·cos(obj_hdg)`  (lateral offset from origin)
+/// 4. Sweep stripes in the `alpha` direction using the linear tangent-plane approximation:
+///    `wx = Ox + alpha·cos(θ) − beta·sin(θ)`
+///    `wy = Oy + alpha·sin(θ) + beta·cos(θ)`
 pub(super) fn emit_crosswalk_stripes(
     corners: &[we_core::model::Point3D],
     ref_pts: &[we_core::geometry::eval::RefLinePoint],
     elevations: &[we_core::model::Elevation],
     obj_s: f64,
-    z_base: f32,
+    obj_t: f64,
+    obj_hdg: f64,
+    _z_base: f32,
     offset_pt: &OffsetPtFn,
     out: &mut Vec<f32>,
 ) {
@@ -304,69 +314,77 @@ pub(super) fn emit_crosswalk_stripes(
         return;
     }
 
-    // Compute AABB in road-local (u, v) space.
-    // c.x = u  (along-road offset from object centre; absolute road s = obj_s + u)
-    // c.y = v  (across-road / lateral offset)
-    let u_min = corners.iter().map(|c| c.x).fold(f64::INFINITY, f64::min);
-    let u_max = corners
+    // Single reference-point lookup at obj_s — safe even when obj_s exceeds road length.
+    let ref_pt = ref_pts
         .iter()
-        .map(|c| c.x)
-        .fold(f64::NEG_INFINITY, f64::max);
-    let v_min = corners.iter().map(|c| c.y).fold(f64::INFINITY, f64::min);
-    let v_max = corners
-        .iter()
-        .map(|c| c.y)
-        .fold(f64::NEG_INFINITY, f64::max);
+        .min_by(|a, b| {
+            (a.s - obj_s)
+                .abs()
+                .partial_cmp(&(b.s - obj_s).abs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .unwrap(); // ref_pts is non-empty, so this is safe
 
-    if u_max <= u_min || v_max <= v_min {
+    // Object world-space origin (includes the lateral obj_t offset).
+    let (ox, oy, _) = offset_pt(ref_pt, obj_t, 0.0);
+    let z = evaluate_elevation(elevations, ref_pt.s) as f32 + 0.02;
+
+    // Road tangent direction at obj_s.
+    let theta = ref_pt.hdg;
+    let (cos_t, sin_t) = (theta.cos(), theta.sin());
+
+    // Transform cornerLocal (u, v) by obj_hdg to road-frame (alpha, beta).
+    let (cos_h, sin_h) = (obj_hdg.cos(), obj_hdg.sin());
+    let mut alpha_min = f64::INFINITY;
+    let mut alpha_max = f64::NEG_INFINITY;
+    let mut beta_min = f64::INFINITY;
+    let mut beta_max = f64::NEG_INFINITY;
+
+    for c in corners {
+        let alpha = c.x * cos_h - c.y * sin_h;
+        let beta = c.x * sin_h + c.y * cos_h;
+        alpha_min = alpha_min.min(alpha);
+        alpha_max = alpha_max.max(alpha);
+        beta_min = beta_min.min(beta);
+        beta_max = beta_max.max(beta);
+    }
+
+    if alpha_max <= alpha_min || beta_max <= beta_min {
         return;
     }
 
-    // Resolve (absolute_s, lateral_t) → world (x, y, z).
-    // abs_s must be the absolute road s-coordinate, not the u offset.
-    let world_at = |abs_s: f64, t: f64| -> (f32, f32, f32) {
-        let rp = ref_pts.iter().min_by(|a, b| {
-            (a.s - abs_s)
-                .abs()
-                .partial_cmp(&(b.s - abs_s).abs())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        if let Some(rp) = rp {
-            let (wx, wy, _) = offset_pt(rp, t, 0.0);
-            let z = evaluate_elevation(elevations, rp.s) as f32 + 0.02;
-            (wx as f32, wy as f32, z)
-        } else {
-            (abs_s as f32, t as f32, z_base)
-        }
+    // Map road-frame (alpha, beta) → world (x, y) via tangent-plane transform.
+    let world_xy = |alpha: f64, beta: f64| -> (f32, f32) {
+        (
+            (ox + alpha * cos_t - beta * sin_t) as f32,
+            (oy + alpha * sin_t + beta * cos_t) as f32,
+        )
     };
 
-    // White zebra stripes in the v (across-road) direction.
-    // stripe_width ≈ 0.45 m; total period = 1.0 m (stripe + gap).
+    // White zebra stripes: sweep the alpha direction (along road),
+    // each stripe spanning the full beta extent (across road).
     let stripe_width = 0.45_f64;
-    let stripe_period = 1.0_f64;
-    let [r, g, b, a]: [f32; 4] = [1.0, 1.0, 1.0, 1.0]; // white
+    let stripe_period = 1.05_f64; // 0.45 stripe + 0.60 gap
+    let [r, g, b, a]: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
-    let abs_u_min = obj_s + u_min;
-    let abs_u_max = obj_s + u_max;
+    let mut alpha = alpha_min;
+    while alpha < alpha_max {
+        let alpha_end = (alpha + stripe_width).min(alpha_max);
 
-    let mut v = v_min;
-    while v < v_max {
-        let v_end = (v + stripe_width).min(v_max);
+        let p00 = world_xy(alpha, beta_min);
+        let p10 = world_xy(alpha, beta_max);
+        let p11 = world_xy(alpha_end, beta_max);
+        let p01 = world_xy(alpha_end, beta_min);
 
-        let p00 = world_at(abs_u_min, v);
-        let p10 = world_at(abs_u_max, v);
-        let p11 = world_at(abs_u_max, v_end);
-        let p01 = world_at(abs_u_min, v_end);
+        out.extend_from_slice(&[p00.0, p00.1, z, r, g, b, a]);
+        out.extend_from_slice(&[p10.0, p10.1, z, r, g, b, a]);
+        out.extend_from_slice(&[p11.0, p11.1, z, r, g, b, a]);
 
-        out.extend_from_slice(&[p00.0, p00.1, p00.2, r, g, b, a]);
-        out.extend_from_slice(&[p10.0, p10.1, p10.2, r, g, b, a]);
-        out.extend_from_slice(&[p11.0, p11.1, p11.2, r, g, b, a]);
+        out.extend_from_slice(&[p00.0, p00.1, z, r, g, b, a]);
+        out.extend_from_slice(&[p11.0, p11.1, z, r, g, b, a]);
+        out.extend_from_slice(&[p01.0, p01.1, z, r, g, b, a]);
 
-        out.extend_from_slice(&[p00.0, p00.1, p00.2, r, g, b, a]);
-        out.extend_from_slice(&[p11.0, p11.1, p11.2, r, g, b, a]);
-        out.extend_from_slice(&[p01.0, p01.1, p01.2, r, g, b, a]);
-
-        v += stripe_period;
+        alpha += stripe_period;
     }
 }
 
@@ -481,5 +499,95 @@ pub(super) fn emit_longitudinal_strip(
         out.extend_from_slice(&[rx0 as f32, ry0 as f32, z0, r, g, b, a]);
         out.extend_from_slice(&[rx1 as f32, ry1 as f32, z1, r, g, b, a]);
         out.extend_from_slice(&[lx1 as f32, ly1 as f32, z1, r, g, b, a]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use we_core::geometry::eval::RefLinePoint;
+    use we_core::model::{Elevation, Point3D};
+
+    /// Helper: straight road along +x with ref_pts at s=0..10 (1m steps).
+    fn straight_road_pts() -> Vec<RefLinePoint> {
+        (0..=10)
+            .map(|i| RefLinePoint { s: i as f64, x: i as f64, y: 0.0, hdg: 0.0 })
+            .collect()
+    }
+
+    fn offset_pt_flat(rp: &RefLinePoint, t: f64, _: f64) -> (f64, f64, f64) {
+        // For a straight road along +x, lateral t is in +y direction.
+        (rp.x, rp.y + t, 0.0)
+    }
+
+    /// Verify that stripes are generated even when obj_s + alpha > road length.
+    ///
+    /// Before the world-space fix, all four vertices of every stripe collapsed
+    /// to the same road endpoint (degenerate zero-area triangles → invisible).
+    /// After the fix, stripes are generated at the extrapolated world position.
+    #[test]
+    fn test_crosswalk_stripes_past_road_end_produces_output() {
+        // Road ref_pts only go to s=10. Put crosswalk at s=9 with alpha=[1,5] → abs_s=[10,14].
+        let ref_pts = straight_road_pts();
+        // Corners: hdg=0 (no rotation), so alpha=u, beta=v.
+        // alpha range [1,5], beta range [-1,1] → 4m × 2m crosswalk past road end.
+        let corners = vec![
+            Point3D { x: 1.0, y: -1.0, z: 0.0, id: None },
+            Point3D { x: 5.0, y: -1.0, z: 0.0, id: None },
+            Point3D { x: 5.0, y: 1.0, z: 0.0, id: None },
+            Point3D { x: 1.0, y: 1.0, z: 0.0, id: None },
+        ];
+        let elevations: Vec<Elevation> = vec![];
+        let mut out = Vec::new();
+        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+
+        emit_crosswalk_stripes(&corners, &ref_pts, &elevations, 9.0, 0.0, 0.0, 0.0, offset_fn, &mut out);
+
+        // Must produce at least one valid (non-degenerate) stripe quad = 6 vertices × 7 floats.
+        assert!(out.len() >= 42, "Expected at least one stripe but got {} floats", out.len());
+
+        // With world-space approach: ref_pt nearest to obj_s=9.0 is at s=9 (x=9.0).
+        // ox=9.0, so wx = 9 + alpha*cos(0) = 9 + alpha.
+        // First stripe at alpha=[1.0,1.45]: x values should be ≈ 10.0..10.45.
+        let first_x = out[0];
+        assert!(first_x >= 10.0 && first_x < 11.5, "First stripe x={first_x} should be ~10.0");
+    }
+
+    /// Verify that a crosswalk with hdg=π/2 produces stripes perpendicular to the road.
+    ///
+    /// With hdg=π/2, corners (u,v) map to road-frame: alpha=-v, beta=u.
+    /// The alpha sweep (perpendicular strip) should still span the v-derived range.
+    #[test]
+    fn test_crosswalk_stripes_hdg_pi_half_is_perpendicular() {
+        let ref_pts = straight_road_pts();
+        // Crosswalk with hdg=π/2, typical junction crosswalk corners.
+        // u in [-3.6, 7.1], v in [-5.0, -1.0]
+        // → alpha = -v ∈ [1.0, 5.0], beta = u ∈ [-3.6, 7.1]
+        let corners = vec![
+            Point3D { x: -3.6, y: -1.0, z: 0.0, id: None },
+            Point3D { x:  7.1, y: -1.0, z: 0.0, id: None },
+            Point3D { x:  7.1, y: -5.0, z: 0.0, id: None },
+            Point3D { x: -3.6, y: -5.0, z: 0.0, id: None },
+        ];
+        let elevations: Vec<Elevation> = vec![];
+        let mut out = Vec::new();
+        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+
+        emit_crosswalk_stripes(
+            &corners, &ref_pts, &elevations,
+            5.0, 0.0, std::f64::consts::FRAC_PI_2, 0.0, offset_fn, &mut out,
+        );
+
+        assert!(!out.is_empty(), "Expected stripes for hdg=π/2 crosswalk");
+
+        // Stripes sweep in alpha=[1,5] direction. Since road is along +x,
+        // alpha maps to +x offset and beta maps to +y.
+        // First stripe near vertices: x ≈ 5+1=6.0..6.45, y ∈ [-3.6, 7.1].
+        let first_x = out[0];
+        let first_y = out[1];
+        // x should be offset from obj origin (s=5 → x=5): 5 + alpha≈1 = ~6
+        assert!((first_x - 6.0).abs() < 0.5, "First stripe x={first_x} should be ~6.0");
+        // y (beta) should be in the lateral range
+        assert!(first_y >= -4.0 && first_y <= 7.5, "First stripe y={first_y} out of expected range");
     }
 }
