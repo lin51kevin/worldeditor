@@ -111,6 +111,9 @@ interface EditorViewState {
   // Spline knot dragging
   draggingKnot: { index: number; type: 'knot' | 'in' | 'out' } | null;
 
+  // Cursor preview position while drawing (mouse pos as a temporary last knot)
+  cursorPreviewPos: [number, number, number] | null;
+
   // View mode (sketch/wire/solid)
   viewMode: 'sketch' | 'wire' | 'solid';
 
@@ -154,6 +157,7 @@ interface EditorViewState {
   popSplineKnot: () => void;
   clearSplineKnots: () => void;
   setDraggingKnot: (info: { index: number; type: 'knot' | 'in' | 'out' } | null) => void;
+  setCursorPreviewPos: (pos: [number, number, number] | null) => void;
   setSplineTangentOverride: (index: number, tangent: [number, number, number]) => void;
   clearSplineTangentOverrides: () => void;
   setViewMode: (m: 'sketch' | 'wire' | 'solid') => void;
@@ -264,6 +268,7 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   splineKnots: [],
   splineTangentOverrides: {},
   draggingKnot: null,
+  cursorPreviewPos: null,
   viewMode: 'solid',
   display: loadDisplay(),
   layout: DEFAULT_LAYOUT,
@@ -290,8 +295,9 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
     set((state) => ({ splineKnots: [...state.splineKnots, knot] })),
   popSplineKnot: () =>
     set((state) => ({ splineKnots: state.splineKnots.slice(0, -1) })),
-  clearSplineKnots: () => set({ splineKnots: [], splineTangentOverrides: {}, draggingKnot: null }),
+  clearSplineKnots: () => set({ splineKnots: [], splineTangentOverrides: {}, draggingKnot: null, cursorPreviewPos: null }),
   setDraggingKnot: (draggingKnot) => set({ draggingKnot }),
+  setCursorPreviewPos: (cursorPreviewPos) => set({ cursorPreviewPos }),
   setSplineTangentOverride: (index, tangent) =>
     set((state) => ({ splineTangentOverrides: { ...state.splineTangentOverrides, [index]: tangent } })),
   clearSplineTangentOverrides: () => set({ splineTangentOverrides: {} }),

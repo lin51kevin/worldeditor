@@ -47,6 +47,7 @@ export function useSplineDrawMode({
   }, [pendingCursorRef]);
 
   const clearSplineDrawHover = useCallback(() => {
+    useEditorViewStore.getState().setCursorPreviewPos(null);
     if (hoveredControlPointRef.current === null) {
       return;
     }
@@ -147,6 +148,9 @@ export function useSplineDrawMode({
       canvas.style.cursor = 'crosshair';
       return false;
     }
+
+    // Update the live cursor preview position for real-time road mesh preview
+    viewState.setCursorPreviewPos([worldPos.x, worldPos.y, 0]);
 
     const nextHover = findSplineControlPointHit(
       worldPos,

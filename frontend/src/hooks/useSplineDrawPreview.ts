@@ -42,14 +42,22 @@ export function useSplineDrawPreview({
   const editMode = useEditorViewStore((s) => s.editMode);
   const splineKnots = useEditorViewStore((s) => s.splineKnots);
   const splineTemplateId = useEditorViewStore((s) => s.splineTemplateId);
+  const cursorPreviewPos = useEditorViewStore((s) => s.cursorPreviewPos);
 
-  // Generate and upload a preview road mesh whenever draw-mode knots change.
+  // Generate and upload a preview road mesh whenever draw-mode knots or cursor position changes.
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer || status !== 'ready' || !isDrawMode(editMode)) return;
 
+    // Append the current cursor position as a temporary last knot for live preview.
+    // This means preview starts as soon as the first knot is placed and the mouse moves.
+    const previewKnots: Array<[number, number, number]> =
+      splineKnots.length >= 1 && cursorPreviewPos
+        ? [...splineKnots, cursorPreviewPos]
+        : splineKnots;
+
     // Need at least 2 knots for a road segment
-    if (splineKnots.length < 2) return;
+    if (previewKnots.length < 2) return;
 
     let cancelled = false;
 
@@ -59,7 +67,7 @@ export function useSplineDrawPreview({
         const PREVIEW_ROAD_ID = '__draw_preview__';
 
         if (editMode === 'spline') {
-          const spline = buildEditableSpline(splineKnots);
+          const spline = buildEditableSpline(previewKnots);
           const wasmId = resolveWasmTemplateId(splineTemplateId);
 
           // Use an empty project so the preview road ID doesn't conflict
@@ -89,11 +97,11 @@ export function useSplineDrawPreview({
           // line / arc / spiral modes: no lane section template, show flat road outline
           let geometries;
           if (editMode === 'line') {
-            geometries = buildMultiLineGeometries(splineKnots);
+            geometries = buildMultiLineGeometries(previewKnots);
           } else if (editMode === 'arc') {
-            geometries = buildMultiArcGeometries(splineKnots);
+            geometries = buildMultiArcGeometries(previewKnots);
           } else {
-            geometries = buildMultiSpiralGeometries(splineKnots);
+            geometries = buildMultiSpiralGeometries(previewKnots);
           }
           if (geometries.length === 0) return;
 
@@ -108,17 +116,21 @@ export function useSplineDrawPreview({
     })();
 
     return () => { cancelled = true; };
-  }, [editMode, splineKnots, splineTemplateId, rendererRef, status]);
+  }, [editMode, splineKnots, cursorPreviewPos, splineTemplateId, rendererRef, status]);
 
   // Restore real project vertices when the preview is discarded (knots cleared,
   // e.g., after Escape or finalization).
-  const prevKnotsLenRef = useRef(splineKnots.length);
+  const prevPreviewLenRef = useRef(0);
   useEffect(() => {
-    const prev = prevKnotsLenRef.current;
-    prevKnotsLenRef.current = splineKnots.length;
-    // A preview was showing (≥2 knots) and now the knots are gone
-    if (prev >= 2 && splineKnots.length < 2) {
+    const previewLen =
+      splineKnots.length >= 1 && cursorPreviewPos
+        ? splineKnots.length + 1
+        : splineKnots.length;
+    const prev = prevPreviewLenRef.current;
+    prevPreviewLenRef.current = previewLen;
+    // A preview was showing (≥2) and now there's nothing left to preview
+    if (prev >= 2 && previewLen < 2) {
       onPreviewEnd();
     }
-  }, [splineKnots.length, onPreviewEnd]);
+  }, [splineKnots, cursorPreviewPos, onPreviewEnd]);
 }
