@@ -4,15 +4,19 @@ use quick_xml::events::{BytesStart, Event};
 use super::super::OpenDriveError;
 use super::geometry::{parse_elevation_profile, parse_plan_view};
 use super::lane::parse_lanes;
-use super::signal::{parse_objects, parse_signals};
+use super::signal::{parse_objects, parse_signals, ObjectRef};
 use super::structure::{
     parse_bridge, parse_bridge_empty, parse_lateral_profile, parse_tunnel, parse_tunnel_empty,
 };
 use super::utils::{attr_str, parse_f64, skip_element};
 use crate::model::*;
 
-pub(super) fn parse_road(start: &BytesStart, reader: &mut Reader<&[u8]>) -> Result<Road, OpenDriveError> {
+pub(super) fn parse_road(
+    start: &BytesStart,
+    reader: &mut Reader<&[u8]>,
+) -> Result<(Road, Vec<ObjectRef>), OpenDriveError> {
     let mut road = Road::new("", 0.0);
+    let mut pending_refs: Vec<ObjectRef> = Vec::new();
 
     for attr in start.attributes().flatten() {
         match attr.key.as_ref() {
@@ -42,7 +46,11 @@ pub(super) fn parse_road(start: &BytesStart, reader: &mut Reader<&[u8]>) -> Resu
                 b"bridge" => road.bridges.push(parse_bridge(e, reader)?),
                 b"tunnel" => road.tunnels.push(parse_tunnel(e, reader)?),
                 b"signals" => road.signals = parse_signals(reader)?,
-                b"objects" => road.objects = parse_objects(reader)?,
+                b"objects" => {
+                    let (objs, refs) = parse_objects(reader)?;
+                    road.objects = objs;
+                    pending_refs.extend(refs);
+                }
                 _ => skip_element(reader, e.name().as_ref())?,
             },
             Ok(Event::Empty(ref e)) => match e.name().as_ref() {
@@ -61,7 +69,7 @@ pub(super) fn parse_road(start: &BytesStart, reader: &mut Reader<&[u8]>) -> Resu
         }
     }
 
-    Ok(road)
+    Ok((road, pending_refs))
 }
 
 // ── Road Link ────────────────────────────────────────

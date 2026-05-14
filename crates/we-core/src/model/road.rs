@@ -411,6 +411,11 @@ pub struct RoadObject {
     pub position: Point3D,
     /// Heading offset relative to road direction (degrees, 0 = forward, 180 = backward).
     pub orientation: f64,
+    /// Object heading in radians relative to the road direction.
+    /// Used to interpret `cornerLocal` (u, v) geometry via rotation:
+    ///   ds = u·cos(hdg) − v·sin(hdg), dt = u·sin(hdg) + v·cos(hdg)
+    #[serde(default)]
+    pub hdg: f64,
     /// Object width (lateral extent in metres).
     pub width: f64,
     /// Object height (vertical extent in metres).
@@ -607,6 +612,7 @@ mod tests {
             name: "Guardrail".to_string(),
             position: Point3D::new(4.0, 5.0, 0.5),
             orientation: 180.0,
+            hdg: 0.0,
             width: 2.5,
             height: 1.2,
             length: 0.0,

@@ -681,12 +681,34 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
             continue;
         }
 
+        // Junction connector roads (junction != "-1") must not render crosswalk / stop-line
+        // objects that arrived via <objectReference> resolution.  Those copies are placed on
+        // connector roads solely to record which crossings are associated with which turn
+        // movements; the physical marking is defined once on the main approach road.
+        // Rendering the copies would:
+        //   (a) produce duplicate markings at the junction boundary, and
+        //   (b) use the connector road's tangent direction instead of the approach road's,
+        //       giving stripes that appear parallel to—rather than perpendicular to—the road.
+        let is_junction_connector =
+            matches!(&road.junction_id, Some(j) if j != "-1");
+
         let ref_pts = sample_road_reference_line(road, 1.0);
         if ref_pts.len() < 2 {
             continue;
         }
 
         for obj in &road.objects {
+            // Skip ground markings (crosswalk, stop lines, yield lines) on junction connectors.
+            if is_junction_connector {
+                match &obj.object_type {
+                    ObjectType::Crosswalk
+                    | ObjectType::StopLine
+                    | ObjectType::SlowDownToYieldLine
+                    | ObjectType::StopToYieldLine => continue,
+                    _ => {}
+                }
+            }
+
             let s = obj.position.x;
             let t = obj.position.y;
             let z_offset = obj.position.z as f32;
@@ -699,12 +721,41 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
 
             match &obj.object_type {
                 ObjectType::StopLine => {
-                    // White transverse bar 0.4m thick, width = obj.width or full lane width
-                    let bar_w = if obj.width > 0.0 { obj.width } else { 3.5 };
+                    // Determine bar width, lateral centre, and the corrected road-s position
+                    // from corner data if available.
+                    //
+                    // cornerLocal (u, v) is in the object's local frame (origin at obj s/t,
+                    // axes rotated by obj.hdg). Road-local conversion:
+                    //   ds (along-road) = u * cos(hdg) - v * sin(hdg)
+                    //   dt (lateral)    = u * sin(hdg) + v * cos(hdg)
+                    //
+                    // When the corner v-values are non-zero (e.g. road 82 stop line 22,
+                    // v ≈ 6.6 m with hdg ≈ π/2), the actual stop line is shifted ~6.6 m
+                    // along the road from obj.s. Ignoring ds causes a large positional error.
+                    let (bar_w, bar_t, stop_ref_pt, stop_z) = if obj.corners.len() >= 2 {
+                        let (cos_h, sin_h) = (obj.hdg.cos(), obj.hdg.sin());
+                        // Along-road offsets from each corner endpoint
+                        let ds0 = obj.corners[0].x * cos_h - obj.corners[0].y * sin_h;
+                        let ds1 = obj.corners[1].x * cos_h - obj.corners[1].y * sin_h;
+                        // Lateral offsets from each corner endpoint
+                        let dt0 = obj.corners[0].x * sin_h + obj.corners[0].y * cos_h;
+                        let dt1 = obj.corners[1].x * sin_h + obj.corners[1].y * cos_h;
+                        let w = (dt1 - dt0).abs();
+                        let center = t + (dt0 + dt1) / 2.0;
+                        // Actual road station of the bar midpoint (clamped to road extent)
+                        let actual_s = (s + (ds0 + ds1) / 2.0).clamp(0.0, road.length);
+                        let rp = road_point_at_s(&road.plan_view, actual_s).unwrap_or(ref_pt);
+                        let z = evaluate_elevation(&road.elevation_profile, actual_s) as f32
+                            + z_offset
+                            + 0.02;
+                        (if w > 0.01 { w } else { obj.width.max(3.5) }, center, rp, z)
+                    } else {
+                        (if obj.width > 0.0 { obj.width } else { 3.5 }, t, ref_pt, z_road)
+                    };
                     emit_transverse_bar(
-                        &ref_pt,
-                        t,
-                        z_road,
+                        &stop_ref_pt,
+                        bar_t,
+                        stop_z,
                         bar_w,
                         0.4,
                         [1.0, 1.0, 1.0, 1.0],
@@ -742,12 +793,14 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                 }
                 ObjectType::Crosswalk => {
                     if !obj.corners.is_empty() {
-                        // Corner-based zebra stripe generation
+                        // Corner-based zebra stripe generation with correct heading rotation.
                         emit_crosswalk_stripes(
                             &obj.corners,
                             &ref_pts,
                             &road.elevation_profile,
                             s,
+                            t,
+                            obj.hdg,
                             z_road,
                             &offset_point,
                             &mut all_floats,
@@ -1107,6 +1160,84 @@ mod tests {
         assert!(
             has_tip,
             "Tip should be at (11.5, 5.0); arrow should point east"
+        );
+    }
+
+    // ── StopLine position tests ───────────────────────────────────────────────
+
+    /// A minimal project JSON with one straight east-going road (hdg=0, length=20)
+    /// and one stop line object.
+    fn make_stop_line_project(obj_s: f64, hdg: f64, corners: &[(f64, f64)]) -> String {
+        let corners_json: String = corners
+            .iter()
+            .map(|(u, v)| format!(r#"{{"x":{u},"y":{v},"z":0.0,"id":null}}"#))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            r#"{{
+                "name": "",
+                "header": {{"rev_major":1,"rev_minor":0,"name":"","date":"",
+                            "north":0,"south":0,"east":0,"west":0,"geo_reference":null}},
+                "roads": [{{
+                    "id": "1", "name": "", "length": 20.0, "junction_id": null,
+                    "link": null,
+                    "plan_view": [{{"s":0,"x":0,"y":0,"hdg":0,"length":20.0,"geo_type":"Line"}}],
+                    "elevation_profile": [{{"s":0,"a":0,"b":0,"c":0,"d":0}}],
+                    "lane_sections": [],
+                    "objects": [{{
+                        "id":"1","object_type":"StopLine","name":"Stop Line",
+                        "position":{{"x":{obj_s},"y":0.0,"z":0.0,"id":null}},
+                        "orientation":0.0,"hdg":{hdg},
+                        "width":0.0,"height":0.0,"length":0.0,
+                        "corners":[{corners_json}],
+                        "validity":null
+                    }}]
+                }}],
+                "junctions": []
+            }}"#
+        )
+    }
+
+    /// Stop line whose cornerLocal have v≈0 (like road 4 stop line 16).
+    /// ds = u·cos(π/2) − v·sin(π/2) ≈ 0 → actual_s ≈ obj.s = 10.
+    /// Vertices should be clustered near x=10.
+    #[test]
+    fn test_stop_line_zero_v_corners_uses_object_s() {
+        let json = make_stop_line_project(
+            10.0,
+            std::f64::consts::FRAC_PI_2,
+            &[(0.0, 0.0), (-3.5, 0.0)],
+        );
+        let verts = generate_object_vertices(&json).unwrap();
+        assert!(!verts.is_empty(), "Expected vertices for stop line");
+        let x_avg = verts.chunks(7).map(|v| v[0]).sum::<f32>() / (verts.len() / 7) as f32;
+        assert!(
+            (x_avg - 10.0).abs() < 0.3,
+            "Stop line (v≈0) should render at x≈10 (obj.s), got x_avg={x_avg}"
+        );
+    }
+
+    /// Stop line whose cornerLocal have v≠0 (like road 82 stop line 22).
+    /// With hdg=π/2: ds = u·cos(π/2) − v·sin(π/2) ≈ −v = −3.5
+    /// → actual_s = 10.0 − 3.5 = 6.5.
+    /// WITHOUT the fix the bar would be at x≈10; WITH the fix it should be at x≈6.5.
+    #[test]
+    fn test_stop_line_nonzero_v_corners_uses_corrected_s() {
+        let json = make_stop_line_project(
+            10.0,
+            std::f64::consts::FRAC_PI_2,
+            &[(0.0, 3.5), (7.0, 3.5)],
+        );
+        let verts = generate_object_vertices(&json).unwrap();
+        assert!(!verts.is_empty(), "Expected vertices for stop line");
+        let x_avg = verts.chunks(7).map(|v| v[0]).sum::<f32>() / (verts.len() / 7) as f32;
+        assert!(
+            (x_avg - 6.5).abs() < 0.3,
+            "Stop line (v≠0, ds≈-3.5) should render at x≈6.5 (corrected s), got x_avg={x_avg}"
+        );
+        assert!(
+            (x_avg - 10.0).abs() > 1.0,
+            "Stop line should NOT remain at obj.s=10, got x_avg={x_avg}"
         );
     }
 

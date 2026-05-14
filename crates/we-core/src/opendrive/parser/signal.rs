@@ -105,11 +105,30 @@ fn parse_signal_elem_attrs(e: &BytesStart) -> Result<Signal, OpenDriveError> {
 
 // ── Objects ──────────────────────────────────────────
 
-/// Parse a `<objects>` block and return all contained road objects.
+/// A pending `<objectReference>` found inside an `<objects>` block.
+///
+/// These are resolved after all roads have been parsed, in the main `parse()` function.
+pub(super) struct ObjectRef {
+    /// The id of the referenced `<object>` or `<roadObject>` element (on any road).
+    pub id: String,
+    /// Road-station position on the *referencing* road.
+    pub s: f64,
+    /// Lateral offset on the *referencing* road.
+    pub t: f64,
+    pub z_offset: f64,
+}
+
+/// Parse a `<objects>` block.
+///
+/// Returns `(objects, pending_refs)` where `pending_refs` are `<objectReference>` entries
+/// that must be resolved after all roads are parsed (they reference objects on other roads).
 ///
 /// Accepts both `<roadObject>` (OpenDRIVE 1.6+) and `<object>` (older/RoadRunner convention).
-pub(super) fn parse_objects(reader: &mut Reader<&[u8]>) -> Result<Vec<RoadObject>, OpenDriveError> {
+pub(super) fn parse_objects(
+    reader: &mut Reader<&[u8]>,
+) -> Result<(Vec<RoadObject>, Vec<ObjectRef>), OpenDriveError> {
     let mut objects = Vec::new();
+    let mut pending_refs = Vec::new();
 
     loop {
         match reader.read_event() {
@@ -123,6 +142,24 @@ pub(super) fn parse_objects(reader: &mut Reader<&[u8]>) -> Result<Vec<RoadObject
             {
                 objects.push(parse_road_object_attrs(e)?);
             }
+            Ok(Event::Empty(ref e)) if e.name().as_ref() == b"objectReference" => {
+                let mut id = String::new();
+                let mut s = 0.0f64;
+                let mut t = 0.0f64;
+                let mut z_offset = 0.0f64;
+                for attr in e.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"id" => id = attr_str(&attr)?,
+                        b"s" => s = parse_f64(&attr)?,
+                        b"t" => t = parse_f64(&attr)?,
+                        b"zOffset" => z_offset = parse_f64(&attr)?,
+                        _ => {}
+                    }
+                }
+                if !id.is_empty() {
+                    pending_refs.push(ObjectRef { id, s, t, z_offset });
+                }
+            }
             Ok(Event::End(ref e)) if e.name().as_ref() == b"objects" => break,
             Ok(Event::Eof) => {
                 return Err(OpenDriveError::InvalidStructure(
@@ -134,7 +171,7 @@ pub(super) fn parse_objects(reader: &mut Reader<&[u8]>) -> Result<Vec<RoadObject
         }
     }
 
-    Ok(objects)
+    Ok((objects, pending_refs))
 }
 
 /// Parse a `<roadObject …>…</roadObject>` or `<object …>…</object>` element.
@@ -221,6 +258,7 @@ fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError>
         name: String::new(),
         position: Point3D::new(0.0, 0.0, 0.0),
         orientation: 0.0,
+        hdg: 0.0,
         width: 0.0,
         height: 0.0,
         length: 0.0,
@@ -244,10 +282,10 @@ fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError>
                     _ => 0.0,
                 };
             }
+            b"hdg" => obj.hdg = parse_f64(&attr)?,
             b"width" => obj.width = parse_f64(&attr)?,
             b"height" => obj.height = parse_f64(&attr)?,
             b"length" => obj.length = parse_f64(&attr)?,
-            // hdg, pitch, roll — not stored in current model but accepted
             _ => {}
         }
     }
@@ -256,28 +294,28 @@ fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError>
 }
 
 fn parse_object_type(s: &str) -> ObjectType {
-    match s {
+    match s.to_lowercase().as_str() {
         "barrier" => ObjectType::Barrier,
-        "guardrail" | "Guardrail" | "RoadGuardrail" => ObjectType::Guardrail,
+        "guardrail" | "roadguardrail" => ObjectType::Guardrail,
         "sign" | "signal" => ObjectType::Sign,
-        "curb" | "Curb" => ObjectType::Curb,
-        "wall" | "Wall" => ObjectType::Wall,
-        "pole" | "pillar" | "Pillar" => ObjectType::Pillar,
-        "trafficCone" | "cone" | "TrafficCone" => ObjectType::TrafficCone,
-        "parkingSpace" | "ParkingSpace" | "SlotSpace" => ObjectType::ParkingSpace,
-        "crosswalk" | "Crosswalk" | "ZebraStripsArea" | "zebra" => ObjectType::Crosswalk,
-        "stopLine" | "StopLine" => ObjectType::StopLine,
-        "crossHatchArea" | "CrossHatchArea" | "SimpleCrossHatch" => ObjectType::CrossHatchArea,
-        "wovenArea" | "WovenArea" => ObjectType::WovenArea,
-        "forwardWaitingArea" | "ForwardWaitingArea" => ObjectType::ForwardWaitingArea,
-        "turnLeftWaitingArea" | "TurnLeftWaitingArea" => ObjectType::TurnLeftWaitingArea,
-        "slowDownToYieldLine" | "SlowDownToYieldLine" => ObjectType::SlowDownToYieldLine,
-        "stopToYieldLine" | "StopToYieldLine" => ObjectType::StopToYieldLine,
-        "simpleSignalPole" | "SimpleSignalPole" => ObjectType::SimpleSignalPole,
-        "trafficLightPole" | "TrafficLightPole" => ObjectType::TrafficLightPole,
-        "streetLightPole" | "StreetLightPole" => ObjectType::StreetLightPole,
-        "signGantry" | "SignGantry" => ObjectType::SignGantry,
-        "lTypeSignalPole" | "LTypeSignalPole" => ObjectType::LTypeSignalPole,
-        _ => ObjectType::Custom(s.to_string()),
+        "curb" => ObjectType::Curb,
+        "wall" => ObjectType::Wall,
+        "pole" | "pillar" => ObjectType::Pillar,
+        "trafficcone" | "cone" => ObjectType::TrafficCone,
+        "parkingspace" | "slotspace" => ObjectType::ParkingSpace,
+        "crosswalk" | "zebrastripsarea" | "zebra" => ObjectType::Crosswalk,
+        "stopline" => ObjectType::StopLine,
+        "crosshatcharea" | "simplecrosshatch" => ObjectType::CrossHatchArea,
+        "wovenarea" => ObjectType::WovenArea,
+        "forwardwaitingarea" => ObjectType::ForwardWaitingArea,
+        "turnleftwaitingarea" => ObjectType::TurnLeftWaitingArea,
+        "slowdowntoyieldline" => ObjectType::SlowDownToYieldLine,
+        "stoptoyieldline" => ObjectType::StopToYieldLine,
+        "simplesignalpole" => ObjectType::SimpleSignalPole,
+        "trafficlightpole" => ObjectType::TrafficLightPole,
+        "streetlightpole" => ObjectType::StreetLightPole,
+        "signgantry" => ObjectType::SignGantry,
+        "ltypesignalpole" => ObjectType::LTypeSignalPole,
+        _ => ObjectType::Custom(s.to_string()), // preserve original casing in fallback
     }
 }

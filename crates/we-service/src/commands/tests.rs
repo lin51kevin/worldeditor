@@ -741,6 +741,7 @@ fn make_road_object(id: &str) -> RoadObject {
         name: "Test Sign".into(),
         position: Point3D::new(10.0, 5.0, 0.0),
         orientation: 0.0,
+        hdg: 0.0,
         width: 1.0,
         height: 2.0,
         length: 0.0,
