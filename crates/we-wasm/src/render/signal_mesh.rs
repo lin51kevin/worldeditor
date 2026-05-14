@@ -394,18 +394,16 @@ pub(super) fn emit_crosswalk_stripes(
 
 /// Emit a polygon outline for area objects (parking space, cross-hatch, etc.)
 ///
-/// Uses the same tangent-plane transform as [`emit_crosswalk_stripes`]: a single
-/// reference-point lookup at `obj_s` avoids `abs_s` overflow and correctly handles
-/// object headings other than 0.
+/// Uses a single reference-point lookup at `obj_s` to form the tangent-plane origin,
+/// then maps each cornerLocal `(u, v)` directly into world space:
+///   `wx = Ox + u·cos(θ) − v·sin(θ)`
+///   `wy = Oy + u·sin(θ) + v·cos(θ)`
 ///
-/// Corner coordinates `(u, v)` are in the object's local frame (origin at `obj_s`/`obj_t`,
-/// axes rotated by `obj_hdg`).  Road-frame conversion:
-///   `alpha = u·cos(obj_hdg) − v·sin(obj_hdg)`  (along-road)
-///   `beta  = u·sin(obj_hdg) + v·cos(obj_hdg)`  (lateral from obj_t)
-///
-/// World coordinates via tangent-plane:
-///   `wx = Ox + alpha·cos(θ) − beta·sin(θ)`
-///   `wy = Oy + alpha·sin(θ) + beta·cos(θ)`
+/// `u` is treated as the along-road (tangent) offset and `v` as the lateral
+/// (bitangent) offset **without applying the object's `hdg` rotation**.
+/// Real-world xodr generators (e.g., the tools that produce parkinglot.xodr)
+/// store cornerLocal coordinates already in road-frame, so adjacent parking spaces
+/// have touching (non-overlapping) boundaries when this direct mapping is used.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn emit_polygon_outline(
     corners: &[we_core::model::Point3D],
@@ -413,7 +411,6 @@ pub(super) fn emit_polygon_outline(
     elevations: &[we_core::model::Elevation],
     obj_s: f64,
     obj_t: f64,
-    obj_hdg: f64,
     z_base: f32,
     bar_thickness: f64,
     color: [f32; 4],
@@ -441,16 +438,14 @@ pub(super) fn emit_polygon_outline(
     let z_base_eval = evaluate_elevation(elevations, ref_pt.s) as f32 + 0.02;
     let theta = ref_pt.hdg;
     let (cos_t, sin_t) = (theta.cos(), theta.sin());
-    let (cos_h, sin_h) = (obj_hdg.cos(), obj_hdg.sin());
 
-    // Transform each cornerLocal (u, v) → world (wx, wy).
+    // Map each cornerLocal (u, v) → world (wx, wy) using the road tangent-plane.
+    // u = along-road offset, v = lateral offset; no obj_hdg rotation applied.
     let world_corners: Vec<(f64, f64, f32)> = corners
         .iter()
         .map(|c| {
-            let alpha = c.x * cos_h - c.y * sin_h;
-            let beta  = c.x * sin_h + c.y * cos_h;
-            let wx = ox + alpha * cos_t - beta * sin_t;
-            let wy = oy + alpha * sin_t + beta * cos_t;
+            let wx = ox + c.x * cos_t - c.y * sin_t;
+            let wy = oy + c.x * sin_t + c.y * cos_t;
             let z  = z_base_eval + c.z as f32;
             (wx, wy, z)
         })
@@ -626,5 +621,82 @@ mod tests {
         let num_stripes = out.len() / 42;
         assert!(num_stripes >= 9 && num_stripes <= 11,
             "Expected ~10 stripes for 10.7 m lateral range, got {num_stripes}");
+    }
+
+    /// Verify that adjacent parking spaces with hdg=π/2 have touching (non-overlapping) edges.
+    ///
+    /// With the direct u/v mapping (no obj_hdg rotation), spaces at s=0.81 and s=3.14
+    /// with corners u∈[-1.12, 1.15] touch exactly at their shared boundary.
+    #[test]
+    fn test_polygon_outline_adjacent_spaces_touch_not_overlap() {
+        // Use finer ref_pts (0.1m steps) to minimize quantization error.
+        let ref_pts: Vec<RefLinePoint> = (0..=200)
+            .map(|i| {
+                let s = i as f64 * 0.1;
+                RefLinePoint { s, x: s, y: 0.0, hdg: 0.0 }
+            })
+            .collect();
+        let elevations: Vec<Elevation> = vec![];
+        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+
+        // Space 50: s=0.81, u∈[-1.12, 1.15]  (no-rotation → x_max ≈ 0.81+1.15=1.96)
+        let corners_50 = vec![
+            Point3D { x: -1.12, y: -2.77, z: 0.0, id: None },
+            Point3D { x: -1.12, y:  0.68, z: 0.0, id: None },
+            Point3D { x:  1.15, y:  0.68, z: 0.0, id: None },
+            Point3D { x:  1.15, y: -2.77, z: 0.0, id: None },
+            Point3D { x: -1.12, y: -2.77, z: 0.0, id: None },
+        ];
+
+        // Space 51: s=3.14, u∈[-1.18, 1.20]  (no-rotation → x_min ≈ 3.14-1.18=1.96)
+        let corners_51 = vec![
+            Point3D { x: -1.18, y: -2.78, z: 0.0, id: None },
+            Point3D { x: -1.18, y:  0.71, z: 0.0, id: None },
+            Point3D { x:  1.20, y:  0.71, z: 0.0, id: None },
+            Point3D { x:  1.20, y: -2.78, z: 0.0, id: None },
+            Point3D { x: -1.18, y: -2.78, z: 0.0, id: None },
+        ];
+
+        let mut out50 = Vec::new();
+        emit_polygon_outline(&corners_50, &ref_pts, &elevations, 0.81, 0.0, 0.0, 0.10,
+            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out50);
+        let mut out51 = Vec::new();
+        emit_polygon_outline(&corners_51, &ref_pts, &elevations, 3.14, 0.0, 0.0, 0.10,
+            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out51);
+
+        assert!(!out50.is_empty(), "Space 50 should produce outline vertices");
+        assert!(!out51.is_empty(), "Space 51 should produce outline vertices");
+
+        // For road theta=0: wx = ox + u.  Nominal touch point = 1.96m.
+        // bar_thickness=0.10 (hw=0.05) means edges extend 0.05m beyond the polygon line.
+        // Space 50: x_max vertex ≈ 0.81+1.15+0.05 = 2.01
+        // Space 51: x_min vertex ≈ 3.14-1.18-0.05 = 1.91
+        // These overlap only by bar_thickness (0.10m), which is acceptable line rendering.
+        // The GEOMETRIC centres must be very close: |x_max_geom_50 - x_min_geom_51| < 0.15
+        //
+        // If obj_hdg=π/2 rotation were (wrongly) applied:
+        //   space 50 x_max would be ox - v_min = 0.81 + 2.77 ≈ 3.58  ← much larger
+        // So we verify x_max_50 (including bar) < 2.15 to rule out the wrong formula.
+        let x_max_50 = out50.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
+        let x_min_51 = out51.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
+
+        // Space 50 east edge (no-rotation): ≈ 0.81+1.15+0.05 ≈ 2.01; should be < 2.20
+        assert!(
+            x_max_50 < 2.20,
+            "Space 50 x_max={x_max_50:.3}: expected ~2.01 (no-rotation), got too-large value indicating wrong hdg rotation"
+        );
+
+        // Space 51 west edge (no-rotation): ≈ 3.14-1.18-0.05 ≈ 1.91; should be > 1.70
+        assert!(
+            x_min_51 > 1.70,
+            "Space 51 x_min={x_min_51:.3}: expected ~1.91 (no-rotation), got too-small value indicating wrong hdg rotation"
+        );
+
+        // Spaces are at most one bar-thickness apart (they nearly touch at x≈1.96).
+        let overlap = x_max_50 - x_min_51;
+        assert!(
+            overlap < 0.15,
+            "Spaces overlap by {overlap:.3}m > bar_thickness; no-rotation should produce touching spaces"
+        );
     }
 }
