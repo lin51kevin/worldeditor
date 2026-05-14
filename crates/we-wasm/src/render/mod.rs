@@ -12,7 +12,8 @@ use marking_mesh::emit_road_mark;
 use road_mesh::{gen_default_ribbon, gen_lane_strip};
 use signal_mesh::{
     arrow_triangles, emit_crosswalk_stripes, emit_longitudinal_strip, emit_polygon_outline,
-    emit_rect_outline, emit_square_marker, emit_transverse_bar, sign_marker_color,
+    emit_polygon_outline_road_corners, emit_rect_outline, emit_square_marker,
+    emit_transverse_bar, sign_marker_color,
 };
 // ── Geometry helpers (no wgpu dependency) ────────────────────────────────────
 
@@ -664,7 +665,7 @@ pub fn generate_signal_paint_vertices(
 #[wasm_bindgen]
 pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError> {
     use we_core::geometry::eval::{evaluate_elevation, offset_point, sample_road_reference_line};
-    use we_core::model::{ObjectType, Project};
+    use we_core::model::{CornerType, ObjectType, Project};
 
     let project: Project =
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
@@ -684,7 +685,7 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
         //   (a) produce duplicate markings at the junction boundary, and
         //   (b) use the connector road's tangent direction instead of the approach road's,
         //       giving stripes that appear parallel to—rather than perpendicular to—the road.
-        let is_junction_connector =
+        let _is_junction_connector =
             matches!(&road.junction_id, Some(j) if j != "-1");
 
         let ref_pts = sample_road_reference_line(road, 1.0);
@@ -701,19 +702,12 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
             // at an incorrect world position, producing ghost stalls tens of metres away.
             // The original objects always render on their own roads, so skipping copies
             // loses no visual information.
+            //
+            // This check also covers ground markings (crosswalks, stop lines) on junction
+            // connectors: those typically arrive via <objectReference> resolution only.
+            // Non-objectReference crosswalks on connectors are intentional and should render.
             if obj.from_object_ref {
                 continue;
-            }
-
-            // Skip ground markings (crosswalk, stop lines, yield lines) on junction connectors.
-            if is_junction_connector {
-                match &obj.object_type {
-                    ObjectType::Crosswalk
-                    | ObjectType::StopLine
-                    | ObjectType::SlowDownToYieldLine
-                    | ObjectType::StopToYieldLine => continue,
-                    _ => {}
-                }
             }
 
             let s = obj.position.x;
@@ -800,18 +794,36 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                 }
                 ObjectType::Crosswalk => {
                     if !obj.corners.is_empty() {
-                        // Corner-based zebra stripe generation with correct heading rotation.
-                        emit_crosswalk_stripes(
-                            &obj.corners,
-                            &ref_pts,
-                            &road.elevation_profile,
-                            s,
-                            t,
-                            obj.hdg,
-                            z_road,
-                            &offset_point,
-                            &mut all_floats,
-                        );
+                        match obj.corner_type {
+                            CornerType::Road => {
+                                // cornerRoad: render as polygon outline (stripe fill not supported
+                                // for absolute coordinates — would need per-corner interpolation).
+                                emit_polygon_outline_road_corners(
+                                    &obj.corners,
+                                    &road.plan_view,
+                                    &road.elevation_profile,
+                                    0.3,
+                                    [1.0, 1.0, 1.0, 1.0],
+                                    &offset_point,
+                                    &road_point_at_s,
+                                    &mut all_floats,
+                                );
+                            }
+                            CornerType::Local => {
+                                // Corner-based zebra stripe generation with correct heading rotation.
+                                emit_crosswalk_stripes(
+                                    &obj.corners,
+                                    &ref_pt,
+                                    &road.elevation_profile,
+                                    s,
+                                    t,
+                                    obj.hdg,
+                                    z_road,
+                                    &offset_point,
+                                    &mut all_floats,
+                                );
+                            }
+                        }
                     } else {
                         // Fallback: navy rectangle outline
                         let len = if obj.length > 0.0 { obj.length } else { 4.0 };
@@ -824,6 +836,7 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                             len,
                             0.3,
                             [0.000, 0.000, 0.502, 1.0], // navy
+                            obj.hdg,
                             &offset_point,
                             &mut all_floats,
                         );
@@ -832,19 +845,35 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                 ObjectType::ParkingSpace => {
                     // Olive-green boundary
                     if !obj.corners.is_empty() {
-                        emit_polygon_outline(
-                            &obj.corners,
-                            &ref_pts,
-                            &road.elevation_profile,
-                            s,
-                            t,
-                            obj.hdg,
-                            z_road,
-                            0.15,
-                            [0.424, 0.549, 0.278, 1.0], // (108,140,71)
-                            &offset_point,
-                            &mut all_floats,
-                        );
+                        match obj.corner_type {
+                            CornerType::Road => {
+                                emit_polygon_outline_road_corners(
+                                    &obj.corners,
+                                    &road.plan_view,
+                                    &road.elevation_profile,
+                                    0.15,
+                                    [0.424, 0.549, 0.278, 1.0],
+                                    &offset_point,
+                                    &road_point_at_s,
+                                    &mut all_floats,
+                                );
+                            }
+                            CornerType::Local => {
+                                emit_polygon_outline(
+                                    &obj.corners,
+                                    &ref_pt,
+                                    &road.elevation_profile,
+                                    s,
+                                    t,
+                                    obj.hdg,
+                                    z_road,
+                                    0.15,
+                                    [0.424, 0.549, 0.278, 1.0],
+                                    &offset_point,
+                                    &mut all_floats,
+                                );
+                            }
+                        }
                     } else {
                         let len = if obj.length > 0.0 { obj.length } else { 5.0 };
                         let wid = if obj.width > 0.0 { obj.width } else { 2.5 };
@@ -856,6 +885,7 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                             len,
                             0.12,
                             [0.424, 0.549, 0.278, 1.0],
+                            obj.hdg,
                             &offset_point,
                             &mut all_floats,
                         );
@@ -864,19 +894,35 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                 ObjectType::CrossHatchArea => {
                     // Orange boundary
                     if !obj.corners.is_empty() {
-                        emit_polygon_outline(
-                            &obj.corners,
-                            &ref_pts,
-                            &road.elevation_profile,
-                            s,
-                            t,
-                            obj.hdg,
-                            z_road,
-                            0.15,
-                            [0.965, 0.651, 0.137, 1.0], // (246,166,35)
-                            &offset_point,
-                            &mut all_floats,
-                        );
+                        match obj.corner_type {
+                            CornerType::Road => {
+                                emit_polygon_outline_road_corners(
+                                    &obj.corners,
+                                    &road.plan_view,
+                                    &road.elevation_profile,
+                                    0.15,
+                                    [0.965, 0.651, 0.137, 1.0],
+                                    &offset_point,
+                                    &road_point_at_s,
+                                    &mut all_floats,
+                                );
+                            }
+                            CornerType::Local => {
+                                emit_polygon_outline(
+                                    &obj.corners,
+                                    &ref_pt,
+                                    &road.elevation_profile,
+                                    s,
+                                    t,
+                                    obj.hdg,
+                                    z_road,
+                                    0.15,
+                                    [0.965, 0.651, 0.137, 1.0],
+                                    &offset_point,
+                                    &mut all_floats,
+                                );
+                            }
+                        }
                     } else {
                         let len = if obj.length > 0.0 { obj.length } else { 5.0 };
                         let wid = if obj.width > 0.0 { obj.width } else { 3.0 };
@@ -888,6 +934,7 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                             len,
                             0.15,
                             [0.965, 0.651, 0.137, 1.0],
+                            obj.hdg,
                             &offset_point,
                             &mut all_floats,
                         );
@@ -897,19 +944,35 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                     // Hot-pink boundary
                     let color = [1.000, 0.051, 0.651, 1.0]; // (255,13,166)
                     if !obj.corners.is_empty() {
-                        emit_polygon_outline(
-                            &obj.corners,
-                            &ref_pts,
-                            &road.elevation_profile,
-                            s,
-                            t,
-                            obj.hdg,
-                            z_road,
-                            0.15,
-                            color,
-                            &offset_point,
-                            &mut all_floats,
-                        );
+                        match obj.corner_type {
+                            CornerType::Road => {
+                                emit_polygon_outline_road_corners(
+                                    &obj.corners,
+                                    &road.plan_view,
+                                    &road.elevation_profile,
+                                    0.15,
+                                    color,
+                                    &offset_point,
+                                    &road_point_at_s,
+                                    &mut all_floats,
+                                );
+                            }
+                            CornerType::Local => {
+                                emit_polygon_outline(
+                                    &obj.corners,
+                                    &ref_pt,
+                                    &road.elevation_profile,
+                                    s,
+                                    t,
+                                    obj.hdg,
+                                    z_road,
+                                    0.15,
+                                    color,
+                                    &offset_point,
+                                    &mut all_floats,
+                                );
+                            }
+                        }
                     } else {
                         let len = if obj.length > 0.0 { obj.length } else { 5.0 };
                         let wid = if obj.width > 0.0 { obj.width } else { 3.5 };
@@ -921,6 +984,7 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                             len,
                             0.15,
                             color,
+                            obj.hdg,
                             &offset_point,
                             &mut all_floats,
                         );
@@ -938,6 +1002,7 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                         len,
                         0.15,
                         [1.0, 1.0, 1.0, 0.9],
+                        obj.hdg,
                         &offset_point,
                         &mut all_floats,
                     );
@@ -1448,6 +1513,90 @@ mod tests {
             has_tip,
             "hOffset=π right-lane arrow tip should be at (8.5, -3.0) [west/-s direction]"
         );
+    }
+
+    /// Verify that ALL 16 ParkingSpace objects in parkinglot.xodr produce vertices.
+    /// This catches cases where parking stalls on certain roads (e.g. vertical Road 16,
+    /// west-going Road 19) might fail to render due to coordinate transform bugs.
+    #[test]
+    fn test_parkinglot_all_16_parking_stalls_produce_vertices() {
+        let xodr = std::fs::read_to_string("../../tests/fixtures/xodr/parkinglot.xodr")
+            .or_else(|_| std::fs::read_to_string("tests/fixtures/xodr/parkinglot.xodr"));
+        let Ok(xodr) = xodr else { return };
+
+        let project: we_core::model::Project =
+            we_core::opendrive::parse_xodr(&xodr).expect("parse parkinglot.xodr");
+        let json = serde_json::to_string(&project).expect("serialize project");
+
+        let verts = generate_object_vertices(&json).expect("generate_object_vertices");
+        assert!(!verts.is_empty(), "Expected non-empty object vertices");
+
+        // Each parking stall has 5 corners in the xodr, but the last duplicates the
+        // first (closing vertex). After dedup: 4 unique corners → 4 edges → 4×6=24
+        // triangle vertices → 24×7=168 floats per stall. 16 stalls → at least 2688 floats.
+        let per_stall_floats = 4 * 6 * 7; // 168
+        let expected_min = 16 * per_stall_floats;
+        assert!(
+            verts.len() >= expected_min,
+            "Expected >= {expected_min} floats for 16 stalls, got {}",
+            verts.len()
+        );
+
+        // Extract bounding box of all vertices to verify spatial extent
+        let xs: Vec<f32> = verts.chunks(7).map(|v| v[0]).collect();
+        let ys: Vec<f32> = verts.chunks(7).map(|v| v[1]).collect();
+        let x_min = xs.iter().cloned().fold(f32::INFINITY, f32::min);
+        let x_max = xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        let y_min = ys.iter().cloned().fold(f32::INFINITY, f32::min);
+        let y_max = ys.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+
+        // Parking objects are on roads 10, 13, 16, 19:
+        //   Road 10: vertical, hdg≈4.7, parking at y≈[2.4, 5]
+        //   Road 13: horizontal, hdg≈3.14, parking at y≈[10, 12]
+        //   Road 16: vertical, hdg≈4.7, parking at x≈[-15, -9]
+        //   Road 19: horizontal west-going (hdg≈π), t=-6.3→north, parking at y≈[2.5, 5]
+        // All stalls are in the y>0 range (no parking at y<0)
+        assert!(x_min < -9.0, "Expected parking stalls at x<-9 (Road 16), got x_min={x_min}");
+        assert!(x_max > 5.0, "Expected parking stalls at x>5 (Road 13), got x_max={x_max}");
+        assert!(y_min < 3.0, "Expected parking stalls at y<3 (Road 10/19), got y_min={y_min}");
+        assert!(y_max > 10.0, "Expected parking stalls at y>10 (Road 13), got y_max={y_max}");
+
+        println!(
+            "All parking stalls render: {} vertices, bbox x=[{x_min:.1}, {x_max:.1}] y=[{y_min:.1}, {y_max:.1}]",
+            verts.len() / 7
+        );
+    }
+
+    /// Verify road surface vertices cover the full spatial extent of parkinglot.xodr,
+    /// including the bottom-left area (Roads 22, 25, 44, 47).
+    #[test]
+    fn test_parkinglot_road_vertices_cover_all_roads() {
+        let xodr = std::fs::read_to_string("../../tests/fixtures/xodr/parkinglot.xodr")
+            .or_else(|_| std::fs::read_to_string("tests/fixtures/xodr/parkinglot.xodr"));
+        let Ok(xodr) = xodr else { return };
+
+        let project: we_core::model::Project =
+            we_core::opendrive::parse_xodr(&xodr).expect("parse parkinglot.xodr");
+        let json = serde_json::to_string(&project).expect("serialize project");
+
+        let verts = generate_road_vertices(&json, 1.0, "byLaneType").expect("generate_road_vertices");
+        assert!(!verts.is_empty(), "Expected non-empty road vertices");
+
+        let xs: Vec<f32> = verts.chunks(7).map(|v| v[0]).collect();
+        let ys: Vec<f32> = verts.chunks(7).map(|v| v[1]).collect();
+        let x_min = xs.iter().cloned().fold(f32::INFINITY, f32::min);
+        let x_max = xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        let y_min = ys.iter().cloned().fold(f32::INFINITY, f32::min);
+        let y_max = ys.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+
+        // Road bounding boxes from geometry analysis:
+        //   Road 25: x=[-61.5, -39.7], y=[-12.2, 22.2]  (the farthest left/bottom road)
+        //   Road 1:  x=[54.6, 75.3], y=[-18.2, 18.0]    (the farthest right road)
+        // Overall: x∈[-61.5, 75.3], y∈[-18.2, 22.2]
+        assert!(x_min < -55.0, "Expected road surface reaching x<-55 (Road 25), got x_min={x_min}");
+        assert!(x_max > 70.0, "Expected road surface reaching x>70 (Road 1), got x_max={x_max}");
+        assert!(y_min < -15.0, "Expected road surface reaching y<-15 (Road 1), got y_min={y_min}");
+        assert!(y_max > 20.0, "Expected road surface reaching y>20 (Road 25), got y_max={y_max}");
     }
 
     /// Left-lane signal (t > 0) with hOffset=-π (compliant XODR for reverse-facing)

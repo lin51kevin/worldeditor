@@ -233,6 +233,7 @@ pub fn generate_object_render_data(objects: &[RoadObject]) -> Vec<ColorVertex> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use we_core::model::CornerType;
 
     #[test]
     fn test_box_mesh_generation() {
@@ -257,10 +258,13 @@ mod tests {
             position: Point3D::new(0.0, 0.0, 0.0),
             orientation: 0.0,
             hdg: 0.0,
+            pitch: 0.0,
+            roll: 0.0,
             width: 1.0,
             height: 1.0,
             length: 0.0,
             corners: vec![],
+            corner_type: CornerType::Local,
             validity: None,
             from_object_ref: false,
         }];
@@ -276,10 +280,13 @@ mod tests {
             position: Point3D::new(1.0, 2.0, 0.5),
             orientation: 0.0,
             hdg: 0.0,
+            pitch: 0.0,
+            roll: 0.0,
             width: 1.0,
             height: 1.0,
             length: 0.0,
             corners: vec![],
+            corner_type: CornerType::Local,
             validity: None,
             from_object_ref: false,
         }

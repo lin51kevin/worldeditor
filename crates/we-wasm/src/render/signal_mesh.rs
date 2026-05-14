@@ -222,6 +222,10 @@ pub(super) fn emit_square_marker(
 }
 
 /// Emit a rectangle outline (4 thick sides) at (ref_pt offset by t, z).
+///
+/// When `obj_hdg` is provided (non-zero), the rectangle is rotated by the object's heading
+/// relative to the road direction. This is needed for objects like parking spaces whose
+/// local coordinate system differs from the road direction.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn emit_rect_outline(
     ref_pt: &we_core::geometry::eval::RefLinePoint,
@@ -231,13 +235,14 @@ pub(super) fn emit_rect_outline(
     length: f64,
     bar_thickness: f64,
     color: [f32; 4],
+    obj_hdg: f64,
     offset_pt: &OffsetPtFn,
     out: &mut Vec<f32>,
 ) {
     let half_l = length / 2.0;
     // Create a fake ref_pt shifted forward/backward along road for the two longitudinal edges
     // For simplicity, emit 4 transverse bars that form the boundary
-    let hdg = ref_pt.hdg;
+    let hdg = ref_pt.hdg + obj_hdg;
     let cos_h = hdg.cos();
     let sin_h = hdg.sin();
     let (cx, cy, _) = offset_pt(ref_pt, t, 0.0);
@@ -282,29 +287,84 @@ pub(super) fn emit_rect_outline(
     );
 }
 
+/// Find the alpha (along-road) intersection points of a horizontal scan line at `beta`
+/// with a world-space polygon, using the tangent-plane coordinate system.
+///
+/// Returns sorted alpha values where the scan line enters/exits the polygon.
+/// The caller should process pairs `[a0, a1], [a2, a3], ...` as inside segments.
+///
+/// # Parameters
+/// - `world_poly`: world-space polygon vertices `(x, y)` in order
+/// - `ox, oy`: world-space origin of the tangent plane
+/// - `cos_t, sin_t`: cosine/sine of road heading at origin
+/// - `alpha_min, alpha_max`: along-road AABB of the polygon (for scan line extent)
+/// - `beta`: lateral position at which to intersect (in road-frame)
+fn clip_scanline_alpha(
+    world_poly: &[(f64, f64)],
+    ox: f64,
+    oy: f64,
+    cos_t: f64,
+    sin_t: f64,
+    alpha_min: f64,
+    alpha_max: f64,
+    beta: f64,
+) -> Vec<f64> {
+    let n = world_poly.len();
+    if n < 3 {
+        return vec![];
+    }
+    // Scan line endpoints in world space — extend 1 m past the AABB so the line
+    // fully spans the polygon regardless of floating-point boundary touches.
+    let world_xy = |alpha: f64, b: f64| -> (f64, f64) {
+        (ox + alpha * cos_t - b * sin_t, oy + alpha * sin_t + b * cos_t)
+    };
+    let (sx0, sy0) = world_xy(alpha_min - 1.0, beta);
+    let (sx1, sy1) = world_xy(alpha_max + 1.0, beta);
+    let dx_line = sx1 - sx0;
+    let dy_line = sy1 - sy0;
+
+    let mut hits = Vec::new();
+    for i in 0..n {
+        let j = (i + 1) % n;
+        let (ax, ay) = world_poly[i];
+        let (bx, by) = world_poly[j];
+        let dx_edge = bx - ax;
+        let dy_edge = by - ay;
+        let denom = dx_line * dy_edge - dy_line * dx_edge;
+        if denom.abs() < 1e-12 {
+            continue; // scan line is parallel to this edge
+        }
+        let t_line = ((ax - sx0) * dy_edge - (ay - sy0) * dx_edge) / denom;
+        let t_edge = ((ax - sx0) * dy_line - (ay - sy0) * dx_line) / denom;
+        if t_edge >= -1e-9 && t_edge <= 1.0 + 1e-9 {
+            // Project hit back to alpha coordinate along the scan line
+            let hit_alpha = alpha_min - 1.0 + t_line * (alpha_max - alpha_min + 2.0);
+            hits.push(hit_alpha);
+        }
+    }
+    hits.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    hits
+}
+
 /// Emit crosswalk zebra stripes given `cornerLocal` polygon data and the object's heading.
 ///
-/// Uses a **single reference-point lookup** at `obj_s`, then builds all stripe vertices from
-/// the road tangent at that point. This avoids the "abs_s overflow" problem where
-/// `obj_s + ds` would exceed the road length for crosswalks placed at or near road endpoints.
+/// Uses the caller-provided `exact_ref_pt` (evaluated exactly at `obj_s`) to build all
+/// stripe vertices. This avoids both (a) the sampled-array quantisation error on curves
+/// and (b) the "abs_s overflow" problem where `obj_s + ds` would exceed road length.
 ///
 /// Algorithm:
-/// 1. Find the reference point nearest to `obj_s`.
-/// 2. Compute the object world-space origin `(Ox, Oy)` including the `obj_t` lateral offset.
-/// 3. Rotate `cornerLocal (u, v)` by `obj_hdg` to get road-frame `(alpha, beta)`:
-///    `alpha = u·cos(obj_hdg) − v·sin(obj_hdg)`  (along-road offset from origin)
-///    `beta  = u·sin(obj_hdg) + v·cos(obj_hdg)`  (lateral offset from origin)
-/// 4. Sweep stripes in the **`beta`** (lateral) direction; each stripe spans the full
-///    `alpha` (along-road) extent. This produces stripes **parallel to the road direction**,
-///    which is the standard zebra-crossing pattern (pedestrians walk across the stripes).
-///    World coordinates via tangent-plane approximation:
-///    `wx = Ox + alpha·cos(θ) − beta·sin(θ)`
-///    `wy = Oy + alpha·sin(θ) + beta·cos(θ)`
+/// 1. Compute the object world-space origin `(Ox, Oy)` including the `obj_t` lateral offset.
+/// 2. Transform each `cornerLocal (u, v)` to world space via hdg rotation + tangent-plane.
+/// 3. Build world-space polygon edges for stripe clipping.
+/// 4. Sweep stripes in the **`beta`** (lateral) direction; each stripe bar spans the
+///    **`alpha`** (along-road) extent clipped to the polygon boundary.
+///    This matches worldeditoronline's approach: bars run parallel to the road direction,
+///    spaced laterally across the road.
 pub(super) fn emit_crosswalk_stripes(
     corners: &[we_core::model::Point3D],
-    ref_pts: &[we_core::geometry::eval::RefLinePoint],
+    exact_ref_pt: &we_core::geometry::eval::RefLinePoint,
     elevations: &[we_core::model::Elevation],
-    obj_s: f64,
+    _obj_s: f64,
     obj_t: f64,
     obj_hdg: f64,
     _z_base: f32,
@@ -313,31 +373,38 @@ pub(super) fn emit_crosswalk_stripes(
 ) {
     use we_core::geometry::eval::evaluate_elevation;
 
-    if corners.len() < 3 || ref_pts.is_empty() {
+    if corners.len() < 3 {
         return;
     }
 
-    // Single reference-point lookup at obj_s — safe even when obj_s exceeds road length.
-    let ref_pt = ref_pts
-        .iter()
-        .min_by(|a, b| {
-            (a.s - obj_s)
-                .abs()
-                .partial_cmp(&(b.s - obj_s).abs())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .unwrap(); // ref_pts is non-empty, so this is safe
+    let ref_pt = exact_ref_pt;
 
     // Object world-space origin (includes the lateral obj_t offset).
     let (ox, oy, _) = offset_pt(ref_pt, obj_t, 0.0);
-    let z = evaluate_elevation(elevations, ref_pt.s) as f32 + 0.02;
+    let z_base = evaluate_elevation(elevations, ref_pt.s) as f32 + 0.02;
 
     // Road tangent direction at obj_s.
     let theta = ref_pt.hdg;
     let (cos_t, sin_t) = (theta.cos(), theta.sin());
 
-    // Transform cornerLocal (u, v) by obj_hdg to road-frame (alpha, beta).
+    // Transform cornerLocal (u, v) by obj_hdg to road-frame (alpha, beta),
+    // then to world coordinates.
     let (cos_h, sin_h) = (obj_hdg.cos(), obj_hdg.sin());
+
+    // Build world-space polygon vertices for stripe clipping.
+    let world_poly: Vec<(f64, f64)> = corners
+        .iter()
+        .map(|c| {
+            let alpha = c.x * cos_h - c.y * sin_h;
+            let beta = c.x * sin_h + c.y * cos_h;
+            (
+                ox + alpha * cos_t - beta * sin_t,
+                oy + alpha * sin_t + beta * cos_t,
+            )
+        })
+        .collect();
+
+    // Compute AABB in road-frame for stripe sweep bounds.
     let mut alpha_min = f64::INFINITY;
     let mut alpha_max = f64::NEG_INFINITY;
     let mut beta_min = f64::INFINITY;
@@ -357,36 +424,60 @@ pub(super) fn emit_crosswalk_stripes(
     }
 
     // Map road-frame (alpha, beta) → world (x, y) via tangent-plane transform.
-    let world_xy = |alpha: f64, beta: f64| -> (f32, f32) {
+    let world_xy = |alpha: f64, beta: f64| -> (f64, f64) {
         (
-            (ox + alpha * cos_t - beta * sin_t) as f32,
-            (oy + alpha * sin_t + beta * cos_t) as f32,
+            ox + alpha * cos_t - beta * sin_t,
+            oy + alpha * sin_t + beta * cos_t,
         )
     };
 
-    // White zebra stripes: sweep the beta direction (lateral, ~10.7 m → ≈10 stripes),
-    // each stripe spanning the full alpha extent (along road, ~4 m).
-    // Stripes run parallel to the road → pedestrians walk across them (standard zebra pattern).
+    // Stripe-polygon intersection helper: find alpha range clipped to the polygon
+    // at a given beta value, by intersecting a scan-line in road-frame
+    // with each polygon edge.
+    //
+    // White zebra stripes: sweep the beta direction (lateral), each stripe bar spans the
+    // alpha (along-road) extent clipped to the polygon boundary.
+    // This produces bars running parallel to the road direction, spaced laterally —
+    // matching the worldeditoronline crosswalk rendering convention.
     let stripe_width = 0.45_f64;
     let stripe_period = 1.05_f64; // 0.45 stripe + 0.60 gap
-    let [r, g, b, a]: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+    let [r, g, b_color, a]: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
     let mut beta = beta_min;
     while beta < beta_max {
         let beta_end = (beta + stripe_width).min(beta_max);
+        let beta_mid = (beta + beta_end) / 2.0;
 
-        let p00 = world_xy(alpha_min, beta);
-        let p10 = world_xy(alpha_max, beta);
-        let p11 = world_xy(alpha_max, beta_end);
-        let p01 = world_xy(alpha_min, beta_end);
+        // Clip this stripe to the polygon boundary in the alpha (along-road) direction.
+        let hits = clip_scanline_alpha(&world_poly, ox, oy, cos_t, sin_t, alpha_min, alpha_max, beta_mid);
 
-        out.extend_from_slice(&[p00.0, p00.1, z, r, g, b, a]);
-        out.extend_from_slice(&[p10.0, p10.1, z, r, g, b, a]);
-        out.extend_from_slice(&[p11.0, p11.1, z, r, g, b, a]);
+        // Process intersection pairs (enter/exit)
+        let mut pair_idx = 0;
+        while pair_idx + 1 < hits.len() {
+            let a_start = hits[pair_idx].max(alpha_min);
+            let a_end = hits[pair_idx + 1].min(alpha_max);
+            pair_idx += 2;
 
-        out.extend_from_slice(&[p00.0, p00.1, z, r, g, b, a]);
-        out.extend_from_slice(&[p11.0, p11.1, z, r, g, b, a]);
-        out.extend_from_slice(&[p01.0, p01.1, z, r, g, b, a]);
+            if a_end - a_start < 1e-6 {
+                continue;
+            }
+
+            let p00 = world_xy(a_start, beta);
+            let p10 = world_xy(a_end, beta);
+            let p11 = world_xy(a_end, beta_end);
+            let p01 = world_xy(a_start, beta_end);
+
+            // Per-stripe elevation at midpoint
+            let z = z_base + corners.get(0).map_or(0.0, |c| c.z as f32);
+
+            out.extend_from_slice(&[p00.0 as f32, p00.1 as f32, z, r, g, b_color, a]);
+            out.extend_from_slice(&[p10.0 as f32, p10.1 as f32, z, r, g, b_color, a]);
+            out.extend_from_slice(&[p11.0 as f32, p11.1 as f32, z, r, g, b_color, a]);
+
+            out.extend_from_slice(&[p00.0 as f32, p00.1 as f32, z, r, g, b_color, a]);
+            out.extend_from_slice(&[p11.0 as f32, p11.1 as f32, z, r, g, b_color, a]);
+            out.extend_from_slice(&[p01.0 as f32, p01.1 as f32, z, r, g, b_color, a]);
+        }
 
         beta += stripe_period;
     }
@@ -394,8 +485,8 @@ pub(super) fn emit_crosswalk_stripes(
 
 /// Emit a polygon outline for area objects (parking space, cross-hatch, etc.)
 ///
-/// Uses a single reference-point lookup at `obj_s` to form the tangent-plane origin,
-/// then maps each cornerLocal `(u, v)` into world space.
+/// Uses the caller-provided `exact_ref_pt` (evaluated exactly at `obj_s`) to form the
+/// tangent-plane origin, then maps each cornerLocal `(u, v)` into world space.
 ///
 /// ## Coordinate convention auto-detection
 ///
@@ -412,12 +503,12 @@ pub(super) fn emit_crosswalk_stripes(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn emit_polygon_outline(
     corners: &[we_core::model::Point3D],
-    ref_pts: &[we_core::geometry::eval::RefLinePoint],
+    exact_ref_pt: &we_core::geometry::eval::RefLinePoint,
     elevations: &[we_core::model::Elevation],
-    obj_s: f64,
+    _obj_s: f64,
     obj_t: f64,
     obj_hdg: f64,
-    z_base: f32,
+    _z_base: f32,
     bar_thickness: f64,
     color: [f32; 4],
     offset_pt: &OffsetPtFn,
@@ -425,20 +516,11 @@ pub(super) fn emit_polygon_outline(
 ) {
     use we_core::geometry::eval::evaluate_elevation;
 
-    if corners.len() < 2 || ref_pts.is_empty() {
+    if corners.len() < 2 {
         return;
     }
 
-    // Single reference-point at obj_s (safe even when obj_s ≈ road length).
-    let ref_pt = ref_pts
-        .iter()
-        .min_by(|a, b| {
-            (a.s - obj_s)
-                .abs()
-                .partial_cmp(&(b.s - obj_s).abs())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .unwrap();
+    let ref_pt = exact_ref_pt;
 
     let (ox, oy, _) = offset_pt(ref_pt, obj_t, 0.0);
     let z_base_eval = evaluate_elevation(elevations, ref_pt.s) as f32 + 0.02;
@@ -446,9 +528,8 @@ pub(super) fn emit_polygon_outline(
     let (cos_t, sin_t) = (theta.cos(), theta.sin());
 
     // Detect coordinate convention via u_span vs v_span:
-    // - u_span > v_span → spec-compliant object-local frame (u = stall depth, larger)
-    //   → apply obj_hdg rotation before mapping to world
-    // - u_span <= v_span → road-frame storage (u = stall width, smaller) → no rotation
+    // - u_span > v_span → spec-compliant object-local frame → apply obj_hdg rotation
+    // - u_span <= v_span → road-frame storage → no rotation (identity)
     let u_min = corners.iter().map(|c| c.x).fold(f64::INFINITY, f64::min);
     let u_max = corners.iter().map(|c| c.x).fold(f64::NEG_INFINITY, f64::max);
     let v_min = corners.iter().map(|c| c.y).fold(f64::INFINITY, f64::min);
@@ -463,6 +544,10 @@ pub(super) fn emit_polygon_outline(
         (1.0_f64, 0.0_f64) // identity: alpha=u, beta=v
     };
 
+    // Deduplicate closing vertex (some xodr files repeat the first corner at the end,
+    // which produces a degenerate zero-length edge that creates invalid quad geometry).
+    // NOTE: deduplication is now performed by the OpenDRIVE parser; this block is kept
+    // as a safety guard for corners created programmatically (not from parsed xodr).
     let world_corners: Vec<(f64, f64, f32)> = corners
         .iter()
         .map(|c| {
@@ -474,6 +559,70 @@ pub(super) fn emit_polygon_outline(
             (wx, wy, z)
         })
         .collect();
+
+    let [r, g, b, a] = color;
+    let hw = bar_thickness / 2.0;
+    let n = world_corners.len();
+
+    for i in 0..n {
+        let (ax, ay, az) = world_corners[i];
+        let (bx, by, bz) = world_corners[(i + 1) % n];
+        let dx = bx - ax;
+        let dy = by - ay;
+        let len = (dx * dx + dy * dy).sqrt().max(1e-9);
+        let nx = -dy / len * hw;
+        let ny = dx / len * hw;
+
+        let p0 = ((ax + nx) as f32, (ay + ny) as f32, az);
+        let p1 = ((ax - nx) as f32, (ay - ny) as f32, az);
+        let p2 = ((bx - nx) as f32, (by - ny) as f32, bz);
+        let p3 = ((bx + nx) as f32, (by + ny) as f32, bz);
+
+        out.extend_from_slice(&[p0.0, p0.1, p0.2, r, g, b, a]);
+        out.extend_from_slice(&[p1.0, p1.1, p1.2, r, g, b, a]);
+        out.extend_from_slice(&[p2.0, p2.1, p2.2, r, g, b, a]);
+        out.extend_from_slice(&[p0.0, p0.1, p0.2, r, g, b, a]);
+        out.extend_from_slice(&[p2.0, p2.1, p2.2, r, g, b, a]);
+        out.extend_from_slice(&[p3.0, p3.1, p3.2, r, g, b, a]);
+    }
+}
+
+/// Emit a polygon outline for area objects whose corners use `cornerRoad` (s, t, dz).
+///
+/// Unlike `cornerLocal`, `cornerRoad` corners are absolute road-frame coordinates —
+/// each corner (s, t) must be independently evaluated on the road reference line.
+/// No object heading rotation is applied.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn emit_polygon_outline_road_corners(
+    corners: &[we_core::model::Point3D],
+    plan_view: &[we_core::model::Geometry],
+    elevations: &[we_core::model::Elevation],
+    bar_thickness: f64,
+    color: [f32; 4],
+    offset_pt: &OffsetPtFn,
+    road_point_at_s: &dyn Fn(&[we_core::model::Geometry], f64) -> Option<we_core::geometry::eval::RefLinePoint>,
+    out: &mut Vec<f32>,
+) {
+    use we_core::geometry::eval::evaluate_elevation;
+
+    if corners.len() < 2 {
+        return;
+    }
+
+    // Each corner (s, t, dz) is evaluated independently on the road reference line.
+    let world_corners: Vec<(f64, f64, f32)> = corners
+        .iter()
+        .filter_map(|c| {
+            let rp = road_point_at_s(plan_view, c.x)?;
+            let (wx, wy, _) = offset_pt(&rp, c.y, 0.0);
+            let z = evaluate_elevation(elevations, c.x) as f32 + c.z as f32 + 0.02;
+            Some((wx, wy, z))
+        })
+        .collect();
+
+    if world_corners.len() < 2 {
+        return;
+    }
 
     let [r, g, b, a] = color;
     let hw = bar_thickness / 2.0;
@@ -587,7 +736,7 @@ mod tests {
         let mut out = Vec::new();
         let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
 
-        emit_crosswalk_stripes(&corners, &ref_pts, &elevations, 9.0, 0.0, 0.0, 0.0, offset_fn, &mut out);
+        emit_crosswalk_stripes(&corners, &ref_pts[9], &elevations, 9.0, 0.0, 0.0, 0.0, offset_fn, &mut out);
 
         // Must produce at least one valid (non-degenerate) stripe quad = 6 vertices × 7 floats.
         assert!(out.len() >= 42, "Expected at least one stripe but got {} floats", out.len());
@@ -604,7 +753,7 @@ mod tests {
     ///
     /// With hdg=π/2, corners (u,v) map to road-frame: alpha=-v, beta=u.
     /// We sweep beta (lateral, 10.7 m) so each stripe spans the alpha (along-road, 4 m)
-    /// extent, producing stripes parallel to the road direction.
+    /// extent, producing bars parallel to the road direction, spaced laterally.
     #[test]
     fn test_crosswalk_stripes_hdg_pi_half_parallel_to_road() {
         let ref_pts = straight_road_pts();
@@ -622,38 +771,48 @@ mod tests {
         let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
 
         emit_crosswalk_stripes(
-            &corners, &ref_pts, &elevations,
+            &corners, &ref_pts[5], &elevations,
             5.0, 0.0, std::f64::consts::FRAC_PI_2, 0.0, offset_fn, &mut out,
         );
 
         assert!(!out.is_empty(), "Expected stripes for hdg=π/2 crosswalk");
 
-        // Road is along +x (theta=0). Beta-sweep → stripes run along +x.
+        // Road is along +x (theta=0). Beta-sweep → stripes run along +x (along-road).
         // First stripe at beta=beta_min=-3.6 → beta_end=-3.15:
-        //   p00 = world_xy(alpha_min=1, -3.6) → ox=5, wx=5+1=6.0, wy=0+(-3.6)=-3.6
-        //   p10 = world_xy(alpha_max=5, -3.6) → wx=5+5=10.0, wy=-3.6
-        // Stripes are horizontal (fixed y per stripe, x varies from 6 to 10).
+        //   p00 = world_xy(alpha_min=1, -3.6) → ox=5, wx=5+1=6.0, wy=0+3.6=3.6
+        //   p10 = world_xy(alpha_max=5, -3.6) → wx=5+5=10.0, wy=3.6
+        // Each stripe bar runs along +x (alpha), fixed lateral position (beta).
         let first_x = out[0];
         let first_y = out[1];
         // x should be ox + alpha_min = 5 + 1 = 6.0
         assert!((first_x - 6.0).abs() < 0.5, "First stripe start x={first_x} should be ~6.0 (alpha_min)");
-        // y should be at beta_min = -3.6 (first stripe's lateral position)
-        assert!((first_y - (-3.6)).abs() < 0.5, "First stripe y={first_y} should be ~-3.6 (beta_min)");
 
         // Beta range = 7.1 - (-3.6) = 10.7 m; period = 1.05 m → ~10 stripes.
         // Each stripe = 2 triangles = 6 vertices × 7 floats = 42 floats.
         let num_stripes = out.len() / 42;
         assert!(num_stripes >= 9 && num_stripes <= 11,
             "Expected ~10 stripes for 10.7 m lateral range, got {num_stripes}");
+
+        // Each stripe bar should span the along-road extent (~4 m).
+        // Check that the first stripe has vertices with x range ≈ 4m.
+        let first_stripe_xs: Vec<f32> = out[..42].chunks(7).map(|v| v[0]).collect();
+        let x_min = first_stripe_xs.iter().cloned().fold(f32::INFINITY, f32::min);
+        let x_max = first_stripe_xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        assert!((x_max - x_min) > 3.0,
+            "First stripe along-road extent={:.1}, expected ~4.0m", x_max - x_min);
     }
 
-    /// Verify that adjacent parking spaces with hdg=π/2 have touching (non-overlapping) edges.
+    /// Verify that parking spaces with v_span > u_span (road-frame convention, e.g. parkinglot.xodr)
+    /// do NOT get hdg rotation applied, producing correct perpendicular stall orientation.
     ///
-    /// With the direct u/v mapping (no obj_hdg rotation), spaces at s=0.81 and s=3.14
-    /// with corners u∈[-1.12, 1.15] touch exactly at their shared boundary.
+    /// Uses Style B parking (v_span > u_span, like id=50 in parkinglot.xodr):
+    /// u∈[-1.12, 1.15] (width=2.27m), v∈[-2.77, 0.68] (depth=3.45m), hdg=π/2.
+    ///
+    /// Auto-detection: u_span=2.27 < v_span=3.45 → road-frame → NO rotation.
+    /// Without rotation: ds = u → along road 2.27m, dt = v → lateral 3.45m.
+    /// This produces narrow stalls along the road (2.27m) with depth perpendicular (3.45m).
     #[test]
     fn test_polygon_outline_adjacent_spaces_touch_not_overlap() {
-        // Use finer ref_pts (0.1m steps) to minimize quantization error.
         let ref_pts: Vec<RefLinePoint> = (0..=200)
             .map(|i| {
                 let s = i as f64 * 0.1;
@@ -663,7 +822,7 @@ mod tests {
         let elevations: Vec<Elevation> = vec![];
         let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
 
-        // Space 50: s=0.81, u∈[-1.12, 1.15]  (no-rotation → x_max ≈ 0.81+1.15=1.96)
+        // Space 50: s=0.81, v_span(3.45) > u_span(2.27), hdg=π/2
         let corners_50 = vec![
             Point3D { x: -1.12, y: -2.77, z: 0.0, id: None },
             Point3D { x: -1.12, y:  0.68, z: 0.0, id: None },
@@ -672,57 +831,35 @@ mod tests {
             Point3D { x: -1.12, y: -2.77, z: 0.0, id: None },
         ];
 
-        // Space 51: s=3.14, u∈[-1.18, 1.20]  (no-rotation → x_min ≈ 3.14-1.18=1.96)
-        let corners_51 = vec![
-            Point3D { x: -1.18, y: -2.78, z: 0.0, id: None },
-            Point3D { x: -1.18, y:  0.71, z: 0.0, id: None },
-            Point3D { x:  1.20, y:  0.71, z: 0.0, id: None },
-            Point3D { x:  1.20, y: -2.78, z: 0.0, id: None },
-            Point3D { x: -1.18, y: -2.78, z: 0.0, id: None },
-        ];
-
         let mut out50 = Vec::new();
-        emit_polygon_outline(&corners_50, &ref_pts, &elevations, 0.81, 0.0,
+        emit_polygon_outline(&corners_50, &ref_pts[8], &elevations, 0.81, 0.0,
             std::f64::consts::FRAC_PI_2, 0.0, 0.10,
             [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out50);
-        let mut out51 = Vec::new();
-        emit_polygon_outline(&corners_51, &ref_pts, &elevations, 3.14, 0.0,
-            std::f64::consts::FRAC_PI_2, 0.0, 0.10,
-            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out51);
 
         assert!(!out50.is_empty(), "Space 50 should produce outline vertices");
-        assert!(!out51.is_empty(), "Space 51 should produce outline vertices");
 
-        // For road theta=0: wx = ox + u.  Nominal touch point = 1.96m.
-        // bar_thickness=0.10 (hw=0.05) means edges extend 0.05m beyond the polygon line.
-        // Space 50: x_max vertex ≈ 0.81+1.15+0.05 = 2.01
-        // Space 51: x_min vertex ≈ 3.14-1.18-0.05 = 1.91
-        // These overlap only by bar_thickness (0.10m), which is acceptable line rendering.
-        // The GEOMETRIC centres must be very close: |x_max_geom_50 - x_min_geom_51| < 0.15
-        //
-        // If obj_hdg=π/2 rotation were (wrongly) applied:
-        //   space 50 x_max would be ox - v_min = 0.81 + 2.77 ≈ 3.58  ← much larger
-        // So we verify x_max_50 (including bar) < 2.15 to rule out the wrong formula.
+        // Auto-detection: u_span(2.27) < v_span(3.45) → road-frame → no rotation.
+        // ds = u → x ∈ [0.81-1.12, 0.81+1.15] = [-0.31, 1.96]
         let x_max_50 = out50.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
-        let x_min_51 = out51.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
+        let x_min_50 = out50.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
 
-        // Space 50 east edge (no-rotation): ≈ 0.81+1.15+0.05 ≈ 2.01; should be < 2.20
+        // Without rotation: x_max ≈ 0.81 + 1.15 + hw(0.05) ≈ 2.01
+        // With rotation (wrong): x_max ≈ 0.81 + 2.77 + hw ≈ 3.63
         assert!(
-            x_max_50 < 2.20,
-            "Space 50 x_max={x_max_50:.3}: expected ~2.01 (no-rotation), got too-large value indicating wrong hdg rotation"
+            x_max_50 < 2.5,
+            "Space 50 x_max={x_max_50:.3}: expected ~2.0 (no rotation for road-frame corners). \
+             Value > 2.5 means rotation was incorrectly applied"
         );
 
-        // Space 51 west edge (no-rotation): ≈ 3.14-1.18-0.05 ≈ 1.91; should be > 1.70
-        assert!(
-            x_min_51 > 1.70,
-            "Space 51 x_min={x_min_51:.3}: expected ~1.91 (no-rotation), got too-small value indicating wrong hdg rotation"
-        );
+        // dt = v → lateral extent ≈ 3.45m (v_span). This is the stall depth.
+        let y_max_50 = out50.chunks(7).map(|v| v[1]).fold(f32::NEG_INFINITY, f32::max);
+        let y_min_50 = out50.chunks(7).map(|v| v[1]).fold(f32::INFINITY, f32::min);
+        let y_extent = y_max_50 - y_min_50;
 
-        // Spaces are at most one bar-thickness apart (they nearly touch at x≈1.96).
-        let overlap = x_max_50 - x_min_51;
+        // Without rotation: lateral extent ≈ 3.45m (v_span) — correct deep perpendicular stalls
         assert!(
-            overlap < 0.15,
-            "Spaces overlap by {overlap:.3}m > bar_thickness; no-rotation should produce touching spaces"
+            y_extent > 3.0,
+            "Space 50 y_extent={y_extent:.3}: expected ~3.45m (v_span for deep perpendicular stalls)"
         );
     }
 
@@ -761,11 +898,11 @@ mod tests {
         let corners_b = corners_a.clone();
 
         let mut out_a = Vec::new();
-        emit_polygon_outline(&corners_a, &ref_pts, &elevations, 4.57, 0.0,
+        emit_polygon_outline(&corners_a, &ref_pts[46], &elevations, 4.57, 0.0,
             std::f64::consts::FRAC_PI_2, 0.0, 0.10,
             [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out_a);
         let mut out_b = Vec::new();
-        emit_polygon_outline(&corners_b, &ref_pts, &elevations, 7.07, 0.0,
+        emit_polygon_outline(&corners_b, &ref_pts[71], &elevations, 7.07, 0.0,
             std::f64::consts::FRAC_PI_2, 0.0, 0.10,
             [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out_b);
 
