@@ -395,15 +395,20 @@ pub(super) fn emit_crosswalk_stripes(
 /// Emit a polygon outline for area objects (parking space, cross-hatch, etc.)
 ///
 /// Uses a single reference-point lookup at `obj_s` to form the tangent-plane origin,
-/// then maps each cornerLocal `(u, v)` directly into world space:
-///   `wx = Ox + u·cos(θ) − v·sin(θ)`
-///   `wy = Oy + u·sin(θ) + v·cos(θ)`
+/// then maps each cornerLocal `(u, v)` into world space.
 ///
-/// `u` is treated as the along-road (tangent) offset and `v` as the lateral
-/// (bitangent) offset **without applying the object's `hdg` rotation**.
-/// Real-world xodr generators (e.g., the tools that produce parkinglot.xodr)
-/// store cornerLocal coordinates already in road-frame, so adjacent parking spaces
-/// have touching (non-overlapping) boundaries when this direct mapping is used.
+/// ## Coordinate convention auto-detection
+///
+/// Two real-world xodr conventions exist for `cornerLocal`:
+/// - **Road-frame** (non-spec): `u` = along-road, `v` = lateral. Detected when `u_span <= v_span`.
+///   → No `obj_hdg` rotation applied: `wx = Ox + u·cos(θ) − v·sin(θ)`
+/// - **Object-local frame** (OpenDRIVE spec): `u` = along object heading, `v` = cross-heading.
+///   Detected when `u_span > v_span` (u is the stall depth, larger than stall width).
+///   → Apply `obj_hdg` rotation first: `alpha = u·cos(h) − v·sin(h)`, `beta = u·sin(h) + v·cos(h)`
+///   → Then: `wx = Ox + alpha·cos(θ) − beta·sin(θ)`
+///
+/// This heuristic correctly handles both `parkinglot.xodr` (road-frame, u < v) and
+/// spec-compliant files like `park_ground_park_ground.xodr` (object-local, u > v).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn emit_polygon_outline(
     corners: &[we_core::model::Point3D],
@@ -411,6 +416,7 @@ pub(super) fn emit_polygon_outline(
     elevations: &[we_core::model::Elevation],
     obj_s: f64,
     obj_t: f64,
+    obj_hdg: f64,
     z_base: f32,
     bar_thickness: f64,
     color: [f32; 4],
@@ -439,13 +445,31 @@ pub(super) fn emit_polygon_outline(
     let theta = ref_pt.hdg;
     let (cos_t, sin_t) = (theta.cos(), theta.sin());
 
-    // Map each cornerLocal (u, v) → world (wx, wy) using the road tangent-plane.
-    // u = along-road offset, v = lateral offset; no obj_hdg rotation applied.
+    // Detect coordinate convention via u_span vs v_span:
+    // - u_span > v_span → spec-compliant object-local frame (u = stall depth, larger)
+    //   → apply obj_hdg rotation before mapping to world
+    // - u_span <= v_span → road-frame storage (u = stall width, smaller) → no rotation
+    let u_min = corners.iter().map(|c| c.x).fold(f64::INFINITY, f64::min);
+    let u_max = corners.iter().map(|c| c.x).fold(f64::NEG_INFINITY, f64::max);
+    let v_min = corners.iter().map(|c| c.y).fold(f64::INFINITY, f64::min);
+    let v_max = corners.iter().map(|c| c.y).fold(f64::NEG_INFINITY, f64::max);
+    let u_span = u_max - u_min;
+    let v_span = v_max - v_min;
+    let apply_rotation = u_span > v_span;
+
+    let (cos_h, sin_h) = if apply_rotation {
+        (obj_hdg.cos(), obj_hdg.sin())
+    } else {
+        (1.0_f64, 0.0_f64) // identity: alpha=u, beta=v
+    };
+
     let world_corners: Vec<(f64, f64, f32)> = corners
         .iter()
         .map(|c| {
-            let wx = ox + c.x * cos_t - c.y * sin_t;
-            let wy = oy + c.x * sin_t + c.y * cos_t;
+            let alpha = c.x * cos_h - c.y * sin_h;
+            let beta  = c.x * sin_h + c.y * cos_h;
+            let wx = ox + alpha * cos_t - beta * sin_t;
+            let wy = oy + alpha * sin_t + beta * cos_t;
             let z  = z_base_eval + c.z as f32;
             (wx, wy, z)
         })
@@ -658,10 +682,12 @@ mod tests {
         ];
 
         let mut out50 = Vec::new();
-        emit_polygon_outline(&corners_50, &ref_pts, &elevations, 0.81, 0.0, 0.0, 0.10,
+        emit_polygon_outline(&corners_50, &ref_pts, &elevations, 0.81, 0.0,
+            std::f64::consts::FRAC_PI_2, 0.0, 0.10,
             [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out50);
         let mut out51 = Vec::new();
-        emit_polygon_outline(&corners_51, &ref_pts, &elevations, 3.14, 0.0, 0.0, 0.10,
+        emit_polygon_outline(&corners_51, &ref_pts, &elevations, 3.14, 0.0,
+            std::f64::consts::FRAC_PI_2, 0.0, 0.10,
             [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out51);
 
         assert!(!out50.is_empty(), "Space 50 should produce outline vertices");
@@ -697,6 +723,72 @@ mod tests {
         assert!(
             overlap < 0.15,
             "Spaces overlap by {overlap:.3}m > bar_thickness; no-rotation should produce touching spaces"
+        );
+    }
+
+    /// Verify that spec-compliant parking spaces (u_span > v_span) get hdg rotation applied.
+    ///
+    /// `park_ground_park_ground.xodr` style: u∈[-3.16, 2.09] (uSpan=5.25m, stall depth),
+    /// v∈[-1.49, 0.99] (vSpan=2.49m, stall width), hdg=π/2.
+    ///
+    /// With rotation (hdg=π/2): alpha = -v ∈ [-0.99, 1.49] → 2.49m along road.
+    /// Spaces at s=4.57 and s=7.07 (spacing=2.5m): each takes 2.49m → barely touching.
+    ///
+    /// Without rotation: u=5.25m along road → MASSIVE overlap at 2.5m spacing.
+    #[test]
+    fn test_polygon_outline_spec_compliant_hdg_rotation() {
+        let ref_pts: Vec<RefLinePoint> = (0..=100)
+            .map(|i| {
+                let s = i as f64 * 0.1;
+                RefLinePoint { s, x: s, y: 0.0, hdg: 0.0 }
+            })
+            .collect();
+        let elevations: Vec<Elevation> = vec![];
+        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+
+        // Space at s=4.57: u∈[-3.156, 2.094] (uSpan=5.25), v∈[-1.491, 0.994] (vSpan=2.485)
+        // uSpan > vSpan → rotation applied.  alpha = -v ∈ [-0.994, 1.491]
+        // x_range: [4.57 - 0.994, 4.57 + 1.491] = [3.576, 6.061]
+        let corners_a = vec![
+            Point3D { x: -3.156, y: -1.491, z: 0.0, id: None },
+            Point3D { x:  2.094, y: -1.491, z: 0.0, id: None },
+            Point3D { x:  2.094, y:  0.994, z: 0.0, id: None },
+            Point3D { x: -3.156, y:  0.994, z: 0.0, id: None },
+            Point3D { x: -3.156, y: -1.491, z: 0.0, id: None },
+        ];
+
+        // Space at s=7.07: same corner shape → x_range: [7.07 - 0.994, 7.07 + 1.491] = [6.076, 8.561]
+        let corners_b = corners_a.clone();
+
+        let mut out_a = Vec::new();
+        emit_polygon_outline(&corners_a, &ref_pts, &elevations, 4.57, 0.0,
+            std::f64::consts::FRAC_PI_2, 0.0, 0.10,
+            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out_a);
+        let mut out_b = Vec::new();
+        emit_polygon_outline(&corners_b, &ref_pts, &elevations, 7.07, 0.0,
+            std::f64::consts::FRAC_PI_2, 0.0, 0.10,
+            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out_b);
+
+        assert!(!out_a.is_empty(), "Space A should produce vertices");
+        assert!(!out_b.is_empty(), "Space B should produce vertices");
+
+        let x_max_a = out_a.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
+        let x_min_b = out_b.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
+
+        // With hdg rotation: space A x_max ≈ 4.57+1.491+hw ≈ 6.11, space B x_min ≈ 7.07-0.994-hw ≈ 6.02
+        // Spaces should be very close (touching), not widely separated or heavily overlapping.
+        // Without rotation: space A x_max ≈ 4.57+3.156+hw ≈ 7.79 → would violate x_max_a < 7.0
+        assert!(
+            x_max_a < 7.0,
+            "Space A x_max={x_max_a:.3}: expected ~6.1 (with hdg rotation applied), \
+             got large value indicating rotation was NOT applied"
+        );
+
+        // Spaces should roughly touch: overlap < 0.5m (allowing for bar thickness)
+        let overlap = x_max_a - x_min_b;
+        assert!(
+            overlap < 0.5,
+            "Spec-compliant spaces overlap by {overlap:.3}m; rotation should produce touching not overlapping spaces"
         );
     }
 }

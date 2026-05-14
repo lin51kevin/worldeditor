@@ -826,6 +826,7 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                             &road.elevation_profile,
                             s,
                             t,
+                            obj.hdg,
                             z_road,
                             0.15,
                             [0.424, 0.549, 0.278, 1.0], // (108,140,71)
@@ -857,6 +858,7 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                             &road.elevation_profile,
                             s,
                             t,
+                            obj.hdg,
                             z_road,
                             0.15,
                             [0.965, 0.651, 0.137, 1.0], // (246,166,35)
@@ -889,6 +891,7 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                             &road.elevation_profile,
                             s,
                             t,
+                            obj.hdg,
                             z_road,
                             0.15,
                             color,
