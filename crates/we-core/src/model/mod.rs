@@ -17,7 +17,7 @@ pub use lane::{
     RoadMarkType, RoadMarkWeight,
 };
 pub use road::{
-    Bridge, Crossfall, CrossfallSide, Elevation, Geometry, GeometryType, LaneOffset,
+    Bridge, CornerType, Crossfall, CrossfallSide, Elevation, Geometry, GeometryType, LaneOffset,
     LateralProfile, ObjectType, ParamPoly3Range, Point3D, Road, RoadObject, Signal, Superelevation,
     Tunnel, Validity,
 };

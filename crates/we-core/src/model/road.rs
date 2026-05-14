@@ -345,6 +345,18 @@ impl Point3D {
 // Road Objects (Signage, Barriers, Guardrails, etc.)
 // ============================================================================
 
+/// Indicates the coordinate system of the corner polygon data.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum CornerType {
+    /// `<cornerLocal>` — coordinates (u, v) in the object's local frame,
+    /// rotated by `obj.hdg` relative to the road direction.
+    #[default]
+    Local,
+    /// `<cornerRoad>` — coordinates (s, t) are absolute road-frame stations,
+    /// **not** relative to the object's (s, t) and **not** rotated by `obj.hdg`.
+    Road,
+}
+
 /// Road object types.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObjectType {
@@ -416,6 +428,12 @@ pub struct RoadObject {
     ///   ds = u·cos(hdg) − v·sin(hdg), dt = u·sin(hdg) + v·cos(hdg)
     #[serde(default)]
     pub hdg: f64,
+    /// Pitch angle in radians (rotation about lateral axis).
+    #[serde(default)]
+    pub pitch: f64,
+    /// Roll angle in radians (rotation about longitudinal axis).
+    #[serde(default)]
+    pub roll: f64,
     /// Object width (lateral extent in metres).
     pub width: f64,
     /// Object height (vertical extent in metres).
@@ -427,6 +445,14 @@ pub struct RoadObject {
     /// such as crosswalks, parking spaces, and cross-hatch areas.
     #[serde(default)]
     pub corners: Vec<Point3D>,
+    /// Indicates whether `corners` came from `<cornerLocal>` or `<cornerRoad>`.
+    /// - `Local` (default): coordinates are `(u, v)` in the object's local frame;
+    ///   the renderer applies hdg rotation before mapping to world space.
+    /// - `Road`: coordinates are absolute `(s, t)` road-frame stations; the renderer
+    ///   must evaluate each corner independently on the road reference line without
+    ///   applying the object's hdg rotation.
+    #[serde(default)]
+    pub corner_type: CornerType,
     pub validity: Option<Validity>,
     /// Set to `true` for objects that were synthesised from an `<objectReference>`
     /// element during parsing.  These copies share their geometry with the original
@@ -628,10 +654,13 @@ mod tests {
             position: Point3D::new(4.0, 5.0, 0.5),
             orientation: 180.0,
             hdg: 0.0,
+            pitch: 0.0,
+            roll: 0.0,
             width: 2.5,
             height: 1.2,
             length: 0.0,
             corners: vec![],
+            corner_type: CornerType::Local,
             validity: Some(Validity {
                 from_lane: -2,
                 to_lane: 2,
