@@ -59,6 +59,8 @@ describe('sceneGraph', () => {
       hiddenJunctionIds: [],
       hiddenLaneSectionKeys: [makeLaneSectionKey('r1', 0)],
       hiddenLaneKeys: [makeLaneKey('r1', 0, 'left', 2)],
+      hiddenSignalKeys: [],
+      hiddenObjectKeys: [],
     });
 
     expect(project.roads[0]?.lane_sections[0]?.render_hidden).toBe(true);
@@ -88,6 +90,8 @@ describe('sceneGraph', () => {
         hiddenJunctionIds: [],
         hiddenLaneSectionKeys: [],
         hiddenLaneKeys: [makeLaneKey('r1', 0, 'left', 2)],
+        hiddenSignalKeys: [],
+        hiddenObjectKeys: [],
       },
     )).toBe(false);
 
@@ -98,6 +102,8 @@ describe('sceneGraph', () => {
         hiddenJunctionIds: [],
         hiddenLaneSectionKeys: [],
         hiddenLaneKeys: [],
+        hiddenSignalKeys: [],
+        hiddenObjectKeys: [],
       },
     )).toBe(false);
   });

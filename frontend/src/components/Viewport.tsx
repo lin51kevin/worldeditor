@@ -200,6 +200,8 @@ export function Viewport() {
     display.hiddenJunctionIds,
     display.hiddenLaneSectionKeys,
     display.hiddenLaneKeys,
+    display.hiddenSignalKeys,
+    display.hiddenObjectKeys,
   ]);
 
   // ── Line mesh (lane lines + center/reference lines) ──
@@ -862,6 +864,31 @@ export function Viewport() {
       const { project: currentProject } = useEditorStore.getState();
       const { display: currentDisplay } = useEditorViewStore.getState();
       const visibleProject = buildRenderableProject(currentProject, currentDisplay);
+
+      // Signals and objects sit ON roads, so they must be checked first with a
+      // tight threshold (2 m) before road picking (5 m) would always win.
+      // Skip during shift-click which is reserved for multi-road/junction selection.
+      if (!e.shiftKey) {
+        const signalHit = await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 2.0);
+        if (signalHit !== null) {
+          useEditorStore.getState().selectSignal(signalHit.roadId, signalHit.signalId);
+          const rendererInst = rendererRef.current;
+          if (rendererInst) rendererInst.clearHover();
+          hoveredRoadRef.current = null;
+          hoveredJunctionRef.current = null;
+          return;
+        }
+        const objectHit = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 2.0);
+        if (objectHit !== null) {
+          useEditorStore.getState().selectObject(objectHit.roadId, objectHit.objectId);
+          const rendererInst = rendererRef.current;
+          if (rendererInst) rendererInst.clearHover();
+          hoveredRoadRef.current = null;
+          hoveredJunctionRef.current = null;
+          return;
+        }
+      }
+
       const roadId = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
 
       if (e.shiftKey) {
@@ -899,28 +926,6 @@ export function Viewport() {
       const junctionId = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
       if (junctionId !== null) {
         useEditorStore.getState().selectJunction(junctionId);
-        const rendererInst = rendererRef.current;
-        if (rendererInst) rendererInst.clearHover();
-        hoveredRoadRef.current = null;
-        hoveredJunctionRef.current = null;
-        return;
-      }
-
-      // Try picking signals
-      const signalHit = await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 3.0);
-      if (signalHit !== null) {
-        useEditorStore.getState().selectSignal(signalHit.roadId, signalHit.signalId);
-        const rendererInst = rendererRef.current;
-        if (rendererInst) rendererInst.clearHover();
-        hoveredRoadRef.current = null;
-        hoveredJunctionRef.current = null;
-        return;
-      }
-
-      // Try picking road objects
-      const objectHit = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 3.0);
-      if (objectHit !== null) {
-        useEditorStore.getState().selectObject(objectHit.roadId, objectHit.objectId);
         const rendererInst = rendererRef.current;
         if (rendererInst) rendererInst.clearHover();
         hoveredRoadRef.current = null;

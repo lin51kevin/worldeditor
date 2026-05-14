@@ -15,6 +15,16 @@ export interface SceneVisibilityState {
   hiddenJunctionIds: string[];
   hiddenLaneSectionKeys: string[];
   hiddenLaneKeys: string[];
+  hiddenSignalKeys: string[];
+  hiddenObjectKeys: string[];
+}
+
+export function makeSignalKey(roadId: string, signalId: string): string {
+  return `${roadId}::signal::${signalId}`;
+}
+
+export function makeObjectKey(roadId: string, objectId: string): string {
+  return `${roadId}::object::${objectId}`;
 }
 
 export function makeLaneSectionKey(roadId: string, sectionIndex: number): string {
@@ -84,10 +94,21 @@ export function buildRenderableProject(
   const hiddenJunctionSet = new Set(visibility.hiddenJunctionIds);
   const hiddenLaneSectionKeys = new Set(visibility.hiddenLaneSectionKeys);
   const hiddenLaneKeys = new Set(visibility.hiddenLaneKeys);
+  const hiddenSignalKeys = new Set(visibility.hiddenSignalKeys ?? []);
+  const hiddenObjectKeys = new Set(visibility.hiddenObjectKeys ?? []);
 
   const roads = project.roads
     .filter((road) => !hiddenRoadSet.has(road.id))
-    .map((road) => cloneRoad(road, hiddenLaneSectionKeys, hiddenLaneKeys));
+    .map((road) => {
+      const cloned = cloneRoad(road, hiddenLaneSectionKeys, hiddenLaneKeys);
+      const signals = (cloned.signals ?? []).filter(
+        (s) => !hiddenSignalKeys.has(makeSignalKey(road.id, s.id)),
+      );
+      const objects = (cloned.objects ?? []).filter(
+        (o) => !hiddenObjectKeys.has(makeObjectKey(road.id, o.id)),
+      );
+      return { ...cloned, signals, objects };
+    });
   const roadIds = new Set(roads.map((road) => road.id));
   const junctions = project.junctions
     .filter((junction) => !hiddenJunctionSet.has(junction.id))
@@ -170,14 +191,14 @@ export function isSceneSelectionVisible(
     return true;
   }
 
-  // Signal visibility follows the road's visibility
+  // Signal visibility follows the road's visibility + per-signal key
   if (selection.type === 'signal') {
-    return true;
+    return !(visibility.hiddenSignalKeys ?? []).includes(makeSignalKey(selection.roadId, selection.signalId));
   }
 
-  // Object visibility follows the road's visibility
+  // Object visibility follows the road's visibility + per-object key
   if (selection.type === 'object') {
-    return true;
+    return !(visibility.hiddenObjectKeys ?? []).includes(makeObjectKey(selection.roadId, selection.objectId));
   }
 
   const sectionKey = makeLaneSectionKey(selection.roadId, selection.sectionIndex);

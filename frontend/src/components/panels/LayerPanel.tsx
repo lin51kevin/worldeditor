@@ -47,6 +47,8 @@ export function LayerPanel() {
     toggleJunctionVisibility: toggleJunctionVisibilityInStore,
     toggleLaneSectionVisibility: toggleLaneSectionVisibilityInStore,
     toggleLaneVisibility: toggleLaneVisibilityInStore,
+    toggleSignalVisibility: toggleSignalVisibilityInStore,
+    toggleObjectVisibility: toggleObjectVisibilityInStore,
   } = useEditorViewStore();
   const [expandedRoads, setExpandedRoads] = useState<Set<string>>(new Set());
   const [expandedLaneSections, setExpandedLaneSections] = useState<Set<string>>(new Set());
@@ -141,6 +143,10 @@ export function LayerPanel() {
     isLaneSectionVisible(roadId, sectionIndex) && !display.hiddenLaneKeys.includes(
       makeLaneKey(roadId, sectionIndex, side, laneId),
     );
+  const isSignalVisible = (roadId: string, signalId: string) =>
+    !( display.hiddenSignalKeys ?? []).includes(`${roadId}::signal::${signalId}`);
+  const isObjectVisible = (roadId: string, objectId: string) =>
+    !(display.hiddenObjectKeys ?? []).includes(`${roadId}::object::${objectId}`);
 
   const selectRoadChildSection = (roadId: string, sectionIndex: number) => {
     setExpandedRoads((prev) => new Set(prev).add(roadId));
@@ -186,12 +192,16 @@ export function LayerPanel() {
 
   const handleSelectSignal = useCallback((roadId: string, signalId: string) => {
     selectionSourceRef.current = 'panel';
+    setExpandedRoads((prev) => new Set(prev).add(roadId));
+    setExpandedRoadSignals((prev) => new Set(prev).add(roadId));
     selectSignal(roadId, signalId);
     emitViewportEvent({ type: 'pan-to-signal', roadId, signalId });
   }, [selectSignal]);
 
   const handleSelectObject = useCallback((roadId: string, objectId: string) => {
     selectionSourceRef.current = 'panel';
+    setExpandedRoads((prev) => new Set(prev).add(roadId));
+    setExpandedRoadObjects((prev) => new Set(prev).add(roadId));
     selectObject(roadId, objectId);
     emitViewportEvent({ type: 'pan-to-object', roadId, objectId });
   }, [selectObject]);
@@ -412,8 +422,12 @@ export function LayerPanel() {
                 onToggleLaneVisibility={(sectionIndex, side, laneId) => toggleLaneVisibility(road.id, sectionIndex, side, laneId)}
                 onToggleSignalsExpand={() => toggleRoadSignalsExpand(road.id)}
                 onSelectSignal={(signalId) => handleSelectSignal(road.id, signalId)}
+                onToggleSignalVisibility={(signalId) => toggleSignalVisibilityInStore(road.id, signalId)}
+                isSignalVisible={(signalId) => isSignalVisible(road.id, signalId)}
                 onToggleObjectsExpand={() => toggleRoadObjectsExpand(road.id)}
                 onSelectObject={(objectId) => handleSelectObject(road.id, objectId)}
+                onToggleObjectVisibility={(objectId) => toggleObjectVisibilityInStore(road.id, objectId)}
+                isObjectVisible={(objectId) => isObjectVisible(road.id, objectId)}
               />
             ))}
 

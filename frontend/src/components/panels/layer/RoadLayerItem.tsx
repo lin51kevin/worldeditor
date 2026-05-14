@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight, Crosshair, Eye, EyeOff } from 'lucide-react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Road } from '../../../services/platform';
 import { makeLaneSectionKey, type LaneSide, type SceneNodeSelection } from '../../../utils/sceneGraph';
@@ -28,8 +29,12 @@ export interface RoadLayerItemProps {
   onToggleLaneVisibility: (sectionIndex: number, side: LaneSide, laneId: number) => void;
   onToggleSignalsExpand: () => void;
   onSelectSignal: (signalId: string) => void;
+  onToggleSignalVisibility: (signalId: string) => void;
+  isSignalVisible: (signalId: string) => boolean;
   onToggleObjectsExpand: () => void;
   onSelectObject: (objectId: string) => void;
+  onToggleObjectVisibility: (objectId: string) => void;
+  isObjectVisible: (objectId: string) => boolean;
 }
 
 export function RoadLayerItem({
@@ -57,12 +62,21 @@ export function RoadLayerItem({
   onToggleLaneVisibility,
   onToggleSignalsExpand,
   onSelectSignal,
+  onToggleSignalVisibility,
+  isSignalVisible,
   onToggleObjectsExpand,
   onSelectObject,
+  onToggleObjectVisibility,
+  isObjectVisible,
 }: RoadLayerItemProps) {
   const { t } = useTranslation();
   const roadSignals = road.signals ?? [];
   const roadObjects = road.objects ?? [];
+  const getObjTypeStr = useCallback(
+    (obj: (typeof roadObjects)[number]) =>
+      typeof obj.object_type === 'string' ? obj.object_type : obj.object_type.Custom,
+    [],
+  );
 
   return (
     <div key={`road-${road.id}`} className="road-list-entry" ref={entryRef}>
@@ -229,17 +243,28 @@ export function RoadLayerItem({
                     const isSignalSelected = selectedSceneNode?.type === 'signal'
                       && selectedSceneNode.roadId === road.id
                       && selectedSceneNode.signalId === signal.id;
+                    const sigType = signal.signal_subtype || signal.signal_type;
                     const displayName = signal.name
-                      ? signal.name
-                      : `${signal.signal_subtype || signal.signal_type} (${signal.id})`;
+                      ? `${signal.name} (${signal.id}) (${sigType})`
+                      : `(${signal.id}) (${sigType})`;
 
                     return (
                       <div
                         key={signal.id}
-                        className={`layer-item layer-item-child layer-item-lane ${isSignalSelected ? 'selected' : ''}`}
+                        className={`layer-item layer-item-child layer-item-lane ${isSignalSelected ? 'selected' : ''} ${!isSignalVisible(signal.id) ? 'layer-item-hidden' : ''}`}
                         onClick={() => onSelectSignal(signal.id)}
                       >
-                        <span className="layer-name">{displayName}</span>
+                        <span className="layer-name" title={displayName}>{displayName}</span>
+                        <button
+                          className={`road-visibility ${isSignalVisible(signal.id) ? '' : 'off'}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onToggleSignalVisibility(signal.id);
+                          }}
+                          title={isSignalVisible(signal.id) ? t('layerPanel.hideRoad') : t('layerPanel.showRoad')}
+                        >
+                          {isSignalVisible(signal.id) ? <Eye size={12} /> : <EyeOff size={12} />}
+                        </button>
                       </div>
                     );
                   })}
@@ -273,23 +298,27 @@ export function RoadLayerItem({
                     const isObjectSelected = selectedSceneNode?.type === 'object'
                       && selectedSceneNode.roadId === road.id
                       && selectedSceneNode.objectId === object.id;
-                    const typeStr = typeof object.object_type === 'string'
-                      ? object.object_type
-                      : object.object_type.Custom;
+                    const typeStr = getObjTypeStr(object);
                     const displayName = object.name
-                      ? object.name
-                      : `${typeStr} (${object.id})`;
-
+                      ? `${object.name} (${object.id}) (${typeStr})`
+                      : `(${object.id}) (${typeStr})`;
                     return (
                       <div
                         key={object.id}
-                        className={`layer-item layer-item-child layer-item-lane ${isObjectSelected ? 'selected' : ''}`}
+                        className={`layer-item layer-item-child layer-item-lane ${isObjectSelected ? 'selected' : ''} ${!isObjectVisible(object.id) ? 'layer-item-hidden' : ''}`}
                         onClick={() => onSelectObject(object.id)}
                       >
-                        <span className="layer-name">
-                          {displayName}
-                          {object.name && <span className="road-id"> ({typeStr})</span>}
-                        </span>
+                        <span className="layer-name" title={displayName}>{displayName}</span>
+                        <button
+                          className={`road-visibility ${isObjectVisible(object.id) ? '' : 'off'}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onToggleObjectVisibility(object.id);
+                          }}
+                          title={isObjectVisible(object.id) ? t('layerPanel.hideRoad') : t('layerPanel.showRoad')}
+                        >
+                          {isObjectVisible(object.id) ? <Eye size={12} /> : <EyeOff size={12} />}
+                        </button>
                       </div>
                     );
                   })}

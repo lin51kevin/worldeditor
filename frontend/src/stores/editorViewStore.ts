@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { makeLaneKey } from '../utils/sceneGraph';
+import { makeLaneKey, makeSignalKey, makeObjectKey } from '../utils/sceneGraph';
 import type { LaneSide } from '../utils/sceneGraph';
 import type { SnapType, DistanceMeasurement, AngleMeasurement, AreaMeasurement, EditableSpline } from '../services/platform';
 
@@ -70,6 +70,8 @@ interface DisplaySettings {
   hiddenJunctionIds: string[];
   hiddenLaneSectionKeys: string[];
   hiddenLaneKeys: string[];
+  hiddenSignalKeys: string[];
+  hiddenObjectKeys: string[];
 }
 
 export const DEFAULT_DISPLAY: DisplaySettings = {
@@ -84,6 +86,8 @@ export const DEFAULT_DISPLAY: DisplaySettings = {
   hiddenJunctionIds: [],
   hiddenLaneSectionKeys: [],
   hiddenLaneKeys: [],
+  hiddenSignalKeys: [],
+  hiddenObjectKeys: [],
 };
 
 interface EditorViewState {
@@ -193,6 +197,8 @@ interface EditorViewState {
   toggleJunctionVisibility: (junctionId: string) => void;
   toggleLaneSectionVisibility: (sectionKey: string) => void;
   toggleLaneVisibility: (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => void;
+  toggleSignalVisibility: (roadId: string, signalId: string) => void;
+  toggleObjectVisibility: (roadId: string, objectId: string) => void;
 
   // Panel layout actions
   setLeftWidth: (width: number) => void;
@@ -387,6 +393,28 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
         ? state.display.hiddenLaneKeys.filter((key) => key !== laneKey)
         : [...state.display.hiddenLaneKeys, laneKey];
       const display = { ...state.display, hiddenLaneKeys };
+      saveDisplay(display);
+      return { display };
+    }),
+
+  toggleSignalVisibility: (roadId, signalId) =>
+    set((state) => {
+      const key = makeSignalKey(roadId, signalId);
+      const hiddenSignalKeys = (state.display.hiddenSignalKeys ?? []).includes(key)
+        ? (state.display.hiddenSignalKeys ?? []).filter((k) => k !== key)
+        : [...(state.display.hiddenSignalKeys ?? []), key];
+      const display = { ...state.display, hiddenSignalKeys };
+      saveDisplay(display);
+      return { display };
+    }),
+
+  toggleObjectVisibility: (roadId, objectId) =>
+    set((state) => {
+      const key = makeObjectKey(roadId, objectId);
+      const hiddenObjectKeys = (state.display.hiddenObjectKeys ?? []).includes(key)
+        ? (state.display.hiddenObjectKeys ?? []).filter((k) => k !== key)
+        : [...(state.display.hiddenObjectKeys ?? []), key];
+      const display = { ...state.display, hiddenObjectKeys };
       saveDisplay(display);
       return { display };
     }),
