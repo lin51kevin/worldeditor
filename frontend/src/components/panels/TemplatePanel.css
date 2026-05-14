@@ -79,12 +79,15 @@
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   background: transparent;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
-}
+  transform-origin: center center;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform 0.2s ease, box-shadow 0.2s ease;
 
 .template-item:hover {
+  transform: scale(1.06);
   border-color: var(--color-accent);
   background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 1;
 }
 
 .template-item[draggable="true"] {

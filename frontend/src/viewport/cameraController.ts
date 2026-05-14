@@ -45,6 +45,13 @@ export class CameraController {
     far: 100000,
   };
 
+  private _animatingDimension = false;
+  private _animStartPos: [number, number, number] = [0, 0, 0];
+  private _animEndPos: [number, number, number] = [0, 0, 0];
+  private _animStartUp: [number, number, number] = [0, 0, 0];
+  private _animEndUp: [number, number, number] = [0, 0, 0];
+  private _animDuration = 400;
+
   private width = 0;
   private height = 0;
   private isDragging = false;
@@ -125,19 +132,51 @@ export class CameraController {
   }
 
   setDimension(dimension: '3d' | '2d'): void {
+    if (dimension === this.dimensionMode) return;
+    if (this._animatingDimension) return;
+
+    const [tx, ty, tz] = this.camera.target;
+    const dist = this.getCameraDistance();
+
     if (dimension === '2d') {
-      const [tx, ty, tz] = this.camera.target;
-      const dist = this.getCameraDistance();
-      this.camera.position = [tx, ty, tz + dist];
-      this.camera.up = [0, 1, 0];
+      this._animEndPos = [tx, ty, tz + dist];
+      this._animEndUp = [0, 1, 0];
     } else {
-      const [tx, ty, tz] = this.camera.target;
-      const dist = this.getCameraDistance();
-      this.camera.position = [tx, ty - dist * 0.5, tz + dist * 0.7];
-      this.camera.up = [0, 0, 1];
+      this._animEndPos = [tx, ty - dist * 0.5, tz + dist * 0.7];
+      this._animEndUp = [0, 0, 1];
     }
+
+    this._animStartPos = [...this.camera.position] as [number, number, number];
+    this._animStartUp = [...this.camera.up] as [number, number, number];
+    this._animatingDimension = true;
     this.dimensionMode = dimension;
-    this.viewDirty = true;
+    this._startDimensionAnimation();
+  }
+
+  private _startDimensionAnimation(): void {
+    const startTime = performance.now();
+    const step = () => {
+      const elapsed = performance.now() - startTime;
+      const t = Math.min(elapsed / this._animDuration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      this.camera.position = [
+        this._animStartPos[0] + (this._animEndPos[0] - this._animStartPos[0]) * ease,
+        this._animStartPos[1] + (this._animEndPos[1] - this._animStartPos[1]) * ease,
+        this._animStartPos[2] + (this._animEndPos[2] - this._animStartPos[2]) * ease,
+      ];
+      this.camera.up = [
+        this._animStartUp[0] + (this._animEndUp[0] - this._animStartUp[0]) * ease,
+        this._animStartUp[1] + (this._animEndUp[1] - this._animStartUp[1]) * ease,
+        this._animStartUp[2] + (this._animEndUp[2] - this._animStartUp[2]) * ease,
+      ];
+      this.viewDirty = true;
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        this._animatingDimension = false;
+      }
+    };
+    requestAnimationFrame(step);
   }
 
   unprojectToGround(screenX: number, screenY: number): { x: number; y: number } | null {
