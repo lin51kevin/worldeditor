@@ -594,19 +594,14 @@ pub fn generate_signal_paint_vertices(
 
             if signal.signal_type == "Graphics" {
                 // Paint arrow on the road surface.
-                // hOffset in OpenDRIVE is used for vertical signs. For paint marks
-                // (Graphics), the arrow template encodes +y = forward in local space.
-                //
-                // In OpenDRIVE, left lanes (t > 0) travel in the -s direction, i.e.
-                // opposite to the reference line. Flip heading by π so the arrow tip
-                // points in the actual direction of travel for that lane.
-                // (Matches C# PanUtils.ts: `if (arrowPaint.t > 0) tangent *= -1`)
+                // hOffset in OpenDRIVE encodes the signal's facing direction relative
+                // to the road s direction (0 = forward/+s, π = backward/-s).
+                // Using hOffset directly follows the spec and handles roads where
+                // arrows on right lanes (t < 0) intentionally face -s (e.g. when the
+                // road is an outgoing leg from a junction and hOffset≈π is set by the
+                // authoring tool).
                 let (cx, cy, _) = offset_point(&ref_pt, signal.t, 0.0);
-                let heading = if signal.t > 0.0 {
-                    ref_pt.hdg + std::f64::consts::PI
-                } else {
-                    ref_pt.hdg
-                };
+                let heading = ref_pt.hdg + signal.h_offset;
                 let scale = if signal.width > 0.0 {
                     signal.width
                 } else {
@@ -830,6 +825,8 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                             &ref_pts,
                             &road.elevation_profile,
                             s,
+                            t,
+                            obj.hdg,
                             z_road,
                             0.15,
                             [0.424, 0.549, 0.278, 1.0], // (108,140,71)
@@ -860,6 +857,8 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                             &ref_pts,
                             &road.elevation_profile,
                             s,
+                            t,
+                            obj.hdg,
                             z_road,
                             0.15,
                             [0.965, 0.651, 0.137, 1.0], // (246,166,35)
@@ -891,6 +890,8 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                             &ref_pts,
                             &road.elevation_profile,
                             s,
+                            t,
+                            obj.hdg,
                             z_road,
                             0.15,
                             color,
@@ -1145,10 +1146,7 @@ mod tests {
         );
     }
 
-    /// Verify that arrow_triangles works correctly with hOffset=PI (the trafficpaint.xodr
-    /// convention). The heading passed in must already NOT include h_offset, so this tests
-    /// that the caller side is correct: generate_signal_paint_vertices uses ref_pt.hdg
-    /// directly, not ref_pt.hdg + h_offset.
+    /// Verify arrow_triangles renders forward at heading=0: tip points east (+x).
     #[test]
     fn test_arrow_triangles_east_road_forward() {
         // For an east-going road (heading=0), the arrow tip should be at +x world
@@ -1241,39 +1239,120 @@ mod tests {
         );
     }
 
-    /// Verify that paint arrows on left lanes (t > 0) are flipped 180° relative to
-    /// right-lane arrows (t < 0), matching the C# PanUtils: `if (t > 0) tangent *= -1`.
+    /// Verify that arrow_triangles correctly renders forward vs reversed headings.
+    /// heading=0 → tip at +x; heading=π → tip at -x.
     #[test]
-    fn test_left_lane_arrow_flipped_vs_right_lane() {
+    fn test_arrow_heading_forward_and_reversed() {
         use std::f32::consts::PI;
-        // A heading of 0 → right-lane arrow tip should be at +x.
-        // A left-lane arrow (heading + π) tip should be at -x.
-        let right = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, 0.0_f32, 1.0);
-        let left = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, PI, 1.0);
 
-        let right_tip_x = right
-            .chunks(7)
-            .map(|v| v[0])
-            .fold(f32::NEG_INFINITY, f32::max);
-        let _left_tip_x = left
-            .chunks(7)
-            .map(|v| v[0])
-            .fold(f32::NEG_INFINITY, f32::max);
+        let forward = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, 0.0_f32, 1.0);
+        let reversed = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, PI, 1.0);
 
-        // Right-lane tip is at +0.5, left-lane tip should be at near 0 (the flipped tail becomes +x)
-        // More precisely: right tip +x > 0, left tip +x should be the *base*, so
-        // check that the left arrow has a vertex near -0.5 in x (the original tip, now reversed).
-        let left_min_x = left.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
+        let forward_max_x = forward.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
+        let reversed_min_x = reversed.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
 
         assert!(
-            right_tip_x > 0.4,
-            "Right-lane tip should be in +x, got {}",
-            right_tip_x
+            forward_max_x > 0.4,
+            "Forward tip should be in +x, got {forward_max_x}"
         );
         assert!(
-            left_min_x < -0.4,
-            "Left-lane arrow (flipped) should reach -x, got {}",
-            left_min_x
+            reversed_min_x < -0.4,
+            "Reversed tip should reach -x, got {reversed_min_x}"
         );
+    }
+
+    // ── Signal paint heading tests ────────────────────────────────────────────
+
+    /// Minimal project JSON with one straight east-going road and one Graphics signal.
+    fn make_signal_project(signal_s: f64, signal_t: f64, h_offset: f64) -> String {
+        format!(
+            r#"{{
+                "name": "",
+                "header": {{"rev_major":1,"rev_minor":0,"name":"","date":"",
+                            "north":0,"south":0,"east":0,"west":0,"geo_reference":null}},
+                "roads": [{{
+                    "id": "1", "name": "", "length": 100.0, "junction_id": null,
+                    "link": null,
+                    "plan_view": [{{"s":0,"x":0,"y":0,"hdg":0,"length":100.0,"geo_type":"Line"}}],
+                    "elevation_profile": [{{"s":0,"a":0,"b":0,"c":0,"d":0}}],
+                    "lane_sections": [],
+                    "signals": [{{
+                        "id": "1", "name": "TestArrow",
+                        "s": {signal_s}, "t": {signal_t},
+                        "z_offset": 0.01, "h_offset": {h_offset},
+                        "width": 3.0, "height": 3.0,
+                        "signal_type": "Graphics",
+                        "signal_subtype": "StraightAheadArrow",
+                        "value": null, "orientation": "none", "is_dynamic": false
+                    }}],
+                    "objects": []
+                }}],
+                "junctions": []
+            }}"#
+        )
+    }
+
+    /// Right-lane signal (t < 0) with hOffset=0 should face +s (east).
+    /// With scale=3 on east road, tip is at cx + 1.5. Center cx = offset_point at t=-3
+    /// on east road = x=10, y=-3. Tip should be at x ≈ 11.5.
+    #[test]
+    fn test_signal_h_offset_zero_points_forward() {
+        let json = make_signal_project(10.0, -3.0, 0.0);
+        let verts = generate_signal_paint_vertices(&json, 1.0).unwrap();
+        assert!(!verts.is_empty(), "Expected signal paint vertices");
+
+        // Tip vertex for east road + heading=0: (cx+1.5, cy) = (11.5, -3)
+        let has_tip = verts
+            .chunks(7)
+            .any(|v| (v[0] - 11.5_f32).abs() < 0.05 && (v[1] + 3.0_f32).abs() < 0.05);
+        assert!(
+            has_tip,
+            "hOffset=0 right-lane arrow tip should be at (11.5, -3.0) [east/+s direction]"
+        );
+    }
+
+    /// Right-lane signal (t < 0) with hOffset=π should face -s (west).
+    /// This is the trafficpaint.xodr convention where both arrows have hOffset≈π.
+    /// With scale=3 on east road, tip is at cx - 1.5. Center cx=10, tip at (8.5, -3).
+    #[test]
+    fn test_signal_h_offset_pi_points_backward() {
+        let json = make_signal_project(10.0, -3.0, std::f64::consts::PI);
+        let verts = generate_signal_paint_vertices(&json, 1.0).unwrap();
+        assert!(!verts.is_empty(), "Expected signal paint vertices");
+
+        // Tip vertex for east road + heading=π: (cx-1.5, cy) = (8.5, -3)
+        let has_tip = verts
+            .chunks(7)
+            .any(|v| (v[0] - 8.5_f32).abs() < 0.05 && (v[1] + 3.0_f32).abs() < 0.05);
+        assert!(
+            has_tip,
+            "hOffset=π right-lane arrow tip should be at (8.5, -3.0) [west/-s direction]"
+        );
+    }
+
+    /// Left-lane signal (t > 0) with hOffset=-π (compliant XODR for reverse-facing)
+    /// should produce the same result as hOffset=+π since cos/sin are periodic with 2π.
+    /// Tip should face west (−s) regardless of the sign of π used.
+    #[test]
+    fn test_signal_h_offset_neg_pi_same_as_pos_pi() {
+        let pos = make_signal_project(10.0, 3.0, std::f64::consts::PI);
+        let neg = make_signal_project(10.0, 3.0, -std::f64::consts::PI);
+
+        let verts_pos = generate_signal_paint_vertices(&pos, 1.0).unwrap();
+        let verts_neg = generate_signal_paint_vertices(&neg, 1.0).unwrap();
+
+        assert_eq!(
+            verts_pos.len(),
+            verts_neg.len(),
+            "hOffset=+π and hOffset=-π should produce same number of vertices"
+        );
+
+        // All vertex positions should be equal (or nearly equal) since -π ≡ +π for cos/sin.
+        for (a, b) in verts_pos.iter().zip(verts_neg.iter()) {
+            assert!(
+                (a - b).abs() < 1e-4,
+                "hOffset=+π and hOffset=-π vertices should be identical, got {a} vs {b}"
+            );
+        }
     }
 }

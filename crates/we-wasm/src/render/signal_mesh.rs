@@ -393,12 +393,27 @@ pub(super) fn emit_crosswalk_stripes(
 }
 
 /// Emit a polygon outline for area objects (parking space, cross-hatch, etc.)
+///
+/// Uses the same tangent-plane transform as [`emit_crosswalk_stripes`]: a single
+/// reference-point lookup at `obj_s` avoids `abs_s` overflow and correctly handles
+/// object headings other than 0.
+///
+/// Corner coordinates `(u, v)` are in the object's local frame (origin at `obj_s`/`obj_t`,
+/// axes rotated by `obj_hdg`).  Road-frame conversion:
+///   `alpha = u·cos(obj_hdg) − v·sin(obj_hdg)`  (along-road)
+///   `beta  = u·sin(obj_hdg) + v·cos(obj_hdg)`  (lateral from obj_t)
+///
+/// World coordinates via tangent-plane:
+///   `wx = Ox + alpha·cos(θ) − beta·sin(θ)`
+///   `wy = Oy + alpha·sin(θ) + beta·cos(θ)`
 #[allow(clippy::too_many_arguments)]
 pub(super) fn emit_polygon_outline(
     corners: &[we_core::model::Point3D],
     ref_pts: &[we_core::geometry::eval::RefLinePoint],
     elevations: &[we_core::model::Elevation],
     obj_s: f64,
+    obj_t: f64,
+    obj_hdg: f64,
     z_base: f32,
     bar_thickness: f64,
     color: [f32; 4],
@@ -407,28 +422,37 @@ pub(super) fn emit_polygon_outline(
 ) {
     use we_core::geometry::eval::evaluate_elevation;
 
-    if corners.len() < 2 {
+    if corners.len() < 2 || ref_pts.is_empty() {
         return;
     }
 
+    // Single reference-point at obj_s (safe even when obj_s ≈ road length).
+    let ref_pt = ref_pts
+        .iter()
+        .min_by(|a, b| {
+            (a.s - obj_s)
+                .abs()
+                .partial_cmp(&(b.s - obj_s).abs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .unwrap();
+
+    let (ox, oy, _) = offset_pt(ref_pt, obj_t, 0.0);
+    let z_base_eval = evaluate_elevation(elevations, ref_pt.s) as f32 + 0.02;
+    let theta = ref_pt.hdg;
+    let (cos_t, sin_t) = (theta.cos(), theta.sin());
+    let (cos_h, sin_h) = (obj_hdg.cos(), obj_hdg.sin());
+
+    // Transform each cornerLocal (u, v) → world (wx, wy).
     let world_corners: Vec<(f64, f64, f32)> = corners
         .iter()
         .map(|c| {
-            // c.x = u offset; absolute road s = obj_s + c.x
-            let abs_s = obj_s + c.x;
-            let nearest = ref_pts.iter().min_by(|a, b| {
-                (a.s - abs_s)
-                    .abs()
-                    .partial_cmp(&(b.s - abs_s).abs())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-            if let Some(rp) = nearest {
-                let (wx, wy, _) = offset_pt(rp, c.y, 0.0);
-                let z = evaluate_elevation(elevations, rp.s) as f32 + c.z as f32 + 0.02;
-                (wx, wy, z)
-            } else {
-                (c.x, c.y, z_base)
-            }
+            let alpha = c.x * cos_h - c.y * sin_h;
+            let beta  = c.x * sin_h + c.y * cos_h;
+            let wx = ox + alpha * cos_t - beta * sin_t;
+            let wy = oy + alpha * sin_t + beta * cos_t;
+            let z  = z_base_eval + c.z as f32;
+            (wx, wy, z)
         })
         .collect();
 
