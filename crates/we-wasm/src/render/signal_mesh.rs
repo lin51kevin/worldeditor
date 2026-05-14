@@ -404,11 +404,21 @@ pub(super) fn emit_crosswalk_stripes(
 ///   → No `obj_hdg` rotation applied: `wx = Ox + u·cos(θ) − v·sin(θ)`
 /// - **Object-local frame** (OpenDRIVE spec): `u` = along object heading, `v` = cross-heading.
 ///   Detected when `u_span > v_span` (u is the stall depth, larger than stall width).
-///   → Apply `obj_hdg` rotation first: `alpha = u·cos(h) − v·sin(h)`, `beta = u·sin(h) + v·cos(h)`
+///   → Apply `obj_hdg` rotation first: `alpha = u·cos(h) − dv·sin(h)`, `beta = u·sin(h) + dv·cos(h)`
 ///   → Then: `wx = Ox + alpha·cos(θ) − beta·sin(θ)`
 ///
-/// This heuristic correctly handles both `parkinglot.xodr` (road-frame, u < v) and
-/// spec-compliant files like `park_ground_park_ground.xodr` (object-local, u > v).
+/// ## v-offset correction for "unusual" corners
+///
+/// Some xodr generators encode corners with large absolute road-frame offsets
+/// (i.e., corner bounding box center is > 2.5m from origin in u or v).
+/// For these, `dv = v − obj_t` is used (WorldEditorOnline convention) to bring
+/// the corner back to object-relative space before rotation.
+/// Normal spec-compliant corners (centered near origin) use `dv = v` unchanged.
+///
+/// This heuristic correctly handles both `parkinglot.xodr` (road-frame, u < v),
+/// `park_ground_park_ground.xodr` normal spaces (object-local, u > v, v near 0),
+/// and the 16 "unusual" spaces in the same file (large-offset corners).
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn emit_polygon_outline(
     corners: &[we_core::model::Point3D],
@@ -463,11 +473,24 @@ pub(super) fn emit_polygon_outline(
         (1.0_f64, 0.0_f64) // identity: alpha=u, beta=v
     };
 
+    // Some xodr generators encode cornerLocal (u, v) in a semi-absolute road frame where
+    // u or v are not centered near origin but offset by the object's lateral position.
+    // The WorldEditorOnline formula corrects this: delta_v = v - obj_t.
+    // Detection: when the corner bounding box center is far from (0, 0) in either axis
+    // (threshold 2.5m), these corners need the offset correction in the rotation branch.
+    let u_center = (u_min + u_max) / 2.0;
+    let v_center = (v_min + v_max) / 2.0;
+    let apply_dv_correction =
+        apply_rotation && (u_center.abs() > 2.5 || v_center.abs() > 2.5);
+
     let world_corners: Vec<(f64, f64, f32)> = corners
         .iter()
         .map(|c| {
-            let alpha = c.x * cos_h - c.y * sin_h;
-            let beta  = c.x * sin_h + c.y * cos_h;
+            // In the rotation branch with unusual corners, subtract obj_t from v so that
+            // the delta is object-relative before the hdg rotation (WorldEditorOnline convention).
+            let dv = if apply_dv_correction { c.y - obj_t } else { c.y };
+            let alpha = c.x * cos_h - dv * sin_h;
+            let beta  = c.x * sin_h + dv * cos_h;
             let wx = ox + alpha * cos_t - beta * sin_t;
             let wy = oy + alpha * sin_t + beta * cos_t;
             let z  = z_base_eval + c.z as f32;
@@ -789,6 +812,64 @@ mod tests {
         assert!(
             overlap < 0.5,
             "Spec-compliant spaces overlap by {overlap:.3}m; rotation should produce touching not overlapping spaces"
+        );
+    }
+
+    /// Verify that "unusual" spaces (corners far from origin) get the v−obj_t correction.
+    ///
+    /// Mirrors park_ground_park_ground.xodr Group 2 style:
+    /// - t_obj = 2.50, hdg = π/2, corners: u∈[-2.15, 3.15], v∈[2.04, 4.54]
+    /// - v_center = 3.29 > 2.5 → apply_dv_correction = true
+    /// - dv = v − 2.50 ∈ [-0.46, 2.04]  (small, near-origin after correction)
+    /// - With hdg=π/2 on θ=0 road:
+    ///   alpha = −dv ∈ [-2.04, 0.46] → wx = ox + alpha (narrow range near ox)
+    ///   Without correction: alpha = −v ∈ [-4.54, -2.04] → wx 2.5m further west
+    #[test]
+    fn test_polygon_outline_unusual_corners_dv_correction() {
+        let ref_pts: Vec<RefLinePoint> = (0..=200)
+            .map(|i| {
+                let s = i as f64 * 0.1;
+                RefLinePoint { s, x: s, y: 0.0, hdg: 0.0 }
+            })
+            .collect();
+        let elevations: Vec<Elevation> = vec![];
+        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+
+        // Unusual space: t_obj=2.50, hdg=π/2, v∈[2.04,4.54] (v_center=3.29 > 2.5 → correction)
+        // u_span=5.30 > v_span=2.50 → rotation branch
+        // After dv=v-2.50: dv∈[-0.46, 2.04], alpha=-dv∈[-2.04, 0.46]
+        // wx = ox + alpha ∈ [ox-2.04, ox+0.46], with ox=road_ref_x=2.93
+        // → wx ∈ [0.89, 3.39]
+        let t_obj = 2.50_f64;
+        let corners = vec![
+            Point3D { x: -2.15, y: 2.04, z: 0.0, id: None },
+            Point3D { x:  3.15, y: 2.04, z: 0.0, id: None },
+            Point3D { x:  3.15, y: 4.54, z: 0.0, id: None },
+            Point3D { x: -2.15, y: 4.54, z: 0.0, id: None },
+            Point3D { x: -2.15, y: 2.04, z: 0.0, id: None },
+        ];
+        let mut out = Vec::new();
+        emit_polygon_outline(
+            &corners, &ref_pts, &elevations,
+            2.93, t_obj,
+            std::f64::consts::FRAC_PI_2, 0.0, 0.10,
+            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out,
+        );
+        assert!(!out.is_empty(), "Unusual space should produce outline vertices");
+
+        // With dv correction: alpha∈[-2.04, 0.46] → wx = ox+alpha ∈ [0.89, 3.39]
+        // Without correction: alpha = -v ∈ [-4.54,-2.04] → wx ∈ [-1.61, 0.89]
+        // The corrected wx_max should be ~3.39+hw ≈ 3.44 (≥ 3.0)
+        // The uncorrected wx_max would be ~0.89+hw ≈ 0.94 (< 1.0)
+        let x_max = out.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
+        assert!(
+            x_max > 3.0,
+            "Unusual space x_max={x_max:.3}: expected ~3.44 (dv correction applied), got too-small value"
+        );
+        // Also ensure we're not excessively far from the expected range
+        assert!(
+            x_max < 4.5,
+            "Unusual space x_max={x_max:.3}: got unexpectedly large value"
         );
     }
 }
