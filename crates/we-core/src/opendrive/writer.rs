@@ -716,10 +716,6 @@ fn write_objects(
         .write_event(Event::Start(BytesStart::new("objects".to_string())))
         .map_err(w_err)?;
 
-    writer
-        .write_event(Event::Start(BytesStart::new("roadObjects".to_string())))
-        .map_err(w_err)?;
-
     for obj in objects {
         let type_str = match &obj.object_type {
             ObjectType::Sign => "sign".to_string(),
@@ -729,7 +725,7 @@ fn write_objects(
             ObjectType::Wall => "wall".to_string(),
             ObjectType::Pillar => "pillar".to_string(),
             ObjectType::TrafficCone => "trafficCone".to_string(),
-            ObjectType::ParkingSpace => "parkingSpace".to_string(),
+            ObjectType::ParkingSpace => "ParkingSpace".to_string(),
             ObjectType::Crosswalk => "crosswalk".to_string(),
             ObjectType::StopLine => "stopLine".to_string(),
             ObjectType::CrossHatchArea => "crossHatchArea".to_string(),
@@ -752,44 +748,66 @@ fn write_objects(
             ("id", obj.id.clone()),
             ("name", obj.name.clone()),
             ("type", type_str),
-            ("hdg", f(obj.orientation)),
+            ("orientation", if obj.orientation >= 180.0 { "-" } else { "none" }.to_string()),
+            ("hdg", f(obj.hdg)),
+            ("pitch", f(obj.pitch)),
+            ("roll", f(obj.roll)),
             ("width", f(obj.width)),
             ("height", f(obj.height)),
             ("length", f(obj.length)),
         ];
-        if let Some(ref v) = obj.validity {
-            attrs.push(("validity", format!("{} {}", v.from_lane, v.to_lane)));
+        if let Some(ref _v) = obj.validity {
+            attrs.push(("validLength", "0".to_string()));
         }
-        if obj.corners.is_empty() {
+        let has_children = !obj.corners.is_empty() || obj.validity.is_some();
+        if !has_children {
             writer
-                .write_event(Event::Empty(elem_with_attrs("roadObject", &attrs)))
+                .write_event(Event::Empty(elem_with_attrs("object", &attrs)))
                 .map_err(w_err)?;
         } else {
             writer
-                .write_event(Event::Start(elem_with_attrs("roadObject", &attrs)))
+                .write_event(Event::Start(elem_with_attrs("object", &attrs)))
                 .map_err(w_err)?;
-            for corner in &obj.corners {
-                let mut corner_attrs = vec![
-                    ("u", f(corner.x)),
-                    ("v", f(corner.y)),
-                    ("dz", f(corner.z)),
-                ];
-                if let Some(ref cid) = corner.id {
-                    corner_attrs.push(("id", cid.clone()));
+
+            if !obj.corners.is_empty() {
+                // Wrap corners in <outline> per OpenDRIVE spec
+                writer
+                    .write_event(Event::Start(BytesStart::new("outline".to_string())))
+                    .map_err(w_err)?;
+                for corner in &obj.corners {
+                    let mut corner_attrs = vec![
+                        ("height", "0".to_string()),
+                        ("u", f(corner.x)),
+                        ("v", f(corner.y)),
+                        ("z", f(corner.z)),
+                    ];
+                    if let Some(ref cid) = corner.id {
+                        corner_attrs.push(("id", cid.clone()));
+                    }
+                    writer
+                        .write_event(Event::Empty(elem_with_attrs("cornerLocal", &corner_attrs)))
+                        .map_err(w_err)?;
                 }
                 writer
-                    .write_event(Event::Empty(elem_with_attrs("cornerLocal", &corner_attrs)))
+                    .write_event(Event::End(BytesEnd::new("outline")))
                     .map_err(w_err)?;
             }
+
+            if let Some(ref v) = obj.validity {
+                let validity_attrs = vec![
+                    ("fromLane", v.from_lane.to_string()),
+                    ("toLane", v.to_lane.to_string()),
+                ];
+                writer
+                    .write_event(Event::Empty(elem_with_attrs("validity", &validity_attrs)))
+                    .map_err(w_err)?;
+            }
+
             writer
-                .write_event(Event::End(BytesEnd::new("roadObject")))
+                .write_event(Event::End(BytesEnd::new("object")))
                 .map_err(w_err)?;
         }
     } // end for obj in objects
-
-    writer
-        .write_event(Event::End(BytesEnd::new("roadObjects".to_string())))
-        .map_err(w_err)?;
 
     writer
         .write_event(Event::End(BytesEnd::new("objects".to_string())))

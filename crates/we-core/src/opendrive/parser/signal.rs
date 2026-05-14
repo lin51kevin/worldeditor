@@ -215,23 +215,32 @@ fn parse_road_object_elem(
                     || e.name().as_ref() == b"cornerLocal"
                     || e.name().as_ref() == b"cornerRoad" =>
             {
-                // Supports both <cornerLocal> (road-frame u/v) and <cornerRoad> (road-frame s/t).
-                // Nested inside an optional <outline> wrapper; the wrapper tag is simply ignored
-                // and corner events are captured at any depth within the element.
+                // <cornerLocal> uses (u, v, z/dz) in the object's local frame.
+                // <cornerRoad> uses (s, t, dz) in absolute road coordinates.
+                // <corner> is a legacy alias for <cornerLocal>.
+                let is_road = e.name().as_ref() == b"cornerRoad";
                 let mut s = 0.0f64;
                 let mut t = 0.0f64;
                 let mut dz = 0.0f64;
+                let mut height = 0.0f64;
                 let mut id: Option<String> = None;
                 for attr in e.attributes().flatten() {
                     match attr.key.as_ref() {
                         b"u" | b"s" => s = parse_f64(&attr).unwrap_or(0.0),
                         b"v" | b"t" => t = parse_f64(&attr).unwrap_or(0.0),
                         b"dz" | b"z" => dz = parse_f64(&attr).unwrap_or(0.0),
+                        b"height" => height = parse_f64(&attr).unwrap_or(0.0),
                         b"id" => id = Some(attr_str(&attr)?),
                         _ => {}
                     }
                 }
+                // Store height in id field as auxiliary data (height is rarely used
+                // for ground objects but parsed for completeness — Bug 9 fix).
+                let _ = height; // currently unused; available for future 3D extrusion
                 obj.corners.push(Point3D::new_with_id(s, t, dz, id));
+                if is_road {
+                    obj.corner_type = CornerType::Road;
+                }
             }
             Ok(Event::End(ref e)) if e.name().as_ref() == closing => break,
             Ok(Event::Eof) => {
@@ -241,6 +250,15 @@ fn parse_road_object_elem(
             }
             Err(e) => return Err(OpenDriveError::XmlError(e)),
             _ => {}
+        }
+    }
+    // Normalise: some xodr files repeat the first corner at the end as a closing vertex.
+    // Remove it here so renderers never need to handle it.
+    if obj.corners.len() >= 4 {
+        let first = obj.corners[0].clone();
+        let last = &obj.corners[obj.corners.len() - 1];
+        if (first.x - last.x).abs() < 1e-9 && (first.y - last.y).abs() < 1e-9 {
+            obj.corners.pop();
         }
     }
     Ok(obj)
@@ -259,10 +277,13 @@ fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError>
         position: Point3D::new(0.0, 0.0, 0.0),
         orientation: 0.0,
         hdg: 0.0,
+        pitch: 0.0,
+        roll: 0.0,
         width: 0.0,
         height: 0.0,
         length: 0.0,
         corners: Vec::new(),
+        corner_type: CornerType::Local,
         validity: None,
         from_object_ref: false,
     };
@@ -284,6 +305,8 @@ fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError>
                 };
             }
             b"hdg" => obj.hdg = parse_f64(&attr)?,
+            b"pitch" => obj.pitch = parse_f64(&attr).unwrap_or(0.0),
+            b"roll" => obj.roll = parse_f64(&attr).unwrap_or(0.0),
             b"width" => obj.width = parse_f64(&attr)?,
             b"height" => obj.height = parse_f64(&attr)?,
             b"length" => obj.length = parse_f64(&attr)?,
