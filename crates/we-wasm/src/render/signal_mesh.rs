@@ -294,7 +294,10 @@ pub(super) fn emit_rect_outline(
 /// 3. Rotate `cornerLocal (u, v)` by `obj_hdg` to get road-frame `(alpha, beta)`:
 ///    `alpha = u·cos(obj_hdg) − v·sin(obj_hdg)`  (along-road offset from origin)
 ///    `beta  = u·sin(obj_hdg) + v·cos(obj_hdg)`  (lateral offset from origin)
-/// 4. Sweep stripes in the `alpha` direction using the linear tangent-plane approximation:
+/// 4. Sweep stripes in the **`beta`** (lateral) direction; each stripe spans the full
+///    `alpha` (along-road) extent. This produces stripes **parallel to the road direction**,
+///    which is the standard zebra-crossing pattern (pedestrians walk across the stripes).
+///    World coordinates via tangent-plane approximation:
 ///    `wx = Ox + alpha·cos(θ) − beta·sin(θ)`
 ///    `wy = Oy + alpha·sin(θ) + beta·cos(θ)`
 pub(super) fn emit_crosswalk_stripes(
@@ -361,20 +364,21 @@ pub(super) fn emit_crosswalk_stripes(
         )
     };
 
-    // White zebra stripes: sweep the alpha direction (along road),
-    // each stripe spanning the full beta extent (across road).
+    // White zebra stripes: sweep the beta direction (lateral, ~10.7 m → ≈10 stripes),
+    // each stripe spanning the full alpha extent (along road, ~4 m).
+    // Stripes run parallel to the road → pedestrians walk across them (standard zebra pattern).
     let stripe_width = 0.45_f64;
     let stripe_period = 1.05_f64; // 0.45 stripe + 0.60 gap
     let [r, g, b, a]: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
-    let mut alpha = alpha_min;
-    while alpha < alpha_max {
-        let alpha_end = (alpha + stripe_width).min(alpha_max);
+    let mut beta = beta_min;
+    while beta < beta_max {
+        let beta_end = (beta + stripe_width).min(beta_max);
 
-        let p00 = world_xy(alpha, beta_min);
-        let p10 = world_xy(alpha, beta_max);
-        let p11 = world_xy(alpha_end, beta_max);
-        let p01 = world_xy(alpha_end, beta_min);
+        let p00 = world_xy(alpha_min, beta);
+        let p10 = world_xy(alpha_max, beta);
+        let p11 = world_xy(alpha_max, beta_end);
+        let p01 = world_xy(alpha_min, beta_end);
 
         out.extend_from_slice(&[p00.0, p00.1, z, r, g, b, a]);
         out.extend_from_slice(&[p10.0, p10.1, z, r, g, b, a]);
@@ -384,7 +388,7 @@ pub(super) fn emit_crosswalk_stripes(
         out.extend_from_slice(&[p11.0, p11.1, z, r, g, b, a]);
         out.extend_from_slice(&[p01.0, p01.1, z, r, g, b, a]);
 
-        alpha += stripe_period;
+        beta += stripe_period;
     }
 }
 
@@ -522,15 +526,14 @@ mod tests {
 
     /// Verify that stripes are generated even when obj_s + alpha > road length.
     ///
-    /// Before the world-space fix, all four vertices of every stripe collapsed
-    /// to the same road endpoint (degenerate zero-area triangles → invisible).
-    /// After the fix, stripes are generated at the extrapolated world position.
+    /// The world-space approach uses a single ref_pt lookup so abs_s overflow
+    /// (degenerate zero-area triangles) cannot occur.
     #[test]
     fn test_crosswalk_stripes_past_road_end_produces_output() {
         // Road ref_pts only go to s=10. Put crosswalk at s=9 with alpha=[1,5] → abs_s=[10,14].
         let ref_pts = straight_road_pts();
         // Corners: hdg=0 (no rotation), so alpha=u, beta=v.
-        // alpha range [1,5], beta range [-1,1] → 4m × 2m crosswalk past road end.
+        // alpha range [1,5] (along road), beta range [-1,1] (lateral) → 4m × 2m crosswalk.
         let corners = vec![
             Point3D { x: 1.0, y: -1.0, z: 0.0, id: None },
             Point3D { x: 5.0, y: -1.0, z: 0.0, id: None },
@@ -546,23 +549,25 @@ mod tests {
         // Must produce at least one valid (non-degenerate) stripe quad = 6 vertices × 7 floats.
         assert!(out.len() >= 42, "Expected at least one stripe but got {} floats", out.len());
 
-        // With world-space approach: ref_pt nearest to obj_s=9.0 is at s=9 (x=9.0).
-        // ox=9.0, so wx = 9 + alpha*cos(0) = 9 + alpha.
-        // First stripe at alpha=[1.0,1.45]: x values should be ≈ 10.0..10.45.
+        // With beta-sweep: road along +x (theta=0), alpha=[1,5], beta=[-1,1].
+        // First stripe at beta=-1 → beta_end=-0.55:
+        //   p00 = world_xy(alpha_min=1, -1) = (9+1, 0-1) = (10.0, -1.0)
+        // x should be 9 + alpha_min = 10.0.
         let first_x = out[0];
-        assert!(first_x >= 10.0 && first_x < 11.5, "First stripe x={first_x} should be ~10.0");
+        assert!((first_x - 10.0).abs() < 0.5, "First stripe x={first_x} should be ~10.0");
     }
 
-    /// Verify that a crosswalk with hdg=π/2 produces stripes perpendicular to the road.
+    /// Verify that a crosswalk with hdg=π/2 produces stripes PARALLEL to the road.
     ///
     /// With hdg=π/2, corners (u,v) map to road-frame: alpha=-v, beta=u.
-    /// The alpha sweep (perpendicular strip) should still span the v-derived range.
+    /// We sweep beta (lateral, 10.7 m) so each stripe spans the alpha (along-road, 4 m)
+    /// extent, producing stripes parallel to the road direction.
     #[test]
-    fn test_crosswalk_stripes_hdg_pi_half_is_perpendicular() {
+    fn test_crosswalk_stripes_hdg_pi_half_parallel_to_road() {
         let ref_pts = straight_road_pts();
         // Crosswalk with hdg=π/2, typical junction crosswalk corners.
         // u in [-3.6, 7.1], v in [-5.0, -1.0]
-        // → alpha = -v ∈ [1.0, 5.0], beta = u ∈ [-3.6, 7.1]
+        // → alpha = -v ∈ [1.0, 5.0] (along road, 4 m), beta = u ∈ [-3.6, 7.1] (lateral, 10.7 m)
         let corners = vec![
             Point3D { x: -3.6, y: -1.0, z: 0.0, id: None },
             Point3D { x:  7.1, y: -1.0, z: 0.0, id: None },
@@ -580,14 +585,22 @@ mod tests {
 
         assert!(!out.is_empty(), "Expected stripes for hdg=π/2 crosswalk");
 
-        // Stripes sweep in alpha=[1,5] direction. Since road is along +x,
-        // alpha maps to +x offset and beta maps to +y.
-        // First stripe near vertices: x ≈ 5+1=6.0..6.45, y ∈ [-3.6, 7.1].
+        // Road is along +x (theta=0). Beta-sweep → stripes run along +x.
+        // First stripe at beta=beta_min=-3.6 → beta_end=-3.15:
+        //   p00 = world_xy(alpha_min=1, -3.6) → ox=5, wx=5+1=6.0, wy=0+(-3.6)=-3.6
+        //   p10 = world_xy(alpha_max=5, -3.6) → wx=5+5=10.0, wy=-3.6
+        // Stripes are horizontal (fixed y per stripe, x varies from 6 to 10).
         let first_x = out[0];
         let first_y = out[1];
-        // x should be offset from obj origin (s=5 → x=5): 5 + alpha≈1 = ~6
-        assert!((first_x - 6.0).abs() < 0.5, "First stripe x={first_x} should be ~6.0");
-        // y (beta) should be in the lateral range
-        assert!(first_y >= -4.0 && first_y <= 7.5, "First stripe y={first_y} out of expected range");
+        // x should be ox + alpha_min = 5 + 1 = 6.0
+        assert!((first_x - 6.0).abs() < 0.5, "First stripe start x={first_x} should be ~6.0 (alpha_min)");
+        // y should be at beta_min = -3.6 (first stripe's lateral position)
+        assert!((first_y - (-3.6)).abs() < 0.5, "First stripe y={first_y} should be ~-3.6 (beta_min)");
+
+        // Beta range = 7.1 - (-3.6) = 10.7 m; period = 1.05 m → ~10 stripes.
+        // Each stripe = 2 triangles = 6 vertices × 7 floats = 42 floats.
+        let num_stripes = out.len() / 42;
+        assert!(num_stripes >= 9 && num_stripes <= 11,
+            "Expected ~10 stripes for 10.7 m lateral range, got {num_stripes}");
     }
 }
