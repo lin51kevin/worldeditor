@@ -175,7 +175,14 @@
     "laneLinks": "车道链接",
     "addPoint": "添加点",
     "deletePoint": "删除",
-    "smoothElevation": "平滑高程"
+    "smoothElevation": "平滑高程",
+    "signalProperties": "信号属性",
+    "objectProperties": "物体属性",
+    "positionLocal": "本地坐标",
+    "headingLocal": "本地朝向",
+    "headingOffset": "本地朝向",
+    "isDynamic": "是否动态",
+    "radius": "半径"
   },
   "layerPanel": {
     "header": "导航器",

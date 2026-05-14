@@ -296,6 +296,25 @@ export function Viewport() {
         }
 
         if (selectedSceneNode && selectedSceneNode.type !== 'junction') {
+          // For signal/object selections: render a small highlight marker at the element's position
+          if (selectedSceneNode.type === 'signal') {
+            const verts = await service.generateSingleSignalVertices(
+              project, selectedSceneNode.roadId, selectedSceneNode.signalId,
+              [0.2, 0.9, 0.9, 1.0],
+            );
+            if (verts.length > 0) renderer.uploadHighlightVertices(verts);
+            else renderer.clearHighlight();
+            return;
+          }
+          if (selectedSceneNode.type === 'object') {
+            const verts = await service.generateSingleObjectVertices(
+              project, selectedSceneNode.roadId, selectedSceneNode.objectId,
+              [0.2, 0.9, 0.9, 1.0],
+            );
+            if (verts.length > 0) renderer.uploadHighlightVertices(verts);
+            else renderer.clearHighlight();
+            return;
+          }
           const highlightProject = buildHighlightProject(project, selectedSceneNode);
           if (!highlightProject) {
             renderer.clearHighlight();
@@ -446,21 +465,48 @@ export function Viewport() {
           })();
           break;
         case 'pan-to-signal': {
-          // Pan to the road containing the signal; this navigates close enough for inspection
+          // Pan to the actual world position of the signal
           const { project: currentProject } = useEditorStore.getState();
-          const road = currentProject.roads.find((r) => r.id === event.roadId);
-          const signal = road?.signals?.find((s) => s.id === event.signalId);
-          if (road && signal) {
-            (async () => {
-              try {
-                const service = await getPlatformService();
-                const verts = await service.generateSingleRoadVertices(road, 2.0, [0.2, 0.5, 1.0, 0.7]);
-                if (verts.length > 0) renderer.panToCenter(verts);
-              } catch (err) {
-                console.error('[Viewport] pan-to-signal failed:', err);
+          (async () => {
+            try {
+              const service = await getPlatformService();
+              const pos = await service.getSignalWorldPos(currentProject, event.roadId, event.signalId);
+              if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+                // Build a tiny synthetic quad centred on the signal position
+                const sz = 1.0;
+                const synth = new Float32Array([
+                  pos.x - sz, pos.y - sz, 0, 1, 1, 1, 1,
+                  pos.x + sz, pos.y - sz, 0, 1, 1, 1, 1,
+                  pos.x,      pos.y + sz, 0, 1, 1, 1, 1,
+                ]);
+                renderer.panToCenter(synth);
               }
-            })();
-          }
+            } catch (err) {
+              console.error('[Viewport] pan-to-signal failed:', err);
+            }
+          })();
+          break;
+        }
+        case 'pan-to-object': {
+          // Pan to the actual world position of the object
+          const { project: currentProject } = useEditorStore.getState();
+          (async () => {
+            try {
+              const service = await getPlatformService();
+              const pos = await service.getObjectWorldPos(currentProject, event.roadId, event.objectId);
+              if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+                const sz = 1.0;
+                const synth = new Float32Array([
+                  pos.x - sz, pos.y - sz, 0, 1, 1, 1, 1,
+                  pos.x + sz, pos.y - sz, 0, 1, 1, 1, 1,
+                  pos.x,      pos.y + sz, 0, 1, 1, 1, 1,
+                ]);
+                renderer.panToCenter(synth);
+              }
+            } catch (err) {
+              console.error('[Viewport] pan-to-object failed:', err);
+            }
+          })();
           break;
         }
         case 'set-dimension':
@@ -853,6 +899,28 @@ export function Viewport() {
       const junctionId = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
       if (junctionId !== null) {
         useEditorStore.getState().selectJunction(junctionId);
+        const rendererInst = rendererRef.current;
+        if (rendererInst) rendererInst.clearHover();
+        hoveredRoadRef.current = null;
+        hoveredJunctionRef.current = null;
+        return;
+      }
+
+      // Try picking signals
+      const signalHit = await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 3.0);
+      if (signalHit !== null) {
+        useEditorStore.getState().selectSignal(signalHit.roadId, signalHit.signalId);
+        const rendererInst = rendererRef.current;
+        if (rendererInst) rendererInst.clearHover();
+        hoveredRoadRef.current = null;
+        hoveredJunctionRef.current = null;
+        return;
+      }
+
+      // Try picking road objects
+      const objectHit = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 3.0);
+      if (objectHit !== null) {
+        useEditorStore.getState().selectObject(objectHit.roadId, objectHit.objectId);
         const rendererInst = rendererRef.current;
         if (rendererInst) rendererInst.clearHover();
         hoveredRoadRef.current = null;

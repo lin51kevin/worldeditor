@@ -131,7 +131,39 @@ export abstract class BasePlatformService implements PlatformService {
     return wasm.pick_junction_at_point(JSON.stringify(project), x, y, threshold);
   }
 
-  // --- Elevation ---
+  async pickSignalAtPoint(project: Project, x: number, y: number, threshold: number): Promise<{ roadId: string; signalId: string } | null> {
+    const wasm = await this.getWasm();
+    return wasm.pick_signal_at_point(JSON.stringify(project), x, y, threshold) as { roadId: string; signalId: string } | null;
+  }
+
+  async pickObjectAtPoint(project: Project, x: number, y: number, threshold: number): Promise<{ roadId: string; objectId: string } | null> {
+    const wasm = await this.getWasm();
+    return wasm.pick_object_at_point(JSON.stringify(project), x, y, threshold) as { roadId: string; objectId: string } | null;
+  }
+
+  async generateSingleSignalVertices(project: Project, roadId: string, signalId: string, color: [number, number, number, number]): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_single_signal_vertices(
+      JSON.stringify(project), roadId, signalId, color[0], color[1], color[2], color[3],
+    );
+  }
+
+  async generateSingleObjectVertices(project: Project, roadId: string, objectId: string, color: [number, number, number, number]): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_single_object_vertices(
+      JSON.stringify(project), roadId, objectId, color[0], color[1], color[2], color[3],
+    );
+  }
+
+  async getSignalWorldPos(project: Project, roadId: string, signalId: string): Promise<{ x: number; y: number } | null> {
+    const wasm = await this.getWasm();
+    return wasm.get_signal_world_pos(JSON.stringify(project), roadId, signalId) as { x: number; y: number } | null;
+  }
+
+  async getObjectWorldPos(project: Project, roadId: string, objectId: string): Promise<{ x: number; y: number } | null> {
+    const wasm = await this.getWasm();
+    return wasm.get_object_world_pos(JSON.stringify(project), roadId, objectId) as { x: number; y: number } | null;
+  }
 
   async queryElevation(road: Road, s: number): Promise<ElevationQueryResult> {
     const wasm = await this.getWasm();

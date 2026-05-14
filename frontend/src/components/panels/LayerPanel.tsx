@@ -38,6 +38,7 @@ export function LayerPanel() {
   const selectLaneSection = useEditorStore((s) => s.selectLaneSection);
   const selectLane = useEditorStore((s) => s.selectLane);
   const selectSignal = useEditorStore((s) => s.selectSignal);
+  const selectObject = useEditorStore((s) => s.selectObject);
   const {
     display,
     toggleDisplaySetting,
@@ -188,6 +189,12 @@ export function LayerPanel() {
     selectSignal(roadId, signalId);
     emitViewportEvent({ type: 'pan-to-signal', roadId, signalId });
   }, [selectSignal]);
+
+  const handleSelectObject = useCallback((roadId: string, objectId: string) => {
+    selectionSourceRef.current = 'panel';
+    selectObject(roadId, objectId);
+    emitViewportEvent({ type: 'pan-to-object', roadId, objectId });
+  }, [selectObject]);
 
   const handleZoomToRoad = useCallback((roadId: string) => {
     emitViewportEvent({ type: 'zoom-to-selected', roadId });
@@ -382,7 +389,6 @@ export function LayerPanel() {
               <RoadLayerItem
                 key={`road-${road.id}`}
                 road={road}
-                roadObjects={(project.objects ?? []).filter((object) => object.roadId === road.id)}
                 selectedSceneNode={selectedSceneNode}
                 isSelected={isRoadSelected(road.id)}
                 isVisible={isRoadVisible(road.id)}
@@ -407,6 +413,7 @@ export function LayerPanel() {
                 onToggleSignalsExpand={() => toggleRoadSignalsExpand(road.id)}
                 onSelectSignal={(signalId) => handleSelectSignal(road.id, signalId)}
                 onToggleObjectsExpand={() => toggleRoadObjectsExpand(road.id)}
+                onSelectObject={(objectId) => handleSelectObject(road.id, objectId)}
               />
             ))}
 

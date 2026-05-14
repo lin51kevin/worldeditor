@@ -693,6 +693,18 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
         }
 
         for obj in &road.objects {
+            // Skip objects that arrived via <objectReference> resolution.  These copies
+            // share geometry with the original object but are placed at a different (s, t)
+            // on a different road.  For objects with small cornerLocal offsets the copy
+            // renders at nearly the same world position as the original (redundant); for
+            // objects with large offsets (e.g. unusual parking spaces) the copy renders
+            // at an incorrect world position, producing ghost stalls tens of metres away.
+            // The original objects always render on their own roads, so skipping copies
+            // loses no visual information.
+            if obj.from_object_ref {
+                continue;
+            }
+
             // Skip ground markings (crosswalk, stop lines, yield lines) on junction connectors.
             if is_junction_connector {
                 match &obj.object_type {
@@ -1110,6 +1122,114 @@ pub fn generate_default_lane_section(
         with_shoulder,
     );
     serde_json::to_string(&section).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Generate highlight vertices for a single signal.
+///
+/// Looks up the signal by road_id + signal_id, evaluates its world position,
+/// and returns a diamond marker mesh tinted with the given colour.
+/// Each vertex is 7 floats: [x, y, z, r, g, b, a].
+#[wasm_bindgen]
+pub fn generate_single_signal_vertices(
+    project_json: &str,
+    road_id: &str,
+    signal_id: &str,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point};
+    use we_core::model::Project;
+
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let road = project.roads.iter().find(|rd| rd.id == road_id);
+    let signal = road.and_then(|rd| rd.signals.iter().find(|s| s.id == signal_id));
+
+    let (road, signal) = match (road, signal) {
+        (Some(road), Some(signal)) => (road, signal),
+        _ => return Ok(Vec::new()),
+    };
+
+    let Some(ref_pt) = road_point_at_s(&road.plan_view, signal.s) else {
+        return Ok(Vec::new());
+    };
+
+    let (mx, my, _) = offset_point(&ref_pt, signal.t, 0.0);
+    let z_road = evaluate_elevation(&road.elevation_profile, signal.s) as f32;
+    let mx = mx as f32;
+    let my = my as f32;
+    let sz = 0.6f32; // slightly larger than the normal 0.4 marker
+    let z = z_road + 0.55;
+
+    // Diamond: 6 vertices (2 triangles)
+    let top = [mx, my - sz, z + sz];
+    let bot = [mx, my + sz, z - sz];
+    let lft = [mx - sz, my, z];
+    let rgt = [mx + sz, my, z];
+
+    let mut floats = Vec::with_capacity(6 * 7);
+    for p in &[top, lft, bot, top, bot, rgt] {
+        floats.extend_from_slice(&[p[0], p[1], p[2], r, g, b, a]);
+    }
+    Ok(floats)
+}
+
+/// Generate highlight vertices for a single road object.
+///
+/// Looks up the object by road_id + object_id, evaluates its world position,
+/// and returns a square marker mesh tinted with the given colour.
+/// Each vertex is 7 floats: [x, y, z, r, g, b, a].
+#[wasm_bindgen]
+pub fn generate_single_object_vertices(
+    project_json: &str,
+    road_id: &str,
+    object_id: &str,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point};
+    use we_core::model::Project;
+
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let road = project.roads.iter().find(|rd| rd.id == road_id);
+    let obj = road.and_then(|rd| rd.objects.iter().find(|o| o.id == object_id));
+
+    let (road, obj) = match (road, obj) {
+        (Some(road), Some(obj)) => (road, obj),
+        _ => return Ok(Vec::new()),
+    };
+
+    let s = obj.position.x;
+    let t = obj.position.y;
+    let Some(ref_pt) = road_point_at_s(&road.plan_view, s) else {
+        return Ok(Vec::new());
+    };
+
+    let (mx, my, _) = offset_point(&ref_pt, t, 0.0);
+    let z_road = evaluate_elevation(&road.elevation_profile, s) as f32;
+    let mx = mx as f32;
+    let my = my as f32;
+    let sz = 0.6f32;
+    let z = z_road + 0.05;
+
+    // Square (4 triangles from center):  2 triangles top-right + bottom-left halves
+    let tl = [mx - sz, my - sz, z];
+    let tr = [mx + sz, my - sz, z];
+    let bl = [mx - sz, my + sz, z];
+    let br = [mx + sz, my + sz, z];
+
+    let mut floats = Vec::with_capacity(6 * 7);
+    for p in &[tl, tr, br, tl, br, bl] {
+        floats.extend_from_slice(&[p[0], p[1], p[2], r, g, b, a]);
+    }
+    Ok(floats)
 }
 
 #[cfg(test)]

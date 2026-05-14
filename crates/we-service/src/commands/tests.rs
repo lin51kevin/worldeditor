@@ -747,6 +747,7 @@ fn make_road_object(id: &str) -> RoadObject {
         length: 0.0,
         corners: vec![],
         validity: None,
+        from_object_ref: false,
     }
 }
 

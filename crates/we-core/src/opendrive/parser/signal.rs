@@ -264,6 +264,7 @@ fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError>
         length: 0.0,
         corners: Vec::new(),
         validity: None,
+        from_object_ref: false,
     };
 
     for attr in e.attributes().flatten() {

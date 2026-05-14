@@ -428,6 +428,21 @@ pub struct RoadObject {
     #[serde(default)]
     pub corners: Vec<Point3D>,
     pub validity: Option<Validity>,
+    /// Set to `true` for objects that were synthesised from an `<objectReference>`
+    /// element during parsing.  These copies share their geometry with the original
+    /// object but are placed at a different (s, t) on a different road.
+    ///
+    /// The renderer skips `from_object_ref` copies because:
+    /// - For small-center objects the copy renders at nearly the same world position
+    ///   as the original → redundant double-draw.
+    /// - For large-center objects (e.g. unusual parking spaces with big cornerLocal
+    ///   offsets) the copy renders at an incorrect world position, producing ghost
+    ///   stalls tens of metres away from the intended location.
+    ///
+    /// The original objects are always rendered on their own roads; no visual
+    /// information is lost by skipping the copies.
+    #[serde(default)]
+    pub from_object_ref: bool,
 }
 
 // ============================================================================
@@ -621,6 +636,7 @@ mod tests {
                 from_lane: -2,
                 to_lane: 2,
             }),
+            from_object_ref: false,
         };
 
         let json = serde_json::to_string(&object).unwrap();

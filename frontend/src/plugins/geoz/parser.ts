@@ -649,7 +649,7 @@ function convertRoad(
     bridges: [],
     tunnels: [],
     signals: [],
-    objects,
+    objects: [],
   };
 
   return { road, signals, objects };

@@ -1,8 +1,8 @@
-import type { Elevation, Geometry, Project, Road, RoadObject, RoadSignal, Junction, Lane, LaneLink, LaneWidth } from '../../services/platform';
+import type { Elevation, Geometry, Project, Road, RoadObject, RoadObjectItem, RoadSignal, Junction, Lane, LaneLink, LaneWidth } from '../../services/platform';
 import type { LaneSide, SceneNodeSelection } from '../../utils/sceneGraph';
 
 // Re-export types used by the store's public API
-export type { Elevation, Geometry, Project, Road, RoadObject, RoadSignal, Junction, Lane, LaneLink, LaneWidth };
+export type { Elevation, Geometry, Project, Road, RoadObject, RoadObjectItem, RoadSignal, Junction, Lane, LaneLink, LaneWidth };
 export type { LaneSide, SceneNodeSelection };
 
 export interface EditorState {
@@ -52,6 +52,7 @@ export interface EditorState {
   selectLaneSection: (roadId: string, sectionIndex: number) => void;
   selectLane: (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => void;
   selectSignal: (roadId: string, signalId: string) => void;
+  selectObject: (roadId: string, objectId: string) => void;
   selectAll: () => void;
   deleteSelected: () => void;
   duplicateSelected: () => void;

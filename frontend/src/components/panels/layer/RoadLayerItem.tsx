@@ -1,11 +1,10 @@
 import { ChevronDown, ChevronRight, Crosshair, Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { Road, RoadObject } from '../../../services/platform';
+import type { Road } from '../../../services/platform';
 import { makeLaneSectionKey, type LaneSide, type SceneNodeSelection } from '../../../utils/sceneGraph';
 
 export interface RoadLayerItemProps {
   road: Road;
-  roadObjects: RoadObject[];
   selectedSceneNode: SceneNodeSelection | null;
   isSelected: boolean;
   isVisible: boolean;
@@ -30,11 +29,11 @@ export interface RoadLayerItemProps {
   onToggleSignalsExpand: () => void;
   onSelectSignal: (signalId: string) => void;
   onToggleObjectsExpand: () => void;
+  onSelectObject: (objectId: string) => void;
 }
 
 export function RoadLayerItem({
   road,
-  roadObjects,
   selectedSceneNode,
   isSelected,
   isVisible,
@@ -59,9 +58,11 @@ export function RoadLayerItem({
   onToggleSignalsExpand,
   onSelectSignal,
   onToggleObjectsExpand,
+  onSelectObject,
 }: RoadLayerItemProps) {
   const { t } = useTranslation();
   const roadSignals = road.signals ?? [];
+  const roadObjects = road.objects ?? [];
 
   return (
     <div key={`road-${road.id}`} className="road-list-entry" ref={entryRef}>
@@ -268,14 +269,30 @@ export function RoadLayerItem({
               </div>
               {objectsExpanded && (
                 <div className="lane-section-children">
-                  {roadObjects.map((object) => (
-                    <div key={object.id} className="layer-item layer-item-child layer-item-lane">
-                      <span className="layer-name">
-                        {object.id}
-                        <span className="road-id"> ({object.type})</span>
-                      </span>
-                    </div>
-                  ))}
+                  {roadObjects.map((object) => {
+                    const isObjectSelected = selectedSceneNode?.type === 'object'
+                      && selectedSceneNode.roadId === road.id
+                      && selectedSceneNode.objectId === object.id;
+                    const typeStr = typeof object.object_type === 'string'
+                      ? object.object_type
+                      : object.object_type.Custom;
+                    const displayName = object.name
+                      ? object.name
+                      : `${typeStr} (${object.id})`;
+
+                    return (
+                      <div
+                        key={object.id}
+                        className={`layer-item layer-item-child layer-item-lane ${isObjectSelected ? 'selected' : ''}`}
+                        onClick={() => onSelectObject(object.id)}
+                      >
+                        <span className="layer-name">
+                          {displayName}
+                          {object.name && <span className="road-id"> ({typeStr})</span>}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

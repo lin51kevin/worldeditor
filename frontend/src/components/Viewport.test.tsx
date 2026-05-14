@@ -195,6 +195,12 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     moveSplineKnot: vi.fn().mockResolvedValue({ knots: [] }),
     splineToGeometries: vi.fn().mockResolvedValue([]),
     generateObjectVertices: vi.fn().mockResolvedValue(new Float32Array()),
+    pickSignalAtPoint: vi.fn().mockResolvedValue(null),
+    pickObjectAtPoint: vi.fn().mockResolvedValue(null),
+    generateSingleSignalVertices: vi.fn().mockResolvedValue(new Float32Array()),
+    generateSingleObjectVertices: vi.fn().mockResolvedValue(new Float32Array()),
+    getSignalWorldPos: vi.fn().mockResolvedValue(null),
+    getObjectWorldPos: vi.fn().mockResolvedValue(null),
   };
 }
 

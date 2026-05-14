@@ -173,6 +173,15 @@ export function generate_signal_paint_vertices(project_json: string, _sample_ste
 export function generate_single_junction_vertices(project_json: string, junction_id: string, r: number, g: number, b: number, a: number): Float32Array;
 
 /**
+ * Generate highlight vertices for a single road object.
+ *
+ * Looks up the object by road_id + object_id, evaluates its world position,
+ * and returns a square marker mesh tinted with the given colour.
+ * Each vertex is 7 floats: [x, y, z, r, g, b, a].
+ */
+export function generate_single_object_vertices(project_json: string, road_id: string, object_id: string, r: number, g: number, b: number, a: number): Float32Array;
+
+/**
  * Generate road mesh vertices for a single road. Returns Float32Array.
  *
  * Each vertex is 7 floats: [x, y, z, r, g, b, a].
@@ -180,6 +189,15 @@ export function generate_single_junction_vertices(project_json: string, junction
  * Used for selection highlight rendering (overrides per-lane colors).
  */
 export function generate_single_road_vertices(road_json: string, sample_step: number, r: number, g: number, b: number, a: number): Float32Array;
+
+/**
+ * Generate highlight vertices for a single signal.
+ *
+ * Looks up the signal by road_id + signal_id, evaluates its world position,
+ * and returns a diamond marker mesh tinted with the given colour.
+ * Each vertex is 7 floats: [x, y, z, r, g, b, a].
+ */
+export function generate_single_signal_vertices(project_json: string, road_id: string, signal_id: string, r: number, g: number, b: number, a: number): Float32Array;
 
 /**
  * Convert WGS84 geodetic coordinates to an MGRS grid reference string.
@@ -203,9 +221,23 @@ export function geo_to_utm(lat: number, lon: number, alt: number): any;
 export function geodetic_to_ecef(lat_deg: number, lon_deg: number, alt_m: number): any;
 
 /**
+ * Compute the world-space position (x, y) of a road object given its road-local position.
+ *
+ * Returns JSON `{ "x": f64, "y": f64 }` or null if the road/object is not found.
+ */
+export function get_object_world_pos(project_json: string, road_id: string, object_id: string): any;
+
+/**
  * List built-in road templates available for spline-based road creation.
  */
 export function get_road_templates(): any;
+
+/**
+ * Compute the world-space position (x, y) of a signal given its s/t road coordinates.
+ *
+ * Returns JSON `{ "x": f64, "y": f64 }` or null if the road/signal is not found.
+ */
+export function get_signal_world_pos(project_json: string, road_id: string, signal_id: string): any;
 
 export function init(): void;
 
@@ -271,6 +303,13 @@ export function parse_wkt_crs(wkt_str: string): any;
 export function pick_junction_at_point(project_json: string, x: number, y: number, threshold: number): any;
 
 /**
+ * Pick the closest road object to a world-space point.
+ *
+ * Returns JSON `{ "roadId": string, "objectId": string }` or null.
+ */
+export function pick_object_at_point(project_json: string, x: number, y: number, threshold: number): any;
+
+/**
  * Find the closest road to a world-space point.
  *
  * Returns the road ID as a string, or null if no road is within the threshold.
@@ -278,6 +317,13 @@ export function pick_junction_at_point(project_json: string, x: number, y: numbe
  * the reference line centre.
  */
 export function pick_road_at_point(project_json: string, x: number, y: number, threshold: number): any;
+
+/**
+ * Pick the closest signal to a world-space point.
+ *
+ * Returns JSON `{ "roadId": string, "signalId": string }` or null.
+ */
+export function pick_signal_at_point(project_json: string, x: number, y: number, threshold: number): any;
 
 /**
  * Pick the closest knot to a point.
@@ -405,11 +451,15 @@ export interface InitOutput {
     readonly generate_road_vertices: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly generate_signal_paint_vertices: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_single_junction_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly generate_single_object_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
     readonly generate_single_road_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+    readonly generate_single_signal_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
     readonly geo_to_mgrs: (a: number, b: number, c: number) => [number, number, number, number];
     readonly geo_to_utm: (a: number, b: number, c: number) => any;
     readonly geodetic_to_ecef: (a: number, b: number, c: number) => [number, number, number];
+    readonly get_object_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly get_road_templates: () => [number, number, number];
+    readonly get_signal_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly init: () => void;
     readonly measure_angle: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly measure_area: (a: number, b: number) => [number, number, number];
@@ -420,7 +470,9 @@ export interface InitOutput {
     readonly parse_proj4_crs: (a: number, b: number) => [number, number, number];
     readonly parse_wkt_crs: (a: number, b: number) => [number, number, number];
     readonly pick_junction_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pick_object_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pick_road_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pick_signal_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pick_spline_knot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly point_in_junction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly project_is_valid: (a: number, b: number) => [number, number, number];

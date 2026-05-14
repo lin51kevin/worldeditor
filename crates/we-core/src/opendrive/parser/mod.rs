@@ -77,6 +77,7 @@ pub fn parse(xml: &str) -> Result<Project, OpenDriveError> {
                 copy.position.x = obj_ref.s;
                 copy.position.y = obj_ref.t;
                 copy.position.z = obj_ref.z_offset;
+                copy.from_object_ref = true;
                 project.roads[road_idx].objects.push(copy);
             } else {
                 log::warn!(
@@ -480,5 +481,9 @@ mod tests {
         // Corners and hdg must be inherited from the original
         assert_eq!(copy.corners.len(), 4, "corners must be copied from original");
         assert!((copy.hdg - std::f64::consts::FRAC_PI_2).abs() < 1e-9, "hdg must be copied from original");
+        // The copy must be flagged so the renderer skips it (avoids ghost stalls)
+        assert!(copy.from_object_ref, "objectReference copy must have from_object_ref=true");
+        // The original must NOT be flagged
+        assert!(!original.from_object_ref, "original object must have from_object_ref=false");
     }
 }

@@ -16,6 +16,7 @@ export interface SelectionSlice {
   selectLaneSection: (roadId: string, sectionIndex: number) => void;
   selectLane: (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => void;
   selectSignal: (roadId: string, signalId: string) => void;
+  selectObject: (roadId: string, objectId: string) => void;
   selectAll: () => void;
   deleteSelected: () => void;
   duplicateSelected: () => void;
@@ -84,6 +85,14 @@ export const createSelectionSlice: SliceCreator<SelectionSlice> = (set, get) => 
       selectedJunctionId: null,
       selectedObjectType: 'road',
       selectedSceneNode: { type: 'signal', roadId, signalId },
+    }),
+
+  selectObject: (roadId, objectId) =>
+    set({
+      selectedRoadId: roadId,
+      selectedJunctionId: null,
+      selectedObjectType: 'road',
+      selectedSceneNode: { type: 'object', roadId, objectId },
     }),
 
   selectAll: () => {

@@ -89,7 +89,7 @@ export interface Road {
   bridges?: unknown[];
   tunnels?: unknown[];
   signals?: RoadSignal[];
-  objects?: unknown[];
+  objects?: RoadObjectItem[];
 }
 
 /** Project-level signal reference (simplified, for project.signals array). */
@@ -119,6 +119,7 @@ export interface RoadSignal {
   is_dynamic: boolean;
 }
 
+/** Project-level road object reference (simplified, for project.objects array). */
 export interface RoadObject {
   id: string;
   roadId: string;
@@ -126,6 +127,37 @@ export interface RoadObject {
   laneId: number;
   type: string;
   validity: string;
+}
+
+/** Road-level object as parsed from OpenDRIVE `<object>` elements (road.objects[]). */
+export interface RoadObjectValidity {
+  from_lane: number;
+  to_lane: number;
+}
+
+export interface RoadObjectPosition {
+  x: number;
+  y: number;
+  z: number;
+  id: string | null;
+}
+
+export interface RoadObjectItem {
+  id: string;
+  /** Serialized ObjectType: unit variants as string (e.g. "ParkingSpace"), Custom as { Custom: string }. */
+  object_type: string | { Custom: string };
+  name: string;
+  /** position.x = s (station), position.y = t (lateral offset), position.z = z_offset */
+  position: RoadObjectPosition;
+  /** Heading offset relative to road direction (degrees). */
+  orientation: number;
+  /** Object heading in radians relative to road direction. */
+  hdg: number;
+  width: number;
+  height: number;
+  length: number;
+  corners: RoadObjectPosition[];
+  validity: RoadObjectValidity | null;
 }
 
 export interface LaneSection {
@@ -336,6 +368,24 @@ export interface PlatformService {
 
   /** Find the closest junction to a world-space point. Returns junction ID or null. */
   pickJunctionAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null>;
+
+  /** Find the closest signal to a world-space point. Returns { roadId, signalId } or null. */
+  pickSignalAtPoint(project: Project, x: number, y: number, threshold: number): Promise<{ roadId: string; signalId: string } | null>;
+
+  /** Find the closest road object to a world-space point. Returns { roadId, objectId } or null. */
+  pickObjectAtPoint(project: Project, x: number, y: number, threshold: number): Promise<{ roadId: string; objectId: string } | null>;
+
+  /** Generate highlight vertices for a single signal. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
+  generateSingleSignalVertices(project: Project, roadId: string, signalId: string, color: [number, number, number, number]): Promise<Float32Array>;
+
+  /** Generate highlight vertices for a single road object. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
+  generateSingleObjectVertices(project: Project, roadId: string, objectId: string, color: [number, number, number, number]): Promise<Float32Array>;
+
+  /** Get the world-space XY position of a signal. Returns { x, y } or null. */
+  getSignalWorldPos(project: Project, roadId: string, signalId: string): Promise<{ x: number; y: number } | null>;
+
+  /** Get the world-space XY position of a road object. Returns { x, y } or null. */
+  getObjectWorldPos(project: Project, roadId: string, objectId: string): Promise<{ x: number; y: number } | null>;
 
   /** Query elevation and grade at a station on a road. */
   queryElevation(road: Road, s: number): Promise<ElevationQueryResult>;

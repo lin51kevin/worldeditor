@@ -891,6 +891,7 @@ mod tests {
                 length: 0.0,
                 corners: vec![],
                 validity: Some(Validity { from_lane: -1, to_lane: -2 }),
+                from_object_ref: false,
             }];
             r
         }], vec![]);
@@ -928,6 +929,7 @@ mod tests {
                     length: 0.0,
                     corners: vec![],
                     validity: None,
+                    from_object_ref: false,
                 }];
                 r
             }], vec![]);
@@ -952,6 +954,7 @@ mod tests {
                 length: 0.0,
                 corners: vec![],
                 validity: None,
+                from_object_ref: false,
             }];
             r
         }], vec![]);
@@ -1382,6 +1385,7 @@ mod tests {
                 length: 0.0,
                 corners: vec![],
                 validity: None,
+                from_object_ref: false,
             }];
             r.bridges = vec![Bridge { id: "b1".into(), s: 20.0, length: 10.0, bridge_type: "steel".into() }];
             r.tunnels = vec![Tunnel { id: "t1".into(), s: 40.0, length: 20.0, tunnel_type: "standard".into() }];

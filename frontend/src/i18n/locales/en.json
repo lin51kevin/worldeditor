@@ -175,7 +175,14 @@
     "laneLinks": "Lane Links",
     "addPoint": "Add Point",
     "deletePoint": "Delete",
-    "smoothElevation": "Smooth Elevation"
+    "smoothElevation": "Smooth Elevation",
+    "signalProperties": "Signal Properties",
+    "objectProperties": "Object Properties",
+    "positionLocal": "PositionLocal",
+    "headingLocal": "HeadingLocal",
+    "headingOffset": "HeadingLocal",
+    "isDynamic": "IsDynamic",
+    "radius": "Radius"
   },
   "layerPanel": {
     "header": "Navigator",

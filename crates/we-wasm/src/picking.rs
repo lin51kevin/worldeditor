@@ -1,5 +1,34 @@
 use crate::render::{build_junction_polygon_points, point_in_polygon, road_point_at_s};
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
+
+/// Plain-object return types for wasm-bindgen.
+///
+/// serde-wasm-bindgen 0.4+ serializes `serde_json::Value::Object` (and any Rust map type) as
+/// a JavaScript **Map** instead of a plain object. Named structs, however, still produce plain
+/// JavaScript objects with dot-accessible properties.  We use these structs wherever the
+/// TypeScript caller uses `result.fieldName` notation.
+#[derive(Serialize)]
+struct WorldPos {
+    x: f64,
+    y: f64,
+}
+
+#[derive(Serialize)]
+struct SignalHit {
+    #[serde(rename = "roadId")]
+    road_id: String,
+    #[serde(rename = "signalId")]
+    signal_id: String,
+}
+
+#[derive(Serialize)]
+struct ObjectHit {
+    #[serde(rename = "roadId")]
+    road_id: String,
+    #[serde(rename = "objectId")]
+    object_id: String,
+}
 
 /// Find the closest junction to a world-space point.
 #[wasm_bindgen]
@@ -308,4 +337,173 @@ pub fn snap_point(
         serde_json::from_str(config_json).map_err(|e| JsError::new(&e.to_string()))?;
     let result = we_core::snapping::snap_point(x, y, &config, &project, exclude_road_id.as_deref());
     serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── Signal & Object world-position helpers ────────────────────────────────────
+
+/// Compute the world-space position (x, y) of a signal given its s/t road coordinates.
+///
+/// Returns JSON `{ "x": f64, "y": f64 }` or null if the road/signal is not found.
+#[wasm_bindgen]
+pub fn get_signal_world_pos(
+    project_json: &str,
+    road_id: &str,
+    signal_id: &str,
+) -> Result<JsValue, JsError> {
+    use crate::render::road_point_at_s;
+    use we_core::geometry::eval::offset_point;
+
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let road = project.roads.iter().find(|r| r.id == road_id);
+    let signal = road.and_then(|r| r.signals.iter().find(|s| s.id == signal_id));
+
+    match (road, signal) {
+        (Some(road), Some(signal)) => {
+            if let Some(ref_pt) = road_point_at_s(&road.plan_view, signal.s) {
+                let (wx, wy, _) = offset_point(&ref_pt, signal.t, 0.0);
+                let result = WorldPos { x: wx, y: wy };
+                serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+            } else {
+                Ok(JsValue::NULL)
+            }
+        }
+        _ => Ok(JsValue::NULL),
+    }
+}
+
+/// Compute the world-space position (x, y) of a road object given its road-local position.
+///
+/// Returns JSON `{ "x": f64, "y": f64 }` or null if the road/object is not found.
+#[wasm_bindgen]
+pub fn get_object_world_pos(
+    project_json: &str,
+    road_id: &str,
+    object_id: &str,
+) -> Result<JsValue, JsError> {
+    use crate::render::road_point_at_s;
+    use we_core::geometry::eval::offset_point;
+
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let road = project.roads.iter().find(|r| r.id == road_id);
+    // position.x = s (station), position.y = t (lateral offset)
+    let object = road.and_then(|r| r.objects.iter().find(|o| o.id == object_id));
+
+    match (road, object) {
+        (Some(road), Some(obj)) => {
+            let s = obj.position.x;
+            let t = obj.position.y;
+            if let Some(ref_pt) = road_point_at_s(&road.plan_view, s) {
+                let (wx, wy, _) = offset_point(&ref_pt, t, 0.0);
+                let result = WorldPos { x: wx, y: wy };
+                serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+            } else {
+                Ok(JsValue::NULL)
+            }
+        }
+        _ => Ok(JsValue::NULL),
+    }
+}
+
+/// Pick the closest signal to a world-space point.
+///
+/// Returns JSON `{ "roadId": string, "signalId": string }` or null.
+#[wasm_bindgen]
+pub fn pick_signal_at_point(
+    project_json: &str,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Result<JsValue, JsError> {
+    use crate::render::road_point_at_s;
+    use we_core::geometry::eval::offset_point;
+
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut best_road_id: Option<String> = None;
+    let mut best_signal_id: Option<String> = None;
+    let mut best_dist = threshold;
+
+    for road in &project.roads {
+        if road.render_hidden {
+            continue;
+        }
+        for signal in &road.signals {
+            let Some(ref_pt) = road_point_at_s(&road.plan_view, signal.s) else {
+                continue;
+            };
+            let (wx, wy, _) = offset_point(&ref_pt, signal.t, 0.0);
+            let dx = wx - x;
+            let dy = wy - y;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < best_dist {
+                best_dist = dist;
+                best_road_id = Some(road.id.clone());
+                best_signal_id = Some(signal.id.clone());
+            }
+        }
+    }
+
+    match (best_road_id, best_signal_id) {
+        (Some(road_id), Some(signal_id)) => {
+            let result = SignalHit { road_id, signal_id };
+            serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+        }
+        _ => Ok(JsValue::NULL),
+    }
+}
+
+/// Pick the closest road object to a world-space point.
+///
+/// Returns JSON `{ "roadId": string, "objectId": string }` or null.
+#[wasm_bindgen]
+pub fn pick_object_at_point(
+    project_json: &str,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Result<JsValue, JsError> {
+    use crate::render::road_point_at_s;
+    use we_core::geometry::eval::offset_point;
+
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut best_road_id: Option<String> = None;
+    let mut best_object_id: Option<String> = None;
+    let mut best_dist = threshold;
+
+    for road in &project.roads {
+        if road.render_hidden {
+            continue;
+        }
+        for obj in &road.objects {
+            let s = obj.position.x;
+            let t = obj.position.y;
+            let Some(ref_pt) = road_point_at_s(&road.plan_view, s) else {
+                continue;
+            };
+            let (wx, wy, _) = offset_point(&ref_pt, t, 0.0);
+            let dx = wx - x;
+            let dy = wy - y;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < best_dist {
+                best_dist = dist;
+                best_road_id = Some(road.id.clone());
+                best_object_id = Some(obj.id.clone());
+            }
+        }
+    }
+
+    match (best_road_id, best_object_id) {
+        (Some(road_id), Some(object_id)) => {
+            let result = ObjectHit { road_id, object_id };
+            serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+        }
+        _ => Ok(JsValue::NULL),
+    }
 }

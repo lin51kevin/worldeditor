@@ -7,7 +7,8 @@ export type SceneNodeSelection =
   | { type: 'laneSection'; roadId: string; sectionIndex: number }
   | { type: 'lane'; roadId: string; sectionIndex: number; side: LaneSide; laneId: number }
   | { type: 'junction'; junctionId: string }
-  | { type: 'signal'; roadId: string; signalId: string };
+  | { type: 'signal'; roadId: string; signalId: string }
+  | { type: 'object'; roadId: string; objectId: string };
 
 export interface SceneVisibilityState {
   hiddenRoadIds: string[];
@@ -171,6 +172,11 @@ export function isSceneSelectionVisible(
 
   // Signal visibility follows the road's visibility
   if (selection.type === 'signal') {
+    return true;
+  }
+
+  // Object visibility follows the road's visibility
+  if (selection.type === 'object') {
     return true;
   }
 

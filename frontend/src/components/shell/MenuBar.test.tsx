@@ -108,6 +108,12 @@ function createPlatformMock() {
     moveSplineKnot: vi.fn<PlatformService['moveSplineKnot']>().mockResolvedValue({ knots: [] }),
     splineToGeometries: vi.fn<PlatformService['splineToGeometries']>().mockResolvedValue([]),
     generateObjectVertices: vi.fn<PlatformService['generateObjectVertices']>().mockResolvedValue(new Float32Array()),
+    pickSignalAtPoint: vi.fn<PlatformService['pickSignalAtPoint']>().mockResolvedValue(null),
+    pickObjectAtPoint: vi.fn<PlatformService['pickObjectAtPoint']>().mockResolvedValue(null),
+    generateSingleSignalVertices: vi.fn<PlatformService['generateSingleSignalVertices']>().mockResolvedValue(new Float32Array()),
+    generateSingleObjectVertices: vi.fn<PlatformService['generateSingleObjectVertices']>().mockResolvedValue(new Float32Array()),
+    getSignalWorldPos: vi.fn<PlatformService['getSignalWorldPos']>().mockResolvedValue(null),
+    getObjectWorldPos: vi.fn<PlatformService['getObjectWorldPos']>().mockResolvedValue(null),
   };
 
   return {

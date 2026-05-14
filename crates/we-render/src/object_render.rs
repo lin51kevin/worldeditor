@@ -262,6 +262,7 @@ mod tests {
             length: 0.0,
             corners: vec![],
             validity: None,
+            from_object_ref: false,
         }];
         let vertices = generate_object_render_data(&objects);
         assert!(!vertices.is_empty());
@@ -280,6 +281,7 @@ mod tests {
             length: 0.0,
             corners: vec![],
             validity: None,
+            from_object_ref: false,
         }
     }
 

@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useEditorStore } from '../../stores/editorStore';
 import { useEditorViewStore } from '../../stores/editorViewStore';
 import { getPlatformService } from '../../services';
-import type { RoadSignal } from '../../services/platform';
+import type { RoadSignal, RoadObjectItem } from '../../services/platform';
 import './PropertyPanel.css';
 
 interface CardSectionProps {
@@ -48,7 +48,24 @@ export function PropertyPanel() {
     return (road?.signals ?? []).find((s) => s.id === selectedSceneNode.signalId) ?? null;
   })();
 
+  // Resolve selected object when an object node is selected
+  const selectedObject: RoadObjectItem | null = (() => {
+    if (selectedSceneNode?.type !== 'object') return null;
+    const road = project.roads.find((r) => r.id === selectedSceneNode.roadId);
+    return (road?.objects ?? []).find((o) => o.id === selectedSceneNode.objectId) ?? null;
+  })();
+
   const isEditingGeometry = geometryEditRoadId === selectedRoadId;
+
+  // Determine what to display — signal/object take priority even though selectedRoadId is also set
+  type DisplayMode = 'road' | 'signal' | 'object' | 'junction' | 'none';
+  const displayMode: DisplayMode = (() => {
+    if (selectedSceneNode?.type === 'signal') return 'signal';
+    if (selectedSceneNode?.type === 'object') return 'object';
+    if (selectedRoad) return 'road';
+    if (selectedJunction) return 'junction';
+    return 'none';
+  })();
 
   const handleEditGeometry = async () => {
     if (!selectedRoad || selectedRoad.plan_view.length === 0) return;
@@ -88,7 +105,8 @@ export function PropertyPanel() {
 
       {/* Properties content */}
       <div className="property-content">
-          {selectedRoad ? (
+          {displayMode === 'road' ? (
+            !selectedRoad ? null : (
             <div className="inspector-cards">
               {/* Basic Properties Card */}
               <CardSection title={t('propertyPanel.roadProperties')}>
@@ -320,7 +338,9 @@ export function PropertyPanel() {
                 </div>
               </CardSection>
             </div>
-          ) : selectedSignal ? (
+            )
+          ) : displayMode === 'signal' ? (
+            !selectedSignal ? null : (
             <div className="inspector-cards">
               <CardSection title={t('propertyPanel.signalProperties', 'Signal Properties')}>
                 <div className="property-row">
@@ -332,11 +352,15 @@ export function PropertyPanel() {
                   <span className="property-value">{selectedSignal.name || '—'}</span>
                 </div>
                 <div className="property-row">
+                  <span className="property-label">RoadId</span>
+                  <span className="property-value">{selectedSceneNode?.type === 'signal' ? selectedSceneNode.roadId : '—'}</span>
+                </div>
+                <div className="property-row">
                   <span className="property-label">Type</span>
                   <span className="property-value">{selectedSignal.signal_type}</span>
                 </div>
                 <div className="property-row">
-                  <span className="property-label">Subtype</span>
+                  <span className="property-label">SubType</span>
                   <span className="property-value">{selectedSignal.signal_subtype || '—'}</span>
                 </div>
                 {selectedSignal.value !== null && (
@@ -347,35 +371,118 @@ export function PropertyPanel() {
                 )}
                 <div className="property-row">
                   <span className="property-label">s (m)</span>
-                  <span className="property-value">{selectedSignal.s.toFixed(3)}</span>
+                  <span className="property-value">{selectedSignal.s.toFixed(5)}</span>
                 </div>
                 <div className="property-row">
                   <span className="property-label">t (m)</span>
-                  <span className="property-value">{selectedSignal.t.toFixed(3)}</span>
+                  <span className="property-value">{selectedSignal.t.toFixed(5)}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.headingOffset', 'HeadingLocal')}</span>
+                  <span className="property-value">
+                    {selectedSignal.h_offset.toFixed(5)}&nbsp;&nbsp;{Number(Math.cos(selectedSignal.h_offset)).toFixed(5)}&nbsp;&nbsp;{Number(0).toFixed(5)}
+                  </span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.positionLocal', 'PositionLocal')}</span>
+                  <span className="property-value">
+                    {selectedSignal.s.toFixed(5)}&nbsp;&nbsp;{selectedSignal.t.toFixed(5)}&nbsp;&nbsp;{selectedSignal.z_offset.toFixed(5)}
+                  </span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">Width (m)</span>
+                  <span className="property-value">{selectedSignal.width.toFixed(5)}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">Height (m)</span>
+                  <span className="property-value">{selectedSignal.height.toFixed(5)}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.isDynamic', 'IsDynamic')}</span>
+                  <span className="property-value">
+                    <input type="checkbox" readOnly checked={selectedSignal.is_dynamic} style={{ pointerEvents: 'none' }} />
+                  </span>
                 </div>
                 <div className="property-row">
                   <span className="property-label">Orientation</span>
                   <span className="property-value">{selectedSignal.orientation}</span>
                 </div>
+              </CardSection>
+            </div>
+            )
+          ) : displayMode === 'object' ? (
+            !selectedObject ? null : (
+            <div className="inspector-cards">
+              <CardSection title={t('propertyPanel.objectProperties', 'Object Properties')}>
                 <div className="property-row">
-                  <span className="property-label">Dynamic</span>
-                  <span className="property-value">{selectedSignal.is_dynamic ? 'Yes' : 'No'}</span>
+                  <span className="property-label">{t('propertyPanel.id')}</span>
+                  <span className="property-value">{selectedObject.id}</span>
                 </div>
                 <div className="property-row">
-                  <span className="property-label">Width (m)</span>
-                  <span className="property-value">{selectedSignal.width.toFixed(3)}</span>
+                  <span className="property-label">RoadId</span>
+                  <span className="property-value">{selectedSceneNode?.type === 'object' ? selectedSceneNode.roadId : '—'}</span>
                 </div>
                 <div className="property-row">
-                  <span className="property-label">Height (m)</span>
-                  <span className="property-value">{selectedSignal.height.toFixed(3)}</span>
+                  <span className="property-label">Type</span>
+                  <span className="property-value">
+                    {typeof selectedObject.object_type === 'string'
+                      ? selectedObject.object_type
+                      : selectedObject.object_type.Custom}
+                  </span>
                 </div>
                 <div className="property-row">
-                  <span className="property-label">Z Offset (m)</span>
-                  <span className="property-value">{selectedSignal.z_offset.toFixed(3)}</span>
+                  <span className="property-label">{t('propertyPanel.name')}</span>
+                  <span className="property-value">{selectedObject.name || '—'}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.positionLocal', 'PositionLocal')}</span>
+                  <span className="property-value">
+                    {selectedObject.position.x.toFixed(5)}&nbsp;&nbsp;{selectedObject.position.y.toFixed(5)}&nbsp;&nbsp;{selectedObject.position.z.toFixed(5)}
+                  </span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.headingLocal', 'HeadingLocal')}</span>
+                  <span className="property-value">
+                    {Math.cos(selectedObject.hdg).toFixed(5)}&nbsp;&nbsp;{Math.sin(selectedObject.hdg).toFixed(5)}&nbsp;&nbsp;{Number(0).toFixed(5)}
+                  </span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.length', 'Length')}</span>
+                  <span className="property-value">{selectedObject.length.toFixed(5)}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">Width</span>
+                  <span className="property-value">{selectedObject.width.toFixed(5)}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">Height</span>
+                  <span className="property-value">{selectedObject.height.toFixed(5)}</span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.radius', 'Radius')}</span>
+                  <span className="property-value">
+                    {(() => {
+                      if (selectedObject.corners.length === 0) return '—';
+                      const cx = selectedObject.position.x;
+                      const cy = selectedObject.position.y;
+                      const corner = selectedObject.corners[0];
+                      if (!corner) return '—';
+                      const r = Math.sqrt((corner.x - cx) ** 2 + (corner.y - cy) ** 2);
+                      return r.toFixed(5);
+                    })()}
+                  </span>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.isDynamic', 'IsDynamic')}</span>
+                  <span className="property-value">
+                    <input type="checkbox" readOnly checked={false} style={{ pointerEvents: 'none' }} />
+                  </span>
                 </div>
               </CardSection>
             </div>
-          ) : selectedJunction ? (
+            )
+          ) : displayMode === 'junction' ? (
+            !selectedJunction ? null : (
             <div className="inspector-cards">
               {/* Junction Properties Card */}
               <CardSection title={t('propertyPanel.junctionProperties')}>
@@ -431,6 +538,7 @@ export function PropertyPanel() {
                 )}
               </CardSection>
             </div>
+            )
           ) : (
             <div className="property-empty">{t('propertyPanel.noSelection')}</div>
           )}
