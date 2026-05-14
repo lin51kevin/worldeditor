@@ -241,11 +241,35 @@ export function useSplineDrawMode({
     return true;
   }, [canvasRef, hoveredControlPointRef, rendererRef]);
 
+  /**
+   * Called on right-click (context-menu) while in draw mode.
+   * If ≥2 knots exist, finalizes the road; otherwise cancels.
+   * Returns true when the event was consumed (draw mode was active).
+   */
+  const handleSplineDrawRightClick = useCallback((): boolean => {
+    const viewState = useEditorViewStore.getState();
+    if (!isDrawMode(viewState.editMode)) {
+      return false;
+    }
+    if (viewState.splineKnots.length >= 2) {
+      if (viewState.editMode === 'spline') {
+        void finalizeSplineCreation();
+      } else {
+        void finalizeDrawGeometry(viewState.editMode, viewState.splineKnots);
+      }
+    } else {
+      // Not enough points — just cancel without creating a road
+      viewState.clearSplineKnots();
+    }
+    return true;
+  }, [finalizeDrawGeometry, finalizeSplineCreation]);
+
   return {
     clearSplineDrawHover,
     handleSplineDrawMouseMove,
     handleSplineDrawMouseDown,
     handleSplineDrawClick,
     handleSplineDrawMouseUp,
+    handleSplineDrawRightClick,
   };
 }

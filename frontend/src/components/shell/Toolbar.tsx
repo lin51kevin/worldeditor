@@ -142,7 +142,7 @@ export function Toolbar() {
         </button>
         <button
           className={`toolbar-btn toolbar-toggle ${editMode === 'spline' ? 'active' : ''}`}
-          onClick={() => { setEditMode('spline'); clearSplineKnots(); }}
+          onClick={() => handleDrawMode('spline')}
           title={t('toolbar.splineEditTitle')}
           aria-label={t('toolbar.splineEdit')}
           aria-pressed={editMode === 'spline'}
