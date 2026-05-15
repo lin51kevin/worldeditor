@@ -775,21 +775,21 @@ export function Viewport() {
               } else {
                 // No road or junction hovered – try signal/object
                 // Signals and objects sit ON roads, check with moderate threshold.
-                const signalHitRaw = await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const signalHitRaw = (await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0)) as any;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const signalHit = signalHitRaw as { roadId: string; signalId: string } | null;
                 if (signalHit !== null) {
-                  if (hoveredSignalRef.current?.signalId !== signalHit.signalId) {
-                    hoveredSignalRef.current = { roadId: signalHit.roadId, signalId: signalHit.signalId };
-                  }
+                  hoveredSignalRef.current = signalHit;
                   if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';
                 } else {
                   hoveredSignalRef.current = null;
-                  const objectHitRaw = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const objectHitRaw = (await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0)) as any;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   const objectHit = objectHitRaw as { roadId: string; objectId: string } | null;
                   if (objectHit !== null) {
-                    if (hoveredObjectRef.current?.objectId !== objectHit.objectId) {
-                      hoveredObjectRef.current = { roadId: objectHit.roadId, objectId: objectHit.objectId };
-                    }
+                    hoveredObjectRef.current = objectHit;
                     if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';
                   } else {
                     hoveredObjectRef.current = null;
