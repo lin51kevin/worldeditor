@@ -7,7 +7,7 @@ use crate::geometry::eval::{
     RefLinePoint, evaluate_lane_width, offset_point, sample_road_reference_line,
 };
 use crate::model::{Junction, Project, Road};
-use crate::spatial_index::{ElementKind, SpatialIndex};
+use crate::spatial_index::{ElementKind, ProjectCache, SpatialIndex};
 
 /// Result of a pick operation.
 #[derive(Debug, Clone)]
@@ -22,13 +22,48 @@ pub struct PickResult {
     pub t: f64,
 }
 
-/// Pick the nearest road to a world-space point.
+/// Pick the nearest road to a world-space point (cached version).
 ///
-/// Uses a spatial index for fast candidate filtering, then performs
-/// detailed distance checks only on nearby roads.
-/// Returns `None` if no road is within `threshold` distance.
-pub fn pick_road(project: &Project, x: f64, y: f64, threshold: f64) -> Option<PickResult> {
-    let index = SpatialIndex::build(project, 100.0);
+/// Uses [`ProjectCache`] to avoid rebuilding the spatial index on every call.
+/// Call [`ProjectCache::invalidate()`] after mutating the project.
+pub fn pick_road_cached(cache: &mut ProjectCache, x: f64, y: f64, threshold: f64) -> Option<PickResult> {
+    // Ensure index is built
+    cache.get_index()?;
+    // Now we can get references separately
+    let project = &cache.project;
+    let index = cache.spatial_index.as_ref().unwrap();
+    pick_road_with_index(project, index, x, y, threshold)
+}
+
+/// Pick the nearest junction to a world-space point (cached version).
+pub fn pick_junction_cached(cache: &mut ProjectCache, x: f64, y: f64, threshold: f64) -> Option<PickResult> {
+    cache.get_index()?;
+    let project = &cache.project;
+    let index = cache.spatial_index.as_ref().unwrap();
+    pick_junction_with_index(project, index, x, y, threshold)
+}
+
+/// Pick a specific lane at a world-space point (cached version).
+pub fn pick_lane_cached(
+    cache: &mut ProjectCache,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Option<(String, usize, i32)> {
+    cache.get_index()?;
+    let project = &cache.project;
+    let index = cache.spatial_index.as_ref().unwrap();
+    pick_lane_with_index(project, index, x, y, threshold)
+}
+
+/// Internal implementation that works with a pre-built spatial index.
+fn pick_road_with_index(
+    project: &Project,
+    index: &SpatialIndex,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Option<PickResult> {
     let candidates = index.query_point(x, y, threshold);
 
     let mut best: Option<PickResult> = None;
@@ -56,12 +91,24 @@ pub fn pick_road(project: &Project, x: f64, y: f64, threshold: f64) -> Option<Pi
     best
 }
 
-/// Pick the nearest junction to a world-space point.
+/// Pick the nearest road to a world-space point.
 ///
-/// Uses a spatial index for fast candidate filtering.
-/// Returns `None` if no junction is within `threshold` distance.
-pub fn pick_junction(project: &Project, x: f64, y: f64, threshold: f64) -> Option<PickResult> {
+/// Uses a spatial index for fast candidate filtering, then performs
+/// detailed distance checks only on nearby roads.
+/// Returns `None` if no road is within `threshold` distance.
+pub fn pick_road(project: &Project, x: f64, y: f64, threshold: f64) -> Option<PickResult> {
     let index = SpatialIndex::build(project, 100.0);
+    pick_road_with_index(project, &index, x, y, threshold)
+}
+
+/// Internal implementation that works with a pre-built spatial index.
+fn pick_junction_with_index(
+    project: &Project,
+    index: &SpatialIndex,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Option<PickResult> {
     let candidates = index.query_point(x, y, threshold);
 
     let mut best: Option<PickResult> = None;
@@ -91,18 +138,23 @@ pub fn pick_junction(project: &Project, x: f64, y: f64, threshold: f64) -> Optio
     best
 }
 
-/// Pick a specific lane at a world-space point.
+/// Pick the nearest junction to a world-space point.
 ///
-/// Uses a spatial index for fast candidate filtering, then performs
-/// detailed per-lane distance checks on nearby roads.
-/// Returns `(road_id, section_index, lane_id)` if a lane is found within threshold.
-pub fn pick_lane(
+/// Uses a spatial index for fast candidate filtering.
+/// Returns `None` if no junction is within `threshold` distance.
+pub fn pick_junction(project: &Project, x: f64, y: f64, threshold: f64) -> Option<PickResult> {
+    let index = SpatialIndex::build(project, 100.0);
+    pick_junction_with_index(project, &index, x, y, threshold)
+}
+
+/// Internal implementation that works with a pre-built spatial index.
+fn pick_lane_with_index(
     project: &Project,
+    index: &SpatialIndex,
     x: f64,
     y: f64,
     threshold: f64,
 ) -> Option<(String, usize, i32)> {
-    let index = SpatialIndex::build(project, 100.0);
     let candidates = index.query_point(x, y, threshold);
 
     let mut best_dist = threshold;
@@ -194,6 +246,21 @@ pub fn pick_lane(
     }
 
     best_result
+}
+
+/// Pick a specific lane at a world-space point.
+///
+/// Uses a spatial index for fast candidate filtering, then performs
+/// detailed per-lane distance checks on nearby roads.
+/// Returns `(road_id, section_index, lane_id)` if a lane is found within threshold.
+pub fn pick_lane(
+    project: &Project,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Option<(String, usize, i32)> {
+    let index = SpatialIndex::build(project, 100.0);
+    pick_lane_with_index(project, &index, x, y, threshold)
 }
 
 /// Compute the minimum distance from a point to a road's reference line,

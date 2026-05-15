@@ -5,7 +5,7 @@
 
 use crate::geometry::eval::{evaluate_road_at_s, sample_road_reference_line};
 use crate::model::{Project, Road};
-use crate::spatial_index::SpatialIndex;
+use crate::spatial_index::{ProjectCache, SpatialIndex};
 use serde::{Deserialize, Serialize};
 
 /// Snap configuration.
@@ -63,6 +63,70 @@ pub enum SnapType {
     Endpoint,
     Midpoint,
     Perpendicular,
+}
+
+/// Cached version of [`snap_point`].
+///
+/// Uses [`ProjectCache`] to avoid rebuilding the spatial index on every call.
+pub fn snap_point_cached(
+    x: f64,
+    y: f64,
+    config: &SnapConfig,
+    cache: &mut ProjectCache,
+    exclude_road_id: Option<&str>,
+) -> SnapResult {
+    // 1. Try endpoint snap
+    if config.endpoint_enabled
+        && let Some(result) = snap_to_endpoint_cached(
+            x,
+            y,
+            config.endpoint_threshold,
+            cache,
+            exclude_road_id,
+        )
+    {
+        return result;
+    }
+
+    // 2. Try midpoint snap
+    if config.midpoint_enabled
+        && let Some(result) = snap_to_midpoint_cached(
+            x,
+            y,
+            config.endpoint_threshold,
+            cache,
+            exclude_road_id,
+        )
+    {
+        return result;
+    }
+
+    // 3. Try perpendicular snap
+    if config.perpendicular_enabled
+        && let Some(result) = snap_to_perpendicular_cached(
+            x,
+            y,
+            config.endpoint_threshold,
+            cache,
+            exclude_road_id,
+        )
+    {
+        return result;
+    }
+
+    // 4. Grid snap (fallback)
+    if config.grid_enabled {
+        return snap_to_grid(x, y, config.grid_size);
+    }
+
+    SnapResult {
+        x,
+        y,
+        snapped: false,
+        snap_type: SnapType::None,
+        target_id: None,
+        contact_point: None,
+    }
 }
 
 /// Snap a point to the nearest grid/endpoint/etc.
@@ -140,6 +204,20 @@ fn snap_to_endpoint(
     exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
     let index = SpatialIndex::build(project, 100.0);
+    snap_to_endpoint_with_index(x, y, threshold, project, &index, exclude_road_id)
+}
+
+fn snap_to_endpoint_cached(
+    x: f64, y: f64, threshold: f64, cache: &mut ProjectCache, exclude_road_id: Option<&str>,
+) -> Option<SnapResult> {
+    cache.get_index()?;
+    let index = cache.spatial_index.as_ref().unwrap();
+    snap_to_endpoint_with_index(x, y, threshold, &cache.project, index, exclude_road_id)
+}
+
+fn snap_to_endpoint_with_index(
+    x: f64, y: f64, threshold: f64, project: &Project, index: &SpatialIndex, exclude_road_id: Option<&str>,
+) -> Option<SnapResult> {
     let candidates = index.query_point(x, y, threshold);
 
     let mut best_dist = threshold;
@@ -178,13 +256,23 @@ fn snap_to_endpoint(
 
 /// Snap to the midpoint of the nearest road.
 fn snap_to_midpoint(
-    x: f64,
-    y: f64,
-    threshold: f64,
-    project: &Project,
-    exclude_road_id: Option<&str>,
+    x: f64, y: f64, threshold: f64, project: &Project, exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
     let index = SpatialIndex::build(project, 100.0);
+    snap_to_midpoint_with_index(x, y, threshold, project, &index, exclude_road_id)
+}
+
+fn snap_to_midpoint_cached(
+    x: f64, y: f64, threshold: f64, cache: &mut ProjectCache, exclude_road_id: Option<&str>,
+) -> Option<SnapResult> {
+    cache.get_index()?;
+    let index = cache.spatial_index.as_ref().unwrap();
+    snap_to_midpoint_with_index(x, y, threshold, &cache.project, index, exclude_road_id)
+}
+
+fn snap_to_midpoint_with_index(
+    x: f64, y: f64, threshold: f64, project: &Project, index: &SpatialIndex, exclude_road_id: Option<&str>,
+) -> Option<SnapResult> {
     let candidates = index.query_point(x, y, threshold);
 
     let mut best_dist = threshold;
@@ -221,13 +309,23 @@ fn snap_to_midpoint(
 
 /// Snap to the nearest perpendicular projection onto a road's reference line.
 fn snap_to_perpendicular(
-    x: f64,
-    y: f64,
-    threshold: f64,
-    project: &Project,
-    exclude_road_id: Option<&str>,
+    x: f64, y: f64, threshold: f64, project: &Project, exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
     let index = SpatialIndex::build(project, 100.0);
+    snap_to_perpendicular_with_index(x, y, threshold, project, &index, exclude_road_id)
+}
+
+fn snap_to_perpendicular_cached(
+    x: f64, y: f64, threshold: f64, cache: &mut ProjectCache, exclude_road_id: Option<&str>,
+) -> Option<SnapResult> {
+    cache.get_index()?;
+    let index = cache.spatial_index.as_ref().unwrap();
+    snap_to_perpendicular_with_index(x, y, threshold, &cache.project, index, exclude_road_id)
+}
+
+fn snap_to_perpendicular_with_index(
+    x: f64, y: f64, threshold: f64, project: &Project, index: &SpatialIndex, exclude_road_id: Option<&str>,
+) -> Option<SnapResult> {
     let candidates = index.query_point(x, y, threshold);
 
     let mut best_dist = threshold;

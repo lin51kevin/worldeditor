@@ -8,6 +8,8 @@ use crate::model::Project;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+const DEFAULT_CELL_SIZE: f64 = 100.0;
+
 /// Axis-aligned bounding box.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Aabb {
@@ -86,6 +88,7 @@ pub struct SpatialQueryResult {
 /// Divides the world into uniform cells. Each cell stores references to
 /// elements whose bounding boxes overlap the cell. This gives O(1) average
 /// lookup for point queries and O(k) for range queries (k = cells covered).
+#[derive(Debug, Clone)]
 pub struct SpatialIndex {
     cell_size: f64,
     grid: HashMap<CellKey, Vec<usize>>,
@@ -93,6 +96,23 @@ pub struct SpatialIndex {
 }
 
 impl SpatialIndex {
+    // TODO(perf): Incremental spatial index update
+    //
+    // Currently `build` performs a full reconstruction every call. When only a
+    // single road changes (e.g. during drag-edit), the entire index is rebuilt.
+    // Future optimisation: incrementally update only affected cells.
+    //
+    // Proposed algorithm:
+    //   1. On road change, compute old & new AABB for the modified road.
+    //   2. Determine which grid cells overlap the union of old and new AABBs.
+    //   3. For each affected cell: remove old entry index, insert new entry index.
+    //   4. If the road was removed entirely, delete its entry from `entries` and
+    //      patch all indices (or use a generational handle scheme to avoid reindexing).
+    //   5. If the road was added, append to `entries` and insert into relevant cells.
+    //
+    // This reduces amortised cost from O(N) to O(k) where k = number of roads
+    // per affected cell (typically 2–5).
+
     /// Build a spatial index from a project.
     ///
     /// `cell_size` controls the grid resolution. A typical value is 50–200 meters.
@@ -187,6 +207,72 @@ impl SpatialIndex {
     /// Whether the index is empty.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+}
+
+/// A wrapper around [`Project`] that caches the [`SpatialIndex`].
+///
+/// Call [`Self::invalidate()`] after mutating `project.roads` or `project.junctions`.
+/// Subsequent calls to [`Self::get_index()`] will rebuild only when dirty.
+///
+/// # WASM compatibility
+/// The cache fields are **not** serialized (`#[serde(skip)]`), so this type
+/// remains fully WASM / serde compatible.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProjectCache {
+    pub project: Project,
+    #[serde(skip)]
+    pub(crate) spatial_index: Option<SpatialIndex>,
+    #[serde(skip)]
+    spatial_index_dirty: bool,
+}
+
+impl ProjectCache {
+    /// Create a new cache wrapping the given project.
+    /// The spatial index is initially dirty and will be built on first access.
+    pub fn new(project: Project) -> Self {
+        Self {
+            project,
+            spatial_index: None,
+            spatial_index_dirty: true,
+        }
+    }
+
+    /// Mark the spatial index as needing a rebuild.
+    /// Call this after any mutation to `project.roads` or `project.junctions`.
+    pub fn invalidate(&mut self) {
+        self.spatial_index_dirty = true;
+    }
+
+    /// Get a reference to the spatial index, rebuilding it only when dirty.
+    /// Returns `None` if the index could not be built (e.g. empty project).
+    pub fn get_index(&mut self) -> Option<&SpatialIndex> {
+        if self.spatial_index_dirty || self.spatial_index.is_none() {
+            self.spatial_index = Some(SpatialIndex::build(&self.project, DEFAULT_CELL_SIZE));
+            self.spatial_index_dirty = false;
+        }
+        self.spatial_index.as_ref()
+    }
+
+    /// Get a reference to the underlying project.
+    pub fn project(&self) -> &Project {
+        &self.project
+    }
+
+    /// Get a mutable reference to the underlying project.
+    /// **Important:** call [`Self::invalidate()`] after mutating roads/junctions.
+    pub fn project_mut(&mut self) -> &mut Project {
+        &mut self.project
+    }
+
+    /// Whether the cached spatial index needs rebuilding.
+    pub fn is_dirty(&self) -> bool {
+        self.spatial_index_dirty
+    }
+
+    /// Whether a cached spatial index exists.
+    pub fn has_index(&self) -> bool {
+        self.spatial_index.is_some() && !self.spatial_index_dirty
     }
 }
 
@@ -359,5 +445,60 @@ mod tests {
         let idx = SpatialIndex::build(&project, 100.0);
         assert!(idx.is_empty());
         assert_eq!(idx.len(), 0);
+    }
+
+    // ---- ProjectCache tests ----
+
+    #[test]
+    fn test_cache_builds_on_first_access() {
+        let project = Project::default();
+        let mut cache = ProjectCache::new(project);
+        assert!(cache.is_dirty());
+        assert!(!cache.has_index());
+        let _idx = cache.get_index();
+        assert!(!cache.is_dirty());
+        assert!(cache.has_index());
+    }
+
+    #[test]
+    fn test_cache_skips_rebuild_when_clean() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        let mut cache = ProjectCache::new(project);
+        let first = cache.get_index().unwrap().len();
+        // Access again without invalidating — should be same instance
+        let second = cache.get_index().unwrap().len();
+        assert_eq!(first, second);
+        assert!(!cache.is_dirty());
+    }
+
+    #[test]
+    fn test_cache_rebuilds_after_invalidate() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        let mut cache = ProjectCache::new(project);
+        assert_eq!(cache.get_index().unwrap().len(), 1);
+
+        // Add a road
+        cache.project_mut().roads.push(make_road_at("r2", 500.0, 500.0, 100.0));
+        cache.invalidate();
+        assert!(cache.is_dirty());
+        assert_eq!(cache.get_index().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_cache_serde_roundtrip() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        let mut cache = ProjectCache::new(project);
+        cache.get_index(); // build cache
+        assert!(cache.has_index());
+
+        // Serialize and deserialize — cache should be skipped
+        let json = serde_json::to_string(&cache).unwrap();
+        let mut restored: ProjectCache = serde_json::from_str(&json).unwrap();
+        assert!(!restored.has_index()); // cache not serialized
+        // But the index is still rebuildable
+        assert_eq!(restored.get_index().unwrap().len(), 1);
     }
 }
