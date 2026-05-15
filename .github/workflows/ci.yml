@@ -94,15 +94,24 @@ jobs:
   # Stage 2: Unit Tests
   test-rust:
     name: Test Rust
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
     needs: build-rust
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+        include:
+          - os: ubuntu-22.04
+            run_coverage: true
+          - os: windows-latest
+            run_coverage: false
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           cache-bin: true
-      - name: Install system dependencies
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -117,11 +126,16 @@ jobs:
             libxcb-render0-dev libxcb-shape0-dev libxcb-keysyms1-dev \
             libxcb-icccm4-dev libxcb-image0-dev libxcb-util-dev \
             libxcb-xkb-dev libxkbcommon-x11-dev libxkbcommon-dev
+      - name: Run tests
+        run: cargo test --workspace
       - name: Install coverage tools
+        if: matrix.run_coverage
         run: cargo install cargo-llvm-cov --locked
       - name: Run tests with coverage
+        if: matrix.run_coverage
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
       - name: Check coverage thresholds per crate
+        if: matrix.run_coverage
         run: |
           # Check we-core coverage ≥ 80%
           cargo llvm-cov --package we-core --summary-only --fail-under-lines 80
@@ -132,6 +146,7 @@ jobs:
           # Optional: report overall coverage
           echo "All coverage thresholds passed!"
       - name: Generate coverage report
+        if: matrix.run_coverage
         run: cargo llvm-cov report --workspace
 
   test-wasm:
@@ -169,19 +184,33 @@ jobs:
         run: cd frontend && yarn test:coverage
 
   e2e-tests:
-    name: E2E Tests
+    name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
     needs: [test-frontend]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'yarn'
           cache-dependency-path: frontend/yarn.lock
-      - run: cd frontend && yarn install --frozen-lockfile
-      - run: cd frontend && yarn playwright install chromium
-      - run: cd frontend && yarn test:e2e
+      - name: Download WASM pkg
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: frontend/wasm/pkg/
+      - name: Install dependencies
+        run: cd frontend && yarn install --frozen-lockfile
+      - name: Install Playwright browsers
+        run: cd frontend && npx playwright install --with-deps chromium
+      - name: Run Playwright tests
+        run: cd frontend && npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: frontend/test-results/
+          retention-days: 30
 
   # Stage 3: Quality Gates
   quality:
