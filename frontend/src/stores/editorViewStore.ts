@@ -325,7 +325,7 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
     set((state) => ({ splineKnots: [...state.splineKnots, knot] })),
   popSplineKnot: () =>
     set((state) => ({ splineKnots: state.splineKnots.slice(0, -1) })),
-  clearSplineKnots: () => set({ splineKnots: [], splineTangentOverrides: {}, splineTangentInOverrides: {}, draggingKnot: null, cursorPreviewPos: null, drawSnapResult: null, snappedEndpoints: [] }),
+  clearSplineKnots: () => set({ splineKnots: [], splineTangentOverrides: {}, splineTangentInOverrides: {}, tangentCoupling: 'mirror' as TangentCoupling, draggingKnot: null, cursorPreviewPos: null, drawSnapResult: null, snappedEndpoints: [] }),
   setDraggingKnot: (draggingKnot) => set({ draggingKnot }),
   setCursorPreviewPos: (cursorPreviewPos) => set({ cursorPreviewPos }),
   setSplineTangentOverride: (index, tangent) =>

@@ -21,7 +21,7 @@ describe('WelcomePage', () => {
 
   it('renders without crashing', () => {
     render(<WelcomePage {...baseProps} />);
-    expect(screen.getByText('WorldEditor Next')).toBeInTheDocument();
+    expect(screen.getByText('WorldEditor')).toBeInTheDocument();
   });
 
   it('shows New and Open File buttons', () => {

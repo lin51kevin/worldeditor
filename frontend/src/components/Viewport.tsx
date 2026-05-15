@@ -142,14 +142,15 @@ export function Viewport() {
   // computation in updateSurfaceMesh / updateLineMesh.
   const visibleProjectRef = useRef<ReturnType<typeof buildRenderableProject> | null>(null);
   const visibleProjectKeyRef = useRef<string>('');
+  const projectLoadVersion = useEditorStore((s) => s.projectLoadVersion);
   const getVisibleProject = useCallback(() => {
-    const key = JSON.stringify({ d: display });
+    const key = JSON.stringify({ d: display, v: projectLoadVersion });
     if (key !== visibleProjectKeyRef.current || !visibleProjectRef.current) {
       visibleProjectKeyRef.current = key;
       visibleProjectRef.current = project ? buildRenderableProject(project, display) : null;
     }
     return visibleProjectRef.current;
-  }, [project, display]);
+  }, [project, display, projectLoadVersion]);
 
   const updateSurfaceMesh = useCallback(async () => {
     const renderer = rendererRef.current;
@@ -255,13 +256,15 @@ export function Viewport() {
     display.hiddenLaneKeys,
   ]);
 
-  const projectLoadVersion = useEditorStore((s) => s.projectLoadVersion);
-
-  // Reset auto-fit cache only when a genuinely new file is loaded (not on every mutation)
+  // Reset caches when a genuinely new file is loaded (not on every mutation)
   useEffect(() => {
     const renderer = rendererRef.current;
     if (status !== 'ready') return;
     renderer?.clearVertexCache();
+    visibleProjectRef.current = null;
+    visibleProjectKeyRef.current = '';
+    surfaceDepsRef.current = { roadRefs: new Map(), junctionRefs: new Map() };
+    cachedSurfaceRef.current = new Float32Array(0);
   }, [projectLoadVersion, status]);
 
   useEffect(() => { updateSurfaceMesh(); }, [updateSurfaceMesh]);
@@ -775,19 +778,13 @@ export function Viewport() {
               } else {
                 // No road or junction hovered – try signal/object
                 // Signals and objects sit ON roads, check with moderate threshold.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const signalHitRaw = (await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0)) as any;
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const signalHit = signalHitRaw as { roadId: string; signalId: string } | null;
+                const signalHit = await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
                 if (signalHit !== null) {
                   hoveredSignalRef.current = signalHit;
                   if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';
                 } else {
                   hoveredSignalRef.current = null;
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  const objectHitRaw = (await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0)) as any;
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  const objectHit = objectHitRaw as { roadId: string; objectId: string } | null;
+                  const objectHit = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
                   if (objectHit !== null) {
                     hoveredObjectRef.current = objectHit;
                     if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';

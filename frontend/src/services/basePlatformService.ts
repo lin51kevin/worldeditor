@@ -133,12 +133,12 @@ export abstract class BasePlatformService implements PlatformService {
 
   async pickSignalAtPoint(project: Project, x: number, y: number, threshold: number): Promise<{ roadId: string; signalId: string } | null> {
     const wasm = await this.getWasm();
-    return wasm.pick_signal_at_point(JSON.stringify(project), x, y, threshold) as { roadId: string; signalId: string } | null;
+    return wasm.pick_signal_at_point(JSON.stringify(project), x, y, threshold);
   }
 
   async pickObjectAtPoint(project: Project, x: number, y: number, threshold: number): Promise<{ roadId: string; objectId: string } | null> {
     const wasm = await this.getWasm();
-    return wasm.pick_object_at_point(JSON.stringify(project), x, y, threshold) as { roadId: string; objectId: string } | null;
+    return wasm.pick_object_at_point(JSON.stringify(project), x, y, threshold);
   }
 
   async generateSingleSignalVertices(project: Project, roadId: string, signalId: string, color: [number, number, number, number]): Promise<Float32Array> {

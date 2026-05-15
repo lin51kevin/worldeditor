@@ -31,9 +31,11 @@ describe('Toolbar', () => {
     // Only default/select and draw mode buttons are shown.
     // Road/Lane/LaneSection select modes are hidden.
     expect(screen.getByRole('button', { name: '默认' })).toBeInTheDocument();
-    ['样条', '直线', '圆弧', '回旋线'].forEach((label) => {
-      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
-    });
+    expect(screen.getByRole('button', { name: '样条' })).toBeInTheDocument();
+    // '直线', '圆弧', '回旋线' have been removed from the toolbar
+    expect(screen.queryByRole('button', { name: '直线' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '圆弧' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '回旋线' })).not.toBeInTheDocument();
     // Hidden buttons must NOT be present
     expect(screen.queryByRole('button', { name: '道路' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '车道' })).not.toBeInTheDocument();
@@ -67,13 +69,10 @@ describe('Toolbar', () => {
   it('updates edit mode via draw mode toolbar buttons', () => {
     render(<Toolbar />);
 
-    fireEvent.click(screen.getByRole('button', { name: '直线' }));
-    expect(useEditorViewStore.getState().editMode).toBe('line');
+    fireEvent.click(screen.getByRole('button', { name: '样条' }));
+    expect(useEditorViewStore.getState().editMode).toBe('spline');
 
-    fireEvent.click(screen.getByRole('button', { name: '圆弧' }));
-    expect(useEditorViewStore.getState().editMode).toBe('arc');
-
-    fireEvent.click(screen.getByRole('button', { name: '回旋线' }));
-    expect(useEditorViewStore.getState().editMode).toBe('spiral');
+    fireEvent.click(screen.getByRole('button', { name: '默认' }));
+    expect(useEditorViewStore.getState().editMode).toBe('default');
   });
 });

@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => ({
     target: 'es2020',
     minify: 'esbuild',
     rollupOptions: {
+      external: mode !== 'tauri' ? [/^@tauri-apps\//] : [],
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],

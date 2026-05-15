@@ -25,6 +25,8 @@ declare module '../../wasm/pkg/we_wasm' {
   // Picking
   export function pick_road_at_point(project_json: string, x: number, y: number, threshold: number): string | null;
   export function pick_junction_at_point(project_json: string, x: number, y: number, threshold: number): string | null;
+  export function pick_signal_at_point(project_json: string, x: number, y: number, threshold: number): { roadId: string; signalId: string } | null;
+  export function pick_object_at_point(project_json: string, x: number, y: number, threshold: number): { roadId: string; objectId: string } | null;
 
   // Elevation
   export function query_elevation(road_json: string, s: number): { elevation: number; grade: number; grade_pct: number };
