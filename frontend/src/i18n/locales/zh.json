@@ -115,7 +115,14 @@
     "snap": "吸附",
     "snapTitle": "开关吸附",
     "measure": "测量",
-    "measureTitle": "测量工具"
+    "measureTitle": "测量工具",
+    "splineDraw": "绘制样条",
+    "moveRoad": "移动道路",
+    "rotateRoad": "旋转道路",
+    "toggleInspector": "切换检查器",
+    "toggleLeftPanel": "切换左面板",
+    "toggleOutputPanel": "切换输出面板",
+    "zoomToFit": "适应视图"
   },
   "statusBar": {
     "roads": "道路",

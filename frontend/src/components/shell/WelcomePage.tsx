@@ -28,13 +28,14 @@ export interface WelcomePageProps {
 }
 
 const SHORTCUTS = [
-  { labelKey: 'toolbar.selectMode',    key: 'S' },
-  { labelKey: 'toolbar.roadEdit',      key: 'R' },
-  { labelKey: 'toolbar.laneEdit',      key: 'L' },
-  { labelKey: 'toolbar.laneSectionEdit', key: 'J' },
-  { labelKey: 'toolbar.splineEdit',    key: 'P' },
-  { labelKey: 'toolbar.drawLine',      key: 'Shift+L' },
-  { labelKey: 'toolbar.drawArc',       key: 'Shift+A' },
+  { labelKey: 'toolbar.selectMode',        key: 'V' },
+  { labelKey: 'toolbar.splineDraw',        key: 'S' },
+  { labelKey: 'toolbar.moveRoad',          key: 'M' },
+  { labelKey: 'toolbar.rotateRoad',        key: 'R' },
+  { labelKey: 'toolbar.toggleInspector',   key: 'I' },
+  { labelKey: 'toolbar.toggleLeftPanel',   key: 'Ctrl+B' },
+  { labelKey: 'toolbar.toggleOutputPanel', key: 'Ctrl+J' },
+  { labelKey: 'toolbar.zoomToFit',         key: 'F' },
 ];
 
 const PROJECT_HOMEPAGE = 'https://github.com/worldeditor/worldeditor-next';

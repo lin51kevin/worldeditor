@@ -110,12 +110,19 @@
     "axisTitle": "Show Axis",
     "switchToLight": "Switch to Light Theme",
     "switchToDark": "Switch to Dark Theme",
-    "switchToZh": "\u5207\u6362\u5230\u4e2d\u6587",
+    "switchToZh": "切换到中文",
     "switchToEn": "Switch to English",
     "snap": "Snap",
     "snapTitle": "Toggle Snap",
     "measure": "Measure",
-    "measureTitle": "Measure Tool"
+    "measureTitle": "Measure Tool",
+    "splineDraw": "Draw Spline",
+    "moveRoad": "Move Road",
+    "rotateRoad": "Rotate Road",
+    "toggleInspector": "Toggle Inspector",
+    "toggleLeftPanel": "Toggle Left Panel",
+    "toggleOutputPanel": "Toggle Output Panel",
+    "zoomToFit": "Zoom to Fit"
   },
   "statusBar": {
     "roads": "Roads",
@@ -268,7 +275,7 @@
     "header": "Templates",
     "noTemplates": "No templates available",
     "favorites": "Favorites",
-    "noFavorites": "No favorites yet. Click \u2b50 on any template to add.",
+    "noFavorites": "No favorites yet. Click ⭐ on any template to add.",
     "addFavorite": "Add to favorites",
     "unfavorite": "Remove from favorites",
     "categories": {
@@ -395,8 +402,8 @@
     "builtinConverterDesc": "Batch format conversion panel"
   },
   "viewport": {
-    "initializing": "3D Viewport \u2014 Initializing WebGPU...",
-    "unsupported": "3D Viewport \u2014 WebGPU not supported"
+    "initializing": "3D Viewport — Initializing WebGPU...",
+    "unsupported": "3D Viewport — WebGPU not supported"
   },
   "status": {
     "ready": "Ready"
@@ -472,11 +479,11 @@
     "noResults": "No results"
   },
   "advancedEditing": {
-    "splitRoad": "Split Road at Midpoint\u2026",
-    "weldRoads": "Weld Roads\u2026",
+    "splitRoad": "Split Road at Midpoint…",
+    "weldRoads": "Weld Roads…",
     "optimiseLanes": "Optimise Lane Geometry",
     "applyStandardMarkings": "Apply Standard Markings",
-    "autoBuildConnecting": "Auto-Build Connecting Roads\u2026",
+    "autoBuildConnecting": "Auto-Build Connecting Roads…",
     "buildJunctionPolygon": "Build Junction Polygon",
     "autoDeploySidewalks": "Auto-Deploy Sidewalks",
     "autoDeployCrosswalks": "Auto-Deploy Crosswalks",
@@ -490,14 +497,14 @@
     "requiresWasm": "This feature requires WASM backend support and will be available in a future release."
   },
   "converter": {
-    "batchConvert": "Batch Convert\u2026"
+    "batchConvert": "Batch Convert…"
   },
   "ecosystem": {
     "placeTrees": "Place Trees"
   },
   "gisTools": {
-    "coordConverter": "Coordinate Converter\u2026",
-    "setCrs": "Set CRS\u2026"
+    "coordConverter": "Coordinate Converter…",
+    "setCrs": "Set CRS…"
   },
   "laneDetect": {
     "autoDetect": "Auto-Detect Lanes"
