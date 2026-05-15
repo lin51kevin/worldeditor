@@ -731,7 +731,7 @@ export function Viewport() {
         const { display: currentDisplay } = useEditorViewStore.getState();
         const visibleProject = buildRenderableProject(currentProject, currentDisplay);
         const rendererInst = rendererRef.current;
-        const newHoveredRoad = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
+        const newHoveredRoad = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 2.5);
         if (newHoveredRoad !== hoveredRoadRef.current || hoveredJunctionRef.current !== null) {
           hoveredRoadRef.current = newHoveredRoad;
           hoveredJunctionRef.current = null;
@@ -756,7 +756,7 @@ export function Viewport() {
               }
             } else {
               rendererInst.clearHover();
-              const newHoveredJunction = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
+              const newHoveredJunction = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 3.0);
               hoveredJunctionRef.current = newHoveredJunction;
               if (newHoveredJunction) {
                 const hoverVerts = await service.generateSingleJunctionVertices(
@@ -889,10 +889,10 @@ export function Viewport() {
       const visibleProject = buildRenderableProject(currentProject, currentDisplay);
 
       // Signals and objects sit ON roads, so they must be checked first with a
-      // tight threshold (2 m) before road picking (5 m) would always win.
+      // moderate threshold (4 m) before road picking (5 m) would always win.
       // Skip during shift-click which is reserved for multi-road/junction selection.
       if (!e.shiftKey) {
-        const signalHit = await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 2.0);
+        const signalHit = await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
         if (signalHit !== null) {
           useEditorStore.getState().selectSignal(signalHit.roadId, signalHit.signalId);
           const rendererInst = rendererRef.current;
@@ -901,7 +901,7 @@ export function Viewport() {
           hoveredJunctionRef.current = null;
           return;
         }
-        const objectHit = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 2.0);
+        const objectHit = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
         if (objectHit !== null) {
           useEditorStore.getState().selectObject(objectHit.roadId, objectHit.objectId);
           const rendererInst = rendererRef.current;
