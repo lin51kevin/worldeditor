@@ -507,7 +507,7 @@ mod tests {
     use super::*;
     use crate::model::{
         Geometry, GeometryType, Lane, LaneSection, LaneType, LaneWidth, LinkElement,
-        LinkElementType, Road, RoadLink,
+        LinkElementType, Road, RoadLink, Signal,
     };
 
     fn make_link(pred: Option<&str>, succ: Option<&str>) -> Option<RoadLink> {
@@ -849,6 +849,145 @@ mod tests {
         let road = make_road_with_lane_sections("r1");
         let mirrored = mirror_road(&road);
         assert_eq!(mirrored.lane_sections[0].center[0].id, 0);
+    }
+
+    // ── reverse/mirror edge cases ─────────────────────────────────────────────
+
+    #[test]
+    fn test_reverse_road_empty_geometry_returns_empty() {
+        let road = Road::new("empty", 0.0);
+        let rev = reverse_road(&road);
+        assert!(rev.plan_view.is_empty());
+    }
+
+    #[test]
+    fn test_mirror_road_empty_geometry_returns_empty() {
+        let road = Road::new("empty", 0.0);
+        let mirrored = mirror_road(&road);
+        assert!(mirrored.plan_view.is_empty());
+    }
+
+    #[test]
+    fn test_reverse_road_preserves_signals() {
+        let mut road = make_road_with_line("r1");
+        road.signals = vec![Signal {
+            id: "sig1".to_string(),
+            name: "Stop".to_string(),
+            s: 50.0,
+            t: 2.0,
+            z_offset: 3.0,
+            h_offset: 0.0,
+            width: 0.6,
+            height: 0.6,
+            value: None,
+            signal_type: "sign".to_string(),
+            signal_subtype: "stop".to_string(),
+            orientation: "+".to_string(),
+            is_dynamic: false,
+            country: String::new(),
+            unit: String::new(),
+            validities: Vec::new(),
+        }];
+        let rev = reverse_road(&road);
+        assert_eq!(rev.signals.len(), 1);
+        assert_eq!(rev.signals[0].id, "sig1");
+    }
+
+    #[test]
+    fn test_mirror_road_preserves_signals() {
+        let mut road = make_road_with_lane_sections("r1");
+        road.signals = vec![Signal {
+            id: "sig1".to_string(),
+            name: "Speed".to_string(),
+            s: 25.0,
+            t: -1.5,
+            z_offset: 2.5,
+            h_offset: 0.0,
+            width: 0.5,
+            height: 0.8,
+            value: Some("30".to_string()),
+            signal_type: "sign".to_string(),
+            signal_subtype: "speed".to_string(),
+            orientation: "+".to_string(),
+            is_dynamic: false,
+            country: String::new(),
+            unit: String::new(),
+            validities: Vec::new(),
+        }];
+        let mirrored = mirror_road(&road);
+        assert_eq!(mirrored.signals.len(), 1);
+        assert_eq!(mirrored.signals[0].id, "sig1");
+    }
+
+    #[test]
+    fn test_reverse_road_elevation_profile_reversed() {
+        use crate::model::Elevation;
+        let mut road = make_road_with_line("r1");
+        road.elevation_profile = vec![
+            Elevation { s: 0.0, a: 0.0, b: 0.1, c: 0.0, d: 0.0 },
+            Elevation { s: 50.0, a: 5.0, b: -0.05, c: 0.0, d: 0.0 },
+        ];
+        let rev = reverse_road(&road);
+        // After reversing: s values should be 100-original_s, sorted
+        assert_eq!(rev.elevation_profile.len(), 2);
+        assert!((rev.elevation_profile[0].s - 50.0).abs() < 1e-9);
+        assert!((rev.elevation_profile[1].s - 100.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_reverse_road_no_lane_sections() {
+        let road = make_road_with_line("r1");
+        // No lane sections
+        let rev = reverse_road(&road);
+        assert!(rev.lane_sections.is_empty());
+    }
+
+    #[test]
+    fn test_mirror_road_no_lane_sections() {
+        let road = make_road_with_line("r1");
+        let mirrored = mirror_road(&road);
+        assert!(mirrored.lane_sections.is_empty());
+    }
+
+    #[test]
+    fn test_mirror_road_multiple_lane_sections() {
+        let make_lane = |lane_id: i32| Lane {
+            id: lane_id,
+            lane_type: LaneType::Driving,
+            level: 0,
+            render_hidden: false,
+            link: None,
+            width: vec![LaneWidth { s_offset: 0.0, a: 3.5, b: 0.0, c: 0.0, d: 0.0 }],
+            borders: vec![],
+            road_marks: vec![],
+        };
+        let mut road = make_road_with_line("r1");
+        road.lane_sections = vec![
+            LaneSection {
+                s: 0.0,
+                single_side: false,
+                render_hidden: false,
+                left: vec![make_lane(1)],
+                center: vec![make_lane(0)],
+                right: vec![make_lane(-1), make_lane(-2)],
+            },
+            LaneSection {
+                s: 50.0,
+                single_side: false,
+                render_hidden: false,
+                left: vec![make_lane(1), make_lane(2), make_lane(3)],
+                center: vec![make_lane(0)],
+                right: vec![make_lane(-1)],
+            },
+        ];
+        let mirrored = mirror_road(&road);
+        assert_eq!(mirrored.lane_sections.len(), 2);
+        // Section 0: left was [1], right was [-1,-2] → after swap: left=2 lanes, right=1 lane
+        assert_eq!(mirrored.lane_sections[0].left.len(), 2);
+        assert_eq!(mirrored.lane_sections[0].right.len(), 1);
+        // Section 1: left was [1,2,3], right was [-1] → after swap: left=1 lane, right=3 lanes
+        assert_eq!(mirrored.lane_sections[1].left.len(), 1);
+        assert_eq!(mirrored.lane_sections[1].right.len(), 3);
     }
 
     // ── optimize_road_knots ───────────────────────────────────────────────────
