@@ -52,6 +52,8 @@ export function Viewport() {
   const { startMoveRotateDrag, updateMoveRotateDrag, commitMoveRotateDrag } = useMoveRotateMode(rendererRef, canvasRef, isPreviewingRoadRef, pendingCursorRef);
   const hoveredRoadRef = useRef<string | null>(null);
   const hoveredJunctionRef = useRef<string | null>(null);
+  const hoveredSignalRef = useRef<{ roadId: string; signalId: string } | null>(null);
+  const hoveredObjectRef = useRef<{ roadId: string; objectId: string } | null>(null);
   const snapIndicatorDomRef = useRef<HTMLDivElement | null>(null);
   const touchStateRef = useRef<{
     touches: Array<{ id: number; x: number; y: number }>;
@@ -735,6 +737,8 @@ export function Viewport() {
         if (newHoveredRoad !== hoveredRoadRef.current || hoveredJunctionRef.current !== null) {
           hoveredRoadRef.current = newHoveredRoad;
           hoveredJunctionRef.current = null;
+          hoveredSignalRef.current = null;
+          hoveredObjectRef.current = null;
           if (rendererInst) {
             if (newHoveredRoad) {
               const { selectedRoadId } = useEditorStore.getState();
@@ -768,8 +772,30 @@ export function Viewport() {
                 if (!rendererInst.pointerDragging) {
                   canvas.style.cursor = 'pointer';
                 }
-              } else if (!rendererInst.pointerDragging) {
-                canvas.style.cursor = '';
+              } else {
+                // No road or junction hovered – try signal/object
+                // Signals and objects sit ON roads, check with moderate threshold.
+                const signalHitRaw = await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
+                const signalHit = signalHitRaw as { roadId: string; signalId: string } | null;
+                if (signalHit !== null) {
+                  if (hoveredSignalRef.current?.signalId !== signalHit.signalId) {
+                    hoveredSignalRef.current = { roadId: signalHit.roadId, signalId: signalHit.signalId };
+                  }
+                  if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';
+                } else {
+                  hoveredSignalRef.current = null;
+                  const objectHitRaw = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
+                  const objectHit = objectHitRaw as { roadId: string; objectId: string } | null;
+                  if (objectHit !== null) {
+                    if (hoveredObjectRef.current?.objectId !== objectHit.objectId) {
+                      hoveredObjectRef.current = { roadId: objectHit.roadId, objectId: objectHit.objectId };
+                    }
+                    if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';
+                  } else {
+                    hoveredObjectRef.current = null;
+                    if (!rendererInst.pointerDragging) canvas.style.cursor = '';
+                  }
+                }
               }
             }
           }
@@ -908,6 +934,8 @@ export function Viewport() {
           if (rendererInst) rendererInst.clearHover();
           hoveredRoadRef.current = null;
           hoveredJunctionRef.current = null;
+          hoveredSignalRef.current = null;
+          hoveredObjectRef.current = null;
           return;
         }
       }
@@ -989,9 +1017,12 @@ export function Viewport() {
   }, [handleSplineDrawRightClick]);
 
   const handleMouseLeave = useCallback(() => {
-    if (hoveredRoadRef.current !== null || hoveredJunctionRef.current !== null) {
+    if (hoveredRoadRef.current !== null || hoveredJunctionRef.current !== null ||
+        hoveredSignalRef.current !== null || hoveredObjectRef.current !== null) {
       hoveredRoadRef.current = null;
       hoveredJunctionRef.current = null;
+      hoveredSignalRef.current = null;
+      hoveredObjectRef.current = null;
       rendererRef.current?.clearHover();
     }
     clearGeometryEditHover();
