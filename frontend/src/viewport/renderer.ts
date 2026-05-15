@@ -15,6 +15,15 @@ export { resolveMouseDragAction, computeGroundPanOffset } from './viewportTypes'
  *   - See crates/we-wasm/src/lib.rs for the progressive WASM data pipeline.
  */
 
+/** Multiplier for GPU buffer allocation headroom. When a buffer needs to grow,
+ *  it is allocated as `requiredBytes × GPU_BUFFER_HEADROOM`. */
+const GPU_BUFFER_HEADROOM = 2.0;
+
+/** Threshold below which an oversized GPU buffer is shrunk.
+ *  If `requiredBytes < bufferSize × GPU_BUFFER_SHRINK_THRESHOLD`, the buffer
+ *  is reallocated to `requiredBytes × GPU_BUFFER_HEADROOM`. */
+const GPU_BUFFER_SHRINK_THRESHOLD = 0.25;
+
 import { applyHandleDrag } from './tangentHandleController';
 import type { ControlPointRef } from './tangentHandleController';
 import {
@@ -193,6 +202,49 @@ export class ViewportRenderer {
   }
 
   /** Upload road vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
+  /**
+   * Reuse or allocate a GPU vertex buffer with smart grow/shrink strategy.
+   *
+   * Strategy:
+   * - **Grow:** If existing buffer is too small, allocate 2× required bytes for headroom.
+   * - **Reuse:** If buffer fits (>= requiredBytes and <= 4× requiredBytes), keep it.
+   * - **Shrink:** If buffer usage drops below 25% (requiredBytes < size × 0.25),
+   *   reallocate to 2× requiredBytes to release GPU memory.
+   *   The 25% threshold avoids thrashing when data oscillates near a power-of-two boundary.
+   */
+  private getOrCreateBuffer(existingBuffer: GPUBuffer | undefined, requiredBytes: number): GPUBuffer {
+    if (existingBuffer) {
+      const currentSize = existingBuffer.size;
+      if (currentSize >= requiredBytes && requiredBytes >= currentSize * GPU_BUFFER_SHRINK_THRESHOLD) {
+        // Buffer fits well — reuse
+        return existingBuffer;
+      }
+      // Too small or too large — destroy and reallocate
+      existingBuffer.destroy();
+    }
+    return this.device.createBuffer({
+      size: Math.ceil(requiredBytes * GPU_BUFFER_HEADROOM),
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+  }
+
+  /** Upload vertex data into a mesh array, reusing or reallocating the GPU buffer as needed. */
+  private uploadMeshData(meshes: RenderableMesh[], vertexData: Float32Array): void {
+    const requiredBytes = vertexData.byteLength;
+    const buffer = this.getOrCreateBuffer(meshes[0]?.vertexBuffer, requiredBytes);
+    this.device.queue.writeBuffer(buffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+
+    // Destroy stale extra mesh entries
+    for (let i = (meshes[0]?.vertexBuffer === buffer ? 1 : 0); i < meshes.length; i++) {
+      meshes[i]!.vertexBuffer.destroy();
+    }
+    meshes.length = 0;
+    meshes.push({
+      vertexBuffer: buffer,
+      vertexCount: vertexData.length / 7,
+    });
+  }
+
   uploadRoadVertices(vertexData: Float32Array): void {
     // Track whether this is a fresh load (previously empty) to decide on auto-fit
     const wasEmpty = this.lastVertexData === null || this.lastVertexData.length === 0;
@@ -204,33 +256,7 @@ export class ViewportRenderer {
       return;
     }
 
-    // Reuse existing buffer if large enough; otherwise allocate with 2x headroom
-    const requiredBytes = vertexData.byteLength;
-    const existing = this.meshes[0];
-    if (existing && existing.vertexBuffer.size >= requiredBytes) {
-      this.device.queue.writeBuffer(existing.vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
-      existing.vertexCount = vertexData.length / 7;
-      // Drop extra mesh entries if they exist
-      for (let i = 1; i < this.meshes.length; i++) {
-        this.meshes[i]!.vertexBuffer.destroy();
-      }
-      this.meshes.length = 1;
-    } else {
-      for (const m of this.meshes) { m.vertexBuffer.destroy(); }
-      this.meshes = [];
-
-      const allocBytes = requiredBytes * 2; // 2x headroom to reduce future re-allocs
-      const buffer = this.device.createBuffer({
-        size: allocBytes,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      });
-      this.device.queue.writeBuffer(buffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
-
-      this.meshes.push({
-        vertexBuffer: buffer,
-        vertexCount: vertexData.length / 7,
-      });
-    }
+    this.uploadMeshData(this.meshes, vertexData);
 
     // Store for later zoomToFit calls
     this.lastVertexData = vertexData;
@@ -247,28 +273,7 @@ export class ViewportRenderer {
       this.clearHighlight();
       return;
     }
-
-    const requiredBytes = vertexData.byteLength;
-    const existing = this.highlightMeshes[0];
-    if (existing && existing.vertexBuffer.size >= requiredBytes) {
-      this.device.queue.writeBuffer(existing.vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
-      existing.vertexCount = vertexData.length / 7;
-      for (let i = 1; i < this.highlightMeshes.length; i++) {
-        this.highlightMeshes[i]!.vertexBuffer.destroy();
-      }
-      this.highlightMeshes.length = 1;
-    } else {
-      this.clearHighlight();
-      const buffer = this.device.createBuffer({
-        size: requiredBytes * 2,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      });
-      this.device.queue.writeBuffer(buffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
-      this.highlightMeshes.push({
-        vertexBuffer: buffer,
-        vertexCount: vertexData.length / 7,
-      });
-    }
+    this.uploadMeshData(this.highlightMeshes, vertexData);
   }
 
   /** Clear the selection highlight mesh. */
@@ -285,28 +290,7 @@ export class ViewportRenderer {
       this.clearHover();
       return;
     }
-
-    const requiredBytes = vertexData.byteLength;
-    const existing = this.hoverMeshes[0];
-    if (existing && existing.vertexBuffer.size >= requiredBytes) {
-      this.device.queue.writeBuffer(existing.vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
-      existing.vertexCount = vertexData.length / 7;
-      for (let i = 1; i < this.hoverMeshes.length; i++) {
-        this.hoverMeshes[i]!.vertexBuffer.destroy();
-      }
-      this.hoverMeshes.length = 1;
-    } else {
-      this.clearHover();
-      const buffer = this.device.createBuffer({
-        size: requiredBytes * 2,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      });
-      this.device.queue.writeBuffer(buffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
-      this.hoverMeshes.push({
-        vertexBuffer: buffer,
-        vertexCount: vertexData.length / 7,
-      });
-    }
+    this.uploadMeshData(this.hoverMeshes, vertexData);
   }
 
   /** Clear the hover highlight mesh. */
@@ -366,30 +350,7 @@ export class ViewportRenderer {
       this.laneLineMeshes = [];
       return;
     }
-
-    const requiredBytes = vertexData.byteLength;
-    const existing = this.laneLineMeshes[0];
-    if (existing && existing.vertexBuffer.size >= requiredBytes) {
-      this.device.queue.writeBuffer(existing.vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
-      existing.vertexCount = vertexData.length / 7;
-      for (let i = 1; i < this.laneLineMeshes.length; i++) {
-        this.laneLineMeshes[i]!.vertexBuffer.destroy();
-      }
-      this.laneLineMeshes.length = 1;
-    } else {
-      for (const m of this.laneLineMeshes) { m.vertexBuffer.destroy(); }
-      this.laneLineMeshes = [];
-
-      const buffer = this.device.createBuffer({
-        size: requiredBytes * 2,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      });
-      this.device.queue.writeBuffer(buffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
-      this.laneLineMeshes.push({
-        vertexBuffer: buffer,
-        vertexCount: vertexData.length / 7,
-      });
-    }
+    this.uploadMeshData(this.laneLineMeshes, vertexData);
   }
 
   /**
