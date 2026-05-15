@@ -108,6 +108,11 @@ fn parse_signal_elem_attrs(e: &BytesStart) -> Result<Signal, OpenDriveError> {
 /// A pending `<objectReference>` found inside an `<objects>` block.
 ///
 /// These are resolved after all roads have been parsed, in the main `parse()` function.
+/// Parsed data from an `<objectReference>` element.
+///
+/// Currently retained for future cross-road validation but not used
+/// to create copies (objects render on their defining road only).
+#[allow(dead_code)]
 pub(super) struct ObjectRef {
     /// The id of the referenced `<object>` or `<roadObject>` element (on any road).
     pub id: String,
@@ -242,6 +247,22 @@ fn parse_road_object_elem(
                     obj.corner_type = CornerType::Road;
                 }
             }
+            Ok(Event::Start(ref e) | Event::Empty(ref e))
+                if e.name().as_ref() == b"userData" =>
+            {
+                let mut code = String::new();
+                let mut value = String::new();
+                for attr in e.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"code" => code = attr_str(&attr)?,
+                        b"value" => value = attr_str(&attr)?,
+                        _ => {}
+                    }
+                }
+                if !code.is_empty() {
+                    obj.user_data.push((code, value));
+                }
+            }
             Ok(Event::End(ref e)) if e.name().as_ref() == closing => break,
             Ok(Event::Eof) => {
                 return Err(OpenDriveError::InvalidStructure(
@@ -286,6 +307,7 @@ fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError>
         corner_type: CornerType::Local,
         validity: None,
         from_object_ref: false,
+        user_data: Vec::new(),
     };
 
     for attr in e.attributes().flatten() {

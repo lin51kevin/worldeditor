@@ -128,6 +128,11 @@ pub(crate) fn eval_lane_offset(offsets: &[we_core::model::LaneOffset], s: f64) -
 /// Evaluate road reference position at a given `s` station.
 ///
 /// Finds the geometry element that covers `s` and evaluates it.
+/// When `s` exceeds the last geometry segment's range, the position
+/// is extrapolated by extending in the tangent direction from the
+/// segment endpoint.  This allows objects defined with s > road.length
+/// (common in XODR parking-space rows) to render at the correct
+/// world position.
 pub(crate) fn road_point_at_s(
     plan_view: &[we_core::model::Geometry],
     s: f64,
@@ -145,8 +150,22 @@ pub(crate) fn road_point_at_s(
         .find(|g| g.s <= s + 1e-9)
         .unwrap_or(&plan_view[0]);
 
-    let ds = (s - geo.s).clamp(0.0, geo.length);
-    Some(evaluate_geometry(geo, ds))
+    let ds = s - geo.s;
+    if ds <= geo.length + 1e-9 {
+        // Normal case: s within segment
+        let ds_clamped = ds.clamp(0.0, geo.length);
+        Some(evaluate_geometry(geo, ds_clamped))
+    } else {
+        // Extrapolate: evaluate at segment end, then extend along tangent
+        let end_pt = evaluate_geometry(geo, geo.length);
+        let overshoot = ds - geo.length;
+        Some(we_core::geometry::eval::RefLinePoint {
+            x: end_pt.x + overshoot * end_pt.hdg.cos(),
+            y: end_pt.y + overshoot * end_pt.hdg.sin(),
+            hdg: end_pt.hdg,
+            s,
+        })
+    }
 }
 // ── Public wasm_bindgen functions ─────────────────────────────────────────────
 
@@ -677,42 +696,22 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
             continue;
         }
 
-        // Junction connector roads (junction != "-1") must not render crosswalk / stop-line
-        // objects that arrived via <objectReference> resolution.  Those copies are placed on
-        // connector roads solely to record which crossings are associated with which turn
-        // movements; the physical marking is defined once on the main approach road.
-        // Rendering the copies would:
-        //   (a) produce duplicate markings at the junction boundary, and
-        //   (b) use the connector road's tangent direction instead of the approach road's,
-        //       giving stripes that appear parallel to—rather than perpendicular to—the road.
-        let _is_junction_connector =
-            matches!(&road.junction_id, Some(j) if j != "-1");
-
         let ref_pts = sample_road_reference_line(road, 1.0);
         if ref_pts.len() < 2 {
             continue;
         }
 
         for obj in &road.objects {
-            // Skip objects that arrived via <objectReference> resolution.  These copies
-            // share geometry with the original object but are placed at a different (s, t)
-            // on a different road.  For objects with small cornerLocal offsets the copy
-            // renders at nearly the same world position as the original (redundant); for
-            // objects with large offsets (e.g. unusual parking spaces) the copy renders
-            // at an incorrect world position, producing ghost stalls tens of metres away.
-            // The original objects always render on their own roads, so skipping copies
-            // loses no visual information.
-            //
-            // This check also covers ground markings (crosswalks, stop lines) on junction
-            // connectors: those typically arrive via <objectReference> resolution only.
-            // Non-objectReference crosswalks on connectors are intentional and should render.
-            if obj.from_object_ref {
-                continue;
-            }
-
             let s = obj.position.x;
             let t = obj.position.y;
             let z_offset = obj.position.z as f32;
+
+            // Skip objects with negative s (invalid placement).
+            // Objects with s > road.length are allowed — road_point_at_s
+            // extrapolates the road geometry by tangent extension.
+            if s < -1.0 {
+                continue;
+            }
 
             // Find reference line point at object s-coordinate
             let Some(ref_pt) = road_point_at_s(&road.plan_view, s) else {
@@ -810,6 +809,18 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                                 );
                             }
                             CornerType::Local => {
+                                // Extract userData: Angle, LineWidth, LineGap
+                                let mut angle_deg = 0.0_f64;
+                                let mut line_width = 0.0_f64;
+                                let mut line_gap = 0.0_f64;
+                                for (code, value) in &obj.user_data {
+                                    match code.as_str() {
+                                        "Angle" => angle_deg = value.parse().unwrap_or(0.0),
+                                        "LineWidth" => line_width = value.parse().unwrap_or(0.0),
+                                        "LineGap" => line_gap = value.parse().unwrap_or(0.0),
+                                        _ => {}
+                                    }
+                                }
                                 // Corner-based zebra stripe generation with correct heading rotation.
                                 emit_crosswalk_stripes(
                                     &obj.corners,
@@ -820,6 +831,9 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                                     obj.hdg,
                                     z_road,
                                     &offset_point,
+                                    angle_deg,
+                                    line_width,
+                                    line_gap,
                                     &mut all_floats,
                                 );
                             }
@@ -871,6 +885,8 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                                     [0.424, 0.549, 0.278, 1.0],
                                     &offset_point,
                                     &mut all_floats,
+                                    obj.length,
+                                    obj.width,
                                 );
                             }
                         }
@@ -920,6 +936,8 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                                     [0.965, 0.651, 0.137, 1.0],
                                     &offset_point,
                                     &mut all_floats,
+                                    obj.length,
+                                    obj.width,
                                 );
                             }
                         }
@@ -970,6 +988,8 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                                     color,
                                     &offset_point,
                                     &mut all_floats,
+                                    obj.length,
+                                    obj.width,
                                 );
                             }
                         }
@@ -1623,5 +1643,72 @@ mod tests {
                 "hOffset=+π and hOffset=-π vertices should be identical, got {a} vs {b}"
             );
         }
+    }
+
+    /// Verify that `road_point_at_s` correctly extrapolates beyond road.length.
+    /// A line geometry from (0,0) heading east (hdg=0), length=10.
+    /// At s=15 (5m past road end), the point should be at (15, 0).
+    #[test]
+    fn test_road_point_at_s_extrapolates_beyond_length() {
+        use we_core::model::{Geometry, GeometryType};
+
+        let plan_view = vec![Geometry {
+            s: 0.0,
+            x: 0.0,
+            y: 0.0,
+            hdg: 0.0,
+            length: 10.0,
+            geo_type: GeometryType::Line,
+        }];
+
+        // Within range: s=5 → (5, 0)
+        let pt = road_point_at_s(&plan_view, 5.0).unwrap();
+        assert!((pt.x - 5.0).abs() < 1e-6);
+        assert!(pt.y.abs() < 1e-6);
+
+        // At road end: s=10 → (10, 0)
+        let pt = road_point_at_s(&plan_view, 10.0).unwrap();
+        assert!((pt.x - 10.0).abs() < 1e-6);
+        assert!(pt.y.abs() < 1e-6);
+
+        // Extrapolated: s=15 → (15, 0), tangent extension along hdg=0
+        let pt = road_point_at_s(&plan_view, 15.0).unwrap();
+        assert!(
+            (pt.x - 15.0).abs() < 1e-6,
+            "extrapolated x should be 15, got {}",
+            pt.x
+        );
+        assert!(pt.y.abs() < 1e-6, "extrapolated y should be 0, got {}", pt.y);
+        assert!(pt.hdg.abs() < 1e-6, "heading preserved at 0");
+    }
+
+    /// Same extrapolation test but with a northward road (hdg=π/2).
+    /// Geometry: origin (10, 0), heading north, length=5.
+    /// At s=12 (7m past end), point should be at (10, 12).
+    #[test]
+    fn test_road_point_at_s_extrapolates_north() {
+        use we_core::model::{Geometry, GeometryType};
+
+        let plan_view = vec![Geometry {
+            s: 0.0,
+            x: 10.0,
+            y: 0.0,
+            hdg: std::f64::consts::FRAC_PI_2,
+            length: 5.0,
+            geo_type: GeometryType::Line,
+        }];
+
+        // Extrapolated: s=12 → origin(10,0) + 12m north → (10, 12)
+        let pt = road_point_at_s(&plan_view, 12.0).unwrap();
+        assert!(
+            (pt.x - 10.0).abs() < 1e-4,
+            "x should stay at 10, got {}",
+            pt.x
+        );
+        assert!(
+            (pt.y - 12.0).abs() < 1e-4,
+            "y should be 12 (extrapolated), got {}",
+            pt.y
+        );
     }
 }

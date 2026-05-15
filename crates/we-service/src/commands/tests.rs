@@ -751,6 +751,7 @@ fn make_road_object(id: &str) -> RoadObject {
         corner_type: CornerType::Local,
         validity: None,
         from_object_ref: false,
+        user_data: Vec::new(),
     }
 }
 

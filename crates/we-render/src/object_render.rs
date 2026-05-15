@@ -267,6 +267,7 @@ mod tests {
             corner_type: CornerType::Local,
             validity: None,
             from_object_ref: false,
+            user_data: Vec::new(),
         }];
         let vertices = generate_object_render_data(&objects);
         assert!(!vertices.is_empty());
@@ -289,6 +290,7 @@ mod tests {
             corner_type: CornerType::Local,
             validity: None,
             from_object_ref: false,
+            user_data: Vec::new(),
         }
     }
 

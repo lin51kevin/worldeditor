@@ -369,6 +369,9 @@ pub(super) fn emit_crosswalk_stripes(
     obj_hdg: f64,
     _z_base: f32,
     offset_pt: &OffsetPtFn,
+    angle_deg: f64,
+    line_width: f64,
+    line_gap: f64,
     out: &mut Vec<f32>,
 ) {
     use we_core::geometry::eval::evaluate_elevation;
@@ -383,8 +386,10 @@ pub(super) fn emit_crosswalk_stripes(
     let (ox, oy, _) = offset_pt(ref_pt, obj_t, 0.0);
     let z_base = evaluate_elevation(elevations, ref_pt.s) as f32 + 0.02;
 
-    // Road tangent direction at obj_s.
-    let theta = ref_pt.hdg;
+    // Road tangent direction at obj_s, with optional Angle offset from userData.
+    // WEO applies: angleOffset = -(Angle * PI / 180), then rotates heading by that amount.
+    let angle_offset_rad = -angle_deg.to_radians();
+    let theta = ref_pt.hdg + angle_offset_rad;
     let (cos_t, sin_t) = (theta.cos(), theta.sin());
 
     // Transform cornerLocal (u, v) by obj_hdg to road-frame (alpha, beta),
@@ -439,8 +444,9 @@ pub(super) fn emit_crosswalk_stripes(
     // alpha (along-road) extent clipped to the polygon boundary.
     // This produces bars running parallel to the road direction, spaced laterally —
     // matching the worldeditoronline crosswalk rendering convention.
-    let stripe_width = 0.45_f64;
-    let stripe_period = 1.05_f64; // 0.45 stripe + 0.60 gap
+    // Use userData LineWidth/LineGap if provided, otherwise default to 0.45 / 0.60.
+    let stripe_width = if line_width > 0.0 { line_width } else { 0.45 };
+    let stripe_period = stripe_width + if line_gap > 0.0 { line_gap } else { 0.60 };
     let [r, g, b_color, a]: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
     let mut beta = beta_min;
@@ -488,18 +494,19 @@ pub(super) fn emit_crosswalk_stripes(
 /// Uses the caller-provided `exact_ref_pt` (evaluated exactly at `obj_s`) to form the
 /// tangent-plane origin, then maps each cornerLocal `(u, v)` into world space.
 ///
-/// ## Coordinate convention auto-detection
+/// ## Coordinate convention detection
 ///
 /// Two real-world xodr conventions exist for `cornerLocal`:
-/// - **Road-frame** (non-spec): `u` = along-road, `v` = lateral. Detected when `u_span <= v_span`.
+/// - **Road-frame** (non-spec): `u` = along-road, `v` = lateral.
+///   The parent `<object>` has `length="0" width="0"` (or both absent).
 ///   → No `obj_hdg` rotation applied: `wx = Ox + u·cos(θ) − v·sin(θ)`
 /// - **Object-local frame** (OpenDRIVE spec): `u` = along object heading, `v` = cross-heading.
-///   Detected when `u_span > v_span` (u is the stall depth, larger than stall width).
+///   The parent `<object>` carries non-zero `length` and `width`.
 ///   → Apply `obj_hdg` rotation first: `alpha = u·cos(h) − v·sin(h)`, `beta = u·sin(h) + v·cos(h)`
 ///   → Then: `wx = Ox + alpha·cos(θ) − beta·sin(θ)`
 ///
-/// This heuristic correctly handles both `parkinglot.xodr` (road-frame, u < v) and
-/// spec-compliant files like `park_ground_park_ground.xodr` (object-local, u > v).
+/// Detection uses `obj_length > 0 && obj_width > 0` from the XML attributes, which
+/// reliably distinguishes the two conventions regardless of corner aspect ratio.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn emit_polygon_outline(
     corners: &[we_core::model::Point3D],
@@ -513,6 +520,8 @@ pub(super) fn emit_polygon_outline(
     color: [f32; 4],
     offset_pt: &OffsetPtFn,
     out: &mut Vec<f32>,
+    obj_length: f64,
+    obj_width: f64,
 ) {
     use we_core::geometry::eval::evaluate_elevation;
 
@@ -527,16 +536,10 @@ pub(super) fn emit_polygon_outline(
     let theta = ref_pt.hdg;
     let (cos_t, sin_t) = (theta.cos(), theta.sin());
 
-    // Detect coordinate convention via u_span vs v_span:
-    // - u_span > v_span → spec-compliant object-local frame → apply obj_hdg rotation
-    // - u_span <= v_span → road-frame storage → no rotation (identity)
-    let u_min = corners.iter().map(|c| c.x).fold(f64::INFINITY, f64::min);
-    let u_max = corners.iter().map(|c| c.x).fold(f64::NEG_INFINITY, f64::max);
-    let v_min = corners.iter().map(|c| c.y).fold(f64::INFINITY, f64::min);
-    let v_max = corners.iter().map(|c| c.y).fold(f64::NEG_INFINITY, f64::max);
-    let u_span = u_max - u_min;
-    let v_span = v_max - v_min;
-    let apply_rotation = u_span > v_span;
+    // Detect coordinate convention via object length/width attributes:
+    // - length > 0 && width > 0 → spec-compliant object-local frame → apply obj_hdg rotation
+    // - otherwise → road-frame storage → no rotation (identity)
+    let apply_rotation = obj_length > 0.0 && obj_width > 0.0;
 
     let (cos_h, sin_h) = if apply_rotation {
         (obj_hdg.cos(), obj_hdg.sin())
@@ -736,7 +739,7 @@ mod tests {
         let mut out = Vec::new();
         let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
 
-        emit_crosswalk_stripes(&corners, &ref_pts[9], &elevations, 9.0, 0.0, 0.0, 0.0, offset_fn, &mut out);
+        emit_crosswalk_stripes(&corners, &ref_pts[9], &elevations, 9.0, 0.0, 0.0, 0.0, offset_fn, 0.0, 0.0, 0.0, &mut out);
 
         // Must produce at least one valid (non-degenerate) stripe quad = 6 vertices × 7 floats.
         assert!(out.len() >= 42, "Expected at least one stripe but got {} floats", out.len());
@@ -772,7 +775,7 @@ mod tests {
 
         emit_crosswalk_stripes(
             &corners, &ref_pts[5], &elevations,
-            5.0, 0.0, std::f64::consts::FRAC_PI_2, 0.0, offset_fn, &mut out,
+            5.0, 0.0, std::f64::consts::FRAC_PI_2, 0.0, offset_fn, 0.0, 0.0, 0.0, &mut out,
         );
 
         assert!(!out.is_empty(), "Expected stripes for hdg=π/2 crosswalk");
@@ -802,13 +805,13 @@ mod tests {
             "First stripe along-road extent={:.1}, expected ~4.0m", x_max - x_min);
     }
 
-    /// Verify that parking spaces with v_span > u_span (road-frame convention, e.g. parkinglot.xodr)
+    /// Verify that parking spaces with road-frame convention (e.g. parkinglot.xodr, length=0/width=0)
     /// do NOT get hdg rotation applied, producing correct perpendicular stall orientation.
     ///
     /// Uses Style B parking (v_span > u_span, like id=50 in parkinglot.xodr):
     /// u∈[-1.12, 1.15] (width=2.27m), v∈[-2.77, 0.68] (depth=3.45m), hdg=π/2.
     ///
-    /// Auto-detection: u_span=2.27 < v_span=3.45 → road-frame → NO rotation.
+    /// Detection: obj_length=0, obj_width=0 → road-frame → NO rotation.
     /// Without rotation: ds = u → along road 2.27m, dt = v → lateral 3.45m.
     /// This produces narrow stalls along the road (2.27m) with depth perpendicular (3.45m).
     #[test]
@@ -834,11 +837,12 @@ mod tests {
         let mut out50 = Vec::new();
         emit_polygon_outline(&corners_50, &ref_pts[8], &elevations, 0.81, 0.0,
             std::f64::consts::FRAC_PI_2, 0.0, 0.10,
-            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out50);
+            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out50,
+            0.0, 0.0); // length=0, width=0 → road-frame → no rotation
 
         assert!(!out50.is_empty(), "Space 50 should produce outline vertices");
 
-        // Auto-detection: u_span(2.27) < v_span(3.45) → road-frame → no rotation.
+        // Detection: obj_length=0, obj_width=0 → road-frame → no rotation.
         // ds = u → x ∈ [0.81-1.12, 0.81+1.15] = [-0.31, 1.96]
         let x_max_50 = out50.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
         let x_min_50 = out50.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
@@ -863,11 +867,12 @@ mod tests {
         );
     }
 
-    /// Verify that spec-compliant parking spaces (u_span > v_span) get hdg rotation applied.
+    /// Verify that spec-compliant parking spaces (non-zero length/width) get hdg rotation applied.
     ///
     /// `park_ground_park_ground.xodr` style: u∈[-3.16, 2.09] (uSpan=5.25m, stall depth),
-    /// v∈[-1.49, 0.99] (vSpan=2.49m, stall width), hdg=π/2.
+    /// v∈[-1.49, 0.99] (vSpan=2.49m, stall width), hdg=π/2, length=5.25, width=2.48.
     ///
+    /// Detection: obj_length=5.25 > 0 && obj_width=2.48 > 0 → spec-compliant → apply rotation.
     /// With rotation (hdg=π/2): alpha = -v ∈ [-0.99, 1.49] → 2.49m along road.
     /// Spaces at s=4.57 and s=7.07 (spacing=2.5m): each takes 2.49m → barely touching.
     ///
@@ -900,11 +905,13 @@ mod tests {
         let mut out_a = Vec::new();
         emit_polygon_outline(&corners_a, &ref_pts[46], &elevations, 4.57, 0.0,
             std::f64::consts::FRAC_PI_2, 0.0, 0.10,
-            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out_a);
+            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out_a,
+            5.25, 2.48); // non-zero length/width → spec-compliant → rotation applied
         let mut out_b = Vec::new();
         emit_polygon_outline(&corners_b, &ref_pts[71], &elevations, 7.07, 0.0,
             std::f64::consts::FRAC_PI_2, 0.0, 0.10,
-            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out_b);
+            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out_b,
+            5.25, 2.48);
 
         assert!(!out_a.is_empty(), "Space A should produce vertices");
         assert!(!out_b.is_empty(), "Space B should produce vertices");
@@ -926,6 +933,61 @@ mod tests {
         assert!(
             overlap < 0.5,
             "Spec-compliant spaces overlap by {overlap:.3}m; rotation should produce touching not overlapping spaces"
+        );
+    }
+
+    /// Verify that parking spaces with u_span > v_span but length=0/width=0
+    /// do NOT get hdg rotation applied (this was the broken case for IDs 57,58,59,64,65
+    /// in parkinglot.xodr where the outline rectangle is wider in u than v).
+    #[test]
+    fn test_polygon_outline_u_wider_than_v_no_rotation_when_length_zero() {
+        let ref_pts: Vec<RefLinePoint> = (0..=200)
+            .map(|i| {
+                let s = i as f64 * 0.1;
+                RefLinePoint { s, x: s, y: 0.0, hdg: 0.0 }
+            })
+            .collect();
+        let elevations: Vec<Elevation> = vec![];
+        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+
+        // Space 58 (Road 10): u∈[-0.68, 2.75] (u_span=3.43), v∈[-1.16, 1.18] (v_span=2.34)
+        // u_span > v_span, but length=0 width=0 → road-frame → NO rotation.
+        let corners_58 = vec![
+            Point3D { x: -0.684, y: -1.161, z: 0.03, id: None },
+            Point3D { x:  2.745, y: -1.144, z: 0.03, id: None },
+            Point3D { x:  2.729, y:  1.176, z: 0.03, id: None },
+            Point3D { x: -0.716, y:  1.136, z: 0.03, id: None },
+        ];
+
+        let mut out = Vec::new();
+        emit_polygon_outline(&corners_58, &ref_pts[11], &elevations, 1.11, 3.62,
+            std::f64::consts::FRAC_PI_2, 0.0, 0.15,
+            [0.424, 0.549, 0.278, 1.0], offset_fn, &mut out,
+            0.0, 0.0); // length=0, width=0 → road-frame → no rotation
+
+        assert!(!out.is_empty(), "Space 58 should produce outline vertices");
+
+        // Without rotation: u maps to x → x_extent ≈ 3.43m (u_span)
+        // With rotation (wrong): u maps to y → x_extent ≈ 2.34m (v_span)
+        let x_max = out.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
+        let x_min = out.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
+        let x_extent = x_max - x_min;
+
+        // Without rotation: x_extent ≈ 3.43m (u_span). With rotation: x_extent ≈ 2.34m.
+        assert!(
+            x_extent > 3.0,
+            "Space 58 x_extent={x_extent:.3}: expected ~3.43 (no rotation for road-frame corners). \
+             Value < 3.0 means rotation was incorrectly applied"
+        );
+
+        // Without rotation: y_extent ≈ 2.34m (v_span). With rotation: y_extent ≈ 3.43m.
+        let y_max = out.chunks(7).map(|v| v[1]).fold(f32::NEG_INFINITY, f32::max);
+        let y_min = out.chunks(7).map(|v| v[1]).fold(f32::INFINITY, f32::min);
+        let y_extent = y_max - y_min;
+        assert!(
+            y_extent < 3.0,
+            "Space 58 y_extent={y_extent:.3}: expected ~2.34 (no rotation). \
+             Value > 3.0 means rotation was incorrectly applied"
         );
     }
 }

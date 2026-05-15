@@ -111,6 +111,16 @@ pub(super) fn write_objects(
                     .map_err(w_err)?;
             }
 
+            for (code, value) in &obj.user_data {
+                let ud_attrs = vec![
+                    ("code", code.clone()),
+                    ("value", value.clone()),
+                ];
+                writer
+                    .write_event(Event::Empty(elem_with_attrs("userData", &ud_attrs)))
+                    .map_err(w_err)?;
+            }
+
             writer
                 .write_event(Event::End(BytesEnd::new("object")))
                 .map_err(w_err)?;

@@ -53,40 +53,17 @@ pub fn parse(xml: &str) -> Result<Project, OpenDriveError> {
         }
     }
 
-    // Resolve objectReferences: build a global id → cloned RoadObject map from all roads,
-    // then attach copies (with the reference's s/t/z_offset) to each referencing road.
-    if !pending_refs.is_empty() {
-        let obj_map: std::collections::HashMap<String, RoadObject> = project
-            .roads
-            .iter()
-            .flat_map(|r| r.objects.iter())
-            .map(|o| (o.id.clone(), o.clone()))
-            .collect();
-
-        for (road_idx, obj_ref) in pending_refs {
-            // Skip references outside the valid road range — negative s or past road end
-            // (e.g. some XODR files have objectReference with s < 0 for adjacent-road alignment
-            // data that doesn't belong on this road).
-            let road_length = project.roads[road_idx].length;
-            if obj_ref.s < 0.0 || (road_length > 0.0 && obj_ref.s > road_length + 1.0) {
-                continue;
-            }
-
-            if let Some(template) = obj_map.get(&obj_ref.id) {
-                let mut copy = template.clone();
-                copy.position.x = obj_ref.s;
-                copy.position.y = obj_ref.t;
-                copy.position.z = obj_ref.z_offset;
-                copy.from_object_ref = true;
-                project.roads[road_idx].objects.push(copy);
-            } else {
-                log::warn!(
-                    "objectReference id='{}' not found in any road — skipping",
-                    obj_ref.id
-                );
-            }
-        }
-    }
+    // objectReference elements are parsed but NOT resolved into copies.
+    //
+    // Objects render on their defining road only.  When an object's s-coordinate
+    // exceeds road.length the renderer extrapolates the road geometry (tangent
+    // extension from the endpoint) so the object appears at the correct world
+    // position.  Creating copies via objectReference would cause the same object
+    // to appear under multiple roads in the navigator and produce duplicates.
+    //
+    // `pending_refs` is retained for future use (e.g. cross-road validation)
+    // but not acted upon here.
+    let _ = pending_refs;
 
     Ok(project)
 }
@@ -416,15 +393,16 @@ mod tests {
         assert_eq!(obj.corners.len(), 4);
     }
 
-    /// `<objectReference>` elements are resolved into copies of the original object,
-    /// positioned at (s, t) on the referencing road.
+    /// `<objectReference>` elements are parsed but do NOT produce copies.
+    /// Objects stay on their defining road only.  The renderer handles
+    /// out-of-range objects by extrapolating the road geometry.
     #[test]
-    fn test_parse_object_reference_resolution() {
+    fn test_object_reference_does_not_create_copies() {
         let xml = r#"<?xml version="1.0"?>
 <OpenDRIVE>
-  <road name="main" length="100" id="1" junction="-1">
+  <road name="main" length="20" id="1" junction="-1">
     <planView>
-      <geometry s="0" x="0" y="0" hdg="0" length="100">
+      <geometry s="0" x="0" y="0" hdg="0" length="20">
         <line/>
       </geometry>
     </planView>
@@ -434,20 +412,20 @@ mod tests {
       </laneSection>
     </lanes>
     <objects>
-      <object id="42" name="Crosswalk" s="50" t="0" zOffset="0" type="crosswalk" orientation="none"
-              length="0" width="0" radius="0" height="0" hdg="1.5707963267949">
+      <object id="42" name="Parking" s="50" t="0" zOffset="0" type="parkingspace" orientation="none"
+              length="5" width="2.5" radius="0" height="0" hdg="1.5707963267949">
         <outline>
-          <cornerLocal u="-1" v="-1" height="0" z="0"/>
-          <cornerLocal u="2"  v="-1" height="0" z="0"/>
-          <cornerLocal u="2"  v="-3" height="0" z="0"/>
-          <cornerLocal u="-1" v="-3" height="0" z="0"/>
+          <cornerLocal u="-2.5" v="-1.25" height="0" z="0"/>
+          <cornerLocal u="2.5"  v="-1.25" height="0" z="0"/>
+          <cornerLocal u="2.5"  v="1.25"  height="0" z="0"/>
+          <cornerLocal u="-2.5" v="1.25"  height="0" z="0"/>
         </outline>
       </object>
     </objects>
   </road>
-  <road name="connector" length="20" id="2" junction="99">
+  <road name="other" length="100" id="2" junction="-1">
     <planView>
-      <geometry s="0" x="100" y="0" hdg="0" length="20">
+      <geometry s="0" x="100" y="0" hdg="0" length="100">
         <line/>
       </geometry>
     </planView>
@@ -464,26 +442,17 @@ mod tests {
 
         let project = parse(xml).expect("parse should succeed");
 
-        // Road 1: original object
+        // Road 1: original object stays at s=50 (untouched, even though s > road.length)
         assert_eq!(project.roads[0].objects.len(), 1);
         let original = &project.roads[0].objects[0];
         assert_eq!(original.id, "42");
-        assert!((original.position.x - 50.0).abs() < 1e-6);
+        assert!((original.position.x - 50.0).abs() < 1e-6, "s must be preserved as-is");
+        assert!(!original.from_object_ref);
 
-        // Road 2: resolved copy with the reference's s/t/z_offset
-        assert_eq!(project.roads[1].objects.len(), 1, "objectReference must be resolved into an object");
-        let copy = &project.roads[1].objects[0];
-        assert_eq!(copy.id, "42", "copy must have the same id as original");
-        assert_eq!(copy.object_type, ObjectType::Crosswalk);
-        assert!((copy.position.x - 10.0).abs() < 1e-6, "s must be from objectReference");
-        assert!((copy.position.y - 1.5).abs() < 1e-6, "t must be from objectReference");
-        assert!((copy.position.z - 0.01).abs() < 1e-6, "zOffset must be from objectReference");
-        // Corners and hdg must be inherited from the original
-        assert_eq!(copy.corners.len(), 4, "corners must be copied from original");
-        assert!((copy.hdg - std::f64::consts::FRAC_PI_2).abs() < 1e-9, "hdg must be copied from original");
-        // The copy must be flagged so the renderer skips it (avoids ghost stalls)
-        assert!(copy.from_object_ref, "objectReference copy must have from_object_ref=true");
-        // The original must NOT be flagged
-        assert!(!original.from_object_ref, "original object must have from_object_ref=false");
+        // Road 2: objectReference does NOT create a copy
+        assert_eq!(
+            project.roads[1].objects.len(), 0,
+            "objectReference must not create copies — objects render on their defining road"
+        );
     }
 }

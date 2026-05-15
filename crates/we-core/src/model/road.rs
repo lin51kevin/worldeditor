@@ -455,20 +455,22 @@ pub struct RoadObject {
     pub corner_type: CornerType,
     pub validity: Option<Validity>,
     /// Set to `true` for objects that were synthesised from an `<objectReference>`
-    /// element during parsing.  These copies share their geometry with the original
-    /// object but are placed at a different (s, t) on a different road.
+    /// element during parsing.  A copy is only created when the original object's
+    /// s-coordinate is out of range on its source road (`s > road_length + 1` or
+    /// `s < -1`), meaning the original cannot render correctly there.  The copy
+    /// provides the authoritative placement on the referencing road.
     ///
-    /// The renderer skips `from_object_ref` copies because:
-    /// - For small-center objects the copy renders at nearly the same world position
-    ///   as the original → redundant double-draw.
-    /// - For large-center objects (e.g. unusual parking spaces with big cornerLocal
-    ///   offsets) the copy renders at an incorrect world position, producing ghost
-    ///   stalls tens of metres away from the intended location.
+    /// When the original is within range, no copy is created — the original already
+    /// renders on its own road and a copy would produce a duplicate.
     ///
-    /// The original objects are always rendered on their own roads; no visual
-    /// information is lost by skipping the copies.
+    /// The renderer skips `from_object_ref` copies on junction connector roads
+    /// (crosswalk/stop-line orientation would be wrong on the connector's tangent).
     #[serde(default)]
     pub from_object_ref: bool,
+    /// Key-value pairs from `<userData code="..." value="..."/>` child elements.
+    /// Common keys: `Angle` (degrees), `LineWidth` (metres), `LineGap` (metres).
+    #[serde(default)]
+    pub user_data: Vec<(String, String)>,
 }
 
 // ============================================================================
@@ -666,6 +668,7 @@ mod tests {
                 to_lane: 2,
             }),
             from_object_ref: false,
+            user_data: Vec::new(),
         };
 
         let json = serde_json::to_string(&object).unwrap();

@@ -895,6 +895,7 @@ mod tests {
                 corner_type: CornerType::Local,
                 validity: Some(Validity { from_lane: -1, to_lane: -2 }),
                 from_object_ref: false,
+                user_data: Vec::new(),
             }];
             r
         }], vec![]);
@@ -936,6 +937,7 @@ mod tests {
                     corner_type: CornerType::Local,
                     validity: None,
                     from_object_ref: false,
+                    user_data: Vec::new(),
                 }];
                 r
             }], vec![]);
@@ -964,6 +966,7 @@ mod tests {
                 corner_type: CornerType::Local,
                 validity: None,
                 from_object_ref: false,
+                user_data: Vec::new(),
             }];
             r
         }], vec![]);
@@ -1398,6 +1401,7 @@ mod tests {
                 corner_type: CornerType::Local,
                 validity: None,
                 from_object_ref: false,
+                user_data: Vec::new(),
             }];
             r.bridges = vec![Bridge { id: "b1".into(), s: 20.0, length: 10.0, bridge_type: "steel".into() }];
             r.tunnels = vec![Tunnel { id: "t1".into(), s: 40.0, length: 20.0, tunnel_type: "standard".into() }];
@@ -1456,6 +1460,7 @@ mod tests {
                 corner_type: CornerType::Local,
                 validity: None,
                 from_object_ref: false,
+                user_data: Vec::new(),
             }];
             r
         }], vec![]);
@@ -1477,7 +1482,7 @@ mod tests {
         let obj = &re.roads[0].objects[0];
         assert_eq!(obj.object_type, ObjectType::ParkingSpace);
         assert!((obj.hdg - 1.5707963249607597).abs() < 1e-10, "hdg must survive round-trip");
-        assert_eq!(obj.corners.len(), 5);
+        assert_eq!(obj.corners.len(), 4, "Parser removes duplicate closing vertex");
         assert!((obj.corners[0].x - (-0.684)).abs() < 1e-6);
         assert!((obj.corners[0].y - (-1.161)).abs() < 1e-6);
         assert!((obj.corners[0].z - 0.03).abs() < 1e-6);
@@ -1507,7 +1512,7 @@ mod tests {
             assert!(ps58.is_some(), "Parking space id=58 should exist");
             let ps58 = ps58.unwrap();
             assert!((ps58.hdg - 1.5707963249607597).abs() < 1e-6, "hdg should be ~π/2");
-            assert_eq!(ps58.corners.len(), 5, "Should have 5 corners (closed polygon)");
+            assert_eq!(ps58.corners.len(), 4, "Parser removes duplicate closing vertex");
             assert!((ps58.pitch - 7.4164533963758464e-11).abs() < 1e-15, "pitch should be preserved");
             assert!((ps58.roll - 8.8020671870275826e-10).abs() < 1e-15, "roll should be preserved");
 
