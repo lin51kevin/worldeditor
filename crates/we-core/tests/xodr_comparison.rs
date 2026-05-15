@@ -11,6 +11,25 @@ use we_core::model::*;
 use we_core::opendrive::parse_xodr;
 
 // ── Tolerances ───────────────────────────────────────
+//
+// These tolerances control how strictly we compare floating-point values
+// against the XODR baseline. The `BASELINE_TOLERANCE_MULTIPLIER` constant
+// allows coarse-grained adjustment if a particular CI environment produces
+// larger FP divergence (e.g. different x86 rounding modes on Windows).
+//
+// Individual field tolerances are multiplied by this factor:
+//   effective_epsilon = BASELINE_TOLERANCE_MULTIPLIER * EPSILON_<TYPE>
+
+/// Global multiplier for all baseline comparison tolerances.
+/// Set to a value > 1.0 in CI if floating-point differences cause false positives.
+/// Can be overridden via the `WE_BASELINE_TOLERANCE_MULT` environment variable.
+fn baseline_tolerance_multiplier() -> f64 {
+    std::env::var("WE_BASELINE_TOLERANCE_MULT")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .filter(|&v| v > 0.0)
+        .unwrap_or(1.0)
+}
 
 const EPSILON_COORD: f64 = 1e-3;
 const EPSILON_ANGLE: f64 = 1e-3;
@@ -57,7 +76,8 @@ impl ComparisonContext {
     }
 
     fn assert_f64_near(&mut self, field: &str, ours: f64, baseline: f64, eps: f64, note: &str) {
-        if (ours - baseline).abs() <= eps {
+        let effective_eps = eps * baseline_tolerance_multiplier();
+        if (ours - baseline).abs() <= effective_eps {
             self.passed.push(field.to_string());
         } else {
             self.diffs.push(FieldDiff {
