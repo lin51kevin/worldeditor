@@ -1,7 +1,7 @@
 {
   "productName": "WorldEditor",
   "version": "0.1.1",
-  "identifier": "com.worldeditor.next",
+  "identifier": "com.worldeditor",
   "build": {
     "frontendDist": "../frontend/dist",
     "devUrl": "http://localhost:5173",

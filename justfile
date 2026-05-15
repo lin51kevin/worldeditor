@@ -1,4 +1,4 @@
-# WorldEditor Next — Development Commands
+# WorldEditor — Development Commands
 # Usage: just <command>
 # Install: cargo install just
 

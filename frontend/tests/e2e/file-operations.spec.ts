@@ -15,7 +15,7 @@ test('can open an XODR file and sync the status bar road count', async ({ page }
   const parserAvailable = await canParseXodr(page, xmlContent);
   test.skip(!parserAvailable, 'WASM-backed OpenDRIVE parsing is unavailable in this browser environment.');
 
-  const welcomeDialog = page.getByRole('dialog', { name: 'WorldEditor Next' });
+  const welcomeDialog = page.getByRole('dialog', { name: 'WorldEditor' });
   const fileChooserPromise = page.waitForEvent('filechooser');
   await welcomeDialog.getByRole('button', { name: '打开文件...' }).click();
   const fileChooser = await fileChooserPromise;

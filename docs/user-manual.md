@@ -1,8 +1,8 @@
-# WorldEditor Next — User Manual
+# WorldEditor — User Manual
 
 ## Overview
 
-WorldEditor Next is an autonomous driving road network editor that supports creating, editing, and exporting OpenDRIVE-format HD maps. It runs as a native desktop application (Tauri) and in web browsers (WASM).
+WorldEditor is an autonomous driving road network editor that supports creating, editing, and exporting OpenDRIVE-format HD maps. It runs as a native desktop application (Tauri) and in web browsers (WASM).
 
 **Current Version**: 0.1.1 (Phase 1 — Feature Development)
 
@@ -388,7 +388,7 @@ Plugins extend the editor with additional functionality. Access via **Plugins > 
 
 ## Auto-Update
 
-WorldEditor Next checks for updates on startup. When a new version is available:
+WorldEditor checks for updates on startup. When a new version is available:
 - A notification appears in the status bar
 - Click **Help > Check for Updates** to manually check
 - Follow the prompt to download the latest release
@@ -416,4 +416,4 @@ WorldEditor Next checks for updates on startup. When a new version is available:
 
 ---
 
-*WorldEditor Next — Built with Rust + TypeScript, powered by Tauri and wgpu*
+*WorldEditor — Built with Rust + TypeScript, powered by Tauri and wgpu*

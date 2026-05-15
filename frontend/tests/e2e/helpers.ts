@@ -35,7 +35,7 @@ export async function openApp(page: Page): Promise<void> {
 }
 
 export async function dismissWelcome(page: Page): Promise<void> {
-  const welcomeDialog = page.getByRole('dialog', { name: 'WorldEditor Next' });
+  const welcomeDialog = page.getByRole('dialog', { name: 'WorldEditor' });
   await expect(welcomeDialog).toBeVisible();
   await welcomeDialog.getByRole('button', { name: '关闭' }).click();
   await expect(welcomeDialog).toBeHidden();

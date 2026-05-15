@@ -1,4 +1,4 @@
-# WorldEditor Next
+# WorldEditor
 
 > 下一代自动驾驶道路网络编辑器 — 基于 Rust + TypeScript + Tauri 2.0 重构，支持桌面与 Web 双端部署。
 
@@ -6,7 +6,7 @@
 
 ## 概述
 
-WorldEditor Next 是 [WorldEditor](../WorldEditor) 的全新重写版本，从 C#/.NET 迁移到 Rust + TypeScript 技术栈。主要用于编辑和可视化自动驾驶场景中的道路网络数据（OpenDRIVE 格式）、点云、3D 模型等地理空间信息。
+WorldEditor 是 [WorldEditor](../WorldEditor) 的全新重写版本，从 C#/.NET 迁移到 Rust + TypeScript 技术栈。主要用于编辑和可视化自动驾驶场景中的道路网络数据（OpenDRIVE 格式）、点云、3D 模型等地理空间信息。
 
 ### 为什么重写？
 
@@ -31,7 +31,7 @@ WorldEditor Next 是 [WorldEditor](../WorldEditor) 的全新重写版本，从 C
 ## 项目结构
 
 ```
-worldeditor-next/
+worldeditor/
 ├── crates/
 │   ├── we-core/           # 核心领域模型 (18 模块, WASM 兼容)
 │   │   ├── model/         #   领域对象 (Project, Road, Lane, Junction, Signal...)
@@ -254,7 +254,7 @@ git tag v0.2.0 && git push origin v0.2.0
 
 ## 从旧版迁移
 
-WorldEditor Next 将逐步替代 `WorldEditor` (C# 版本)。迁移路径：
+WorldEditor 将逐步替代 `WorldEditor` (C# 版本)。迁移路径：
 
 1. **Phase 0** (已完成): 项目脚手架、核心领域模型、wgpu 渲染原型
 2. **Phase 1** (当前): OpenDRIVE 完整解析、道路/车道/高程编辑、插件系统、E2E 测试、REST API

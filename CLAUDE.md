@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-WorldEditor Next 是自动驾驶道路网络编辑器，从 C#/.NET 重写为 Rust + TypeScript。
+WorldEditor 是自动驾驶道路网络编辑器，从 C#/.NET 重写为 Rust + TypeScript。
 支持三个部署目标：Tauri 桌面、Web 浏览器 (WASM)、REST API 服务器。
 当前版本 **0.1.1**，处于 **Phase 1**（功能完善阶段）。
 
@@ -31,7 +31,7 @@ WorldEditor Next 是自动驾驶道路网络编辑器，从 C#/.NET 重写为 Ru
 ## 工作区结构
 
 ```
-worldeditor-next/
+worldeditor/
 ├── Cargo.toml              # Rust workspace root (9 members)
 ├── crates/
 │   ├── we-core/            # 领域模型, GIS, OpenDRIVE, 拾取, 路径, 捕捉 (18 模块, WASM 兼容)
