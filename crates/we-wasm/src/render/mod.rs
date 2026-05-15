@@ -834,6 +834,8 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                                     angle_deg,
                                     line_width,
                                     line_gap,
+                                    obj.length,
+                                    obj.width,
                                     &mut all_floats,
                                 );
                             }

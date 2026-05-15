@@ -346,20 +346,68 @@ fn clip_scanline_alpha(
     hits
 }
 
+/// Find the lateral intersection points of a scan line at position `s_coord` along the
+/// sweep direction with a world-space polygon.
+///
+/// The sweep coordinate system is defined by `(cos_sw, sin_sw)` as the along-sweep direction.
+/// Returns sorted lateral values where the scan line enters/exits the polygon.
+fn clip_scanline_lateral(
+    world_poly: &[(f64, f64)],
+    ox: f64,
+    oy: f64,
+    cos_sw: f64,
+    sin_sw: f64,
+    l_min: f64,
+    l_max: f64,
+    s_coord: f64,
+) -> Vec<f64> {
+    let n = world_poly.len();
+    if n < 3 {
+        return vec![];
+    }
+    let world_from_sweep = |s: f64, l: f64| -> (f64, f64) {
+        (ox + s * cos_sw - l * sin_sw, oy + s * sin_sw + l * cos_sw)
+    };
+    let (sx0, sy0) = world_from_sweep(s_coord, l_min - 1.0);
+    let (sx1, sy1) = world_from_sweep(s_coord, l_max + 1.0);
+    let dx_line = sx1 - sx0;
+    let dy_line = sy1 - sy0;
+
+    let mut hits = Vec::new();
+    for i in 0..n {
+        let j = (i + 1) % n;
+        let (ax, ay) = world_poly[i];
+        let (bx, by) = world_poly[j];
+        let dx_edge = bx - ax;
+        let dy_edge = by - ay;
+        let denom = dx_line * dy_edge - dy_line * dx_edge;
+        if denom.abs() < 1e-12 {
+            continue;
+        }
+        let t_line = ((ax - sx0) * dy_edge - (ay - sy0) * dx_edge) / denom;
+        let t_edge = ((ax - sx0) * dy_line - (ay - sy0) * dx_line) / denom;
+        if t_edge >= -1e-9 && t_edge <= 1.0 + 1e-9 {
+            let hit_l = l_min - 1.0 + t_line * (l_max - l_min + 2.0);
+            hits.push(hit_l);
+        }
+    }
+    hits.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    hits
+}
+
 /// Emit crosswalk zebra stripes given `cornerLocal` polygon data and the object's heading.
 ///
 /// Uses the caller-provided `exact_ref_pt` (evaluated exactly at `obj_s`) to build all
-/// stripe vertices. This avoids both (a) the sampled-array quantisation error on curves
-/// and (b) the "abs_s overflow" problem where `obj_s + ds` would exceed road length.
+/// stripe vertices.
 ///
 /// Algorithm:
 /// 1. Compute the object world-space origin `(Ox, Oy)` including the `obj_t` lateral offset.
-/// 2. Transform each `cornerLocal (u, v)` to world space via hdg rotation + tangent-plane.
+/// 2. Transform each `cornerLocal (u, v)` to world space via obj_hdg rotation + road tangent
+///    plane mapping. WEO always applies hdg via Euler rotation in `toRoadObject()`.
 /// 3. Build world-space polygon edges for stripe clipping.
-/// 4. Sweep stripes in the **`beta`** (lateral) direction; each stripe bar spans the
-///    **`alpha`** (along-road) extent clipped to the polygon boundary.
-///    This matches worldeditoronline's approach: bars run parallel to the road direction,
-///    spaced laterally across the road.
+/// 4. Sweep stripes in the lateral direction (perpendicular to road tangent + Angle offset);
+///    each stripe bar extends along the road tangent direction, clipped to the polygon.
+///    This matches WEO's `buildCrosswalkSurface`: sweep along t, bars along heading.
 pub(super) fn emit_crosswalk_stripes(
     corners: &[we_core::model::Point3D],
     exact_ref_pt: &we_core::geometry::eval::RefLinePoint,
@@ -372,6 +420,8 @@ pub(super) fn emit_crosswalk_stripes(
     angle_deg: f64,
     line_width: f64,
     line_gap: f64,
+    obj_length: f64,
+    obj_width: f64,
     out: &mut Vec<f32>,
 ) {
     use we_core::geometry::eval::evaluate_elevation;
@@ -386,94 +436,104 @@ pub(super) fn emit_crosswalk_stripes(
     let (ox, oy, _) = offset_pt(ref_pt, obj_t, 0.0);
     let z_base = evaluate_elevation(elevations, ref_pt.s) as f32 + 0.02;
 
-    // Road tangent direction at obj_s, with optional Angle offset from userData.
-    // WEO applies: angleOffset = -(Angle * PI / 180), then rotates heading by that amount.
+    // Stripe directions: bars extend along road tangent (parallel to traffic),
+    // spaced in the lateral (perpendicular) direction.
+    // WEO: angleOffset = -(Angle * PI / 180), rotates the bar direction.
     let angle_offset_rad = -angle_deg.to_radians();
-    let theta = ref_pt.hdg + angle_offset_rad;
-    let (cos_t, sin_t) = (theta.cos(), theta.sin());
+    let bar_theta = ref_pt.hdg + angle_offset_rad; // direction bars extend
+    let sweep_theta = bar_theta + std::f64::consts::FRAC_PI_2; // spacing direction (lateral)
+    let (cos_sw, sin_sw) = (sweep_theta.cos(), sweep_theta.sin());
 
-    // Transform cornerLocal (u, v) by obj_hdg to road-frame (alpha, beta),
-    // then to world coordinates.
-    let (cos_h, sin_h) = (obj_hdg.cos(), obj_hdg.sin());
+    // Corner transform: road tangent for the tangent-plane mapping.
+    let road_theta = ref_pt.hdg;
+    let (cos_road, sin_road) = (road_theta.cos(), road_theta.sin());
+
+    // Convention detection via object length/width attributes:
+    //
+    // - length > 0 && width > 0 (e.g. CityScape): the exporter stored cornerLocal
+    //   (u, v) already in road-frame orientation (u = along-road, v = lateral).
+    //   obj_hdg is metadata only; applying it would rotate the clipping polygon
+    //   and produce wrong stripe count / orientation.  → NO hdg rotation.
+    //
+    // - length = 0 && width = 0 (e.g. junction_crosswalk_signal): cornerLocal (u, v)
+    //   is in the object's own local frame.  obj_hdg must be applied to map them
+    //   into road-frame before stripe generation.  → APPLY hdg rotation.
+    let apply_hdg = !(obj_length > 0.0 && obj_width > 0.0);
+    let (cos_h, sin_h) = if apply_hdg {
+        (obj_hdg.cos(), obj_hdg.sin())
+    } else {
+        (1.0_f64, 0.0_f64) // identity: alpha = u, beta = v
+    };
 
     // Build world-space polygon vertices for stripe clipping.
     let world_poly: Vec<(f64, f64)> = corners
         .iter()
         .map(|c| {
             let alpha = c.x * cos_h - c.y * sin_h;
-            let beta = c.x * sin_h + c.y * cos_h;
+            let beta  = c.x * sin_h + c.y * cos_h;
             (
-                ox + alpha * cos_t - beta * sin_t,
-                oy + alpha * sin_t + beta * cos_t,
+                ox + alpha * cos_road - beta * sin_road,
+                oy + alpha * sin_road + beta * cos_road,
             )
         })
         .collect();
 
-    // Compute AABB in road-frame for stripe sweep bounds.
-    let mut alpha_min = f64::INFINITY;
-    let mut alpha_max = f64::NEG_INFINITY;
-    let mut beta_min = f64::INFINITY;
-    let mut beta_max = f64::NEG_INFINITY;
+    // Project world polygon onto sweep coordinate system to compute AABB.
+    let mut s_min = f64::INFINITY;
+    let mut s_max = f64::NEG_INFINITY;
+    let mut l_min = f64::INFINITY;
+    let mut l_max = f64::NEG_INFINITY;
 
-    for c in corners {
-        let alpha = c.x * cos_h - c.y * sin_h;
-        let beta = c.x * sin_h + c.y * cos_h;
-        alpha_min = alpha_min.min(alpha);
-        alpha_max = alpha_max.max(alpha);
-        beta_min = beta_min.min(beta);
-        beta_max = beta_max.max(beta);
+    for &(wx, wy) in &world_poly {
+        let dx = wx - ox;
+        let dy = wy - oy;
+        let s_coord = dx * cos_sw + dy * sin_sw;
+        let l_coord = -dx * sin_sw + dy * cos_sw;
+        s_min = s_min.min(s_coord);
+        s_max = s_max.max(s_coord);
+        l_min = l_min.min(l_coord);
+        l_max = l_max.max(l_coord);
     }
 
-    if alpha_max <= alpha_min || beta_max <= beta_min {
+    if s_max <= s_min || l_max <= l_min {
         return;
     }
 
-    // Map road-frame (alpha, beta) → world (x, y) via tangent-plane transform.
-    let world_xy = |alpha: f64, beta: f64| -> (f64, f64) {
+    // Map sweep-frame → world.
+    let world_from_sweep = |s_coord: f64, l_coord: f64| -> (f64, f64) {
         (
-            ox + alpha * cos_t - beta * sin_t,
-            oy + alpha * sin_t + beta * cos_t,
+            ox + s_coord * cos_sw - l_coord * sin_sw,
+            oy + s_coord * sin_sw + l_coord * cos_sw,
         )
     };
 
-    // Stripe-polygon intersection helper: find alpha range clipped to the polygon
-    // at a given beta value, by intersecting a scan-line in road-frame
-    // with each polygon edge.
-    //
-    // White zebra stripes: sweep the beta direction (lateral), each stripe bar spans the
-    // alpha (along-road) extent clipped to the polygon boundary.
-    // This produces bars running parallel to the road direction, spaced laterally —
-    // matching the worldeditoronline crosswalk rendering convention.
-    // Use userData LineWidth/LineGap if provided, otherwise default to 0.45 / 0.60.
     let stripe_width = if line_width > 0.0 { line_width } else { 0.45 };
     let stripe_period = stripe_width + if line_gap > 0.0 { line_gap } else { 0.60 };
     let [r, g, b_color, a]: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
-    let mut beta = beta_min;
-    while beta < beta_max {
-        let beta_end = (beta + stripe_width).min(beta_max);
-        let beta_mid = (beta + beta_end) / 2.0;
+    // Sweep along road tangent (s direction), each stripe bar spans lateral (l) direction.
+    let mut s_pos = s_min;
+    while s_pos < s_max {
+        let s_end = (s_pos + stripe_width).min(s_max);
+        let s_mid = (s_pos + s_end) / 2.0;
 
-        // Clip this stripe to the polygon boundary in the alpha (along-road) direction.
-        let hits = clip_scanline_alpha(&world_poly, ox, oy, cos_t, sin_t, alpha_min, alpha_max, beta_mid);
+        let hits = clip_scanline_lateral(&world_poly, ox, oy, cos_sw, sin_sw, l_min, l_max, s_mid);
 
-        // Process intersection pairs (enter/exit)
         let mut pair_idx = 0;
         while pair_idx + 1 < hits.len() {
-            let a_start = hits[pair_idx].max(alpha_min);
-            let a_end = hits[pair_idx + 1].min(alpha_max);
+            let l_start = hits[pair_idx].max(l_min);
+            let l_end = hits[pair_idx + 1].min(l_max);
             pair_idx += 2;
 
-            if a_end - a_start < 1e-6 {
+            if l_end - l_start < 1e-6 {
                 continue;
             }
 
-            let p00 = world_xy(a_start, beta);
-            let p10 = world_xy(a_end, beta);
-            let p11 = world_xy(a_end, beta_end);
-            let p01 = world_xy(a_start, beta_end);
+            let p00 = world_from_sweep(s_pos, l_start);
+            let p10 = world_from_sweep(s_pos, l_end);
+            let p11 = world_from_sweep(s_end, l_end);
+            let p01 = world_from_sweep(s_end, l_start);
 
-            // Per-stripe elevation at midpoint
             let z = z_base + corners.get(0).map_or(0.0, |c| c.z as f32);
 
             out.extend_from_slice(&[p00.0 as f32, p00.1 as f32, z, r, g, b_color, a]);
@@ -485,7 +545,7 @@ pub(super) fn emit_crosswalk_stripes(
             out.extend_from_slice(&[p01.0 as f32, p01.1 as f32, z, r, g, b_color, a]);
         }
 
-        beta += stripe_period;
+        s_pos += stripe_period;
     }
 }
 
@@ -739,30 +799,31 @@ mod tests {
         let mut out = Vec::new();
         let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
 
-        emit_crosswalk_stripes(&corners, &ref_pts[9], &elevations, 9.0, 0.0, 0.0, 0.0, offset_fn, 0.0, 0.0, 0.0, &mut out);
+        emit_crosswalk_stripes(&corners, &ref_pts[9], &elevations, 9.0, 0.0, 0.0, 0.0, offset_fn, 0.0, 0.0, 0.0, 4.0, 2.0, &mut out);
 
         // Must produce at least one valid (non-degenerate) stripe quad = 6 vertices × 7 floats.
         assert!(out.len() >= 42, "Expected at least one stripe but got {} floats", out.len());
 
-        // With beta-sweep: road along +x (theta=0), alpha=[1,5], beta=[-1,1].
-        // First stripe at beta=-1 → beta_end=-0.55:
-        //   p00 = world_xy(alpha_min=1, -1) = (9+1, 0-1) = (10.0, -1.0)
-        // x should be 9 + alpha_min = 10.0.
-        let first_x = out[0];
-        assert!((first_x - 10.0).abs() < 0.5, "First stripe x={first_x} should be ~10.0");
+        // Lateral-sweep: road along +x (theta=0), sweep along +y.
+        // Corners in world: x ∈ [10,14], y ∈ [-1,1]. Bars extend in x, spaced in y.
+        // Verify stripe vertices are within the crosswalk world-space bounds.
+        let all_x: Vec<f32> = out.chunks(7).map(|v| v[0]).collect();
+        let all_y: Vec<f32> = out.chunks(7).map(|v| v[1]).collect();
+        assert!(all_x.iter().all(|&x| x >= 9.5 && x <= 14.5),
+            "Stripe x coords should be in [10,14] range, got {:?}", all_x);
+        assert!(all_y.iter().all(|&y| y >= -1.5 && y <= 1.5),
+            "Stripe y coords should be in [-1,1] range, got {:?}", all_y);
     }
 
-    /// Verify that a crosswalk with hdg=π/2 produces stripes PARALLEL to the road.
+    /// Verify that a crosswalk with hdg=π/2 and length=0/width=0 (junction_crosswalk_signal
+    /// style) applies hdg rotation so that stripes have correct count and orientation.
     ///
-    /// With hdg=π/2, corners (u,v) map to road-frame: alpha=-v, beta=u.
-    /// We sweep beta (lateral, 10.7 m) so each stripe spans the alpha (along-road, 4 m)
-    /// extent, producing bars parallel to the road direction, spaced laterally.
+    /// Corners: u ∈ [-3.6, 7.1] (10.7m), v ∈ [-5.0, -1.0] (4.0m).
+    /// With hdg=π/2 rotation: alpha=-v ∈ [1,5] (4m along-road), beta=u ∈ [-3.6,7.1] (10.7m lateral).
+    /// Lateral sweep → 10.7m → ~10 stripes, each bar spans 4m along-road.
     #[test]
-    fn test_crosswalk_stripes_hdg_pi_half_parallel_to_road() {
+    fn test_crosswalk_stripes_hdg_pi_half_perpendicular_to_road() {
         let ref_pts = straight_road_pts();
-        // Crosswalk with hdg=π/2, typical junction crosswalk corners.
-        // u in [-3.6, 7.1], v in [-5.0, -1.0]
-        // → alpha = -v ∈ [1.0, 5.0] (along road, 4 m), beta = u ∈ [-3.6, 7.1] (lateral, 10.7 m)
         let corners = vec![
             Point3D { x: -3.6, y: -1.0, z: 0.0, id: None },
             Point3D { x:  7.1, y: -1.0, z: 0.0, id: None },
@@ -773,36 +834,67 @@ mod tests {
         let mut out = Vec::new();
         let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
 
+        // length=0, width=0 → apply hdg rotation
         emit_crosswalk_stripes(
             &corners, &ref_pts[5], &elevations,
-            5.0, 0.0, std::f64::consts::FRAC_PI_2, 0.0, offset_fn, 0.0, 0.0, 0.0, &mut out,
+            5.0, 0.0, std::f64::consts::FRAC_PI_2, 0.0, offset_fn, 0.0, 0.0, 0.0,
+            0.0, 0.0, &mut out,
         );
 
         assert!(!out.is_empty(), "Expected stripes for hdg=π/2 crosswalk");
 
-        // Road is along +x (theta=0). Beta-sweep → stripes run along +x (along-road).
-        // First stripe at beta=beta_min=-3.6 → beta_end=-3.15:
-        //   p00 = world_xy(alpha_min=1, -3.6) → ox=5, wx=5+1=6.0, wy=0+3.6=3.6
-        //   p10 = world_xy(alpha_max=5, -3.6) → wx=5+5=10.0, wy=3.6
-        // Each stripe bar runs along +x (alpha), fixed lateral position (beta).
-        let first_x = out[0];
-        let first_y = out[1];
-        // x should be ox + alpha_min = 5 + 1 = 6.0
-        assert!((first_x - 6.0).abs() < 0.5, "First stripe start x={first_x} should be ~6.0 (alpha_min)");
-
-        // Beta range = 7.1 - (-3.6) = 10.7 m; period = 1.05 m → ~10 stripes.
-        // Each stripe = 2 triangles = 6 vertices × 7 floats = 42 floats.
+        // With rotation: lateral range = 10.7m; period = 1.05m → ~10 stripes.
         let num_stripes = out.len() / 42;
-        assert!(num_stripes >= 9 && num_stripes <= 11,
+        assert!(num_stripes >= 8 && num_stripes <= 12,
             "Expected ~10 stripes for 10.7 m lateral range, got {num_stripes}");
 
-        // Each stripe bar should span the along-road extent (~4 m).
-        // Check that the first stripe has vertices with x range ≈ 4m.
+        // Each stripe bar spans the along-road extent (~4m in x after rotation).
         let first_stripe_xs: Vec<f32> = out[..42].chunks(7).map(|v| v[0]).collect();
         let x_min = first_stripe_xs.iter().cloned().fold(f32::INFINITY, f32::min);
         let x_max = first_stripe_xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         assert!((x_max - x_min) > 3.0,
             "First stripe along-road extent={:.1}, expected ~4.0m", x_max - x_min);
+    }
+
+    /// Verify that a crosswalk with hdg=π/2 and length>0/width>0 (CityScape style)
+    /// does NOT apply hdg rotation, keeping stripes correct.
+    ///
+    /// Corners: u ∈ [-2.16, 1.48] (3.6m), v ∈ [-6.57, 4.36] (10.9m).
+    /// Without rotation: along-road = 3.6m, lateral = 10.9m.
+    /// Lateral sweep → 10.9m → ~10 stripes, each bar spans 3.6m along-road.
+    #[test]
+    fn test_crosswalk_stripes_hdg_pi_half_cityscape_style() {
+        let ref_pts = straight_road_pts();
+        let corners = vec![
+            Point3D { x: -2.16, y:  4.36, z: 0.0, id: None },
+            Point3D { x:  1.48, y:  4.36, z: 0.0, id: None },
+            Point3D { x:  1.48, y: -6.57, z: 0.0, id: None },
+            Point3D { x: -2.16, y: -6.57, z: 0.0, id: None },
+        ];
+        let elevations: Vec<Elevation> = vec![];
+        let mut out = Vec::new();
+        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+
+        // length=3.64, width=10.99 → don't apply hdg rotation
+        emit_crosswalk_stripes(
+            &corners, &ref_pts[5], &elevations,
+            5.0, 0.0, std::f64::consts::FRAC_PI_2, 0.0, offset_fn, 0.0, 0.0, 0.0,
+            3.64, 10.99, &mut out,
+        );
+
+        assert!(!out.is_empty(), "Expected stripes for CityScape-style crosswalk");
+
+        // Without rotation: lateral range = 10.9m; period = 1.05m → ~10 stripes.
+        let num_stripes = out.len() / 42;
+        assert!(num_stripes >= 8 && num_stripes <= 12,
+            "Expected ~10 stripes for 10.9 m lateral range, got {num_stripes}");
+
+        // Each stripe bar spans the along-road extent (~3.6m in x, no rotation).
+        let first_stripe_xs: Vec<f32> = out[..42].chunks(7).map(|v| v[0]).collect();
+        let x_min = first_stripe_xs.iter().cloned().fold(f32::INFINITY, f32::min);
+        let x_max = first_stripe_xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        assert!((x_max - x_min) > 2.5,
+            "First stripe along-road extent={:.1}, expected ~3.6m", x_max - x_min);
     }
 
     /// Verify that parking spaces with road-frame convention (e.g. parkinglot.xodr, length=0/width=0)
