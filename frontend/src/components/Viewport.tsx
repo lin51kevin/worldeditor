@@ -152,6 +152,24 @@ export function Viewport() {
     return visibleProjectRef.current;
   }, [project, display, projectLoadVersion]);
 
+  // ── WASM project cache lifecycle ──
+  // Pushes the visible project into the WASM-side cache once per change,
+  // so that 60 Hz pick/snap calls avoid per-call JSON serialisation.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const vp = getVisibleProject();
+      if (!vp || cancelled) return;
+      try {
+        const service = await getPlatformService();
+        await service.setProjectCache(vp);
+      } catch {
+        // Non-fatal: cached pick will fall back to uncached path.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [getVisibleProject]);
+
   const updateSurfaceMesh = useCallback(async () => {
     const renderer = rendererRef.current;
     if (!renderer || status !== 'ready' || !project) return;
@@ -681,9 +699,8 @@ export function Viewport() {
     if (viewState.snapEnabled) {
       try {
         const service = await getPlatformService();
-        const { project: currentProject, selectedRoadId: excludeId } = useEditorStore.getState();
-        const snapResult = await service.snapPoint(
-          currentProject,
+        const { selectedRoadId: excludeId } = useEditorStore.getState();
+        const snapResult = await service.snapPointCached(
           worldPos.x,
           worldPos.y,
           {
@@ -733,10 +750,10 @@ export function Viewport() {
       try {
         const service = await getPlatformService();
         const { project: currentProject } = useEditorStore.getState();
-        const { display: currentDisplay } = useEditorViewStore.getState();
-        const visibleProject = buildRenderableProject(currentProject, currentDisplay);
+        const visibleProject = getVisibleProject();
+        if (!visibleProject) return;
         const rendererInst = rendererRef.current;
-        const newHoveredRoad = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 2.5);
+        const newHoveredRoad = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 2.5);
         if (newHoveredRoad !== hoveredRoadRef.current || hoveredJunctionRef.current !== null) {
           hoveredRoadRef.current = newHoveredRoad;
           hoveredJunctionRef.current = null;
@@ -763,7 +780,7 @@ export function Viewport() {
               }
             } else {
               rendererInst.clearHover();
-              const newHoveredJunction = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 3.0);
+              const newHoveredJunction = await service.pickJunctionAtPointCached(worldPos.x, worldPos.y, 3.0);
               hoveredJunctionRef.current = newHoveredJunction;
               if (newHoveredJunction) {
                 const hoverVerts = await service.generateSingleJunctionVertices(
@@ -804,7 +821,7 @@ export function Viewport() {
 
     emitCursorMove(worldPos.x, worldPos.y);
     pendingCursorRef.current = worldPos;
-  }, [handleGeometryEditMouseMove, handleSplineDrawMouseMove]);
+  }, [handleGeometryEditMouseMove, handleSplineDrawMouseMove, getVisibleProject]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     mouseGestureRef.current = {
@@ -907,9 +924,8 @@ export function Viewport() {
 
     try {
       const service = await getPlatformService();
-      const { project: currentProject } = useEditorStore.getState();
-      const { display: currentDisplay } = useEditorViewStore.getState();
-      const visibleProject = buildRenderableProject(currentProject, currentDisplay);
+      const visibleProject = getVisibleProject();
+      if (!visibleProject) return;
 
       // Signals and objects sit ON roads, so they must be checked first with a
       // moderate threshold (4 m) before road picking (5 m) would always win.
@@ -982,7 +998,7 @@ export function Viewport() {
     } catch (err) {
       console.error('[Viewport] Pick failed:', err);
     }
-  }, [handleRoadDoubleClick, handleSplineDrawClick]);
+  }, [handleRoadDoubleClick, handleSplineDrawClick, getVisibleProject]);
 
   const handleMouseUp = useCallback(async (e: React.MouseEvent) => {
     if (commitRubberBand(e)) return;

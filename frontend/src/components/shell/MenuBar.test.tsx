@@ -115,6 +115,12 @@ function createPlatformMock() {
     getSignalWorldPos: vi.fn<PlatformService['getSignalWorldPos']>().mockResolvedValue(null),
     getObjectWorldPos: vi.fn<PlatformService['getObjectWorldPos']>().mockResolvedValue(null),
     getRoadEndpointTangent: vi.fn<PlatformService['getRoadEndpointTangent']>().mockResolvedValue(null),
+    setProjectCache: vi.fn<PlatformService['setProjectCache']>().mockResolvedValue(undefined),
+    invalidateProjectCache: vi.fn<PlatformService['invalidateProjectCache']>().mockResolvedValue(undefined),
+    hasProjectCache: vi.fn<PlatformService['hasProjectCache']>().mockResolvedValue(true),
+    pickRoadAtPointCached: vi.fn<PlatformService['pickRoadAtPointCached']>().mockResolvedValue(null),
+    pickJunctionAtPointCached: vi.fn<PlatformService['pickJunctionAtPointCached']>().mockResolvedValue(null),
+    snapPointCached: vi.fn<PlatformService['snapPointCached']>().mockResolvedValue({ x: 0, y: 0, snapped: false, snap_type: 'None', target_id: null, contact_point: null }),
   };
 
   return {

@@ -202,6 +202,12 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     getSignalWorldPos: vi.fn().mockResolvedValue(null),
     getObjectWorldPos: vi.fn().mockResolvedValue(null),
     getRoadEndpointTangent: vi.fn().mockResolvedValue(null),
+    setProjectCache: vi.fn().mockResolvedValue(undefined),
+    invalidateProjectCache: vi.fn().mockResolvedValue(undefined),
+    hasProjectCache: vi.fn().mockResolvedValue(true),
+    pickRoadAtPointCached: vi.fn().mockResolvedValue(null),
+    pickJunctionAtPointCached: vi.fn().mockResolvedValue(null),
+    snapPointCached: vi.fn().mockResolvedValue({ x: 0, y: 0, snapped: false, snap_type: 'None', target_id: null }),
   };
 }
 
@@ -473,7 +479,7 @@ describe('Viewport', () => {
 
   it('uploads golden hover vertices when hovering over a road in select mode', async () => {
     const platform = createPlatformMock();
-    (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+    (platform.pickRoadAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
     (platform.generateSingleRoadVertices as ReturnType<typeof vi.fn>).mockResolvedValue(
       new Float32Array([1, 2, 3, 1.0, 0.85, 0.1, 0.5]),
     );
@@ -497,10 +503,10 @@ describe('Viewport', () => {
 
   it('clears hover vertices when mouse moves off a road', async () => {
     const platform = createPlatformMock();
-    (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>)
+    (platform.pickRoadAtPointCached as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce('road-1')
       .mockResolvedValue(null);
-    (platform.pickJunctionAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (platform.pickJunctionAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     (platform.generateSingleRoadVertices as ReturnType<typeof vi.fn>).mockResolvedValue(
       new Float32Array([1, 2, 3, 1, 0, 0, 1]),
     );

@@ -370,6 +370,30 @@ export interface PlatformService {
    *  Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateObjectVertices(project: Project): Promise<Float32Array>;
 
+  // --- Project cache (avoids per-call JSON serialisation on 60 Hz mousemove) ---
+
+  /** Store the project in the WASM-side cache. Call once per project mutation. */
+  setProjectCache(project: Project): Promise<void>;
+
+  /** Invalidate the WASM spatial index without re-parsing the project. */
+  invalidateProjectCache(): Promise<void>;
+
+  /** Whether a WASM project cache has been initialised. */
+  hasProjectCache(): Promise<boolean>;
+
+  // --- Cached picking (no JSON serialisation per call) ---
+
+  /** Pick road using cached project. Call setProjectCache() first. */
+  pickRoadAtPointCached(x: number, y: number, threshold: number): Promise<string | null>;
+
+  /** Pick junction using cached project. Call setProjectCache() first. */
+  pickJunctionAtPointCached(x: number, y: number, threshold: number): Promise<string | null>;
+
+  /** Snap point using cached project. Call setProjectCache() first. */
+  snapPointCached(x: number, y: number, config: SnapConfig, excludeRoadId?: string): Promise<SnapResult>;
+
+  // --- Uncached picking (legacy, for one-off calls) ---
+
   /** Find the closest road to a world-space point. Returns road ID or null. */
   pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null>;
 

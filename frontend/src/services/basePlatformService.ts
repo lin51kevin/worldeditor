@@ -119,7 +119,44 @@ export abstract class BasePlatformService implements PlatformService {
     return wasm.generate_object_vertices(JSON.stringify(project));
   }
 
-  // --- Picking ---
+  // --- Project cache (avoids per-call JSON serialisation on mousemove) ---
+
+  /** Store the project in the WASM-side cache. Call once per project mutation. */
+  async setProjectCache(project: Project): Promise<void> {
+    const wasm = await this.getWasm();
+    wasm.set_project_cache(JSON.stringify(project));
+  }
+
+  /** Invalidate the WASM spatial index without re-parsing the project. */
+  async invalidateProjectCache(): Promise<void> {
+    const wasm = await this.getWasm();
+    wasm.invalidate_project_cache();
+  }
+
+  /** Whether a WASM project cache has been initialised. */
+  async hasProjectCache(): Promise<boolean> {
+    const wasm = await this.getWasm();
+    return wasm.has_project_cache();
+  }
+
+  // --- Picking (cached — no JSON serialisation per call) ---
+
+  async pickRoadAtPointCached(x: number, y: number, threshold: number): Promise<string | null> {
+    const wasm = await this.getWasm();
+    return wasm.pick_road_at_point_cached(x, y, threshold);
+  }
+
+  async pickJunctionAtPointCached(x: number, y: number, threshold: number): Promise<string | null> {
+    const wasm = await this.getWasm();
+    return wasm.pick_junction_at_point_cached(x, y, threshold);
+  }
+
+  async snapPointCached(x: number, y: number, config: SnapConfig, excludeRoadId?: string): Promise<SnapResult> {
+    const wasm = await this.getWasm();
+    return wasm.snap_point_cached(x, y, JSON.stringify(config), excludeRoadId);
+  }
+
+  // --- Picking (uncached — legacy, for one-off calls) ---
 
   async pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null> {
     const wasm = await this.getWasm();

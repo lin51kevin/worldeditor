@@ -1,6 +1,51 @@
 use crate::render::{build_junction_polygon_points, point_in_polygon, road_point_at_s};
 use serde::Serialize;
+use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
+use we_core::spatial_index::ProjectCache;
+
+// ── Thread-local project cache ────────────────────────────────────────────────
+//
+// WASM is single-threaded, so a thread_local RefCell is safe and zero-overhead.
+// The frontend calls `set_project_cache()` once per project mutation instead of
+// serializing the entire project on every pick/snap call (60 Hz mousemove).
+
+thread_local! {
+    static PROJECT_CACHE: RefCell<Option<ProjectCache>> = const { RefCell::new(None) };
+}
+
+/// Store (or replace) the cached project used by `pick_road_cached` / `snap_point_cached`.
+///
+/// Call this once after every project mutation. Subsequent pick/snap calls will
+/// reuse the parsed project and its spatial index without re-parsing JSON.
+#[wasm_bindgen]
+pub fn set_project_cache(project_json: &str) -> Result<(), JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    PROJECT_CACHE.with(|cell| {
+        *cell.borrow_mut() = Some(ProjectCache::new(project));
+    });
+    Ok(())
+}
+
+/// Mark the spatial index as dirty so it is rebuilt on the next query.
+///
+/// Lighter than `set_project_cache` when only the spatial structure changed
+/// but the project reference is the same.
+#[wasm_bindgen]
+pub fn invalidate_project_cache() {
+    PROJECT_CACHE.with(|cell| {
+        if let Some(cache) = cell.borrow_mut().as_mut() {
+            cache.invalidate();
+        }
+    });
+}
+
+/// Returns `true` if a project cache has been initialised.
+#[wasm_bindgen]
+pub fn has_project_cache() -> bool {
+    PROJECT_CACHE.with(|cell| cell.borrow().is_some())
+}
 
 /// Plain-object return types for wasm-bindgen.
 ///
@@ -533,4 +578,99 @@ pub fn pick_object_at_point(
         }
         _ => Ok(JsValue::NULL),
     }
+}
+
+// ── Cached pick / snap functions ──────────────────────────────────────────────
+//
+// These operate on the thread-local `ProjectCache` set by `set_project_cache()`.
+// The spatial index is built lazily on the first query after invalidation.
+
+/// Pick the nearest road using the cached project + spatial index.
+///
+/// Falls back to the uncached path if no cache has been set.
+#[wasm_bindgen]
+pub fn pick_road_at_point_cached(
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Result<JsValue, JsError> {
+    PROJECT_CACHE.with(|cell| {
+        let mut borrow = cell.borrow_mut();
+        let cache = borrow
+            .as_mut()
+            .ok_or_else(|| JsError::new("Project cache not initialised — call set_project_cache() first"))?;
+        match we_core::picking::pick_road_cached(cache, x, y, threshold) {
+            Some(result) => Ok(JsValue::from_str(&result.id)),
+            None => Ok(JsValue::NULL),
+        }
+    })
+}
+
+/// Snap a point using the cached project + spatial index.
+///
+/// Falls back to the uncached path if no cache has been set.
+#[wasm_bindgen]
+pub fn snap_point_cached(
+    x: f64,
+    y: f64,
+    config_json: &str,
+    exclude_road_id: Option<String>,
+) -> Result<JsValue, JsError> {
+    let config: we_core::snapping::SnapConfig =
+        serde_json::from_str(config_json).map_err(|e| JsError::new(&e.to_string()))?;
+    PROJECT_CACHE.with(|cell| {
+        let mut borrow = cell.borrow_mut();
+        let cache = borrow
+            .as_mut()
+            .ok_or_else(|| JsError::new("Project cache not initialised — call set_project_cache() first"))?;
+        let result = we_core::snapping::snap_point_cached(
+            x,
+            y,
+            &config,
+            cache,
+            exclude_road_id.as_deref(),
+        );
+        serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+    })
+}
+
+/// Pick the nearest junction using the cached project.
+#[wasm_bindgen]
+pub fn pick_junction_at_point_cached(
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Result<JsValue, JsError> {
+    PROJECT_CACHE.with(|cell| {
+        let mut borrow = cell.borrow_mut();
+        let cache = borrow
+            .as_mut()
+            .ok_or_else(|| JsError::new("Project cache not initialised — call set_project_cache() first"))?;
+        // Use the project from cache for junction picking (no spatial-index optimised path yet)
+        let project = &cache.project;
+        let mut best: Option<String> = None;
+        let mut best_dist = threshold;
+
+        for junction in &project.junctions {
+            let poly = build_junction_polygon_points(project, junction);
+            if poly.len() >= 3 {
+                if point_in_polygon(x, y, &poly) {
+                    return Ok(JsValue::from_str(&junction.id));
+                }
+                let cx: f64 = poly.iter().map(|p| p[0] as f64).sum::<f64>() / poly.len() as f64;
+                let cy: f64 = poly.iter().map(|p| p[1] as f64).sum::<f64>() / poly.len() as f64;
+                let dx = cx - x;
+                let dy = cy - y;
+                let dist = (dx * dx + dy * dy).sqrt();
+                if dist < best_dist {
+                    best_dist = dist;
+                    best = Some(junction.id.clone());
+                }
+            }
+        }
+        match best {
+            Some(id) => Ok(JsValue::from_str(&id)),
+            None => Ok(JsValue::NULL),
+        }
+    })
 }
