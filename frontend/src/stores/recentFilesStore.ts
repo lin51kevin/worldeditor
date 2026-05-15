@@ -12,7 +12,7 @@ export interface RecentFile {
 }
 
 const KEY = 'we_recent_files';
-const MAX = 10;
+const MAX = 8;
 
 function loadFromStorage(): RecentFile[] {
   try {

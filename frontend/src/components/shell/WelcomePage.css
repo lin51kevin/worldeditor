@@ -60,6 +60,7 @@
   width: 100%;
   margin: 0 auto;
   align-items: flex-start;
+  padding-top: 120px; /* 对齐 logo 垂直居中 */
 }
 
 .wp-col {
@@ -68,6 +69,10 @@
   padding: 0 24px;
   overflow: hidden;
 }
+
+.wp-col:first-child { flex: 0 0 200px; }
+.wp-col:nth-child(2) { flex: 0 0 240px; }
+.wp-col:last-child { flex: 1; }
 
 .wp-col+.wp-col {
   border-left: 1px solid var(--color-border, rgba(128, 128, 128, 0.15));
