@@ -41,10 +41,26 @@ fn parse_signal_elem(
     start: &BytesStart,
     reader: &mut Reader<&[u8]>,
 ) -> Result<Signal, OpenDriveError> {
-    let signal = parse_signal_elem_attrs(start)?;
-    // consume any child elements until </signal>
+    let mut signal = parse_signal_elem_attrs(start)?;
+    // parse child elements (validity, etc.) until </signal>
     loop {
         match reader.read_event() {
+            Ok(Event::Start(ref e) | Event::Empty(ref e))
+                if e.name().as_ref() == b"validity" =>
+            {
+                let mut from_lane = i32::MIN;
+                let mut to_lane = i32::MAX;
+                for attr in e.attributes().flatten() {
+                    match attr.key.as_ref() {
+                        b"fromLane" => {
+                            from_lane = attr_str(&attr)?.parse().unwrap_or(i32::MIN)
+                        }
+                        b"toLane" => to_lane = attr_str(&attr)?.parse().unwrap_or(i32::MAX),
+                        _ => {}
+                    }
+                }
+                signal.validities.push(Validity { from_lane, to_lane });
+            }
             Ok(Event::End(ref e)) if e.name().as_ref() == b"signal" => break,
             Ok(Event::Eof) => {
                 return Err(OpenDriveError::InvalidStructure(
@@ -74,6 +90,9 @@ fn parse_signal_elem_attrs(e: &BytesStart) -> Result<Signal, OpenDriveError> {
         value: None,
         orientation: "none".to_string(),
         is_dynamic: false,
+        country: String::new(),
+        unit: String::new(),
+        validities: Vec::new(),
     };
 
     for attr in e.attributes().flatten() {
@@ -96,6 +115,8 @@ fn parse_signal_elem_attrs(e: &BytesStart) -> Result<Signal, OpenDriveError> {
             }
             b"orientation" => signal.orientation = attr_str(&attr)?,
             b"dynamic" => signal.is_dynamic = attr_str(&attr)?.eq_ignore_ascii_case("yes"),
+            b"country" => signal.country = attr_str(&attr)?,
+            b"unit" => signal.unit = attr_str(&attr)?,
             _ => {}
         }
     }

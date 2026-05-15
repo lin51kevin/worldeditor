@@ -837,6 +837,9 @@ mod tests {
                 signal_type: "206".into(),
                 signal_subtype: "-1".into(),
                 value: Some("30".into()),
+                country: String::new(),
+                unit: String::new(),
+                validities: Vec::new(),
             }];
             r
         }], vec![]);
@@ -865,6 +868,9 @@ mod tests {
                 signal_type: "1000001".into(),
                 signal_subtype: "-1".into(),
                 value: None,
+                country: String::new(),
+                unit: String::new(),
+                validities: Vec::new(),
             }];
             r
         }], vec![]);
@@ -1384,6 +1390,9 @@ mod tests {
                 signal_type: "100".into(),
                 signal_subtype: "".into(),
                 value: None,
+                country: String::new(),
+                unit: String::new(),
+                validities: Vec::new(),
             }];
             r.objects = vec![RoadObject {
                 id: "o1".into(),

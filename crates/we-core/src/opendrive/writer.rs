@@ -695,9 +695,33 @@ fn write_signals(
         if let Some(ref val) = sig.value {
             attrs.push(("value", val.clone()));
         }
-        writer
-            .write_event(Event::Empty(elem_with_attrs("signal", &attrs)))
-            .map_err(w_err)?;
+        if !sig.country.is_empty() {
+            attrs.push(("country", sig.country.clone()));
+        }
+        if !sig.unit.is_empty() {
+            attrs.push(("unit", sig.unit.clone()));
+        }
+        if sig.validities.is_empty() {
+            writer
+                .write_event(Event::Empty(elem_with_attrs("signal", &attrs)))
+                .map_err(w_err)?;
+        } else {
+            writer
+                .write_event(Event::Start(elem_with_attrs("signal", &attrs)))
+                .map_err(w_err)?;
+            for v in &sig.validities {
+                let v_attrs = vec![
+                    ("fromLane", v.from_lane.to_string()),
+                    ("toLane", v.to_lane.to_string()),
+                ];
+                writer
+                    .write_event(Event::Empty(elem_with_attrs("validity", &v_attrs)))
+                    .map_err(w_err)?;
+            }
+            writer
+                .write_event(Event::End(BytesEnd::new("signal".to_string())))
+                .map_err(w_err)?;
+        }
     }
 
     writer

@@ -373,7 +373,7 @@ fn test_create_road_from_centerline_duplicate() {
 
 #[test]
 fn test_create_road_from_spline_single_lane() {
-    use we_core::spline::{EditableSpline, SplineKnot};
+    use we_core::spline::{EditableSpline, SplineKnot, SplineOutputMode};
 
     let project = Project::default();
     let spline = EditableSpline::from_knots(vec![
@@ -381,7 +381,7 @@ fn test_create_road_from_spline_single_lane() {
         SplineKnot::new(100.0, 0.0, 0.0),
     ]);
     let template = RoadTemplate::single_lane();
-    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template, SplineOutputMode::Classify);
     let result = cmd.execute(&project).unwrap();
 
     assert_eq!(result.roads.len(), 1);
@@ -395,7 +395,7 @@ fn test_create_road_from_spline_single_lane() {
 
 #[test]
 fn test_create_road_from_spline_dual_lanes() {
-    use we_core::spline::{EditableSpline, SplineKnot};
+    use we_core::spline::{EditableSpline, SplineKnot, SplineOutputMode};
 
     let project = Project::default();
     let spline = EditableSpline::from_knots(vec![
@@ -403,7 +403,7 @@ fn test_create_road_from_spline_dual_lanes() {
         SplineKnot::new(50.0, 0.0, 0.0),
     ]);
     let template = RoadTemplate::dual_two_lane();
-    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template, SplineOutputMode::Classify);
     let result = cmd.execute(&project).unwrap();
 
     let road = &result.roads[0];
@@ -413,7 +413,7 @@ fn test_create_road_from_spline_dual_lanes() {
 
 #[test]
 fn test_create_road_from_spline_undo() {
-    use we_core::spline::{EditableSpline, SplineKnot};
+    use we_core::spline::{EditableSpline, SplineKnot, SplineOutputMode};
 
     let project = Project::default();
     let spline = EditableSpline::from_knots(vec![
@@ -421,7 +421,7 @@ fn test_create_road_from_spline_undo() {
         SplineKnot::new(100.0, 0.0, 0.0),
     ]);
     let template = RoadTemplate::single_lane();
-    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template, SplineOutputMode::Classify);
     let after = cmd.execute(&project).unwrap();
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.roads.len(), 0);
@@ -429,7 +429,7 @@ fn test_create_road_from_spline_undo() {
 
 #[test]
 fn test_create_road_from_spline_duplicate_id() {
-    use we_core::spline::{EditableSpline, SplineKnot};
+    use we_core::spline::{EditableSpline, SplineKnot, SplineOutputMode};
 
     let mut project = Project::default();
     project.roads.push(Road::new("road_1", 50.0));
@@ -439,29 +439,29 @@ fn test_create_road_from_spline_duplicate_id() {
         SplineKnot::new(100.0, 0.0, 0.0),
     ]);
     let template = RoadTemplate::single_lane();
-    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template, SplineOutputMode::Classify);
     assert!(cmd.execute(&project).is_err());
 }
 
 #[test]
 fn test_create_road_from_spline_empty_knots() {
-    use we_core::spline::EditableSpline;
+    use we_core::spline::{EditableSpline, SplineOutputMode};
 
     let project = Project::default();
     let spline = EditableSpline::new();
     let template = RoadTemplate::single_lane();
-    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template, SplineOutputMode::Classify);
     assert!(cmd.execute(&project).is_err());
 }
 
 #[test]
 fn test_create_road_from_spline_single_knot() {
-    use we_core::spline::{EditableSpline, SplineKnot};
+    use we_core::spline::{EditableSpline, SplineKnot, SplineOutputMode};
 
     let project = Project::default();
     let spline = EditableSpline::from_knots(vec![SplineKnot::new(0.0, 0.0, 0.0)]);
     let template = RoadTemplate::single_lane();
-    let cmd = CreateRoadFromSpline::new("road_1", spline, template);
+    let cmd = CreateRoadFromSpline::new("road_1", spline, template, SplineOutputMode::Classify);
     assert!(cmd.execute(&project).is_err());
 }
 
@@ -651,6 +651,9 @@ fn make_signal(id: &str) -> Signal {
         value: None,
         orientation: "+".into(),
         is_dynamic: true,
+        country: String::new(),
+        unit: String::new(),
+        validities: Vec::new(),
     }
 }
 

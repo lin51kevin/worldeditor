@@ -320,6 +320,15 @@ pub struct Signal {
     pub orientation: String,
     /// Whether this signal is dynamic (e.g., a traffic light).
     pub is_dynamic: bool,
+    /// Country code (e.g., `"OpenDRIVE"`, `"DE"`).
+    #[serde(default)]
+    pub country: String,
+    /// Unit of the `value` field (e.g., `"km/h"`, `"m"`).
+    #[serde(default)]
+    pub unit: String,
+    /// Lane validity ranges for this signal.
+    #[serde(default)]
+    pub validities: Vec<Validity>,
 }
 
 /// 3D point with optional id reference.
@@ -633,6 +642,9 @@ mod tests {
             value: Some("30".to_string()),
             orientation: "+".to_string(),
             is_dynamic: false,
+            country: String::new(),
+            unit: String::new(),
+            validities: Vec::new(),
         };
 
         let json = serde_json::to_string(&signal).unwrap();
