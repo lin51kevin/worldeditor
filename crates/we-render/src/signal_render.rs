@@ -173,6 +173,9 @@ mod tests {
             value: None,
             orientation: "+".to_string(),
             is_dynamic: false,
+            country: String::new(),
+            unit: String::new(),
+            validities: Vec::new(),
         }
     }
 

@@ -241,6 +241,7 @@ pub struct CreateRoadFromSpline {
     pub road_id: String,
     pub spline: we_core::spline::EditableSpline,
     pub template: RoadTemplate,
+    pub output_mode: we_core::spline::SplineOutputMode,
 }
 
 impl CreateRoadFromSpline {
@@ -248,11 +249,13 @@ impl CreateRoadFromSpline {
         road_id: impl Into<String>,
         spline: we_core::spline::EditableSpline,
         template: RoadTemplate,
+        output_mode: we_core::spline::SplineOutputMode,
     ) -> Self {
         Self {
             road_id: road_id.into(),
             spline,
             template,
+            output_mode,
         }
     }
 }
@@ -267,7 +270,8 @@ impl Command for CreateRoadFromSpline {
         }
 
         // Convert spline to geometries
-        let geometries = we_core::spline::spline_to_geometries(&self.spline);
+        let geometries =
+            we_core::spline::spline_to_geometries_with_mode(&self.spline, self.output_mode);
 
         if geometries.is_empty() {
             return Err(EditorError::OperationFailed(

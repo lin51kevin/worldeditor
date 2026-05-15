@@ -51,6 +51,8 @@ pub struct SnapResult {
     pub snap_type: SnapType,
     /// ID of the element snapped to (for endpoint/midpoint).
     pub target_id: Option<String>,
+    /// Which end of the target road was snapped to (only for Endpoint snap).
+    pub contact_point: Option<String>,
 }
 
 /// The type of snap that was applied.
@@ -112,6 +114,7 @@ pub fn snap_point(
         snapped: false,
         snap_type: SnapType::None,
         target_id: None,
+        contact_point: None,
     }
 }
 
@@ -124,6 +127,7 @@ pub fn snap_to_grid(x: f64, y: f64, grid_size: f64) -> SnapResult {
         snapped: true,
         snap_type: SnapType::Grid,
         target_id: None,
+        contact_point: None,
     }
 }
 
@@ -150,18 +154,20 @@ fn snap_to_endpoint(
             None => continue,
         };
         let endpoints = get_road_endpoints(road);
-        for (ex, ey) in endpoints {
+        for (i, (ex, ey)) in endpoints.iter().enumerate() {
             let dx = x - ex;
             let dy = y - ey;
             let dist = (dx * dx + dy * dy).sqrt();
             if dist < best_dist {
                 best_dist = dist;
+                let cp = if i == 0 { "Start" } else { "End" };
                 best = Some(SnapResult {
-                    x: ex,
-                    y: ey,
+                    x: *ex,
+                    y: *ey,
                     snapped: true,
                     snap_type: SnapType::Endpoint,
                     target_id: Some(road.id.clone()),
+                    contact_point: Some(cp.to_string()),
                 });
             }
         }
@@ -204,6 +210,7 @@ fn snap_to_midpoint(
                     snapped: true,
                     snap_type: SnapType::Midpoint,
                     target_id: Some(road.id.clone()),
+                    contact_point: None,
                 });
             }
         }
@@ -247,6 +254,7 @@ fn snap_to_perpendicular(
                     snapped: true,
                     snap_type: SnapType::Perpendicular,
                     target_id: Some(road.id.clone()),
+                    contact_point: None,
                 });
             }
         }
@@ -270,6 +278,42 @@ fn get_road_endpoints(road: &Road) -> Vec<(f64, f64)> {
         }
     }
     endpoints
+}
+
+/// Result of querying a road endpoint's position and heading.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EndpointTangent {
+    /// World X coordinate of the endpoint.
+    pub x: f64,
+    /// World Y coordinate of the endpoint.
+    pub y: f64,
+    /// Heading (tangent angle in radians) at the endpoint.
+    pub hdg: f64,
+}
+
+/// Get the position and heading at a road endpoint.
+///
+/// `contact_point` should be `"Start"` or `"End"`.
+/// For `"End"`, the heading is flipped by π so the tangent points *away*
+/// from the road (i.e. the direction the next road should continue).
+pub fn get_road_endpoint_tangent(road: &Road, contact_point: &str) -> Option<EndpointTangent> {
+    let s = match contact_point {
+        "Start" => 0.0,
+        "End" => road.length,
+        _ => return None,
+    };
+    evaluate_road_at_s(road, s).map(|pt| {
+        let hdg = if contact_point == "End" {
+            // Heading at the end already points in the road's forward direction.
+            // No flip needed — this IS the continuation direction.
+            pt.hdg
+        } else {
+            // At the start, the road's heading points forward (away from start).
+            // Flip by π so the tangent points *into* the road for a predecessor connection.
+            pt.hdg + std::f64::consts::PI
+        };
+        EndpointTangent { x: pt.x, y: pt.y, hdg }
+    })
 }
 
 /// Get the midpoint of a road's reference line.
@@ -402,5 +446,61 @@ mod tests {
         assert!(config.grid_enabled);
         assert!(config.endpoint_enabled);
         assert_eq!(config.grid_size, 1.0);
+    }
+
+    #[test]
+    fn test_endpoint_snap_returns_contact_point() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        let config = SnapConfig {
+            endpoint_enabled: true,
+            endpoint_threshold: 5.0,
+            grid_enabled: false,
+            ..Default::default()
+        };
+        // Near start (0, 0)
+        let result = snap_point(1.0, 0.5, &config, &project, None);
+        assert!(result.snapped);
+        assert_eq!(result.snap_type, SnapType::Endpoint);
+        assert_eq!(result.contact_point.as_deref(), Some("Start"));
+
+        // Near end (100, 0)
+        let result = snap_point(99.5, 0.5, &config, &project, None);
+        assert!(result.snapped);
+        assert_eq!(result.snap_type, SnapType::Endpoint);
+        assert_eq!(result.contact_point.as_deref(), Some("End"));
+    }
+
+    #[test]
+    fn test_get_road_endpoint_tangent_start() {
+        let road = make_road_at("r1", 10.0, 20.0, 50.0);
+        let result = get_road_endpoint_tangent(&road, "Start").unwrap();
+        assert!((result.x - 10.0).abs() < 1e-6);
+        assert!((result.y - 20.0).abs() < 1e-6);
+        // At start, heading is flipped by π from the road's forward direction (hdg=0)
+        assert!((result.hdg - std::f64::consts::PI).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_get_road_endpoint_tangent_end() {
+        let road = make_road_at("r1", 10.0, 20.0, 50.0);
+        let result = get_road_endpoint_tangent(&road, "End").unwrap();
+        // End of a horizontal line road: x = 10 + 50 = 60, y = 20
+        assert!((result.x - 60.0).abs() < 1e-6);
+        assert!((result.y - 20.0).abs() < 1e-6);
+        // At end, heading is the road's forward direction (hdg=0)
+        assert!((result.hdg).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_get_road_endpoint_tangent_invalid() {
+        let road = make_road_at("r1", 0.0, 0.0, 50.0);
+        assert!(get_road_endpoint_tangent(&road, "Invalid").is_none());
+    }
+
+    #[test]
+    fn test_grid_snap_has_no_contact_point() {
+        let result = snap_to_grid(3.3, 7.8, 1.0);
+        assert!(result.contact_point.is_none());
     }
 }

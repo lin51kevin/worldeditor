@@ -131,8 +131,11 @@ pub(super) fn classify_param_poly3(
 ///
 /// The local frame has:
 /// - Origin at k0.position
-/// - U-axis along the chord direction (k0 → k1)
-/// - V-axis perpendicular to chord
+/// - U-axis along the **tangent direction** at k0 (matching `geo.hdg`)
+/// - V-axis perpendicular to the tangent
+///
+/// This frame must match what `evaluate_geometry` uses (`geo.hdg = tangent heading`),
+/// so that the local (u, v) coordinates are correctly transformed to world space.
 ///
 /// Returns (a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v) for normalized parameter range [0, 1].
 pub(super) fn fit_hermite_param_poly3(
@@ -143,13 +146,18 @@ pub(super) fn fit_hermite_param_poly3(
     let dx = k1.position[0] - k0.position[0];
     let dy = k1.position[1] - k0.position[1];
 
-    // Local frame rotation
-    let cos_h = dx / chord_len;
-    let sin_h = dy / chord_len;
+    // Local frame rotation — use k0's tangent heading to match geo.hdg
+    let t_len = (k0.tangent_out[0].powi(2) + k0.tangent_out[1].powi(2)).sqrt();
+    let (cos_h, sin_h) = if t_len > 1e-12 {
+        (k0.tangent_out[0] / t_len, k0.tangent_out[1] / t_len)
+    } else {
+        // Degenerate tangent — fall back to chord direction
+        (dx / chord_len, dy / chord_len)
+    };
 
     // Transform endpoint to local frame
-    let end_u = dx * cos_h + dy * sin_h; // should be ~chord_len
-    let end_v = -dx * sin_h + dy * cos_h; // should be ~0 for aligned
+    let end_u = dx * cos_h + dy * sin_h;
+    let end_v = -dx * sin_h + dy * cos_h;
 
     // Transform tangents to local frame and scale by chord length
     let t0_u = (k0.tangent_out[0] * cos_h + k0.tangent_out[1] * sin_h) * chord_len;

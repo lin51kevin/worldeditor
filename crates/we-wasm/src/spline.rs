@@ -1,6 +1,14 @@
 use wasm_bindgen::prelude::*;
 use we_service::editor::Command;
 
+/// Parse a string mode into `SplineOutputMode`.
+fn parse_spline_output_mode(mode: &str) -> we_core::spline::SplineOutputMode {
+    match mode {
+        "parampoly3" => we_core::spline::SplineOutputMode::ParamPoly3Only,
+        _ => we_core::spline::SplineOutputMode::Classify,
+    }
+}
+
 /// Convert a road (as JSON) to an editable spline (as JSON).
 ///
 /// `sample_step`: distance between intermediate sample points (0 = no intermediates).
@@ -13,11 +21,15 @@ pub fn road_to_spline(road_json: &str, sample_step: f64) -> Result<String, JsErr
 }
 
 /// Convert an editable spline (as JSON) back to OpenDRIVE geometry segments (as JSON).
+///
+/// `mode`: `"classify"` (default — picks optimal geometry types) or
+///         `"parampoly3"` (always emit ParamPoly3, except straight Lines).
 #[wasm_bindgen]
-pub fn spline_to_geometries(spline_json: &str) -> Result<String, JsError> {
+pub fn spline_to_geometries(spline_json: &str, mode: &str) -> Result<String, JsError> {
     let spline: we_core::spline::EditableSpline =
         serde_json::from_str(spline_json).map_err(|e| JsError::new(&e.to_string()))?;
-    let geos = we_core::spline::spline_to_geometries(&spline);
+    let output_mode = parse_spline_output_mode(mode);
+    let geos = we_core::spline::spline_to_geometries_with_mode(&spline, output_mode);
     serde_json::to_string(&geos).map_err(|e| JsError::new(&e.to_string()))
 }
 
@@ -78,12 +90,14 @@ pub fn compute_soft_selection(
 /// - `spline_json`: JSON representation of EditableSpline
 /// - `template_id`: Template ID (e.g., "single", "dual2", "dual4", "dual6")
 /// - `road_id`: Unique ID for the new road
+/// - `mode`: `"classify"` or `"parampoly3"` (geometry output mode)
 #[wasm_bindgen]
 pub fn create_road_from_spline(
     project_json: &str,
     road_id: &str,
     spline_json: &str,
     template_id: &str,
+    mode: &str,
 ) -> Result<String, JsError> {
     let project: we_core::model::Project =
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
@@ -103,7 +117,8 @@ pub fn create_road_from_spline(
         }
     };
 
-    let cmd = we_service::commands::CreateRoadFromSpline::new(road_id, spline, template);
+    let output_mode = parse_spline_output_mode(mode);
+    let cmd = we_service::commands::CreateRoadFromSpline::new(road_id, spline, template, output_mode);
     let result = cmd
         .execute(&project)
         .map_err(|e| JsError::new(&e.to_string()))?;

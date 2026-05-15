@@ -25,6 +25,20 @@ pub use catmull_rom::compute_catmull_rom_tangent;
 use cubic_bezier::param_poly3_curvature;
 use cubic_bezier::{CurveClassification, classify_param_poly3, fit_hermite_param_poly3};
 
+/// Controls how `spline_to_geometries` emits geometry types.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SplineOutputMode {
+    /// Classify curvature profile to choose optimal geometry type
+    /// (Line / Arc / Spiral / ParamPoly3). Produces standard
+    /// Line-Spiral-Arc-Spiral-Line patterns.
+    #[default]
+    Classify,
+    /// Emit ParamPoly3 directly from Hermite fitting, without
+    /// curvature classification. Straight segments are still
+    /// detected as Line.
+    ParamPoly3Only,
+}
+
 /// Type of a spline knot — determines how it participates in tangent computation.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KnotType {
@@ -488,15 +502,28 @@ pub fn road_to_spline(road: &crate::model::Road, sample_step: f64) -> EditableSp
 
 /// Convert an EditableSpline back to OpenDRIVE geometry segments (plan_view).
 ///
-/// Generates optimal geometry types between consecutive key knots:
-/// - **Line** when tangents align with the chord (straight segments)
-/// - **Arc** when sampled curvature is approximately constant
-/// - **Spiral** when curvature varies linearly (clothoid transition)
-/// - **ParamPoly3** for general curves (Hermite fitting)
+/// Uses [`SplineOutputMode::Classify`] by default, which produces optimal
+/// geometry types (Line / Arc / Spiral / ParamPoly3).
 ///
-/// This classification produces cleaner OpenDRIVE output that matches
-/// standard road design conventions (Line-Spiral-Arc-Spiral-Line patterns).
+/// See [`spline_to_geometries_with_mode`] for explicit mode control.
 pub fn spline_to_geometries(spline: &EditableSpline) -> Vec<crate::model::Geometry> {
+    spline_to_geometries_with_mode(spline, SplineOutputMode::Classify)
+}
+
+/// Convert an EditableSpline back to OpenDRIVE geometry segments (plan_view)
+/// with explicit output mode control.
+///
+/// - [`SplineOutputMode::Classify`]: Generates optimal geometry types between
+///   consecutive key knots (Line / Arc / Spiral / ParamPoly3) by analyzing
+///   curvature profiles. Produces standard road design patterns.
+///
+/// - [`SplineOutputMode::ParamPoly3Only`]: Emits ParamPoly3 directly from
+///   Hermite fitting without curvature classification. Straight segments are
+///   still detected as Line.
+pub fn spline_to_geometries_with_mode(
+    spline: &EditableSpline,
+    mode: SplineOutputMode,
+) -> Vec<crate::model::Geometry> {
     use crate::model::{Geometry, GeometryType, ParamPoly3Range};
 
     // Ensure auto-tangents are up-to-date before converting
@@ -548,40 +575,61 @@ pub fn spline_to_geometries(spline: &EditableSpline) -> Vec<crate::model::Geomet
                 geo_type: GeometryType::Line,
             });
         } else {
-            // Curved — fit Hermite → ParamPoly3 first, then classify
+            // Curved — fit Hermite → ParamPoly3 first, then optionally classify
             let (a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v) =
                 fit_hermite_param_poly3(k0, k1, chord_len);
 
             // Compute true arc length for this segment
             let arc_len = param_poly3_arc_length(b_u, c_u, d_u, b_v, c_v, d_v);
 
-            // Classify curvature profile to pick optimal geometry type
-            let classification = classify_param_poly3(b_u, c_u, d_u, b_v, c_v, d_v, arc_len);
+            let geo_type = match mode {
+                SplineOutputMode::Classify => {
+                    // Classify curvature profile to pick optimal geometry type
+                    let classification =
+                        classify_param_poly3(b_u, c_u, d_u, b_v, c_v, d_v, arc_len);
 
-            let geo_type = match classification {
-                CurveClassification::Line => GeometryType::Line,
+                    match classification {
+                        CurveClassification::Line => GeometryType::Line,
 
-                CurveClassification::Arc { curvature } => GeometryType::Arc { curvature },
+                        CurveClassification::Arc { curvature } => {
+                            GeometryType::Arc { curvature }
+                        }
 
-                CurveClassification::Spiral {
-                    curv_start,
-                    curv_end,
-                } => GeometryType::Spiral {
-                    curv_start,
-                    curv_end,
-                },
+                        CurveClassification::Spiral {
+                            curv_start,
+                            curv_end,
+                        } => GeometryType::Spiral {
+                            curv_start,
+                            curv_end,
+                        },
 
-                CurveClassification::ParamPoly3 => GeometryType::ParamPoly3 {
-                    a_u,
-                    b_u,
-                    c_u,
-                    d_u,
-                    a_v,
-                    b_v,
-                    c_v,
-                    d_v,
-                    p_range: ParamPoly3Range::Normalized,
-                },
+                        CurveClassification::ParamPoly3 => GeometryType::ParamPoly3 {
+                            a_u,
+                            b_u,
+                            c_u,
+                            d_u,
+                            a_v,
+                            b_v,
+                            c_v,
+                            d_v,
+                            p_range: ParamPoly3Range::Normalized,
+                        },
+                    }
+                }
+                SplineOutputMode::ParamPoly3Only => {
+                    // Emit ParamPoly3 directly — no curvature classification
+                    GeometryType::ParamPoly3 {
+                        a_u,
+                        b_u,
+                        c_u,
+                        d_u,
+                        a_v,
+                        b_v,
+                        c_v,
+                        d_v,
+                        p_range: ParamPoly3Range::Normalized,
+                    }
+                }
             };
 
             geometries.push(Geometry {
@@ -1323,5 +1371,91 @@ mod tests {
             "First segment should be Line, got {:?}",
             geos[0].geo_type
         );
+    }
+
+    #[test]
+    fn test_spline_to_geometries_parampoly3_mode_no_spiral() {
+        // A curved spline that would normally classify as Spiral under Classify mode
+        // should produce ParamPoly3 under ParamPoly3Only mode.
+        let mut spline = EditableSpline::from_knots(vec![
+            SplineKnot::with_tangent(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+            {
+                let angle = std::f64::consts::FRAC_PI_4;
+                SplineKnot::with_tangent(80.0, 15.0, 0.0, angle.cos(), angle.sin(), 0.0)
+            },
+        ]);
+        spline.recompute_stations();
+
+        let geos = spline_to_geometries_with_mode(&spline, SplineOutputMode::ParamPoly3Only);
+        assert!(!geos.is_empty(), "Should produce at least one geometry");
+
+        for geo in &geos {
+            match &geo.geo_type {
+                crate::model::GeometryType::Line => { /* lines are always allowed */ }
+                crate::model::GeometryType::ParamPoly3 { .. } => { /* expected */ }
+                other => {
+                    panic!(
+                        "ParamPoly3Only mode should not produce {:?}",
+                        other
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_spline_to_geometries_parampoly3_mode_line_preserved() {
+        // Straight segment should still be classified as Line even in ParamPoly3Only mode.
+        let mut spline = EditableSpline::from_knots(vec![
+            SplineKnot::with_tangent(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+            SplineKnot::with_tangent(50.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+        ]);
+        spline.recompute_stations();
+
+        let geos = spline_to_geometries_with_mode(&spline, SplineOutputMode::ParamPoly3Only);
+        assert!(!geos.is_empty(), "Should produce at least one geometry");
+        assert!(
+            matches!(geos[0].geo_type, crate::model::GeometryType::Line),
+            "Straight segment should be Line, got {:?}",
+            geos[0].geo_type
+        );
+    }
+
+    #[test]
+    fn test_spline_to_geometries_classify_mode_unchanged() {
+        // Verify Classify mode produces same results as the original function.
+        let mut spline = EditableSpline::from_knots(vec![
+            SplineKnot::with_tangent(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+            SplineKnot::with_tangent(50.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+            {
+                let angle = std::f64::consts::FRAC_PI_4;
+                SplineKnot::with_tangent(80.0, 15.0, 0.0, angle.cos(), angle.sin(), 0.0)
+            },
+        ]);
+        spline.recompute_stations();
+
+        let geos_default = spline_to_geometries(&spline);
+        let geos_classify = spline_to_geometries_with_mode(&spline, SplineOutputMode::Classify);
+
+        assert_eq!(
+            geos_default.len(),
+            geos_classify.len(),
+            "Classify mode should produce same number of segments as default"
+        );
+
+        for (a, b) in geos_default.iter().zip(geos_classify.iter()) {
+            assert!(
+                (a.s - b.s).abs() < 1e-6,
+                "Station offset mismatch: {} vs {}",
+                a.s,
+                b.s
+            );
+            assert!(
+                (a.length - b.length).abs() < 1e-6,
+                "Length mismatch: {} vs {}",
+                a.length,
+                b.length
+            );
+        }
     }
 }

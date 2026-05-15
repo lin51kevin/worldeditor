@@ -339,6 +339,33 @@ pub fn snap_point(
     serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
 }
 
+// ── Endpoint tangent helper ───────────────────────────────────────────────────
+
+/// Get the position and heading at a road endpoint for tangent inheritance.
+///
+/// `contact_point` should be `"Start"` or `"End"`.
+/// Returns `{ x, y, hdg }` or null if the road is not found.
+#[wasm_bindgen]
+pub fn get_road_endpoint_tangent(
+    project_json: &str,
+    road_id: &str,
+    contact_point: &str,
+) -> Result<JsValue, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    let road = project.roads.iter().find(|r| r.id == road_id);
+    match road {
+        Some(road) => {
+            match we_core::snapping::get_road_endpoint_tangent(road, contact_point) {
+                Some(result) => serde_wasm_bindgen::to_value(&result)
+                    .map_err(|e| JsError::new(&e.to_string())),
+                None => Ok(JsValue::NULL),
+            }
+        }
+        None => Ok(JsValue::NULL),
+    }
+}
+
 // ── Signal & Object world-position helpers ────────────────────────────────────
 
 /// Compute the world-space position (x, y) of a signal given its s/t road coordinates.

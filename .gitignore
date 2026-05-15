@@ -58,3 +58,4 @@ docs/reference/
 frontend/e2e/__snapshots__/
 tests/fixtures/xodr/CityScape.xodr
 tests/fixtures/xodr/park_ground_park_ground.xodr
+tests/fixtures/xodr/crosswark_junction.xodr

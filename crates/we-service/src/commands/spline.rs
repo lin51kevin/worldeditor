@@ -23,6 +23,8 @@ pub struct ModifyRoadKnots {
     pub old_length: f64,
     /// New knots to convert and apply.
     pub new_knots: Vec<we_core::spline::SplineKnot>,
+    /// Geometry output mode.
+    pub output_mode: we_core::spline::SplineOutputMode,
 }
 
 impl ModifyRoadKnots {
@@ -37,6 +39,7 @@ impl ModifyRoadKnots {
             old_plan_view,
             old_length,
             new_knots,
+            output_mode: we_core::spline::SplineOutputMode::Classify,
         }
     }
 }
@@ -47,7 +50,8 @@ impl Command for ModifyRoadKnots {
         let road = find_road_mut(&mut p, &self.road_id)?;
 
         let spline = we_core::spline::EditableSpline::from_knots(self.new_knots.clone());
-        let new_geos = we_core::spline::spline_to_geometries(&spline);
+        let new_geos =
+            we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
 
         if new_geos.is_empty() {
             return Err(EditorError::OperationFailed(
@@ -100,6 +104,7 @@ pub struct MoveKnot {
     pub old_plan_view: Vec<Geometry>,
     pub old_length: f64,
     pub params: MoveKnotParams,
+    pub output_mode: we_core::spline::SplineOutputMode,
 }
 
 impl MoveKnot {
@@ -114,6 +119,7 @@ impl MoveKnot {
             old_plan_view,
             old_length,
             params,
+            output_mode: we_core::spline::SplineOutputMode::Classify,
         }
     }
 }
@@ -161,7 +167,8 @@ impl Command for MoveKnot {
         }
 
         // Convert back to OpenDRIVE
-        let new_geos = we_core::spline::spline_to_geometries(&spline);
+        let new_geos =
+            we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
         if new_geos.is_empty() {
             return Err(EditorError::OperationFailed(
                 "Spline conversion produced no geometry".into(),
@@ -200,6 +207,8 @@ pub struct InsertKnot {
     pub position: [f64; 3],
     /// Index where to insert (computed from `find_insertion_index` if not specified).
     pub insert_index: Option<usize>,
+    /// Geometry output mode.
+    pub output_mode: we_core::spline::SplineOutputMode,
 }
 
 impl InsertKnot {
@@ -218,6 +227,7 @@ impl InsertKnot {
             original_knots,
             position,
             insert_index,
+            output_mode: we_core::spline::SplineOutputMode::Classify,
         }
     }
 }
@@ -240,7 +250,8 @@ impl Command for InsertKnot {
         spline.recompute_stations();
         spline.compute_tangents();
 
-        let new_geos = we_core::spline::spline_to_geometries(&spline);
+        let new_geos =
+            we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
         if new_geos.is_empty() {
             return Err(EditorError::OperationFailed(
                 "Spline conversion produced no geometry after insert".into(),
@@ -275,6 +286,7 @@ pub struct DeleteKnot {
     pub old_length: f64,
     pub original_knots: Vec<we_core::spline::SplineKnot>,
     pub knot_index: usize,
+    pub output_mode: we_core::spline::SplineOutputMode,
 }
 
 impl DeleteKnot {
@@ -291,6 +303,7 @@ impl DeleteKnot {
             old_length,
             original_knots,
             knot_index,
+            output_mode: we_core::spline::SplineOutputMode::Classify,
         }
     }
 }
@@ -319,7 +332,8 @@ impl Command for DeleteKnot {
         spline.recompute_stations();
         spline.compute_tangents();
 
-        let new_geos = we_core::spline::spline_to_geometries(&spline);
+        let new_geos =
+            we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
         if new_geos.is_empty() {
             return Err(EditorError::OperationFailed(
                 "Spline conversion produced no geometry after delete".into(),
@@ -355,6 +369,7 @@ pub struct SetKnotTangent {
     pub original_knots: Vec<we_core::spline::SplineKnot>,
     pub knot_index: usize,
     pub new_tangent: [f64; 3],
+    pub output_mode: we_core::spline::SplineOutputMode,
 }
 
 impl SetKnotTangent {
@@ -373,6 +388,7 @@ impl SetKnotTangent {
             original_knots,
             knot_index,
             new_tangent,
+            output_mode: we_core::spline::SplineOutputMode::Classify,
         }
     }
 }
@@ -408,7 +424,8 @@ impl Command for SetKnotTangent {
         spline.knots[self.knot_index].tangent_out = tangent;
         spline.knots[self.knot_index].tangent_mode = we_core::spline::TangentMode::Manual;
 
-        let new_geos = we_core::spline::spline_to_geometries(&spline);
+        let new_geos =
+            we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
         if new_geos.is_empty() {
             return Err(EditorError::OperationFailed(
                 "Spline conversion produced no geometry".into(),
