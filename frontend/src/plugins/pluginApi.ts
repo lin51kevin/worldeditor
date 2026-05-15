@@ -34,6 +34,43 @@ import type {
 } from '../stores/pluginContribStore';
 import type { Project } from '../services/platform';
 
+// ── Permission system ─────────────────────────────────────────────────────────
+
+/** Permissions that plugins can request in their manifest. */
+export type PluginPermission =
+  | 'project:read'
+  | 'project:write'
+  | 'ui:menu'
+  | 'ui:panel'
+  | 'ui:toolbar'
+  | 'ui:overlay'
+  | 'ui:settings'
+  | 'ui:context-menu'
+  | 'ui:templates'
+  | 'io:import'
+  | 'io:export';
+
+/** All permissions — used for built-in plugins that bypass the permission check. */
+export const ALL_PERMISSIONS: readonly PluginPermission[] = [
+  'project:read', 'project:write',
+  'ui:menu', 'ui:panel', 'ui:toolbar', 'ui:overlay', 'ui:settings', 'ui:context-menu', 'ui:templates',
+  'io:import', 'io:export',
+] as const;
+
+class PluginPermissionError extends Error {
+  constructor(pluginId: string, permission: PluginPermission) {
+    super(`Plugin '${pluginId}' does not have '${permission}' permission`);
+    this.name = 'PluginPermissionError';
+  }
+}
+
+/** Guard that throws if a plugin lacks a required permission. */
+function requirePermission(pluginId: string, granted: readonly PluginPermission[], required: PluginPermission): void {
+  if (!granted.includes(required)) {
+    throw new PluginPermissionError(pluginId, required);
+  }
+}
+
 export interface PluginContext {
   // Existing contributions
   registerToolbarButton(contrib: ToolbarButtonContrib): void;
@@ -74,7 +111,7 @@ export interface PluginContext {
 type SetupFn = (ctx: PluginContext) => (() => void) | void;
 
 interface WePluginApi {
-  registerPlugin(id: string, setup: SetupFn): void;
+  registerPlugin(id: string, setup: SetupFn, permissions?: readonly PluginPermission[]): void;
   unloadPlugin(id: string): void;
 }
 
@@ -87,28 +124,61 @@ export function installPluginApi(): void {
   if ((window as unknown as Record<string, unknown>)['__WE_PLUGIN_API__']) return;
 
   const api: WePluginApi = {
-    registerPlugin(id: string, setup: SetupFn): void {
+    registerPlugin(id: string, setup: SetupFn, permissions?: readonly PluginPermission[]): void {
+      const granted = permissions ?? ALL_PERMISSIONS;
       const contribStore = usePluginContribStore.getState();
       const ctx: PluginContext = {
-        registerToolbarButton: (contrib) => contribStore.registerToolbarButton(contrib),
-        registerMenuItem: (contrib) => contribStore.registerMenuItem(contrib),
-        registerTemplateSection: (section) => contribStore.registerTemplateSection(section),
-        registerImporter: (contrib) => usePluginContribStore.getState().registerImporter(contrib),
-        registerExporter: (contrib) => usePluginContribStore.getState().registerExporter(contrib),
-        registerPanel: (contrib) => usePluginContribStore.getState().registerPanel(contrib),
-        registerContextMenuItem: (contrib) => usePluginContribStore.getState().registerContextMenuItem(contrib),
-        registerViewportOverlay: (contrib) => usePluginContribStore.getState().registerViewportOverlay(contrib),
-        registerSettings: (contrib) => usePluginContribStore.getState().registerSettings(contrib),
+        registerToolbarButton: (contrib) => {
+          requirePermission(id, granted, 'ui:toolbar');
+          contribStore.registerToolbarButton(contrib);
+        },
+        registerMenuItem: (contrib) => {
+          requirePermission(id, granted, 'ui:menu');
+          contribStore.registerMenuItem(contrib);
+        },
+        registerTemplateSection: (section) => {
+          requirePermission(id, granted, 'ui:templates');
+          contribStore.registerTemplateSection(section);
+        },
+        registerImporter: (contrib) => {
+          requirePermission(id, granted, 'io:import');
+          usePluginContribStore.getState().registerImporter(contrib);
+        },
+        registerExporter: (contrib) => {
+          requirePermission(id, granted, 'io:export');
+          usePluginContribStore.getState().registerExporter(contrib);
+        },
+        registerPanel: (contrib) => {
+          requirePermission(id, granted, 'ui:panel');
+          usePluginContribStore.getState().registerPanel(contrib);
+        },
+        registerContextMenuItem: (contrib) => {
+          requirePermission(id, granted, 'ui:context-menu');
+          usePluginContribStore.getState().registerContextMenuItem(contrib);
+        },
+        registerViewportOverlay: (contrib) => {
+          requirePermission(id, granted, 'ui:overlay');
+          usePluginContribStore.getState().registerViewportOverlay(contrib);
+        },
+        registerSettings: (contrib) => {
+          requirePermission(id, granted, 'ui:settings');
+          usePluginContribStore.getState().registerSettings(contrib);
+        },
 
-        getProject: () => useEditorStore.getState().project,
+        getProject: () => {
+          requirePermission(id, granted, 'project:read');
+          return useEditorStore.getState().project;
+        },
 
         updateProject: (updater) => {
+          requirePermission(id, granted, 'project:write');
           const state = useEditorStore.getState();
           const newProject = updater(state.project);
           useEditorStore.setState({ project: newProject, isDirty: true });
         },
 
         executeWithUndo: (description, executeFn) => {
+          requirePermission(id, granted, 'project:write');
           useEditorStore.getState().executePluginCommand(description, executeFn);
         },
 
