@@ -13,7 +13,7 @@
     "showAxis": "显示坐标轴"
   },
   "app": {
-    "title": "WorldEditor Next",
+    "title": "WorldEditor",
     "brand": "世界编辑器",
     "updateAvailable": "新版本 {{version}} 可用",
     "download": "下载",
@@ -533,7 +533,7 @@
     "hideDetail": "隐藏详情"
   },
   "welcomePage": {
-    "title": "WorldEditor Next",
+    "title": "WorldEditor",
     "subtitle": "自动驾驶道路网络编辑器",
     "start": "开始",
     "new": "新建",

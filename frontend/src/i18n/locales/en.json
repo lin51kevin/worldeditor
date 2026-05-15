@@ -13,7 +13,7 @@
     "showAxis": "Show Axis"
   },
   "app": {
-    "title": "WorldEditor Next",
+    "title": "WorldEditor",
     "brand": "World Editor",
     "updateAvailable": "New version {{version}} is available.",
     "download": "Download",
@@ -533,7 +533,7 @@
     "hideDetail": "Hide Details"
   },
   "welcomePage": {
-    "title": "WorldEditor Next",
+    "title": "WorldEditor",
     "subtitle": "Autonomous driving road network editor",
     "start": "Start",
     "new": "New",

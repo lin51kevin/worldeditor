@@ -65,7 +65,9 @@ export function WelcomePage({
   );
 
   const openExternal = (url: string) => {
-    try { window.open(url, '_blank', 'noopener,noreferrer'); } catch { /* ignore */ }
+    import('@tauri-apps/plugin-shell').then(({ open }) => open(url)).catch(() => {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
   };
 
   return (
@@ -75,7 +77,7 @@ export function WelcomePage({
         <div className="wp-logo">
           <Globe size={120} />
         </div>
-        <h1 className="wp-title">{t('welcomePage.title', 'WorldEditor Next')}</h1>
+        <h1 className="wp-title">{t('welcomePage.title', 'WorldEditor')}</h1>
         <p className="wp-subtitle">{t('welcomePage.subtitle', 'Autonomous driving road network editor')}</p>
       </header>
 
