@@ -35,6 +35,9 @@
 *.ttf binary
 *.eot binary
 *.pdf binary
+
+# Baseline JSON files are auto-generated, don't count in language stats
+tests/fixtures/xodr/baseline/*.baseline.json linguist-generated
 *.zip binary
 *.gz binary
 *.tar binary
