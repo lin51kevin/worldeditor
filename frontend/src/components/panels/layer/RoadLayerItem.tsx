@@ -31,10 +31,12 @@ export interface RoadLayerItemProps {
   onSelectSignal: (signalId: string) => void;
   onToggleSignalVisibility: (signalId: string) => void;
   isSignalVisible: (signalId: string) => boolean;
+  registerSignalRef?: (signalId: string, el: HTMLDivElement | null) => void;
   onToggleObjectsExpand: () => void;
   onSelectObject: (objectId: string) => void;
   onToggleObjectVisibility: (objectId: string) => void;
   isObjectVisible: (objectId: string) => boolean;
+  registerObjectRef?: (objectId: string, el: HTMLDivElement | null) => void;
 }
 
 export function RoadLayerItem({
@@ -64,10 +66,12 @@ export function RoadLayerItem({
   onSelectSignal,
   onToggleSignalVisibility,
   isSignalVisible,
+  registerSignalRef,
   onToggleObjectsExpand,
   onSelectObject,
   onToggleObjectVisibility,
   isObjectVisible,
+  registerObjectRef,
 }: RoadLayerItemProps) {
   const { t } = useTranslation();
   const roadSignals = road.signals ?? [];
@@ -171,7 +175,7 @@ export function RoadLayerItem({
                         >
                           <span className="layer-name">
                             {t('layerPanel.lane')} L{Math.abs(lane.id)}
-                            <span className="road-id"> ({lane.lane_type})</span>
+                            <span className="type-tag" data-type={lane.lane_type}>{lane.lane_type}</span>
                           </span>
                           <button
                             className={`road-visibility ${laneVisible ? '' : 'off'}`}
@@ -197,7 +201,7 @@ export function RoadLayerItem({
                         >
                           <span className="layer-name">
                             {t('layerPanel.lane')} R{Math.abs(lane.id)}
-                            <span className="road-id"> ({lane.lane_type})</span>
+                            <span className="type-tag" data-type={lane.lane_type}>{lane.lane_type}</span>
                           </span>
                           <button
                             className={`road-visibility ${laneVisible ? '' : 'off'}`}
@@ -244,17 +248,22 @@ export function RoadLayerItem({
                       && selectedSceneNode.roadId === road.id
                       && selectedSceneNode.signalId === signal.id;
                     const sigType = signal.signal_subtype || signal.signal_type;
-                    const displayName = signal.name
-                      ? `${signal.name} (${signal.id}) (${sigType})`
-                      : `(${signal.id}) (${sigType})`;
+                    const sigLabel = signal.name
+                      ? `${signal.name} (${signal.id})`
+                      : `(${signal.id})`;
+                    const displayName = `${sigLabel} (${sigType})`;
 
                     return (
                       <div
                         key={signal.id}
+                        ref={(el) => registerSignalRef?.(signal.id, el)}
                         className={`layer-item layer-item-child layer-item-lane ${isSignalSelected ? 'selected' : ''} ${!isSignalVisible(signal.id) ? 'layer-item-hidden' : ''}`}
                         onClick={() => onSelectSignal(signal.id)}
                       >
-                        <span className="layer-name" title={displayName}>{displayName}</span>
+                        <span className="layer-name" title={displayName}>
+                          {sigLabel}
+                          <span className="type-tag" data-type="signal">{sigType}</span>
+                        </span>
                         <button
                           className={`road-visibility ${isSignalVisible(signal.id) ? '' : 'off'}`}
                           onClick={(event) => {
@@ -299,16 +308,21 @@ export function RoadLayerItem({
                       && selectedSceneNode.roadId === road.id
                       && selectedSceneNode.objectId === object.id;
                     const typeStr = getObjTypeStr(object);
-                    const displayName = object.name
-                      ? `${object.name} (${object.id}) (${typeStr})`
-                      : `(${object.id}) (${typeStr})`;
+                    const objLabel = object.name
+                      ? `${object.name} (${object.id})`
+                      : `(${object.id})`;
+                    const displayName = `${objLabel} (${typeStr})`;
                     return (
                       <div
                         key={object.id}
+                        ref={(el) => registerObjectRef?.(object.id, el)}
                         className={`layer-item layer-item-child layer-item-lane ${isObjectSelected ? 'selected' : ''} ${!isObjectVisible(object.id) ? 'layer-item-hidden' : ''}`}
                         onClick={() => onSelectObject(object.id)}
                       >
-                        <span className="layer-name" title={displayName}>{displayName}</span>
+                        <span className="layer-name" title={displayName}>
+                          {objLabel}
+                          <span className="type-tag" data-type={typeStr}>{typeStr}</span>
+                        </span>
                         <button
                           className={`road-visibility ${isObjectVisible(object.id) ? '' : 'off'}`}
                           onClick={(event) => {

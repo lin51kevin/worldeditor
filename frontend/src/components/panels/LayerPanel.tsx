@@ -65,21 +65,41 @@ export function LayerPanel() {
   // Track whether the last selection came from within the panel (to avoid unwanted auto-scroll)
   const selectionSourceRef = useRef<'panel' | 'viewport'>('viewport');
 
-  // Auto-scroll to the selected road/junction when selection originates from the viewport
+  // Auto-scroll to the selected road/junction/signal/object when selection originates from viewport
   useEffect(() => {
     if (selectionSourceRef.current === 'panel') {
       selectionSourceRef.current = 'viewport';
       return;
     }
-    const id = selectedRoadId ? `road-${selectedRoadId}` : selectedJunctionId ? `junc-${selectedJunctionId}` : null;
-    if (!id) return;
-    // Ensure the scene list section is expanded so the item is visible
-    setSceneListCollapsed(false);
-    const el = rowRefs.current.get(id);
-    if (el) {
-      el.scrollIntoView({ behavior: 'instant', block: 'nearest' });
+
+    let id: string | null = null;
+
+    if (selectedSceneNode?.type === 'signal') {
+      const { roadId, signalId } = selectedSceneNode;
+      // Ensure road row + signals group are expanded so the item is reachable
+      setSceneListCollapsed(false);
+      setExpandedRoads((prev) => new Set(prev).add(roadId));
+      setExpandedRoadSignals((prev) => new Set(prev).add(roadId));
+      id = `signal-${roadId}-${signalId}`;
+    } else if (selectedSceneNode?.type === 'object') {
+      const { roadId, objectId } = selectedSceneNode;
+      setSceneListCollapsed(false);
+      setExpandedRoads((prev) => new Set(prev).add(roadId));
+      setExpandedRoadObjects((prev) => new Set(prev).add(roadId));
+      id = `object-${roadId}-${objectId}`;
+    } else {
+      id = selectedRoadId ? `road-${selectedRoadId}` : selectedJunctionId ? `junc-${selectedJunctionId}` : null;
+      if (id) setSceneListCollapsed(false);
     }
-  }, [selectedRoadId, selectedJunctionId]);
+
+    if (!id) return;
+    // DOM expansion is async — defer scroll one tick so the expanded rows are rendered
+    const rafId = requestAnimationFrame(() => {
+      const el = rowRefs.current.get(id!);
+      if (el) el.scrollIntoView({ behavior: 'instant', block: 'nearest' });
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [selectedRoadId, selectedJunctionId, selectedSceneNode]);
 
 
   const toggleRoadExpand = (roadId: string) => {
@@ -222,10 +242,48 @@ export function LayerPanel() {
   const filteredRoads = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return project.roads;
-    return project.roads.filter(
-      (r) => r.id.toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q),
-    );
+    return project.roads.filter((r) => {
+      if (r.id.toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q)) return true;
+      // Match signals
+      if ((r.signals ?? []).some((s) =>
+        s.id.toLowerCase().includes(q) ||
+        (s.name || '').toLowerCase().includes(q) ||
+        s.signal_type.toLowerCase().includes(q) ||
+        (s.signal_subtype || '').toLowerCase().includes(q),
+      )) return true;
+      // Match objects
+      if ((r.objects ?? []).some((o) => {
+        const typeStr = typeof o.object_type === 'string' ? o.object_type : o.object_type.Custom;
+        return o.id.toLowerCase().includes(q) ||
+          (o.name || '').toLowerCase().includes(q) ||
+          typeStr.toLowerCase().includes(q);
+      })) return true;
+      return false;
+    });
   }, [project.roads, searchQuery]);
+
+  // When searching, auto-expand roads whose match comes from a child (signal/object)
+  useEffect(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return;
+    project.roads.forEach((r) => {
+      const roadSelfMatch = r.id.toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q);
+      if (roadSelfMatch) return;
+      const signalMatch = (r.signals ?? []).some((s) =>
+        s.id.toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q) ||
+        s.signal_type.toLowerCase().includes(q) || (s.signal_subtype || '').toLowerCase().includes(q),
+      );
+      const objectMatch = (r.objects ?? []).some((o) => {
+        const typeStr = typeof o.object_type === 'string' ? o.object_type : o.object_type.Custom;
+        return o.id.toLowerCase().includes(q) || (o.name || '').toLowerCase().includes(q) || typeStr.toLowerCase().includes(q);
+      });
+      if (signalMatch || objectMatch) {
+        setExpandedRoads((prev) => new Set(prev).add(r.id));
+        if (signalMatch) setExpandedRoadSignals((prev) => new Set(prev).add(r.id));
+        if (objectMatch) setExpandedRoadObjects((prev) => new Set(prev).add(r.id));
+      }
+    });
+  }, [searchQuery, project.roads]);
 
   const filteredJunctions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -424,10 +482,12 @@ export function LayerPanel() {
                 onSelectSignal={(signalId) => handleSelectSignal(road.id, signalId)}
                 onToggleSignalVisibility={(signalId) => toggleSignalVisibilityInStore(road.id, signalId)}
                 isSignalVisible={(signalId) => isSignalVisible(road.id, signalId)}
+                registerSignalRef={(signalId, el) => registerRowRef(`signal-${road.id}-${signalId}`, el)}
                 onToggleObjectsExpand={() => toggleRoadObjectsExpand(road.id)}
                 onSelectObject={(objectId) => handleSelectObject(road.id, objectId)}
                 onToggleObjectVisibility={(objectId) => toggleObjectVisibilityInStore(road.id, objectId)}
                 isObjectVisible={(objectId) => isObjectVisible(road.id, objectId)}
+                registerObjectRef={(objectId, el) => registerRowRef(`object-${road.id}-${objectId}`, el)}
               />
             ))}
 

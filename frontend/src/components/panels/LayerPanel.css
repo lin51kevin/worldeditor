@@ -149,6 +149,24 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--font-size-sm);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* Coloured type badge — used for lane types, signal types, object types */
+.type-tag {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  color: #fff;
+  opacity: 0.85;
+  font-weight: 500;
 }
 
 .road-id {
@@ -159,6 +177,43 @@
 .layer-item.selected .road-id {
   color: var(--color-text-secondary);
 }
+
+/* Lane surface colours (derived from Rust RoadRenderConfig defaults) */
+.type-tag[data-type="Driving"]       { background: #5a5a62; }
+.type-tag[data-type="Shoulder"]      { background: #4d4d4a; }
+.type-tag[data-type="Sidewalk"]      { background: #8c8c80; }
+.type-tag[data-type="Median"]        { background: #335933; }
+.type-tag[data-type="Border"]        { background: #404040; }
+.type-tag[data-type="Parking"]       { background: #4a6080; }
+.type-tag[data-type="Biking"]        { background: #3d6b45; }
+.type-tag[data-type="Stop"]          { background: #8b3333; }
+.type-tag[data-type="None"]          { background: #666659; }
+
+/* Signal type colour (traffic control group → blue-ish) */
+.type-tag[data-type="signal"]        { background: #2a6490; }
+/* Object type colours */
+.type-tag[data-type="Sign"]          { background: #2a6490; }
+.type-tag[data-type="Guardrail"]     { background: #5c5c5c; }
+.type-tag[data-type="Barrier"]       { background: #6b4c2a; }
+.type-tag[data-type="Curb"]          { background: #666666; }
+.type-tag[data-type="Wall"]          { background: #5a5a5a; }
+.type-tag[data-type="Pillar"]        { background: #5a5a5a; }
+.type-tag[data-type="TrafficCone"]   { background: #cc5500; }
+.type-tag[data-type="ParkingSpace"]  { background: #2a5fa0; }
+.type-tag[data-type="Crosswalk"]     { background: #4a7a9b; }
+.type-tag[data-type="StopLine"]      { background: #8b3333; }
+.type-tag[data-type="CrossHatchArea"]     { background: #5c7a3e; }
+.type-tag[data-type="WovenArea"]          { background: #5c7a3e; }
+.type-tag[data-type="ForwardWaitingArea"] { background: #3d6b45; }
+.type-tag[data-type="TurnLeftWaitingArea"]{ background: #3d6b45; }
+.type-tag[data-type="SlowDownToYieldLine"]{ background: #8b7033; }
+.type-tag[data-type="StopToYieldLine"]    { background: #8b3333; }
+.type-tag[data-type="SimpleSignalPole"]   { background: #2a6490; }
+.type-tag[data-type="TrafficLightPole"]   { background: #2a6490; }
+.type-tag[data-type="StreetLightPole"]    { background: #7a6a2a; }
+.type-tag[data-type="SignGantry"]         { background: #2a6490; }
+.type-tag[data-type="LTypeSignalPole"]    { background: #2a6490; }
+.type-tag[data-type="Custom"]             { background: #666666; }
 
 .road-visibility {
   background: transparent;
