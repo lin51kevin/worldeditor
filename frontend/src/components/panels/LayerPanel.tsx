@@ -93,10 +93,12 @@ export function LayerPanel() {
     }
 
     if (!id) return;
-    // DOM expansion is async — defer scroll one tick so the expanded rows are rendered
+    // Double rAF ensures expand animation completes before scrolling
     const rafId = requestAnimationFrame(() => {
-      const el = rowRefs.current.get(id!);
-      if (el) el.scrollIntoView({ behavior: 'instant', block: 'nearest' });
+      requestAnimationFrame(() => {
+        const el = rowRefs.current.get(id!);
+        if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
     });
     return () => cancelAnimationFrame(rafId);
   }, [selectedRoadId, selectedJunctionId, selectedSceneNode]);
