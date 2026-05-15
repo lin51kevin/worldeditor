@@ -25,8 +25,8 @@ interface UseGeometryEditModeOptions {
   status: ViewportStatus;
 }
 
-function isDrawMode(mode: string): mode is 'spline' | 'line' | 'arc' | 'spiral' {
-  return mode === 'spline' || mode === 'line' || mode === 'arc' || mode === 'spiral';
+function isDrawMode(mode: string): mode is 'spline' {
+  return mode === 'spline';
 }
 
 /**

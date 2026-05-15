@@ -23,12 +23,12 @@ interface UseSplineDrawModeOptions {
   status: ViewportStatus;
 }
 
-function isDrawMode(mode: string): mode is 'spline' | 'line' | 'arc' | 'spiral' {
-  return mode === 'spline' || mode === 'line' || mode === 'arc' || mode === 'spiral';
+function isDrawMode(mode: string): mode is 'spline' {
+  return mode === 'spline';
 }
 
 /**
- * Encapsulates spline/line/arc/spiral draw-mode keyboard and pointer interaction.
+ * Encapsulates spline draw-mode keyboard and pointer interaction.
  */
 export function useSplineDrawMode({
   canvasRef,
@@ -42,7 +42,7 @@ export function useSplineDrawMode({
   const splineTangentOverrides = useEditorViewStore((state) => state.splineTangentOverrides);
   const splineTangentInOverrides = useEditorViewStore((state) => state.splineTangentInOverrides);
   const geometryEditSpline = useEditorViewStore((state) => state.geometryEditSpline);
-  const { finalizeSplineCreation, finalizeDrawGeometry } = useSplineOperations();
+  const { finalizeSplineCreation } = useSplineOperations();
 
   const syncCursor = useCallback((worldPos: WorldPosition) => {
     emitCursorMove(worldPos.x, worldPos.y);
@@ -102,17 +102,13 @@ export function useSplineDrawMode({
         event.preventDefault();
         if (viewState.editMode === 'spline') {
           void finalizeSplineCreation(undefined, 'parampoly3');
-        } else if (viewState.editMode === 'spiral') {
-          void finalizeSplineCreation(undefined, 'classify');
-        } else {
-          void finalizeDrawGeometry(viewState.editMode, viewState.splineKnots);
         }
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [finalizeDrawGeometry, finalizeSplineCreation]);
+  }, [finalizeSplineCreation]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
@@ -184,7 +180,7 @@ export function useSplineDrawMode({
           viewState.setSplineKnots(knots.map((knot, index) => (
             index === drag.index ? [worldPos.x, worldPos.y, knot[2]] : knot
           )));
-        } else if (viewState.editMode === 'spline' || viewState.editMode === 'spiral') {
+        } else if (viewState.editMode === 'spline') {
           // Use applyHandleDrag with broken tangent (Alt) and constraint (Shift) support
           const coupling = mouseEvent?.altKey ? 'broken' as const : viewState.tangentCoupling;
           const constraint: DragConstraint = inferConstraint(
@@ -241,7 +237,7 @@ export function useSplineDrawMode({
       viewState.splineKnots,
       renderer.getMetersPerPixel(),
       viewState.splineTangentOverrides,
-      viewState.editMode === 'spline' || viewState.editMode === 'spiral',
+      viewState.editMode === 'spline',
     );
     updateHoveredControlPoint(renderer, nextHover);
     canvas.style.cursor = nextHover ? 'grab' : 'crosshair';
@@ -267,7 +263,7 @@ export function useSplineDrawMode({
       viewState.splineKnots,
       renderer.getMetersPerPixel(),
       viewState.splineTangentOverrides,
-      viewState.editMode === 'spline' || viewState.editMode === 'spiral',
+      viewState.editMode === 'spline',
     );
     if (!bestHit) {
       return false;
@@ -300,7 +296,7 @@ export function useSplineDrawMode({
 
     // Tangent inheritance: if snapped to an endpoint, query the road's heading
     // and set as tangent override for this knot
-    if (useSnap && (viewState.editMode === 'spline' || viewState.editMode === 'spiral')) {
+    if (useSnap && viewState.editMode === 'spline') {
       void inheritTangentFromSnap(knotIndex, snap.targetId!, snap.contactPoint!);
     }
 
@@ -324,19 +320,8 @@ export function useSplineDrawMode({
       return true;
     }
 
-    if (viewState.editMode === 'spiral') {
-      if (nextKnots.length >= 2) {
-        await finalizeSplineCreation(nextKnots, 'classify');
-      }
-      return true;
-    }
-
-    const minPoints = viewState.editMode === 'arc' ? 3 : 2;
-    if (nextKnots.length >= minPoints) {
-      await finalizeDrawGeometry(viewState.editMode, nextKnots);
-    }
     return true;
-  }, [finalizeDrawGeometry, finalizeSplineCreation, inheritTangentFromSnap]);
+  }, [finalizeSplineCreation, inheritTangentFromSnap]);
 
   const handleSplineDrawMouseUp = useCallback((): boolean => {
     const viewState = useEditorViewStore.getState();
@@ -369,19 +354,13 @@ export function useSplineDrawMode({
       return false;
     }
     if (viewState.splineKnots.length >= 2) {
-      if (viewState.editMode === 'spline') {
-        void finalizeSplineCreation(undefined, 'parampoly3');
-      } else if (viewState.editMode === 'spiral') {
-        void finalizeSplineCreation(undefined, 'classify');
-      } else {
-        void finalizeDrawGeometry(viewState.editMode, viewState.splineKnots);
-      }
+      void finalizeSplineCreation(undefined, 'parampoly3');
     } else {
       // Not enough points — just cancel without creating a road
       viewState.clearSplineKnots();
     }
     return true;
-  }, [finalizeDrawGeometry, finalizeSplineCreation]);
+  }, [finalizeSplineCreation]);
 
   return {
     clearSplineDrawHover,

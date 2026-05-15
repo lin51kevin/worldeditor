@@ -2,10 +2,9 @@ import { useCallback, useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MousePointer,
-  Spline, Minus, Circle, Route,
+  Route,
 } from 'lucide-react';
 import { useEditorViewStore } from '../../stores/editorViewStore';
-import type { DrawMode } from '../../stores/editorViewStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
 import './Toolbar.css';
@@ -70,14 +69,6 @@ export function Toolbar() {
     document.body.style.userSelect = 'none';
   }, [tx, ty]);
 
-  const handleDrawMode = useCallback((mode: DrawMode) => {
-    setEditMode(mode);
-    clearSplineKnots();
-  }, [setEditMode, clearSplineKnots]);
-
-  // Subscribe so toolbar re-renders when selectedRoadId changes (used by plugin buttons that read selection state)
-  // Note: selectedRoadId is intentionally subscribed even if not directly referenced here
-
   const pluginModeButtons = toolbarButtons.filter((b) => b.group === 'mode');
   const pluginActionButtons = toolbarButtons.filter((b) => b.group === 'action');
 
@@ -121,42 +112,18 @@ export function Toolbar() {
         </>
       )}
 
-      {/* DrawMode group: line / arc / spline / spiral */}
+      {/* DrawMode group: spline */}
       <div className="toolbar-separator" />
       <div className="toolbar-group">
         <button
-          className={`toolbar-btn toolbar-toggle ${editMode === 'line' ? 'active' : ''}`}
-          onClick={() => handleDrawMode('line')}
-          title={t('toolbar.drawLineTitle')}
-        >
-          <Minus size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.drawLine')}</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${editMode === 'arc' ? 'active' : ''}`}
-          onClick={() => handleDrawMode('arc')}
-          title={t('toolbar.drawArcTitle')}
-        >
-          <Circle size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.drawArc')}</span>
-        </button>
-        <button
           className={`toolbar-btn toolbar-toggle ${editMode === 'spline' ? 'active' : ''}`}
-          onClick={() => handleDrawMode('spline')}
+          onClick={() => { setEditMode('spline'); clearSplineKnots(); }}
           title={t('toolbar.splineEditTitle')}
           aria-label={t('toolbar.splineEdit')}
           aria-pressed={editMode === 'spline'}
         >
-          <Route size={16}           className="tb-icon" />
+          <Route size={16} className="tb-icon" />
           <span className="tb-label">{t('toolbar.splineEdit')}</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${editMode === 'spiral' ? 'active' : ''}`}
-          onClick={() => handleDrawMode('spiral')}
-          title={t('toolbar.drawSpiralTitle')}
-        >
-          <Spline size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.drawSpiral')}</span>
         </button>
       </div>
 

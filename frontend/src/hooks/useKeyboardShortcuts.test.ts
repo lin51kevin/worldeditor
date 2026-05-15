@@ -61,21 +61,6 @@ describe('useKeyboardShortcuts — mode shortcuts', () => {
     renderHook(() => useKeyboardShortcuts(config));
   });
 
-  it('L → line draw mode', () => {
-    press('l');
-    expect(config.onSetEditMode).toHaveBeenCalledWith('line');
-  });
-
-  it('A → arc draw mode', () => {
-    press('a');
-    expect(config.onSetEditMode).toHaveBeenCalledWith('arc');
-  });
-
-  it('P → spiral draw mode', () => {
-    press('p');
-    expect(config.onSetEditMode).toHaveBeenCalledWith('spiral');
-  });
-
   it('S → spline draw mode', () => {
     press('s');
     expect(config.onSetEditMode).toHaveBeenCalledWith('spline');
@@ -91,11 +76,11 @@ describe('useKeyboardShortcuts — mode shortcuts', () => {
     expect(config.onSetEditMode).toHaveBeenCalledWith('rotate-road');
   });
 
-  it('uppercase variants work (L, A, P, S, M, R)', () => {
-    (['L', 'A', 'P', 'S', 'M', 'R'] as const).forEach((key) => {
+  it('uppercase variants work (S, M, R)', () => {
+    (['S', 'M', 'R'] as const).forEach((key) => {
       press(key);
     });
-    const modes: ActiveMode[] = ['line', 'arc', 'spiral', 'spline', 'move-road', 'rotate-road'];
+    const modes: ActiveMode[] = ['spline', 'move-road', 'rotate-road'];
     modes.forEach((mode) => {
       expect(config.onSetEditMode).toHaveBeenCalledWith(mode);
     });
@@ -164,14 +149,11 @@ describe('useKeyboardShortcuts — suppressed inside editable targets', () => {
   });
 });
 
-describe('useKeyboardShortcuts — L no longer toggles left panel', () => {
-  it('pressing L calls onSetEditMode, not toggleLeftPanel', () => {
+describe('useKeyboardShortcuts — L/A/P no longer set draw modes', () => {
+  it('pressing L does not call onSetEditMode', () => {
     const config = makeConfig();
     renderHook(() => useKeyboardShortcuts(config));
-
     press('l');
-
-    expect(config.onSetEditMode).toHaveBeenCalledWith('line');
-    expect(config.toggleLeftPanel).not.toHaveBeenCalled();
+    expect(config.onSetEditMode).not.toHaveBeenCalled();
   });
 });

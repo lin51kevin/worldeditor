@@ -2,12 +2,12 @@
  * useKeyboardShortcuts — centralised keyboard shortcut handler.
  *
  * Tool shortcuts:
- *   Drawing modes  — L (line) · A (arc) · P (spiral) · S (spline)
+ *   Drawing modes  — S (spline)
  *   Transform      — M (move-road, toggle) · R (rotate-road, toggle)
  *   Universal      — Escape (smart cancel) · Delete/Backspace (delete) · F (zoom-to-fit)
  *   Panels         — I (inspector) · Ctrl+B (left panel) · ? (help)
  *
- * Escape behaviour in draw modes (line/arc/spiral/spline):
+ * Escape behaviour in draw modes (spline):
  *   1st press — clears in-progress knots (cancels current stroke, stays in mode)
  *   2nd press — returns to default select mode
  */
@@ -155,21 +155,6 @@ export function useKeyboardShortcuts({
 
       // ── DrawMode shortcuts ────────────────────────────────────────────────
 
-      if (e.key === 'l' || e.key === 'L') {
-        e.preventDefault();
-        onSetEditMode('line');
-        return;
-      }
-      if (e.key === 'a' || e.key === 'A') {
-        e.preventDefault();
-        onSetEditMode('arc');
-        return;
-      }
-      if (e.key === 'p' || e.key === 'P') {
-        e.preventDefault();
-        onSetEditMode('spiral');
-        return;
-      }
       if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
         onSetEditMode('spline');

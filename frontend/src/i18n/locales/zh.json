@@ -115,13 +115,7 @@
     "snap": "吸附",
     "snapTitle": "开关吸附",
     "measure": "测量",
-    "measureTitle": "测量工具",
-    "drawLine": "直线",
-    "drawLineTitle": "绘制直线 (L)",
-    "drawArc": "圆弧",
-    "drawArcTitle": "绘制圆弧 (A)",
-    "drawSpiral": "回旋线",
-    "drawSpiralTitle": "绘制回旋线 (P)"
+    "measureTitle": "测量工具"
   },
   "statusBar": {
     "roads": "道路",
@@ -136,9 +130,6 @@
       "road": "道路编辑",
       "lane": "车道编辑",
       "lanesection": "车道簇编辑",
-      "line": "绘制直线 [L]",
-      "arc": "绘制圆弧 [A]",
-      "spiral": "绘制回旋线 [P]",
       "spline": "样条线 [S]",
       "move-road": "移动道路 [M]",
       "rotate-road": "旋转道路 [R]",
@@ -573,9 +564,6 @@
       "panels": "面板"
     },
     "keys": {
-      "drawLine": "绘制直线段",
-      "drawArc": "绘制圆弧",
-      "drawSpiral": "绘制回旋线（欧拉螺线）",
       "drawSpline": "绘制样条道路",
       "moveRoad": "移动道路",
       "rotateRoad": "旋转道路",

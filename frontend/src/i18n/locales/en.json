@@ -115,13 +115,7 @@
     "snap": "Snap",
     "snapTitle": "Toggle Snap",
     "measure": "Measure",
-    "measureTitle": "Measure Tool",
-    "drawLine": "Line",
-    "drawLineTitle": "Draw Line (L)",
-    "drawArc": "Arc",
-    "drawArcTitle": "Draw Arc (A)",
-    "drawSpiral": "Spiral",
-    "drawSpiralTitle": "Draw Spiral (P)"
+    "measureTitle": "Measure Tool"
   },
   "statusBar": {
     "roads": "Roads",
@@ -136,9 +130,6 @@
       "road": "Road Edit",
       "lane": "Lane Edit",
       "lanesection": "LaneSection Edit",
-      "line": "Draw Line [L]",
-      "arc": "Draw Arc [A]",
-      "spiral": "Draw Spiral [P]",
       "spline": "Spline [S]",
       "move-road": "Move Road [M]",
       "rotate-road": "Rotate Road [R]",
@@ -573,9 +564,6 @@
       "panels": "Panels"
     },
     "keys": {
-      "drawLine": "Draw line segment",
-      "drawArc": "Draw arc",
-      "drawSpiral": "Draw spiral (Euler)",
       "drawSpline": "Draw spline road",
       "moveRoad": "Move road",
       "rotateRoad": "Rotate road",

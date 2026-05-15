@@ -101,7 +101,7 @@ export function TemplatePanel() {
       viewStore.clearPendingTemplate();
       const current = viewStore.editMode;
       const inDrawMode =
-        current === 'spline' || current === 'line' || current === 'arc' || current === 'spiral';
+        current === 'spline';
       if (!inDrawMode) {
         viewStore.setEditMode('spline');
       } else {
@@ -164,7 +164,7 @@ export function TemplatePanel() {
           displayedItems.map((item) => {
             const isSelected = selectedTemplateId === item.id &&
               (!item.id.startsWith('tpl:jct:') || pendingTemplateId === item.id) &&
-              (!item.id.startsWith('tpl:road:') || editMode === 'spline' || editMode === 'line' || editMode === 'arc' || editMode === 'spiral');
+              (!item.id.startsWith('tpl:road:') || editMode === 'spline');
             const isPending = pendingTemplateId === item.id;
             return (
             <div

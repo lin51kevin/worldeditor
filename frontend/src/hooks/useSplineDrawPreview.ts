@@ -7,8 +7,8 @@ import type { ViewportRenderer } from '../viewport/renderer';
 
 type ViewportStatus = 'loading' | 'ready' | 'unsupported';
 
-function isDrawMode(mode: string): mode is 'spline' | 'line' | 'arc' | 'spiral' {
-  return mode === 'spline' || mode === 'line' || mode === 'arc' || mode === 'spiral';
+function isDrawMode(mode: string): mode is 'spline' {
+  return mode === 'spline';
 }
 
 /** Semi-transparent blue tint used for the draw-mode road preview. */
@@ -60,10 +60,9 @@ export function useSplineDrawPreview({
         const service = await getPlatformService();
         const PREVIEW_ROAD_ID = '__draw_preview__';
 
-        if (editMode === 'spline' || editMode === 'spiral') {
-          // Both spline and spiral modes go through the WASM spline pipeline.
-          // spline → ParamPoly3 output; spiral → classify (may produce Spiral/Arc/Line/ParamPoly3)
-          const splineMode = editMode === 'spline' ? 'parampoly3' : 'classify';
+        if (editMode === 'spline') {
+          // Spline mode goes through the WASM spline pipeline → ParamPoly3 output
+          const splineMode = 'parampoly3';
           const spline = buildEditableSpline(previewKnots);
           const wasmId = resolveWasmTemplateId(splineTemplateId);
 

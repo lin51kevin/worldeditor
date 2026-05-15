@@ -38,12 +38,9 @@ export function CommandPalette() {
       // Edit mode
       { id: 'mode-select', label: t('toolbar.select'), shortcut: 'V', category: 'Edit', action: () => setEditMode('default') },
       { id: 'mode-road', label: t('toolbar.road'), shortcut: 'R', category: 'Edit', action: () => setEditMode('road') },
-      { id: 'mode-spline', label: t('toolbar.splineEdit'), shortcut: 'P', category: 'Edit', action: () => setEditMode('spline') },
+      { id: 'mode-spline', label: t('toolbar.splineEdit'), shortcut: 'S', category: 'Edit', action: () => setEditMode('spline') },
       { id: 'mode-lane', label: t('toolbar.lane'), shortcut: 'L', category: 'Edit', action: () => setEditMode('lane') },
       { id: 'mode-lanesection', label: t('toolbar.laneSectionEdit'), shortcut: 'J', category: 'Edit', action: () => setEditMode('lanesection') },
-      { id: 'mode-draw-line', label: t('toolbar.drawLine'), shortcut: 'Shift+L', category: 'Edit', action: () => setEditMode('line') },
-      { id: 'mode-draw-arc', label: t('toolbar.drawArc'), shortcut: 'Shift+A', category: 'Edit', action: () => setEditMode('arc') },
-      { id: 'mode-draw-spiral', label: t('toolbar.drawSpiral'), shortcut: 'Shift+S', category: 'Edit', action: () => setEditMode('spiral') },
 
       // View mode
       { id: 'view-sketch', label: t('toolbar.sketch'), category: 'Display', action: () => setViewMode('sketch') },

@@ -87,30 +87,6 @@ export function useSplineOperations() {
     }
   }, []);
 
-  const finalizeDrawGeometry = useCallback(async (
-    mode: 'line' | 'arc' | 'spiral',
-    points: Array<[number, number, number]>,
-  ) => {
-    if (mode === 'spiral') {
-      // Spiral mode now uses the spline pipeline with classify output
-      if (points.length < 2) {
-        console.warn('[Viewport] spiral mode needs at least 2 points.');
-        return;
-      }
-      await finalizeSplineCreation(points, 'classify');
-      return;
-    }
-
-    const minPoints = mode === 'arc' ? 3 : 2;
-    if (points.length < minPoints) {
-      console.warn(`[Viewport] ${mode} mode needs at least ${minPoints} points.`);
-      return;
-    }
-
-    // Route line/arc through the spline pipeline with 'classify' for proper lane sections
-    await finalizeSplineCreation(points, 'classify');
-  }, [finalizeSplineCreation]);
-
   const enterGeometryEditMode = useCallback(async (roadId: string) => {
     const editorState = useEditorStore.getState();
     const road = editorState.project.roads.find((r) => r.id === roadId);
@@ -141,7 +117,6 @@ export function useSplineOperations() {
 
   return {
     finalizeSplineCreation,
-    finalizeDrawGeometry,
     enterGeometryEditMode,
     finalizeGeometryEdit,
   };

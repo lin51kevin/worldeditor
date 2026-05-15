@@ -121,7 +121,7 @@ export function App() {
         setEditMode('default');
       } else {
         setEditMode(mode);
-        if (mode === 'spline' || mode === 'line' || mode === 'arc' || mode === 'spiral') {
+        if (mode === 'spline') {
           clearSplineKnots();
         }
       }
@@ -130,7 +130,7 @@ export function App() {
       // In draw modes: 1st Escape clears in-progress knots (stays in mode),
       //               2nd Escape (no knots left) returns to default.
       // In all other modes: immediately return to default.
-      const drawModes = new Set(['line', 'arc', 'spiral', 'spline']);
+      const drawModes = new Set(['spline']);
       const { editMode: current, splineKnots } = useEditorViewStore.getState();
       if (drawModes.has(current) && splineKnots.length > 0) {
         clearSplineKnots();

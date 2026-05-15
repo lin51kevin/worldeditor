@@ -26,7 +26,7 @@ export type SelectMode = 'default' | 'road' | 'lane' | 'lanesection';
 /** Geometry manipulation modes (transform existing roads). */
 export type EditMode = 'move-road' | 'rotate-road' | 'adjust-edge' | 'road-markings';
 /** Road drawing / creation modes. */
-export type DrawMode = 'line' | 'arc' | 'spline' | 'spiral';
+export type DrawMode = 'spline';
 /** Union of all active-mode categories. */
 export type ActiveMode = SelectMode | EditMode | DrawMode;
 
