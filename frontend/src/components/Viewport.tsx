@@ -91,10 +91,7 @@ export function Viewport() {
     const onKeyDown = (event: KeyboardEvent) => {
       const viewState = useEditorViewStore.getState();
       const isDrawMode =
-        viewState.editMode === 'spline' ||
-        viewState.editMode === 'line' ||
-        viewState.editMode === 'arc' ||
-        viewState.editMode === 'spiral';
+        viewState.editMode === 'spline';
 
       if (event.key === 'Escape') {
         // Pending click-to-place mode takes priority — cancel it first
@@ -139,13 +136,27 @@ export function Viewport() {
   }>({ roadRefs: new Map(), junctionRefs: new Map() });
   const cachedSurfaceRef = useRef<Float32Array>(new Float32Array(0));
 
+  // Shared renderable project — cached per (project, display) to avoid duplicate
+  // computation in updateSurfaceMesh / updateLineMesh.
+  const visibleProjectRef = useRef<ReturnType<typeof buildRenderableProject> | null>(null);
+  const visibleProjectKeyRef = useRef<string>('');
+  const getVisibleProject = useCallback(() => {
+    const key = JSON.stringify({ d: display });
+    if (key !== visibleProjectKeyRef.current || !visibleProjectRef.current) {
+      visibleProjectKeyRef.current = key;
+      visibleProjectRef.current = project ? buildRenderableProject(project, display) : null;
+    }
+    return visibleProjectRef.current;
+  }, [project, display]);
+
   const updateSurfaceMesh = useCallback(async () => {
     const renderer = rendererRef.current;
     if (!renderer || status !== 'ready' || !project) return;
 
     try {
       const service = await getPlatformService();
-      const visibleProject = buildRenderableProject(project, display);
+      const visibleProject = getVisibleProject();
+      if (!visibleProject) return;
 
       // Detect whether any road/junction actually changed via reference equality.
       const prev = surfaceDepsRef.current;
@@ -213,7 +224,8 @@ export function Viewport() {
 
     try {
       const service = await getPlatformService();
-      const visibleProject = buildRenderableProject(project, display);
+      const visibleProject = getVisibleProject();
+      if (!visibleProject) return;
 
       const empty = Promise.resolve(new Float32Array(0));
       const centerLineProm = display.showReferenceLine
@@ -642,7 +654,7 @@ export function Viewport() {
     {
       const drawSnap = useEditorViewStore.getState().drawSnapResult;
       const snapEl = snapIndicatorDomRef.current;
-      const inDrawMode = viewState.editMode === 'spline' || viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral';
+      const inDrawMode = viewState.editMode === 'spline';
       if (drawSnap?.snapped && snapEl) {
         const screenPos = renderer.projectWorldToScreen(drawSnap.x, drawSnap.y);
         if (screenPos) {
@@ -702,9 +714,6 @@ export function Viewport() {
       viewState.editMode !== 'spline' &&
       viewState.editMode !== 'move-road' &&
       viewState.editMode !== 'rotate-road' &&
-      viewState.editMode !== 'line' &&
-      viewState.editMode !== 'arc' &&
-      viewState.editMode !== 'spiral' &&
       !viewState.geometryEditSpline &&
       !viewState.draggingKnot &&
       !rubberBandRef.current;
@@ -796,9 +805,6 @@ export function Viewport() {
     if (
       e.shiftKey &&
       viewState.editMode !== 'spline' &&
-      viewState.editMode !== 'line' &&
-      viewState.editMode !== 'arc' &&
-      viewState.editMode !== 'spiral' &&
       !viewState.geometryEditSpline
     ) {
       startRubberBand(e, renderer);
