@@ -5,7 +5,7 @@
   "build": {
     "frontendDist": "../frontend/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "cd ../frontend && yarn dev",
+    "beforeDevCommand": "cd ../frontend && yarn dev:tauri",
     "beforeBuildCommand": "cd ../frontend && yarn build"
   },
   "app": {
