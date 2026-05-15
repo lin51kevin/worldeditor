@@ -11,10 +11,10 @@ pub(super) fn gen_lane_strip(
     prev_widths: &[&[we_core::model::LaneWidth]],
     is_left: bool,
     color: [f32; 4],
-    eval_elev: &dyn Fn(&[we_core::model::Elevation], f64) -> f64,
-    eval_width: &dyn Fn(&[we_core::model::LaneWidth], f64) -> f64,
-    eval_lane_off: &dyn Fn(&[we_core::model::LaneOffset], f64) -> f64,
-    offset_pt: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
+    eval_elev: &impl Fn(&[we_core::model::Elevation], f64) -> f64,
+    eval_width: &impl Fn(&[we_core::model::LaneWidth], f64) -> f64,
+    eval_lane_off: &impl Fn(&[we_core::model::LaneOffset], f64) -> f64,
+    offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
 ) -> Vec<[f32; 7]> {
     let mut verts = Vec::new();
     let [r, g, b, a] = color;

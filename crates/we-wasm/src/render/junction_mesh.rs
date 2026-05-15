@@ -121,9 +121,9 @@ fn append_road_boundary_points(
     road: &we_core::model::Road,
     s: f64,
     points: &mut Vec<[f32; 3]>,
-    evaluate_elevation: &dyn Fn(&[we_core::model::Elevation], f64) -> f64,
-    evaluate_lane_width: &dyn Fn(&[we_core::model::LaneWidth], f64) -> f64,
-    offset_point: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
+    evaluate_elevation: &impl Fn(&[we_core::model::Elevation], f64) -> f64,
+    evaluate_lane_width: &impl Fn(&[we_core::model::LaneWidth], f64) -> f64,
+    offset_point: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
 ) {
     let Some(ref_pt) = road_point_at_s(&road.plan_view, s) else {
         return;

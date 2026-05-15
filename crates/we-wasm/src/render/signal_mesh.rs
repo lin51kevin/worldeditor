@@ -150,9 +150,6 @@ pub(super) fn sign_marker_color(signal_type: &str) -> [f32; 4] {
 
 // ── Object geometry helpers ───────────────────────────────────────────────────
 
-/// Function type for offsetting a reference line point by lateral (t) and vertical (z) offsets.
-type OffsetPtFn = dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64);
-
 /// Emit a transverse bar (stop line, yield line) perpendicular to the road direction.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn emit_transverse_bar(
@@ -162,7 +159,7 @@ pub(super) fn emit_transverse_bar(
     width: f64,     // lateral full-width
     thickness: f64, // along-road thickness
     color: [f32; 4],
-    offset_pt: &OffsetPtFn,
+    offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
     out: &mut Vec<f32>,
 ) {
     let [r, g, b, a] = color;
@@ -214,7 +211,7 @@ pub(super) fn emit_square_marker(
     z: f32,
     size: f64,
     color: [f32; 4],
-    offset_pt: &OffsetPtFn,
+    offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
     out: &mut Vec<f32>,
 ) {
     // Treat the square as a transverse bar with equal width and thickness
@@ -236,7 +233,7 @@ pub(super) fn emit_rect_outline(
     bar_thickness: f64,
     color: [f32; 4],
     obj_hdg: f64,
-    offset_pt: &OffsetPtFn,
+    offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
     out: &mut Vec<f32>,
 ) {
     let half_l = length / 2.0;
@@ -416,7 +413,7 @@ pub(super) fn emit_crosswalk_stripes(
     obj_t: f64,
     obj_hdg: f64,
     _z_base: f32,
-    offset_pt: &OffsetPtFn,
+    offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
     angle_deg: f64,
     line_width: f64,
     line_gap: f64,
@@ -578,7 +575,7 @@ pub(super) fn emit_polygon_outline(
     _z_base: f32,
     bar_thickness: f64,
     color: [f32; 4],
-    offset_pt: &OffsetPtFn,
+    offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
     out: &mut Vec<f32>,
     obj_length: f64,
     obj_width: f64,
@@ -662,8 +659,8 @@ pub(super) fn emit_polygon_outline_road_corners(
     elevations: &[we_core::model::Elevation],
     bar_thickness: f64,
     color: [f32; 4],
-    offset_pt: &OffsetPtFn,
-    road_point_at_s: &dyn Fn(&[we_core::model::Geometry], f64) -> Option<we_core::geometry::eval::RefLinePoint>,
+    offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
+    road_point_at_s: &impl Fn(&[we_core::model::Geometry], f64) -> Option<we_core::geometry::eval::RefLinePoint>,
     out: &mut Vec<f32>,
 ) {
     use we_core::geometry::eval::evaluate_elevation;
@@ -725,8 +722,8 @@ pub(super) fn emit_longitudinal_strip(
     length: f64,
     half_w: f64,
     color: [f32; 4],
-    eval_elev: &dyn Fn(&[we_core::model::Elevation], f64) -> f64,
-    offset_pt: &OffsetPtFn,
+    eval_elev: &impl Fn(&[we_core::model::Elevation], f64) -> f64,
+    offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
     out: &mut Vec<f32>,
 ) {
     let [r, g, b, a] = color;
@@ -797,7 +794,7 @@ mod tests {
         ];
         let elevations: Vec<Elevation> = vec![];
         let mut out = Vec::new();
-        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+        let offset_fn = &offset_pt_flat;
 
         emit_crosswalk_stripes(&corners, &ref_pts[9], &elevations, 9.0, 0.0, 0.0, 0.0, offset_fn, 0.0, 0.0, 0.0, 4.0, 2.0, &mut out);
 
@@ -832,7 +829,7 @@ mod tests {
         ];
         let elevations: Vec<Elevation> = vec![];
         let mut out = Vec::new();
-        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+        let offset_fn = &offset_pt_flat;
 
         // length=0, width=0 → apply hdg rotation
         emit_crosswalk_stripes(
@@ -873,7 +870,7 @@ mod tests {
         ];
         let elevations: Vec<Elevation> = vec![];
         let mut out = Vec::new();
-        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+        let offset_fn = &offset_pt_flat;
 
         // length=3.64, width=10.99 → don't apply hdg rotation
         emit_crosswalk_stripes(
@@ -915,7 +912,7 @@ mod tests {
             })
             .collect();
         let elevations: Vec<Elevation> = vec![];
-        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+        let offset_fn = &offset_pt_flat;
 
         // Space 50: s=0.81, v_span(3.45) > u_span(2.27), hdg=π/2
         let corners_50 = vec![
@@ -978,7 +975,7 @@ mod tests {
             })
             .collect();
         let elevations: Vec<Elevation> = vec![];
-        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+        let offset_fn = &offset_pt_flat;
 
         // Space at s=4.57: u∈[-3.156, 2.094] (uSpan=5.25), v∈[-1.491, 0.994] (vSpan=2.485)
         // uSpan > vSpan → rotation applied.  alpha = -v ∈ [-0.994, 1.491]
@@ -1040,7 +1037,7 @@ mod tests {
             })
             .collect();
         let elevations: Vec<Elevation> = vec![];
-        let offset_fn: &dyn Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64) = &offset_pt_flat;
+        let offset_fn = &offset_pt_flat;
 
         // Space 58 (Road 10): u∈[-0.68, 2.75] (u_span=3.43), v∈[-1.16, 1.18] (v_span=2.34)
         // u_span > v_span, but length=0 width=0 → road-frame → NO rotation.

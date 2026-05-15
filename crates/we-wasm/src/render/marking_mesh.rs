@@ -13,7 +13,7 @@ pub(super) fn emit_road_mark(
     elevations: &[we_core::model::Elevation],
     section_s: f64,
     lane_offsets: &[we_core::model::LaneOffset],
-    lateral_offset_at_ds: &dyn Fn(f64) -> f64,
+    lateral_offset_at_ds: &(impl Fn(f64) -> f64 + ?Sized),
     out: &mut Vec<f32>,
 ) {
     use we_core::geometry::eval::{evaluate_elevation, offset_point};
@@ -162,13 +162,13 @@ pub(super) fn gen_road_mark_line(
     elevations: &[we_core::model::Elevation],
     section_s: f64,
     lane_offsets: &[we_core::model::LaneOffset],
-    lateral_offset_at_ds: &dyn Fn(f64) -> f64,
+    lateral_offset_at_ds: &(impl Fn(f64) -> f64 + ?Sized),
     line_width: f32,
     color: [f32; 4],
     is_dashed: bool,
-    eval_elev: &dyn Fn(&[we_core::model::Elevation], f64) -> f64,
-    eval_lane_off: &dyn Fn(&[we_core::model::LaneOffset], f64) -> f64,
-    offset_pt: &dyn Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
+    eval_elev: &impl Fn(&[we_core::model::Elevation], f64) -> f64,
+    eval_lane_off: &impl Fn(&[we_core::model::LaneOffset], f64) -> f64,
+    offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
 ) -> Vec<[f32; 7]> {
     let mut verts = Vec::new();
     let z_lift = 0.015f32; // 15mm above road surface (matches C# RoadMarkConfig)

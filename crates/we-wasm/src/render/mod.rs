@@ -109,7 +109,7 @@ fn mark_line_width(rm: &we_core::model::RoadMark) -> f32 {
 fn sum_widths_at_ds(
     widths_list: &[&[we_core::model::LaneWidth]],
     ds: f64,
-    eval: &dyn Fn(&[we_core::model::LaneWidth], f64) -> f64,
+    eval: &impl Fn(&[we_core::model::LaneWidth], f64) -> f64,
 ) -> f64 {
     widths_list.iter().map(|w| eval(w, ds)).sum()
 }
@@ -701,6 +701,12 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
             continue;
         }
 
+        // Junction connector roads inherit objectReference associations but
+        // should not render traffic-control markings — those are defined once
+        // on the approach road and would appear with incorrect orientation on
+        // the connector's tangent.
+        let is_junction_connector = matches!(&road.junction_id, Some(j) if j != "-1");
+
         for obj in &road.objects {
             let s = obj.position.x;
             let t = obj.position.y;
@@ -711,6 +717,17 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
             // extrapolates the road geometry by tangent extension.
             if s < -1.0 {
                 continue;
+            }
+
+            // Skip traffic-control markings on junction connectors.
+            if is_junction_connector {
+                match &obj.object_type {
+                    ObjectType::Crosswalk
+                    | ObjectType::StopLine
+                    | ObjectType::SlowDownToYieldLine
+                    | ObjectType::StopToYieldLine => continue,
+                    _ => {}
+                }
             }
 
             // Find reference line point at object s-coordinate
