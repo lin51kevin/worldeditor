@@ -1,11 +1,9 @@
 /**
  * plugin-io-signals: JSON signal import + HD Map XML export plugin.
  */
-import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { Project } from '../services/platform';
 import { downloadBlob } from '../utils/download';
-
-const PLUGIN_ID = 'io-signals';
+import { createIOPlugin } from './ioPluginFactory';
 
 async function importSignals(content: string | ArrayBuffer): Promise<Project> {
   const text = typeof content === 'string' ? content : new TextDecoder().decode(content);
@@ -53,10 +51,16 @@ function exportHdMapXml(project: Project): Promise<void> {
   return Promise.resolve();
 }
 
-export function mountIoSignalsPlugin(): () => void {
-  const { registerImporter, registerExporter, unregisterPlugin } = usePluginContribStore.getState();
-  // Importer is disabled: JSON signal data cannot yet be merged into a project.
-  registerImporter({ id: `${PLUGIN_ID}:importer`, pluginId: PLUGIN_ID, formatName: 'Signal JSON', extensions: ['.json'], disabled: true, onImport: importSignals });
-  registerExporter({ id: `${PLUGIN_ID}:exporter`, pluginId: PLUGIN_ID, formatName: 'HD Map XML', onExport: exportHdMapXml });
-  return () => unregisterPlugin(PLUGIN_ID);
-}
+export const mountIoSignalsPlugin = createIOPlugin({
+  pluginId: 'io-signals',
+  importer: {
+    formatName: 'Signal JSON',
+    extensions: ['.json'],
+    disabled: true,
+    onImport: importSignals,
+  },
+  exporter: {
+    formatName: 'HD Map XML',
+    onExport: exportHdMapXml,
+  },
+});

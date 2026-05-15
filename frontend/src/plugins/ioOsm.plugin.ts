@@ -2,11 +2,9 @@
  * plugin-io-osm: OpenStreetMap XML export plugin.
  * Export only — generates OSM XML from road network data.
  */
-import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { Project } from '../services/platform';
 import { downloadBlob } from '../utils/download';
-
-const PLUGIN_ID = 'io-osm';
+import { createIOPlugin } from './ioPluginFactory';
 
 function escapeXml(str: string): string {
   return str
@@ -81,8 +79,10 @@ function exportToOsm(project: Project): Promise<void> {
   return Promise.resolve();
 }
 
-export function mountIoOsmPlugin(): () => void {
-  const { registerExporter, unregisterPlugin } = usePluginContribStore.getState();
-  registerExporter({ id: `${PLUGIN_ID}:exporter`, pluginId: PLUGIN_ID, formatName: 'OpenStreetMap XML', onExport: exportToOsm });
-  return () => unregisterPlugin(PLUGIN_ID);
-}
+export const mountIoOsmPlugin = createIOPlugin({
+  pluginId: 'io-osm',
+  exporter: {
+    formatName: 'OpenStreetMap XML',
+    onExport: exportToOsm,
+  },
+});

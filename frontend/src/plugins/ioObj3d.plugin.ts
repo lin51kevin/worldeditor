@@ -2,11 +2,9 @@
  * plugin-io-obj3d: Wavefront OBJ 3D mesh export plugin.
  * Export only — roads are tessellated into triangulated quad-strips.
  */
-import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { Project, Road } from '../services/platform';
 import { downloadBlob } from '../utils/download';
-
-const PLUGIN_ID = 'io-obj3d';
+import { createIOPlugin } from './ioPluginFactory';
 
 function computeRoadWidth(road: Road): number {
   const ls = road.lane_sections?.[0];
@@ -91,13 +89,10 @@ function exportToObj(project: Project): Promise<void> {
   return Promise.resolve();
 }
 
-export function mountIoObj3dPlugin(): () => void {
-  const { registerExporter, unregisterPlugin } = usePluginContribStore.getState();
-  registerExporter({
-    id: `${PLUGIN_ID}:exporter`,
-    pluginId: PLUGIN_ID,
+export const mountIoObj3dPlugin = createIOPlugin({
+  pluginId: 'io-obj3d',
+  exporter: {
     formatName: 'Wavefront OBJ 3D',
     onExport: exportToObj,
-  });
-  return () => unregisterPlugin(PLUGIN_ID);
-}
+  },
+});

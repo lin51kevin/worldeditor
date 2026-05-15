@@ -6,11 +6,9 @@
  * Export: writes road geometry as CSV.
  */
 
-import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { Project } from '../services/platform';
 import { downloadBlob } from '../utils/download';
-
-const PLUGIN_ID = 'io-csv';
+import { createIOPlugin } from './ioPluginFactory';
 
 function parseCsvToProject(content: string | ArrayBuffer): Promise<Project> {
   const text = typeof content === 'string' ? content : new TextDecoder().decode(content);
@@ -76,24 +74,15 @@ function exportProjectToCsv(project: Project): Promise<void> {
   return Promise.resolve();
 }
 
-export function mountIoCsvPlugin(): () => void {
-  const { registerImporter, registerExporter, unregisterPlugin } =
-    usePluginContribStore.getState();
-
-  registerImporter({
-    id: `${PLUGIN_ID}:importer`,
-    pluginId: PLUGIN_ID,
+export const mountIoCsvPlugin = createIOPlugin({
+  pluginId: 'io-csv',
+  importer: {
     formatName: 'CSV Coordinates',
     extensions: ['.csv', '.txt'],
-    onImport: (content, _fileName) => parseCsvToProject(content),
-  });
-
-  registerExporter({
-    id: `${PLUGIN_ID}:exporter`,
-    pluginId: PLUGIN_ID,
+    onImport: (content) => parseCsvToProject(content),
+  },
+  exporter: {
     formatName: 'CSV Coordinates',
     onExport: exportProjectToCsv,
-  });
-
-  return () => unregisterPlugin(PLUGIN_ID);
-}
+  },
+});
