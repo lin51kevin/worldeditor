@@ -2,7 +2,7 @@ import { useCallback, useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MousePointer,
-  Spline, Minus, Circle, Waves,
+  Spline, Minus, Circle, Route,
 } from 'lucide-react';
 import { useEditorViewStore } from '../../stores/editorViewStore';
 import type { DrawMode } from '../../stores/editorViewStore';
@@ -147,7 +147,7 @@ export function Toolbar() {
           aria-label={t('toolbar.splineEdit')}
           aria-pressed={editMode === 'spline'}
         >
-          <Spline size={16} className="tb-icon" />
+          <Route size={16}           className="tb-icon" />
           <span className="tb-label">{t('toolbar.splineEdit')}</span>
         </button>
         <button
@@ -155,7 +155,7 @@ export function Toolbar() {
           onClick={() => handleDrawMode('spiral')}
           title={t('toolbar.drawSpiralTitle')}
         >
-          <Waves size={16} className="tb-icon" />
+          <Spline size={16} className="tb-icon" />
           <span className="tb-label">{t('toolbar.drawSpiral')}</span>
         </button>
       </div>

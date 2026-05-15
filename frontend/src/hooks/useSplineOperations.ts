@@ -2,12 +2,6 @@ import { useCallback } from 'react';
 import { useEditorStore } from '../stores/editorStore';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { getPlatformService } from '../services';
-import {
-  buildMultiLineGeometries,
-  buildMultiArcGeometries,
-  buildMultiSpiralGeometries,
-  buildRoadFromGeometries,
-} from '../utils/geometryBuilder';
 import { buildEditableSpline, nextSplineRoadId } from '../components/viewportUtils';
 
 /**
@@ -32,7 +26,10 @@ export function resolveWasmTemplateId(templateId: string): string {
  * Encapsulates spline/geometry creation and geometry-edit mode callbacks.
  */
 export function useSplineOperations() {
-  const finalizeSplineCreation = useCallback(async (overrideKnots?: Array<[number, number, number]>) => {
+  const finalizeSplineCreation = useCallback(async (
+    overrideKnots?: Array<[number, number, number]>,
+    splineMode: 'classify' | 'parampoly3' = 'parampoly3',
+  ) => {
     const viewState = useEditorViewStore.getState();
     const knots = overrideKnots ?? viewState.splineKnots;
     if (knots.length < 2) {
@@ -51,9 +48,34 @@ export function useSplineOperations() {
         roadId,
         spline,
         wasmTemplateId,
+        splineMode,
       );
       const newRoad = nextProject.roads.find((r) => r.id === roadId);
       if (newRoad) {
+        // Apply road links from snapped endpoints
+        const snappedEndpoints = viewState.snappedEndpoints.filter(Boolean) as Array<{ knotIndex: number; roadId: string; contactPoint: string }>;
+        if (snappedEndpoints.length > 0) {
+          const firstSnap = snappedEndpoints.find((s) => s.knotIndex === 0);
+          const lastKnotIndex = knots.length - 1;
+          const lastSnap = snappedEndpoints.find((s) => s.knotIndex === lastKnotIndex);
+
+          const link = { ...(newRoad.link ?? { predecessor: null, successor: null }) };
+          if (firstSnap) {
+            link.predecessor = {
+              element_id: firstSnap.roadId,
+              element_type: 'Road',
+              contact_point: firstSnap.contactPoint as 'Start' | 'End',
+            };
+          }
+          if (lastSnap) {
+            link.successor = {
+              element_id: lastSnap.roadId,
+              element_type: 'Road',
+              contact_point: lastSnap.contactPoint as 'Start' | 'End',
+            };
+          }
+          newRoad.link = link;
+        }
         editorState.addRoad(newRoad);
       }
       editorState.selectRoad(roadId);
@@ -69,8 +91,15 @@ export function useSplineOperations() {
     mode: 'line' | 'arc' | 'spiral',
     points: Array<[number, number, number]>,
   ) => {
-    const editorState = useEditorStore.getState();
-    const viewState = useEditorViewStore.getState();
+    if (mode === 'spiral') {
+      // Spiral mode now uses the spline pipeline with classify output
+      if (points.length < 2) {
+        console.warn('[Viewport] spiral mode needs at least 2 points.');
+        return;
+      }
+      await finalizeSplineCreation(points, 'classify');
+      return;
+    }
 
     const minPoints = mode === 'arc' ? 3 : 2;
     if (points.length < minPoints) {
@@ -78,27 +107,9 @@ export function useSplineOperations() {
       return;
     }
 
-    const roadId = nextSplineRoadId(editorState.project.roads.map((r) => r.id));
-
-    let geometries;
-    if (mode === 'line') {
-      geometries = buildMultiLineGeometries(points);
-    } else if (mode === 'arc') {
-      geometries = buildMultiArcGeometries(points);
-    } else {
-      geometries = buildMultiSpiralGeometries(points);
-    }
-
-    if (geometries.length === 0) {
-      console.warn(`[Viewport] ${mode} produced no geometry segments from ${points.length} points.`);
-      return;
-    }
-
-    const road = buildRoadFromGeometries(roadId, geometries);
-    editorState.addRoad(road);
-    editorState.selectRoad(roadId);
-    viewState.clearSplineKnots();
-  }, []);
+    // Route line/arc through the spline pipeline with 'classify' for proper lane sections
+    await finalizeSplineCreation(points, 'classify');
+  }, [finalizeSplineCreation]);
 
   const enterGeometryEditMode = useCallback(async (roadId: string) => {
     const editorState = useEditorStore.getState();

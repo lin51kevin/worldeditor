@@ -743,10 +743,11 @@ export class ViewportRenderer {
               world.y,
               this.markerRenderer.knots,
               this.markerRenderer.tangentOverrides,
+              {},
             );
-            this.markerRenderer.setTangentOverrides(newOverrides);
+            this.markerRenderer.setTangentOverrides(newOverrides.out);
             const idx = this.activeDragHandle.index;
-            const tangent = newOverrides[idx];
+            const tangent = newOverrides.out[idx];
             if (tangent) this.onTangentChanged?.(idx, tangent);
             const mpp = this.getMetersPerPixel();
             this.markerRenderer.refreshSplineCurve(mpp);

@@ -1,3 +1,5 @@
+import { computeHandleScale } from './tangentHandleController';
+
 /**
  * Pure functions that generate spline curve and control-point marker vertices.
  * Used by ViewportRenderer to render spline overlays.
@@ -114,6 +116,7 @@ export function buildSplineMarkerVertices(
   clearColor: { r: number; g: number; b: number },
   hovered: ControlPointState | null,
   selected: ControlPointState | null,
+  tangentInOverrides?: Readonly<Record<number, readonly [number, number, number]>>,
 ): number[] {
   if (knots.length === 0) return [];
 
@@ -146,12 +149,26 @@ export function buildSplineMarkerVertices(
   if (knots.length >= 2) {
     for (let i = 0; i < knots.length; i++) {
       const [kx, ky] = knots[i]!;
-      const [tvx, tvy] = tangentAt(knots, i, tangentOverrides);
+      const outTangent = tangentAt(knots, i, tangentOverrides);
+      const [tvx, tvy] = outTangent;
       const tLen = Math.hypot(tvx, tvy);
       if (tLen < 1e-6) continue;
-      const scale = Math.min(4.0 / tLen, 0.3);
+      const scale = computeHandleScale(tLen, mpp);
       const hx1 = kx + tvx * scale, hy1 = ky + tvy * scale; // 'out' handle
-      const hx2 = kx - tvx * scale, hy2 = ky - tvy * scale; // 'in'  handle
+
+      // In-tangent: use independent override if present, otherwise mirror the out-tangent
+      let hx2: number, hy2: number;
+      if (tangentInOverrides && i in tangentInOverrides) {
+        const [inx, iny] = tangentInOverrides[i]!;
+        const inLen = Math.hypot(inx, iny);
+        const inScale = inLen > 1e-6 ? computeHandleScale(inLen, mpp) : scale;
+        // in-tangent stored as outgoing direction, display inverted
+        hx2 = kx - inx * inScale;
+        hy2 = ky - iny * inScale;
+      } else {
+        hx2 = kx - tvx * scale;
+        hy2 = ky - tvy * scale;
+      }
 
       // Yellow tangent line
       emitSegment(markerVerts, hx2, hy2, hx1, hy1, handleZ - 0.01, lineHW, ...colYellow);

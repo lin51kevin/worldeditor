@@ -33,7 +33,8 @@ declare module '../../wasm/pkg/we_wasm' {
   export function smooth_elevation(project_json: string, road_id: string, iterations: number): string;
 
   // Snapping
-  export function snap_point(project_json: string, x: number, y: number, config_json: string, exclude_road_id?: string): { x: number; y: number; snapped: boolean; snap_type: string; target_id: string | null };
+  export function snap_point(project_json: string, x: number, y: number, config_json: string, exclude_road_id?: string): { x: number; y: number; snapped: boolean; snap_type: string; target_id: string | null; contact_point: string | null };
+  export function get_road_endpoint_tangent(project_json: string, road_id: string, contact_point: string): { x: number; y: number; hdg: number } | null;
 
   // Measurement
   export function measure_distance(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number): { straight: number; horizontal: number; vertical: number };
@@ -45,8 +46,8 @@ declare module '../../wasm/pkg/we_wasm' {
   export function get_road_templates(): Array<{ id: string; name: string; left_lanes: number; right_lanes: number; lane_width: number }>;
 
   // Spline editing
-  export function create_road_from_spline(project_json: string, road_id: string, spline_json: string, template_id: string): string;
+  export function create_road_from_spline(project_json: string, road_id: string, spline_json: string, template_id: string, mode: string): string;
   export function road_to_spline(road_json: string, sample_step: number): string;
   export function move_spline_knot(spline_json: string, knot_index: number, x: number, y: number, z: number): string;
-  export function spline_to_geometries(spline_json: string): string;
+  export function spline_to_geometries(spline_json: string, mode: string): string;
 }

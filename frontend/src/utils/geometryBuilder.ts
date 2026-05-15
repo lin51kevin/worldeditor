@@ -86,7 +86,10 @@ export function buildArcGeometry(
   };
 }
 
-/** Build a Spiral (clothoid) geometry from two points with curvature endpoints. */
+/**
+ * Build a Spiral (clothoid) geometry from two points with curvature endpoints.
+ * @deprecated Spiral drawing now uses the WASM spline pipeline with classify mode.
+ */
 export function buildSpiralGeometry(
   p0: [number, number, number],
   p1: [number, number, number],
@@ -199,6 +202,7 @@ export function buildMultiArcGeometries(
 /**
  * Build N-1 Spiral geometry segments from N control points.
  * Returns segments with cumulative `s` values.
+ * @deprecated Spiral drawing now uses the WASM spline pipeline with classify mode.
  */
 export function buildMultiSpiralGeometries(
   points: Array<[number, number, number]>,

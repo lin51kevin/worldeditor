@@ -11,7 +11,7 @@
 import type {
   GisCoord, UtmCoord,
   PlatformService, Project, Road, RoadTemplate,
-  ElevationQueryResult, SnapConfig, SnapResult,
+  ElevationQueryResult, SnapConfig, SnapResult, EndpointTangent,
   DistanceMeasurement, AngleMeasurement, AreaMeasurement, EditableSpline,
   Geometry,
 } from './platform';
@@ -197,6 +197,11 @@ export abstract class BasePlatformService implements PlatformService {
     );
   }
 
+  async getRoadEndpointTangent(project: Project, roadId: string, contactPoint: string): Promise<EndpointTangent | null> {
+    const wasm = await this.getWasm();
+    return wasm.get_road_endpoint_tangent(JSON.stringify(project), roadId, contactPoint);
+  }
+
   // --- Measurement ---
 
   async measureDistance(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number): Promise<DistanceMeasurement> {
@@ -228,10 +233,10 @@ export abstract class BasePlatformService implements PlatformService {
 
   // --- Spline operations ---
 
-  async createRoadFromSpline(project: Project, roadId: string, spline: EditableSpline, templateId: string): Promise<Project> {
+  async createRoadFromSpline(project: Project, roadId: string, spline: EditableSpline, templateId: string, mode: 'classify' | 'parampoly3' = 'classify'): Promise<Project> {
     const wasm = await this.getWasm();
     const json = await wasm.create_road_from_spline(
-      JSON.stringify(project), roadId, JSON.stringify(spline), templateId,
+      JSON.stringify(project), roadId, JSON.stringify(spline), templateId, mode,
     );
     return JSON.parse(json) as Project;
   }
@@ -248,9 +253,9 @@ export abstract class BasePlatformService implements PlatformService {
     return JSON.parse(json) as EditableSpline;
   }
 
-  async splineToGeometries(spline: EditableSpline): Promise<Geometry[]> {
+  async splineToGeometries(spline: EditableSpline, mode: 'classify' | 'parampoly3' = 'classify'): Promise<Geometry[]> {
     const wasm = await this.getWasm();
-    const json = wasm.spline_to_geometries(JSON.stringify(spline));
+    const json = wasm.spline_to_geometries(JSON.stringify(spline), mode);
     return JSON.parse(json) as Geometry[];
   }
 }

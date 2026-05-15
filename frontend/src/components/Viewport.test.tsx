@@ -201,6 +201,7 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     generateSingleObjectVertices: vi.fn().mockResolvedValue(new Float32Array()),
     getSignalWorldPos: vi.fn().mockResolvedValue(null),
     getObjectWorldPos: vi.fn().mockResolvedValue(null),
+    getRoadEndpointTangent: vi.fn().mockResolvedValue(null),
   };
 }
 

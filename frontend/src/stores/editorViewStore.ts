@@ -5,6 +5,9 @@ import type { SnapType, DistanceMeasurement, AngleMeasurement, AreaMeasurement, 
 
 export type MeasureMode = 'none' | 'distance' | 'angle' | 'area';
 
+/** Controls whether in/out tangent handles are mirrored or independent. */
+export type TangentCoupling = 'mirror' | 'broken';
+
 export interface MeasurePoint {
   x: number;
   y: number;
@@ -111,6 +114,10 @@ interface EditorViewState {
   pendingTemplateId: string | null;
   splineKnots: Array<[number, number, number]>;
   splineTangentOverrides: Record<number, [number, number, number]>;
+  /** Independent in-tangent overrides (broken tangent mode only). */
+  splineTangentInOverrides: Record<number, [number, number, number]>;
+  /** Whether in/out tangent handles are mirrored or independent. */
+  tangentCoupling: TangentCoupling;
 
   // Spline knot dragging
   draggingKnot: { index: number; type: 'knot' | 'in' | 'out' } | null;
@@ -132,6 +139,11 @@ interface EditorViewState {
   snapMode: SnapType;
   snapThreshold: number;
   gridSnapSize: number;
+
+  // Draw-mode endpoint snap (real-time snap feedback while drawing)
+  drawSnapResult: { x: number; y: number; snapped: boolean; snapType: SnapType; targetId: string | null; contactPoint: string | null } | null;
+  /** Snapped endpoints for each knot index (null entries = no snap at that knot). */
+  snappedEndpoints: Array<{ knotIndex: number; roadId: string; contactPoint: string } | null>;
 
   // Measurement
   measureMode: MeasureMode;
@@ -163,7 +175,9 @@ interface EditorViewState {
   setDraggingKnot: (info: { index: number; type: 'knot' | 'in' | 'out' } | null) => void;
   setCursorPreviewPos: (pos: [number, number, number] | null) => void;
   setSplineTangentOverride: (index: number, tangent: [number, number, number]) => void;
+  setSplineTangentInOverride: (index: number, tangent: [number, number, number]) => void;
   clearSplineTangentOverrides: () => void;
+  setTangentCoupling: (coupling: TangentCoupling) => void;
   setViewMode: (m: 'sketch' | 'wire' | 'solid') => void;
 
   // Snapping actions
@@ -171,6 +185,11 @@ interface EditorViewState {
   setSnapMode: (mode: SnapType) => void;
   setSnapThreshold: (threshold: number) => void;
   setGridSnapSize: (size: number) => void;
+
+  // Draw-mode endpoint snap actions
+  setDrawSnapResult: (result: { x: number; y: number; snapped: boolean; snapType: SnapType; targetId: string | null; contactPoint: string | null } | null) => void;
+  addSnappedEndpoint: (entry: { knotIndex: number; roadId: string; contactPoint: string }) => void;
+  clearDrawSnap: () => void;
 
   // Measurement actions
   setMeasureMode: (mode: MeasureMode) => void;
@@ -273,6 +292,8 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   pendingTemplateId: null,
   splineKnots: [],
   splineTangentOverrides: {},
+  splineTangentInOverrides: {},
+  tangentCoupling: 'mirror' as TangentCoupling,
   draggingKnot: null,
   cursorPreviewPos: null,
   viewMode: 'solid',
@@ -282,6 +303,8 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   snapMode: 'Grid' as SnapType,
   snapThreshold: 5.0,
   gridSnapSize: 1.0,
+  drawSnapResult: null,
+  snappedEndpoints: [],
   measureMode: 'none' as MeasureMode,
   measurePoints: [],
   lastMeasurement: null,
@@ -301,12 +324,15 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
     set((state) => ({ splineKnots: [...state.splineKnots, knot] })),
   popSplineKnot: () =>
     set((state) => ({ splineKnots: state.splineKnots.slice(0, -1) })),
-  clearSplineKnots: () => set({ splineKnots: [], splineTangentOverrides: {}, draggingKnot: null, cursorPreviewPos: null }),
+  clearSplineKnots: () => set({ splineKnots: [], splineTangentOverrides: {}, splineTangentInOverrides: {}, draggingKnot: null, cursorPreviewPos: null, drawSnapResult: null, snappedEndpoints: [] }),
   setDraggingKnot: (draggingKnot) => set({ draggingKnot }),
   setCursorPreviewPos: (cursorPreviewPos) => set({ cursorPreviewPos }),
   setSplineTangentOverride: (index, tangent) =>
     set((state) => ({ splineTangentOverrides: { ...state.splineTangentOverrides, [index]: tangent } })),
-  clearSplineTangentOverrides: () => set({ splineTangentOverrides: {} }),
+  setSplineTangentInOverride: (index, tangent) =>
+    set((state) => ({ splineTangentInOverrides: { ...state.splineTangentInOverrides, [index]: tangent } })),
+  clearSplineTangentOverrides: () => set({ splineTangentOverrides: {}, splineTangentInOverrides: {} }),
+  setTangentCoupling: (tangentCoupling) => set({ tangentCoupling }),
   setViewMode: (viewMode) => set({ viewMode }),
 
   // Snapping actions
@@ -314,6 +340,13 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   setSnapMode: (snapMode) => set({ snapMode }),
   setSnapThreshold: (snapThreshold) => set({ snapThreshold: Math.max(0.1, snapThreshold) }),
   setGridSnapSize: (gridSnapSize) => set({ gridSnapSize: Math.max(0.01, gridSnapSize) }),
+
+  // Draw-mode endpoint snap actions
+  setDrawSnapResult: (drawSnapResult) => set({ drawSnapResult }),
+  addSnappedEndpoint: (entry) => set((state) => ({
+    snappedEndpoints: [...state.snappedEndpoints, entry],
+  })),
+  clearDrawSnap: () => set({ drawSnapResult: null, snappedEndpoints: [] }),
 
   // Measurement actions
   setMeasureMode: (measureMode) => set({ measureMode, measurePoints: [], lastMeasurement: null }),
@@ -340,7 +373,7 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   // Geometry drawing actions (deprecated — now delegates to splineKnots)
   appendDrawPoint: (point) =>
     set((state) => ({ splineKnots: [...state.splineKnots, point] })),
-  clearDrawPoints: () => set({ splineKnots: [], splineTangentOverrides: {}, draggingKnot: null }),
+  clearDrawPoints: () => set({ splineKnots: [], splineTangentOverrides: {}, splineTangentInOverrides: {}, draggingKnot: null }),
 
   toggleDisplaySetting: (key) =>
     set((state) => {

@@ -45,17 +45,18 @@ describe('computeTangentAt', () => {
 });
 
 describe('computeHandleScale', () => {
-  it('caps at HANDLE_SCALE_MAX (0.3) for large tangent lengths', () => {
-    expect(computeHandleScale(100)).toBeCloseTo(0.04); // 4/100
+  it('returns displayDist/tLen capped by HANDLE_DISPLAY_MAX', () => {
+    // mpp=1 (default): targetDist = max(80*1, 0.5) = 80, clamped = min(80, 60) = 60
+    expect(computeHandleScale(100)).toBeCloseTo(0.6); // 60/100
   });
 
-  it('returns 0.3 when tangent length equals exactly 4/0.3 boundary', () => {
-    // At 4/0.3 ≈ 13.33, scale = min(4/13.33, 0.3) = 0.3
-    expect(computeHandleScale(4 / 0.3)).toBeCloseTo(0.3);
+  it('scales with mpp for smaller viewports', () => {
+    // mpp=0.01: targetDist = max(80*0.01, 0.5) = 0.8, clamped = min(0.8, 60) = 0.8
+    expect(computeHandleScale(10, 0.01)).toBeCloseTo(0.08); // 0.8/10
   });
 
-  it('returns 0.3 for very small tangent lengths (fallback)', () => {
-    expect(computeHandleScale(0)).toBeCloseTo(0.3);
+  it('returns 0 for zero tangent length', () => {
+    expect(computeHandleScale(0)).toBe(0);
   });
 });
 
@@ -78,9 +79,9 @@ describe('computeControlPointPositions', () => {
     const knots: Array<[number, number, number]> = [[0, 0, 0], [10, 0, 0]];
     const positions = computeControlPointPositions(knots, NO_OVERRIDES);
     const outHandle = positions.find(p => p.ref.index === 0 && p.ref.type === 'out');
-    // Tangent at 0 is [10, 0, 0], scale = min(4/10, 0.3) = 0.3 → handle at 0 + 10*0.3 = 3m
+    // Tangent at 0 is [10, 0, 0], mpp=1 default → scale = 60/10 = 6 → handle at (60, 0)
     expect(outHandle).toBeDefined();
-    expect(outHandle!.wx).toBeCloseTo(3);
+    expect(outHandle!.wx).toBeCloseTo(60);
     expect(outHandle!.wy).toBeCloseTo(0);
   });
 });
@@ -111,31 +112,38 @@ describe('pickControlPoint', () => {
 
 describe('applyHandleDrag', () => {
   it('returns unchanged overrides when type is knot', () => {
-    const result = applyHandleDrag({ index: 0, type: 'knot' }, 5, 5, KNOTS, NO_OVERRIDES);
-    expect(result).toEqual(NO_OVERRIDES);
+    const result = applyHandleDrag({ index: 0, type: 'knot' }, 5, 5, KNOTS, NO_OVERRIDES, {});
+    expect(result.out).toEqual(NO_OVERRIDES);
   });
 
   it('sets tangent override for out handle drag', () => {
     // Drag out handle of knot 0 to world (3, 0, 0)
-    // Expected tangent: (3-0, 0-0) / 0.3 = [10, 0, 0]
-    const result = applyHandleDrag({ index: 0, type: 'out' }, 3, 0, KNOTS, NO_OVERRIDES);
-    expect(result[0]).toBeDefined();
-    expect(result[0]![0]).toBeCloseTo(10);
-    expect(result[0]![1]).toBeCloseTo(0);
+    // Expected tangent: (3-0, 0-0) = [3, 0, 0] (magnitude = distance from knot)
+    const result = applyHandleDrag({ index: 0, type: 'out' }, 3, 0, KNOTS, NO_OVERRIDES, {});
+    expect(result.out[0]).toBeDefined();
+    expect(result.out[0]![0]).toBeCloseTo(3);
+    expect(result.out[0]![1]).toBeCloseTo(0);
   });
 
-  it('flips sign for in handle drag', () => {
+  it('flips sign for in handle drag (mirror mode)', () => {
     // Drag in handle of knot 0 to (-3, 0) → delta = (-3, 0)
-    // sign = -1 for 'in': tangent = (-3 * -1) / 0.3 = [10, 0]
-    const result = applyHandleDrag({ index: 0, type: 'in' }, -3, 0, KNOTS, NO_OVERRIDES);
-    expect(result[0]).toBeDefined();
-    expect(result[0]![0]).toBeCloseTo(10);
+    // Mirror mode: out tangent = -delta = (3, 0)
+    const result = applyHandleDrag({ index: 0, type: 'in' }, -3, 0, KNOTS, NO_OVERRIDES, {});
+    expect(result.out[0]).toBeDefined();
+    expect(result.out[0]![0]).toBeCloseTo(3);
   });
 
   it('preserves existing overrides for other knots', () => {
     const overrides = { 2: [5, 5, 0] as [number, number, number] };
-    const result = applyHandleDrag({ index: 0, type: 'out' }, 3, 0, KNOTS, overrides);
-    expect(result[2]).toEqual([5, 5, 0]);
-    expect(result[0]).toBeDefined();
+    const result = applyHandleDrag({ index: 0, type: 'out' }, 3, 0, KNOTS, overrides, {});
+    expect(result.out[2]).toEqual([5, 5, 0]);
+    expect(result.out[0]).toBeDefined();
+  });
+
+  it('supports broken tangent mode for in handle', () => {
+    const result = applyHandleDrag({ index: 0, type: 'in' }, -3, 0, KNOTS, NO_OVERRIDES, {}, 'broken');
+    // In broken mode, in handle drag sets in_ override independently
+    expect(result.in_[0]).toBeDefined();
+    expect(result.in_[0]![0]).toBeCloseTo(3); // -(-3) = 3
   });
 });

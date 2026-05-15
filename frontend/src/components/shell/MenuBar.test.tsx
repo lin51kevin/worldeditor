@@ -95,7 +95,7 @@ function createPlatformMock() {
     addElevationPoint: vi.fn<PlatformService['addElevationPoint']>().mockResolvedValue(makeProject()),
     deleteElevationPoint: vi.fn<PlatformService['deleteElevationPoint']>().mockResolvedValue(makeProject()),
     smoothElevation: vi.fn<PlatformService['smoothElevation']>().mockResolvedValue(makeProject()),
-    snapPoint: vi.fn<PlatformService['snapPoint']>().mockResolvedValue({ x: 0, y: 0, snapped: false, snap_type: 'None', target_id: null }),
+    snapPoint: vi.fn<PlatformService['snapPoint']>().mockResolvedValue({ x: 0, y: 0, snapped: false, snap_type: 'None', target_id: null, contact_point: null }),
     measureDistance: vi.fn<PlatformService['measureDistance']>().mockResolvedValue({ straight: 0, horizontal: 0, vertical: 0 }),
     measureAngle: vi.fn<PlatformService['measureAngle']>().mockResolvedValue({ radians: 0, degrees: 0 }),
     measureArea: vi.fn<PlatformService['measureArea']>().mockResolvedValue({ area: 0, perimeter: 0 }),
@@ -114,6 +114,7 @@ function createPlatformMock() {
     generateSingleObjectVertices: vi.fn<PlatformService['generateSingleObjectVertices']>().mockResolvedValue(new Float32Array()),
     getSignalWorldPos: vi.fn<PlatformService['getSignalWorldPos']>().mockResolvedValue(null),
     getObjectWorldPos: vi.fn<PlatformService['getObjectWorldPos']>().mockResolvedValue(null),
+    getRoadEndpointTangent: vi.fn<PlatformService['getRoadEndpointTangent']>().mockResolvedValue(null),
   };
 
   return {

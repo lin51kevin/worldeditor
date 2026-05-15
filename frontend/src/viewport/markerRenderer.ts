@@ -19,6 +19,7 @@ export class MarkerRenderer {
   private splineMarkerMeshes: RenderableMesh[] = [];
   private splineKnotsCache: Array<[number, number, number]> = [];
   private splineTangentCache: Record<number, [number, number, number]> | undefined = undefined;
+  private splineTangentInCache: Record<number, [number, number, number]> | undefined = undefined;
   private hoveredControlPoint: ControlPointState | null = null;
   private selectedControlPoint: ControlPointState | null = null;
 
@@ -56,6 +57,10 @@ export class MarkerRenderer {
 
   setTangentOverrides(overrides: Record<number, [number, number, number]> | undefined): void {
     this.splineTangentCache = overrides;
+  }
+
+  setTangentInOverrides(overrides: Record<number, [number, number, number]> | undefined): void {
+    this.splineTangentInCache = overrides;
   }
 
   setSplinePreviewKnots(
@@ -104,6 +109,7 @@ export class MarkerRenderer {
       clearColor,
       this.hoveredControlPoint,
       this.selectedControlPoint,
+      this.splineTangentInCache,
     );
     this.uploadToMeshArray(this.splineMarkerMeshes, markerVerts);
   }
@@ -111,7 +117,7 @@ export class MarkerRenderer {
   pickControlPoint(wx: number, wy: number, mpp: number): ControlPointRef | null {
     if (this.splineKnotsCache.length === 0) return null;
     const thresholdMeters = 10.0 * mpp;
-    const positions = computeControlPointPositions(this.splineKnotsCache, this.splineTangentCache ?? {});
+    const positions = computeControlPointPositions(this.splineKnotsCache, this.splineTangentCache ?? {}, this.splineTangentInCache, mpp);
     return pickControlPointFn(wx, wy, positions, thresholdMeters);
   }
 

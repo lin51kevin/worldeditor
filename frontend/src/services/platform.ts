@@ -268,6 +268,13 @@ export interface SnapResult {
   snapped: boolean;
   snap_type: SnapType;
   target_id: string | null;
+  contact_point: string | null;
+}
+
+export interface EndpointTangent {
+  x: number;
+  y: number;
+  hdg: number;
 }
 
 export interface DistanceMeasurement {
@@ -402,6 +409,9 @@ export interface PlatformService {
   /** Snap a point according to current snap configuration. */
   snapPoint(project: Project, x: number, y: number, config: SnapConfig, excludeRoadId?: string): Promise<SnapResult>;
 
+  /** Get the position and heading at a road endpoint for tangent inheritance. */
+  getRoadEndpointTangent(project: Project, roadId: string, contactPoint: string): Promise<EndpointTangent | null>;
+
   /** Measure 3D distance between two points. */
   measureDistance(
     x1: number,
@@ -431,12 +441,15 @@ export interface PlatformService {
   /** List built-in road templates for spline-based road generation. */
   getRoadTemplates(): Promise<RoadTemplate[]>;
 
-  /** Create a road from spline and template, returning updated project. */
+  /** Create a road from spline and template, returning updated project.
+   * @param mode - `'classify'` (optimal geometry types) or `'parampoly3'` (force ParamPoly3)
+   */
   createRoadFromSpline(
     project: Project,
     roadId: string,
     spline: EditableSpline,
     templateId: string,
+    mode?: 'classify' | 'parampoly3',
   ): Promise<Project>;
 
   /** Convert a road's plan_view geometry to an editable spline. */
@@ -445,6 +458,8 @@ export interface PlatformService {
   /** Move a spline knot to a new position, recomputing tangents. Returns updated spline. */
   moveSplineKnot(spline: EditableSpline, knotIndex: number, x: number, y: number, z: number): Promise<EditableSpline>;
 
-  /** Convert an editable spline back to OpenDRIVE geometry segments. */
-  splineToGeometries(spline: EditableSpline): Promise<Geometry[]>;
+  /** Convert an editable spline back to OpenDRIVE geometry segments.
+   * @param mode - `'classify'` (optimal geometry types) or `'parampoly3'` (force ParamPoly3)
+   */
+  splineToGeometries(spline: EditableSpline, mode?: 'classify' | 'parampoly3'): Promise<Geometry[]>;
 }

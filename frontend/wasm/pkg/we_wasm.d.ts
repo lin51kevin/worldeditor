@@ -42,8 +42,9 @@ export function compute_soft_selection(spline_json: string, selected_index: numb
  * - `spline_json`: JSON representation of EditableSpline
  * - `template_id`: Template ID (e.g., "single", "dual2", "dual4", "dual6")
  * - `road_id`: Unique ID for the new road
+ * - `mode`: `"classify"` or `"parampoly3"` (geometry output mode)
  */
-export function create_road_from_spline(project_json: string, road_id: string, spline_json: string, template_id: string): string;
+export function create_road_from_spline(project_json: string, road_id: string, spline_json: string, template_id: string, mode: string): string;
 
 /**
  * Delete an elevation point from a road and return the modified project.
@@ -228,6 +229,14 @@ export function geodetic_to_ecef(lat_deg: number, lon_deg: number, alt_m: number
 export function get_object_world_pos(project_json: string, road_id: string, object_id: string): any;
 
 /**
+ * Get the position and heading at a road endpoint for tangent inheritance.
+ *
+ * `contact_point` should be `"Start"` or `"End"`.
+ * Returns `{ x, y, hdg }` or null if the road is not found.
+ */
+export function get_road_endpoint_tangent(project_json: string, road_id: string, contact_point: string): any;
+
+/**
  * List built-in road templates available for spline-based road creation.
  */
 export function get_road_templates(): any;
@@ -389,8 +398,11 @@ export function spatial_query_point(project_json: string, x: number, y: number, 
 
 /**
  * Convert an editable spline (as JSON) back to OpenDRIVE geometry segments (as JSON).
+ *
+ * `mode`: `"classify"` (default — picks optimal geometry types) or
+ *         `"parampoly3"` (always emit ParamPoly3, except straight Lines).
  */
-export function spline_to_geometries(spline_json: string): string;
+export function spline_to_geometries(spline_json: string, mode: string): string;
 
 /**
  * Translate a road by (dx, dy, dz) and return the modified project JSON.
@@ -437,7 +449,7 @@ export interface InitOutput {
     readonly compute_junction_area: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly compute_road_width: (a: number, b: number, c: number) => [number, number, number];
     readonly compute_soft_selection: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
-    readonly create_road_from_spline: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly create_road_from_spline: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
     readonly delete_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly ecef_to_geodetic: (a: number, b: number, c: number) => [number, number, number];
     readonly fit_affine_from_gcps: (a: number, b: number) => [number, number, number];
@@ -458,6 +470,7 @@ export interface InitOutput {
     readonly geo_to_utm: (a: number, b: number, c: number) => any;
     readonly geodetic_to_ecef: (a: number, b: number, c: number) => [number, number, number];
     readonly get_object_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly get_road_endpoint_tangent: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly get_road_templates: () => [number, number, number];
     readonly get_signal_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly init: () => void;
@@ -483,7 +496,7 @@ export interface InitOutput {
     readonly smooth_elevation: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly snap_point: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly spatial_query_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-    readonly spline_to_geometries: (a: number, b: number) => [number, number, number, number];
+    readonly spline_to_geometries: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly translate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly utm_to_geo: (a: number, b: number, c: number, d: number, e: number) => any;
     readonly validate_project: (a: number, b: number) => [number, number, number];

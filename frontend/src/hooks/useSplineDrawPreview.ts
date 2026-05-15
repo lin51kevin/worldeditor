@@ -1,12 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { useEditorViewStore } from '../stores/editorViewStore';
 import { getPlatformService } from '../services';
-import {
-  buildMultiLineGeometries,
-  buildMultiArcGeometries,
-  buildMultiSpiralGeometries,
-  buildRoadFromGeometries,
-} from '../utils/geometryBuilder';
 import { buildEditableSpline } from '../components/viewportUtils';
 import { resolveWasmTemplateId } from './useSplineOperations';
 import type { ViewportRenderer } from '../viewport/renderer';
@@ -66,7 +60,10 @@ export function useSplineDrawPreview({
         const service = await getPlatformService();
         const PREVIEW_ROAD_ID = '__draw_preview__';
 
-        if (editMode === 'spline') {
+        if (editMode === 'spline' || editMode === 'spiral') {
+          // Both spline and spiral modes go through the WASM spline pipeline.
+          // spline → ParamPoly3 output; spiral → classify (may produce Spiral/Arc/Line/ParamPoly3)
+          const splineMode = editMode === 'spline' ? 'parampoly3' : 'classify';
           const spline = buildEditableSpline(previewKnots);
           const wasmId = resolveWasmTemplateId(splineTemplateId);
 
@@ -76,6 +73,7 @@ export function useSplineDrawPreview({
             PREVIEW_ROAD_ID,
             spline,
             wasmId,
+            splineMode,
           );
           if (cancelled) return;
 
@@ -94,21 +92,33 @@ export function useSplineDrawPreview({
           renderer.uploadRoadVertices(roadVerts);
           renderer.uploadLaneLineVertices(laneLineVerts);
         } else {
-          // line / arc / spiral modes: no lane section template, show flat road outline
-          let geometries;
-          if (editMode === 'line') {
-            geometries = buildMultiLineGeometries(previewKnots);
-          } else if (editMode === 'arc') {
-            geometries = buildMultiArcGeometries(previewKnots);
-          } else {
-            geometries = buildMultiSpiralGeometries(previewKnots);
-          }
-          if (geometries.length === 0) return;
+          // line / arc modes: route through WASM spline pipeline with 'classify' for lane preview
+          const spline = buildEditableSpline(previewKnots);
+          const wasmId = resolveWasmTemplateId(splineTemplateId);
 
-          const previewRoad = buildRoadFromGeometries(PREVIEW_ROAD_ID, geometries);
+          const previewProject = await service.createRoadFromSpline(
+            { name: '', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads: [], junctions: [], signals: [], objects: [] },
+            PREVIEW_ROAD_ID,
+            spline,
+            wasmId,
+            'classify',
+          );
+          if (cancelled) return;
+
+          const previewRoad = previewProject.roads.find((r) => r.id === PREVIEW_ROAD_ID);
+          if (!previewRoad) return;
+
           const roadVerts = await service.generateSingleRoadVertices(previewRoad, 2.0, PREVIEW_TINT);
           if (cancelled) return;
+
+          const laneLineVerts = await service.generateLaneLineVertices(
+            { ...previewProject, roads: [previewRoad] },
+            2.0,
+          );
+          if (cancelled) return;
+
           renderer.uploadRoadVertices(roadVerts);
+          renderer.uploadLaneLineVertices(laneLineVerts);
         }
       } catch {
         // Ignore preview errors — user experience degrades gracefully to no preview

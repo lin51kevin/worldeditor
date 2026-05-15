@@ -2,12 +2,14 @@ import { useCallback, useEffect, type MutableRefObject, type RefObject } from 'r
 import { ViewportRenderer } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
 import { useEditorViewStore } from '../stores/editorViewStore';
+import { useEditorStore } from '../stores/editorStore';
 import {
   findSplineControlPointHit,
-  tangentFromHandlePosition,
   type SplineControlPoint,
 } from '../components/viewportUtils';
+import { applyHandleDrag, inferConstraint, type DragConstraint } from '../viewport/tangentHandleController';
 import { useSplineOperations } from './useSplineOperations';
+import { getPlatformService } from '../services';
 
 type ViewportStatus = 'loading' | 'ready' | 'unsupported';
 
@@ -38,6 +40,7 @@ export function useSplineDrawMode({
   const editMode = useEditorViewStore((state) => state.editMode);
   const splineKnots = useEditorViewStore((state) => state.splineKnots);
   const splineTangentOverrides = useEditorViewStore((state) => state.splineTangentOverrides);
+  const splineTangentInOverrides = useEditorViewStore((state) => state.splineTangentInOverrides);
   const geometryEditSpline = useEditorViewStore((state) => state.geometryEditSpline);
   const { finalizeSplineCreation, finalizeDrawGeometry } = useSplineOperations();
 
@@ -98,7 +101,9 @@ export function useSplineDrawMode({
       if (event.key === 'Enter') {
         event.preventDefault();
         if (viewState.editMode === 'spline') {
-          void finalizeSplineCreation();
+          void finalizeSplineCreation(undefined, 'parampoly3');
+        } else if (viewState.editMode === 'spiral') {
+          void finalizeSplineCreation(undefined, 'classify');
         } else {
           void finalizeDrawGeometry(viewState.editMode, viewState.splineKnots);
         }
@@ -116,9 +121,56 @@ export function useSplineDrawMode({
     }
     const overrides = Object.keys(splineTangentOverrides).length > 0 ? splineTangentOverrides : undefined;
     renderer.setSplinePreviewKnots(isDrawMode(editMode) ? splineKnots : [], overrides);
-  }, [editMode, geometryEditSpline, rendererRef, splineKnots, splineTangentOverrides, status]);
+  }, [editMode, geometryEditSpline, rendererRef, splineKnots, splineTangentOverrides, splineTangentInOverrides, status]);
 
-  const handleSplineDrawMouseMove = useCallback((worldPos: WorldPosition, canvas: HTMLCanvasElement, renderer: ViewportRenderer): boolean => {
+  /** Fire-and-forget endpoint snap query during draw mode mouse move. */
+  const queryDrawModeSnap = useCallback(async (x: number, y: number) => {
+    try {
+      const service = await getPlatformService();
+      const { project } = useEditorStore.getState();
+      const snapResult = await service.snapPoint(project, x, y, {
+        grid_enabled: false,
+        grid_size: 1.0,
+        endpoint_enabled: true,
+        endpoint_threshold: useEditorViewStore.getState().snapThreshold,
+        midpoint_enabled: false,
+        perpendicular_enabled: false,
+      });
+      if (snapResult.snapped && snapResult.snap_type === 'Endpoint') {
+        useEditorViewStore.getState().setDrawSnapResult({
+          x: snapResult.x,
+          y: snapResult.y,
+          snapped: true,
+          snapType: snapResult.snap_type,
+          targetId: snapResult.target_id,
+          contactPoint: snapResult.contact_point,
+        });
+      } else {
+        useEditorViewStore.getState().setDrawSnapResult(null);
+      }
+    } catch {
+      useEditorViewStore.getState().setDrawSnapResult(null);
+    }
+  }, []);
+
+  /** Inherit tangent direction from a snapped road endpoint. */
+  const inheritTangentFromSnap = useCallback(async (knotIndex: number, roadId: string, contactPoint: string) => {
+    try {
+      const service = await getPlatformService();
+      const { project } = useEditorStore.getState();
+      const tangent = await service.getRoadEndpointTangent(project, roadId, contactPoint);
+      if (!tangent) return;
+      // Convert heading to a tangent vector with a reasonable default length
+      const len = 10.0;
+      const tx = Math.cos(tangent.hdg) * len;
+      const ty = Math.sin(tangent.hdg) * len;
+      useEditorViewStore.getState().setSplineTangentOverride(knotIndex, [tx, ty, 0]);
+    } catch {
+      // Silently ignore tangent inheritance errors
+    }
+  }, []);
+
+  const handleSplineDrawMouseMove = useCallback((worldPos: WorldPosition, canvas: HTMLCanvasElement, renderer: ViewportRenderer, mouseEvent?: MouseEvent | React.MouseEvent): boolean => {
     const viewState = useEditorViewStore.getState();
     if (viewState.geometryEditSpline || !isDrawMode(viewState.editMode)) {
       return false;
@@ -132,15 +184,47 @@ export function useSplineDrawMode({
           viewState.setSplineKnots(knots.map((knot, index) => (
             index === drag.index ? [worldPos.x, worldPos.y, knot[2]] : knot
           )));
-        } else if (viewState.editMode === 'spline') {
-          viewState.setSplineTangentOverride(
-            drag.index,
-            tangentFromHandlePosition(knots[drag.index]!, worldPos, drag.type),
+        } else if (viewState.editMode === 'spline' || viewState.editMode === 'spiral') {
+          // Use applyHandleDrag with broken tangent (Alt) and constraint (Shift) support
+          const coupling = mouseEvent?.altKey ? 'broken' as const : viewState.tangentCoupling;
+          const constraint: DragConstraint = inferConstraint(
+            worldPos.x - knots[drag.index]![0],
+            worldPos.y - knots[drag.index]![1],
+            mouseEvent?.shiftKey ?? false,
           );
+          const result = applyHandleDrag(
+            drag,
+            worldPos.x,
+            worldPos.y,
+            knots,
+            viewState.splineTangentOverrides,
+            viewState.splineTangentInOverrides,
+            coupling,
+            constraint,
+          );
+          // Batch-update out-tangent overrides
+          for (const [key, val] of Object.entries(result.out)) {
+            viewState.setSplineTangentOverride(Number(key), val);
+          }
+          // Batch-update in-tangent overrides
+          for (const [key, val] of Object.entries(result.in_)) {
+            viewState.setSplineTangentInOverride(Number(key), val);
+          }
+          // If Alt was pressed, persist broken coupling for this session
+          if (mouseEvent?.altKey && viewState.tangentCoupling !== 'broken') {
+            viewState.setTangentCoupling('broken');
+          }
         }
       }
       syncCursor(worldPos);
       return true;
+    }
+
+    // Query endpoint snap while in draw mode (async, fire-and-forget for responsiveness)
+    if (viewState.snapEnabled) {
+      void queryDrawModeSnap(worldPos.x, worldPos.y);
+    } else {
+      viewState.setDrawSnapResult(null);
     }
 
     if (viewState.splineKnots.length === 0) {
@@ -157,12 +241,12 @@ export function useSplineDrawMode({
       viewState.splineKnots,
       renderer.getMetersPerPixel(),
       viewState.splineTangentOverrides,
-      viewState.editMode === 'spline',
+      viewState.editMode === 'spline' || viewState.editMode === 'spiral',
     );
     updateHoveredControlPoint(renderer, nextHover);
     canvas.style.cursor = nextHover ? 'grab' : 'crosshair';
     return false;
-  }, [clearSplineDrawHover, syncCursor, updateHoveredControlPoint]);
+  }, [clearSplineDrawHover, queryDrawModeSnap, syncCursor, updateHoveredControlPoint]);
 
   const handleSplineDrawMouseDown = useCallback((e: React.MouseEvent, canvas: HTMLCanvasElement, renderer: ViewportRenderer): boolean => {
     const viewState = useEditorViewStore.getState();
@@ -183,7 +267,7 @@ export function useSplineDrawMode({
       viewState.splineKnots,
       renderer.getMetersPerPixel(),
       viewState.splineTangentOverrides,
-      viewState.editMode === 'spline',
+      viewState.editMode === 'spline' || viewState.editMode === 'spiral',
     );
     if (!bestHit) {
       return false;
@@ -203,9 +287,31 @@ export function useSplineDrawMode({
       return false;
     }
 
-    const point: [number, number, number] = [worldPos.x, worldPos.y, 0];
+    // If snapped to an endpoint, use the snapped position instead of raw cursor
+    const snap = viewState.drawSnapResult;
+    const useSnap = snap?.snapped && snap.snapType === 'Endpoint' && snap.targetId && snap.contactPoint;
+    const px = useSnap ? snap.x : worldPos.x;
+    const py = useSnap ? snap.y : worldPos.y;
+
+    const point: [number, number, number] = [px, py, 0];
+    const knotIndex = viewState.splineKnots.length;
     const nextKnots: Array<[number, number, number]> = [...viewState.splineKnots, point];
     viewState.setSplineKnots(nextKnots);
+
+    // Tangent inheritance: if snapped to an endpoint, query the road's heading
+    // and set as tangent override for this knot
+    if (useSnap && (viewState.editMode === 'spline' || viewState.editMode === 'spiral')) {
+      void inheritTangentFromSnap(knotIndex, snap.targetId!, snap.contactPoint!);
+    }
+
+    // Track snapped endpoint for road linking on finalization
+    if (useSnap) {
+      viewState.addSnappedEndpoint({
+        knotIndex,
+        roadId: snap.targetId!,
+        contactPoint: snap.contactPoint!,
+      });
+    }
 
     if (e.detail < 2) {
       return true;
@@ -213,7 +319,14 @@ export function useSplineDrawMode({
 
     if (viewState.editMode === 'spline') {
       if (nextKnots.length >= 2) {
-        await finalizeSplineCreation(nextKnots);
+        await finalizeSplineCreation(nextKnots, 'parampoly3');
+      }
+      return true;
+    }
+
+    if (viewState.editMode === 'spiral') {
+      if (nextKnots.length >= 2) {
+        await finalizeSplineCreation(nextKnots, 'classify');
       }
       return true;
     }
@@ -223,7 +336,7 @@ export function useSplineDrawMode({
       await finalizeDrawGeometry(viewState.editMode, nextKnots);
     }
     return true;
-  }, [finalizeDrawGeometry, finalizeSplineCreation]);
+  }, [finalizeDrawGeometry, finalizeSplineCreation, inheritTangentFromSnap]);
 
   const handleSplineDrawMouseUp = useCallback((): boolean => {
     const viewState = useEditorViewStore.getState();
@@ -257,7 +370,9 @@ export function useSplineDrawMode({
     }
     if (viewState.splineKnots.length >= 2) {
       if (viewState.editMode === 'spline') {
-        void finalizeSplineCreation();
+        void finalizeSplineCreation(undefined, 'parampoly3');
+      } else if (viewState.editMode === 'spiral') {
+        void finalizeSplineCreation(undefined, 'classify');
       } else {
         void finalizeDrawGeometry(viewState.editMode, viewState.splineKnots);
       }

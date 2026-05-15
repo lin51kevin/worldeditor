@@ -6,7 +6,7 @@ export const apply_affine_transform: (a: number, b: number, c: number, d: number
 export const compute_junction_area: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const compute_road_width: (a: number, b: number, c: number) => [number, number, number];
 export const compute_soft_selection: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
-export const create_road_from_spline: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+export const create_road_from_spline: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
 export const delete_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
 export const ecef_to_geodetic: (a: number, b: number, c: number) => [number, number, number];
 export const fit_affine_from_gcps: (a: number, b: number) => [number, number, number];
@@ -27,6 +27,7 @@ export const geo_to_mgrs: (a: number, b: number, c: number) => [number, number, 
 export const geo_to_utm: (a: number, b: number, c: number) => any;
 export const geodetic_to_ecef: (a: number, b: number, c: number) => [number, number, number];
 export const get_object_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+export const get_road_endpoint_tangent: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const get_road_templates: () => [number, number, number];
 export const get_signal_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const init: () => void;
@@ -52,7 +53,7 @@ export const sample_lane_boundary: (a: number, b: number, c: number, d: number, 
 export const smooth_elevation: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
 export const snap_point: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
 export const spatial_query_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-export const spline_to_geometries: (a: number, b: number) => [number, number, number, number];
+export const spline_to_geometries: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const translate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
 export const utm_to_geo: (a: number, b: number, c: number, d: number, e: number) => any;
 export const validate_project: (a: number, b: number) => [number, number, number];

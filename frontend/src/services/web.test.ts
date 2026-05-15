@@ -203,6 +203,7 @@ describe('WebPlatformService', () => {
       'road_spline_1',
       JSON.stringify(spline),
       'single',
+      'classify',
     );
   });
 });

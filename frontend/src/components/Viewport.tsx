@@ -636,7 +636,24 @@ export function Viewport() {
 
     const viewState = useEditorViewStore.getState();
     if (await handleGeometryEditMouseMove(worldPos, canvas, renderer)) return;
-    if (handleSplineDrawMouseMove(worldPos, canvas, renderer)) return;
+    if (handleSplineDrawMouseMove(worldPos, canvas, renderer, e)) return;
+
+    // Show snap indicator for draw-mode endpoint snapping
+    {
+      const drawSnap = useEditorViewStore.getState().drawSnapResult;
+      const snapEl = snapIndicatorDomRef.current;
+      const inDrawMode = viewState.editMode === 'spline' || viewState.editMode === 'line' || viewState.editMode === 'arc' || viewState.editMode === 'spiral';
+      if (drawSnap?.snapped && snapEl) {
+        const screenPos = renderer.projectWorldToScreen(drawSnap.x, drawSnap.y);
+        if (screenPos) {
+          snapEl.style.left = `${screenPos.x}px`;
+          snapEl.style.top = `${screenPos.y}px`;
+          snapEl.style.display = 'block';
+        }
+      } else if (snapEl && inDrawMode) {
+        snapEl.style.display = 'none';
+      }
+    }
 
     // In click-to-place mode show crosshair and skip normal hover picking
     if (viewState.pendingTemplateId) {
