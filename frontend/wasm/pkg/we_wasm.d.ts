@@ -59,6 +59,26 @@ export function delete_elevation_point(project_json: string, road_id: string, s:
 export function ecef_to_geodetic(x: number, y: number, z: number): any;
 
 /**
+ * Export the project to Wavefront OBJ text.
+ */
+export function export_project_to_obj(project_json: string): string;
+
+/**
+ * Export the project's roads to CSV text.
+ */
+export function export_roads_to_csv(project_json: string): string;
+
+/**
+ * Export the project's signals to JSON text.
+ */
+export function export_signals_to_json(project_json: string): string;
+
+/**
+ * Export the project to HD Map XML format.
+ */
+export function export_to_hdmap_xml(project_json: string): string;
+
+/**
  * Fit an affine transform from Ground Control Points (GCPs).
  *
  * `gcps_json`: JSON array of `{ px, py, wx, wy }`.
@@ -248,7 +268,34 @@ export function get_road_templates(): any;
  */
 export function get_signal_world_pos(project_json: string, road_id: string, signal_id: string): any;
 
+/**
+ * Returns `true` if a project cache has been initialised.
+ */
+export function has_project_cache(): boolean;
+
+/**
+ * Import roads from CSV text.
+ *
+ * Returns a JSON string representing the imported `Road[]` array.
+ */
+export function import_roads_from_csv(csv: string, options_json: string): string;
+
+/**
+ * Import signals from a JSON string.
+ *
+ * Returns a JSON string representing the imported `SignalEntry[]` array.
+ */
+export function import_signals_from_json(json: string): string;
+
 export function init(): void;
+
+/**
+ * Mark the spatial index as dirty so it is rebuilt on the next query.
+ *
+ * Lighter than `set_project_cache` when only the spatial structure changed
+ * but the project reference is the same.
+ */
+export function invalidate_project_cache(): void;
 
 /**
  * Measure the angle at a vertex (p2) formed by p1-p2-p3.
@@ -312,6 +359,11 @@ export function parse_wkt_crs(wkt_str: string): any;
 export function pick_junction_at_point(project_json: string, x: number, y: number, threshold: number): any;
 
 /**
+ * Pick the nearest junction using the cached project.
+ */
+export function pick_junction_at_point_cached(x: number, y: number, threshold: number): any;
+
+/**
  * Pick the closest road object to a world-space point.
  *
  * Returns JSON `{ "roadId": string, "objectId": string }` or null.
@@ -326,6 +378,13 @@ export function pick_object_at_point(project_json: string, x: number, y: number,
  * the reference line centre.
  */
 export function pick_road_at_point(project_json: string, x: number, y: number, threshold: number): any;
+
+/**
+ * Pick the nearest road using the cached project + spatial index.
+ *
+ * Falls back to the uncached path if no cache has been set.
+ */
+export function pick_road_at_point_cached(x: number, y: number, threshold: number): any;
 
 /**
  * Pick the closest signal to a world-space point.
@@ -378,6 +437,14 @@ export function rotate_road(project_json: string, road_id: string, pivot_x: numb
 export function sample_lane_boundary(road_json: string, section_s: number, lane_id: number, step: number): string;
 
 /**
+ * Store (or replace) the cached project used by `pick_road_cached` / `snap_point_cached`.
+ *
+ * Call this once after every project mutation. Subsequent pick/snap calls will
+ * reuse the parsed project and its spatial index without re-parsing JSON.
+ */
+export function set_project_cache(project_json: string): void;
+
+/**
  * Smooth a road's elevation profile.
  */
 export function smooth_elevation(project_json: string, road_id: string, iterations: number): string;
@@ -388,6 +455,13 @@ export function smooth_elevation(project_json: string, road_id: string, iteratio
  * Returns JSON `{ x, y, snapped, snap_type, target_id }`.
  */
 export function snap_point(project_json: string, x: number, y: number, config_json: string, exclude_road_id?: string | null): any;
+
+/**
+ * Snap a point using the cached project + spatial index.
+ *
+ * Falls back to the uncached path if no cache has been set.
+ */
+export function snap_point_cached(x: number, y: number, config_json: string, exclude_road_id?: string | null): any;
 
 /**
  * Query elements near a point using a spatial index.
@@ -452,6 +526,10 @@ export interface InitOutput {
     readonly create_road_from_spline: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
     readonly delete_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly ecef_to_geodetic: (a: number, b: number, c: number) => [number, number, number];
+    readonly export_project_to_obj: (a: number, b: number) => [number, number, number, number];
+    readonly export_roads_to_csv: (a: number, b: number) => [number, number, number, number];
+    readonly export_signals_to_json: (a: number, b: number) => [number, number, number, number];
+    readonly export_to_hdmap_xml: (a: number, b: number) => [number, number, number, number];
     readonly fit_affine_from_gcps: (a: number, b: number) => [number, number, number];
     readonly gcj02_to_wgs84: (a: number, b: number, c: number) => any;
     readonly generate_center_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
@@ -473,7 +551,11 @@ export interface InitOutput {
     readonly get_road_endpoint_tangent: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly get_road_templates: () => [number, number, number];
     readonly get_signal_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly has_project_cache: () => number;
+    readonly import_roads_from_csv: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly import_signals_from_json: (a: number, b: number) => [number, number, number, number];
     readonly init: () => void;
+    readonly invalidate_project_cache: () => void;
     readonly measure_angle: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly measure_area: (a: number, b: number) => [number, number, number];
     readonly measure_distance: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
@@ -483,8 +565,10 @@ export interface InitOutput {
     readonly parse_proj4_crs: (a: number, b: number) => [number, number, number];
     readonly parse_wkt_crs: (a: number, b: number) => [number, number, number];
     readonly pick_junction_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pick_junction_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
     readonly pick_object_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pick_road_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pick_road_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
     readonly pick_signal_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pick_spline_knot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly point_in_junction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
@@ -493,8 +577,10 @@ export interface InitOutput {
     readonly road_to_spline: (a: number, b: number, c: number) => [number, number, number, number];
     readonly rotate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly sample_lane_boundary: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly set_project_cache: (a: number, b: number) => [number, number];
     readonly smooth_elevation: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly snap_point: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
+    readonly snap_point_cached: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly spatial_query_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly spline_to_geometries: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly translate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];

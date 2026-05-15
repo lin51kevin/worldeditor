@@ -4,6 +4,7 @@
 //! columns for X, Y (world coordinates) and optional heading/ID.
 //! Each row produces one road with a single straight geometry.
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use we_core::model::{Geometry, GeometryType, Project, Road};
 
@@ -16,7 +17,7 @@ pub enum CsvError {
 }
 
 /// Options controlling how CSV data is interpreted.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CsvImportOptions {
     /// Column delimiter character (default: ',')
     pub delimiter: char,
