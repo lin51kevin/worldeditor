@@ -196,6 +196,7 @@ interface EditorViewState {
   addMeasurePoint: (point: MeasurePoint) => void;
   clearMeasurePoints: () => void;
   setMeasurementResult: (result: MeasurementResult | null) => void;
+  resetDisplay: () => void;
 
   // Geometry editing actions
   enterGeometryEdit: (roadId: string, spline: EditableSpline) => void;
@@ -353,6 +354,17 @@ export const useEditorViewStore = create<EditorViewState>((set) => ({
   addMeasurePoint: (point) =>
     set((state) => ({ measurePoints: [...state.measurePoints, point] })),
   clearMeasurePoints: () => set({ measurePoints: [], lastMeasurement: null }),
+  resetDisplay: () => set((state) => ({
+    display: {
+      ...state.display,
+      hiddenRoadIds: [],
+      hiddenJunctionIds: [],
+      hiddenLaneSectionKeys: [],
+      hiddenLaneKeys: [],
+      hiddenSignalKeys: [],
+      hiddenObjectKeys: [],
+    }
+  })),
   setMeasurementResult: (lastMeasurement) => set({ lastMeasurement }),
 
   // Geometry editing actions

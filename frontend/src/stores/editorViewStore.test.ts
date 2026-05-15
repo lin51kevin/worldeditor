@@ -1,5 +1,5 @@
 import { act } from '@testing-library/react';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, test } from 'vitest';
 import { DEFAULT_DISPLAY, useEditorViewStore } from './editorViewStore';
 
 describe('editorViewStore', () => {
@@ -314,6 +314,30 @@ describe('editorViewStore', () => {
         useEditorViewStore.getState().setSoftSelectionRadius(9999);
       });
       expect(useEditorViewStore.getState().softSelectionRadius).toBe(9999);
+    });
+  });
+
+  describe('resetDisplay', () => {
+    test('clears all hidden arrays', () => {
+      useEditorViewStore.setState({
+        display: {
+          ...DEFAULT_DISPLAY,
+          hiddenRoadIds: ['r1'],
+          hiddenJunctionIds: ['j1'],
+          hiddenLaneSectionKeys: ['k1'],
+          hiddenLaneKeys: ['l1'],
+          hiddenSignalKeys: ['s1'],
+          hiddenObjectKeys: ['o1'],
+        }
+      });
+      useEditorViewStore.getState().resetDisplay();
+      const d = useEditorViewStore.getState().display;
+      expect(d.hiddenRoadIds).toEqual([]);
+      expect(d.hiddenJunctionIds).toEqual([]);
+      expect(d.hiddenLaneSectionKeys).toEqual([]);
+      expect(d.hiddenLaneKeys).toEqual([]);
+      expect(d.hiddenSignalKeys).toEqual([]);
+      expect(d.hiddenObjectKeys).toEqual([]);
     });
   });
 });

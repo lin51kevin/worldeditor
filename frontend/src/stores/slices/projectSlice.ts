@@ -2,6 +2,7 @@ import type { Project } from '../../services/platform';
 import type { EditorState, SliceCreator } from './types';
 import { initialProject } from './types';
 
+import { useEditorViewStore } from '../editorViewStore';
 export interface ProjectSlice {
   project: Project;
   savedProject: Project | null;
@@ -29,14 +30,17 @@ export const createProjectSlice: SliceCreator<ProjectSlice> = (set) => ({
   gridSpacing: 10.0,
   viewportMpp: 0.1,
 
-  setProject: (project) => set((s) => ({
-    project,
-    savedProject: project,
-    isDirty: false,
-    undoStack: [],
-    redoStack: [],
-    projectLoadVersion: s.projectLoadVersion + 1,
-  })),
+  setProject: (project) => {
+    set((s) => ({
+      project,
+      savedProject: project,
+      isDirty: false,
+      undoStack: [],
+      redoStack: [],
+      projectLoadVersion: s.projectLoadVersion + 1,
+    }));
+    useEditorViewStore.getState().resetDisplay();
+  },
 
   setCursorWorldPos: (pos) => set((s) => {
     if (s.cursorWorldPos.x === pos.x && s.cursorWorldPos.y === pos.y) return s as Partial<EditorState>;
@@ -66,21 +70,24 @@ export const createProjectSlice: SliceCreator<ProjectSlice> = (set) => ({
       }
     : s as Partial<EditorState>),
 
-  reset: () => set((s) => ({
-    project: initialProject,
-    isDirty: false,
-    selectedRoadId: null,
-    selectedJunctionId: null,
-    selectedObjectType: null,
-    selectedSceneNode: null,
-    selectedRoadIds: [],
-    selectedJunctionIds: [],
-    clipboardRoadId: null,
-    undoStack: [],
-    redoStack: [],
-    cursorWorldPos: { x: 0, y: 0 },
-    gridSpacing: 10.0,
-    viewportMpp: 0.1,
-    projectLoadVersion: s.projectLoadVersion + 1,
-  })),
+  reset: () => {
+    set((s) => ({
+      project: initialProject,
+      isDirty: false,
+      selectedRoadId: null,
+      selectedJunctionId: null,
+      selectedObjectType: null,
+      selectedSceneNode: null,
+      selectedRoadIds: [],
+      selectedJunctionIds: [],
+      clipboardRoadId: null,
+      undoStack: [],
+      redoStack: [],
+      cursorWorldPos: { x: 0, y: 0 },
+      gridSpacing: 10.0,
+      viewportMpp: 0.1,
+      projectLoadVersion: s.projectLoadVersion + 1,
+    }));
+    useEditorViewStore.getState().resetDisplay();
+  },
 });
