@@ -95,17 +95,13 @@ mod tests {
     use we_core::model::*;
 
     fn make_road(id: &str, x: f64, y: f64, hdg: f64) -> Road {
-        Road {
-            id: id.to_string(),
-            plan_view: vec![Geometry {
-                s: 0.0, x, y, hdg,
-                length: 50.0,
-                geo_type: GeometryType::Line,
-            }],
+        let mut road = Road::new(id, 50.0);
+        road.plan_view = vec![Geometry {
+            s: 0.0, x, y, hdg,
             length: 50.0,
-            junction_id: None,
-            ..Road::default()
-        }
+            geo_type: GeometryType::Line,
+        }];
+        road
     }
 
     fn make_connector(id: &str, jid: &str, from_road: &Road, to_road: &Road) -> Road {
@@ -114,18 +110,15 @@ mod tests {
         let dx = gt.x - gf.x;
         let dy = gt.y - gf.y;
         let length = (dx * dx + dy * dy).sqrt().max(0.5);
-        Road {
-            id: id.to_string(),
-            plan_view: vec![Geometry {
-                s: 0.0, x: gf.x, y: gf.y,
-                hdg: dy.atan2(dx),
-                length,
-                geo_type: GeometryType::Line,
-            }],
+        let mut road = Road::new(id, length);
+        road.junction_id = Some(jid.to_string());
+        road.plan_view = vec![Geometry {
+            s: 0.0, x: gf.x, y: gf.y,
+            hdg: dy.atan2(dx),
             length,
-            junction_id: Some(jid.to_string()),
-            ..Road::default()
-        }
+            geo_type: GeometryType::Line,
+        }];
+        road
     }
 
     #[test]

@@ -65,6 +65,7 @@ export const set_project_cache: (a: number, b: number) => [number, number];
 export const smooth_elevation: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
 export const snap_point: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
 export const snap_point_cached: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+export const snap_point_on_road: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const spatial_query_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const spline_to_geometries: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const translate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];

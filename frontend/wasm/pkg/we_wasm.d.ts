@@ -477,6 +477,19 @@ export function snap_point(project_json: string, x: number, y: number, config_js
 export function snap_point_cached(x: number, y: number, config_json: string, exclude_road_id?: string | null): any;
 
 /**
+ * Project a world-space point onto a road's reference line, returning road-local
+ * coordinates `{ s, t, hdg }` at the closest point.
+ *
+ * - `s`: arc-length station along the road reference line (metres from road start)
+ * - `t`: signed lateral offset from the reference line (positive = left)
+ * - `hdg`: road heading at that station (radians)
+ *
+ * Used by the viewport after picking a road via `pick_road_at_point` to convert
+ * the world click position into correct road-local s/t for placing signals and objects.
+ */
+export function snap_point_on_road(road_json: string, world_x: number, world_y: number): any;
+
+/**
  * Query elements near a point using a spatial index.
  *
  * Returns JSON array of `{ id, kind, aabb }`.
@@ -595,6 +608,7 @@ export interface InitOutput {
     readonly smooth_elevation: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly snap_point: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly snap_point_cached: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly snap_point_on_road: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly spatial_query_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly spline_to_geometries: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly translate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
