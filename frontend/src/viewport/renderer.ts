@@ -79,9 +79,6 @@ export class ViewportRenderer {
   private showGrid = true;
   private showAxis = true;
 
-  // View mode: solid = full mesh, wire = lane lines only, sketch = outline style
-  private viewMode: 'solid' | 'wire' | 'sketch' = 'solid';
-
   // Theme colors
   private clearColor: { r: number; g: number; b: number; a: number } = { r: 0.10, g: 0.10, b: 0.12, a: 1.0 };
   private gridColor: [number, number, number] = [0.50, 0.50, 0.50];
@@ -316,9 +313,8 @@ export class ViewportRenderer {
     this.cameraController.markDirty();
   }
 
-  /** Set the render view mode (solid / wire / sketch). */
-  setViewMode(mode: 'solid' | 'wire' | 'sketch'): void {
-    this.viewMode = mode;
+  /** Trigger redraw when the viewport view mode changes. */
+  setViewMode(_mode: 'solid' | 'wire' | 'sketch'): void {
     this.cameraController.markDirty();
   }
 
@@ -366,12 +362,16 @@ export class ViewportRenderer {
    * Upload spline knot preview geometry: Catmull-Rom smooth curve + tangent handles + knot markers.
    * Pass an empty array to clear the preview.
    * Vertex format: 7 floats per vertex (x, y, z, r, g, b, a), triangle-list.
+   *
+   * @param isDrawMode When true, tangent handle endpoint X-squares are hidden so
+   *   only the tangent reference lines and knot markers are shown (draw-mode style).
    */
   setSplinePreviewKnots(
     knots: Array<[number, number, number]>,
     tangentOverrides?: Record<number, [number, number, number]>,
+    isDrawMode = false,
   ): void {
-    this.markerRenderer.setSplinePreviewKnots(knots, tangentOverrides, this.getMetersPerPixel(), this.clearColor);
+    this.markerRenderer.setSplinePreviewKnots(knots, tangentOverrides, this.getMetersPerPixel(), this.clearColor, isDrawMode);
   }
 
   /**
@@ -532,8 +532,7 @@ export class ViewportRenderer {
     }
 
     // Draw road meshes (render first - on bottom)
-    // In wire/sketch mode the solid fill is suppressed; only lane lines show geometry.
-    if (this.meshes.length > 0 && this.viewMode === 'solid') {
+    if (this.meshes.length > 0) {
       pass.setPipeline(this.basicPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
       for (const mesh of this.meshes) {
