@@ -5,6 +5,7 @@ import { getPlatformService } from '../services';
 import { buildEditableSpline } from '../components/viewportUtils';
 import { buildRenderableProject } from '../utils/sceneGraph';
 import { resolveWasmTemplateId } from './useSplineOperations';
+import { loadCatalog, buildLaneSection } from '../plugins/templates/index';
 import type { ViewportRenderer } from '../viewport/renderer';
 import type { Project } from '../services/platform';
 
@@ -99,7 +100,15 @@ export function useSplineDrawPreview({
         const previewRoad = previewProject.roads.find((r) => r.id === PREVIEW_ROAD_ID);
         if (!previewRoad) return;
 
-        const singleRoadProject = { ...previewProject, roads: [previewRoad] };
+        // Override lane sections from the TS catalog so the preview reflects
+        // the correct lane count (the Rust WASM templates differ from the catalog).
+        const catalog = loadCatalog();
+        const tplConfig = catalog.roads.find((t) => t.id === splineTemplateId);
+        const previewRoadWithLanes = tplConfig
+          ? { ...previewRoad, lane_sections: [buildLaneSection(tplConfig.left, tplConfig.right)] }
+          : previewRoad;
+
+        const singleRoadProject = { ...previewProject, roads: [previewRoadWithLanes] };
 
         // Generate BOTH the existing project's lane lines AND the preview road's.
         // This ensures existing roads stay visible while drawing.

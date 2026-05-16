@@ -3,6 +3,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useViewportStore } from '../stores/viewportStore';
 import { getPlatformService } from '../services';
 import { buildEditableSpline, nextSplineRoadId } from '../components/viewportUtils';
+import { loadCatalog, buildLaneSection } from '../plugins/templates/index';
 
 /**
  * Maps a template item ID (as stored in the panel) to the WASM template ID
@@ -52,6 +53,13 @@ export function useSplineOperations() {
       );
       const newRoad = nextProject.roads.find((r) => r.id === roadId);
       if (newRoad) {
+        // Override lane sections from the TS catalog. The Rust WASM templates
+        // have different lane counts; the TS catalog is the single source of truth.
+        const catalog = loadCatalog();
+        const tplConfig = catalog.roads.find((t) => t.id === viewState.splineTemplateId);
+        if (tplConfig) {
+          newRoad.lane_sections = [buildLaneSection(tplConfig.left, tplConfig.right)];
+        }
         // Apply road links from snapped endpoints
         const snappedEndpoints = viewState.snappedEndpoints.filter(Boolean) as Array<{ knotIndex: number; roadId: string; contactPoint: string }>;
         if (snappedEndpoints.length > 0) {
