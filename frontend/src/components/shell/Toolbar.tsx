@@ -75,6 +75,13 @@ export function Toolbar() {
     document.body.style.userSelect = 'none';
   }, [tx, ty]);
 
+  const handleButtonMouseDownCapture = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as Element).closest('button')) {
+      e.preventDefault();
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    }
+  }, []);
+
   const pluginModeButtons = toolbarButtons.filter((b) => b.group === 'mode');
   const pluginActionButtons = toolbarButtons.filter((b) => b.group === 'action');
 
@@ -82,6 +89,7 @@ export function Toolbar() {
     <div
       className="toolbar"
       style={{ transform: `translateX(calc(-50% + ${tx}px)) translateY(${ty}px)` }}
+      onMouseDownCapture={handleButtonMouseDownCapture}
       onMouseDown={handleMouseDown}
     >
       {/* SelectMode group: only default/select — road/lane/lanesection hidden for now */}

@@ -71,8 +71,15 @@ export function RoadEditToolbar() {
   const project = useProjectStore((s) => s.project);
   const selectedRoad = project?.roads?.find((r) => r.id === selectedRoadId) ?? null;
 
+  const handleButtonMouseDownCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as Element).closest('button')) {
+      e.preventDefault();
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    }
+  };
+
   return (
-    <div className="road-edit-toolbar">
+    <div className="road-edit-toolbar" onMouseDownCapture={handleButtonMouseDownCapture}>
       <div className="road-edit-toolbar__header">
         {t('toolPanel.roadEditSection')}
       </div>

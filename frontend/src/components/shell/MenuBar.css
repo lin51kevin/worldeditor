@@ -42,6 +42,13 @@
   background: var(--color-bg-hover);
 }
 
+.menubar-hamburger:focus:not(:focus-visible),
+.menubar-item:focus:not(:focus-visible),
+.menubar-action-btn:focus:not(:focus-visible),
+.menubar-icon-btn:focus:not(:focus-visible) {
+  outline: none;
+}
+
 /* Mega dropdown — first-level menu list */
 .menubar-mega-dropdown {
   position: absolute;
@@ -307,6 +314,7 @@
 .menubar-dropdown-item.checked {
   color: var(--color-text-primary);
 }
+
 /* Submenu trigger items (have flyout submenu) */
 .menubar-has-sub {
   cursor: pointer;

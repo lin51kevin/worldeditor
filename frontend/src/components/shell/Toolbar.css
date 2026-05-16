@@ -45,6 +45,10 @@
   border-color: var(--color-border);
 }
 
+.toolbar-btn:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .toolbar-btn:disabled {
   opacity: 0.4;
   cursor: default;
