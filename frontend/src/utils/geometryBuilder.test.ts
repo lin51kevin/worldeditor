@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildLineGeometry,
+  buildArcGeometry,
+  buildSpiralGeometry,
+  buildRoadFromGeometry,
   buildMultiLineGeometries,
   buildMultiArcGeometries,
   buildMultiSpiralGeometries,
   buildRoadFromGeometries,
+  sampleGeometryPoints,
 } from './geometryBuilder';
 
 // ─── buildMultiLineGeometries ──────────────────────────────────────────────
@@ -185,5 +189,100 @@ describe('buildRoadFromGeometries', () => {
     const road = buildRoadFromGeometries('r3', [geo]);
     expect(road.length).toBeCloseTo(10, 5);
     expect(road.plan_view).toHaveLength(1);
+  });
+});
+
+// ─── buildArcGeometry (direct) ────────────────────────────────────────────
+
+describe('buildArcGeometry', () => {
+  it('produces arc geo_type for non-collinear points', () => {
+    const geo = buildArcGeometry([0, 0, 0], [5, 5, 0], [10, 0, 0]);
+    expect(typeof geo.geo_type).toBe('object');
+    if (typeof geo.geo_type === 'object' && 'Arc' in geo.geo_type) {
+      expect(Math.abs(geo.geo_type.Arc.curvature)).toBeGreaterThan(0);
+    }
+  });
+
+  it('falls back to line for collinear points', () => {
+    const geo = buildArcGeometry([0, 0, 0], [5, 0, 0], [10, 0, 0]);
+    expect(geo.geo_type).toBe('Line');
+  });
+});
+
+// ─── buildSpiralGeometry (direct) ────────────────────────────────────────
+
+describe('buildSpiralGeometry', () => {
+  it('produces a spiral geometry', () => {
+    const geo = buildSpiralGeometry([0, 0, 0], [10, 0, 0]);
+    expect(typeof geo.geo_type).toBe('object');
+    if (typeof geo.geo_type === 'object' && 'Spiral' in geo.geo_type) {
+      expect(geo.geo_type.Spiral.curv_start).toBe(0);
+      expect(geo.geo_type.Spiral.curv_end).toBeGreaterThan(0);
+    }
+    expect(geo.length).toBeCloseTo(10, 5);
+  });
+});
+
+// ─── buildRoadFromGeometry (singular) ────────────────────────────────────
+
+describe('buildRoadFromGeometry', () => {
+  it('creates a road with correct id and geometry', () => {
+    const geo = buildLineGeometry([0, 0, 0], [20, 0, 0]);
+    const road = buildRoadFromGeometry('road-1', geo);
+    expect(road.id).toBe('road-1');
+    expect(road.length).toBeCloseTo(20, 5);
+    expect(road.plan_view).toHaveLength(1);
+  });
+
+  it('has one lane section with left/center/right lanes', () => {
+    const geo = buildLineGeometry([0, 0, 0], [10, 0, 0]);
+    const road = buildRoadFromGeometry('r', geo);
+    expect(road.lane_sections).toHaveLength(1);
+    expect(road.lane_sections[0]!.left).toHaveLength(1);
+    expect(road.lane_sections[0]!.center).toHaveLength(1);
+    expect(road.lane_sections[0]!.right).toHaveLength(1);
+  });
+});
+
+// ─── sampleGeometryPoints ─────────────────────────────────────────────────
+
+describe('sampleGeometryPoints', () => {
+  it('returns numSamples+1 points for a line', () => {
+    const geo = buildLineGeometry([0, 0, 0], [10, 0, 0]);
+    const pts = sampleGeometryPoints(geo, 10);
+    expect(pts).toHaveLength(11);
+  });
+
+  it('first point equals geometry start', () => {
+    const geo = buildLineGeometry([5, 3, 0], [15, 3, 0]);
+    const pts = sampleGeometryPoints(geo, 5);
+    expect(pts[0]![0]).toBeCloseTo(5, 4);
+    expect(pts[0]![1]).toBeCloseTo(3, 4);
+  });
+
+  it('last point equals geometry end for a straight line', () => {
+    const geo = buildLineGeometry([0, 0, 0], [10, 0, 0]);
+    const pts = sampleGeometryPoints(geo, 10);
+    expect(pts[10]![0]).toBeCloseTo(10, 4);
+    expect(pts[10]![1]).toBeCloseTo(0, 4);
+  });
+
+  it('samples arc geometry without error', () => {
+    const geo = buildArcGeometry([0, 0, 0], [5, 5, 0], [10, 0, 0]);
+    const pts = sampleGeometryPoints(geo, 8);
+    expect(pts).toHaveLength(9);
+    for (const p of pts) {
+      expect(isNaN(p[0])).toBe(false);
+      expect(isNaN(p[1])).toBe(false);
+    }
+  });
+
+  it('samples spiral geometry without error', () => {
+    const geo = buildSpiralGeometry([0, 0, 0], [10, 0, 0]);
+    const pts = sampleGeometryPoints(geo, 8);
+    expect(pts).toHaveLength(9);
+    for (const p of pts) {
+      expect(isNaN(p[0])).toBe(false);
+    }
   });
 });

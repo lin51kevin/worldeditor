@@ -1,6 +1,19 @@
 import { act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, test } from 'vitest';
 import { DEFAULT_DISPLAY, useEditorViewStore } from './editorViewStore';
+import type { EditableSpline, SplineKnot } from '../services/platform';
+import { makeSignalKey, makeObjectKey } from '../utils/sceneGraph';
+
+function makeSplineKnot(position: [number, number, number], s: number): SplineKnot {
+  return {
+    position,
+    tangent_in: [0, 0, 0],
+    tangent_out: [0, 0, 0],
+    s,
+    knot_type: 'Key',
+    tangent_mode: 'Manual',
+  };
+}
 
 describe('editorViewStore', () => {
   beforeEach(() => {
@@ -338,6 +351,215 @@ describe('editorViewStore', () => {
       expect(d.hiddenLaneKeys).toEqual([]);
       expect(d.hiddenSignalKeys).toEqual([]);
       expect(d.hiddenObjectKeys).toEqual([]);
+    });
+  });
+
+  describe('spline template and pending', () => {
+    it('setSplineTemplateId updates template id', () => {
+      act(() => { useEditorViewStore.getState().setSplineTemplateId('my-tpl'); });
+      expect(useEditorViewStore.getState().splineTemplateId).toBe('my-tpl');
+    });
+
+    it('setPendingTemplate sets pendingTemplateId', () => {
+      act(() => { useEditorViewStore.getState().setPendingTemplate('tpl:foo'); });
+      expect(useEditorViewStore.getState().pendingTemplateId).toBe('tpl:foo');
+    });
+
+    it('clearPendingTemplate clears pendingTemplateId', () => {
+      act(() => {
+        useEditorViewStore.getState().setPendingTemplate('tpl:foo');
+        useEditorViewStore.getState().clearPendingTemplate();
+      });
+      expect(useEditorViewStore.getState().pendingTemplateId).toBeNull();
+    });
+  });
+
+  describe('setSplineKnots / setDraggingKnot / setCursorPreviewPos', () => {
+    it('setSplineKnots replaces knot array', () => {
+      act(() => { useEditorViewStore.getState().setSplineKnots([[1, 2, 0], [3, 4, 0]]); });
+      expect(useEditorViewStore.getState().splineKnots).toEqual([[1, 2, 0], [3, 4, 0]]);
+    });
+
+    it('setDraggingKnot stores dragging info', () => {
+      act(() => { useEditorViewStore.getState().setDraggingKnot({ index: 2, type: 'in' }); });
+      expect(useEditorViewStore.getState().draggingKnot).toEqual({ index: 2, type: 'in' });
+    });
+
+    it('setDraggingKnot can be cleared with null', () => {
+      act(() => {
+        useEditorViewStore.getState().setDraggingKnot({ index: 0, type: 'knot' });
+        useEditorViewStore.getState().setDraggingKnot(null);
+      });
+      expect(useEditorViewStore.getState().draggingKnot).toBeNull();
+    });
+
+    it('setCursorPreviewPos stores preview position', () => {
+      act(() => { useEditorViewStore.getState().setCursorPreviewPos([5, 6, 7]); });
+      expect(useEditorViewStore.getState().cursorPreviewPos).toEqual([5, 6, 7]);
+    });
+
+    it('setCursorPreviewPos can be cleared', () => {
+      act(() => {
+        useEditorViewStore.getState().setCursorPreviewPos([5, 6, 7]);
+        useEditorViewStore.getState().setCursorPreviewPos(null);
+      });
+      expect(useEditorViewStore.getState().cursorPreviewPos).toBeNull();
+    });
+  });
+
+  describe('tangent overrides', () => {
+    it('setSplineTangentOverride stores override for index', () => {
+      act(() => { useEditorViewStore.getState().setSplineTangentOverride(1, [1, 0, 0]); });
+      expect(useEditorViewStore.getState().splineTangentOverrides[1]).toEqual([1, 0, 0]);
+    });
+
+    it('setSplineTangentInOverride stores in-tangent override', () => {
+      act(() => { useEditorViewStore.getState().setSplineTangentInOverride(2, [0, 1, 0]); });
+      expect(useEditorViewStore.getState().splineTangentInOverrides[2]).toEqual([0, 1, 0]);
+    });
+
+    it('clearSplineTangentOverrides removes all overrides', () => {
+      act(() => {
+        useEditorViewStore.getState().setSplineTangentOverride(0, [1, 0, 0]);
+        useEditorViewStore.getState().setSplineTangentInOverride(0, [0, 1, 0]);
+        useEditorViewStore.getState().clearSplineTangentOverrides();
+      });
+      expect(useEditorViewStore.getState().splineTangentOverrides).toEqual({});
+      expect(useEditorViewStore.getState().splineTangentInOverrides).toEqual({});
+    });
+
+    it('setTangentCoupling changes coupling mode', () => {
+      act(() => { useEditorViewStore.getState().setTangentCoupling('broken'); });
+      expect(useEditorViewStore.getState().tangentCoupling).toBe('broken');
+    });
+  });
+
+  describe('draw snap actions', () => {
+    it('setDrawSnapResult stores result', () => {
+      const snap = { x: 1, y: 2, snapped: true, snapType: 'Endpoint' as const, targetId: 'r1', contactPoint: 'start' };
+      act(() => { useEditorViewStore.getState().setDrawSnapResult(snap); });
+      expect(useEditorViewStore.getState().drawSnapResult).toEqual(snap);
+    });
+
+    it('addSnappedEndpoint appends entry', () => {
+      act(() => { useEditorViewStore.getState().addSnappedEndpoint({ knotIndex: 0, roadId: 'r1', contactPoint: 'start' }); });
+      expect(useEditorViewStore.getState().snappedEndpoints[0]).toEqual({ knotIndex: 0, roadId: 'r1', contactPoint: 'start' });
+    });
+
+    it('clearDrawSnap clears drawSnapResult and snappedEndpoints', () => {
+      const snap = { x: 1, y: 2, snapped: true, snapType: 'Endpoint' as const, targetId: 'r1', contactPoint: 'start' };
+      act(() => {
+        useEditorViewStore.getState().setDrawSnapResult(snap);
+        useEditorViewStore.getState().addSnappedEndpoint({ knotIndex: 0, roadId: 'r1', contactPoint: 'start' });
+        useEditorViewStore.getState().clearDrawSnap();
+      });
+      expect(useEditorViewStore.getState().drawSnapResult).toBeNull();
+      expect(useEditorViewStore.getState().snappedEndpoints).toEqual([]);
+    });
+  });
+
+  describe('geometry edit actions', () => {
+    const sampleSpline: EditableSpline = {
+      knots: [makeSplineKnot([0, 0, 0], 0), makeSplineKnot([10, 0, 0], 10)],
+    };
+
+    it('enterGeometryEdit stores roadId and spline', () => {
+      act(() => { useEditorViewStore.getState().enterGeometryEdit('r1', sampleSpline); });
+      expect(useEditorViewStore.getState().geometryEditRoadId).toBe('r1');
+      expect(useEditorViewStore.getState().geometryEditSpline).toEqual(sampleSpline);
+    });
+
+    it('exitGeometryEdit clears road and spline', () => {
+      act(() => {
+        useEditorViewStore.getState().enterGeometryEdit('r1', sampleSpline);
+        useEditorViewStore.getState().exitGeometryEdit();
+      });
+      expect(useEditorViewStore.getState().geometryEditRoadId).toBeNull();
+      expect(useEditorViewStore.getState().geometryEditSpline).toBeNull();
+    });
+
+    it('setGeometryEditSpline updates the spline', () => {
+      act(() => {
+        useEditorViewStore.getState().enterGeometryEdit('r1', sampleSpline);
+        const updated: EditableSpline = {
+          knots: [makeSplineKnot([0, 0, 0], 0), makeSplineKnot([5, 0, 0], 5), makeSplineKnot([10, 0, 0], 10)],
+        };
+        useEditorViewStore.getState().setGeometryEditSpline(updated);
+      });
+      expect(useEditorViewStore.getState().geometryEditSpline?.knots).toHaveLength(3);
+    });
+  });
+
+  describe('deprecated draw point actions', () => {
+    it('appendDrawPoint appends to splineKnots', () => {
+      act(() => { useEditorViewStore.getState().appendDrawPoint([1, 2, 0]); });
+      expect(useEditorViewStore.getState().splineKnots).toContainEqual([1, 2, 0]);
+    });
+
+    it('clearDrawPoints clears splineKnots', () => {
+      act(() => {
+        useEditorViewStore.getState().appendDrawPoint([1, 2, 0]);
+        useEditorViewStore.getState().clearDrawPoints();
+      });
+      expect(useEditorViewStore.getState().splineKnots).toEqual([]);
+    });
+  });
+
+  describe('display settings', () => {
+    it('toggleDisplaySetting flips showLaneLines', () => {
+      expect(useEditorViewStore.getState().display.showLaneLines).toBe(true);
+      act(() => { useEditorViewStore.getState().toggleDisplaySetting('showLaneLines'); });
+      expect(useEditorViewStore.getState().display.showLaneLines).toBe(false);
+    });
+
+    it('setColorMode changes colorMode', () => {
+      act(() => { useEditorViewStore.getState().setColorMode('byRoad'); });
+      expect(useEditorViewStore.getState().display.colorMode).toBe('byRoad');
+    });
+
+    it('toggleRoadVisibility hides and shows a road', () => {
+      act(() => { useEditorViewStore.getState().toggleRoadVisibility('r1'); });
+      expect(useEditorViewStore.getState().display.hiddenRoadIds).toContain('r1');
+      act(() => { useEditorViewStore.getState().toggleRoadVisibility('r1'); });
+      expect(useEditorViewStore.getState().display.hiddenRoadIds).not.toContain('r1');
+    });
+
+    it('toggleJunctionVisibility hides a junction', () => {
+      act(() => { useEditorViewStore.getState().toggleJunctionVisibility('j1'); });
+      expect(useEditorViewStore.getState().display.hiddenJunctionIds).toContain('j1');
+    });
+
+    it('toggleSignalVisibility hides a signal', () => {
+      act(() => { useEditorViewStore.getState().toggleSignalVisibility('r1', 'sig1'); });
+      expect(useEditorViewStore.getState().display.hiddenSignalKeys).toContain(makeSignalKey('r1', 'sig1'));
+    });
+
+    it('toggleObjectVisibility hides an object', () => {
+      act(() => { useEditorViewStore.getState().toggleObjectVisibility('r1', 'obj1'); });
+      expect(useEditorViewStore.getState().display.hiddenObjectKeys).toContain(makeObjectKey('r1', 'obj1'));
+    });
+  });
+
+  describe('panel layout (additional)', () => {
+    it('setOutputHeight clamps between 80 and 300', () => {
+      act(() => { useEditorViewStore.getState().setOutputHeight(50); });
+      expect(useEditorViewStore.getState().layout.outputHeight).toBe(80);
+      act(() => { useEditorViewStore.getState().setOutputHeight(999); });
+      expect(useEditorViewStore.getState().layout.outputHeight).toBe(300);
+      act(() => { useEditorViewStore.getState().setOutputHeight(200); });
+      expect(useEditorViewStore.getState().layout.outputHeight).toBe(200);
+    });
+
+    it('toggleTemplatePanel flips templatePanelCollapsed', () => {
+      const before = useEditorViewStore.getState().layout.templatePanelCollapsed;
+      act(() => { useEditorViewStore.getState().toggleTemplatePanel(); });
+      expect(useEditorViewStore.getState().layout.templatePanelCollapsed).toBe(!before);
+    });
+
+    it('initLayout loads layout from localStorage (default when empty)', () => {
+      act(() => { useEditorViewStore.getState().initLayout(); });
+      const layout = useEditorViewStore.getState().layout;
+      expect(layout.leftWidth).toBeGreaterThan(0);
     });
   });
 });

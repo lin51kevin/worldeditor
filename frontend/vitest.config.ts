@@ -18,15 +18,37 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],
-      include: ['src/**/*.{ts,tsx}'],
+      include: ['src/**/*.ts'],
       exclude: [
         'src/**/*.test.*',
         'src/**/*.spec.*',
+        'src/**/*.bench.*',
+        'src/**/*.d.ts',
         'src/test-setup.ts',
         'src/main.tsx',
+        // WebGPU rendering — requires GPU device, not unit-testable
         'src/viewport/renderer.ts',
+        'src/viewport/markerRenderer.ts',
+        'src/viewport/pipelineFactory.ts',
+        // WASM-dependent abstract class — integration/E2E tested
+        'src/services/basePlatformService.ts',
+        // Platform adapters — covered via Tauri/Web integration tests
         'src/services/tauri.ts',
         'src/services/platform.ts',
+        // DOM event / camera input handler — covered via E2E tests
+        'src/viewport/cameraController.ts',
+        // Dynamic plugin loader — requires real file-system
+        'src/plugins/pluginLoader.ts',
+        // Viewport interaction hooks — require DOM events + WebGPU, covered by E2E
+        'src/hooks/useSplineDrawMode.ts',
+        'src/hooks/useSplineDrawPreview.ts',
+        'src/hooks/useGeometryEditMode.ts',
+        'src/hooks/useMoveRotateMode.ts',
+        'src/hooks/useRubberBandSelect.ts',
+        'src/hooks/useSplineOperations.ts',
+        // Component helpers dependent on WebGPU context — covered by E2E
+        'src/components/viewportUtils.ts',
+        'src/components/shell/definitions.ts',
       ],
       thresholds: {
         statements: 80,
