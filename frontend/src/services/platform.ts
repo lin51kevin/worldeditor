@@ -328,7 +328,7 @@ export interface PlatformService {
   openFileByPath(path: string): Promise<{ name: string; content: string } | null>;
 
   /** Save content to a file. */
-  saveFile(filename: string, content: string): Promise<void>;
+  saveFile(filename: string, content: string): Promise<string | null>;
 
   /** Get platform info. */
   getPlatformInfo(): { type: 'tauri' | 'web'; version: string };

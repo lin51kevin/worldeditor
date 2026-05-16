@@ -32,6 +32,7 @@ export interface ShortcutsConfig {
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
   toggleOutputPanel: () => void;
+  toggleValidationPanel?: () => void;
   onShowShortcutHelp: (show: boolean) => void;
   /** Called when a shortcut should change the active edit/draw mode. */
   onSetEditMode: (mode: ActiveMode) => void;
@@ -50,6 +51,7 @@ export function useKeyboardShortcuts({
   toggleLeftPanel,
   toggleRightPanel,
   toggleOutputPanel,
+  toggleValidationPanel,
   onShowShortcutHelp,
   onSetEditMode,
   onEscape,
@@ -82,6 +84,11 @@ export function useKeyboardShortcuts({
       if (mod && e.key === 'j') {
         e.preventDefault();
         toggleOutputPanel();
+        return;
+      }
+      if (mod && e.shiftKey && (e.key === 'v' || e.key === 'V')) {
+        e.preventDefault();
+        toggleValidationPanel?.();
         return;
       }
       if (mod && e.key === 'a') {

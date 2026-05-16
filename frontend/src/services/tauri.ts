@@ -46,7 +46,7 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
     }
   }
 
-  async saveFile(filename: string, content: string): Promise<void> {
+  async saveFile(filename: string, content: string): Promise<string | null> {
     const { save } = await import('@tauri-apps/plugin-dialog');
     const { writeTextFile } = await import('@tauri-apps/plugin-fs');
 
@@ -57,7 +57,9 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
 
     if (path) {
       await writeTextFile(path, content);
+      return path;
     }
+    return null;
   }
 
   getPlatformInfo() {

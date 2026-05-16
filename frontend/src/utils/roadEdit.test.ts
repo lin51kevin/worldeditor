@@ -261,7 +261,7 @@ describe('deploySidewalks', () => {
     const road = makeRoad('r1', 100, 2, 2);
     const result = deploySidewalks(road);
 
-    const hasSidewalk = result.lane_sections[0]!.left.some((l) => l.lane_type === 'sidewalk');
+    const hasSidewalk = result.lane_sections[0]!.left.some((l) => l.lane_type === 'Sidewalk');
     expect(hasSidewalk).toBe(true);
   });
 
@@ -269,7 +269,7 @@ describe('deploySidewalks', () => {
     const road = makeRoad('r1', 100, 2, 2);
     const result = deploySidewalks(road);
 
-    const hasSidewalk = result.lane_sections[0]!.right.some((l) => l.lane_type === 'sidewalk');
+    const hasSidewalk = result.lane_sections[0]!.right.some((l) => l.lane_type === 'Sidewalk');
     expect(hasSidewalk).toBe(true);
   });
 
@@ -292,18 +292,18 @@ describe('deploySidewalks', () => {
   it('does not add duplicate sidewalks (left)', () => {
     let road = makeRoad('r1', 100, 2, 2);
     road = deploySidewalks(road);
-    const afterFirst = road.lane_sections[0]!.left.filter((l) => l.lane_type === 'sidewalk').length;
+    const afterFirst = road.lane_sections[0]!.left.filter((l) => l.lane_type === 'Sidewalk').length;
     road = deploySidewalks(road);
-    const afterSecond = road.lane_sections[0]!.left.filter((l) => l.lane_type === 'sidewalk').length;
+    const afterSecond = road.lane_sections[0]!.left.filter((l) => l.lane_type === 'Sidewalk').length;
     expect(afterSecond).toBe(afterFirst);
   });
 
   it('does not add duplicate sidewalks (right)', () => {
     let road = makeRoad('r1', 100, 2, 2);
     road = deploySidewalks(road);
-    const afterFirst = road.lane_sections[0]!.right.filter((l) => l.lane_type === 'sidewalk').length;
+    const afterFirst = road.lane_sections[0]!.right.filter((l) => l.lane_type === 'Sidewalk').length;
     road = deploySidewalks(road);
-    const afterSecond = road.lane_sections[0]!.right.filter((l) => l.lane_type === 'sidewalk').length;
+    const afterSecond = road.lane_sections[0]!.right.filter((l) => l.lane_type === 'Sidewalk').length;
     expect(afterSecond).toBe(afterFirst);
   });
 
@@ -311,32 +311,32 @@ describe('deploySidewalks', () => {
     const road = makeRoad('r1', 100, 2, 0);
     const result = deploySidewalks(road);
 
-    const hasRightSidewalk = result.lane_sections[0]!.right.some((l) => l.lane_type === 'sidewalk');
+    const hasRightSidewalk = result.lane_sections[0]!.right.some((l) => l.lane_type === 'Sidewalk');
     expect(hasRightSidewalk).toBe(true);
-    const hasLeftSidewalk = result.lane_sections[0]!.left.some((l) => l.lane_type === 'sidewalk');
+    const hasLeftSidewalk = result.lane_sections[0]!.left.some((l) => l.lane_type === 'Sidewalk');
     expect(hasLeftSidewalk).toBe(true); // adds sidewalk at id=1 even if no lanes before it
   });
 
   it('applies correct default sidewalk width', () => {
     const road = makeRoad('r1', 100, 1, 0);
     const result = deploySidewalks(road);
-    const sidewalk = result.lane_sections[0]!.right.find((l) => l.lane_type === 'sidewalk');
+    const sidewalk = result.lane_sections[0]!.right.find((l) => l.lane_type === 'Sidewalk');
     expect(sidewalk?.width[0]?.a).toBeCloseTo(2.0);
   });
 
   it('respects custom sidewalk width', () => {
     const road = makeRoad('r1', 100, 1, 0);
     const result = deploySidewalks(road, 3.5);
-    const sidewalk = result.lane_sections[0]!.right.find((l) => l.lane_type === 'sidewalk');
+    const sidewalk = result.lane_sections[0]!.right.find((l) => l.lane_type === 'Sidewalk');
     expect(sidewalk?.width[0]?.a).toBeCloseTo(3.5);
   });
 
   it('applies road mark to deployed sidewalk', () => {
     const road = makeRoad('r1', 100, 1, 0);
     const result = deploySidewalks(road);
-    const sidewalk = result.lane_sections[0]!.right.find((l) => l.lane_type === 'sidewalk');
+    const sidewalk = result.lane_sections[0]!.right.find((l) => l.lane_type === 'Sidewalk');
     expect(sidewalk?.road_marks).toHaveLength(1);
-    expect(sidewalk?.road_marks[0]?.mark_type).toBe('solid');
+    expect(sidewalk?.road_marks[0]?.mark_type).toBe('Solid');
   });
 
   it('does not mutate the original road', () => {
@@ -354,28 +354,28 @@ describe('applyStandardMarkings', () => {
     const road = makeRoad('r1', 100, 2, 0); // right: id=-1, id=-2
     const result = applyStandardMarkings(road);
     const outer = result.lane_sections[0]!.right.find((l) => l.id === -2);
-    expect(outer?.road_marks[0]?.mark_type).toBe('solid');
+    expect(outer?.road_marks[0]?.mark_type).toBe('Solid');
   });
 
   it('sets broken mark on inner right lanes', () => {
     const road = makeRoad('r1', 100, 2, 0);
     const result = applyStandardMarkings(road);
     const inner = result.lane_sections[0]!.right.find((l) => l.id === -1);
-    expect(inner?.road_marks[0]?.mark_type).toBe('broken');
+    expect(inner?.road_marks[0]?.mark_type).toBe('Broken');
   });
 
   it('sets solid mark on the outermost left lane (max id)', () => {
     const road = makeRoad('r1', 100, 0, 2); // left: id=1, id=2
     const result = applyStandardMarkings(road);
     const outer = result.lane_sections[0]!.left.find((l) => l.id === 2);
-    expect(outer?.road_marks[0]?.mark_type).toBe('solid');
+    expect(outer?.road_marks[0]?.mark_type).toBe('Solid');
   });
 
   it('sets broken mark on inner left lanes', () => {
     const road = makeRoad('r1', 100, 0, 2);
     const result = applyStandardMarkings(road);
     const inner = result.lane_sections[0]!.left.find((l) => l.id === 1);
-    expect(inner?.road_marks[0]?.mark_type).toBe('broken');
+    expect(inner?.road_marks[0]?.mark_type).toBe('Broken');
   });
 
   it('does not throw for a road with no driving lanes', () => {
@@ -390,7 +390,7 @@ describe('applyStandardMarkings', () => {
       ...result.lane_sections[0]!.left,
       ...result.lane_sections[0]!.right,
     ].flatMap((l) => l.road_marks);
-    expect(allMarks.every((m) => m.color === 'white')).toBe(true);
+    expect(allMarks.every((m) => m.color === 'White')).toBe(true);
   });
 
   it('does not mutate the original road', () => {
@@ -408,8 +408,8 @@ describe('applyStandardMarkings', () => {
       ],
     };
     const result = applyStandardMarkings(road);
-    expect(result.lane_sections[0]!.right.find((l) => l.id === -2)?.road_marks[0]?.mark_type).toBe('solid');
-    expect(result.lane_sections[1]!.right.find((l) => l.id === -1)?.road_marks[0]?.mark_type).toBe('solid');
+    expect(result.lane_sections[0]!.right.find((l) => l.id === -2)?.road_marks[0]?.mark_type).toBe('Solid');
+    expect(result.lane_sections[1]!.right.find((l) => l.id === -1)?.road_marks[0]?.mark_type).toBe('Solid');
   });
 });
 

@@ -64,14 +64,15 @@ export function useMenuActions() {
   }, [project]);
 
   const handleSaveAs = useCallback(async () => {
-    const name = await showPrompt(t('dialog.projectName'), project.name);
-    if (!name) return;
     const platform = await getPlatformService();
     const xml = await platform.writeOpenDrive(project);
-    await platform.saveFile(name, xml);
-    setProject({ ...project, name });
+    const savedPath = await platform.saveFile(project.name, xml);
+    if (!savedPath) return; // user cancelled the dialog
+    // Extract bare filename (without path separators) to use as project name
+    const bare = savedPath.replace(/\\/g, '/').split('/').pop() ?? savedPath;
+    setProject({ ...project, name: bare });
     useProjectStore.getState().markClean();
-  }, [project, setProject, t]);
+  }, [project, setProject]);
 
   const handleImportOpenDrive = useCallback(async () => {
     try {

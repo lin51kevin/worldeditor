@@ -48,7 +48,7 @@ export abstract class BasePlatformService implements PlatformService {
   abstract writeOpenDrive(project: Project): Promise<string>;
   abstract openFile(): Promise<{ name: string; content: string; path?: string } | null>;
   abstract openFileByPath(path: string): Promise<{ name: string; content: string } | null>;
-  abstract saveFile(filename: string, content: string): Promise<void>;
+  abstract saveFile(filename: string, content: string): Promise<string | null>;
   abstract getPlatformInfo(): { type: 'tauri' | 'web'; version: string };
 
   // --- GIS conversions ---

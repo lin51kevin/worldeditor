@@ -16,8 +16,8 @@ function isTauri(): boolean {
 async function syncNativeTheme(theme: Theme): Promise<void> {
   if (!isTauri()) return;
   try {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window');
-    await getCurrentWindow().setTheme(theme);
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('set_window_theme', { theme });
   } catch {
     // Non-critical: native title bar theme sync failure should not break the app
   }

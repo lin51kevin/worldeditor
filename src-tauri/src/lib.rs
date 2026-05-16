@@ -25,6 +25,7 @@ pub fn run() {
             commands::plugin_disable,
             commands::plugin_install,
             commands::plugin_unload,
+            commands::set_window_theme,
         ])
         .setup(|app| {
             // Create the main window programmatically so we can call
@@ -41,6 +42,7 @@ pub fn run() {
             .min_inner_size(800.0, 600.0)
             .maximized(true)
             .resizable(true)
+            .theme(Some(tauri::Theme::Dark))
             .disable_drag_drop_handler()
             .build()?;
 

@@ -79,6 +79,9 @@ export class ViewportRenderer {
   private showGrid = true;
   private showAxis = true;
 
+  // View mode: solid = full mesh, wire = lane lines only, sketch = outline style
+  private viewMode: 'solid' | 'wire' | 'sketch' = 'solid';
+
   // Theme colors
   private clearColor: { r: number; g: number; b: number; a: number } = { r: 0.10, g: 0.10, b: 0.12, a: 1.0 };
   private gridColor: [number, number, number] = [0.50, 0.50, 0.50];
@@ -313,6 +316,12 @@ export class ViewportRenderer {
     this.cameraController.markDirty();
   }
 
+  /** Set the render view mode (solid / wire / sketch). */
+  setViewMode(mode: 'solid' | 'wire' | 'sketch'): void {
+    this.viewMode = mode;
+    this.cameraController.markDirty();
+  }
+
   /** Set the WebGPU clear (background) color. */
   setClearColor(r: number, g: number, b: number): void {
     this.clearColor = { r, g, b, a: 1.0 };
@@ -523,7 +532,8 @@ export class ViewportRenderer {
     }
 
     // Draw road meshes (render first - on bottom)
-    if (this.meshes.length > 0) {
+    // In wire/sketch mode the solid fill is suppressed; only lane lines show geometry.
+    if (this.meshes.length > 0 && this.viewMode === 'solid') {
       pass.setPipeline(this.basicPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
       for (const mesh of this.meshes) {

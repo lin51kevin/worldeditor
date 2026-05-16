@@ -68,7 +68,7 @@ function createPlatformMock() {
   const parseOpenDrive = vi.fn<PlatformService['parseOpenDrive']>().mockResolvedValue(makeProject());
   const writeOpenDrive = vi.fn<PlatformService['writeOpenDrive']>().mockResolvedValue('<OpenDRIVE />');
   const openFile = vi.fn<PlatformService['openFile']>().mockResolvedValue(null);
-  const saveFile = vi.fn<PlatformService['saveFile']>().mockResolvedValue(undefined);
+  const saveFile = vi.fn<PlatformService['saveFile']>().mockResolvedValue(null);
   const openFileByPath = vi.fn<PlatformService['openFileByPath']>().mockResolvedValue(null);
 
   const platform: PlatformService = {
@@ -378,8 +378,10 @@ describe('MenuBar', () => {
       useProjectStore.setState({ project: makeProject([], 'SaveTarget'), isDirty: true });
     });
 
+    // For Save As, mock saveFile to return the chosen path (simulates native dialog accepting)
+    vi.mocked(platform.saveFile).mockResolvedValueOnce('renamed.xodr');
     dispatchWindowKey({ key: 's', ctrlKey: true, shiftKey: true });
-    await waitFor(() => expect(platform.saveFile).toHaveBeenCalledWith('renamed.xodr', '<OpenDRIVE />'));
+    await waitFor(() => expect(platform.saveFile).toHaveBeenCalledWith('SaveTarget', '<OpenDRIVE />'));
     await waitFor(() => expect(useProjectStore.getState().project.name).toBe('renamed.xodr'));
 
     act(() => {

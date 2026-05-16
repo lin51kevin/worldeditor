@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import {
   MousePointer,
   Route,
+  Layers,
+  GitBranch,
+  Box,
 } from 'lucide-react';
 import { useViewportStore } from '../../stores/viewportStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -25,6 +28,8 @@ export function Toolbar() {
     editMode,
     setEditMode,
     clearSplineKnots,
+    viewMode,
+    setViewMode,
   } = useViewportStore();
 
   // Subscribe so toolbar re-renders when selectedRoadId changes (plugin buttons may react to selection state)
@@ -147,6 +152,38 @@ export function Toolbar() {
           </div>
         </>
       )}
+
+      {/* View mode group: sketch / wire / solid */}
+      <div className="toolbar-separator" />
+      <div className="toolbar-group">
+        <button
+          className={`toolbar-btn toolbar-toggle ${viewMode === 'sketch' ? 'active' : ''}`}
+          onClick={() => setViewMode('sketch')}
+          title={t('toolbar.sketchTitle', 'Sketch (outline only)')}
+          aria-label={t('toolbar.sketch', 'Sketch')}
+          aria-pressed={viewMode === 'sketch'}
+        >
+          <GitBranch size={16} className="tb-icon" />
+        </button>
+        <button
+          className={`toolbar-btn toolbar-toggle ${viewMode === 'wire' ? 'active' : ''}`}
+          onClick={() => setViewMode('wire')}
+          title={t('toolbar.wireframeTitle', 'Wireframe (lane lines only)')}
+          aria-label={t('toolbar.wireframe', 'Wireframe')}
+          aria-pressed={viewMode === 'wire'}
+        >
+          <Layers size={16} className="tb-icon" />
+        </button>
+        <button
+          className={`toolbar-btn toolbar-toggle ${viewMode === 'solid' ? 'active' : ''}`}
+          onClick={() => setViewMode('solid')}
+          title={t('toolbar.solidTitle', 'Solid (filled mesh)')}
+          aria-label={t('toolbar.solid', 'Solid')}
+          aria-pressed={viewMode === 'solid'}
+        >
+          <Box size={16} className="tb-icon" />
+        </button>
+      </div>
 
     </div>
   );

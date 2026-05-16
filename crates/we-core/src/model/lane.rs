@@ -65,41 +65,68 @@ pub struct RoadMark {
 }
 
 /// Road mark type.
+///
+/// Lowercase aliases accepted on deserialization for TypeScript interop.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RoadMarkType {
+    #[serde(alias = "solid")]
     Solid,
+    #[serde(alias = "broken")]
     Broken,
+    #[serde(alias = "solidSolid", alias = "solid solid", alias = "solid_solid")]
     SolidSolid,
+    #[serde(alias = "solidBroken", alias = "solid broken", alias = "solid_broken")]
     SolidBroken,
+    #[serde(alias = "brokenSolid", alias = "broken solid", alias = "broken_solid")]
     BrokenSolid,
+    #[serde(alias = "bottsDots", alias = "botts dots", alias = "botts_dots")]
     BottsDots,
+    #[serde(alias = "curb")]
     Curb,
+    #[serde(alias = "stopLine", alias = "stop line", alias = "stop_line")]
     StopLine,
+    #[serde(alias = "grass")]
     Grass,
+    #[serde(alias = "custom")]
     Custom,
     #[default]
+    #[serde(alias = "none")]
     None,
 }
 
 /// Road mark color.
+///
+/// Lowercase aliases accepted on deserialization for TypeScript interop.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RoadMarkColor {
     #[default]
+    #[serde(alias = "standard")]
     Standard,
+    #[serde(alias = "white")]
     White,
+    #[serde(alias = "yellow")]
     Yellow,
+    #[serde(alias = "red")]
     Red,
+    #[serde(alias = "blue")]
     Blue,
+    #[serde(alias = "green")]
     Green,
+    #[serde(alias = "orange")]
     Orange,
+    #[serde(alias = "violet")]
     Violet,
 }
 
 /// Road mark weight.
+///
+/// Lowercase aliases accepted on deserialization for TypeScript interop.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RoadMarkWeight {
     #[default]
+    #[serde(alias = "standard")]
     Standard,
+    #[serde(alias = "bold")]
     Bold,
 }
 
@@ -114,34 +141,64 @@ pub struct LaneWidth {
 }
 
 /// Lane type as defined in OpenDRIVE.
+///
+/// Serde accepts both PascalCase (canonical) and lowercase aliases so that
+/// JSON originating from older TypeScript code or external tools round-trips
+/// without errors. Serialization always outputs PascalCase.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LaneType {
+    #[serde(alias = "driving")]
     Driving,
+    #[serde(alias = "shoulder")]
     Shoulder,
+    #[serde(alias = "sidewalk")]
     Sidewalk,
+    #[serde(alias = "border")]
     Border,
+    #[serde(alias = "parking")]
     Parking,
+    #[serde(alias = "median")]
     Median,
+    #[serde(alias = "curb")]
     Curb,
+    #[serde(alias = "stop")]
     Stop,
+    #[serde(alias = "biking")]
     Biking,
+    #[serde(alias = "restricted")]
     Restricted,
+    #[serde(alias = "bidirectional")]
     Bidirectional,
+    #[serde(alias = "rail")]
     Rail,
+    #[serde(alias = "tram")]
     Tram,
+    #[serde(alias = "bus")]
     Bus,
+    #[serde(alias = "taxi")]
     Taxi,
+    #[serde(alias = "hov")]
     HOV,
+    #[serde(alias = "entry")]
     Entry,
+    #[serde(alias = "exit")]
     Exit,
+    #[serde(alias = "offRamp", alias = "offramp", alias = "off_ramp")]
     OffRamp,
+    #[serde(alias = "onRamp", alias = "onramp", alias = "on_ramp")]
     OnRamp,
+    #[serde(alias = "connectingRamp", alias = "connectingramp", alias = "connecting_ramp")]
     ConnectingRamp,
+    #[serde(alias = "special1")]
     Special1,
+    #[serde(alias = "special2")]
     Special2,
+    #[serde(alias = "special3")]
     Special3,
+    #[serde(alias = "roadWorks", alias = "roadworks", alias = "road_works")]
     RoadWorks,
     #[default]
+    #[serde(alias = "none")]
     None,
 }
 
@@ -159,6 +216,39 @@ mod tests {
     #[test]
     fn test_lane_type_default() {
         assert_eq!(LaneType::default(), LaneType::None);
+    }
+
+    #[test]
+    fn test_lane_type_case_insensitive_deserialization() {
+        // PascalCase (canonical)
+        assert_eq!(serde_json::from_str::<LaneType>("\"Sidewalk\"").unwrap(), LaneType::Sidewalk);
+        // lowercase (from TypeScript roadEdit.ts)
+        assert_eq!(serde_json::from_str::<LaneType>("\"sidewalk\"").unwrap(), LaneType::Sidewalk);
+        assert_eq!(serde_json::from_str::<LaneType>("\"driving\"").unwrap(), LaneType::Driving);
+        assert_eq!(serde_json::from_str::<LaneType>("\"none\"").unwrap(), LaneType::None);
+        assert_eq!(serde_json::from_str::<LaneType>("\"shoulder\"").unwrap(), LaneType::Shoulder);
+    }
+
+    #[test]
+    fn test_road_mark_type_case_insensitive_deserialization() {
+        assert_eq!(serde_json::from_str::<RoadMarkType>("\"Solid\"").unwrap(), RoadMarkType::Solid);
+        assert_eq!(serde_json::from_str::<RoadMarkType>("\"solid\"").unwrap(), RoadMarkType::Solid);
+        assert_eq!(serde_json::from_str::<RoadMarkType>("\"broken\"").unwrap(), RoadMarkType::Broken);
+        assert_eq!(serde_json::from_str::<RoadMarkType>("\"none\"").unwrap(), RoadMarkType::None);
+    }
+
+    #[test]
+    fn test_road_mark_weight_case_insensitive_deserialization() {
+        assert_eq!(serde_json::from_str::<RoadMarkWeight>("\"Standard\"").unwrap(), RoadMarkWeight::Standard);
+        assert_eq!(serde_json::from_str::<RoadMarkWeight>("\"standard\"").unwrap(), RoadMarkWeight::Standard);
+        assert_eq!(serde_json::from_str::<RoadMarkWeight>("\"bold\"").unwrap(), RoadMarkWeight::Bold);
+    }
+
+    #[test]
+    fn test_road_mark_color_case_insensitive_deserialization() {
+        assert_eq!(serde_json::from_str::<RoadMarkColor>("\"White\"").unwrap(), RoadMarkColor::White);
+        assert_eq!(serde_json::from_str::<RoadMarkColor>("\"white\"").unwrap(), RoadMarkColor::White);
+        assert_eq!(serde_json::from_str::<RoadMarkColor>("\"yellow\"").unwrap(), RoadMarkColor::Yellow);
     }
 
     #[test]

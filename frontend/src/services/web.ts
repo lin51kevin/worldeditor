@@ -45,8 +45,10 @@ export class WebPlatformService extends BasePlatformService implements PlatformS
     return null;
   }
 
-  async saveFile(filename: string, content: string): Promise<void> {
+  async saveFile(filename: string, content: string): Promise<string | null> {
     downloadBlob(new Blob([content], { type: 'application/xml' }), filename);
+    // Web can't resolve a real FS path; return the filename as a pseudo-identifier.
+    return filename;
   }
 
   getPlatformInfo() {

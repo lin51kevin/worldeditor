@@ -25,15 +25,15 @@ const DEFAULT_MARK_WIDTH = 0.15;
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Build a standard road mark record. */
-function makeMark(markType: 'solid' | 'broken' | 'none', color = 'white'): RoadMark {
+function makeMark(markType: 'Solid' | 'Broken' | 'None', color = 'White'): RoadMark {
   return {
     s_offset: 0,
     mark_type: markType,
-    weight: 'standard',
+    weight: 'Standard',
     color,
     material: 'standard',
     width: DEFAULT_MARK_WIDTH,
-    lane_change: markType === 'broken' ? 'both' : 'none',
+    lane_change: markType === 'Broken' ? 'both' : 'none',
   };
 }
 
@@ -41,11 +41,11 @@ function makeMark(markType: 'solid' | 'broken' | 'none', color = 'white'): RoadM
 function makeSidewalkLane(id: number, width: number): Lane {
   return {
     id,
-    lane_type: 'sidewalk',
+    lane_type: 'Sidewalk',
     level: 0,
     link: null,
     width: [{ s_offset: 0, a: width, b: 0, c: 0, d: 0 }],
-    road_marks: [makeMark('solid')],
+    road_marks: [makeMark('Solid')],
   };
 }
 
@@ -235,8 +235,8 @@ export function weldRoads(road1: Road, road2: Road): Road {
  */
 export function deploySidewalks(road: Road, sidewalkWidth = DEFAULT_SIDEWALK_WIDTH): Road {
   const lane_sections: LaneSection[] = road.lane_sections.map((ls) => {
-    const hasLeftSidewalk = ls.left.some((l) => l.lane_type === 'sidewalk');
-    const hasRightSidewalk = ls.right.some((l) => l.lane_type === 'sidewalk');
+    const hasLeftSidewalk = ls.left.some((l) => l.lane_type === 'Sidewalk');
+    const hasRightSidewalk = ls.right.some((l) => l.lane_type === 'Sidewalk');
 
     const maxLeftId = ls.left.length > 0 ? Math.max(...ls.left.map((l) => l.id)) : 0;
     const minRightId = ls.right.length > 0 ? Math.min(...ls.right.map((l) => l.id)) : 0;
@@ -272,12 +272,12 @@ export function applyStandardMarkings(road: Road): Road {
 
     const left = ls.left.map((lane) => ({
       ...lane,
-      road_marks: [makeMark(lane.id === maxLeftId ? 'solid' : 'broken')],
+      road_marks: [makeMark(lane.id === maxLeftId ? 'Solid' : 'Broken')],
     }));
 
     const right = ls.right.map((lane) => ({
       ...lane,
-      road_marks: [makeMark(lane.id === minRightId ? 'solid' : 'broken')],
+      road_marks: [makeMark(lane.id === minRightId ? 'Solid' : 'Broken')],
     }));
 
     return { ...ls, left, right };

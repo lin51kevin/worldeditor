@@ -41,7 +41,7 @@ export function Viewport() {
   const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
   const selectedRoadIds = useProjectStore((s) => s.selectedRoadIds);
   const selectedJunctionIds = useProjectStore((s) => s.selectedJunctionIds);
-  const { showGrid, showAxis, dimension, display } = useViewportStore();
+  const { showGrid, showAxis, dimension, display, viewMode } = useViewportStore();
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
@@ -412,6 +412,13 @@ export function Viewport() {
     if (!renderer || status !== 'ready') return;
     renderer.setDimension(dimension);
   }, [dimension, status]);
+
+  // Sync view mode (solid/wire/sketch) to renderer
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer || status !== 'ready') return;
+    renderer.setViewMode(viewMode);
+  }, [viewMode, status]);
 
   // Sync theme colors to WebGPU renderer
   useEffect(() => {

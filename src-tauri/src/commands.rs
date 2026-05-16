@@ -228,6 +228,20 @@ fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result
     Ok(())
 }
 
+/// Set the native window theme (title bar colour) from the frontend.
+///
+/// Calling `window.setTheme()` via the JS API can silently fail on Windows in
+/// production builds because the call must originate from the main thread.
+/// Routing it through a Tauri command runs on the correct thread reliably.
+#[tauri::command]
+pub fn set_window_theme(window: tauri::WebviewWindow, theme: String) -> Result<(), String> {
+    let tauri_theme = match theme.as_str() {
+        "light" => Some(tauri::Theme::Light),
+        _ => Some(tauri::Theme::Dark),
+    };
+    window.set_theme(tauri_theme).map_err(|e| e.to_string())
+}
+
 /// Notify the backend that a plugin has been unloaded from the frontend JS context.
 /// (Best-effort; the registry marks it as available again.)
 #[tauri::command]
