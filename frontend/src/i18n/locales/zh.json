@@ -283,7 +283,9 @@
       "roads": "道路",
       "junctions": "交汇处",
       "signals": "信号",
-      "markings": "喷漆"
+      "markings": "喷漆",
+      "objects": "附属物",
+      "signs": "标志牌"
     },
     "roads": {
       "singleLane": "单车道",
@@ -296,7 +298,9 @@
     },
     "junctions": {
       "tIntersection": "T型路口",
+      "tSingleLane": "T型单车道",
       "crossIntersection": "十字路口",
+      "fork": "叉路",
       "fiveWay": "五叉路口",
       "sixWay": "六叉路口",
       "roundabout": "环形路口"
@@ -305,11 +309,16 @@
       "trafficLight": "交通灯",
       "stopSign": "停车标志",
       "warningSign": "警告标志",
+      "giveWay": "让行标志",
+      "noEntry": "禁止驶入",
+      "noParking": "禁止停车",
       "speedLimit30": "限速30",
       "speedLimit60": "限速60",
       "speedLimit80": "限速80",
       "speedLimit120": "限速120",
-      "noEntry": "禁止驶入"
+      "arrowStraight": "直行箭头",
+      "arrowLeft": "左转箭头",
+      "arrowRight": "右转箭头"
     },
     "markings": {
       "solidWhite": "实白线",
@@ -317,7 +326,31 @@
       "solidYellow": "实黄线",
       "doubleYellow": "双黄线",
       "zebraCrossing": "斑马线",
-      "noMarking": "无标线"
+      "noMarking": "无标线",
+      "brokenYellow": "虚黄线",
+      "doubleBroken": "双虚线"
+    },
+    "objects": {
+      "crosswalk": "人行横道",
+      "stopLine": "停止线",
+      "yieldSlowLine": "减速让行线",
+      "yieldStopLine": "停车让行线",
+      "crossHatch": "网格区域",
+      "wovenArea": "交织区域",
+      "forwardWaiting": "直行待行区",
+      "turnLeftWaiting": "左转待行区",
+      "parkingSpace": "停车位",
+      "guardrail": "护栏",
+      "barrier": "隔离墩",
+      "trafficCone": "锥桶",
+      "streetLight": "路灯杆"
+    },
+    "signs": {
+      "signPole": "标志牌",
+      "gantry": "门架式标志",
+      "simpleSignalPole": "简易信号灯杆",
+      "trafficLightPole": "交通灯杆",
+      "lTypePole": "L型信号灯杆"
     }
   },
   "pluginManager": {

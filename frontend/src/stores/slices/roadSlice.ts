@@ -1,4 +1,4 @@
-import type { Geometry, Junction, Road, RoadSignal, RoadObject } from '../../services/platform';
+import type { Geometry, Junction, Road, RoadSignal, RoadObject, RoadObjectItem } from '../../services/platform';
 import type { EditorState, SliceCreator } from './types';
 import { pushUndo } from './types';
 
@@ -23,6 +23,8 @@ export interface RoadSlice {
   addObject: (obj: RoadObject) => void;
   removeObject: (id: string) => void;
   updateObject: (id: string, updates: Partial<RoadObject>) => void;
+  /** Place a RoadObjectItem directly onto a road's objects[] array. */
+  addRoadObjectItem: (roadId: string, obj: RoadObjectItem) => void;
 }
 
 export const createRoadSlice: SliceCreator<RoadSlice> = (set) => ({
@@ -474,6 +476,20 @@ export const createRoadSlice: SliceCreator<RoadSlice> = (set) => ({
         ...state.project,
         objects: (state.project.objects || []).map((o) =>
           o.id === id ? { ...o, ...updates } : o,
+        ),
+      },
+      isDirty: true,
+    })),
+
+  addRoadObjectItem: (roadId, obj) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) =>
+          r.id === roadId
+            ? { ...r, objects: [...(r.objects ?? []), obj] }
+            : r,
         ),
       },
       isDirty: true,

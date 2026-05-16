@@ -9,11 +9,13 @@
 import type {
   Road, Lane, LaneSection, LaneWidth, Geometry, RoadLink,
   RoadMark, RoadSignal, Junction, JunctionConnection, LinkElement,
+  RoadObjectItem,
 } from '../../../services/platform';
 import type {
   LaneConfig, MarkConfig, SectionConfig,
   RoadTemplateConfig, JunctionTemplateConfig, JunctionTopology,
   SignalTemplateConfig, MarkingTemplateConfig,
+  RoadObjectTemplateConfig, SignTemplateConfig,
 } from './schema';
 
 const DEFAULT_ROAD_LENGTH = 100;
@@ -307,4 +309,50 @@ export function buildSignalFromConfig(config: SignalTemplateConfig): RoadSignal 
 
 export function buildMarkFromConfig(config: MarkingTemplateConfig): RoadMark {
   return markConfigToRoadMark(config.mark);
+}
+
+// ── Road-object template → RoadObjectItem ────────────────────────────────────
+
+export function buildRoadObjectFromConfig(
+  config: RoadObjectTemplateConfig,
+  s: number,
+  t: number,
+  hdg = 0,
+): RoadObjectItem {
+  return {
+    id: genId('obj'),
+    object_type: config.objectType,
+    name: '',
+    position: { x: s, y: t, z: 0.1, id: null },
+    orientation: hdg,
+    hdg,
+    width: config.defaultWidth ?? 1.0,
+    height: config.defaultHeight ?? 0.5,
+    length: config.defaultLength ?? 1.0,
+    corners: [],
+    validity: null,
+  };
+}
+
+// ── Sign template → RoadObjectItem ───────────────────────────────────────────
+
+export function buildSignFromConfig(
+  config: SignTemplateConfig,
+  s: number,
+  t: number,
+  hdg = 0,
+): RoadObjectItem {
+  return {
+    id: genId('sign'),
+    object_type: config.objectType,
+    name: '',
+    position: { x: s, y: t, z: 0.1, id: null },
+    orientation: hdg,
+    hdg,
+    width: config.defaultWidth ?? 1.0,
+    height: config.defaultHeight ?? 3.0,
+    length: config.defaultWidth ?? 1.0,
+    corners: [],
+    validity: null,
+  };
 }

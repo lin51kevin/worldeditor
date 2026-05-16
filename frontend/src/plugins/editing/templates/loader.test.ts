@@ -18,19 +18,19 @@ describe('loadCatalog', () => {
     expect(catalog.roads).toHaveLength(7);
   });
 
-  it('should contain 5 junction templates', () => {
+  it('should contain 7 junction templates', () => {
     const catalog = loadCatalog();
-    expect(catalog.junctions).toHaveLength(5);
+    expect(catalog.junctions).toHaveLength(7);
   });
 
-  it('should contain 8 signal templates', () => {
+  it('should contain 13 signal templates', () => {
     const catalog = loadCatalog();
-    expect(catalog.signals).toHaveLength(8);
+    expect(catalog.signals).toHaveLength(13);
   });
 
-  it('should contain 6 marking templates', () => {
+  it('should contain 8 marking templates', () => {
     const catalog = loadCatalog();
-    expect(catalog.markings).toHaveLength(6);
+    expect(catalog.markings).toHaveLength(8);
   });
 
   it('should have version string', () => {
@@ -55,6 +55,8 @@ describe('validateCatalog', () => {
       junctions: [],
       signals: [],
       markings: [],
+      objects: [],
+      signs: [],
     };
     const errors = validateCatalog(catalog);
     expect(errors.some((e) => e.includes('id: required'))).toBe(true);
@@ -67,6 +69,8 @@ describe('validateCatalog', () => {
       junctions: [],
       signals: [],
       markings: [],
+      objects: [],
+      signs: [],
     };
     const errors = validateCatalog(catalog);
     expect(errors.some((e) => e.includes('laneType'))).toBe(true);
@@ -79,6 +83,8 @@ describe('validateCatalog', () => {
       junctions: [],
       signals: [],
       markings: [],
+      objects: [],
+      signs: [],
     };
     const errors = validateCatalog(catalog);
     expect(errors.some((e) => e.includes('width: must be > 0'))).toBe(true);
@@ -91,6 +97,8 @@ describe('validateCatalog', () => {
       junctions: [],
       signals: [],
       markings: [],
+      objects: [],
+      signs: [],
     };
     const errors = validateCatalog(catalog);
     expect(errors.some((e) => e.includes('mark type'))).toBe(true);
@@ -103,6 +111,8 @@ describe('validateCatalog', () => {
       junctions: [{ id: 'test', labelKey: 'test', icon: 'x', topology: 'Invalid' as 'T', armLength: 80 }],
       signals: [],
       markings: [],
+      objects: [],
+      signs: [],
     };
     const errors = validateCatalog(catalog);
     expect(errors.some((e) => e.includes('topology'))).toBe(true);
@@ -115,6 +125,8 @@ describe('validateCatalog', () => {
       junctions: [{ id: 'test', labelKey: 'test', icon: 'x', topology: 'T', armLength: -5 }],
       signals: [],
       markings: [],
+      objects: [],
+      signs: [],
     };
     const errors = validateCatalog(catalog);
     expect(errors.some((e) => e.includes('armLength'))).toBe(true);
@@ -127,6 +139,8 @@ describe('validateCatalog', () => {
       junctions: [],
       signals: [{ id: 'test', labelKey: 'test', icon: 'x', signalType: '' }],
       markings: [],
+      objects: [],
+      signs: [],
     };
     const errors = validateCatalog(catalog);
     expect(errors.some((e) => e.includes('signalType'))).toBe(true);
@@ -139,6 +153,8 @@ describe('validateCatalog', () => {
       junctions: [],
       signals: [],
       markings: [{ id: 'test', labelKey: 'test', icon: 'x', mark: undefined as unknown as { type: string } }],
+      objects: [],
+      signs: [],
     };
     const errors = validateCatalog(catalog);
     expect(errors.some((e) => e.includes('mark: required'))).toBe(true);
@@ -154,6 +170,8 @@ describe('mergeCatalogs', () => {
     junctions: [],
     signals: [],
     markings: [],
+    objects: [],
+    signs: [],
   };
 
   it('should append new items from extra', () => {
@@ -163,6 +181,8 @@ describe('mergeCatalogs', () => {
       junctions: [],
       signals: [],
       markings: [],
+      objects: [],
+      signs: [],
     };
     const merged = mergeCatalogs(base, extra);
     expect(merged.roads).toHaveLength(2);
@@ -175,6 +195,8 @@ describe('mergeCatalogs', () => {
       junctions: [],
       signals: [],
       markings: [],
+      objects: [],
+      signs: [],
     };
     const merged = mergeCatalogs(base, extra);
     expect(merged.roads).toHaveLength(1);
@@ -182,7 +204,7 @@ describe('mergeCatalogs', () => {
   });
 
   it('should preserve base version', () => {
-    const extra: TemplateCatalog = { version: '2.0.0', roads: [], junctions: [], signals: [], markings: [] };
+    const extra: TemplateCatalog = { version: '2.0.0', roads: [], junctions: [], signals: [], markings: [], objects: [], signs: [] };
     const merged = mergeCatalogs(base, extra);
     expect(merged.version).toBe('1.0.0');
   });
@@ -198,6 +220,8 @@ describe('parseExternalCatalog', () => {
       junctions: [],
       signals: [],
       markings: [],
+      objects: [],
+      signs: [],
     };
     const catalog = parseExternalCatalog(raw);
     expect(catalog.roads).toHaveLength(1);
@@ -214,6 +238,8 @@ describe('parseExternalCatalog', () => {
       junctions: [],
       signals: [],
       markings: [],
+      objects: [],
+      signs: [],
     };
     expect(() => parseExternalCatalog(raw)).toThrow('validation failed');
   });

@@ -103,6 +103,10 @@ export function Viewport() {
           viewState.clearPendingTemplate();
           return;
         }
+        if (viewState.pendingObjectTemplateId) {
+          viewState.clearPendingObjectTemplate();
+          return;
+        }
         if (viewState.geometryEditRoadId || isDrawMode) {
           return;
         }
@@ -122,7 +126,7 @@ export function Viewport() {
         return;
       }
 
-      if (event.key === 'Delete' && !viewState.geometryEditRoadId && !isDrawMode && !viewState.pendingTemplateId) {
+      if (event.key === 'Delete' && !viewState.geometryEditRoadId && !isDrawMode && !viewState.pendingTemplateId && !viewState.pendingObjectTemplateId) {
         useProjectStore.getState().deleteSelected();
       }
     };
@@ -751,7 +755,7 @@ export function Viewport() {
     }
 
     // In click-to-place mode show crosshair and skip normal hover picking
-    if (viewState.pendingTemplateId) {
+    if (viewState.pendingTemplateId || viewState.pendingObjectTemplateId) {
       canvas.style.cursor = 'crosshair';
       return;
     }
@@ -988,6 +992,30 @@ export function Viewport() {
       return;
     }
 
+    // Click-to-place road object / sign: pick nearest road, then place at road-local s/t
+    if (viewState.pendingObjectTemplateId) {
+      const templateId = viewState.pendingObjectTemplateId;
+      viewState.clearPendingObjectTemplate();
+      try {
+        const service = await getPlatformService();
+        const visibleProject = getVisibleProject();
+        if (visibleProject) {
+          const roadId = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 10.0);
+          if (roadId) {
+            const allItems = usePluginContribStore.getState().templateSections.flatMap((s) => s.items);
+            const item = allItems.find((i) => i.id === templateId);
+            if (item) {
+              // Use world x/y as s/t approximation; Rust rendering will handle exact placement
+              item.onApply({ roadId, x: worldPos.x, y: worldPos.y, hdg: 0 });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[Viewport] Failed to place road object:', err);
+      }
+      return;
+    }
+
     if (await handleSplineDrawClick(e, worldPos)) {
       return;
     }
@@ -1099,6 +1127,10 @@ export function Viewport() {
     const viewState = useViewportStore.getState();
     if (viewState.pendingTemplateId) {
       viewState.clearPendingTemplate();
+      return;
+    }
+    if (viewState.pendingObjectTemplateId) {
+      viewState.clearPendingObjectTemplate();
       return;
     }
     // Right-click in draw mode finalizes (or cancels) the road being drawn

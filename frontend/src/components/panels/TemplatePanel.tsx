@@ -57,6 +57,7 @@ export function TemplatePanel() {
   const activeSection = sorted.find((s) => s.id === resolvedId) ?? null;
   const selectedTemplateId = useViewportStore((s) => s.splineTemplateId);
   const pendingTemplateId = useViewportStore((s) => s.pendingTemplateId);
+  const pendingObjectTemplateId = useViewportStore((s) => s.pendingObjectTemplateId);
   const editMode = useViewportStore((s) => s.editMode);
 
   const favoriteItems = useMemo(
@@ -111,10 +112,16 @@ export function TemplatePanel() {
     } else if (itemId.startsWith('tpl:jct:')) {
       // Junction templates: enter click-to-place mode.
       // The next single left-click in the viewport will instantiate the template.
+      viewStore.clearPendingObjectTemplate();
       viewStore.setPendingTemplate(itemId);
+    } else if (itemId.startsWith('tpl:obj:') || itemId.startsWith('tpl:sign:')) {
+      // Road-object / sign templates: click-to-place on road.
+      viewStore.clearPendingTemplate();
+      viewStore.setPendingObjectTemplate(itemId);
     } else {
       // Signal / marking templates apply to the currently selected road immediately.
       viewStore.clearPendingTemplate();
+      viewStore.clearPendingObjectTemplate();
       item.onApply?.();
     }
   };
@@ -165,7 +172,8 @@ export function TemplatePanel() {
             const isSelected = selectedTemplateId === item.id &&
               (!item.id.startsWith('tpl:jct:') || pendingTemplateId === item.id) &&
               (!item.id.startsWith('tpl:road:') || editMode === 'spline');
-            const isPending = pendingTemplateId === item.id;
+            const isObjPending = pendingObjectTemplateId === item.id;
+            const isPending = pendingTemplateId === item.id || isObjPending;
             return (
             <div
               key={item.id}

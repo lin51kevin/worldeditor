@@ -92,6 +92,8 @@ export interface EditorState {
   addObject: (obj: RoadObject) => void;
   removeObject: (id: string) => void;
   updateObject: (id: string, updates: Partial<RoadObject>) => void;
+  /** Place a RoadObjectItem directly onto a road's objects[] array. */
+  addRoadObjectItem: (roadId: string, obj: RoadObjectItem) => void;
 
   // Actions — lane operations
   updateLaneType: (roadId: string, sectionIndex: number, side: 'left' | 'right', laneId: number, laneType: string) => void;

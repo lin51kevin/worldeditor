@@ -58,9 +58,9 @@ export interface TemplateItemDef {
   icon: string;
   /**
    * Called when the user clicks or activates the item.
-   * @param opts optional drop position in world coordinates
+   * @param opts optional drop position in world coordinates, or roadId for road-object placement
    */
-  onApply: (opts?: { x?: number; y?: number; hdg?: number }) => void;
+  onApply: (opts?: { x?: number; y?: number; hdg?: number; roadId?: string }) => void;
 }
 
 /** A category of templates contributed by a plugin */

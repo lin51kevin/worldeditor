@@ -114,6 +114,12 @@ interface EditorViewState {
    * world position and then clear this field.
    */
   pendingTemplateId: string | null;
+  /**
+   * When non-null, the viewport is in "click-to-place" mode for a road object
+   * or sign template. A click picks the nearest road and places the object
+   * at the corresponding s/t coordinates on that road.
+   */
+  pendingObjectTemplateId: string | null;
   splineKnots: Array<[number, number, number]>;
   splineTangentOverrides: Record<number, [number, number, number]>;
   /** Independent in-tangent overrides (broken tangent mode only). */
@@ -171,6 +177,8 @@ interface EditorViewState {
   setSplineTemplateId: (templateId: string) => void;
   setPendingTemplate: (id: string | null) => void;
   clearPendingTemplate: () => void;
+  setPendingObjectTemplate: (id: string | null) => void;
+  clearPendingObjectTemplate: () => void;
   setSplineKnots: (knots: Array<[number, number, number]>) => void;
   appendSplineKnot: (knot: [number, number, number]) => void;
   popSplineKnot: () => void;
@@ -295,6 +303,7 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   editMode: 'default',
   splineTemplateId: 'tpl:road:single',
   pendingTemplateId: null,
+  pendingObjectTemplateId: null,
   splineKnots: [],
   splineTangentOverrides: {},
   splineTangentInOverrides: {},
@@ -325,6 +334,8 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   setSplineTemplateId: (splineTemplateId) => set({ splineTemplateId }),
   setPendingTemplate: (pendingTemplateId) => set({ pendingTemplateId }),
   clearPendingTemplate: () => set({ pendingTemplateId: null }),
+  setPendingObjectTemplate: (pendingObjectTemplateId) => set({ pendingObjectTemplateId }),
+  clearPendingObjectTemplate: () => set({ pendingObjectTemplateId: null }),
   setSplineKnots: (splineKnots) => set({ splineKnots }),
   appendSplineKnot: (knot) =>
     set((state) => ({ splineKnots: [...state.splineKnots, knot] })),

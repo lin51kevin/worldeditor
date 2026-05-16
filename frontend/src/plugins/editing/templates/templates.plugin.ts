@@ -26,12 +26,16 @@ import {
   buildJunctionFromConfig,
   buildSignalFromConfig,
   buildMarkFromConfig,
+  buildRoadObjectFromConfig,
+  buildSignFromConfig,
 } from './index';
 import type {
   RoadTemplateConfig,
   JunctionTemplateConfig,
   SignalTemplateConfig,
   MarkingTemplateConfig,
+  RoadObjectTemplateConfig,
+  SignTemplateConfig,
 } from './index';
 
 const PLUGIN_ID = 'builtin-templates';
@@ -163,7 +167,59 @@ function buildSections(): TemplateSectionContrib[] {
     items: catalog.markings.map(markingConfigToItem),
   };
 
-  return [roadSection, junctionSection, signalSection, markingSection];
+  const objectSection: TemplateSectionContrib = {
+    id: `${PLUGIN_ID}:objects`,
+    pluginId: PLUGIN_ID,
+    categoryKey: 'templatePanel.categories.objects',
+    order: 4,
+    items: catalog.objects.map(objectConfigToItem),
+  };
+
+  const signSection: TemplateSectionContrib = {
+    id: `${PLUGIN_ID}:signs`,
+    pluginId: PLUGIN_ID,
+    categoryKey: 'templatePanel.categories.signs',
+    order: 5,
+    items: catalog.signs.map(signConfigToItem),
+  };
+
+  return [roadSection, junctionSection, signalSection, markingSection, objectSection, signSection];
+}
+
+// ── Road-object config → TemplateItemDef ─────────────────────────────────────
+
+function objectConfigToItem(config: RoadObjectTemplateConfig): TemplateItemDef {
+  return {
+    id: config.id,
+    labelKey: config.labelKey,
+    icon: config.icon,
+    onApply: (opts) => {
+      if (opts?.roadId === undefined) return;
+      const s = opts.x ?? 0;
+      const t = opts.y ?? 0;
+      const obj = buildRoadObjectFromConfig(config, s, t, opts.hdg ?? 0);
+      const store = useProjectStore.getState();
+      store.addRoadObjectItem(opts.roadId, obj);
+    },
+  };
+}
+
+// ── Sign config → TemplateItemDef ─────────────────────────────────────────────
+
+function signConfigToItem(config: SignTemplateConfig): TemplateItemDef {
+  return {
+    id: config.id,
+    labelKey: config.labelKey,
+    icon: config.icon,
+    onApply: (opts) => {
+      if (opts?.roadId === undefined) return;
+      const s = opts.x ?? 0;
+      const t = opts.y ?? 0;
+      const obj = buildSignFromConfig(config, s, t, opts.hdg ?? 0);
+      const store = useProjectStore.getState();
+      store.addRoadObjectItem(opts.roadId, obj);
+    },
+  };
 }
 
 // ── Plugin mount/unmount ─────────────────────────────────────────────────────

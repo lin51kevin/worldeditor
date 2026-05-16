@@ -283,7 +283,9 @@
       "roads": "Roads",
       "junctions": "Junctions",
       "signals": "Signals",
-      "markings": "Markings"
+      "markings": "Markings",
+      "objects": "Road Objects",
+      "signs": "Signs"
     },
     "roads": {
       "singleLane": "Single Lane",
@@ -296,7 +298,9 @@
     },
     "junctions": {
       "tIntersection": "T-Junction",
+      "tSingleLane": "T-Junction (Single)",
       "crossIntersection": "Cross (+)",
+      "fork": "Fork",
       "fiveWay": "5-Way",
       "sixWay": "6-Way",
       "roundabout": "Roundabout"
@@ -305,11 +309,16 @@
       "trafficLight": "Traffic Light",
       "stopSign": "Stop Sign",
       "warningSign": "Warning",
+      "giveWay": "Give Way",
+      "noEntry": "No Entry",
+      "noParking": "No Parking",
       "speedLimit30": "Speed 30",
       "speedLimit60": "Speed 60",
       "speedLimit80": "Speed 80",
       "speedLimit120": "Speed 120",
-      "noEntry": "No Entry"
+      "arrowStraight": "Arrow Straight",
+      "arrowLeft": "Arrow Left",
+      "arrowRight": "Arrow Right"
     },
     "markings": {
       "solidWhite": "Solid White",
@@ -317,7 +326,31 @@
       "solidYellow": "Solid Yellow",
       "doubleYellow": "Double Yellow",
       "zebraCrossing": "Zebra Crossing",
-      "noMarking": "No Marking"
+      "noMarking": "No Marking",
+      "brokenYellow": "Dashed Yellow",
+      "doubleBroken": "Double Dashed"
+    },
+    "objects": {
+      "crosswalk": "Crosswalk",
+      "stopLine": "Stop Line",
+      "yieldSlowLine": "Yield (Slow)",
+      "yieldStopLine": "Yield (Stop)",
+      "crossHatch": "Cross-Hatch",
+      "wovenArea": "Woven Area",
+      "forwardWaiting": "Fwd Waiting Area",
+      "turnLeftWaiting": "L-Turn Waiting",
+      "parkingSpace": "Parking Space",
+      "guardrail": "Guardrail",
+      "barrier": "Barrier",
+      "trafficCone": "Traffic Cone",
+      "streetLight": "Street Light"
+    },
+    "signs": {
+      "signPole": "Sign Pole",
+      "gantry": "Gantry Sign",
+      "simpleSignalPole": "Simple Signal Pole",
+      "trafficLightPole": "Traffic Light Pole",
+      "lTypePole": "L-Type Pole"
     }
   },
   "pluginManager": {

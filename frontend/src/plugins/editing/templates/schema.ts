@@ -111,6 +111,59 @@ export interface MarkingTemplateConfig {
   mark: MarkConfig;
 }
 
+// ── Road Object Template ─────────────────────────────────────────────────────
+
+/** All ObjectType keys that can be placed via a template */
+export type RoadObjectTypeKey =
+  | 'Crosswalk'
+  | 'StopLine'
+  | 'SlowDownToYieldLine'
+  | 'StopToYieldLine'
+  | 'CrossHatchArea'
+  | 'WovenArea'
+  | 'ForwardWaitingArea'
+  | 'TurnLeftWaitingArea'
+  | 'ParkingSpace'
+  | 'Guardrail'
+  | 'Barrier'
+  | 'TrafficCone'
+  | 'StreetLightPole';
+
+export interface RoadObjectTemplateConfig {
+  id: string;
+  labelKey: string;
+  icon: string;
+  /** Maps to Rust ObjectType (serialised as plain string) */
+  objectType: RoadObjectTypeKey;
+  /** Default object width in metres */
+  defaultWidth?: number;
+  /** Default object length in metres */
+  defaultLength?: number;
+  /** Default object height in metres */
+  defaultHeight?: number;
+}
+
+// ── Sign Template ─────────────────────────────────────────────────────────────
+
+export type SignTypeKey =
+  | 'Sign'
+  | 'SignGantry'
+  | 'SimpleSignalPole'
+  | 'TrafficLightPole'
+  | 'LTypeSignalPole';
+
+export interface SignTemplateConfig {
+  id: string;
+  labelKey: string;
+  icon: string;
+  /** Maps to Rust ObjectType (serialised as plain string) */
+  objectType: SignTypeKey;
+  /** Default sign width in metres */
+  defaultWidth?: number;
+  /** Default sign height in metres */
+  defaultHeight?: number;
+}
+
 // ── Catalog ──────────────────────────────────────────────────────────────────
 
 export interface TemplateCatalog {
@@ -120,4 +173,8 @@ export interface TemplateCatalog {
   junctions: JunctionTemplateConfig[];
   signals: SignalTemplateConfig[];
   markings: MarkingTemplateConfig[];
+  /** Road surface and roadside accessories (人行横道, 护栏, 停车位…) */
+  objects: RoadObjectTemplateConfig[];
+  /** Sign structures (标志牌, 信号灯杆…) */
+  signs: SignTemplateConfig[];
 }
