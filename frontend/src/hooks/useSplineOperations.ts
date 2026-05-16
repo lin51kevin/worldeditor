@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import { useEditorStore } from '../stores/editorStore';
-import { useEditorViewStore } from '../stores/editorViewStore';
+import { useProjectStore } from '../stores/projectStore';
+import { useViewportStore } from '../stores/viewportStore';
 import { getPlatformService } from '../services';
 import { buildEditableSpline, nextSplineRoadId } from '../components/viewportUtils';
 
@@ -30,7 +30,7 @@ export function useSplineOperations() {
     overrideKnots?: Array<[number, number, number]>,
     splineMode: 'classify' | 'parampoly3' = 'parampoly3',
   ) => {
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     const knots = overrideKnots ?? viewState.splineKnots;
     if (knots.length < 2) {
       console.warn('[Viewport] Need at least 2 spline knots to create a road.');
@@ -39,7 +39,7 @@ export function useSplineOperations() {
 
     try {
       const service = await getPlatformService();
-      const editorState = useEditorStore.getState();
+      const editorState = useProjectStore.getState();
       const roadId = nextSplineRoadId(editorState.project.roads.map((road) => road.id));
       const spline = buildEditableSpline(knots);
       const wasmTemplateId = resolveWasmTemplateId(viewState.splineTemplateId);
@@ -83,32 +83,32 @@ export function useSplineOperations() {
     } catch (err) {
       console.error('[Viewport] Failed to create road from spline:', err);
       // Clear knots so the user isn't stuck in draw mode on error
-      useEditorViewStore.getState().clearSplineKnots();
+      useViewportStore.getState().clearSplineKnots();
     }
   }, []);
 
   const enterGeometryEditMode = useCallback(async (roadId: string) => {
-    const editorState = useEditorStore.getState();
+    const editorState = useProjectStore.getState();
     const road = editorState.project.roads.find((r) => r.id === roadId);
     if (!road || road.plan_view.length === 0) return;
     try {
       const service = await getPlatformService();
       const spline = await service.roadToSpline(road, 2.0);
-      useEditorViewStore.getState().enterGeometryEdit(roadId, spline);
+      useViewportStore.getState().enterGeometryEdit(roadId, spline);
     } catch (err) {
       console.error('[Viewport] Failed to enter geometry edit:', err);
     }
   }, []);
 
   const finalizeGeometryEdit = useCallback(async () => {
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     const { geometryEditRoadId: roadId, geometryEditSpline: spline } = viewState;
     if (!roadId || !spline) return;
     try {
       const service = await getPlatformService();
       const geometries = await service.splineToGeometries(spline);
       const totalLength = geometries.reduce((sum, g) => sum + g.length, 0);
-      useEditorStore.getState().updateRoadGeometry(roadId, geometries, totalLength);
+      useProjectStore.getState().updateRoadGeometry(roadId, geometries, totalLength);
       viewState.exitGeometryEdit();
     } catch (err) {
       console.error('[Viewport] Failed to finalize geometry edit:', err);

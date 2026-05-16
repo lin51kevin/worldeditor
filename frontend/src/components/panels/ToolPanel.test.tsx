@@ -1,13 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { useEditorStore } from '../../stores/editorStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { ToolPanel } from './ToolPanel';
 
 describe('ToolPanel', () => {
   beforeEach(() => {
     act(() => {
-      useEditorStore.getState().reset();
+      useProjectStore.getState().reset();
     });
     vi.clearAllMocks();
   });

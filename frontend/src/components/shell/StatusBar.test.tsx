@@ -1,13 +1,13 @@
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useEditorStore } from '../../stores/editorStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { emitCursorMove } from '../../viewport/cursorEvents';
 import { StatusBar } from './StatusBar';
 
 describe('StatusBar', () => {
   beforeEach(() => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         cursorWorldPos: { x: 0, y: 0 },
         gridSpacing: 10.0,
         viewportMpp: 0.1,
@@ -34,14 +34,14 @@ describe('StatusBar', () => {
   });
 
   it('shows saved status when not dirty', () => {
-    act(() => { useEditorStore.setState({ isDirty: false }); });
+    act(() => { useProjectStore.setState({ isDirty: false }); });
     render(<StatusBar />);
     // Save state is no longer shown in StatusBar
     expect(screen.queryByText('已保存')).not.toBeInTheDocument();
   });
 
   it('shows modified status when dirty', () => {
-    act(() => { useEditorStore.setState({ isDirty: true }); });
+    act(() => { useProjectStore.setState({ isDirty: true }); });
     render(<StatusBar />);
     // Save state is no longer shown in StatusBar
     expect(screen.queryByText('已修改')).not.toBeInTheDocument();
@@ -49,8 +49,8 @@ describe('StatusBar', () => {
 
   it('shows road count from project', () => {
     act(() => {
-      const project = useEditorStore.getState().project;
-      useEditorStore.setState({
+      const project = useProjectStore.getState().project;
+      useProjectStore.setState({
         project: { ...project, roads: [{ id: 'r1', name: 'Test', length: 10, junction_id: null, link: { predecessor: null, successor: null }, plan_view: [], elevation_profile: [], lane_sections: [] }] },
       });
     });
@@ -66,7 +66,7 @@ describe('StatusBar', () => {
 
   it('shows km label for large grid spacing', () => {
     act(() => {
-      useEditorStore.setState({ gridSpacing: 2000, viewportMpp: 1.0 });
+      useProjectStore.setState({ gridSpacing: 2000, viewportMpp: 1.0 });
     });
     render(<StatusBar />);
     expect(screen.getByText('2km')).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe('StatusBar', () => {
   it('clamps scale bar pixel width between 20 and 180', () => {
     // gridSpacing = 10, mpp = 0.001 → raw barPx = 10000 → clamped to 180
     act(() => {
-      useEditorStore.setState({ gridSpacing: 10, viewportMpp: 0.001 });
+      useProjectStore.setState({ gridSpacing: 10, viewportMpp: 0.001 });
     });
     const { container } = render(<StatusBar />);
     const bar = container.querySelector('.scale-bar-track') as HTMLElement;

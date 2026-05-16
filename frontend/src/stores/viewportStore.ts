@@ -284,7 +284,7 @@ function loadDisplay(): DisplaySettings {
   return DEFAULT_DISPLAY;
 }
 
-export const useEditorViewStore = create<EditorViewState>((set) => ({
+export const useViewportStore = create<EditorViewState>((set) => ({
   dimension: '2d',
   showGrid: true,
   showAxis: true,

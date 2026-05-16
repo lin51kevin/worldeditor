@@ -1,6 +1,6 @@
 import { useRef, type RefObject } from 'react';
 import { ViewportRenderer } from '../viewport/renderer';
-import { useEditorStore } from '../stores/editorStore';
+import { useProjectStore } from '../stores/projectStore';
 import { DRAG_THRESHOLD_SQ, roadIntersectsAABB, junctionIntersectsAABB } from '../components/viewportUtils';
 
 interface RubberBandState {
@@ -79,14 +79,14 @@ export function useRubberBandSelect(
           const maxX = Math.max(tl.x, br.x);
           const minY = Math.min(tl.y, br.y);
           const maxY = Math.max(tl.y, br.y);
-          const { project } = useEditorStore.getState();
+          const { project } = useProjectStore.getState();
           const roadIds = project.roads
             .filter((r) => roadIntersectsAABB(r, minX, minY, maxX, maxY))
             .map((r) => r.id);
           const junctionIds = project.junctions
             .filter((j) => junctionIntersectsAABB(j, project, minX, minY, maxX, maxY))
             .map((j) => j.id);
-          useEditorStore.getState().selectMultiple(roadIds, junctionIds);
+          useProjectStore.getState().selectMultiple(roadIds, junctionIds);
         }
       }
     }

@@ -2,11 +2,11 @@ import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import type { ShortcutsConfig } from './useKeyboardShortcuts';
-import type { ActiveMode } from '../stores/editorViewStore';
+import type { ActiveMode } from '../stores/viewportStore';
 
-// Stub the editorStore so selectAll / copySelected / etc. don't throw
-vi.mock('../stores/editorStore', () => ({
-  useEditorStore: {
+// Stub the projectStore so selectAll / copySelected / etc. don't throw
+vi.mock('../stores/projectStore', () => ({
+  useProjectStore: {
     getState: () => ({
       canUndo: () => false,
       undo: vi.fn(),
@@ -19,8 +19,8 @@ vi.mock('../stores/editorStore', () => ({
   },
 }));
 
-vi.mock('../stores/editorViewStore', () => ({
-  useEditorViewStore: {
+vi.mock('../stores/viewportStore', () => ({
+  useViewportStore: {
     getState: () => ({
       editMode: null,
       setEditMode: vi.fn(),

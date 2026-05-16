@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useEditorStore } from '../editorStore';
+import { useProjectStore } from '../projectStore';
 import type { Project } from '../../services/platform';
 
-// Mock useEditorViewStore to avoid side effects
-vi.mock('../editorViewStore', () => ({
-  useEditorViewStore: {
+// Mock useViewportStore to avoid side effects
+vi.mock('../viewportStore', () => ({
+  useViewportStore: {
     getState: () => ({ resetDisplay: vi.fn() }),
   },
 }));
@@ -23,79 +23,79 @@ function makeProject(overrides: Partial<Project> = {}): Project {
 
 describe('projectSlice', () => {
   beforeEach(() => {
-    useEditorStore.getState().reset();
+    useProjectStore.getState().reset();
   });
 
   describe('setProject', () => {
     it('should replace project and mark clean', () => {
       const p = makeProject({ name: 'New' });
-      useEditorStore.getState().setProject(p);
-      const state = useEditorStore.getState();
+      useProjectStore.getState().setProject(p);
+      const state = useProjectStore.getState();
       expect(state.project.name).toBe('New');
       expect(state.isDirty).toBe(false);
     });
 
     it('should clear undo/redo stacks', () => {
-      const store = useEditorStore.getState();
+      const store = useProjectStore.getState();
       // Add something to undo stack
       store.addRoad({ id: 'r1', name: 'R', length: 10, junction_id: null, link: { predecessor: null, successor: null }, plan_view: [], lane_sections: [], elevation_profile: [] });
-      expect(useEditorStore.getState().canUndo()).toBe(true);
+      expect(useProjectStore.getState().canUndo()).toBe(true);
       // Set a new project → stacks cleared
       store.setProject(makeProject());
-      expect(useEditorStore.getState().canUndo()).toBe(false);
-      expect(useEditorStore.getState().canRedo()).toBe(false);
+      expect(useProjectStore.getState().canUndo()).toBe(false);
+      expect(useProjectStore.getState().canRedo()).toBe(false);
     });
 
     it('should increment projectLoadVersion', () => {
-      const v0 = useEditorStore.getState().projectLoadVersion;
-      useEditorStore.getState().setProject(makeProject());
-      expect(useEditorStore.getState().projectLoadVersion).toBe(v0 + 1);
+      const v0 = useProjectStore.getState().projectLoadVersion;
+      useProjectStore.getState().setProject(makeProject());
+      expect(useProjectStore.getState().projectLoadVersion).toBe(v0 + 1);
     });
 
     it('should save as savedProject', () => {
       const p = makeProject({ name: 'Saved' });
-      useEditorStore.getState().setProject(p);
-      expect(useEditorStore.getState().savedProject?.name).toBe('Saved');
+      useProjectStore.getState().setProject(p);
+      expect(useProjectStore.getState().savedProject?.name).toBe('Saved');
     });
   });
 
   describe('markDirty / markClean', () => {
     it('should toggle isDirty', () => {
-      useEditorStore.getState().markDirty();
-      expect(useEditorStore.getState().isDirty).toBe(true);
-      useEditorStore.getState().markClean();
-      expect(useEditorStore.getState().isDirty).toBe(false);
+      useProjectStore.getState().markDirty();
+      expect(useProjectStore.getState().isDirty).toBe(true);
+      useProjectStore.getState().markClean();
+      expect(useProjectStore.getState().isDirty).toBe(false);
     });
 
     it('markClean should update savedProject to current project', () => {
       const p = makeProject({ name: 'Draft' });
-      useEditorStore.getState().setProject(p);
-      useEditorStore.getState().markDirty();
-      useEditorStore.getState().markClean();
-      expect(useEditorStore.getState().savedProject?.name).toBe('Draft');
+      useProjectStore.getState().setProject(p);
+      useProjectStore.getState().markDirty();
+      useProjectStore.getState().markClean();
+      expect(useProjectStore.getState().savedProject?.name).toBe('Draft');
     });
   });
 
   describe('setCursorWorldPos', () => {
     it('should update cursor position', () => {
-      useEditorStore.getState().setCursorWorldPos({ x: 5, y: 10 });
-      expect(useEditorStore.getState().cursorWorldPos).toEqual({ x: 5, y: 10 });
+      useProjectStore.getState().setCursorWorldPos({ x: 5, y: 10 });
+      expect(useProjectStore.getState().cursorWorldPos).toEqual({ x: 5, y: 10 });
     });
 
     it('should return same state when position unchanged', () => {
-      useEditorStore.getState().setCursorWorldPos({ x: 1, y: 2 });
-      const s1 = useEditorStore.getState();
+      useProjectStore.getState().setCursorWorldPos({ x: 1, y: 2 });
+      const s1 = useProjectStore.getState();
       // Setting same value should not trigger re-render (returns same partial state)
-      useEditorStore.getState().setCursorWorldPos({ x: 1, y: 2 });
-      const s2 = useEditorStore.getState();
+      useProjectStore.getState().setCursorWorldPos({ x: 1, y: 2 });
+      const s2 = useProjectStore.getState();
       expect(s2.cursorWorldPos).toEqual(s1.cursorWorldPos);
     });
   });
 
   describe('setViewportInfo', () => {
     it('should update gridSpacing and viewportMpp', () => {
-      useEditorStore.getState().setViewportInfo({ gridSpacing: 20, mpp: 0.5 });
-      const state = useEditorStore.getState();
+      useProjectStore.getState().setViewportInfo({ gridSpacing: 20, mpp: 0.5 });
+      const state = useProjectStore.getState();
       expect(state.gridSpacing).toBe(20);
       expect(state.viewportMpp).toBe(0.5);
     });
@@ -103,10 +103,10 @@ describe('projectSlice', () => {
 
   describe('reset', () => {
     it('should clear project and selection', () => {
-      useEditorStore.getState().addRoad({ id: 'r1', name: '', length: 1, junction_id: null, link: { predecessor: null, successor: null }, plan_view: [], lane_sections: [], elevation_profile: [] });
-      useEditorStore.getState().selectRoad('r1');
-      useEditorStore.getState().reset();
-      const state = useEditorStore.getState();
+      useProjectStore.getState().addRoad({ id: 'r1', name: '', length: 1, junction_id: null, link: { predecessor: null, successor: null }, plan_view: [], lane_sections: [], elevation_profile: [] });
+      useProjectStore.getState().selectRoad('r1');
+      useProjectStore.getState().reset();
+      const state = useProjectStore.getState();
       expect(state.project.roads).toHaveLength(0);
       expect(state.selectedRoadId).toBeNull();
       expect(state.isDirty).toBe(false);
@@ -116,15 +116,15 @@ describe('projectSlice', () => {
   describe('resetToSaved', () => {
     it('should restore savedProject when available', () => {
       const p = makeProject({ name: 'Original' });
-      useEditorStore.getState().setProject(p);
-      useEditorStore.getState().addRoad({ id: 'r1', name: '', length: 1, junction_id: null, link: { predecessor: null, successor: null }, plan_view: [], lane_sections: [], elevation_profile: [] });
-      useEditorStore.getState().resetToSaved();
-      expect(useEditorStore.getState().project.roads).toHaveLength(0);
+      useProjectStore.getState().setProject(p);
+      useProjectStore.getState().addRoad({ id: 'r1', name: '', length: 1, junction_id: null, link: { predecessor: null, successor: null }, plan_view: [], lane_sections: [], elevation_profile: [] });
+      useProjectStore.getState().resetToSaved();
+      expect(useProjectStore.getState().project.roads).toHaveLength(0);
     });
 
     it('should not crash when savedProject is null', () => {
-      useEditorStore.setState({ savedProject: null });
-      expect(() => useEditorStore.getState().resetToSaved()).not.toThrow();
+      useProjectStore.setState({ savedProject: null });
+      expect(() => useProjectStore.getState().resetToSaved()).not.toThrow();
     });
   });
 });

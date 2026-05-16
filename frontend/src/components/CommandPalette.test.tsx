@@ -1,6 +1,6 @@
 import { act, fireEvent, render } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useEditorViewStore } from '../stores/editorViewStore';
+import { useViewportStore } from '../stores/viewportStore';
 import { useThemeStore } from '../stores/themeStore';
 import { CommandPalette } from './CommandPalette';
 
@@ -14,7 +14,7 @@ describe('CommandPalette', () => {
     Element.prototype.scrollIntoView = vi.fn();
 
     act(() => {
-      useEditorViewStore.setState({
+      useViewportStore.setState({
         editMode: 'default',
         showGrid: true,
         showAxis: true,

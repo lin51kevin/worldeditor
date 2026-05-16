@@ -17,9 +17,9 @@ import { SettingsDialog } from './components/dialogs/SettingsDialog';
 import { DialogHost } from './components/common/Dialog';
 import { WelcomePage } from './components/shell/WelcomePage';
 import { ShortcutHelpOverlay } from './components/dialogs/ShortcutHelpOverlay';
-import { useEditorStore } from './stores/editorStore';
+import { useProjectStore } from './stores/projectStore';
 import { useThemeStore } from './stores/themeStore';
-import { useEditorViewStore } from './stores/editorViewStore';
+import { useViewportStore } from './stores/viewportStore';
 import { useBuiltinPluginStore } from './stores/builtinPluginStore';
 import { useRecentFilesStore } from './stores/recentFilesStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -33,9 +33,9 @@ const STARTUP_WELCOME_KEY = 'we-show-welcome-on-startup';
 // ── App component ──────────────────────────────────────────────────────────
 
 export function App() {
-  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
-  const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
-  const projectName = useEditorStore((s) => s.project.name);
+  const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
+  const selectedJunctionId = useProjectStore((s) => s.selectedJunctionId);
+  const projectName = useProjectStore((s) => s.project.name);
   const { initTheme } = useThemeStore();
   const { t, i18n } = useTranslation();
   const {
@@ -47,7 +47,7 @@ export function App() {
     toggleTemplatePanel,
     setEditMode,
     clearSplineKnots,
-  } = useEditorViewStore();
+  } = useViewportStore();
   const { recentFiles, push: pushRecentFile, remove: removeRecentFile } = useRecentFilesStore();
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
@@ -62,7 +62,7 @@ export function App() {
   //   • the store already has a named project (e.g. set by tests / Tauri deep-link)
   const [isEditorOpen, setIsEditorOpen] = useState<boolean>(
     () => localStorage.getItem(STARTUP_WELCOME_KEY) === 'false' ||
-          useEditorStore.getState().project.name !== 'Untitled',
+          useProjectStore.getState().project.name !== 'Untitled',
   );
 
   const handleToggleShowOnStartup = useCallback((value: boolean) => {
@@ -116,7 +116,7 @@ export function App() {
       // EditModes (move-road, rotate-road): toggle back to default if already active.
       // DrawModes: always enter the mode and reset in-progress knots.
       const isEditMode = mode === 'move-road' || mode === 'rotate-road';
-      const current = useEditorViewStore.getState().editMode;
+      const current = useViewportStore.getState().editMode;
       if (isEditMode && current === mode) {
         setEditMode('default');
       } else {
@@ -131,7 +131,7 @@ export function App() {
       //               2nd Escape (no knots left) returns to default.
       // In all other modes: immediately return to default.
       const drawModes = new Set(['spline']);
-      const { editMode: current, splineKnots } = useEditorViewStore.getState();
+      const { editMode: current, splineKnots } = useViewportStore.getState();
       if (drawModes.has(current) && splineKnots.length > 0) {
         clearSplineKnots();
       } else {
@@ -139,7 +139,7 @@ export function App() {
         clearSplineKnots();
       }
     },
-    onDeleteSelected: () => useEditorStore.getState().deleteSelected(),
+    onDeleteSelected: () => useProjectStore.getState().deleteSelected(),
     onZoomToFit: () => emitViewportEvent({ type: 'zoom-to-fit' }),
   });
 
@@ -155,7 +155,7 @@ export function App() {
       if (!result) return;
       const project = await ps.parseOpenDrive(result.content);
       project.name = result.name;
-      useEditorStore.getState().setProject(project);
+      useProjectStore.getState().setProject(project);
       if (result.path) {
         pushRecentFile(result.name, result.path);
       }
@@ -167,7 +167,7 @@ export function App() {
 
   /** Create a new empty project and enter the editor. */
   const handleNew = useCallback(() => {
-    useEditorStore.getState().reset();
+    useProjectStore.getState().reset();
     setIsEditorOpen(true);
   }, []);
 
@@ -183,7 +183,7 @@ export function App() {
       }
       const project = await ps.parseOpenDrive(result.content);
       project.name = result.name;
-      useEditorStore.getState().setProject(project);
+      useProjectStore.getState().setProject(project);
       pushRecentFile(result.name, recentFile.path);
       setIsEditorOpen(true);
     } catch {

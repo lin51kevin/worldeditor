@@ -27,8 +27,8 @@ vi.mock('react-i18next', () => ({
 }));
 
 // Mock the stores
-vi.mock('../../stores/editorStore', () => ({
-  useEditorStore: vi.fn(() => ({
+vi.mock('../../stores/projectStore', () => ({
+  useProjectStore: vi.fn(() => ({
     selectedRoadId: null,
     selectedJunctionId: null,
     selectedSceneNode: null,
@@ -36,8 +36,8 @@ vi.mock('../../stores/editorStore', () => ({
   })),
 }));
 
-vi.mock('../../stores/editorViewStore', () => ({
-  useEditorViewStore: vi.fn(() => ({
+vi.mock('../../stores/viewportStore', () => ({
+  useViewportStore: vi.fn(() => ({
     editMode: null,
     setEditMode: vi.fn(),
   })),

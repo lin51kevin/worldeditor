@@ -2,8 +2,8 @@ import { useCallback, useEffect, type MutableRefObject, type RefObject } from 'r
 import { ViewportRenderer } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
 import { getPlatformService } from '../services';
-import { useEditorStore } from '../stores/editorStore';
-import { useEditorViewStore } from '../stores/editorViewStore';
+import { useProjectStore } from '../stores/projectStore';
+import { useViewportStore } from '../stores/viewportStore';
 import {
   findSplineControlPointHit,
   splineToRendererFormat,
@@ -40,7 +40,7 @@ export function useGeometryEditMode({
   hoveredControlPointRef,
   status,
 }: UseGeometryEditModeOptions) {
-  const geometryEditSpline = useEditorViewStore((state) => state.geometryEditSpline);
+  const geometryEditSpline = useViewportStore((state) => state.geometryEditSpline);
   const { enterGeometryEditMode, finalizeGeometryEdit } = useSplineOperations();
 
   const syncCursor = useCallback((worldPos: WorldPosition) => {
@@ -66,7 +66,7 @@ export function useGeometryEditMode({
     renderer.refreshSplineMarkers(nextHover, undefined);
   }, [hoveredControlPointRef]);
 
-  const previewEditedRoad = useCallback((roadId: string, splineJson: ReturnType<typeof useEditorViewStore.getState>['geometryEditSpline']) => {
+  const previewEditedRoad = useCallback((roadId: string, splineJson: ReturnType<typeof useViewportStore.getState>['geometryEditSpline']) => {
     const renderer = rendererRef.current;
     if (!renderer || !splineJson) {
       return;
@@ -78,7 +78,7 @@ export function useGeometryEditMode({
         const service = await getPlatformService();
         const geometries = await service.splineToGeometries(splineJson);
         const totalLength = geometries.reduce((sum, geometry) => sum + geometry.length, 0);
-        const currentProject = useEditorStore.getState().project;
+        const currentProject = useProjectStore.getState().project;
         const baseRoad = currentProject.roads.find((road) => road.id === roadId);
         if (!baseRoad) {
           return;
@@ -112,7 +112,7 @@ export function useGeometryEditMode({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const viewState = useEditorViewStore.getState();
+      const viewState = useViewportStore.getState();
       if (event.key === 'Escape' && viewState.geometryEditRoadId) {
         void finalizeGeometryEdit();
         return;
@@ -122,7 +122,7 @@ export function useGeometryEditMode({
         if (viewState.geometryEditRoadId || isDrawMode(viewState.editMode) || viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
           return;
         }
-        const { selectedRoadId } = useEditorStore.getState();
+        const { selectedRoadId } = useProjectStore.getState();
         if (selectedRoadId) {
           void enterGeometryEditMode(selectedRoadId);
         }
@@ -134,7 +134,7 @@ export function useGeometryEditMode({
   }, [enterGeometryEditMode, finalizeGeometryEdit]);
 
   const handleGeometryEditMouseMove = useCallback(async (worldPos: WorldPosition, canvas: HTMLCanvasElement, renderer: ViewportRenderer): Promise<boolean> => {
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     const spline = viewState.geometryEditSpline;
     if (!spline) {
       return false;
@@ -203,7 +203,7 @@ export function useGeometryEditMode({
   }, [isPreviewingRoadRef, previewEditedRoad, syncCursor, updateHoveredControlPoint]);
 
   const handleGeometryEditMouseDown = useCallback((e: React.MouseEvent, canvas: HTMLCanvasElement, renderer: ViewportRenderer): boolean => {
-    const spline = useEditorViewStore.getState().geometryEditSpline;
+    const spline = useViewportStore.getState().geometryEditSpline;
     if (!spline) {
       return false;
     }
@@ -228,7 +228,7 @@ export function useGeometryEditMode({
       return false;
     }
 
-    useEditorViewStore.getState().setDraggingKnot(bestHit);
+    useViewportStore.getState().setDraggingKnot(bestHit);
     renderer.lockCamera();
     canvas.style.cursor = 'grabbing';
     hoveredControlPointRef.current = null;
@@ -237,7 +237,7 @@ export function useGeometryEditMode({
   }, [hoveredControlPointRef]);
 
   const handleGeometryEditMouseUp = useCallback(async (): Promise<boolean> => {
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     if (!viewState.geometryEditSpline || !viewState.draggingKnot) {
       return false;
     }
@@ -260,7 +260,7 @@ export function useGeometryEditMode({
         const service = await getPlatformService();
         const geometries = await service.splineToGeometries(spline);
         const totalLength = geometries.reduce((sum, geometry) => sum + geometry.length, 0);
-        useEditorStore.getState().updateRoadGeometry(roadId, geometries, totalLength);
+        useProjectStore.getState().updateRoadGeometry(roadId, geometries, totalLength);
       } catch (err) {
         console.error('[Viewport] Failed to update road geometry:', err);
       }
@@ -270,8 +270,8 @@ export function useGeometryEditMode({
   }, [canvasRef, hoveredControlPointRef, rendererRef]);
 
   const handleRoadDoubleClick = useCallback((roadId: string | null, detail: number): boolean => {
-    const { geometryEditRoadId } = useEditorViewStore.getState();
-    const { selectedRoadId } = useEditorStore.getState();
+    const { geometryEditRoadId } = useViewportStore.getState();
+    const { selectedRoadId } = useProjectStore.getState();
     if (geometryEditRoadId || detail < 2 || !roadId || roadId !== selectedRoadId) {
       return false;
     }

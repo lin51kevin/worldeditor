@@ -12,9 +12,9 @@
  *   2nd press — returns to default select mode
  */
 import { useEffect } from 'react';
-import { useEditorStore } from '../stores/editorStore';
-import { useEditorViewStore } from '../stores/editorViewStore';
-import type { ActiveMode } from '../stores/editorViewStore';
+import { useProjectStore } from '../stores/projectStore';
+import { useViewportStore } from '../stores/viewportStore';
+import type { ActiveMode } from '../stores/viewportStore';
 
 function isEditableTarget(e: KeyboardEvent): boolean {
   const t = e.target;
@@ -64,13 +64,13 @@ export function useKeyboardShortcuts({
 
       if (mod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        const { canUndo, undo } = useEditorStore.getState();
+        const { canUndo, undo } = useProjectStore.getState();
         if (canUndo()) undo();
         return;
       }
       if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault();
-        const { canRedo, redo } = useEditorStore.getState();
+        const { canRedo, redo } = useProjectStore.getState();
         if (canRedo()) redo();
         return;
       }
@@ -86,17 +86,17 @@ export function useKeyboardShortcuts({
       }
       if (mod && e.key === 'a') {
         e.preventDefault();
-        useEditorStore.getState().selectAll();
+        useProjectStore.getState().selectAll();
         return;
       }
       if (mod && e.key === 'c') {
         e.preventDefault();
-        useEditorStore.getState().copySelected();
+        useProjectStore.getState().copySelected();
         return;
       }
       if (mod && e.key === 'v') {
         e.preventDefault();
-        useEditorStore.getState().pasteFromClipboard();
+        useProjectStore.getState().pasteFromClipboard();
         return;
       }
 
@@ -137,7 +137,7 @@ export function useKeyboardShortcuts({
       // V: exit to select mode (force return to default tool)
       if (e.key === 'v' || e.key === 'V') {
         e.preventDefault();
-        const { editMode, setEditMode } = useEditorViewStore.getState();
+        const { editMode, setEditMode } = useViewportStore.getState();
         if (editMode !== null && editMode !== 'default') {
           setEditMode('default');
         }

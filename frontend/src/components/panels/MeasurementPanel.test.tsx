@@ -1,11 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useEditorViewStore } from '../../stores/editorViewStore';
+import { useViewportStore } from '../../stores/viewportStore';
 import { MeasurementPanel } from './MeasurementPanel';
 
 describe('MeasurementPanel', () => {
   beforeEach(() => {
-    useEditorViewStore.setState({
+    useViewportStore.setState({
       measureMode: 'none',
       measurePoints: [],
       lastMeasurement: null,
@@ -18,13 +18,13 @@ describe('MeasurementPanel', () => {
   });
 
   it('should render when measureMode is distance', () => {
-    useEditorViewStore.setState({ measureMode: 'distance' });
+    useViewportStore.setState({ measureMode: 'distance' });
     render(<MeasurementPanel />);
     expect(screen.getByTestId('measurement-panel')).toBeTruthy();
   });
 
   it('should show three mode buttons', () => {
-    useEditorViewStore.setState({ measureMode: 'distance' });
+    useViewportStore.setState({ measureMode: 'distance' });
     render(<MeasurementPanel />);
     expect(screen.getByTestId('measure-mode-distance')).toBeTruthy();
     expect(screen.getByTestId('measure-mode-angle')).toBeTruthy();
@@ -32,16 +32,16 @@ describe('MeasurementPanel', () => {
   });
 
   it('should switch mode when clicking a mode button', () => {
-    useEditorViewStore.setState({ measureMode: 'distance' });
+    useViewportStore.setState({ measureMode: 'distance' });
     render(<MeasurementPanel />);
     act(() => {
       fireEvent.click(screen.getByTestId('measure-mode-angle'));
     });
-    expect(useEditorViewStore.getState().measureMode).toBe('angle');
+    expect(useViewportStore.getState().measureMode).toBe('angle');
   });
 
   it('should close panel when clicking close button', () => {
-    useEditorViewStore.setState({ measureMode: 'distance' });
+    useViewportStore.setState({ measureMode: 'distance' });
     const { rerender } = render(<MeasurementPanel />);
     expect(screen.getByTestId('measurement-panel')).toBeTruthy();
     act(() => {
@@ -53,7 +53,7 @@ describe('MeasurementPanel', () => {
   });
 
   it('should show distance measurement result', () => {
-    useEditorViewStore.setState({
+    useViewportStore.setState({
       measureMode: 'distance',
       measurePoints: [
         { x: 0, y: 0, z: 0 },
@@ -71,7 +71,7 @@ describe('MeasurementPanel', () => {
   });
 
   it('should show angle measurement result', () => {
-    useEditorViewStore.setState({
+    useViewportStore.setState({
       measureMode: 'angle',
       measurePoints: [
         { x: 0, y: 0, z: 0 },
@@ -88,7 +88,7 @@ describe('MeasurementPanel', () => {
   });
 
   it('should show area measurement result', () => {
-    useEditorViewStore.setState({
+    useViewportStore.setState({
       measureMode: 'area',
       measurePoints: [
         { x: 0, y: 0, z: 0 },
@@ -105,7 +105,7 @@ describe('MeasurementPanel', () => {
   });
 
   it('should clear points when clicking clear button', () => {
-    useEditorViewStore.setState({
+    useViewportStore.setState({
       measureMode: 'distance',
       measurePoints: [{ x: 0, y: 0, z: 0 }],
       lastMeasurement: {
@@ -118,7 +118,7 @@ describe('MeasurementPanel', () => {
       const clearBtn = screen.getByRole('button', { name: /measurement\.clear|清除|Clear/i });
       fireEvent.click(clearBtn);
     });
-    expect(useEditorViewStore.getState().measurePoints).toEqual([]);
-    expect(useEditorViewStore.getState().lastMeasurement).toBeNull();
+    expect(useViewportStore.getState().measurePoints).toEqual([]);
+    expect(useViewportStore.getState().lastMeasurement).toBeNull();
   });
 });

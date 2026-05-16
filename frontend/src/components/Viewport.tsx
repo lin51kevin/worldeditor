@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { ViewportRenderer } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
 import { onViewportEvent } from '../viewport/viewportEvents';
-import { useEditorStore } from '../stores/editorStore';
-import { useEditorViewStore } from '../stores/editorViewStore';
+import { useProjectStore } from '../stores/projectStore';
+import { useViewportStore } from '../stores/viewportStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getPlatformService } from '../services';
 import { showContextMenu } from '../services/contextMenu';
@@ -36,12 +36,12 @@ export function Viewport() {
   const rendererRef = useRef<ViewportRenderer | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useViewportDrop(rendererRef, canvasRef);
-  const project = useEditorStore((s) => s.project);
-  const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
-  const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
-  const selectedRoadIds = useEditorStore((s) => s.selectedRoadIds);
-  const selectedJunctionIds = useEditorStore((s) => s.selectedJunctionIds);
-  const { showGrid, showAxis, dimension, display } = useEditorViewStore();
+  const project = useProjectStore((s) => s.project);
+  const selectedJunctionId = useProjectStore((s) => s.selectedJunctionId);
+  const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
+  const selectedRoadIds = useProjectStore((s) => s.selectedRoadIds);
+  const selectedJunctionIds = useProjectStore((s) => s.selectedJunctionIds);
+  const { showGrid, showAxis, dimension, display } = useViewportStore();
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
@@ -91,7 +91,7 @@ export function Viewport() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const viewState = useEditorViewStore.getState();
+      const viewState = useViewportStore.getState();
       const isDrawMode =
         viewState.editMode === 'spline';
 
@@ -108,7 +108,7 @@ export function Viewport() {
           viewState.setEditMode('default');
           return;
         }
-        const editorState = useEditorStore.getState();
+        const editorState = useProjectStore.getState();
         if (
           editorState.selectedRoadId ||
           editorState.selectedJunctionId ||
@@ -121,7 +121,7 @@ export function Viewport() {
       }
 
       if (event.key === 'Delete' && !viewState.geometryEditRoadId && !isDrawMode && !viewState.pendingTemplateId) {
-        useEditorStore.getState().deleteSelected();
+        useProjectStore.getState().deleteSelected();
       }
     };
 
@@ -142,7 +142,7 @@ export function Viewport() {
   // computation in updateSurfaceMesh / updateLineMesh.
   const visibleProjectRef = useRef<ReturnType<typeof buildRenderableProject> | null>(null);
   const visibleProjectKeyRef = useRef<string>('');
-  const projectLoadVersion = useEditorStore((s) => s.projectLoadVersion);
+  const projectLoadVersion = useProjectStore((s) => s.projectLoadVersion);
   const getVisibleProject = useCallback(() => {
     const key = JSON.stringify({ d: display, v: projectLoadVersion });
     if (key !== visibleProjectKeyRef.current || !visibleProjectRef.current) {
@@ -390,7 +390,7 @@ export function Viewport() {
     let frameId = 0;
     const flush = () => {
       if (pendingCursorRef.current) {
-        useEditorStore.getState().setCursorWorldPos(pendingCursorRef.current);
+        useProjectStore.getState().setCursorWorldPos(pendingCursorRef.current);
         pendingCursorRef.current = null;
       }
       frameId = requestAnimationFrame(flush);
@@ -445,7 +445,7 @@ export function Viewport() {
           (async () => {
             try {
               const service = await getPlatformService();
-              const { project: currentProject } = useEditorStore.getState();
+              const { project: currentProject } = useProjectStore.getState();
               const road = currentProject.roads.find((r) => r.id === event.roadId);
               if (!road) return;
               const verts = await service.generateSingleRoadVertices(road, 2.0, [0.2, 0.5, 1.0, 0.7]);
@@ -459,7 +459,7 @@ export function Viewport() {
           (async () => {
             try {
               const service = await getPlatformService();
-              const { project: currentProject } = useEditorStore.getState();
+              const { project: currentProject } = useProjectStore.getState();
               const verts = await service.generateSingleJunctionVertices(
                 currentProject,
                 event.junctionId,
@@ -475,7 +475,7 @@ export function Viewport() {
           (async () => {
             try {
               const service = await getPlatformService();
-              const { project: currentProject } = useEditorStore.getState();
+              const { project: currentProject } = useProjectStore.getState();
               const road = currentProject.roads.find((r) => r.id === event.roadId);
               if (!road) return;
               const verts = await service.generateSingleRoadVertices(road, 2.0, [0.2, 0.5, 1.0, 0.7]);
@@ -489,7 +489,7 @@ export function Viewport() {
           (async () => {
             try {
               const service = await getPlatformService();
-              const { project: currentProject } = useEditorStore.getState();
+              const { project: currentProject } = useProjectStore.getState();
               const verts = await service.generateSingleJunctionVertices(
                 currentProject,
                 event.junctionId,
@@ -503,7 +503,7 @@ export function Viewport() {
           break;
         case 'pan-to-signal': {
           // Pan to the actual world position of the signal
-          const { project: currentProject } = useEditorStore.getState();
+          const { project: currentProject } = useProjectStore.getState();
           (async () => {
             try {
               const service = await getPlatformService();
@@ -526,7 +526,7 @@ export function Viewport() {
         }
         case 'pan-to-object': {
           // Pan to the actual world position of the object
-          const { project: currentProject } = useEditorStore.getState();
+          const { project: currentProject } = useProjectStore.getState();
           (async () => {
             try {
               const service = await getPlatformService();
@@ -602,7 +602,7 @@ export function Viewport() {
         setStatus('ready');
         renderer.start();
         renderer.setScaleChangeCallback((info) => {
-          useEditorStore.getState().setViewportInfo(info);
+          useProjectStore.getState().setViewportInfo(info);
         });
       } else {
         setStatus('unsupported');
@@ -669,13 +669,13 @@ export function Viewport() {
 
     if (updateMoveRotateDrag(worldPos)) return;
 
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     if (await handleGeometryEditMouseMove(worldPos, canvas, renderer)) return;
     if (handleSplineDrawMouseMove(worldPos, canvas, renderer, e)) return;
 
     // Show snap indicator for draw-mode endpoint snapping
     {
-      const drawSnap = useEditorViewStore.getState().drawSnapResult;
+      const drawSnap = useViewportStore.getState().drawSnapResult;
       const snapEl = snapIndicatorDomRef.current;
       const inDrawMode = viewState.editMode === 'spline';
       if (drawSnap?.snapped && snapEl) {
@@ -699,7 +699,7 @@ export function Viewport() {
     if (viewState.snapEnabled) {
       try {
         const service = await getPlatformService();
-        const { selectedRoadId: excludeId } = useEditorStore.getState();
+        const { selectedRoadId: excludeId } = useProjectStore.getState();
         const snapResult = await service.snapPointCached(
           worldPos.x,
           worldPos.y,
@@ -749,7 +749,7 @@ export function Viewport() {
     if (isInSelectMode) {
       try {
         const service = await getPlatformService();
-        const { project: currentProject } = useEditorStore.getState();
+        const { project: currentProject } = useProjectStore.getState();
         const visibleProject = getVisibleProject();
         if (!visibleProject) return;
         const rendererInst = rendererRef.current;
@@ -761,7 +761,7 @@ export function Viewport() {
           hoveredObjectRef.current = null;
           if (rendererInst) {
             if (newHoveredRoad) {
-              const { selectedRoadId } = useEditorStore.getState();
+              const { selectedRoadId } = useProjectStore.getState();
               if (newHoveredRoad !== selectedRoadId) {
                 const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
                 if (road) {
@@ -837,7 +837,7 @@ export function Viewport() {
     const renderer = rendererRef.current;
     if (!canvas || !renderer) return;
 
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     if (handleGeometryEditMouseDown(e, canvas, renderer) || handleSplineDrawMouseDown(e, canvas, renderer)) {
       return;
     }
@@ -869,7 +869,7 @@ export function Viewport() {
     const worldPos = renderer.unprojectToGround(screenX, screenY);
     if (!worldPos) return;
 
-    const { measureMode, measurePoints, addMeasurePoint, setMeasurementResult } = useEditorViewStore.getState();
+    const { measureMode, measurePoints, addMeasurePoint, setMeasurementResult } = useViewportStore.getState();
     if (measureMode !== 'none') {
       const point = { x: worldPos.x, y: worldPos.y, z: 0 };
       addMeasurePoint(point);
@@ -898,7 +898,7 @@ export function Viewport() {
       return;
     }
 
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
       return;
     }
@@ -933,7 +933,7 @@ export function Viewport() {
       if (!e.shiftKey) {
         const signalHit = await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
         if (signalHit !== null) {
-          useEditorStore.getState().selectSignal(signalHit.roadId, signalHit.signalId);
+          useProjectStore.getState().selectSignal(signalHit.roadId, signalHit.signalId);
           const rendererInst = rendererRef.current;
           if (rendererInst) rendererInst.clearHover();
           hoveredRoadRef.current = null;
@@ -942,7 +942,7 @@ export function Viewport() {
         }
         const objectHit = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
         if (objectHit !== null) {
-          useEditorStore.getState().selectObject(objectHit.roadId, objectHit.objectId);
+          useProjectStore.getState().selectObject(objectHit.roadId, objectHit.objectId);
           const rendererInst = rendererRef.current;
           if (rendererInst) rendererInst.clearHover();
           hoveredRoadRef.current = null;
@@ -957,19 +957,19 @@ export function Viewport() {
 
       if (e.shiftKey) {
         if (roadId) {
-          const { selectedRoadIds, selectedJunctionIds } = useEditorStore.getState();
+          const { selectedRoadIds, selectedJunctionIds } = useProjectStore.getState();
           const newRoadIds = selectedRoadIds.includes(roadId)
             ? selectedRoadIds.filter((id) => id !== roadId)
             : [...selectedRoadIds, roadId];
-          useEditorStore.getState().selectMultiple(newRoadIds, selectedJunctionIds);
+          useProjectStore.getState().selectMultiple(newRoadIds, selectedJunctionIds);
         } else {
           const junctionId = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
           if (junctionId) {
-            const { selectedRoadIds, selectedJunctionIds } = useEditorStore.getState();
+            const { selectedRoadIds, selectedJunctionIds } = useProjectStore.getState();
             const newJunctionIds = selectedJunctionIds.includes(junctionId)
               ? selectedJunctionIds.filter((id) => id !== junctionId)
               : [...selectedJunctionIds, junctionId];
-            useEditorStore.getState().selectMultiple(selectedRoadIds, newJunctionIds);
+            useProjectStore.getState().selectMultiple(selectedRoadIds, newJunctionIds);
           }
         }
         return;
@@ -980,7 +980,7 @@ export function Viewport() {
       }
 
       if (roadId) {
-        useEditorStore.getState().selectRoad(roadId);
+        useProjectStore.getState().selectRoad(roadId);
         const rendererInst = rendererRef.current;
         if (rendererInst) rendererInst.clearHover();
         hoveredRoadRef.current = null;
@@ -989,7 +989,7 @@ export function Viewport() {
       }
       const junctionId = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
       if (junctionId !== null) {
-        useEditorStore.getState().selectJunction(junctionId);
+        useProjectStore.getState().selectJunction(junctionId);
         const rendererInst = rendererRef.current;
         if (rendererInst) rendererInst.clearHover();
         hoveredRoadRef.current = null;
@@ -1019,7 +1019,7 @@ export function Viewport() {
       return;
     }
     // Cancel pending template placement on right-click
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     if (viewState.pendingTemplateId) {
       viewState.clearPendingTemplate();
       return;

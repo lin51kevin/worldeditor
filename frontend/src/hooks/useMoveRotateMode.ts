@@ -1,8 +1,8 @@
 import { useRef, type MutableRefObject, type RefObject } from 'react';
 import { ViewportRenderer } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
-import { useEditorStore } from '../stores/editorStore';
-import { useEditorViewStore } from '../stores/editorViewStore';
+import { useProjectStore } from '../stores/projectStore';
+import { useViewportStore } from '../stores/viewportStore';
 import { getPlatformService } from '../services';
 import type { MoveRotateDragState } from '../components/viewportUtils';
 
@@ -23,11 +23,11 @@ export function useMoveRotateMode(
     renderer: ViewportRenderer,
     canvas: HTMLCanvasElement,
   ): boolean => {
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     if (viewState.editMode !== 'move-road' && viewState.editMode !== 'rotate-road') return false;
 
-    const selRoadId = useEditorStore.getState().selectedRoadId;
-    const road = selRoadId ? useEditorStore.getState().project.roads.find((r) => r.id === selRoadId) : null;
+    const selRoadId = useProjectStore.getState().selectedRoadId;
+    const road = selRoadId ? useProjectStore.getState().project.roads.find((r) => r.id === selRoadId) : null;
     if (!road || road.plan_view.length === 0) return false;
 
     const rect = canvas.getBoundingClientRect();
@@ -60,7 +60,7 @@ export function useMoveRotateMode(
     if (!moveRotateDrag) return false;
 
     const { mode, roadId, startWorldX, startWorldY, centroidX, centroidY } = moveRotateDrag;
-    const { project: currentProject } = useEditorStore.getState();
+    const { project: currentProject } = useProjectStore.getState();
     const road = currentProject.roads.find((r) => r.id === roadId);
     if (road) {
       let previewRoad: typeof road;
@@ -131,7 +131,7 @@ export function useMoveRotateMode(
     const canvas = canvasRef.current;
     if (canvas) canvas.style.cursor = '';
     const { mode, roadId, currentDx, currentDy, currentAngle, centroidX, centroidY } = moveRotateDrag;
-    const store = useEditorStore.getState();
+    const store = useProjectStore.getState();
     if (mode === 'move-road' && (currentDx !== 0 || currentDy !== 0)) {
       store.moveRoad(roadId, currentDx, currentDy);
     } else if (mode === 'rotate-road' && currentAngle !== 0) {

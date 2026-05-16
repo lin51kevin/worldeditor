@@ -1,8 +1,8 @@
 import { useCallback, useEffect, type MutableRefObject, type RefObject } from 'react';
 import { ViewportRenderer } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
-import { useEditorViewStore } from '../stores/editorViewStore';
-import { useEditorStore } from '../stores/editorStore';
+import { useViewportStore } from '../stores/viewportStore';
+import { useProjectStore } from '../stores/projectStore';
 import {
   findSplineControlPointHit,
   type SplineControlPoint,
@@ -37,11 +37,11 @@ export function useSplineDrawMode({
   hoveredControlPointRef,
   status,
 }: UseSplineDrawModeOptions) {
-  const editMode = useEditorViewStore((state) => state.editMode);
-  const splineKnots = useEditorViewStore((state) => state.splineKnots);
-  const splineTangentOverrides = useEditorViewStore((state) => state.splineTangentOverrides);
-  const splineTangentInOverrides = useEditorViewStore((state) => state.splineTangentInOverrides);
-  const geometryEditSpline = useEditorViewStore((state) => state.geometryEditSpline);
+  const editMode = useViewportStore((state) => state.editMode);
+  const splineKnots = useViewportStore((state) => state.splineKnots);
+  const splineTangentOverrides = useViewportStore((state) => state.splineTangentOverrides);
+  const splineTangentInOverrides = useViewportStore((state) => state.splineTangentInOverrides);
+  const geometryEditSpline = useViewportStore((state) => state.geometryEditSpline);
   const { finalizeSplineCreation } = useSplineOperations();
 
   const syncCursor = useCallback((worldPos: WorldPosition) => {
@@ -50,7 +50,7 @@ export function useSplineDrawMode({
   }, [pendingCursorRef]);
 
   const clearSplineDrawHover = useCallback(() => {
-    useEditorViewStore.getState().setCursorPreviewPos(null);
+    useViewportStore.getState().setCursorPreviewPos(null);
     if (hoveredControlPointRef.current === null) {
       return;
     }
@@ -70,7 +70,7 @@ export function useSplineDrawMode({
 
   useEffect(() => {
     if (!isDrawMode(editMode)) {
-      useEditorViewStore.getState().clearSplineKnots();
+      useViewportStore.getState().clearSplineKnots();
     }
   }, [editMode]);
 
@@ -83,7 +83,7 @@ export function useSplineDrawMode({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const viewState = useEditorViewStore.getState();
+      const viewState = useViewportStore.getState();
       if (!isDrawMode(viewState.editMode)) {
         return;
       }
@@ -123,17 +123,17 @@ export function useSplineDrawMode({
   const queryDrawModeSnap = useCallback(async (x: number, y: number) => {
     try {
       const service = await getPlatformService();
-      const { project } = useEditorStore.getState();
+      const { project } = useProjectStore.getState();
       const snapResult = await service.snapPoint(project, x, y, {
         grid_enabled: false,
         grid_size: 1.0,
         endpoint_enabled: true,
-        endpoint_threshold: useEditorViewStore.getState().snapThreshold,
+        endpoint_threshold: useViewportStore.getState().snapThreshold,
         midpoint_enabled: false,
         perpendicular_enabled: false,
       });
       if (snapResult.snapped && snapResult.snap_type === 'Endpoint') {
-        useEditorViewStore.getState().setDrawSnapResult({
+        useViewportStore.getState().setDrawSnapResult({
           x: snapResult.x,
           y: snapResult.y,
           snapped: true,
@@ -142,10 +142,10 @@ export function useSplineDrawMode({
           contactPoint: snapResult.contact_point,
         });
       } else {
-        useEditorViewStore.getState().setDrawSnapResult(null);
+        useViewportStore.getState().setDrawSnapResult(null);
       }
     } catch {
-      useEditorViewStore.getState().setDrawSnapResult(null);
+      useViewportStore.getState().setDrawSnapResult(null);
     }
   }, []);
 
@@ -153,21 +153,21 @@ export function useSplineDrawMode({
   const inheritTangentFromSnap = useCallback(async (knotIndex: number, roadId: string, contactPoint: string) => {
     try {
       const service = await getPlatformService();
-      const { project } = useEditorStore.getState();
+      const { project } = useProjectStore.getState();
       const tangent = await service.getRoadEndpointTangent(project, roadId, contactPoint);
       if (!tangent) return;
       // Convert heading to a tangent vector with a reasonable default length
       const len = 10.0;
       const tx = Math.cos(tangent.hdg) * len;
       const ty = Math.sin(tangent.hdg) * len;
-      useEditorViewStore.getState().setSplineTangentOverride(knotIndex, [tx, ty, 0]);
+      useViewportStore.getState().setSplineTangentOverride(knotIndex, [tx, ty, 0]);
     } catch {
       // Silently ignore tangent inheritance errors
     }
   }, []);
 
   const handleSplineDrawMouseMove = useCallback((worldPos: WorldPosition, canvas: HTMLCanvasElement, renderer: ViewportRenderer, mouseEvent?: MouseEvent | React.MouseEvent): boolean => {
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     if (viewState.geometryEditSpline || !isDrawMode(viewState.editMode)) {
       return false;
     }
@@ -245,7 +245,7 @@ export function useSplineDrawMode({
   }, [clearSplineDrawHover, queryDrawModeSnap, syncCursor, updateHoveredControlPoint]);
 
   const handleSplineDrawMouseDown = useCallback((e: React.MouseEvent, canvas: HTMLCanvasElement, renderer: ViewportRenderer): boolean => {
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     if (viewState.geometryEditSpline || !isDrawMode(viewState.editMode) || viewState.splineKnots.length === 0) {
       return false;
     }
@@ -278,7 +278,7 @@ export function useSplineDrawMode({
   }, [hoveredControlPointRef]);
 
   const handleSplineDrawClick = useCallback(async (e: React.MouseEvent, worldPos: WorldPosition): Promise<boolean> => {
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     if (viewState.geometryEditRoadId || !isDrawMode(viewState.editMode)) {
       return false;
     }
@@ -324,7 +324,7 @@ export function useSplineDrawMode({
   }, [finalizeSplineCreation, inheritTangentFromSnap]);
 
   const handleSplineDrawMouseUp = useCallback((): boolean => {
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     if (viewState.geometryEditSpline || !viewState.draggingKnot || !isDrawMode(viewState.editMode)) {
       return false;
     }
@@ -349,7 +349,7 @@ export function useSplineDrawMode({
    * Returns true when the event was consumed (draw mode was active).
    */
   const handleSplineDrawRightClick = useCallback((): boolean => {
-    const viewState = useEditorViewStore.getState();
+    const viewState = useViewportStore.getState();
     if (!isDrawMode(viewState.editMode)) {
       return false;
     }

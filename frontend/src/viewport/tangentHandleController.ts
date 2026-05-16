@@ -6,7 +6,7 @@
  * (click/drag tangent vectors).
  */
 
-import type { TangentCoupling } from '../stores/editorViewStore';
+import type { TangentCoupling } from '../stores/viewportStore';
 
 export type ControlPointRef = { index: number; type: 'knot' | 'in' | 'out' };
 

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GisCoord, PlatformService, Project, Road, UtmCoord } from '../../services/platform';
-import { useEditorStore } from '../../stores/editorStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { useRecentFilesStore } from '../../stores/recentFilesStore';
 import { getPlatformService } from '../../services';
 import { emitViewportEvent } from '../../viewport/viewportEvents';
@@ -147,7 +147,7 @@ describe('MenuBar', () => {
     vi.mocked(showPrompt).mockResolvedValue('renamed.xodr');
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject(),
         isDirty: false,
         selectedRoadId: null,
@@ -206,7 +206,7 @@ describe('MenuBar', () => {
     expect(screen.getByText('导出 OpenDRIVE...').closest('button')).toBeDisabled();
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         isDirty: true,
         project: makeProject([makeRoad('r-1', 12.5)]),
       });
@@ -227,7 +227,7 @@ describe('MenuBar', () => {
 
   it('calculates and shows the total road length from the current project', async () => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([makeRoad('r-1', 100), makeRoad('r-2', 50.5)]),
       });
     });
@@ -268,7 +268,7 @@ describe('MenuBar', () => {
     const closeSpy = vi.spyOn(window, 'close').mockImplementation(() => {});
 
     act(() => {
-      useEditorStore.setState({ isDirty: true });
+      useProjectStore.setState({ isDirty: true });
     });
 
     render(<MenuBar />);
@@ -304,7 +304,7 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByText('recent.xodr'));
 
     await waitFor(() => expect(platform.openFileByPath).toHaveBeenCalledWith('C:\\maps\\recent.xodr'));
-    expect(useEditorStore.getState().project.name).toBe('recent.xodr');
+    expect(useProjectStore.getState().project.name).toBe('recent.xodr');
   });
 
   it('removes missing recent files from storage', async () => {
@@ -335,7 +335,7 @@ describe('MenuBar', () => {
     vi.mocked(showConfirm).mockResolvedValueOnce(false);
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([makeRoad('r-1', 20)], 'Original'),
         isDirty: true,
         selectedRoadId: 'r-1',
@@ -346,14 +346,14 @@ describe('MenuBar', () => {
 
     dispatchWindowKey({ key: 'n', ctrlKey: true });
     await act(async () => {});
-    expect(useEditorStore.getState().project.name).toBe('Original');
+    expect(useProjectStore.getState().project.name).toBe('Original');
 
     dispatchWindowKey({ key: 'n', ctrlKey: true });
     await act(async () => {});
-    expect(useEditorStore.getState().project.name).toBe('Untitled');
+    expect(useProjectStore.getState().project.name).toBe('Untitled');
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([makeRoad('r-1', 20)], 'SaveTarget'),
         isDirty: true,
         selectedRoadId: 'r-1',
@@ -363,34 +363,34 @@ describe('MenuBar', () => {
     dispatchWindowKey({ key: 'o', ctrlKey: true });
     await waitFor(() => expect(platform.openFile).toHaveBeenCalled());
     await waitFor(() => expect(platform.parseOpenDrive).toHaveBeenCalledWith('<OpenDRIVE />'));
-    await waitFor(() => expect(useEditorStore.getState().project.name).toBe('loaded.xodr'));
+    await waitFor(() => expect(useProjectStore.getState().project.name).toBe('loaded.xodr'));
 
     act(() => {
-      useEditorStore.setState({ project: makeProject([makeRoad('r-1', 20)], 'SaveTarget'), isDirty: true });
+      useProjectStore.setState({ project: makeProject([makeRoad('r-1', 20)], 'SaveTarget'), isDirty: true });
     });
 
     dispatchWindowKey({ key: 's', ctrlKey: true });
     await waitFor(() => expect(platform.writeOpenDrive).toHaveBeenCalled());
     await waitFor(() => expect(platform.saveFile).toHaveBeenCalledWith('SaveTarget', '<OpenDRIVE />'));
-    await waitFor(() => expect(useEditorStore.getState().isDirty).toBe(false));
+    await waitFor(() => expect(useProjectStore.getState().isDirty).toBe(false));
 
     act(() => {
-      useEditorStore.setState({ project: makeProject([], 'SaveTarget'), isDirty: true });
+      useProjectStore.setState({ project: makeProject([], 'SaveTarget'), isDirty: true });
     });
 
     dispatchWindowKey({ key: 's', ctrlKey: true, shiftKey: true });
     await waitFor(() => expect(platform.saveFile).toHaveBeenCalledWith('renamed.xodr', '<OpenDRIVE />'));
-    await waitFor(() => expect(useEditorStore.getState().project.name).toBe('renamed.xodr'));
+    await waitFor(() => expect(useProjectStore.getState().project.name).toBe('renamed.xodr'));
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([makeRoad('delete-me', 15)]),
         selectedRoadId: 'delete-me',
       });
     });
 
     dispatchWindowKey({ key: 'Delete' });
-    expect(useEditorStore.getState().project.roads).toHaveLength(0);
+    expect(useProjectStore.getState().project.roads).toHaveLength(0);
   });
 
   it('handles keyboard shortcuts for zoom actions by emitting viewport events', () => {
@@ -398,7 +398,7 @@ describe('MenuBar', () => {
     emitSpy.mockClear();
 
     act(() => {
-      useEditorStore.setState({ selectedRoadId: 'r-zoom' });
+      useProjectStore.setState({ selectedRoadId: 'r-zoom' });
     });
 
     render(<MenuBar />);
@@ -418,7 +418,7 @@ describe('MenuBar', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const originalProject = makeProject([makeRoad('original', 10)], 'Original');
-    act(() => { useEditorStore.setState({ project: originalProject }); });
+    act(() => { useProjectStore.setState({ project: originalProject }); });
 
     render(<MenuBar />);
     fireEvent.click(screen.getByTitle('文件'));
@@ -426,7 +426,7 @@ describe('MenuBar', () => {
     fireEvent.click(screen.getByText('打开文件...'));
 
     await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalled());
-    expect(useEditorStore.getState().project.name).toBe('Original');
+    expect(useProjectStore.getState().project.name).toBe('Original');
   });
 
   it('shows a parse error alert when parseOpenDrive returns a non-Project value', async () => {
@@ -437,13 +437,13 @@ describe('MenuBar', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const originalProject = makeProject([], 'OriginalProject');
-    act(() => { useEditorStore.setState({ project: originalProject }); });
+    act(() => { useProjectStore.setState({ project: originalProject }); });
 
     render(<MenuBar />);
     dispatchWindowKey({ key: 'o', ctrlKey: true });
 
     await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalled());
-    expect(useEditorStore.getState().project.name).toBe('OriginalProject');
+    expect(useProjectStore.getState().project.name).toBe('OriginalProject');
   });
 
   describe('plugin importer/exporter menu items', () => {

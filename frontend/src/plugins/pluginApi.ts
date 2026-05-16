@@ -20,7 +20,7 @@
  */
 
 import { usePluginContribStore } from '../stores/pluginContribStore';
-import { useEditorStore } from '../stores/editorStore';
+import { useProjectStore } from '../stores/projectStore';
 import type {
   ToolbarButtonContrib,
   MenuItemContrib,
@@ -167,23 +167,23 @@ export function installPluginApi(): void {
 
         getProject: () => {
           requirePermission(id, granted, 'project:read');
-          return useEditorStore.getState().project;
+          return useProjectStore.getState().project;
         },
 
         updateProject: (updater) => {
           requirePermission(id, granted, 'project:write');
-          const state = useEditorStore.getState();
+          const state = useProjectStore.getState();
           const newProject = updater(state.project);
-          useEditorStore.setState({ project: newProject, isDirty: true });
+          useProjectStore.setState({ project: newProject, isDirty: true });
         },
 
         executeWithUndo: (description, executeFn) => {
           requirePermission(id, granted, 'project:write');
-          useEditorStore.getState().executePluginCommand(description, executeFn);
+          useProjectStore.getState().executePluginCommand(description, executeFn);
         },
 
         onSelectionChanged: (callback) => {
-          return useEditorStore.subscribe((state) => {
+          return useProjectStore.subscribe((state) => {
             callback({
               roadId: state.selectedRoadId,
               junctionId: state.selectedJunctionId,
@@ -194,7 +194,7 @@ export function installPluginApi(): void {
         },
 
         onProjectChanged: (callback) => {
-          return useEditorStore.subscribe((state) => {
+          return useProjectStore.subscribe((state) => {
             callback(state.project);
           });
         },

@@ -1,17 +1,17 @@
 import { useTranslation } from 'react-i18next';
-import { useEditorStore } from '../../stores/editorStore';
-import { useEditorViewStore } from '../../stores/editorViewStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { useViewportStore } from '../../stores/viewportStore';
 
 // ── Component ──────────────────────────────────────────────────────────────
 
 export function RoadEditToolbar() {
   const { t } = useTranslation();
-  const editMode = useEditorViewStore((s) => s.editMode);
-  const softSelectionRadius = useEditorViewStore((s) => s.softSelectionRadius);
-  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
-  const setEditMode = useEditorViewStore((s) => s.setEditMode);
-  const clearSplineKnots = useEditorViewStore((s) => s.clearSplineKnots);
-  const setSoftSelectionRadius = useEditorViewStore((s) => s.setSoftSelectionRadius);
+  const editMode = useViewportStore((s) => s.editMode);
+  const softSelectionRadius = useViewportStore((s) => s.softSelectionRadius);
+  const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
+  const setEditMode = useViewportStore((s) => s.setEditMode);
+  const clearSplineKnots = useViewportStore((s) => s.clearSplineKnots);
+  const setSoftSelectionRadius = useViewportStore((s) => s.setSoftSelectionRadius);
 
   const isAdjustNodeActive = editMode === 'spline';
   const hasRoad = !!selectedRoadId;
@@ -30,23 +30,23 @@ export function RoadEditToolbar() {
   const handleClone = () => {
     if (!selectedRoadId) return;
     const newId = `${selectedRoadId}-clone-${Date.now()}`;
-    useEditorStore.getState().cloneRoad(selectedRoadId, newId, [5, 5]);
-    useEditorStore.getState().selectRoad(newId);
+    useProjectStore.getState().cloneRoad(selectedRoadId, newId, [5, 5]);
+    useProjectStore.getState().selectRoad(newId);
   };
 
   const handleReverse = () => {
     if (!selectedRoadId) return;
-    useEditorStore.getState().reverseRoad(selectedRoadId);
+    useProjectStore.getState().reverseRoad(selectedRoadId);
   };
 
   const handleMirror = () => {
     if (!selectedRoadId) return;
-    useEditorStore.getState().mirrorRoad(selectedRoadId);
+    useProjectStore.getState().mirrorRoad(selectedRoadId);
   };
 
   const handleSwapCenterline = () => {
     if (!selectedRoadId) return;
-    const project = useEditorStore.getState().project;
+    const project = useProjectStore.getState().project;
     const road = project.roads.find((r) => r.id === selectedRoadId);
     if (!road) return;
     const section = road.lane_sections[0];
@@ -63,12 +63,12 @@ export function RoadEditToolbar() {
     }
 
     if (targetLaneId !== null) {
-      useEditorStore.getState().swapCenterline(selectedRoadId, targetLaneId);
+      useProjectStore.getState().swapCenterline(selectedRoadId, targetLaneId);
     }
   };
 
   // ── Road name ────────────────────────────────────────────────────────────
-  const project = useEditorStore((s) => s.project);
+  const project = useProjectStore((s) => s.project);
   const selectedRoad = project?.roads?.find((r) => r.id === selectedRoadId) ?? null;
 
   return (
@@ -123,7 +123,7 @@ export function RoadEditToolbar() {
         <button
           className="toolbar-btn"
           title={t('toolPanel.optimizeNode')}
-          onClick={() => selectedRoadId && useEditorStore.getState().optimizeRoad(selectedRoadId)}
+          onClick={() => selectedRoadId && useProjectStore.getState().optimizeRoad(selectedRoadId)}
           disabled={!hasRoad}
         >
           {t('toolPanel.optimizeNode')}

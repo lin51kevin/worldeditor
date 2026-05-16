@@ -10,7 +10,7 @@ import { createLaneSlice } from './slices/laneSlice';
 // Re-export types for consumers
 export type { RoadSignal, RoadObject };
 
-export const useEditorStore = create<EditorState>((set, get) => ({
+export const useProjectStore = create<EditorState>((set, get) => ({
   ...createProjectSlice(set, get),
   ...createSelectionSlice(set, get),
   ...createUndoRedoSlice(set, get),

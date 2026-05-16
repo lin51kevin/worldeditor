@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useEditorStore } from '../stores/editorStore';
-import { useEditorViewStore } from '../stores/editorViewStore';
+import { useProjectStore } from '../stores/projectStore';
+import { useViewportStore } from '../stores/viewportStore';
 import { emitViewportEvent } from '../viewport/viewportEvents';
 import { getPlatformService } from '../services';
 import { showAlert, showConfirm, showPrompt } from '../utils/dialog';
@@ -13,18 +13,18 @@ function calculateTotalRoadLength(project: Project): number {
 }
 
 export function useMenuActions() {
-  const project = useEditorStore((s) => s.project);
-  const isDirty = useEditorStore((s) => s.isDirty);
-  const savedProject = useEditorStore((s) => s.savedProject);
-  const undo = useEditorStore((s) => s.undo);
-  const redo = useEditorStore((s) => s.redo);
-  const canUndo = useEditorStore((s) => s.canUndo);
-  const canRedo = useEditorStore((s) => s.canRedo);
-  const reset = useEditorStore((s) => s.reset);
-  const resetToSaved = useEditorStore((s) => s.resetToSaved);
-  const setProject = useEditorStore((s) => s.setProject);
+  const project = useProjectStore((s) => s.project);
+  const isDirty = useProjectStore((s) => s.isDirty);
+  const savedProject = useProjectStore((s) => s.savedProject);
+  const undo = useProjectStore((s) => s.undo);
+  const redo = useProjectStore((s) => s.redo);
+  const canUndo = useProjectStore((s) => s.canUndo);
+  const canRedo = useProjectStore((s) => s.canRedo);
+  const reset = useProjectStore((s) => s.reset);
+  const resetToSaved = useProjectStore((s) => s.resetToSaved);
+  const setProject = useProjectStore((s) => s.setProject);
 
-  const { setDimension, toggleGrid, toggleAxis, toggleSnap, setMeasureMode } = useEditorViewStore();
+  const { setDimension, toggleGrid, toggleAxis, toggleSnap, setMeasureMode } = useViewportStore();
   const { push: pushRecentFile, remove: removeRecentFile } = useRecentFilesStore();
   const { t } = useTranslation();
 
@@ -60,7 +60,7 @@ export function useMenuActions() {
     const platform = await getPlatformService();
     const xml = await platform.writeOpenDrive(project);
     await platform.saveFile(project.name, xml);
-    useEditorStore.getState().markClean();
+    useProjectStore.getState().markClean();
   }, [project]);
 
   const handleSaveAs = useCallback(async () => {
@@ -70,7 +70,7 @@ export function useMenuActions() {
     const xml = await platform.writeOpenDrive(project);
     await platform.saveFile(name, xml);
     setProject({ ...project, name });
-    useEditorStore.getState().markClean();
+    useProjectStore.getState().markClean();
   }, [project, setProject, t]);
 
   const handleImportOpenDrive = useCallback(async () => {
@@ -126,7 +126,7 @@ export function useMenuActions() {
   }, [project, t]);
 
   const handleDelete = useCallback(() => {
-    const { selectedRoadId, removeRoad } = useEditorStore.getState();
+    const { selectedRoadId, removeRoad } = useProjectStore.getState();
     if (selectedRoadId) {
       removeRoad(selectedRoadId);
     }
@@ -147,7 +147,7 @@ export function useMenuActions() {
   }, []);
 
   const handleZoomToSelected = useCallback(() => {
-    const { selectedRoadId, selectedJunctionId } = useEditorStore.getState();
+    const { selectedRoadId, selectedJunctionId } = useProjectStore.getState();
     if (selectedRoadId) {
       emitViewportEvent({ type: 'zoom-to-selected', roadId: selectedRoadId });
     } else if (selectedJunctionId) {
@@ -156,13 +156,13 @@ export function useMenuActions() {
   }, []);
 
   const handleToggleGrid = useCallback(() => {
-    const newVal = !useEditorViewStore.getState().showGrid;
+    const newVal = !useViewportStore.getState().showGrid;
     toggleGrid();
     emitViewportEvent({ type: 'set-show-grid', show: newVal });
   }, [toggleGrid]);
 
   const handleToggleAxis = useCallback(() => {
-    const newVal = !useEditorViewStore.getState().showAxis;
+    const newVal = !useViewportStore.getState().showAxis;
     toggleAxis();
     emitViewportEvent({ type: 'set-show-axis', show: newVal });
   }, [toggleAxis]);

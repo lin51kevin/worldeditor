@@ -17,7 +17,7 @@ import {
 import { usePluginContribStore } from '../../stores/pluginContribStore';
 import { useBuiltinPluginStore } from '../../stores/builtinPluginStore';
 import { useRecentFilesStore } from '../../stores/recentFilesStore';
-import { useEditorViewStore } from '../../stores/editorViewStore';
+import { useViewportStore } from '../../stores/viewportStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { resetAllPanels } from '../layout/FloatingPanel';
 import { useMenuActions } from '../../hooks/useMenuActions';
@@ -87,7 +87,7 @@ export function MenuBar({
     toggleLeftPanel,
     toggleRightPanel,
     toggleTemplatePanel,
-  } = useEditorViewStore();
+  } = useViewportStore();
 
   const { theme, toggleTheme } = useThemeStore();
   const { t, i18n } = useTranslation();

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { MapPin, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useEditorStore } from '../../stores/editorStore';
-import { useEditorViewStore } from '../../stores/editorViewStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { useViewportStore } from '../../stores/viewportStore';
 import { onCursorMove } from '../../viewport/cursorEvents';
 import './StatusBar.css';
 
@@ -13,10 +13,10 @@ function formatDist(m: number): string {
 }
 
 export function StatusBar() {
-  const gridSpacing = useEditorStore((s) => s.gridSpacing);
-  const viewportMpp = useEditorStore((s) => s.viewportMpp);
-  const roadCount = useEditorStore((s) => s.project.roads.length);
-  const editMode = useEditorViewStore((s) => s.editMode);
+  const gridSpacing = useProjectStore((s) => s.gridSpacing);
+  const viewportMpp = useProjectStore((s) => s.viewportMpp);
+  const roadCount = useProjectStore((s) => s.project.roads.length);
+  const editMode = useViewportStore((s) => s.editMode);
   const { t } = useTranslation();
   const coordRef = useRef<HTMLSpanElement>(null);
 

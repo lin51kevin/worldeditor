@@ -17,11 +17,11 @@ window.addEventListener('error', (event: ErrorEvent) => {
 
 // Expose store and services for E2E testing (development only)
 if (import.meta.env.DEV) {
-  import('./stores/editorStore').then(({ useEditorStore }) => {
-    (window as unknown as Record<string, unknown>)['__editorStore'] = useEditorStore;
+  import('./stores/projectStore').then(({ useProjectStore }) => {
+    (window as unknown as Record<string, unknown>)['__projectStore'] = useProjectStore;
   });
-  import('./stores/editorViewStore').then(({ useEditorViewStore }) => {
-    (window as unknown as Record<string, unknown>)['__editorViewStore'] = useEditorViewStore;
+  import('./stores/viewportStore').then(({ useViewportStore }) => {
+    (window as unknown as Record<string, unknown>)['__viewportStore'] = useViewportStore;
   });
   import('./services').then(({ getPlatformService }) => {
     (window as unknown as Record<string, unknown>)['__getPlatformService'] = getPlatformService;

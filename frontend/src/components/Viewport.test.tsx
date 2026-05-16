@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GisCoord, PlatformService, Project, UtmCoord } from '../services/platform';
 import { getPlatformService } from '../services';
 import { showContextMenu } from '../services/contextMenu';
-import { useEditorStore } from '../stores/editorStore';
-import { DEFAULT_DISPLAY, useEditorViewStore } from '../stores/editorViewStore';
+import { useProjectStore } from '../stores/projectStore';
+import { DEFAULT_DISPLAY, useViewportStore } from '../stores/viewportStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import { Viewport } from './Viewport';
 
@@ -235,7 +235,7 @@ describe('Viewport', () => {
     );
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject(),
         isDirty: false,
         selectedRoadId: null,
@@ -245,7 +245,7 @@ describe('Viewport', () => {
         undoStack: [],
         redoStack: [],
       });
-      useEditorViewStore.setState({ display: { ...DEFAULT_DISPLAY }, geometryEditSpline: null, geometryEditRoadId: null, editMode: 'default', splineKnots: [] });
+      useViewportStore.setState({ display: { ...DEFAULT_DISPLAY }, geometryEditSpline: null, geometryEditRoadId: null, editMode: 'default', splineKnots: [] });
     });
   });
 
@@ -338,7 +338,7 @@ describe('Viewport', () => {
     fireEvent.click(canvas, { button: 0, clientX: 24, clientY: 32 });
 
     await waitFor(() => expect(platform.pickRoadAtPoint).toHaveBeenCalledWith(makeProject(), 10, 20, 5.0));
-    expect(useEditorStore.getState().selectedRoadId).toBe('road-1');
+    expect(useProjectStore.getState().selectedRoadId).toBe('road-1');
   });
 
   it('does not select a road after a modified left-button drag', async () => {
@@ -358,7 +358,7 @@ describe('Viewport', () => {
     fireEvent.click(canvas, { button: 0, clientX: 40, clientY: 52, ctrlKey: true });
 
     expect(platform.pickRoadAtPoint).not.toHaveBeenCalled();
-    expect(useEditorStore.getState().selectedRoadId).toBeNull();
+    expect(useProjectStore.getState().selectedRoadId).toBeNull();
   });
 
   it('uploads red highlight vertices when a road is selected', async () => {
@@ -368,7 +368,7 @@ describe('Viewport', () => {
     vi.mocked(getPlatformService).mockResolvedValue(platform);
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProjectWithRoad(),
         selectedRoadId: 'road-1',
         selectedJunctionId: null,
@@ -433,7 +433,7 @@ describe('Viewport', () => {
     vi.mocked(getPlatformService).mockResolvedValue(platform);
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProjectWithRoad(),
         selectedRoadId: 'road-1',
         selectedObjectType: 'road',
@@ -448,8 +448,8 @@ describe('Viewport', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }));
     });
 
-    await waitFor(() => expect(useEditorStore.getState().project.roads).toHaveLength(0));
-    expect(useEditorStore.getState().selectedRoadId).toBeNull();
+    await waitFor(() => expect(useProjectStore.getState().project.roads).toHaveLength(0));
+    expect(useProjectStore.getState().selectedRoadId).toBeNull();
   });
 
   it('clears road selection when Escape is pressed in select mode', async () => {
@@ -459,7 +459,7 @@ describe('Viewport', () => {
     vi.mocked(getPlatformService).mockResolvedValue(platform);
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProjectWithRoad(),
         selectedRoadId: 'road-1',
         selectedObjectType: 'road',
@@ -474,7 +474,7 @@ describe('Viewport', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
 
-    expect(useEditorStore.getState().selectedRoadId).toBeNull();
+    expect(useProjectStore.getState().selectedRoadId).toBeNull();
   });
 
   it('uploads golden hover vertices when hovering over a road in select mode', async () => {
@@ -489,7 +489,7 @@ describe('Viewport', () => {
     vi.mocked(getPlatformService).mockResolvedValue(platform);
 
     act(() => {
-      useEditorStore.setState({ project: makeProjectWithRoad() });
+      useProjectStore.setState({ project: makeProjectWithRoad() });
     });
 
     render(<Viewport />);
@@ -516,7 +516,7 @@ describe('Viewport', () => {
     vi.mocked(getPlatformService).mockResolvedValue(platform);
 
     act(() => {
-      useEditorStore.setState({ project: makeProjectWithRoad() });
+      useProjectStore.setState({ project: makeProjectWithRoad() });
     });
 
     render(<Viewport />);
@@ -538,7 +538,7 @@ describe('Viewport', () => {
     vi.mocked(getPlatformService).mockResolvedValue(platform);
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProjectWithRoadPlanView(),
         selectedRoadId: 'road-1',
         selectedObjectType: 'road',
@@ -554,7 +554,7 @@ describe('Viewport', () => {
     });
 
     await waitFor(() =>
-      expect(useEditorViewStore.getState().geometryEditSpline).not.toBeNull()
+      expect(useViewportStore.getState().geometryEditSpline).not.toBeNull()
     );
   });
 
@@ -567,7 +567,7 @@ describe('Viewport', () => {
     vi.mocked(getPlatformService).mockResolvedValue(platform);
 
     act(() => {
-      useEditorStore.setState({ project: makeProjectWithRoad(), selectedRoadIds: [] });
+      useProjectStore.setState({ project: makeProjectWithRoad(), selectedRoadIds: [] });
     });
 
     render(<Viewport />);
@@ -579,7 +579,7 @@ describe('Viewport', () => {
     fireEvent.click(canvas, { button: 0, clientX: 50, clientY: 50, shiftKey: true });
 
     await waitFor(() =>
-      expect(useEditorStore.getState().selectedRoadIds).toContain('road-1')
+      expect(useProjectStore.getState().selectedRoadIds).toContain('road-1')
     );
   });
 
@@ -592,7 +592,7 @@ describe('Viewport', () => {
     vi.mocked(getPlatformService).mockResolvedValue(platform);
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProjectWithRoad(),
         selectedRoadIds: ['road-1'],
         selectedRoadId: null,
@@ -607,7 +607,7 @@ describe('Viewport', () => {
     fireEvent.click(canvas, { button: 0, clientX: 50, clientY: 50, shiftKey: true });
 
     await waitFor(() =>
-      expect(useEditorStore.getState().selectedRoadIds).not.toContain('road-1')
+      expect(useProjectStore.getState().selectedRoadIds).not.toContain('road-1')
     );
   });
 

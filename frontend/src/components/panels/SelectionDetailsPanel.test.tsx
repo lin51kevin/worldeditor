@@ -1,14 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('../../stores/editorStore', () => ({
-  useEditorStore: vi.fn(),
+vi.mock('../../stores/projectStore', () => ({
+  useProjectStore: vi.fn(),
 }));
 
 import { SelectionDetailsPanel } from './SelectionDetailsPanel';
-import { useEditorStore } from '../../stores/editorStore';
+import { useProjectStore } from '../../stores/projectStore';
 
-const mockUseEditorStore = useEditorStore as unknown as ReturnType<typeof vi.fn>;
+const mockUseEditorStore = useProjectStore as unknown as ReturnType<typeof vi.fn>;
 
 describe('SelectionDetailsPanel', () => {
   beforeEach(() => {

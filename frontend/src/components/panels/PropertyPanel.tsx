@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useEditorStore } from '../../stores/editorStore';
-import { useEditorViewStore } from '../../stores/editorViewStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { useViewportStore } from '../../stores/viewportStore';
 import { getPlatformService } from '../../services';
 import type { RoadSignal, RoadObjectItem } from '../../services/platform';
 import './PropertyPanel.css';
@@ -30,13 +30,13 @@ function CardSection({ title, defaultOpen = true, children }: CardSectionProps) 
 }
 
 export function PropertyPanel() {
-  const project = useEditorStore((s) => s.project);
-  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
-  const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
-  const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
+  const project = useProjectStore((s) => s.project);
+  const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
+  const selectedJunctionId = useProjectStore((s) => s.selectedJunctionId);
+  const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
   const selectedRoad = project.roads.find((r) => r.id === selectedRoadId);
   const selectedJunction = project.junctions.find((j) => j.id === selectedJunctionId);
-  const geometryEditRoadId = useEditorViewStore((s) => s.geometryEditRoadId);
+  const geometryEditRoadId = useViewportStore((s) => s.geometryEditRoadId);
   const { t } = useTranslation();
   const [newElevationS, setNewElevationS] = useState(0);
   const [newElevationH, setNewElevationH] = useState(0);
@@ -71,14 +71,14 @@ export function PropertyPanel() {
     if (!selectedRoad || selectedRoad.plan_view.length === 0) return;
     if (isEditingGeometry) {
       // Exit geometry edit mode: finalize
-      const viewState = useEditorViewStore.getState();
+      const viewState = useViewportStore.getState();
       const { geometryEditSpline: spline } = viewState;
       if (spline) {
         try {
           const service = await getPlatformService();
           const geometries = await service.splineToGeometries(spline);
           const totalLength = geometries.reduce((sum, g) => sum + g.length, 0);
-          useEditorStore.getState().updateRoadGeometry(selectedRoad.id, geometries, totalLength);
+          useProjectStore.getState().updateRoadGeometry(selectedRoad.id, geometries, totalLength);
         } catch (err) {
           console.error('[PropertyPanel] Failed to finalize geometry edit:', err);
         }
@@ -89,7 +89,7 @@ export function PropertyPanel() {
       try {
         const service = await getPlatformService();
         const spline = await service.roadToSpline(selectedRoad, 2.0);
-        useEditorViewStore.getState().enterGeometryEdit(selectedRoad.id, spline);
+        useViewportStore.getState().enterGeometryEdit(selectedRoad.id, spline);
       } catch (err) {
         console.error('[PropertyPanel] Failed to enter geometry edit:', err);
       }
@@ -120,7 +120,7 @@ export function PropertyPanel() {
                     className="property-input"
                     value={selectedRoad.name || ''}
                     placeholder="—"
-                    onChange={(e) => useEditorStore.getState().updateRoad(selectedRoad.id, { name: e.target.value })}
+                    onChange={(e) => useProjectStore.getState().updateRoad(selectedRoad.id, { name: e.target.value })}
                   />
                 </div>
                 <div className="property-row">
@@ -190,7 +190,7 @@ export function PropertyPanel() {
                                 className="property-select property-select-lane"
                                 value={lane.lane_type}
                                 onChange={(e) =>
-                                  useEditorStore.getState().updateLaneType(
+                                  useProjectStore.getState().updateLaneType(
                                     selectedRoad.id, si, side, lane.id, e.target.value,
                                   )
                                 }
@@ -214,7 +214,7 @@ export function PropertyPanel() {
                                 onChange={(e) => {
                                   const val = parseFloat(e.target.value);
                                   if (!isNaN(val) && val >= 0.5 && val <= 20) {
-                                    useEditorStore.getState().updateLaneWidth(
+                                    useProjectStore.getState().updateLaneWidth(
                                       selectedRoad.id, si, side, lane.id,
                                       { s_offset: 0, a: val, b: 0, c: 0, d: 0 },
                                     );
@@ -226,7 +226,7 @@ export function PropertyPanel() {
                                 className="property-btn property-btn-delete-lane"
                                 title={t('propertyPanel.deleteLane')}
                                 onClick={() =>
-                                  useEditorStore.getState().removeLane(selectedRoad.id, si, side, lane.id)
+                                  useProjectStore.getState().removeLane(selectedRoad.id, si, side, lane.id)
                                 }
                               >
                                 ×
@@ -240,14 +240,14 @@ export function PropertyPanel() {
                       <button
                         className="property-btn property-btn-add-lane"
                         title={t('propertyPanel.addLane')}
-                        onClick={() => useEditorStore.getState().addLane(selectedRoad.id, si, 'left')}
+                        onClick={() => useProjectStore.getState().addLane(selectedRoad.id, si, 'left')}
                       >
                         +L
                       </button>
                       <button
                         className="property-btn property-btn-add-lane"
                         title={t('propertyPanel.addLane')}
-                        onClick={() => useEditorStore.getState().addLane(selectedRoad.id, si, 'right')}
+                        onClick={() => useProjectStore.getState().addLane(selectedRoad.id, si, 'right')}
                       >
                         +R
                       </button>
@@ -281,7 +281,7 @@ export function PropertyPanel() {
                   />
                   <button
                     className="property-btn"
-                    onClick={() => useEditorStore.getState().addElevationPoint(selectedRoad.id, newElevationS, newElevationH)}
+                    onClick={() => useProjectStore.getState().addElevationPoint(selectedRoad.id, newElevationS, newElevationH)}
                   >
                     {t('propertyPanel.addPoint')}
                   </button>
@@ -302,7 +302,7 @@ export function PropertyPanel() {
                           onChange={(e) => {
                             const value = parseFloat(e.target.value);
                             if (!Number.isNaN(value)) {
-                              useEditorStore.getState().updateElevationPoint(selectedRoad.id, sourceIndex, { s: value });
+                              useProjectStore.getState().updateElevationPoint(selectedRoad.id, sourceIndex, { s: value });
                             }
                           }}
                         />
@@ -314,13 +314,13 @@ export function PropertyPanel() {
                           onChange={(e) => {
                             const value = parseFloat(e.target.value);
                             if (!Number.isNaN(value)) {
-                              useEditorStore.getState().updateElevationPoint(selectedRoad.id, sourceIndex, { a: value });
+                              useProjectStore.getState().updateElevationPoint(selectedRoad.id, sourceIndex, { a: value });
                             }
                           }}
                         />
                         <button
                           className="property-btn"
-                          onClick={() => useEditorStore.getState().removeElevationPoint(selectedRoad.id, sourceIndex)}
+                          onClick={() => useProjectStore.getState().removeElevationPoint(selectedRoad.id, sourceIndex)}
                         >
                           {t('propertyPanel.deletePoint')}
                         </button>
@@ -331,7 +331,7 @@ export function PropertyPanel() {
                 <div className="property-row">
                   <button
                     className="property-btn"
-                    onClick={() => useEditorStore.getState().smoothElevation(selectedRoad.id, 1)}
+                    onClick={() => useProjectStore.getState().smoothElevation(selectedRoad.id, 1)}
                   >
                     {t('propertyPanel.smoothElevation')}
                   </button>
@@ -496,7 +496,7 @@ export function PropertyPanel() {
                     className="property-input"
                     value={selectedJunction.name || ''}
                     placeholder="—"
-                    onChange={(e) => useEditorStore.getState().updateJunction(selectedJunction.id, { name: e.target.value })}
+                    onChange={(e) => useProjectStore.getState().updateJunction(selectedJunction.id, { name: e.target.value })}
                   />
                 </div>
               </CardSection>

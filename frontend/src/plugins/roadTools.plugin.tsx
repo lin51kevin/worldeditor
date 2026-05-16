@@ -5,8 +5,8 @@
  * to the MenuBar. Call mountRoadToolsPlugin() once on app init; it returns a
  * cleanup function that removes all contributions on unmount.
  */
-import { useEditorStore } from '../stores/editorStore';
-import { useEditorViewStore } from '../stores/editorViewStore';
+import { useProjectStore } from '../stores/projectStore';
+import { useViewportStore } from '../stores/viewportStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { ToolbarButtonContrib, MenuItemContrib } from '../stores/pluginContribStore';
 import { FlipHorizontal2, Sparkles, ArrowUpDown } from 'lucide-react';
@@ -25,10 +25,10 @@ export function mountRoadToolsPlugin(): () => void {
       icon: '⊕',
       labelKey: 'toolPanel.moveRoad',
       group: 'mode',
-      isActive: () => useEditorViewStore.getState().editMode === 'move-road',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isActive: () => useViewportStore.getState().editMode === 'move-road',
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const vs = useEditorViewStore.getState();
+        const vs = useViewportStore.getState();
         const entering = vs.editMode !== 'move-road';
         vs.setEditMode(entering ? 'move-road' : 'default');
       },
@@ -39,10 +39,10 @@ export function mountRoadToolsPlugin(): () => void {
       icon: '↺',
       labelKey: 'toolPanel.rotateRoad',
       group: 'mode',
-      isActive: () => useEditorViewStore.getState().editMode === 'rotate-road',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isActive: () => useViewportStore.getState().editMode === 'rotate-road',
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const vs = useEditorViewStore.getState();
+        const vs = useViewportStore.getState();
         const entering = vs.editMode !== 'rotate-road';
         vs.setEditMode(entering ? 'rotate-road' : 'default');
       },
@@ -78,9 +78,9 @@ export function mountRoadToolsPlugin(): () => void {
       labelKey: 'toolPanel.cloneRoad',
       tooltipKey: 'toolPanel.cloneRoad',
       group: 'action',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const { selectedRoadId, cloneRoad } = useEditorStore.getState();
+        const { selectedRoadId, cloneRoad } = useProjectStore.getState();
         if (!selectedRoadId) return;
         cloneRoad(selectedRoadId, `${selectedRoadId}-clone-${Date.now()}`, [20, 20]);
       },
@@ -91,9 +91,9 @@ export function mountRoadToolsPlugin(): () => void {
       icon: '⇄',
       labelKey: 'toolPanel.reverseRoad',
       group: 'action',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const { selectedRoadId, reverseRoad } = useEditorStore.getState();
+        const { selectedRoadId, reverseRoad } = useProjectStore.getState();
         if (selectedRoadId) reverseRoad(selectedRoadId);
       },
     },
@@ -103,9 +103,9 @@ export function mountRoadToolsPlugin(): () => void {
       icon: <FlipHorizontal2 size={14} />,
       labelKey: 'toolPanel.mirrorRoad',
       group: 'action',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const { selectedRoadId, mirrorRoad } = useEditorStore.getState();
+        const { selectedRoadId, mirrorRoad } = useProjectStore.getState();
         if (selectedRoadId) mirrorRoad(selectedRoadId);
       },
     },
@@ -115,9 +115,9 @@ export function mountRoadToolsPlugin(): () => void {
       icon: <Sparkles size={14} />,
       labelKey: 'toolPanel.optimizeNode',
       group: 'action',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const { selectedRoadId, optimizeRoad } = useEditorStore.getState();
+        const { selectedRoadId, optimizeRoad } = useProjectStore.getState();
         if (selectedRoadId) optimizeRoad(selectedRoadId);
       },
     },
@@ -127,9 +127,9 @@ export function mountRoadToolsPlugin(): () => void {
       icon: <ArrowUpDown size={14} />,
       labelKey: 'toolPanel.swapCenterlineAndEdge',
       group: 'action',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const { selectedRoadId, project, swapCenterline } = useEditorStore.getState();
+        const { selectedRoadId, project, swapCenterline } = useProjectStore.getState();
         if (!selectedRoadId) return;
         const road = project.roads.find((r) => r.id === selectedRoadId);
         if (!road) return;
@@ -154,9 +154,9 @@ export function mountRoadToolsPlugin(): () => void {
       menu: 'road',
       labelKey: 'toolPanel.cloneRoad',
       shortcut: 'Ctrl+D',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const { selectedRoadId, cloneRoad } = useEditorStore.getState();
+        const { selectedRoadId, cloneRoad } = useProjectStore.getState();
         if (!selectedRoadId) return;
         cloneRoad(selectedRoadId, `${selectedRoadId}-clone-${Date.now()}`, [20, 20]);
       },
@@ -166,9 +166,9 @@ export function mountRoadToolsPlugin(): () => void {
       pluginId: PLUGIN_ID,
       menu: 'road',
       labelKey: 'toolPanel.reverseRoad',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const { selectedRoadId, reverseRoad } = useEditorStore.getState();
+        const { selectedRoadId, reverseRoad } = useProjectStore.getState();
         if (selectedRoadId) reverseRoad(selectedRoadId);
       },
     },
@@ -177,9 +177,9 @@ export function mountRoadToolsPlugin(): () => void {
       pluginId: PLUGIN_ID,
       menu: 'road',
       labelKey: 'toolPanel.mirrorRoad',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const { selectedRoadId, mirrorRoad } = useEditorStore.getState();
+        const { selectedRoadId, mirrorRoad } = useProjectStore.getState();
         if (selectedRoadId) mirrorRoad(selectedRoadId);
       },
     },
@@ -188,9 +188,9 @@ export function mountRoadToolsPlugin(): () => void {
       pluginId: PLUGIN_ID,
       menu: 'road',
       labelKey: 'toolPanel.optimizeNode',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const { selectedRoadId, optimizeRoad } = useEditorStore.getState();
+        const { selectedRoadId, optimizeRoad } = useProjectStore.getState();
         if (selectedRoadId) optimizeRoad(selectedRoadId);
       },
     },
@@ -199,9 +199,9 @@ export function mountRoadToolsPlugin(): () => void {
       pluginId: PLUGIN_ID,
       menu: 'road',
       labelKey: 'toolPanel.swapCenterlineAndEdge',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
-        const { selectedRoadId, project, swapCenterline } = useEditorStore.getState();
+        const { selectedRoadId, project, swapCenterline } = useProjectStore.getState();
         if (!selectedRoadId) return;
         const road = project.roads.find((r) => r.id === selectedRoadId);
         if (!road) return;

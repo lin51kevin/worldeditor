@@ -69,8 +69,8 @@ let store: ReturnType<typeof makeContribStore>;
 vi.mock('../stores/pluginContribStore', () => ({
   usePluginContribStore: { getState: () => store },
 }));
-vi.mock('../stores/editorStore', () => ({
-  useEditorStore: {
+vi.mock('../stores/projectStore', () => ({
+  useProjectStore: {
     getState: vi.fn(() => ({
       project: { roads: [], junctions: [], header: { name: '', version: '' }, signals: [], objects: [] },
       selectedRoadId: null,

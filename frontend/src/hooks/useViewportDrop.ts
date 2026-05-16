@@ -1,7 +1,7 @@
 import { useState, useCallback, type RefObject } from 'react';
 import { ViewportRenderer } from '../viewport/renderer';
 import { emitViewportEvent } from '../viewport/viewportEvents';
-import { useEditorStore } from '../stores/editorStore';
+import { useProjectStore } from '../stores/projectStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 
 /**
@@ -57,7 +57,7 @@ export function useViewportDrop(
     const item = sections.flatMap((s) => s.items).find((i) => i.id === templateId);
     if (item) {
       item.onApply({ x: worldPos.x, y: worldPos.y, hdg: 0 });
-      const { selectedRoadId, selectedJunctionId } = useEditorStore.getState();
+      const { selectedRoadId, selectedJunctionId } = useProjectStore.getState();
       if (selectedRoadId) {
         emitViewportEvent({ type: 'pan-to-road', roadId: selectedRoadId });
       } else if (selectedJunctionId) {

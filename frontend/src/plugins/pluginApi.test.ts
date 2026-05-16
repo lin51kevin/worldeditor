@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { installPluginApi } from './pluginApi';
 import { usePluginContribStore } from '../stores/pluginContribStore';
-import { useEditorStore } from '../stores/editorStore';
+import { useProjectStore } from '../stores/projectStore';
 import type { Project } from '../services/platform';
 
 const emptyProject: Project = {
@@ -20,7 +20,7 @@ beforeEach(() => {
     importers: [], exporters: [], panels: [], contextMenuItems: [],
     viewportOverlays: [], settingsContribs: [],
   });
-  useEditorStore.getState().reset();
+  useProjectStore.getState().reset();
   // Re-install API (idempotent)
   // Reset global for test isolation
   delete (window as unknown as Record<string, unknown>)['__WE_PLUGIN_API__'];
@@ -98,7 +98,7 @@ describe('installPluginApi', () => {
   });
 
   it('ctx.getProject returns the current project', () => {
-    useEditorStore.setState({ project: { ...emptyProject, name: 'MyMap' } });
+    useProjectStore.setState({ project: { ...emptyProject, name: 'MyMap' } });
     getApi().registerPlugin('p1', (ctx: unknown) => {
       const c = ctx as { getProject: () => Project };
       expect(c.getProject().name).toBe('MyMap');
@@ -106,23 +106,23 @@ describe('installPluginApi', () => {
   });
 
   it('ctx.updateProject applies an immutable update', () => {
-    useEditorStore.setState({ project: emptyProject });
+    useProjectStore.setState({ project: emptyProject });
     getApi().registerPlugin('p1', (ctx: unknown) => {
       const c = ctx as { updateProject: (fn: (p: Project) => Project) => void };
       c.updateProject((p) => ({ ...p, name: 'Updated' }));
     });
-    expect(useEditorStore.getState().project.name).toBe('Updated');
+    expect(useProjectStore.getState().project.name).toBe('Updated');
   });
 
   it('ctx.executeWithUndo mutates project and supports undo', () => {
-    useEditorStore.setState({ project: emptyProject, undoStack: [], redoStack: [] });
+    useProjectStore.setState({ project: emptyProject, undoStack: [], redoStack: [] });
     getApi().registerPlugin('p1', (ctx: unknown) => {
       const c = ctx as { executeWithUndo: (desc: string, fn: (p: Project) => Project) => void };
       c.executeWithUndo('Change name', (p) => ({ ...p, name: 'Changed' }));
     });
-    expect(useEditorStore.getState().project.name).toBe('Changed');
-    useEditorStore.getState().undo();
-    expect(useEditorStore.getState().project.name).toBe('Test');
+    expect(useProjectStore.getState().project.name).toBe('Changed');
+    useProjectStore.getState().undo();
+    expect(useProjectStore.getState().project.name).toBe('Test');
   });
 
   it('ctx.onSelectionChanged fires callback and returns unsubscribe', () => {

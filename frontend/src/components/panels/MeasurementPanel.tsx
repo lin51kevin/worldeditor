@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useEditorViewStore, type MeasureMode, type MeasurementResult } from '../../stores/editorViewStore';
+import { useViewportStore, type MeasureMode, type MeasurementResult } from '../../stores/viewportStore';
 import './MeasurementPanel.css';
 
 function requiredPoints(mode: MeasureMode): number {
@@ -61,11 +61,11 @@ function formatResult(result: MeasurementResult, t: (key: string) => string): Re
 
 export function MeasurementPanel() {
   const { t } = useTranslation();
-  const measureMode = useEditorViewStore((s) => s.measureMode);
-  const measurePoints = useEditorViewStore((s) => s.measurePoints);
-  const lastMeasurement = useEditorViewStore((s) => s.lastMeasurement);
-  const setMeasureMode = useEditorViewStore((s) => s.setMeasureMode);
-  const clearMeasurePoints = useEditorViewStore((s) => s.clearMeasurePoints);
+  const measureMode = useViewportStore((s) => s.measureMode);
+  const measurePoints = useViewportStore((s) => s.measurePoints);
+  const lastMeasurement = useViewportStore((s) => s.lastMeasurement);
+  const setMeasureMode = useViewportStore((s) => s.setMeasureMode);
+  const clearMeasurePoints = useViewportStore((s) => s.clearMeasurePoints);
 
   if (measureMode === 'none') return null;
 

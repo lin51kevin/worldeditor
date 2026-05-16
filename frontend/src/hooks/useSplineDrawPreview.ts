@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { useEditorViewStore } from '../stores/editorViewStore';
+import { useViewportStore } from '../stores/viewportStore';
 import { getPlatformService } from '../services';
 import { buildEditableSpline } from '../components/viewportUtils';
 import { resolveWasmTemplateId } from './useSplineOperations';
@@ -33,10 +33,10 @@ export function useSplineDrawPreview({
   /** Called when the preview has been removed and the real scene should be restored. */
   onPreviewEnd: () => void;
 }) {
-  const editMode = useEditorViewStore((s) => s.editMode);
-  const splineKnots = useEditorViewStore((s) => s.splineKnots);
-  const splineTemplateId = useEditorViewStore((s) => s.splineTemplateId);
-  const cursorPreviewPos = useEditorViewStore((s) => s.cursorPreviewPos);
+  const editMode = useViewportStore((s) => s.editMode);
+  const splineKnots = useViewportStore((s) => s.splineKnots);
+  const splineTemplateId = useViewportStore((s) => s.splineTemplateId);
+  const cursorPreviewPos = useViewportStore((s) => s.cursorPreviewPos);
 
   // Generate and upload a preview road mesh whenever draw-mode knots or cursor position changes.
   useEffect(() => {

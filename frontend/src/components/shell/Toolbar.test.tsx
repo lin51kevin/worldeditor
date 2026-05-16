@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useEditorViewStore } from '../../stores/editorViewStore';
+import { useViewportStore } from '../../stores/viewportStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { Toolbar } from './Toolbar';
 
@@ -10,7 +10,7 @@ describe('Toolbar', () => {
     document.documentElement.removeAttribute('data-theme');
 
     act(() => {
-      useEditorViewStore.setState({
+      useViewportStore.setState({
         dimension: '3d',
         showGrid: true,
         showAxis: true,
@@ -70,9 +70,9 @@ describe('Toolbar', () => {
     render(<Toolbar />);
 
     fireEvent.click(screen.getByRole('button', { name: '样条' }));
-    expect(useEditorViewStore.getState().editMode).toBe('spline');
+    expect(useViewportStore.getState().editMode).toBe('spline');
 
     fireEvent.click(screen.getByRole('button', { name: '默认' }));
-    expect(useEditorViewStore.getState().editMode).toBe('default');
+    expect(useViewportStore.getState().editMode).toBe('default');
   });
 });

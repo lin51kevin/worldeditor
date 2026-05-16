@@ -2,7 +2,7 @@ import type { Project } from '../../services/platform';
 import type { EditorState, SliceCreator } from './types';
 import { initialProject } from './types';
 
-import { useEditorViewStore } from '../editorViewStore';
+import { useViewportStore } from '../viewportStore';
 export interface ProjectSlice {
   project: Project;
   savedProject: Project | null;
@@ -39,7 +39,7 @@ export const createProjectSlice: SliceCreator<ProjectSlice> = (set) => ({
       redoStack: [],
       projectLoadVersion: s.projectLoadVersion + 1,
     }));
-    useEditorViewStore.getState().resetDisplay();
+    useViewportStore.getState().resetDisplay();
   },
 
   setCursorWorldPos: (pos) => set((s) => {
@@ -88,6 +88,6 @@ export const createProjectSlice: SliceCreator<ProjectSlice> = (set) => ({
       viewportMpp: 0.1,
       projectLoadVersion: s.projectLoadVersion + 1,
     }));
-    useEditorViewStore.getState().resetDisplay();
+    useViewportStore.getState().resetDisplay();
   },
 });

@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
-import { useEditorViewStore } from '../../stores/editorViewStore';
+import { useViewportStore } from '../../stores/viewportStore';
 import type { TemplateItemDef } from '../../stores/pluginContribStore';
 import './TemplatePanel.css';
 
@@ -55,9 +55,9 @@ export function TemplatePanel() {
 
   const isFavoritesActive = resolvedId === FAVORITES_TAB_ID;
   const activeSection = sorted.find((s) => s.id === resolvedId) ?? null;
-  const selectedTemplateId = useEditorViewStore((s) => s.splineTemplateId);
-  const pendingTemplateId = useEditorViewStore((s) => s.pendingTemplateId);
-  const editMode = useEditorViewStore((s) => s.editMode);
+  const selectedTemplateId = useViewportStore((s) => s.splineTemplateId);
+  const pendingTemplateId = useViewportStore((s) => s.pendingTemplateId);
+  const editMode = useViewportStore((s) => s.editMode);
 
   const favoriteItems = useMemo(
     () => allItems.filter((item) => favorites.includes(item.id)),
@@ -92,7 +92,7 @@ export function TemplatePanel() {
   const handleItemClick = (itemId: string) => {
     const item = isFavoritesActive ? findItem(itemId) : activeSection?.items.find((i) => i.id === itemId);
     if (!item) return;
-    const viewStore = useEditorViewStore.getState();
+    const viewStore = useViewportStore.getState();
     viewStore.setSplineTemplateId(itemId);
     if (itemId.startsWith('tpl:road:')) {
       // Road cross-section templates: enter draw mode.

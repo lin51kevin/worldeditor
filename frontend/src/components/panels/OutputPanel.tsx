@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Trash2 } from 'lucide-react';
-import { useEditorViewStore } from '../../stores/editorViewStore';
+import { useViewportStore } from '../../stores/viewportStore';
 import './OutputPanel.css';
 
 interface LogEntry {
@@ -12,7 +12,7 @@ interface LogEntry {
 export function OutputPanel() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const toggleOutputPanel = useEditorViewStore((s) => s.toggleOutputPanel);
+  const toggleOutputPanel = useViewportStore((s) => s.toggleOutputPanel);
 
   // Auto-scroll on new entries
   useEffect(() => {

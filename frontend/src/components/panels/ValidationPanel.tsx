@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Play, Trash2, CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-react';
-import { useEditorStore } from '../../stores/editorStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { validateProject, type ValidationIssue } from '../../utils/validation';
 import './OutputPanel.css';
 
@@ -11,7 +11,7 @@ const severityIcon = {
 };
 
 export function ValidationPanel() {
-  const project = useEditorStore((s) => s.project);
+  const project = useProjectStore((s) => s.project);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
 
   const runValidation = () => {

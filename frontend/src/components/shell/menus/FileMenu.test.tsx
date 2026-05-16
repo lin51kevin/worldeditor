@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Road } from '../../../services/platform';
-import { useEditorStore } from '../../../stores/editorStore';
+import { useProjectStore } from '../../../stores/projectStore';
 import { usePluginContribStore } from '../../../stores/pluginContribStore';
 import { getPlatformService } from '../../../services';
 import { showAlert } from '../../../utils/dialog';
@@ -43,7 +43,7 @@ describe('FileMenu import/export error handling', () => {
     vi.mocked(showAlert).mockResolvedValue(undefined);
     vi.mocked(getPlatformService).mockResolvedValue(createPlatformMock().platform);
     act(() => {
-      useEditorStore.setState({ project: makeProject([{ id: 'r1', name: 'R1', length: 10, junction_id: null, link: { predecessor: null, successor: null }, plan_view: [{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], elevation_profile: [], lane_sections: [] }]), isDirty: false });
+      useProjectStore.setState({ project: makeProject([{ id: 'r1', name: 'R1', length: 10, junction_id: null, link: { predecessor: null, successor: null }, plan_view: [{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], elevation_profile: [], lane_sections: [] }]), isDirty: false });
       // Clear leftover plugins
       usePluginContribStore.getState().importers.forEach(i => usePluginContribStore.getState().unregisterImporter(i.id));
       usePluginContribStore.getState().exporters.forEach(e => usePluginContribStore.getState().unregisterExporter(e.id));

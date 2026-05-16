@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { LaneSection, Project, Road } from '../../services/platform';
-import { useEditorStore } from '../../stores/editorStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { PropertyPanel } from './PropertyPanel';
 
 function makeProject(roads: Road[] = []): Project {
@@ -61,7 +61,7 @@ function makeRoad(): Road {
 describe('PropertyPanel', () => {
   beforeEach(() => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject(),
         isDirty: false,
         selectedRoadId: null,
@@ -88,7 +88,7 @@ describe('PropertyPanel', () => {
     const road = makeRoad();
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([road]),
         selectedRoadId: road.id,
         selectedObjectType: 'road',
@@ -122,7 +122,7 @@ describe('PropertyPanel', () => {
     const road = makeRoad();
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([road]),
         selectedRoadId: road.id,
         selectedObjectType: 'road',
@@ -143,7 +143,7 @@ describe('PropertyPanel', () => {
     const road = makeRoad();
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([road]),
         selectedRoadId: road.id,
         selectedObjectType: 'road',
@@ -160,20 +160,20 @@ describe('PropertyPanel', () => {
       fireEvent.click(screen.getByText('添加点'));
     });
 
-    expect(useEditorStore.getState().project.roads[0]?.elevation_profile.length).toBe(2);
+    expect(useProjectStore.getState().project.roads[0]?.elevation_profile.length).toBe(2);
 
     act(() => {
       fireEvent.click(screen.getAllByText('删除')[0]!);
     });
 
-    expect(useEditorStore.getState().project.roads[0]?.elevation_profile.length).toBe(1);
+    expect(useProjectStore.getState().project.roads[0]?.elevation_profile.length).toBe(1);
   });
 
   it('shows add lane buttons and clicking adds a lane to the correct side', () => {
     const road = makeRoad();
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([road]),
         selectedRoadId: road.id,
         selectedObjectType: 'road',
@@ -185,12 +185,12 @@ describe('PropertyPanel', () => {
     const addLaneButtons = screen.getAllByTitle('添加车道');
     expect(addLaneButtons.length).toBeGreaterThan(0);
 
-    const leftBefore = useEditorStore.getState().project.roads[0]!.lane_sections[0]!.left.length;
+    const leftBefore = useProjectStore.getState().project.roads[0]!.lane_sections[0]!.left.length;
     fireEvent.click(addLaneButtons[0]!);
-    const leftAfter = useEditorStore.getState().project.roads[0]!.lane_sections[0]!.left.length;
+    const leftAfter = useProjectStore.getState().project.roads[0]!.lane_sections[0]!.left.length;
     expect(leftAfter).toBe(leftBefore + 1);
 
-    const leftLanes = useEditorStore.getState().project.roads[0]!.lane_sections[0]!.left;
+    const leftLanes = useProjectStore.getState().project.roads[0]!.lane_sections[0]!.left;
     const newLane = leftLanes[leftLanes.length - 1]!;
     expect(newLane.id).toBeGreaterThan(0);
     expect(newLane.lane_type).toBe('Driving');

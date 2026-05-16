@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useEditorStore } from '../../stores/editorStore';
+import { useProjectStore } from '../../stores/projectStore';
 
 /**
  * A compact read-only summary panel showing the currently selected element.
@@ -8,9 +8,9 @@ import { useEditorStore } from '../../stores/editorStore';
 export function SelectionDetailsPanel() {
   const { t } = useTranslation();
 
-  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
-  const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
-  const project = useEditorStore((s) => s.project);
+  const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
+  const selectedJunctionId = useProjectStore((s) => s.selectedJunctionId);
+  const project = useProjectStore((s) => s.project);
 
   const selectedRoad = selectedRoadId
     ? project.roads.find((r) => r.id === selectedRoadId)

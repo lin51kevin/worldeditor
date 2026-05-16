@@ -1,5 +1,5 @@
 import type { Project } from '../../../services/platform';
-import { useEditorStore } from '../../../stores/editorStore';
+import { useProjectStore } from '../../../stores/projectStore';
 import type { ExporterContrib, ImporterContrib } from '../../../stores/pluginContribStore';
 import type { RecentFile } from '../../../stores/recentFilesStore';
 import { showAlert } from '../../../utils/dialog';
@@ -84,7 +84,7 @@ export function FileMenu({
             if (importedProject.roads.length === 0) {
               await showAlert(t('dialog.importEmptyProject'), t('dialog.warningTitle'));
             }
-            useEditorStore.getState().setProject(importedProject);
+            useProjectStore.getState().setProject(importedProject);
             await showAlert(`${t('dialog.importSuccess')}: ${file.name}`, t('dialog.successTitle'));
           } catch (err) {
             console.error('[FileMenu] Import failed:', err);

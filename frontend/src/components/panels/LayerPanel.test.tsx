@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Junction, LaneSection, Project, Road } from '../../services/platform';
-import { useEditorStore } from '../../stores/editorStore';
-import { DEFAULT_DISPLAY, useEditorViewStore } from '../../stores/editorViewStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { DEFAULT_DISPLAY, useViewportStore } from '../../stores/viewportStore';
 import { makeLaneKey, makeLaneSectionKey } from '../../utils/sceneGraph';
 import { LayerPanel } from './LayerPanel';
 
@@ -64,7 +64,7 @@ describe('LayerPanel', () => {
     Element.prototype.scrollIntoView = vi.fn();
 
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject(),
         isDirty: false,
         selectedRoadId: null,
@@ -74,7 +74,7 @@ describe('LayerPanel', () => {
         undoStack: [],
         redoStack: [],
       });
-      useEditorViewStore.setState({ display: { ...DEFAULT_DISPLAY } });
+      useViewportStore.setState({ display: { ...DEFAULT_DISPLAY } });
     });
   });
 
@@ -102,7 +102,7 @@ describe('LayerPanel', () => {
 
   it('shows roads when project has roads', () => {
     act(() => {
-      useEditorStore.setState({ project: makeProject([makeRoad('r-1', '测试道路')]) });
+      useProjectStore.setState({ project: makeProject([makeRoad('r-1', '测试道路')]) });
     });
 
     render(<LayerPanel />);
@@ -133,13 +133,13 @@ describe('LayerPanel', () => {
 
   it('selects roads and toggles road details and visibility', () => {
     act(() => {
-      useEditorStore.setState({ project: makeProject([makeRoad('r-1', '测试道路')]) });
+      useProjectStore.setState({ project: makeProject([makeRoad('r-1', '测试道路')]) });
     });
 
     render(<LayerPanel />);
 
     fireEvent.click(screen.getByText('测试道路'));
-    expect(useEditorStore.getState().selectedRoadId).toBe('r-1');
+    expect(useProjectStore.getState().selectedRoadId).toBe('r-1');
 
     fireEvent.click(document.querySelector('.road-expand') as HTMLElement);
     expect(screen.queryByText('长度: 120.5m')).not.toBeInTheDocument();
@@ -152,10 +152,10 @@ describe('LayerPanel', () => {
 
   it('renders lane section and lane child nodes with selection and visibility controls', () => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([makeRoad('r-1', '测试道路')]),
       });
-      useEditorStore.setState((state) => ({
+      useProjectStore.setState((state) => ({
         project: {
           ...state.project,
           roads: [{ ...state.project.roads[0]!, lane_sections: [makeLaneSection()] }],
@@ -167,14 +167,14 @@ describe('LayerPanel', () => {
 
     fireEvent.click(document.querySelector('.road-expand') as HTMLElement);
     fireEvent.click(screen.getByText('车道段 #1'));
-    expect(useEditorStore.getState().selectedSceneNode).toEqual({
+    expect(useProjectStore.getState().selectedSceneNode).toEqual({
       type: 'laneSection',
       roadId: 'r-1',
       sectionIndex: 0,
     });
 
     fireEvent.click(screen.getByText(/车道 L2/));
-    expect(useEditorStore.getState().selectedSceneNode).toEqual({
+    expect(useProjectStore.getState().selectedSceneNode).toEqual({
       type: 'lane',
       roadId: 'r-1',
       sectionIndex: 0,
@@ -183,12 +183,12 @@ describe('LayerPanel', () => {
     });
 
     fireEvent.click(screen.getAllByTitle('隐藏车道')[0] as HTMLElement);
-    expect(useEditorViewStore.getState().display.hiddenLaneKeys).toEqual([
+    expect(useViewportStore.getState().display.hiddenLaneKeys).toEqual([
       makeLaneKey('r-1', 0, 'left', 2),
     ]);
 
     fireEvent.click(screen.getByTitle('隐藏车道段'));
-    expect(useEditorViewStore.getState().display.hiddenLaneSectionKeys).toEqual([
+    expect(useViewportStore.getState().display.hiddenLaneSectionKeys).toEqual([
       makeLaneSectionKey('r-1', 0),
     ]);
   });
@@ -202,7 +202,7 @@ describe('LayerPanel', () => {
 
   it('filters roads by id', () => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([makeRoad('road-1', '主干道'), makeRoad('road-2', '辅路')]),
       });
     });
@@ -217,7 +217,7 @@ describe('LayerPanel', () => {
 
   it('filters roads by name (case-insensitive)', () => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([makeRoad('r-1', 'MainStreet'), makeRoad('r-2', 'SideRoad')]),
       });
     });
@@ -232,7 +232,7 @@ describe('LayerPanel', () => {
 
   it('filters junctions by id', () => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProjectWithJunctions(
           [],
           [makeJunction('j-10', 'Junction Alpha'), makeJunction('j-20', 'Junction Beta')],
@@ -250,7 +250,7 @@ describe('LayerPanel', () => {
 
   it('shows no-results message when nothing matches', () => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([makeRoad('r-1', '测试道路')]),
       });
     });
@@ -265,7 +265,7 @@ describe('LayerPanel', () => {
 
   it('restores full list when search is cleared', () => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject([makeRoad('r-1', '道路A'), makeRoad('r-2', '道路B')]),
       });
     });

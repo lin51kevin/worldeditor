@@ -16,8 +16,8 @@ vi.mock('../stores/pluginContribStore', () => ({
   },
 }));
 
-vi.mock('../stores/editorStore', () => ({
-  useEditorStore: {
+vi.mock('../stores/projectStore', () => ({
+  useProjectStore: {
     getState: vi.fn(() => ({
       project: { roads: [], junctions: [] },
       selectedRoadId: null,

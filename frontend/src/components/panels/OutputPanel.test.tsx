@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useEditorViewStore } from '../../stores/editorViewStore';
+import { useViewportStore } from '../../stores/viewportStore';
 import { OutputPanel } from './OutputPanel';
 
 describe('OutputPanel', () => {
@@ -9,7 +9,7 @@ describe('OutputPanel', () => {
     Element.prototype.scrollTo = vi.fn();
 
     act(() => {
-      useEditorViewStore.setState({ layout: { leftWidth: 260, rightWidth: 300, outputHeight: 150, leftCollapsed: false, rightCollapsed: false, outputCollapsed: false, templatePanelCollapsed: false } });
+      useViewportStore.setState({ layout: { leftWidth: 260, rightWidth: 300, outputHeight: 150, leftCollapsed: false, rightCollapsed: false, outputCollapsed: false, templatePanelCollapsed: false } });
     });
     vi.clearAllMocks();
   });
@@ -53,7 +53,7 @@ describe('OutputPanel', () => {
   });
 
   it('close button calls toggleOutputPanel', () => {
-    const spy = vi.spyOn(useEditorViewStore.getState(), 'toggleOutputPanel');
+    const spy = vi.spyOn(useViewportStore.getState(), 'toggleOutputPanel');
     render(<OutputPanel />);
     fireEvent.click(screen.getByTitle('Close'));
     expect(spy).toHaveBeenCalled();

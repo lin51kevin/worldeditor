@@ -9,7 +9,7 @@
  *
  * Call mountTemplatesPlugin() once on app init; returns a cleanup function.
  */
-import { useEditorStore } from '../stores/editorStore';
+import { useProjectStore } from '../stores/projectStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { TemplateSectionContrib } from '../stores/pluginContribStore';
 import type { Road, Lane, LaneSection, Geometry, RoadMark, RoadSignal, Junction } from '../services/platform';
@@ -90,7 +90,7 @@ function applyRoadTemplate(laneSection: LaneSection, opts?: { x?: number; y?: nu
   // Guard: only create when explicit world coordinates are provided (drag-to-viewport).
   if (opts?.x === undefined || opts?.y === undefined) return;
   const road = makeRoad(laneSection, opts.x, opts.y, opts.hdg ?? 0);
-  const store = useEditorStore.getState();
+  const store = useProjectStore.getState();
   store.addRoad(road);
   store.selectRoad(road.id);
 }
@@ -208,8 +208,8 @@ function applyJunctionTemplate(armCount: number, armLength: number, opts?: { x?:
     roads.push(makeRoad(laneSection, cx, cy, angle, armLength, junctionId));
   }
 
-  useEditorStore.getState().addJunctionWithRoads(junction, roads);
-  useEditorStore.getState().selectJunction(junctionId);
+  useProjectStore.getState().addJunctionWithRoads(junction, roads);
+  useProjectStore.getState().selectJunction(junctionId);
 }
 
 const junctionSection: TemplateSectionContrib = {
@@ -256,7 +256,7 @@ const junctionSection: TemplateSectionContrib = {
 function applySignalTemplate(type: string, _opts?: { x?: number; y?: number }) {
   // Signals don't require world position (they attach to selected road at s=0).
   // Guard: only create when a road is selected.
-  const store = useEditorStore.getState();
+  const store = useProjectStore.getState();
   if (!store.selectedRoadId) return;
   const signal: RoadSignal = {
     id: `signal_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -297,7 +297,7 @@ const signalSection: TemplateSectionContrib = {
 
 /** Replaces road marks on all driving lanes in the selected road's first section. */
 function applyMarkingTemplate(mark: RoadMark) {
-  const { selectedRoadId, project } = useEditorStore.getState();
+  const { selectedRoadId, project } = useProjectStore.getState();
   if (!selectedRoadId) return;
   const road = project.roads.find((r) => r.id === selectedRoadId);
   if (!road || road.lane_sections.length === 0) return;
@@ -320,12 +320,12 @@ function applyMarkingTemplate(mark: RoadMark) {
   };
 
   // Patch the project directly via setProject to avoid a separate store action
-  const { project: proj } = useEditorStore.getState();
-  useEditorStore.getState().setProject({
+  const { project: proj } = useProjectStore.getState();
+  useProjectStore.getState().setProject({
     ...proj,
     roads: proj.roads.map((r) => (r.id === selectedRoadId ? updatedRoad : r)),
   });
-  useEditorStore.getState().markDirty();
+  useProjectStore.getState().markDirty();
 }
 
 const markingSection: TemplateSectionContrib = {

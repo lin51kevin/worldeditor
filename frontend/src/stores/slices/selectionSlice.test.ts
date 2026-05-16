@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useEditorStore } from '../editorStore';
+import { useProjectStore } from '../projectStore';
 
-vi.mock('../editorViewStore', () => ({
-  useEditorViewStore: {
+vi.mock('../viewportStore', () => ({
+  useViewportStore: {
     getState: () => ({ resetDisplay: vi.fn() }),
   },
 }));
@@ -15,38 +15,38 @@ const road = {
 
 describe('selectionSlice', () => {
   beforeEach(() => {
-    useEditorStore.getState().reset();
+    useProjectStore.getState().reset();
   });
 
   describe('selectRoad', () => {
     it('should set selectedRoadId and clear junction', () => {
-      useEditorStore.getState().selectJunction('j1');
-      useEditorStore.getState().selectRoad('r1');
-      const state = useEditorStore.getState();
+      useProjectStore.getState().selectJunction('j1');
+      useProjectStore.getState().selectRoad('r1');
+      const state = useProjectStore.getState();
       expect(state.selectedRoadId).toBe('r1');
       expect(state.selectedJunctionId).toBeNull();
       expect(state.selectedObjectType).toBe('road');
     });
 
     it('should set selectedSceneNode for road', () => {
-      useEditorStore.getState().selectRoad('r1');
-      const node = useEditorStore.getState().selectedSceneNode;
+      useProjectStore.getState().selectRoad('r1');
+      const node = useProjectStore.getState().selectedSceneNode;
       expect(node).toMatchObject({ type: 'road', roadId: 'r1' });
     });
 
     it('should clear selection when null passed', () => {
-      useEditorStore.getState().selectRoad('r1');
-      useEditorStore.getState().selectRoad(null);
-      expect(useEditorStore.getState().selectedRoadId).toBeNull();
-      expect(useEditorStore.getState().selectedObjectType).toBeNull();
+      useProjectStore.getState().selectRoad('r1');
+      useProjectStore.getState().selectRoad(null);
+      expect(useProjectStore.getState().selectedRoadId).toBeNull();
+      expect(useProjectStore.getState().selectedObjectType).toBeNull();
     });
   });
 
   describe('selectJunction', () => {
     it('should set selectedJunctionId and clear road', () => {
-      useEditorStore.getState().selectRoad('r1');
-      useEditorStore.getState().selectJunction('j1');
-      const state = useEditorStore.getState();
+      useProjectStore.getState().selectRoad('r1');
+      useProjectStore.getState().selectJunction('j1');
+      const state = useProjectStore.getState();
       expect(state.selectedJunctionId).toBe('j1');
       expect(state.selectedRoadId).toBeNull();
       expect(state.selectedObjectType).toBe('junction');
@@ -55,8 +55,8 @@ describe('selectionSlice', () => {
 
   describe('selectMultiple', () => {
     it('should set multiple selected roads and junctions', () => {
-      useEditorStore.getState().selectMultiple(['r1', 'r2'], ['j1']);
-      const state = useEditorStore.getState();
+      useProjectStore.getState().selectMultiple(['r1', 'r2'], ['j1']);
+      const state = useProjectStore.getState();
       expect(state.selectedRoadIds).toEqual(['r1', 'r2']);
       expect(state.selectedJunctionIds).toEqual(['j1']);
       expect(state.selectedRoadId).toBeNull();
@@ -65,36 +65,36 @@ describe('selectionSlice', () => {
 
   describe('copySelected / pasteFromClipboard', () => {
     it('should set clipboard on copySelected', () => {
-      useEditorStore.getState().addRoad(road);
-      useEditorStore.getState().selectRoad('r1');
-      useEditorStore.getState().copySelected();
-      expect(useEditorStore.getState().clipboardRoadId).toBe('r1');
+      useProjectStore.getState().addRoad(road);
+      useProjectStore.getState().selectRoad('r1');
+      useProjectStore.getState().copySelected();
+      expect(useProjectStore.getState().clipboardRoadId).toBe('r1');
     });
 
     it('should duplicate road on paste', () => {
-      useEditorStore.getState().addRoad(road);
-      useEditorStore.getState().selectRoad('r1');
-      useEditorStore.getState().copySelected();
-      useEditorStore.getState().pasteFromClipboard();
-      expect(useEditorStore.getState().project.roads.length).toBeGreaterThan(1);
+      useProjectStore.getState().addRoad(road);
+      useProjectStore.getState().selectRoad('r1');
+      useProjectStore.getState().copySelected();
+      useProjectStore.getState().pasteFromClipboard();
+      expect(useProjectStore.getState().project.roads.length).toBeGreaterThan(1);
     });
   });
 
   describe('deleteSelected', () => {
     it('should remove selected road', () => {
-      useEditorStore.getState().addRoad(road);
-      useEditorStore.getState().selectRoad('r1');
-      useEditorStore.getState().deleteSelected();
-      expect(useEditorStore.getState().project.roads).toHaveLength(0);
+      useProjectStore.getState().addRoad(road);
+      useProjectStore.getState().selectRoad('r1');
+      useProjectStore.getState().deleteSelected();
+      expect(useProjectStore.getState().project.roads).toHaveLength(0);
     });
   });
 
   describe('selectAll', () => {
     it('should select all roads', () => {
-      useEditorStore.getState().addRoad(road);
-      useEditorStore.getState().addRoad({ ...road, id: 'r2' });
-      useEditorStore.getState().selectAll();
-      expect(useEditorStore.getState().selectedRoadIds).toHaveLength(2);
+      useProjectStore.getState().addRoad(road);
+      useProjectStore.getState().addRoad({ ...road, id: 'r2' });
+      useProjectStore.getState().selectAll();
+      expect(useProjectStore.getState().selectedRoadIds).toHaveLength(2);
     });
   });
 });

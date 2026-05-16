@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, ChevronDown, Search, X } from 'lucide-react';
-import { useEditorStore } from '../../stores/editorStore';
-import { useEditorViewStore } from '../../stores/editorViewStore';
+import { useProjectStore } from '../../stores/projectStore';
+import { useViewportStore } from '../../stores/viewportStore';
 import {
   makeLaneKey,
   makeLaneSectionKey,
@@ -27,18 +27,18 @@ function hasProjectData(project: { roads: unknown[]; junctions: unknown[]; heade
 }
 
 export function LayerPanel() {
-  const project = useEditorStore((s) => s.project);
-  const selectedSceneNode = useEditorStore((s) => s.selectedSceneNode);
-  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
-  const selectedJunctionId = useEditorStore((s) => s.selectedJunctionId);
-  const selectedRoadIds = useEditorStore((s) => s.selectedRoadIds);
-  const selectedJunctionIds = useEditorStore((s) => s.selectedJunctionIds);
-  const selectRoad = useEditorStore((s) => s.selectRoad);
-  const selectJunction = useEditorStore((s) => s.selectJunction);
-  const selectLaneSection = useEditorStore((s) => s.selectLaneSection);
-  const selectLane = useEditorStore((s) => s.selectLane);
-  const selectSignal = useEditorStore((s) => s.selectSignal);
-  const selectObject = useEditorStore((s) => s.selectObject);
+  const project = useProjectStore((s) => s.project);
+  const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
+  const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
+  const selectedJunctionId = useProjectStore((s) => s.selectedJunctionId);
+  const selectedRoadIds = useProjectStore((s) => s.selectedRoadIds);
+  const selectedJunctionIds = useProjectStore((s) => s.selectedJunctionIds);
+  const selectRoad = useProjectStore((s) => s.selectRoad);
+  const selectJunction = useProjectStore((s) => s.selectJunction);
+  const selectLaneSection = useProjectStore((s) => s.selectLaneSection);
+  const selectLane = useProjectStore((s) => s.selectLane);
+  const selectSignal = useProjectStore((s) => s.selectSignal);
+  const selectObject = useProjectStore((s) => s.selectObject);
   const {
     display,
     toggleDisplaySetting,
@@ -49,7 +49,7 @@ export function LayerPanel() {
     toggleLaneVisibility: toggleLaneVisibilityInStore,
     toggleSignalVisibility: toggleSignalVisibilityInStore,
     toggleObjectVisibility: toggleObjectVisibilityInStore,
-  } = useEditorViewStore();
+  } = useViewportStore();
   const [expandedRoads, setExpandedRoads] = useState<Set<string>>(new Set());
   const [expandedLaneSections, setExpandedLaneSections] = useState<Set<string>>(new Set());
   const [expandedRoadSignals, setExpandedRoadSignals] = useState<Set<string>>(new Set());

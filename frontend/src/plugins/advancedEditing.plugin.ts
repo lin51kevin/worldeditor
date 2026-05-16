@@ -21,7 +21,7 @@
  */
 
 import { usePluginContribStore } from '../stores/pluginContribStore';
-import { useEditorStore } from '../stores/editorStore';
+import { useProjectStore } from '../stores/projectStore';
 import type { MenuItemContrib, ToolbarButtonContrib, ContextMenuContrib, ContextMenuCtx } from '../stores/pluginContribStore';
 import { showAlert } from '../utils/dialog';
 import i18next from 'i18next';
@@ -43,7 +43,7 @@ function t(key: string, fallback: string): string {
 }
 
 function getStore() {
-  return useEditorStore.getState();
+  return useProjectStore.getState();
 }
 
 // ─── Feature implementations ───────────────────────────────────────────────────
@@ -256,7 +256,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.splitRoad',
       group: 'action',
       isActive: () => false,
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: splitRoadAtJunction,
     },
     {
@@ -266,7 +266,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.weldRoads',
       group: 'action',
       isActive: () => false,
-      isDisabled: () => useEditorStore.getState().selectedRoadIds.length < 2,
+      isDisabled: () => useProjectStore.getState().selectedRoadIds.length < 2,
       onClick: weldRoads,
     },
   ];
@@ -284,7 +284,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       label: 'Split Road at Midpoint…',
       group: 'advanced',
       shortcut: 'Ctrl+Shift+X',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: splitRoadAtJunction,
     },
     {
@@ -294,7 +294,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.weldRoads',
       label: 'Weld Roads…',
       group: 'advanced',
-      isDisabled: () => useEditorStore.getState().selectedRoadIds.length < 2,
+      isDisabled: () => useProjectStore.getState().selectedRoadIds.length < 2,
       onClick: weldRoads,
     },
     {
@@ -304,7 +304,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.optimiseLanes',
       label: 'Optimise Lane Geometry',
       group: 'advanced',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: optimiseLaneGeometry,
     },
     {
@@ -314,7 +314,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.applyStandardMarkings',
       label: 'Apply Standard Markings',
       group: 'advanced',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: applyStandardMarkings,
     },
     // Junction menu group
@@ -325,7 +325,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.autoBuildConnecting',
       label: 'Auto-Build Connecting Roads…',
       group: 'junction',
-      isDisabled: () => !useEditorStore.getState().selectedJunctionId,
+      isDisabled: () => !useProjectStore.getState().selectedJunctionId,
       onClick: autoBuildConnectingRoads,
     },
     {
@@ -335,7 +335,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.buildJunctionPolygon',
       label: 'Build Junction Polygon',
       group: 'junction',
-      isDisabled: () => !useEditorStore.getState().selectedJunctionId,
+      isDisabled: () => !useProjectStore.getState().selectedJunctionId,
       onClick: buildJunctionPolygon,
     },
     // Deploy submenu
@@ -346,7 +346,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.autoDeploySidewalks',
       label: 'Auto-Deploy Sidewalks',
       group: 'deploy',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: autoDeploySidewalks,
     },
     {
@@ -356,7 +356,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.autoDeployCrosswalks',
       label: 'Auto-Deploy Crosswalks',
       group: 'deploy',
-      isDisabled: () => !useEditorStore.getState().selectedJunctionId,
+      isDisabled: () => !useProjectStore.getState().selectedJunctionId,
       onClick: autoDeployCrosswalks,
     },
     {
@@ -366,7 +366,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.autoDeployStopLines',
       label: 'Auto-Deploy Stop Lines',
       group: 'deploy',
-      isDisabled: () => !useEditorStore.getState().selectedJunctionId,
+      isDisabled: () => !useProjectStore.getState().selectedJunctionId,
       onClick: autoDeployStopLines,
     },
     // Bridge/Tunnel submenu
@@ -377,7 +377,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.addBridge',
       label: 'Add Bridge Section',
       group: 'infrastructure',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: addBridgeSection,
     },
     {
@@ -387,7 +387,7 @@ export function mountAdvancedEditingPlugin(): () => void {
       labelKey: 'advancedEditing.addTunnel',
       label: 'Add Tunnel Section',
       group: 'infrastructure',
-      isDisabled: () => !useEditorStore.getState().selectedRoadId,
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: addTunnelSection,
     },
   ];

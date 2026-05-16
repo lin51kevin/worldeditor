@@ -4,8 +4,8 @@ import {
   MousePointer,
   Route,
 } from 'lucide-react';
-import { useEditorViewStore } from '../../stores/editorViewStore';
-import { useEditorStore } from '../../stores/editorStore';
+import { useViewportStore } from '../../stores/viewportStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
 import './Toolbar.css';
 
@@ -24,10 +24,10 @@ export function Toolbar() {
     editMode,
     setEditMode,
     clearSplineKnots,
-  } = useEditorViewStore();
+  } = useViewportStore();
 
   // Subscribe so toolbar re-renders when selectedRoadId changes (plugin buttons may react to selection state)
-  const selectedRoadId = useEditorStore((s) => s.selectedRoadId);
+  const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
   // Intentionally consumed to ensure re-render on selection changes; value used implicitly by plugin buttons
   void selectedRoadId;
 

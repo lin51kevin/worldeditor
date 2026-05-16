@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useEditorStore } from '../stores/editorStore';
-import { useEditorViewStore } from '../stores/editorViewStore';
+import { useProjectStore } from '../stores/projectStore';
+import { useViewportStore } from '../stores/viewportStore';
 import { useThemeStore } from '../stores/themeStore';
 import './CommandPalette.css';
 
@@ -23,7 +23,7 @@ export function CommandPalette() {
 
   const commands = useMemo<Command[]>(() => {
     const { toggleGrid, toggleAxis, setEditMode, setViewMode, toggleLeftPanel, toggleRightPanel, toggleOutputPanel, toggleSnap, setMeasureMode } =
-      useEditorViewStore.getState();
+      useViewportStore.getState();
     const { toggleTheme } = useThemeStore.getState();
 
     return [
@@ -54,8 +54,8 @@ export function CommandPalette() {
       { id: 'measure-area', label: t('measurement.area'), category: 'Tools', action: () => setMeasureMode('area') },
 
       // Actions
-      { id: 'undo', label: t('menuBar.undo'), shortcut: 'Ctrl+Z', category: 'Edit', action: () => { if (useEditorStore.getState().canUndo()) useEditorStore.getState().undo(); } },
-      { id: 'redo', label: t('menuBar.redo'), shortcut: 'Ctrl+Shift+Z', category: 'Edit', action: () => { if (useEditorStore.getState().canRedo()) useEditorStore.getState().redo(); } },
+      { id: 'undo', label: t('menuBar.undo'), shortcut: 'Ctrl+Z', category: 'Edit', action: () => { if (useProjectStore.getState().canUndo()) useProjectStore.getState().undo(); } },
+      { id: 'redo', label: t('menuBar.redo'), shortcut: 'Ctrl+Shift+Z', category: 'Edit', action: () => { if (useProjectStore.getState().canRedo()) useProjectStore.getState().redo(); } },
     ];
   }, [t]);
 

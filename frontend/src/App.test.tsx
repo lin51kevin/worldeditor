@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import type { Project, Road } from './services/platform';
-import { useEditorStore } from './stores/editorStore';
+import { useProjectStore } from './stores/projectStore';
 import { usePluginContribStore } from './stores/pluginContribStore';
 import { onViewportEvent } from './viewport/viewportEvents';
 
@@ -45,7 +45,7 @@ describe('App', () => {
     // jsdom doesn't implement scrollIntoView; mock it
     Element.prototype.scrollIntoView = vi.fn();
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject('Current'),
         isDirty: false,
         selectedRoadId: null,
@@ -70,7 +70,7 @@ describe('App', () => {
 
   it('handles undo and redo keyboard shortcuts', () => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: makeProject('Current'),
         undoStack: [makeProject('Previous')],
         redoStack: [],
@@ -80,15 +80,15 @@ describe('App', () => {
     render(<App />);
 
     fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
-    expect(useEditorStore.getState().project.name).toBe('Previous');
+    expect(useProjectStore.getState().project.name).toBe('Previous');
 
     fireEvent.keyDown(window, { key: 'y', ctrlKey: true });
-    expect(useEditorStore.getState().project.name).toBe('Current');
+    expect(useProjectStore.getState().project.name).toBe('Current');
   });
 
   it('should select all roads and junctions on Ctrl+A', () => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: {
           ...makeProject('Test'),
           roads: [makeRoad('r1'), makeRoad('r2')],
@@ -100,19 +100,19 @@ describe('App', () => {
     });
     render(<App />);
     fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
-    expect(useEditorStore.getState().selectedRoadIds).toEqual(['r1', 'r2']);
+    expect(useProjectStore.getState().selectedRoadIds).toEqual(['r1', 'r2']);
   });
 
   it('should duplicate selected road on Ctrl+D', () => {
     act(() => {
-      useEditorStore.setState({
+      useProjectStore.setState({
         project: { ...makeProject('Test'), roads: [makeRoad('r1')], junctions: [] },
         selectedRoadId: 'r1',
       });
     });
     render(<App />);
     fireEvent.keyDown(window, { key: 'd', ctrlKey: true });
-    expect(useEditorStore.getState().project.roads).toHaveLength(2);
+    expect(useProjectStore.getState().project.roads).toHaveLength(2);
   });
 
   it('should emit zoom-to-fit event on Home key', () => {
