@@ -12,7 +12,7 @@
 import { useProjectStore } from '../stores/projectStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import type { TemplateSectionContrib } from '../stores/pluginContribStore';
-import type { Road, Lane, LaneSection, Geometry, RoadMark, RoadSignal, Junction } from '../services/platform';
+import type { Road, Lane, LaneSection, Geometry, RoadMark, RoadSignal, Junction, JunctionConnection, LinkElement } from '../services/platform';
 
 const PLUGIN_ID = 'builtin-templates';
 const LANE_WIDTH = 3.5;
@@ -212,6 +212,90 @@ function applyJunctionTemplate(armCount: number, armLength: number, opts?: { x?:
   useProjectStore.getState().selectJunction(junctionId);
 }
 
+// ── Dual 4-lane section helper ───────────────────────────────────────────────
+
+/** Bidirectional 4-lane: 2 driving lanes per direction with proper markings.
+ *  - Inner lanes (id ±1): solid yellow center line (no lane-change)
+ *  - Outer lanes (id ±2): dashed white (lane-change allowed)
+ */
+function dual4LaneSection(): LaneSection {
+  return makeLaneSection(
+    [[1, 'Driving', LANE_WIDTH, [solidLine('Yellow')]], [2, 'Driving', LANE_WIDTH, [dashedLine()]]],
+    [[1, 'Driving', LANE_WIDTH, [solidLine('Yellow')]], [2, 'Driving', LANE_WIDTH, [dashedLine()]]],
+  );
+}
+
+let junctionSeq = 0;
+function nextId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${(++junctionSeq).toString(36)}`;
+}
+
+/**
+ * T-intersection with bidirectional 4-lane arms.
+ *
+ * Creates 3 arms in a T-shape (east + west main road, north branch) with
+ * a gap between the arm starts so the junction polygon can be rendered.
+ * Arm roads have their predecessor link referencing the junction.
+ * Junction connections are populated for all 6 directed pairs.
+ */
+function applyTIntersectionDual4(armLength: number, opts?: { x?: number; y?: number }) {
+  if (opts?.x === undefined || opts?.y === undefined) return;
+  const cx = opts.x;
+  const cy = opts.y;
+  const junctionId = nextId('junction');
+
+  // Gap = half the road width so arms don't overlap at the center
+  const section = dual4LaneSection();
+  const halfWidth = 2 * LANE_WIDTH; // 2 lanes × 3.5m = 7m per side
+  const gap = halfWidth + 1.0; // 8m clearance
+
+  // Arm roads start at `gap` distance from center, heading outward.
+  // s=0 is at the junction boundary; s=length reaches the arm tip.
+  const effLength = armLength - gap;
+  const roadEast = makeRoad(section, cx + gap, cy, 0, effLength, null);
+  const roadWest = makeRoad(section, cx - gap, cy, Math.PI, effLength, null);
+  const roadNorth = makeRoad(section, cx, cy + gap, Math.PI / 2, effLength, null);
+
+  // Link each arm's start (s=0) to the junction
+  const junctionLink: LinkElement = { element_type: 'Junction', element_id: junctionId, contact_point: null };
+  roadEast.link = { predecessor: junctionLink, successor: null };
+  roadWest.link = { predecessor: junctionLink, successor: null };
+  roadNorth.link = { predecessor: junctionLink, successor: null };
+
+  // Junction connections: every directed pair of arms.
+  // connecting_road's contact_point=Start means the junction polygon builder
+  // samples the road at s=0 (the junction boundary).
+  const makeConn = (incoming: Road, connecting: Road): JunctionConnection => ({
+    id: nextId('conn'),
+    incoming_road: incoming.id,
+    connecting_road: connecting.id,
+    contact_point: 'Start',
+    lane_links: [
+      { from: 1, to: 1 },
+      { from: 2, to: 2 },
+      { from: -1, to: -1 },
+      { from: -2, to: -2 },
+    ],
+  });
+
+  const junction: Junction = {
+    id: junctionId,
+    name: 'T-Intersection',
+    connections: [
+      makeConn(roadEast, roadWest),
+      makeConn(roadWest, roadEast),
+      makeConn(roadEast, roadNorth),
+      makeConn(roadNorth, roadEast),
+      makeConn(roadWest, roadNorth),
+      makeConn(roadNorth, roadWest),
+    ],
+  };
+
+  const store = useProjectStore.getState();
+  store.addJunctionWithRoads(junction, [roadEast, roadWest, roadNorth]);
+  store.selectJunction(junctionId);
+}
+
 const junctionSection: TemplateSectionContrib = {
   id: `${PLUGIN_ID}:junctions`,
   pluginId: PLUGIN_ID,
@@ -222,7 +306,7 @@ const junctionSection: TemplateSectionContrib = {
       id: 'tpl:jct:t',
       labelKey: 'templatePanel.junctions.tIntersection',
       icon: '⊤',
-      onApply: (opts) => applyJunctionTemplate(3, 80, opts),
+      onApply: (opts) => applyTIntersectionDual4(80, opts),
     },
     {
       id: 'tpl:jct:cross',
