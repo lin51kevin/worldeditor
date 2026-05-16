@@ -101,6 +101,7 @@ interface EditorViewState {
   // Visibility toggles
   showGrid: boolean;
   showAxis: boolean;
+  showHoverHighlight: boolean;
 
   // Edit mode
   editMode: ActiveMode;
@@ -165,6 +166,7 @@ interface EditorViewState {
   setDimension: (d: ViewDimension) => void;
   toggleGrid: () => void;
   toggleAxis: () => void;
+  toggleHoverHighlight: () => void;
   setEditMode: (m: ActiveMode) => void;
   setSplineTemplateId: (templateId: string) => void;
   setPendingTemplate: (id: string | null) => void;
@@ -289,6 +291,7 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   dimension: '2d',
   showGrid: true,
   showAxis: true,
+  showHoverHighlight: false,
   editMode: 'default',
   splineTemplateId: 'tpl:road:single',
   pendingTemplateId: null,
@@ -317,6 +320,7 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   setDimension: (dimension) => set({ dimension }),
   toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
   toggleAxis: () => set((state) => ({ showAxis: !state.showAxis })),
+  toggleHoverHighlight: () => set((state) => ({ showHoverHighlight: !state.showHoverHighlight })),
   setEditMode: (editMode) => set({ editMode }),
   setSplineTemplateId: (splineTemplateId) => set({ splineTemplateId }),
   setPendingTemplate: (pendingTemplateId) => set({ pendingTemplateId }),

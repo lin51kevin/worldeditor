@@ -93,6 +93,24 @@ describe('viewportStore', () => {
     expect(useViewportStore.getState().showAxis).toBe(false);
   });
 
+  it('showHoverHighlight defaults to false', () => {
+    expect(useViewportStore.getState().showHoverHighlight).toBe(false);
+  });
+
+  it('toggleHoverHighlight flips showHoverHighlight', () => {
+    act(() => {
+      useViewportStore.getState().toggleHoverHighlight();
+    });
+
+    expect(useViewportStore.getState().showHoverHighlight).toBe(true);
+
+    act(() => {
+      useViewportStore.getState().toggleHoverHighlight();
+    });
+
+    expect(useViewportStore.getState().showHoverHighlight).toBe(false);
+  });
+
   it.each(['default', 'road', 'lane', 'lanesection', 'spline', 'move-road', 'rotate-road'] as const)(
     'setEditMode changes editMode to %s',
     (editMode) => {
