@@ -51,7 +51,7 @@ describe('ioCsv.plugin', () => {
   it('should call unregisterPlugin on cleanup', () => {
     const cleanup = mountIoCsvPlugin();
     cleanup();
-    expect(mockUnregisterPlugin).toHaveBeenCalledWith('io-csv');
+    expect(mockUnregisterPlugin).toHaveBeenCalledWith('io-csv-import');
   });
 
   it('should register importer with correct extensions', () => {

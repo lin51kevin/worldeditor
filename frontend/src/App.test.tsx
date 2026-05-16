@@ -6,6 +6,10 @@ import { useProjectStore } from './stores/projectStore';
 import { usePluginContribStore } from './stores/pluginContribStore';
 import { onViewportEvent } from './viewport/viewportEvents';
 
+vi.mock('./components/dialogs/PluginManager', () => ({
+  PluginManager: () => null,
+}));
+
 function makeProject(name: string): Project {
   return {
     name,

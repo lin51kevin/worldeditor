@@ -7,5 +7,5 @@ describe('satellite-beta.plugin', () => {
   it('mounts', () => { const c = mountSatellitePlugin(); expect(typeof c).toBe('function'); c(); });
   it('registers panel', () => { const c = mountSatellitePlugin(); expect(rp).toHaveBeenCalled(); c(); });
   it('registers menu item', () => { const c = mountSatellitePlugin(); expect(rm).toHaveBeenCalled(); c(); });
-  it('unregisters', () => { const c = mountSatellitePlugin(); c(); expect(u).toHaveBeenCalledWith('satellite'); });
+  it('unregisters', () => { const c = mountSatellitePlugin(); c(); expect(u).toHaveBeenCalledWith('satellite-beta'); });
 });

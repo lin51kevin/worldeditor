@@ -7,5 +7,5 @@ describe('io-nio-stub.plugin', () => {
   it('mounts', () => { const c = mountIoNioPlugin(); expect(typeof c).toBe('function'); c(); });
   it('registers importer', () => { const c = mountIoNioPlugin(); expect(m).toHaveBeenCalled(); c(); });
   it('registers exporter', () => { const c = mountIoNioPlugin(); expect(e).toHaveBeenCalled(); c(); });
-  it('unregisters', () => { const c = mountIoNioPlugin(); c(); expect(u).toHaveBeenCalledWith('io-nio'); });
+  it('unregisters', () => { const c = mountIoNioPlugin(); c(); expect(u).toHaveBeenCalledWith('io-nio-stub'); });
 });

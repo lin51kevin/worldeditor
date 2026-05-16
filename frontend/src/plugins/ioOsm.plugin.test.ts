@@ -33,7 +33,7 @@ describe('ioOsm.plugin', () => {
   it('mounts', () => { const c = mountIoOsmPlugin(); expect(typeof c).toBe('function'); c(); });
   it('registers exporter', () => { const c = mountIoOsmPlugin(); expect(e).toHaveBeenCalled(); c(); });
   it('exporter format is OSM', () => { const c = mountIoOsmPlugin(); expect(e.mock.calls[0]![0].formatName).toContain('OpenStreetMap'); c(); });
-  it('unregisters', () => { const c = mountIoOsmPlugin(); c(); expect(u).toHaveBeenCalledWith('io-osm'); });
+  it('unregisters', () => { const c = mountIoOsmPlugin(); c(); expect(u).toHaveBeenCalledWith('io-osm-export'); });
 
   describe('exportToOsm', () => {
     it('empty project produces valid OSM with no nodes/ways', async () => {

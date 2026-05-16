@@ -11,5 +11,5 @@ describe('io-lanelet2-stub.plugin', () => {
   it('mounts and returns cleanup', () => { const c = mountIoLanelet2Plugin(); expect(typeof c).toBe('function'); c(); });
   it('registers importer', () => { const c = mountIoLanelet2Plugin(); expect(mockRegisterImporter).toHaveBeenCalled(); c(); });
   it('registers exporter', () => { const c = mountIoLanelet2Plugin(); expect(mockRegisterExporter).toHaveBeenCalled(); c(); });
-  it('unregisters on cleanup', () => { const c = mountIoLanelet2Plugin(); c(); expect(mockUnregisterPlugin).toHaveBeenCalledWith('io-lanelet2'); });
+  it('unregisters on cleanup', () => { const c = mountIoLanelet2Plugin(); c(); expect(mockUnregisterPlugin).toHaveBeenCalledWith('io-lanelet2-stub'); });
 });

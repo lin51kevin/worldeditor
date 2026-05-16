@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ValidationPanel } from './ValidationPanel';
 
 vi.mock('../../stores/projectStore', () => ({
@@ -25,7 +25,7 @@ describe('ValidationPanel', () => {
 
   it('shows issues after clicking validate on empty project', async () => {
     render(<ValidationPanel />);
-    screen.getByText('Validate').click();
+    fireEvent.click(screen.getByText('Validate'));
     // Empty project should produce "Project has no roads" info
     const infoText = await screen.findByText('Project has no roads');
     expect(infoText).toBeDefined();

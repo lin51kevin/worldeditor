@@ -41,7 +41,7 @@ describe('ioObj3d.plugin', () => {
   it('should unregister on cleanup', () => {
     const cleanup = mountIoObj3dPlugin();
     cleanup();
-    expect(mockUnregisterPlugin).toHaveBeenCalledWith('io-obj3d');
+    expect(mockUnregisterPlugin).toHaveBeenCalledWith('io-obj3d-export');
   });
 });
 

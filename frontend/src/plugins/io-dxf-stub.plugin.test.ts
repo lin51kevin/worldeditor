@@ -7,5 +7,5 @@ describe('io-dxf-stub.plugin', () => {
   it('mounts', () => { const c = mountIoDxfPlugin(); expect(typeof c).toBe('function'); c(); });
   it('registers importer', () => { const c = mountIoDxfPlugin(); expect(m).toHaveBeenCalled(); c(); });
   it('registers exporter', () => { const c = mountIoDxfPlugin(); expect(e).toHaveBeenCalled(); c(); });
-  it('unregisters', () => { const c = mountIoDxfPlugin(); c(); expect(u).toHaveBeenCalledWith('io-dxf'); });
+  it('unregisters', () => { const c = mountIoDxfPlugin(); c(); expect(u).toHaveBeenCalledWith('io-dxf-stub'); });
 });

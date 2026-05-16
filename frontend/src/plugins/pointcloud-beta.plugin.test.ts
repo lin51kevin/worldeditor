@@ -7,5 +7,5 @@ describe('pointcloud-beta.plugin', () => {
   it('mounts', () => { const c = mountPointcloudPlugin(); expect(typeof c).toBe('function'); c(); });
   it('registers panel', () => { const c = mountPointcloudPlugin(); expect(rp).toHaveBeenCalled(); c(); });
   it('registers importer with .las', () => { const c = mountPointcloudPlugin(); expect(ri.mock.calls[0]?.[0].extensions).toContain('.las'); c(); });
-  it('unregisters', () => { const c = mountPointcloudPlugin(); c(); expect(u).toHaveBeenCalledWith('pointcloud'); });
+  it('unregisters', () => { const c = mountPointcloudPlugin(); c(); expect(u).toHaveBeenCalledWith('pointcloud-beta'); });
 });

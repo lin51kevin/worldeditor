@@ -289,7 +289,7 @@ describe('Viewport', () => {
   });
 
   it('logs an error but does not crash when generateRoadVertices rejects', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const platform = createPlatformMock();
     (platform.generateRoadVertices as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('WASM not ready'));
     rendererMocks.isSupported.mockReturnValue(true);
@@ -300,12 +300,16 @@ describe('Viewport', () => {
 
     await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
     await waitFor(() => expect(platform.generateRoadVertices).toHaveBeenCalled());
-    // generateRoadVertices rejection is caught individually; no console.error expected
-    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[Viewport] generateRoadVertices failed:',
+        expect.any(Error),
+      );
+    });
     // uploadRoadVertices is still called with empty fallback data
     await waitFor(() => expect(rendererMocks.uploadRoadVertices).toHaveBeenCalled());
 
-    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
   });
 
   it('does not upload vertices when project has no roads', async () => {

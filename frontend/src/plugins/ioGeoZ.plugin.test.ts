@@ -25,8 +25,8 @@ describe('ioGeoZ.plugin', () => {
     const importer = mockRegisterImporter.mock.calls[0]?.[0];
 
     expect(importer).toMatchObject({
-      id: 'io-geoz:importer',
-      pluginId: 'io-geoz',
+      id: 'io-geoz-import:importer',
+      pluginId: 'io-geoz-import',
       formatName: 'GeoZ Map',
       extensions: ['.geoz', '.zip'],
       disabled: false,

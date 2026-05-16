@@ -111,7 +111,7 @@ describe('plugin-io-lanelet2', () => {
     expect(store.registerExporter).toHaveBeenCalledOnce();
     expect(typeof unmount).toBe('function');
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-lanelet2');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-lanelet2-stub');
   });
 
   it('importer throws when called (stub)', async () => {
@@ -129,7 +129,7 @@ describe('plugin-io-shapefile', () => {
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-shapefile');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-shapefile-stub');
   });
 });
 
@@ -140,7 +140,7 @@ describe('plugin-io-csv', () => {
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-csv');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-csv-import');
   });
 });
 
@@ -150,7 +150,7 @@ describe('plugin-io-osm', () => {
     const unmount = mountIoOsmPlugin();
     expect(store.registerExporter).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-osm');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-osm-export');
   });
 });
 
@@ -160,7 +160,7 @@ describe('plugin-io-obj3d', () => {
     const unmount = mountIoObj3dPlugin();
     expect(store.registerExporter).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-obj3d');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-obj3d-export');
   });
 });
 
@@ -171,7 +171,7 @@ describe('plugin-io-mif', () => {
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-mif');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-mif-stub');
   });
 });
 
@@ -182,7 +182,7 @@ describe('plugin-io-nio', () => {
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-nio');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-nio-stub');
   });
 });
 
@@ -192,7 +192,7 @@ describe('plugin-io-geoz', () => {
     const unmount = mountIoGeoZPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-geoz');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-geoz-import');
   });
 });
 
@@ -214,7 +214,7 @@ describe('plugin-io-dxf', () => {
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-dxf');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-dxf-stub');
   });
 });
 
@@ -225,7 +225,7 @@ describe('plugin-io-xodr-ext', () => {
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-xodr-ext');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('io-xodr-ext-stub');
   });
 });
 
@@ -272,7 +272,7 @@ describe('plugin-scripting', () => {
     expect(store.registerPanel).toHaveBeenCalledOnce();
     expect(store.registerMenuItem.mock.calls.length).toBeGreaterThanOrEqual(1);
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('scripting');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('scripting-beta');
   });
 });
 
@@ -282,7 +282,7 @@ describe('plugin-ecosystem', () => {
     const unmount = mountEcosystemPlugin();
     expect(store.registerPanel).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('ecosystem');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('ecosystem-beta');
   });
 });
 
@@ -312,7 +312,7 @@ describe('plugin-pointcloud', () => {
     const unmount = mountPointcloudPlugin();
     expect(store.registerPanel).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('pointcloud');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('pointcloud-beta');
   });
 });
 
@@ -322,7 +322,7 @@ describe('plugin-satellite', () => {
     const unmount = mountSatellitePlugin();
     expect(store.registerPanel).toHaveBeenCalledOnce();
     unmount();
-    expect(store.unregisterPlugin).toHaveBeenCalledWith('satellite');
+    expect(store.unregisterPlugin).toHaveBeenCalledWith('satellite-beta');
   });
 });
 

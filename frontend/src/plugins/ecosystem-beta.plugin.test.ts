@@ -6,5 +6,5 @@ describe('ecosystem-beta.plugin', () => {
   beforeEach(() => vi.clearAllMocks());
   it('mounts', () => { const c = mountEcosystemPlugin(); expect(typeof c).toBe('function'); c(); });
   it('registers panel', () => { const c = mountEcosystemPlugin(); expect(rp).toHaveBeenCalled(); c(); });
-  it('unregisters', () => { const c = mountEcosystemPlugin(); c(); expect(u).toHaveBeenCalledWith('ecosystem'); });
+  it('unregisters', () => { const c = mountEcosystemPlugin(); c(); expect(u).toHaveBeenCalledWith('ecosystem-beta'); });
 });

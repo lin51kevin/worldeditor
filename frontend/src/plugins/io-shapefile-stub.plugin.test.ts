@@ -7,5 +7,5 @@ describe('io-shapefile-stub.plugin', () => {
   it('mounts', () => { const c = mountIoShapefilePlugin(); expect(typeof c).toBe('function'); c(); });
   it('registers importer', () => { const c = mountIoShapefilePlugin(); expect(mockRegisterImporter).toHaveBeenCalled(); c(); });
   it('registers exporter', () => { const c = mountIoShapefilePlugin(); expect(mockRegisterExporter).toHaveBeenCalled(); c(); });
-  it('unregisters', () => { const c = mountIoShapefilePlugin(); c(); expect(mockUnregisterPlugin).toHaveBeenCalledWith('io-shapefile'); });
+  it('unregisters', () => { const c = mountIoShapefilePlugin(); c(); expect(mockUnregisterPlugin).toHaveBeenCalledWith('io-shapefile-stub'); });
 });

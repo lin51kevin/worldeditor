@@ -7,5 +7,5 @@ describe('io-mif-stub.plugin', () => {
   it('mounts', () => { const c = mountIoMifPlugin(); expect(typeof c).toBe('function'); c(); });
   it('registers importer', () => { const c = mountIoMifPlugin(); expect(m).toHaveBeenCalled(); c(); });
   it('registers exporter', () => { const c = mountIoMifPlugin(); expect(e).toHaveBeenCalled(); c(); });
-  it('unregisters', () => { const c = mountIoMifPlugin(); c(); expect(u).toHaveBeenCalledWith('io-mif'); });
+  it('unregisters', () => { const c = mountIoMifPlugin(); c(); expect(u).toHaveBeenCalledWith('io-mif-stub'); });
 });
