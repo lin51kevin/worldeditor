@@ -370,6 +370,7 @@ describe('MenuBar', () => {
       useProjectStore.setState({ project: makeProject([makeRoad('r-1', 20)], 'SaveTarget'), isDirty: true });
     });
 
+    vi.mocked(platform.saveFile).mockResolvedValueOnce('SaveTarget.xodr');
     dispatchWindowKey({ key: 's', ctrlKey: true });
     await waitFor(() => expect(platform.writeOpenDrive).toHaveBeenCalled());
     await waitFor(() => expect(platform.saveFile).toHaveBeenCalledWith('SaveTarget', '<OpenDRIVE />'));

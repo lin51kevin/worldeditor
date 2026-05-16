@@ -245,14 +245,26 @@ export class ViewportRenderer {
     });
   }
 
-  uploadRoadVertices(vertexData: Float32Array): void {
+  uploadRoadVertices(
+    vertexData: Float32Array,
+    options?: { preserveLastVertexDataOnEmpty?: boolean },
+  ): void {
     // Track whether this is a fresh load (previously empty) to decide on auto-fit
     const wasEmpty = this.lastVertexData === null || this.lastVertexData.length === 0;
+    const preserveLastVertexDataOnEmpty = options?.preserveLastVertexDataOnEmpty === true;
 
     if (vertexData.length === 0) {
       for (const m of this.meshes) { m.vertexBuffer.destroy(); }
       this.meshes = [];
-      this.lastVertexData = vertexData;
+      if (preserveLastVertexDataOnEmpty) {
+        // Keep last non-empty geometry so switching wire/sketch -> solid does not
+        // trigger an unintended auto-fit reset.
+        if (!this.lastVertexData || this.lastVertexData.length === 0) {
+          this.lastVertexData = vertexData;
+        }
+      } else {
+        this.lastVertexData = vertexData;
+      }
       return;
     }
 

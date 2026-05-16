@@ -425,6 +425,7 @@
     "meters": "米",
     "parseError": "文件解析失败，请检查文件格式是否正确。",
     "openError": "打开文件失败，请重试。",
+    "saveError": "保存文件失败，请重试。",
     "aboutTitle": "关于 World Editor",
     "versionTitle": "版本信息",
     "version": "版本",

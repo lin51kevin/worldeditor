@@ -38,6 +38,7 @@ export function useSplineDrawMode({
   status,
 }: UseSplineDrawModeOptions) {
   const editMode = useViewportStore((state) => state.editMode);
+  const pendingTemplateId = useViewportStore((state) => state.pendingTemplateId);
   const splineKnots = useViewportStore((state) => state.splineKnots);
   const splineTangentOverrides = useViewportStore((state) => state.splineTangentOverrides);
   const splineTangentInOverrides = useViewportStore((state) => state.splineTangentInOverrides);
@@ -80,6 +81,20 @@ export function useSplineDrawMode({
     }
     clearSplineDrawHover();
   }, [clearSplineDrawHover, editMode, geometryEditSpline]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || geometryEditSpline) return;
+
+    if (pendingTemplateId || isDrawMode(editMode)) {
+      canvas.style.cursor = 'crosshair';
+      return;
+    }
+
+    if (editMode === null || editMode === 'default') {
+      canvas.style.cursor = 'default';
+    }
+  }, [canvasRef, editMode, geometryEditSpline, pendingTemplateId]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

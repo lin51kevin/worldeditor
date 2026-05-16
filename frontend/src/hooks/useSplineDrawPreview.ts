@@ -109,10 +109,10 @@ export function useSplineDrawPreview({
         const [previewLaneVerts, previewCenterVerts, existingLaneVerts, existingCenterVerts, existingMarkVerts] = await Promise.all([
           service.generateLaneBoundaryVertices(singleRoadProject, 2.0).catch(() => empty),
           service.generateCenterLineVertices(singleRoadProject, 2.0).catch(() => empty),
-          visibleProject
+          visibleProject && viewMode !== 'solid'
             ? service.generateLaneBoundaryVertices(visibleProject, 2.0).catch(() => empty)
             : empty,
-          visibleProject
+          visibleProject && (display.showReferenceLine || viewMode !== 'solid')
             ? service.generateCenterLineVertices(visibleProject, 2.0).catch(() => empty)
             : empty,
           visibleProject && (viewMode === 'wire' || display.showLaneLines)

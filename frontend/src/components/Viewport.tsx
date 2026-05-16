@@ -242,7 +242,11 @@ export function Viewport() {
         objectVerts,
       );
       cachedSurfaceRef.current = surfaceVerts;
-      renderer.uploadRoadVertices(surfaceVerts);
+      if (viewMode === 'solid') {
+        renderer.uploadRoadVertices(surfaceVerts);
+      } else {
+        renderer.uploadRoadVertices(surfaceVerts, { preserveLastVertexDataOnEmpty: true });
+      }
     } catch (err) {
       console.error('[Viewport] Failed to generate surface mesh:', err);
     }

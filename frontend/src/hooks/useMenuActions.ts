@@ -57,22 +57,33 @@ export function useMenuActions() {
   }, [setProject, pushRecentFile, t]);
 
   const handleSave = useCallback(async () => {
-    const platform = await getPlatformService();
-    const xml = await platform.writeOpenDrive(project);
-    await platform.saveFile(project.name, xml);
-    useProjectStore.getState().markClean();
-  }, [project]);
+    try {
+      const platform = await getPlatformService();
+      const xml = await platform.writeOpenDrive(project);
+      const savedPath = await platform.saveFile(project.name, xml);
+      if (!savedPath) return;
+      useProjectStore.getState().markClean();
+    } catch (err) {
+      console.error('[MenuBar] Failed to save file:', err);
+      await showAlert(t('dialog.saveError'));
+    }
+  }, [project, t]);
 
   const handleSaveAs = useCallback(async () => {
-    const platform = await getPlatformService();
-    const xml = await platform.writeOpenDrive(project);
-    const savedPath = await platform.saveFile(project.name, xml);
-    if (!savedPath) return; // user cancelled the dialog
-    // Extract bare filename (without path separators) to use as project name
-    const bare = savedPath.replace(/\\/g, '/').split('/').pop() ?? savedPath;
-    setProject({ ...project, name: bare });
-    useProjectStore.getState().markClean();
-  }, [project, setProject]);
+    try {
+      const platform = await getPlatformService();
+      const xml = await platform.writeOpenDrive(project);
+      const savedPath = await platform.saveFile(project.name, xml);
+      if (!savedPath) return; // user cancelled the dialog
+      // Extract bare filename (without path separators) to use as project name
+      const bare = savedPath.replace(/\\/g, '/').split('/').pop() ?? savedPath;
+      setProject({ ...project, name: bare });
+      useProjectStore.getState().markClean();
+    } catch (err) {
+      console.error('[MenuBar] Failed to save file as:', err);
+      await showAlert(t('dialog.saveError'));
+    }
+  }, [project, setProject, t]);
 
   const handleImportOpenDrive = useCallback(async () => {
     try {
