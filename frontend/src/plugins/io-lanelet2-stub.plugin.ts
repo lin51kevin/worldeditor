@@ -2,7 +2,7 @@
 import { createIOPluginStub } from './ioPluginFactory';
 
 export const mountIoLanelet2Plugin = createIOPluginStub({
-  pluginId: 'io-lanelet2',
+  pluginId: 'io-lanelet2-stub',
   formatName: 'Lanelet2 OSM-XML',
   extensions: ['.osm', '.xml'],
   phase: 3,

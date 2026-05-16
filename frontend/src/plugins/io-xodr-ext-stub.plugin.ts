@@ -2,7 +2,7 @@
 import { createIOPluginStub } from './ioPluginFactory';
 
 export const mountIoXodrExtPlugin = createIOPluginStub({
-  pluginId: 'io-xodr-ext',
+  pluginId: 'io-xodr-ext-stub',
   formatName: 'OpenDRIVE Extensions',
   extensions: ['.xodr'],
   phase: 3,

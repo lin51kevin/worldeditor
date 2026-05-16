@@ -2,7 +2,7 @@
 import { createIOPluginStub } from './ioPluginFactory';
 
 export const mountIoNioPlugin = createIOPluginStub({
-  pluginId: 'io-nio',
+  pluginId: 'io-nio-stub',
   formatName: 'NIO ProtoBuf',
   extensions: ['.pb', '.bin'],
   phase: 3,

@@ -2,7 +2,7 @@
 import { createIOPluginStub } from './ioPluginFactory';
 
 export const mountIoMifPlugin = createIOPluginStub({
-  pluginId: 'io-mif',
+  pluginId: 'io-mif-stub',
   formatName: 'MapInfo MIF',
   extensions: ['.mif'],
   phase: 3,

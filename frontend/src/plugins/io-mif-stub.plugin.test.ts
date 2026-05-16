@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 const m = vi.fn(), e = vi.fn(), u = vi.fn();
 vi.mock('../stores/pluginContribStore', () => ({ usePluginContribStore: { getState: vi.fn(() => ({ registerImporter: m, registerExporter: e, unregisterPlugin: u })) } }));
-import { mountIoMifPlugin } from './ioMif.plugin';
-describe('ioMif.plugin', () => {
+import { mountIoMifPlugin } from './io-mif-stub.plugin';
+describe('io-mif-stub.plugin', () => {
   beforeEach(() => vi.clearAllMocks());
   it('mounts', () => { const c = mountIoMifPlugin(); expect(typeof c).toBe('function'); c(); });
   it('registers importer', () => { const c = mountIoMifPlugin(); expect(m).toHaveBeenCalled(); c(); });

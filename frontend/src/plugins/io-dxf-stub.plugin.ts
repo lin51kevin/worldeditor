@@ -2,7 +2,7 @@
 import { createIOPluginStub } from './ioPluginFactory';
 
 export const mountIoDxfPlugin = createIOPluginStub({
-  pluginId: 'io-dxf',
+  pluginId: 'io-dxf-stub',
   formatName: 'DXF CAD',
   extensions: ['.dxf'],
   phase: 3,

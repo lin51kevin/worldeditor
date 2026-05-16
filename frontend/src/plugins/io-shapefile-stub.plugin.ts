@@ -2,7 +2,7 @@
 import { createIOPluginStub } from './ioPluginFactory';
 
 export const mountIoShapefilePlugin = createIOPluginStub({
-  pluginId: 'io-shapefile',
+  pluginId: 'io-shapefile-stub',
   formatName: 'Shapefile',
   extensions: ['.shp'],
   phase: 3,

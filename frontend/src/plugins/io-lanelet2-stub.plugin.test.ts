@@ -5,8 +5,8 @@ const mockUnregisterPlugin = vi.fn();
 vi.mock('../stores/pluginContribStore', () => ({
   usePluginContribStore: { getState: vi.fn(() => ({ registerImporter: mockRegisterImporter, registerExporter: mockRegisterExporter, unregisterPlugin: mockUnregisterPlugin })) },
 }));
-import { mountIoLanelet2Plugin } from './ioLanelet2.plugin';
-describe('ioLanelet2.plugin', () => {
+import { mountIoLanelet2Plugin } from './io-lanelet2-stub.plugin';
+describe('io-lanelet2-stub.plugin', () => {
   beforeEach(() => vi.clearAllMocks());
   it('mounts and returns cleanup', () => { const c = mountIoLanelet2Plugin(); expect(typeof c).toBe('function'); c(); });
   it('registers importer', () => { const c = mountIoLanelet2Plugin(); expect(mockRegisterImporter).toHaveBeenCalled(); c(); });

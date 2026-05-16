@@ -105,7 +105,7 @@ afterEach(() => {
 
 describe('plugin-io-lanelet2', () => {
   it('mounts, registers importer+exporter, and unmounts cleanly', async () => {
-    const { mountIoLanelet2Plugin } = await import('../plugins/ioLanelet2.plugin');
+    const { mountIoLanelet2Plugin } = await import('../plugins/io-lanelet2-stub.plugin');
     const unmount = mountIoLanelet2Plugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -115,7 +115,7 @@ describe('plugin-io-lanelet2', () => {
   });
 
   it('importer throws when called (stub)', async () => {
-    const { mountIoLanelet2Plugin } = await import('../plugins/ioLanelet2.plugin');
+    const { mountIoLanelet2Plugin } = await import('../plugins/io-lanelet2-stub.plugin');
     mountIoLanelet2Plugin();
     const importer = (store.registerImporter.mock.calls[0] as unknown as [{ onImport: (c: string) => Promise<unknown> }])[0];
     await expect(importer.onImport('')).rejects.toThrow();
@@ -124,7 +124,7 @@ describe('plugin-io-lanelet2', () => {
 
 describe('plugin-io-shapefile', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoShapefilePlugin } = await import('../plugins/ioShapefile.plugin');
+    const { mountIoShapefilePlugin } = await import('../plugins/io-shapefile-stub.plugin');
     const unmount = mountIoShapefilePlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -166,7 +166,7 @@ describe('plugin-io-obj3d', () => {
 
 describe('plugin-io-mif', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoMifPlugin } = await import('../plugins/ioMif.plugin');
+    const { mountIoMifPlugin } = await import('../plugins/io-mif-stub.plugin');
     const unmount = mountIoMifPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -177,7 +177,7 @@ describe('plugin-io-mif', () => {
 
 describe('plugin-io-nio', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoNioPlugin } = await import('../plugins/ioNio.plugin');
+    const { mountIoNioPlugin } = await import('../plugins/io-nio-stub.plugin');
     const unmount = mountIoNioPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -209,7 +209,7 @@ describe('plugin-io-signals', () => {
 
 describe('plugin-io-dxf', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoDxfPlugin } = await import('../plugins/ioDxf.plugin');
+    const { mountIoDxfPlugin } = await import('../plugins/io-dxf-stub.plugin');
     const unmount = mountIoDxfPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -220,7 +220,7 @@ describe('plugin-io-dxf', () => {
 
 describe('plugin-io-xodr-ext', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoXodrExtPlugin } = await import('../plugins/ioXodrExt.plugin');
+    const { mountIoXodrExtPlugin } = await import('../plugins/io-xodr-ext-stub.plugin');
     const unmount = mountIoXodrExtPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
