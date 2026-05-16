@@ -226,3 +226,125 @@ pub fn spline_to_geometries_with_mode(
 
     geometries
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Geometry, GeometryType};
+    use crate::spline::{EditableSpline, KnotType, SplineKnot, TangentMode};
+
+    fn line_geometry(x: f64, y: f64, hdg: f64, length: f64) -> Geometry {
+        Geometry {
+            s: 0.0,
+            x,
+            y,
+            hdg,
+            length,
+            geo_type: GeometryType::Line,
+        }
+    }
+
+    fn straight_road(length: f64) -> crate::model::Road {
+        crate::model::Road::from_centerline("r1", vec![line_geometry(0.0, 0.0, 0.0, length)])
+    }
+
+    // ── road_to_spline ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_road_to_spline_empty_returns_empty() {
+        let road = crate::model::Road::new("r0", 0.0);
+        let spline = road_to_spline(&road, 1.0);
+        assert!(spline.knots.is_empty());
+    }
+
+    #[test]
+    fn test_road_to_spline_single_line_produces_two_anchors() {
+        let road = straight_road(10.0);
+        let spline = road_to_spline(&road, 20.0); // sample_step > length → no intermediates
+        assert!(spline.knots.len() >= 2, "expected ≥2 knots, got {}", spline.knots.len());
+    }
+
+    #[test]
+    fn test_road_to_spline_start_matches_road_origin() {
+        let road = straight_road(10.0);
+        let spline = road_to_spline(&road, 5.0);
+        let first = &spline.knots[0];
+        assert!(first.position[0].abs() < 1e-6, "start x = {}", first.position[0]);
+        assert!(first.position[1].abs() < 1e-6, "start y = {}", first.position[1]);
+    }
+
+    #[test]
+    fn test_road_to_spline_end_matches_road_end() {
+        let road = straight_road(10.0);
+        let spline = road_to_spline(&road, 5.0);
+        let last = spline.knots.last().unwrap();
+        assert!((last.position[0] - 10.0).abs() < 1e-3, "end x = {}", last.position[0]);
+    }
+
+    #[test]
+    fn test_road_to_spline_long_segment_has_intermediates() {
+        // length=100, sample_step=5 → n = 20 intermediate points
+        let road = straight_road(100.0);
+        let spline = road_to_spline(&road, 5.0);
+        let n_intermediate = spline.knots.iter()
+            .filter(|k| k.knot_type == KnotType::Intermediate)
+            .count();
+        assert!(n_intermediate > 0, "long segment should have intermediates");
+    }
+
+    #[test]
+    fn test_road_to_spline_short_segment_no_intermediates() {
+        // length=10, sample_step=15 → length < 2*step → no intermediates
+        let road = straight_road(10.0);
+        let spline = road_to_spline(&road, 15.0);
+        let n_intermediate = spline.knots.iter()
+            .filter(|k| k.knot_type == KnotType::Intermediate)
+            .count();
+        assert_eq!(n_intermediate, 0);
+    }
+
+    // ── spline_to_geometries ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_spline_to_geometries_empty_spline_returns_empty() {
+        let spline = EditableSpline::new();
+        assert!(spline_to_geometries(&spline).is_empty());
+    }
+
+    #[test]
+    fn test_spline_to_geometries_single_knot_returns_empty() {
+        let mut spline = EditableSpline::new();
+        spline.knots.push(SplineKnot::new(0.0, 0.0, 0.0));
+        assert!(spline_to_geometries(&spline).is_empty());
+    }
+
+    #[test]
+    fn test_spline_to_geometries_aligned_tangents_produce_line() {
+        // Two knots pointing east → line geometry
+        let road = straight_road(10.0);
+        let spline = road_to_spline(&road, 20.0); // no intermediates
+        let geos = spline_to_geometries(&spline);
+        assert!(!geos.is_empty(), "expected at least one geometry");
+        let has_line = geos.iter().any(|g| matches!(g.geo_type, GeometryType::Line));
+        assert!(has_line, "aligned tangents should produce Line, got {:?}", geos);
+    }
+
+    #[test]
+    fn test_spline_to_geometries_lengths_are_positive() {
+        let road = straight_road(20.0);
+        let spline = road_to_spline(&road, 8.0);
+        let geos = spline_to_geometries(&spline);
+        for g in &geos {
+            assert!(g.length > 0.0, "geometry length must be positive, got {}", g.length);
+        }
+    }
+
+    #[test]
+    fn test_spline_to_geometries_parampoly3_mode_produces_output() {
+        // A curved spline with ParamPoly3Only mode should still produce geometries
+        let road = straight_road(10.0);
+        let spline = road_to_spline(&road, 20.0);
+        let geos = spline_to_geometries_with_mode(&spline, SplineOutputMode::ParamPoly3Only);
+        assert!(!geos.is_empty(), "ParamPoly3Only should produce geometries for 2-knot spline");
+    }
+}

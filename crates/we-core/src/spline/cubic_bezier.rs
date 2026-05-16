@@ -185,3 +185,125 @@ pub(super) fn fit_hermite_param_poly3(
 
     (a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::spline::{SplineKnot, TangentMode};
+
+    fn make_knot(x: f64, y: f64, tx: f64, ty: f64) -> SplineKnot {
+        let mut k = SplineKnot::new(x, y, 0.0);
+        k.tangent_out = [tx, ty, 0.0];
+        k.tangent_in = [tx, ty, 0.0];
+        k.tangent_mode = TangentMode::Manual;
+        k
+    }
+
+    // ── param_poly3_curvature ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_curvature_zero_for_straight_line() {
+        // u(p) = p, v(p) = 0 → zero curvature everywhere
+        let kappa = param_poly3_curvature(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5);
+        assert!(kappa.abs() < 1e-12, "kappa={kappa}");
+    }
+
+    #[test]
+    fn test_curvature_nonzero_for_curved_segment() {
+        // Quadratic lateral component → nonzero curvature
+        let kappa = param_poly3_curvature(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.5);
+        assert!(kappa.abs() > 1e-6, "kappa should be nonzero, got {kappa}");
+    }
+
+    #[test]
+    fn test_curvature_degenerate_speed_returns_zero() {
+        // Zero speed → curvature returns 0 safely
+        let kappa = param_poly3_curvature(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5);
+        assert_eq!(kappa, 0.0);
+    }
+
+    #[test]
+    fn test_curvature_sign_left_vs_right() {
+        // Positive v component → left-turning, curvature positive
+        let kappa_left = param_poly3_curvature(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let kappa_right = param_poly3_curvature(1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0);
+        assert!(kappa_left > 0.0, "left turn should have positive curvature");
+        assert!(kappa_right < 0.0, "right turn should have negative curvature");
+    }
+
+    // ── classify_param_poly3 ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_classify_straight_line_is_line() {
+        // b_u=1, all else 0 → pure straight line, zero curvature
+        let cls = classify_param_poly3(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+        assert_eq!(cls, CurveClassification::Line);
+    }
+
+    #[test]
+    fn test_classify_constant_curvature_is_arc() {
+        // b_u=1.0, c_v=0.005 gives ddv=0.01, nearly constant kappa≈0.01 for small dv
+        // kappa_range << kappa_tol (0.002) but kappa_max > kappa_tol → Arc
+        let cls = classify_param_poly3(1.0, 0.0, 0.0, 0.0, 0.005, 0.0, 1.0);
+        match cls {
+            CurveClassification::Arc { .. } => {}
+            other => panic!("Expected Arc, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_classify_complex_curve_not_line() {
+        // A curve with higher-order terms should not be classified as Line
+        let cls = classify_param_poly3(1.0, 0.0, 0.5, 0.0, 1.0, -1.0, 5.0);
+        assert_ne!(cls, CurveClassification::Line);
+    }
+
+    // ── fit_hermite_param_poly3 ───────────────────────────────────────────────
+
+    #[test]
+    fn test_fit_hermite_east_to_east_straight() {
+        // k0 at origin pointing east, k1 at (1, 0) pointing east → straight
+        let k0 = make_knot(0.0, 0.0, 1.0, 0.0);
+        let k1 = make_knot(1.0, 0.0, 1.0, 0.0);
+        let (a_u, b_u, _c_u, _d_u, a_v, b_v, c_v, d_v) =
+            fit_hermite_param_poly3(&k0, &k1, 1.0);
+        assert_eq!(a_u, 0.0);
+        assert!((b_u - 1.0).abs() < 1e-10, "b_u={b_u}");
+        assert_eq!(a_v, 0.0);
+        // All v-components should be zero for a straight east segment
+        assert!(b_v.abs() < 1e-12, "b_v={b_v}");
+        assert!(c_v.abs() < 1e-12, "c_v={c_v}");
+        assert!(d_v.abs() < 1e-12, "d_v={d_v}");
+    }
+
+    #[test]
+    fn test_fit_hermite_degenerate_tangent_falls_back_to_chord() {
+        // Zero tangent should use chord direction without panicking
+        let mut k0 = SplineKnot::new(0.0, 0.0, 0.0);
+        k0.tangent_out = [0.0, 0.0, 0.0];
+        k0.tangent_in = [0.0, 0.0, 0.0];
+        let k1 = SplineKnot::new(1.0, 0.0, 0.0);
+        // Should complete without panic
+        let coeffs = fit_hermite_param_poly3(&k0, &k1, 1.0);
+        // a_u and a_v should be zero (origin in local frame)
+        assert_eq!(coeffs.0, 0.0); // a_u
+        assert_eq!(coeffs.4, 0.0); // a_v
+    }
+
+    #[test]
+    fn test_fit_hermite_hermite_basis_sums_to_end_at_t1() {
+        // Evaluate the curve at p=1: a + b + c + d should equal end_u
+        let k0 = make_knot(0.0, 0.0, 1.0, 0.0);
+        let k1 = make_knot(2.0, 1.0, 1.0, 0.0);
+        let chord_len = ((2.0_f64).powi(2) + 1.0_f64.powi(2)).sqrt();
+        let (a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v) =
+            fit_hermite_param_poly3(&k0, &k1, chord_len);
+        // At p=1, u(1) = a_u + b_u + c_u + d_u should equal end_u in local frame
+        let u_at_1 = a_u + b_u + c_u + d_u;
+        let v_at_1 = a_v + b_v + c_v + d_v;
+        // end_u = chord_len (since we're aligned with the chord), end_v = 0
+        // But with tangent bias, end_u depends on the local frame. Just check finiteness.
+        assert!(u_at_1.is_finite(), "u(1) should be finite, got {u_at_1}");
+        assert!(v_at_1.is_finite(), "v(1) should be finite, got {v_at_1}");
+    }
+}

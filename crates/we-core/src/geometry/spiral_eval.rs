@@ -192,3 +192,138 @@ pub fn evaluate_spiral_simpson(
     let theta_end = curv_start * ds + 0.5 * c_dot * ds * ds;
     (x, y, theta_end)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::f64::consts::PI;
+
+    #[test]
+    fn test_fresnel_zero_input() {
+        let (c, s) = fresnel_cs(0.0);
+        assert_eq!(c, 0.0);
+        assert_eq!(s, 0.0);
+    }
+
+    #[test]
+    fn test_fresnel_power_series_small_t() {
+        // t = 0.5 is in the power-series branch (t < 1.5)
+        let (c, s) = fresnel_cs(0.5);
+        // Reference values from Abramowitz & Stegun
+        assert!((c - 0.4923_f64).abs() < 1e-3, "C(0.5) ≈ 0.4923, got {c}");
+        assert!((s - 0.0647_f64).abs() < 1e-3, "S(0.5) ≈ 0.0647, got {s}");
+    }
+
+    #[test]
+    fn test_fresnel_rational_approx_large_t() {
+        // t = 2.0 is in the rational-approximation branch (t >= 1.5)
+        // Use loose tolerance since the rational approx has limited accuracy here
+        let (c, s) = fresnel_cs(2.0);
+        assert!((c - 0.5).abs() < 0.15, "C(2.0) should be near 0.5, got {c}");
+        assert!((s - 0.35).abs() < 0.15, "S(2.0) should be near 0.35, got {s}");
+    }
+
+    #[test]
+    fn test_fresnel_large_t_stays_bounded() {
+        // Fresnel integrals always stay in [0, 1] for positive t
+        for &t in &[2.0_f64, 5.0, 10.0, 20.0] {
+            let (c, s) = fresnel_cs(t);
+            assert!(c >= 0.0 && c <= 1.0, "C({t}) out of range: {c}");
+            assert!(s >= 0.0 && s <= 1.0, "S({t}) out of range: {s}");
+        }
+    }
+
+    #[test]
+    fn test_fresnel_negative_input_is_antisymmetric() {
+        let (c_pos, s_pos) = fresnel_cs(1.0);
+        let (c_neg, s_neg) = fresnel_cs(-1.0);
+        assert!((c_pos + c_neg).abs() < 1e-12, "C(-t) == -C(t)");
+        assert!((s_pos + s_neg).abs() < 1e-12, "S(-t) == -S(t)");
+    }
+
+    #[test]
+    fn test_fresnel_asymptotic_approaches_half() {
+        let (c, s) = fresnel_cs(100.0);
+        assert!((c - 0.5).abs() < 1e-2, "C(100) → 0.5, got {c}");
+        assert!((s - 0.5).abs() < 1e-2, "S(100) → 0.5, got {s}");
+    }
+
+    #[test]
+    fn test_fresnel_boundary_small_t_near_1() {
+        // Values close to the boundary should be non-negative and bounded
+        let (c1, s1) = fresnel_cs(1.4);
+        let (c2, s2) = fresnel_cs(1.6);
+        assert!(c1 >= 0.0 && c1 <= 1.0, "C(1.4) = {c1}");
+        assert!(s1 >= 0.0 && s1 <= 1.0, "S(1.4) = {s1}");
+        assert!(c2 >= 0.0 && c2 <= 1.0, "C(1.6) = {c2}");
+        assert!(s2 >= 0.0 && s2 <= 1.0, "S(1.6) = {s2}");
+    }
+
+    #[test]
+    fn test_spiral_zero_length_returns_origin() {
+        let (x, y, hdg) = evaluate_spiral(0.0, 0.1, 0.0, 5.0);
+        assert_eq!((x, y, hdg), (0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_spiral_both_zero_curvature_is_straight() {
+        let ds = 10.0;
+        let (x, y, hdg) = evaluate_spiral(0.0, 0.0, 100.0, ds);
+        assert!((x - ds).abs() < 1e-12, "x should be {ds}, got {x}");
+        assert!(y.abs() < 1e-12, "y should be 0, got {y}");
+        assert!(hdg.abs() < 1e-12, "hdg should be 0, got {hdg}");
+    }
+
+    #[test]
+    fn test_spiral_constant_curvature_matches_arc() {
+        // A spiral with curv_start == curv_end is a circular arc.
+        // For arc with radius r and arc length ds:
+        //   x = r * sin(ds/r), y = r * (1 - cos(ds/r))
+        let r = 10.0_f64;
+        let curv = 1.0 / r;
+        let ds = PI / 2.0 * r; // quarter circle
+        let length = 100.0;
+        let (x, y, _) = evaluate_spiral(curv, curv, length, ds);
+        let ax = r * (ds / r).sin();
+        let ay = r * (1.0 - (ds / r).cos());
+        assert!((x - ax).abs() < 1e-6, "x: spiral={x}, arc={ax}");
+        assert!((y - ay).abs() < 1e-6, "y: spiral={y}, arc={ay}");
+    }
+
+    #[test]
+    fn test_spiral_fresnel_vs_simpson_entry_spiral() {
+        // Entry spiral (curv_start = 0) should use Fresnel path
+        let curv_end = 0.1;
+        let length = 10.0;
+        let ds = 8.0;
+        let (xf, yf, hf) = evaluate_spiral(0.0, curv_end, length, ds);
+        let (xs, ys, hs) = evaluate_spiral_simpson(0.0, curv_end, length, ds);
+        assert!((xf - xs).abs() < 1e-4, "x: fresnel={xf}, simpson={xs}");
+        assert!((yf - ys).abs() < 1e-4, "y: fresnel={yf}, simpson={ys}");
+        assert!((hf - hs).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_spiral_general_case_agrees_with_simpson() {
+        let curv_start = 0.05;
+        let curv_end = 0.15;
+        let length = 20.0;
+        let ds = 10.0;
+        let (x, y, _) = evaluate_spiral(curv_start, curv_end, length, ds);
+        let (xs, ys, _) = evaluate_spiral_simpson(curv_start, curv_end, length, ds);
+        assert!((x - xs).abs() < 1e-3, "x: {x} vs {xs}");
+        assert!((y - ys).abs() < 1e-3, "y: {y} vs {ys}");
+    }
+
+    #[test]
+    fn test_spiral_theta_end_formula() {
+        let curv_start = 0.1;
+        let curv_end = 0.3;
+        let length = 20.0;
+        let ds = 10.0;
+        let c_dot = (curv_end - curv_start) / length;
+        let expected_theta = curv_start * ds + 0.5 * c_dot * ds * ds;
+        let (_, _, hdg) = evaluate_spiral(curv_start, curv_end, length, ds);
+        assert!((hdg - expected_theta).abs() < 1e-12, "hdg={hdg}, expected={expected_theta}");
+    }
+}
