@@ -116,7 +116,7 @@ export function useSplineDrawMode({
       return;
     }
     const overrides = Object.keys(splineTangentOverrides).length > 0 ? splineTangentOverrides : undefined;
-    renderer.setSplinePreviewKnots(isDrawMode(editMode) ? splineKnots : [], overrides);
+    renderer.setSplinePreviewKnots(isDrawMode(editMode) ? splineKnots : [], overrides, true);
   }, [editMode, geometryEditSpline, rendererRef, splineKnots, splineTangentOverrides, splineTangentInOverrides, status]);
 
   /** Fire-and-forget endpoint snap query during draw mode mouse move. */

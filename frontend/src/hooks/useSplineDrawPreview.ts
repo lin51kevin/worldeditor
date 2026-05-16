@@ -1,23 +1,43 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { useViewportStore } from '../stores/viewportStore';
+import { useProjectStore } from '../stores/projectStore';
 import { getPlatformService } from '../services';
 import { buildEditableSpline } from '../components/viewportUtils';
+import { buildRenderableProject } from '../utils/sceneGraph';
 import { resolveWasmTemplateId } from './useSplineOperations';
 import type { ViewportRenderer } from '../viewport/renderer';
+import type { Project } from '../services/platform';
 
 type ViewportStatus = 'loading' | 'ready' | 'unsupported';
+
+const EMPTY_PROJECT: Project = {
+  name: '',
+  header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null },
+  roads: [],
+  junctions: [],
+  signals: [],
+  objects: [],
+};
 
 function isDrawMode(mode: string): mode is 'spline' {
   return mode === 'spline';
 }
 
-/** Semi-transparent blue tint used for the draw-mode road preview. */
-const PREVIEW_TINT: [number, number, number, number] = [0.45, 0.65, 1.0, 0.78];
+/** Merge two Float32Arrays into one. */
+function mergeFloat32Arrays(a: Float32Array, b: Float32Array): Float32Array {
+  if (a.length === 0) return b;
+  if (b.length === 0) return a;
+  const out = new Float32Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+}
 
 /**
- * Generates a live road-mesh preview while the user is placing knots in
- * draw mode. Uploads the result directly to the renderer so the user sees
- * the road (with correct lane sections) grow as they click.
+ * Generates a live lane-line preview while the user is placing knots in draw
+ * mode. Only lane boundary lines and the center reference line are uploaded —
+ * no filled road mesh is shown. This matches the line-based style of the C#
+ * WorldEditor and WorldEditorOnline.
  *
  * When the preview should be cleared (knots dropped below the threshold,
  * draw mode exited), `onPreviewEnd` is called so the caller can re-upload
@@ -37,8 +57,11 @@ export function useSplineDrawPreview({
   const splineKnots = useViewportStore((s) => s.splineKnots);
   const splineTemplateId = useViewportStore((s) => s.splineTemplateId);
   const cursorPreviewPos = useViewportStore((s) => s.cursorPreviewPos);
+  const project = useProjectStore((s) => s.project);
+  const display = useViewportStore((s) => s.display);
+  const viewMode = useViewportStore((s) => s.viewMode);
 
-  // Generate and upload a preview road mesh whenever draw-mode knots or cursor position changes.
+  // Generate and upload preview lane lines whenever draw-mode knots or cursor position changes.
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer || status !== 'ready' || !isDrawMode(editMode)) return;
@@ -60,72 +83,60 @@ export function useSplineDrawPreview({
         const service = await getPlatformService();
         const PREVIEW_ROAD_ID = '__draw_preview__';
 
-        if (editMode === 'spline') {
-          // Spline mode goes through the WASM spline pipeline → ParamPoly3 output
-          const splineMode = 'parampoly3';
-          const spline = buildEditableSpline(previewKnots);
-          const wasmId = resolveWasmTemplateId(splineTemplateId);
+        const splineMode = editMode === 'spline' ? 'parampoly3' : 'classify';
+        const spline = buildEditableSpline(previewKnots);
+        const wasmId = resolveWasmTemplateId(splineTemplateId);
 
-          // Use an empty project so the preview road ID doesn't conflict
-          const previewProject = await service.createRoadFromSpline(
-            { name: '', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads: [], junctions: [], signals: [], objects: [] },
-            PREVIEW_ROAD_ID,
-            spline,
-            wasmId,
-            splineMode,
-          );
-          if (cancelled) return;
+        const previewProject = await service.createRoadFromSpline(
+          { ...EMPTY_PROJECT },
+          PREVIEW_ROAD_ID,
+          spline,
+          wasmId,
+          splineMode,
+        );
+        if (cancelled) return;
 
-          const previewRoad = previewProject.roads.find((r) => r.id === PREVIEW_ROAD_ID);
-          if (!previewRoad) return;
+        const previewRoad = previewProject.roads.find((r) => r.id === PREVIEW_ROAD_ID);
+        if (!previewRoad) return;
 
-          const roadVerts = await service.generateSingleRoadVertices(previewRoad, 2.0, PREVIEW_TINT);
-          if (cancelled) return;
+        const singleRoadProject = { ...previewProject, roads: [previewRoad] };
 
-          const laneLineVerts = await service.generateLaneLineVertices(
-            { ...previewProject, roads: [previewRoad] },
-            2.0,
-          );
-          if (cancelled) return;
+        // Generate BOTH the existing project's lane lines AND the preview road's.
+        // This ensures existing roads stay visible while drawing.
+        const visibleProject = project ? buildRenderableProject(project, display) : null;
+        const empty = new Float32Array(0);
 
-          renderer.uploadRoadVertices(roadVerts);
-          renderer.uploadLaneLineVertices(laneLineVerts);
-        } else {
-          // line / arc modes: route through WASM spline pipeline with 'classify' for lane preview
-          const spline = buildEditableSpline(previewKnots);
-          const wasmId = resolveWasmTemplateId(splineTemplateId);
+        const [previewLaneVerts, previewCenterVerts, existingLaneVerts, existingCenterVerts, existingMarkVerts] = await Promise.all([
+          service.generateLaneBoundaryVertices(singleRoadProject, 2.0).catch(() => empty),
+          service.generateCenterLineVertices(singleRoadProject, 2.0).catch(() => empty),
+          visibleProject
+            ? service.generateLaneBoundaryVertices(visibleProject, 2.0).catch(() => empty)
+            : empty,
+          visibleProject
+            ? service.generateCenterLineVertices(visibleProject, 2.0).catch(() => empty)
+            : empty,
+          visibleProject && (viewMode === 'wire' || display.showLaneLines)
+            ? service.generateLaneLineVertices(visibleProject, 2.0).catch(() => empty)
+            : empty,
+        ]);
+        if (cancelled) return;
 
-          const previewProject = await service.createRoadFromSpline(
-            { name: '', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads: [], junctions: [], signals: [], objects: [] },
-            PREVIEW_ROAD_ID,
-            spline,
-            wasmId,
-            'classify',
-          );
-          if (cancelled) return;
-
-          const previewRoad = previewProject.roads.find((r) => r.id === PREVIEW_ROAD_ID);
-          if (!previewRoad) return;
-
-          const roadVerts = await service.generateSingleRoadVertices(previewRoad, 2.0, PREVIEW_TINT);
-          if (cancelled) return;
-
-          const laneLineVerts = await service.generateLaneLineVertices(
-            { ...previewProject, roads: [previewRoad] },
-            2.0,
-          );
-          if (cancelled) return;
-
-          renderer.uploadRoadVertices(roadVerts);
-          renderer.uploadLaneLineVertices(laneLineVerts);
-        }
+        // Merge existing project lines with preview road lines.
+        const combined = mergeFloat32Arrays(
+          mergeFloat32Arrays(
+            mergeFloat32Arrays(existingLaneVerts, existingMarkVerts),
+            existingCenterVerts,
+          ),
+          mergeFloat32Arrays(previewLaneVerts, previewCenterVerts),
+        );
+        renderer.uploadLaneLineVertices(combined);
       } catch {
         // Ignore preview errors — user experience degrades gracefully to no preview
       }
     })();
 
     return () => { cancelled = true; };
-  }, [editMode, splineKnots, cursorPreviewPos, splineTemplateId, rendererRef, status]);
+  }, [editMode, splineKnots, cursorPreviewPos, splineTemplateId, rendererRef, status, project, display, viewMode]);
 
   // Restore real project vertices when the preview is discarded (knots cleared,
   // e.g., after Escape or finalization).

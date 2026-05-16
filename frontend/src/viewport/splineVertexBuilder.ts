@@ -108,7 +108,12 @@ export interface ControlPointState {
   type: 'knot' | 'in' | 'out';
 }
 
-/** Generate spline control-point marker vertex data (knots + tangent handles). */
+/** Generate spline control-point marker vertex data (knots + tangent handles).
+ *
+ * @param showHandleEndpoints When false (draw mode), tangent handle endpoint
+ *   X-squares are omitted and only tangent reference lines and knot markers
+ *   are rendered. Defaults to true (full edit-mode display).
+ */
 export function buildSplineMarkerVertices(
   knots: ReadonlyArray<readonly [number, number, number]>,
   tangentOverrides: Readonly<Record<number, readonly [number, number, number]>> | undefined,
@@ -117,6 +122,7 @@ export function buildSplineMarkerVertices(
   hovered: ControlPointState | null,
   selected: ControlPointState | null,
   tangentInOverrides?: Readonly<Record<number, readonly [number, number, number]>>,
+  showHandleEndpoints: boolean = true,
 ): number[] {
   if (knots.length === 0) return [];
 
@@ -170,20 +176,25 @@ export function buildSplineMarkerVertices(
         hy2 = ky - tvy * scale;
       }
 
-      // Yellow tangent line
-      emitSegment(markerVerts, hx2, hy2, hx1, hy1, handleZ - 0.01, lineHW, ...colYellow);
+      // Yellow tangent reference line — only in geometry-edit mode (not draw mode)
+      if (showHandleEndpoints) {
+        emitSegment(markerVerts, hx2, hy2, hx1, hy1, handleZ - 0.01, lineHW, ...colYellow);
+      }
 
-      // 'out' handle X-square
-      const outColor = (hovered?.index === i && hovered?.type === 'out') ? colGreen
-        : (selected?.index === i && selected?.type === 'out') ? colRed
-        : colBlue;
-      addXSquare(markerVerts, hx1, hy1, handleZ, handleHalfSize, strokeHW, ...outColor);
+      // In draw mode, skip handle endpoint X-squares (only show in geometry-edit mode)
+      if (showHandleEndpoints) {
+        // 'out' handle X-square
+        const outColor = (hovered?.index === i && hovered?.type === 'out') ? colGreen
+          : (selected?.index === i && selected?.type === 'out') ? colRed
+          : colBlue;
+        addXSquare(markerVerts, hx1, hy1, handleZ, handleHalfSize, strokeHW, ...outColor);
 
-      // 'in' handle X-square
-      const inColor = (hovered?.index === i && hovered?.type === 'in') ? colGreen
-        : (selected?.index === i && selected?.type === 'in') ? colRed
-        : colBlue;
-      addXSquare(markerVerts, hx2, hy2, handleZ, handleHalfSize, strokeHW, ...inColor);
+        // 'in' handle X-square
+        const inColor = (hovered?.index === i && hovered?.type === 'in') ? colGreen
+          : (selected?.index === i && selected?.type === 'in') ? colRed
+          : colBlue;
+        addXSquare(markerVerts, hx2, hy2, handleZ, handleHalfSize, strokeHW, ...inColor);
+      }
     }
   }
 

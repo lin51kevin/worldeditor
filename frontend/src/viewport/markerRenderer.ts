@@ -22,6 +22,8 @@ export class MarkerRenderer {
   private splineTangentInCache: Record<number, [number, number, number]> | undefined = undefined;
   private hoveredControlPoint: ControlPointState | null = null;
   private selectedControlPoint: ControlPointState | null = null;
+  /** When true, handle endpoint X-squares are hidden (draw mode). */
+  private drawMode = false;
 
   setDevice(device: GPUDevice): void {
     this.device = device;
@@ -68,7 +70,9 @@ export class MarkerRenderer {
     tangentOverrides: Record<number, [number, number, number]> | undefined,
     mpp: number,
     clearColor: { r: number; g: number; b: number; a: number },
+    isDrawMode = false,
   ): void {
+    this.drawMode = isDrawMode;
     this.disposeMeshes(this.splineCurveMeshes);
     this.disposeMeshes(this.splineMarkerMeshes);
     this.splineKnotsCache = knots;
@@ -78,7 +82,11 @@ export class MarkerRenderer {
 
     if (knots.length === 0) return;
 
-    this.refreshSplineCurve(mpp);
+    // In draw mode, skip the yellow Hermite curve — the road shape is already
+    // visualised as lane-boundary + center-line by useSplineDrawPreview.
+    if (!isDrawMode) {
+      this.refreshSplineCurve(mpp);
+    }
     this.refreshSplineMarkers(mpp, clearColor);
   }
 
@@ -110,6 +118,7 @@ export class MarkerRenderer {
       this.hoveredControlPoint,
       this.selectedControlPoint,
       this.splineTangentInCache,
+      !this.drawMode,
     );
     this.uploadToMeshArray(this.splineMarkerMeshes, markerVerts);
   }
