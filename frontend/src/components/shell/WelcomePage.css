@@ -1,11 +1,18 @@
-/* WelcomePage — three-column layout inspired by minimal editor welcome screens */
+/* WelcomePage — 3×3 CSS Grid: header in row-1/col-2, three content cols in row-2, footer in row-3/col-2 */
 
 .wp-container {
   position: fixed;
   inset: 0;
   z-index: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 200px 240px 320px;
+  grid-template-rows: auto auto auto;
+  grid-template-areas:
+    ". header ."
+    "start shortcuts recent"
+    ". footer .";
+  justify-content: center;
+  align-content: center;
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -15,17 +22,18 @@
 /* ── Header ───────────────────────────────────────────────────── */
 
 .wp-header {
+  grid-area: header;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 48px 24px 32px;
+  padding: 40px 16px 28px;
   gap: 8px;
 }
 
 .wp-logo {
-  width: 200px;
-  height: 200px;
-  border-radius: 14px;
+  width: 100px;
+  height: 100px;
+  border-radius: 10px;
   background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light, var(--color-accent)));
   display: flex;
   align-items: center;
@@ -44,37 +52,32 @@
 }
 
 .wp-subtitle {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--color-text-secondary);
   margin: 0;
+  text-align: center;
+  line-height: 1.5;
 }
 
-/* ── Body (three columns) ─────────────────────────────────────── */
-
-.wp-body {
-  flex: 1;
-  display: flex;
-  gap: 0;
-  padding: 0 10% 32px;
-  max-width: 1100px;
-  width: 100%;
-  margin: 0 auto;
-  align-items: flex-start;
-  padding-top: 120px; /* 对齐 logo 垂直居中 */
-}
+/* ── Body columns (row 2) ─────────────────────────────────────── */
 
 .wp-col {
-  flex: 1;
-  min-width: 0; /* allow flex items to shrink below content size */
-  padding: 0 24px;
+  min-width: 0;
+  padding: 0 24px 32px;
   overflow: hidden;
 }
 
-.wp-col:first-child { flex: 0 0 200px; }
-.wp-col:nth-child(2) { flex: 0 0 240px; }
-.wp-col:last-child { flex: 1; }
+.wp-col-start {
+  grid-area: start;
+}
 
-.wp-col+.wp-col {
+.wp-col-shortcuts {
+  grid-area: shortcuts;
+  border-left: 1px solid var(--color-border, rgba(128, 128, 128, 0.15));
+}
+
+.wp-col-recent {
+  grid-area: recent;
   border-left: 1px solid var(--color-border, rgba(128, 128, 128, 0.15));
 }
 
@@ -251,17 +254,16 @@
   padding: 8px 10px;
 }
 
-/* ── Footer ───────────────────────────────────────────────────── */
+/* ── Footer (row 3, col 2) ──────────────────────────────────────────── */
 
 .wp-footer {
+  grid-area: footer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 10%;
+  justify-content: center;
+  padding: 12px 16px 24px;
   font-size: 12px;
   color: var(--color-text-secondary);
-  max-width: 600px;
-  margin: 0 auto;
   box-sizing: border-box;
 }
 
