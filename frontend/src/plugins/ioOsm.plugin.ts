@@ -16,7 +16,7 @@ function escapeXml(str: string): string {
 }
 
 function exportToOsm(project: Project): Promise<void> {
-  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6" generator="WorldEditor Next">\n';
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6" generator="WorldEditor">\n';
   let nodeId = -1;
   const allWays: Array<{ roadId: string; length: number; nodes: number[] }> = [];
 

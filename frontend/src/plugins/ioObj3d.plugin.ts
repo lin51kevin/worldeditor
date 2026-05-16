@@ -22,7 +22,7 @@ function computeRoadWidth(road: Road): number {
 /** Extract the actual export logic for testability. */
 export function generateObjContent(project: Project): string {
   const lines = [
-    '# WorldEditor Next — OBJ Export',
+    '# WorldEditor — OBJ Export',
     `# Roads: ${project.roads.length}`,
     `# Generated: ${new Date().toISOString()}`,
   ];

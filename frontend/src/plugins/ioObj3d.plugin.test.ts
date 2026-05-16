@@ -106,7 +106,7 @@ describe('generateObjContent', () => {
 
   it('output starts with # WorldEditor header', () => {
     const obj = generateObjContent(makeProject());
-    expect(obj).toMatch(/^# WorldEditor Next/);
+    expect(obj).toMatch(/^# WorldEditor/);
   });
 
   it('road with no plan_view entries is skipped', () => {
