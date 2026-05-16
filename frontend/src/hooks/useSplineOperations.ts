@@ -3,7 +3,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useViewportStore } from '../stores/viewportStore';
 import { getPlatformService } from '../services';
 import { buildEditableSpline, nextSplineRoadId } from '../components/viewportUtils';
-import { loadCatalog, buildLaneSection } from '../plugins/templates/index';
+import { loadCatalog, buildLaneSection } from '../plugins/editing/templates/index';
 
 /**
  * Maps a template item ID (as stored in the panel) to the WASM template ID

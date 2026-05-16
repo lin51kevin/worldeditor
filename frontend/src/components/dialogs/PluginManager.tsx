@@ -10,7 +10,7 @@ import {
   AlertCircle, Trash2, FolderOpen,
 } from 'lucide-react';
 import { usePlugins, type PluginInfo } from '../../hooks/usePlugins';
-import { loadPluginBundle } from '../../plugins/pluginLoader';
+import { loadPluginBundle } from '../../plugins/core/pluginLoader';
 import './PluginManager.css';
 
 type TabId = 'available' | 'installed' | 'disabled';

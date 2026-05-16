@@ -6,30 +6,30 @@
  */
 
 import type { PluginInfo } from '../hooks/usePlugins';
-import { mountRoadToolsPlugin } from './roadTools.plugin';
-import { mountTemplatesPlugin } from './templates.plugin';
-import { mountAdvancedEditingPlugin } from './advancedEditing.plugin';
-import { mountIoCsvPlugin } from './ioCsv.plugin';
-import { mountIoObj3dPlugin } from './ioObj3d.plugin';
-import { mountIoLanelet2Plugin } from './io-lanelet2-stub.plugin';
-import { mountIoShapefilePlugin } from './io-shapefile-stub.plugin';
-import { mountIoDxfPlugin } from './io-dxf-stub.plugin';
-import { mountIoNioPlugin } from './io-nio-stub.plugin';
-import { mountIoGeoZPlugin } from './ioGeoZ.plugin';
-import { mountIoMifPlugin } from './io-mif-stub.plugin';
-import { mountIoOsmPlugin } from './ioOsm.plugin';
-import { mountIoSignalsPlugin } from './ioSignals.plugin';
-import { mountIoXodrExtPlugin } from './io-xodr-ext-stub.plugin';
-import { mountGisToolsPlugin } from './gisTools.plugin';
-import { mountValidationPlugin } from './validation.plugin';
-import { mountTrafficPlugin } from './traffic.plugin';
-import { mountPointcloudPlugin } from './pointcloud-beta.plugin';
-import { mountSatellitePlugin } from './satellite-beta.plugin';
-import { mountModels3dPlugin } from './models-3d-beta.plugin';
-import { mountScriptingPlugin } from './scripting-beta.plugin';
-import { mountEcosystemPlugin } from './ecosystem-beta.plugin';
-import { mountLaneDetectPlugin } from './lane-detect-beta.plugin';
-import { mountConverterPlugin } from './converter.plugin';
+import { mountRoadToolsPlugin } from './editing/road-tools/roadTools.plugin';
+import { mountTemplatesPlugin } from './editing/templates/templates.plugin';
+import { mountAdvancedEditingPlugin } from './editing/advanced-editing/advancedEditing.plugin';
+import { mountConverterPlugin } from './editing/converter/converter.plugin';
+import { mountIoCsvPlugin } from './io/csv/ioCsv.plugin';
+import { mountIoObj3dPlugin } from './io/obj3d/ioObj3d.plugin';
+import { mountIoGeoZPlugin } from './io/geoz/ioGeoZ.plugin';
+import { mountIoOsmPlugin } from './io/osm/ioOsm.plugin';
+import { mountIoSignalsPlugin } from './io/signals/ioSignals.plugin';
+import { mountIoLanelet2Plugin } from './io/lanelet2/io-lanelet2-stub.plugin';
+import { mountIoShapefilePlugin } from './io/shapefile/io-shapefile-stub.plugin';
+import { mountIoDxfPlugin } from './io/dxf/io-dxf-stub.plugin';
+import { mountIoNioPlugin } from './io/nio/io-nio-stub.plugin';
+import { mountIoMifPlugin } from './io/mif/io-mif-stub.plugin';
+import { mountIoXodrExtPlugin } from './io/xodr-ext/io-xodr-ext-stub.plugin';
+import { mountValidationPlugin } from './analysis/validation/validation.plugin';
+import { mountTrafficPlugin } from './analysis/traffic/traffic.plugin';
+import { mountLaneDetectPlugin } from './analysis/lane-detect/lane-detect-beta.plugin';
+import { mountGisToolsPlugin } from './gis-viz/gis-tools/gisTools.plugin';
+import { mountPointcloudPlugin } from './gis-viz/pointcloud/pointcloud-beta.plugin';
+import { mountSatellitePlugin } from './gis-viz/satellite/satellite-beta.plugin';
+import { mountModels3dPlugin } from './gis-viz/models-3d/models-3d-beta.plugin';
+import { mountScriptingPlugin } from './gis-viz/scripting/scripting-beta.plugin';
+import { mountEcosystemPlugin } from './gis-viz/ecosystem/ecosystem-beta.plugin';
 
 /** Plugin entry with a mount function for App.tsx registration. */
 export interface BuiltinPluginEntry extends PluginInfo {

@@ -13,7 +13,7 @@ vi.mock('../plugins/builtinRegistry', () => ({
 }));
 
 // Mock plugin loader to avoid URL.createObjectURL in jsdom
-vi.mock('../plugins/pluginLoader', () => ({
+vi.mock('../plugins/core/pluginLoader', () => ({
   loadPluginBundle: vi.fn().mockResolvedValue(undefined),
   unloadPluginBundle: vi.fn(),
 }));

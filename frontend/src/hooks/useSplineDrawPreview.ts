@@ -5,7 +5,7 @@ import { getPlatformService } from '../services';
 import { buildEditableSpline } from '../components/viewportUtils';
 import { buildRenderableProject } from '../utils/sceneGraph';
 import { resolveWasmTemplateId } from './useSplineOperations';
-import { loadCatalog, buildLaneSection } from '../plugins/templates/index';
+import { loadCatalog, buildLaneSection } from '../plugins/editing/templates/index';
 import type { ViewportRenderer } from '../viewport/renderer';
 import type { Project } from '../services/platform';
 

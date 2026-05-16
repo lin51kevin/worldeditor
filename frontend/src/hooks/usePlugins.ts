@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { BUILTIN_PLUGINS } from '../plugins/builtinRegistry';
-import { loadPluginBundle, unloadPluginBundle } from '../plugins/pluginLoader';
+import { loadPluginBundle, unloadPluginBundle } from '../plugins/core/pluginLoader';
 import { useBuiltinPluginStore } from '../stores/builtinPluginStore';
 
 export interface PluginInfo {
