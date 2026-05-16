@@ -172,3 +172,68 @@ pub fn rotate_road(
         .map_err(|e| JsError::new(&e.to_string()))?;
     serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
+mod tests {
+    use super::parse_spline_output_mode;
+    use we_core::spline::SplineOutputMode;
+    use we_core::model::{Road, Geometry, GeometryType};
+    use we_service::editor::Command;
+
+    fn simple_road(length: f64) -> Road {
+        Road::from_centerline("r1", vec![Geometry {
+            s: 0.0, x: 0.0, y: 0.0, hdg: 0.0, length,
+            geo_type: GeometryType::Line,
+        }])
+    }
+
+    #[test]
+    fn test_parse_spline_output_mode_parampoly3() {
+        assert!(matches!(
+            parse_spline_output_mode("parampoly3"),
+            SplineOutputMode::ParamPoly3Only
+        ));
+    }
+
+    #[test]
+    fn test_parse_spline_output_mode_classify_default() {
+        assert!(matches!(
+            parse_spline_output_mode("classify"),
+            SplineOutputMode::Classify
+        ));
+    }
+
+    #[test]
+    fn test_parse_spline_output_mode_unknown_defaults_to_classify() {
+        assert!(matches!(
+            parse_spline_output_mode("something_else"),
+            SplineOutputMode::Classify
+        ));
+    }
+
+    #[test]
+    fn test_road_to_spline_roundtrip_via_serde() {
+        let road = simple_road(10.0);
+        let spline = we_core::spline::road_to_spline(&road, 5.0);
+        let json = serde_json::to_string(&spline).unwrap();
+        let back: we_core::spline::EditableSpline = serde_json::from_str(&json).unwrap();
+        assert_eq!(spline.knots.len(), back.knots.len());
+    }
+
+    #[test]
+    fn test_create_road_from_spline_command() {
+        let road = simple_road(10.0);
+        let spline = we_core::spline::road_to_spline(&road, 20.0);
+        let mut project = we_core::model::Project::default();
+        let template = we_core::model::RoadTemplate::single_lane();
+        let cmd = we_service::commands::CreateRoadFromSpline::new(
+            "new_road",
+            spline,
+            template,
+            SplineOutputMode::Classify,
+        );
+        let new_project = cmd.execute(&project).unwrap();
+        assert!(new_project.roads.iter().any(|r| r.id == "new_road"));
+    }
+}

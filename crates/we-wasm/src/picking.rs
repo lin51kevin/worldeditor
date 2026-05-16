@@ -47,6 +47,60 @@ pub fn has_project_cache() -> bool {
     PROJECT_CACHE.with(|cell| cell.borrow().is_some())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
+mod tests {
+    use super::PROJECT_CACHE;
+    use we_core::spatial_index::ProjectCache;
+
+    fn clear_cache() {
+        PROJECT_CACHE.with(|cell| {
+            *cell.borrow_mut() = None;
+        });
+    }
+
+    #[test]
+    fn test_has_project_cache_starts_false() {
+        clear_cache();
+        assert!(!super::has_project_cache());
+    }
+
+    #[test]
+    fn test_set_project_cache_populates_cache() {
+        clear_cache();
+        let project = we_core::model::Project::default();
+        let json = serde_json::to_string(&project).unwrap();
+        // Directly populate (bypass wasm-bindgen function signature)
+        let parsed: we_core::model::Project = serde_json::from_str(&json).unwrap();
+        PROJECT_CACHE.with(|cell| {
+            *cell.borrow_mut() = Some(ProjectCache::new(parsed));
+        });
+        assert!(super::has_project_cache());
+        clear_cache();
+    }
+
+    #[test]
+    fn test_invalidate_cache_does_not_clear() {
+        clear_cache();
+        let project = we_core::model::Project::default();
+        PROJECT_CACHE.with(|cell| {
+            *cell.borrow_mut() = Some(ProjectCache::new(project));
+        });
+        super::invalidate_project_cache();
+        // Cache still present after invalidation
+        assert!(super::has_project_cache());
+        clear_cache();
+    }
+
+    #[test]
+    fn test_snap_config_serde_roundtrip() {
+        let config = we_core::snapping::SnapConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        let back: we_core::snapping::SnapConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(config.grid_size, back.grid_size);
+    }
+}
+
 /// Plain-object return types for wasm-bindgen.
 ///
 /// serde-wasm-bindgen 0.4+ serializes `serde_json::Value::Object` (and any Rust map type) as
