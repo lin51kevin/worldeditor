@@ -1,4 +1,5 @@
 import { Crosshair, Eye, EyeOff, GitMerge } from 'lucide-react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Junction } from '../../../services/platform';
 
@@ -12,7 +13,7 @@ export interface JunctionLayerItemProps {
   onToggleVisibility: () => void;
 }
 
-export function JunctionLayerItem({
+export const JunctionLayerItem = memo(function JunctionLayerItem({
   junction,
   isSelected,
   isVisible,
@@ -58,4 +59,4 @@ export function JunctionLayerItem({
       </div>
     </div>
   );
-}
+});

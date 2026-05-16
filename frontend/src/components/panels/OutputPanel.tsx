@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { useViewportStore } from '../../stores/viewportStore';
 import './OutputPanel.css';
@@ -9,7 +9,7 @@ interface LogEntry {
   timestamp: string;
 }
 
-export function OutputPanel() {
+export const OutputPanel = memo(function OutputPanel() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const toggleOutputPanel = useViewportStore((s) => s.toggleOutputPanel);
@@ -60,4 +60,4 @@ export function OutputPanel() {
       </div>
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
@@ -13,7 +13,7 @@ interface CardSectionProps {
   children: React.ReactNode;
 }
 
-function CardSection({ title, defaultOpen = true, children }: CardSectionProps) {
+const CardSection = memo(function CardSection({ title, defaultOpen = true, children }: CardSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="inspector-card">
@@ -27,7 +27,7 @@ function CardSection({ title, defaultOpen = true, children }: CardSectionProps) 
       {open && <div className="inspector-card-body">{children}</div>}
     </div>
   );
-}
+});
 
 export function PropertyPanel() {
   const project = useProjectStore((s) => s.project);

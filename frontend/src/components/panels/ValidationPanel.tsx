@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Play, Trash2, CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
 import { validateProject, type ValidationIssue } from '../../utils/validation';
@@ -10,7 +10,7 @@ const severityIcon = {
   info: <Info size={14} style={{ color: '#48f' }} />,
 };
 
-export function ValidationPanel() {
+export const ValidationPanel = memo(function ValidationPanel() {
   const project = useProjectStore((s) => s.project);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
 
@@ -48,7 +48,7 @@ export function ValidationPanel() {
       </div>
     </div>
   );
-}
+});
 
 const btnStyle: React.CSSProperties = {
   display: 'flex',

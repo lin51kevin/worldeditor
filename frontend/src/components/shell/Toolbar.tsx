@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useRef, useState, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MousePointer,
@@ -23,7 +23,7 @@ function loadPos(): { tx: number; ty: number } {
   return { tx: 0, ty: 0 };
 }
 
-export function Toolbar() {
+export const Toolbar = memo(function Toolbar() {
   const {
     editMode,
     setEditMode,
@@ -195,5 +195,5 @@ export function Toolbar() {
 
     </div>
   );
-}
+});
 

@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight, Crosshair, Eye, EyeOff } from 'lucide-react';
+import { memo, useCallback } from 'react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Road } from '../../../services/platform';
@@ -39,7 +40,7 @@ export interface RoadLayerItemProps {
   registerObjectRef?: (objectId: string, el: HTMLDivElement | null) => void;
 }
 
-export function RoadLayerItem({
+export const RoadLayerItem = memo(function RoadLayerItem({
   road,
   selectedSceneNode,
   isSelected,
@@ -344,4 +345,4 @@ export function RoadLayerItem({
       )}
     </div>
   );
-}
+});

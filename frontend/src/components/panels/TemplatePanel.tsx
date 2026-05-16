@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, memo } from 'react';
 import { Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
@@ -27,7 +27,7 @@ function saveFavorites(ids: string[]): void {
   }
 }
 
-export function TemplatePanel() {
+export const TemplatePanel = memo(function TemplatePanel() {
   const { t } = useTranslation();
   const templateSections = usePluginContribStore((s) => s.templateSections);
 
@@ -118,8 +118,13 @@ export function TemplatePanel() {
       // Road-object / sign templates: click-to-place on road.
       viewStore.clearPendingTemplate();
       viewStore.setPendingObjectTemplate(itemId);
+    } else if (itemId.startsWith('tpl:sig:') || itemId.startsWith('tpl:mark:')) {
+      // Signal / marking templates: enter click-to-place road-pick mode.
+      // The viewport pendingObjectTemplateId handler picks the road then calls onApply({roadId, x, y}).
+      viewStore.clearPendingTemplate();
+      viewStore.setPendingObjectTemplate(itemId);
     } else {
-      // Signal / marking templates apply to the currently selected road immediately.
+      // Fallback: any template type without a pending mode applies immediately.
       viewStore.clearPendingTemplate();
       viewStore.clearPendingObjectTemplate();
       item.onApply?.();
@@ -215,4 +220,4 @@ export function TemplatePanel() {
       </div>
     </div>
   );
-}
+});
