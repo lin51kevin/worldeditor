@@ -7,9 +7,10 @@ import {
 import { useViewportStore } from '../../stores/viewportStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
+import { STORAGE_KEYS } from '../../constants/storage';
 import './Toolbar.css';
 
-const STORAGE_KEY = 'we-toolbar-pos';
+const STORAGE_KEY = STORAGE_KEYS.TOOLBAR_POS;
 
 function loadPos(): { tx: number; ty: number } {
   try {

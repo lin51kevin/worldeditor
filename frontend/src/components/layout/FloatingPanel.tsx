@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, useEffect, type CSSProperties } from 'react';
 import { X } from 'lucide-react';
 import './FloatingPanel.css';
+import { STORAGE_KEYS } from '../../constants/storage';
 
 interface SavedState {
   tx: number;
@@ -50,9 +51,9 @@ function saveState(key: string, state: SavedState): void {
 
 /** Clear persisted position/size for all floating panels and reload so CSS defaults apply. */
 export const PANEL_STORAGE_KEYS = [
-  'we-panel-left',
-  'we-panel-right',
-  'we-panel-template',
+  STORAGE_KEYS.PANEL_LEFT,
+  STORAGE_KEYS.PANEL_RIGHT,
+  STORAGE_KEYS.PANEL_TEMPLATE,
 ];
 
 export function resetAllPanels(): void {

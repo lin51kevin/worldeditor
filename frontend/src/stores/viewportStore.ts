@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { makeLaneKey, makeSignalKey, makeObjectKey } from '../utils/sceneGraph';
 import type { LaneSide } from '../utils/sceneGraph';
 import type { SnapType, DistanceMeasurement, AngleMeasurement, AreaMeasurement, EditableSpline } from '../services/platform';
+import { STORAGE_KEYS } from '../constants/storage';
 
 export type MeasureMode = 'none' | 'distance' | 'angle' | 'area';
 
@@ -30,7 +31,7 @@ export type DrawMode = 'spline';
 /** Union of all active-mode categories. */
 export type ActiveMode = SelectMode | EditMode | DrawMode;
 
-const STORAGE_KEY = 'we-editor-view';
+const STORAGE_KEY = STORAGE_KEYS.EDITOR_VIEW;
 
 interface PanelLayout {
   leftWidth: number;
@@ -256,7 +257,7 @@ function loadLayout(): PanelLayout {
   return DEFAULT_LAYOUT;
 }
 
-const DISPLAY_STORAGE_KEY = 'we-display-settings';
+const DISPLAY_STORAGE_KEY = STORAGE_KEYS.DISPLAY_SETTINGS;
 
 let displayPersistTimer: ReturnType<typeof setTimeout> | null = null;
 

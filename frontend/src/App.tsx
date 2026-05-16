@@ -27,8 +27,9 @@ import { BUILTIN_PLUGINS } from './plugins/builtinRegistry';
 import { getPlatformService } from './services';
 import { showAlert } from './utils/dialog';
 import { emitViewportEvent } from './viewport/viewportEvents';
+import { STORAGE_KEYS } from './constants/storage';
 
-const STARTUP_WELCOME_KEY = 'we-show-welcome-on-startup';
+const STARTUP_WELCOME_KEY = STORAGE_KEYS.SHOW_WELCOME_ON_STARTUP;
 
 // ── App component ──────────────────────────────────────────────────────────
 

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { STORAGE_KEYS } from '../constants/storage';
 
 export type Theme = 'dark' | 'light';
 
@@ -26,7 +27,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
   theme: 'dark',
 
   initTheme: () => {
-    const saved = localStorage.getItem('we-theme') as Theme | null;
+    const saved = localStorage.getItem(STORAGE_KEYS.THEME) as Theme | null;
     const theme = saved ?? 'dark';
     document.documentElement.setAttribute('data-theme', theme);
     set({ theme });
@@ -36,7 +37,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
   toggleTheme: () =>
     set((state) => {
       const next: Theme = state.theme === 'dark' ? 'light' : 'dark';
-      localStorage.setItem('we-theme', next);
+      localStorage.setItem(STORAGE_KEYS.THEME, next);
       document.documentElement.setAttribute('data-theme', next);
       void syncNativeTheme(next);
       return { theme: next };
