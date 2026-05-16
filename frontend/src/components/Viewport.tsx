@@ -1005,8 +1005,21 @@ export function Viewport() {
             const allItems = usePluginContribStore.getState().templateSections.flatMap((s) => s.items);
             const item = allItems.find((i) => i.id === templateId);
             if (item) {
-              // Use world x/y as s/t approximation; Rust rendering will handle exact placement
-              item.onApply({ roadId, x: worldPos.x, y: worldPos.y, hdg: 0 });
+              const road = visibleProject.roads.find((r) => r.id === roadId);
+              let s = worldPos.x;
+              let t = worldPos.y;
+              let hdg = 0;
+              if (road) {
+                try {
+                  const snap = await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
+                  s = snap.s;
+                  t = snap.t;
+                  hdg = snap.hdg;
+                } catch {
+                  // snap failed — fall back to world coords approximation
+                }
+              }
+              item.onApply({ roadId, x: s, y: t, hdg });
             }
           }
         }

@@ -409,6 +409,15 @@ export interface PlatformService {
   /** Find the closest road object to a world-space point. Returns { roadId, objectId } or null. */
   pickObjectAtPoint(project: Project, x: number, y: number, threshold: number): Promise<{ roadId: string; objectId: string } | null>;
 
+  /** Project a world-space point onto a road's reference line.
+   *  Returns road-local `{ s, t, hdg }` at the closest point on the reference line.
+   *  - s: arc-length station (metres from road start)
+   *  - t: signed lateral offset (positive = left)
+   *  - hdg: road heading at that station (radians)
+   *  Used after pickRoadAtPoint to convert a click position into correct s/t for signal/object placement.
+   */
+  snapPointOnRoad(road: Road, worldX: number, worldY: number): Promise<{ s: number; t: number; hdg: number }>;
+
   /** Generate highlight vertices for a single signal. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateSingleSignalVertices(project: Project, roadId: string, signalId: string, color: [number, number, number, number]): Promise<Float32Array>;
 

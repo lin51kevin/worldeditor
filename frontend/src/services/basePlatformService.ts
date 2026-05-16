@@ -190,6 +190,11 @@ export abstract class BasePlatformService implements PlatformService {
     return wasm.pick_object_at_point(JSON.stringify(project), x, y, threshold);
   }
 
+  async snapPointOnRoad(road: Road, worldX: number, worldY: number): Promise<{ s: number; t: number; hdg: number }> {
+    const wasm = await this.getWasm();
+    return wasm.snap_point_on_road(JSON.stringify(road), worldX, worldY) as { s: number; t: number; hdg: number };
+  }
+
   async generateSingleSignalVertices(project: Project, roadId: string, signalId: string, color: [number, number, number, number]): Promise<Float32Array> {
     const wasm = await this.getWasm();
     return wasm.generate_single_signal_vertices(

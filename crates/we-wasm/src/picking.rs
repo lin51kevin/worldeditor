@@ -728,3 +728,57 @@ pub fn pick_junction_at_point_cached(
         }
     })
 }
+
+/// Project a world-space point onto a road's reference line, returning road-local
+/// coordinates `{ s, t, hdg }` at the closest point.
+///
+/// - `s`: arc-length station along the road reference line (metres from road start)
+/// - `t`: signed lateral offset from the reference line (positive = left)
+/// - `hdg`: road heading at that station (radians)
+///
+/// Used by the viewport after picking a road via `pick_road_at_point` to convert
+/// the world click position into correct road-local s/t for placing signals and objects.
+#[wasm_bindgen]
+pub fn snap_point_on_road(road_json: &str, world_x: f64, world_y: f64) -> Result<JsValue, JsError> {
+    use we_core::geometry::eval::sample_road_reference_line;
+
+    #[derive(Serialize)]
+    struct RoadLocalPos {
+        s: f64,
+        t: f64,
+        hdg: f64,
+    }
+
+    let road: we_core::model::Road =
+        serde_json::from_str(road_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let samples = sample_road_reference_line(&road, 1.0);
+
+    let result = if samples.is_empty() {
+        RoadLocalPos { s: 0.0, t: 0.0, hdg: 0.0 }
+    } else {
+        // Find the closest reference-line sample
+        let mut best_idx = 0usize;
+        let mut best_dist_sq = f64::MAX;
+        for (i, pt) in samples.iter().enumerate() {
+            let dx = pt.x - world_x;
+            let dy = pt.y - world_y;
+            let d = dx * dx + dy * dy;
+            if d < best_dist_sq {
+                best_dist_sq = d;
+                best_idx = i;
+            }
+        }
+        let pt = &samples[best_idx];
+        // Decompose world offset into road-local axes
+        let dx = world_x - pt.x;
+        let dy = world_y - pt.y;
+        let cos_h = pt.hdg.cos();
+        let sin_h = pt.hdg.sin();
+        // t = perpendicular component (positive = left of heading direction)
+        let t = -dx * sin_h + dy * cos_h;
+        RoadLocalPos { s: pt.s, t, hdg: pt.hdg }
+    };
+
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+}
