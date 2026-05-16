@@ -99,6 +99,11 @@ export abstract class BasePlatformService implements PlatformService {
     return wasm.generate_junction_vertices(JSON.stringify(project));
   }
 
+  async generateLaneBoundaryVertices(project: Project, sampleStep: number): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_lane_boundary_vertices(JSON.stringify(project), sampleStep);
+  }
+
   async generateLaneLineVertices(project: Project, sampleStep: number): Promise<Float32Array> {
     const wasm = await this.getWasm();
     return wasm.generate_lane_line_vertices(JSON.stringify(project), sampleStep);

@@ -357,6 +357,9 @@ export interface PlatformService {
   /** Generate junction surface mesh vertices. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateJunctionVertices(project: Project): Promise<Float32Array>;
 
+  /** Generate lane boundary line vertices (solid geometric lines, no road_marks needed). Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
+  generateLaneBoundaryVertices(project: Project, sampleStep: number): Promise<Float32Array>;
+
   /** Generate lane boundary line vertices (solid/dashed road markings). Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateLaneLineVertices(project: Project, sampleStep: number): Promise<Float32Array>;
 

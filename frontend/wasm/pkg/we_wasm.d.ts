@@ -119,6 +119,19 @@ export function generate_default_lane_section(s: number, n_lanes_per_side: numbe
 export function generate_junction_vertices(project_json: string): Float32Array;
 
 /**
+ * Generate geometric lane boundary line vertices from a project JSON.
+ *
+ * Unlike `generate_lane_line_vertices` (which requires `road_marks` data),
+ * this function emits a thin ribbon at **every** lane edge boundary based
+ * solely on the geometric lane widths. Useful for draw-mode previews where
+ * template-based roads have no road_marks populated.
+ *
+ * Each vertex is 7 floats: [x, y, z, r, g, b, a].
+ * Color: dark gray `[0.15, 0.15, 0.15, 0.9]`.
+ */
+export function generate_lane_boundary_vertices(project_json: string, sample_step: number): Float32Array;
+
+/**
  * Generate lane boundary line vertices from a project JSON. Returns Float32Array.
  *
  * Each vertex is 7 floats: [x, y, z, r, g, b, a].
@@ -535,6 +548,7 @@ export interface InitOutput {
     readonly generate_center_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_default_lane_section: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly generate_junction_vertices: (a: number, b: number) => [number, number, number, number];
+    readonly generate_lane_boundary_vertices: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_lane_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_object_vertices: (a: number, b: number) => [number, number, number, number];
     readonly generate_road_mesh_from_json: (a: number, b: number, c: number) => [number, number, number, number];

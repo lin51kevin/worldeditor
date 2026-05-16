@@ -18,6 +18,7 @@ export const gcj02_to_wgs84: (a: number, b: number, c: number) => any;
 export const generate_center_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
 export const generate_default_lane_section: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const generate_junction_vertices: (a: number, b: number) => [number, number, number, number];
+export const generate_lane_boundary_vertices: (a: number, b: number, c: number) => [number, number, number, number];
 export const generate_lane_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
 export const generate_object_vertices: (a: number, b: number) => [number, number, number, number];
 export const generate_road_mesh_from_json: (a: number, b: number, c: number) => [number, number, number, number];
