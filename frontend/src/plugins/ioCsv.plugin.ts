@@ -75,7 +75,7 @@ function exportProjectToCsv(project: Project): Promise<void> {
 }
 
 export const mountIoCsvPlugin = createIOPlugin({
-  pluginId: 'io-csv',
+  pluginId: 'io-csv-import',
   importer: {
     formatName: 'CSV Coordinates',
     extensions: ['.csv', '.txt'],

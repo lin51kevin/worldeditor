@@ -90,7 +90,7 @@ function exportToObj(project: Project): Promise<void> {
 }
 
 export const mountIoObj3dPlugin = createIOPlugin({
-  pluginId: 'io-obj3d',
+  pluginId: 'io-obj3d-export',
   exporter: {
     formatName: 'Wavefront OBJ 3D',
     onExport: exportToObj,

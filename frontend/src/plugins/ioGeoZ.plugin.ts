@@ -9,7 +9,7 @@ import { createIOPlugin } from './ioPluginFactory';
 export { buildGeoZProtoRoot, geoToProject, importGeoZ } from './geoz/parser';
 
 export const mountIoGeoZPlugin = createIOPlugin({
-  pluginId: 'io-geoz',
+  pluginId: 'io-geoz-import',
   importer: {
     formatName: 'GeoZ Map',
     extensions: ['.geoz', '.zip'],

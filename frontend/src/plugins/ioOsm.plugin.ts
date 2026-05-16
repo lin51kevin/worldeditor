@@ -80,7 +80,7 @@ function exportToOsm(project: Project): Promise<void> {
 }
 
 export const mountIoOsmPlugin = createIOPlugin({
-  pluginId: 'io-osm',
+  pluginId: 'io-osm-export',
   exporter: {
     formatName: 'OpenStreetMap XML',
     onExport: exportToOsm,
