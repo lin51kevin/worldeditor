@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+// Eagerly pre-warm WebGPU adapter+device so the viewport mounts faster.
+import './viewport/gpuDeviceCache';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MenuBar } from './components/shell/MenuBar';
 import { Toolbar } from './components/shell/Toolbar';

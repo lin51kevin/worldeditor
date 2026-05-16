@@ -1,6 +1,8 @@
 export { getSplineHandlePoints } from './splineUtils';
 export type { SignalData, ObjectData, MarkingData, MouseDragAction } from './viewportTypes';
 export { resolveMouseDragAction, computeGroundPanOffset } from './viewportTypes';
+import { takePrewarmedGPU, returnPrewarmedGPU } from './gpuDeviceCache';
+import type { PrewarmedGPU } from './gpuDeviceCache';
 
 /**
  * WebGPU viewport renderer.
@@ -160,20 +162,35 @@ export class ViewportRenderer {
 
   /** Initialize the renderer on a canvas element. */
   async init(canvas: HTMLCanvasElement): Promise<boolean> {
+    const t0 = performance.now();
     if (!ViewportRenderer.isSupported()) return false;
 
-    const adapter = await navigator.gpu.requestAdapter();
-    if (this.disposed || !adapter) return false;
-
-    this.device = await adapter.requestDevice();
-    // React StrictMode may call dispose() while awaiting the device.
-    // If that happened, release the device and bail out to avoid a
-    // stale renderer starting a render loop against a reconfigured canvas.
+    // Try pre-warmed GPU first; fall back to fresh request
+    const prewarmed = await takePrewarmedGPU();
     if (this.disposed) {
-      this.device.destroy();
+      // React StrictMode unmounted us — return the device to cache for next mount
+      if (prewarmed) returnPrewarmedGPU(prewarmed);
       return false;
     }
 
+    let adapter: GPUAdapter | null;
+    let device: GPUDevice;
+    if (prewarmed) {
+      adapter = prewarmed.adapter;
+      device = prewarmed.device;
+    } else {
+      adapter = await navigator.gpu.requestAdapter();
+      if (this.disposed || !adapter) return false;
+      device = await adapter.requestDevice();
+      if (this.disposed) {
+        // Return fresh device to cache for next mount
+        returnPrewarmedGPU({ adapter, device } as PrewarmedGPU);
+        return false;
+      }
+    }
+    const tDevice = performance.now();
+
+    this.device = device;
     this.device.lost.then((info) => {
       console.warn('[Renderer] WebGPU device lost:', info.message);
       this.deviceLost = true;
@@ -192,11 +209,25 @@ export class ViewportRenderer {
     this.cameraController.setViewportSize(this.width, this.height);
     this.markerRenderer.setDevice(this.device);
 
+    const tConfigure = performance.now();
     this.createDepthTexture();
+    const tDepth = performance.now();
     this.createMsaaTexture();
+    const tMsaa = performance.now();
     this.createGridPipeline();
+    const tGrid = performance.now();
     this.createBasicPipeline();
+    const tBasic = performance.now();
     this.setupMouseControls(canvas);
+    const tDone = performance.now();
+
+    console.info(
+      `[Renderer:perf] init total=${(tDone - t0).toFixed(1)}ms (${prewarmed ? 'prewarmed' : 'cold'}) | ` +
+      `device=${(tDevice - t0).toFixed(1)} configure=${(tConfigure - tDevice).toFixed(1)} ` +
+      `depth=${(tDepth - tConfigure).toFixed(1)} msaa=${(tMsaa - tDepth).toFixed(1)} ` +
+      `gridPipeline=${(tGrid - tMsaa).toFixed(1)} basicPipeline=${(tBasic - tGrid).toFixed(1)} ` +
+      `mouseControls=${(tDone - tBasic).toFixed(1)}`,
+    );
 
     return true;
   }

@@ -30,9 +30,16 @@ export abstract class BasePlatformService implements PlatformService {
     if (this.wasmModule) return this.wasmModule;
     if (!this.wasmInitPromise) {
       this.wasmInitPromise = (async () => {
+        const tStart = performance.now();
         const wasm = await import('../../wasm/pkg/we_wasm') as WasmModule;
+        const tImport = performance.now();
         await (wasm.default as unknown as () => Promise<void>)();
+        const tInit = performance.now();
         this.wasmModule = wasm;
+        console.info(
+          `[WASM:perf] init total=${(tInit - tStart).toFixed(1)}ms | ` +
+          `import=${(tImport - tStart).toFixed(1)} init=${(tInit - tImport).toFixed(1)}`,
+        );
         return wasm;
       })().catch((err) => {
         // Clear the cached promise so callers can retry after a transient failure.

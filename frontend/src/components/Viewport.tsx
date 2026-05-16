@@ -189,9 +189,11 @@ export function Viewport() {
   const updateSurfaceMesh = useCallback(async () => {
     const renderer = rendererRef.current;
     if (!renderer || status !== 'ready' || !project) return;
+    const tStart = performance.now();
 
     try {
       const service = await getPlatformService();
+      const tService = performance.now();
       const visibleProject = getVisibleProject();
       if (!visibleProject) return;
 
@@ -213,6 +215,7 @@ export function Viewport() {
 
       if (!roadsChanged && !junctionsChanged && !modeChanged && cachedSurfaceRef.current.length > 0) {
         // Nothing geometry-related changed — skip WASM calls entirely.
+        console.info(`[Viewport:perf] updateSurfaceMesh skipped (no change) ${(performance.now() - tStart).toFixed(1)}ms`);
         return;
       }
 
@@ -236,6 +239,7 @@ export function Viewport() {
         signalProm,
         objectProm,
       ]);
+      const tWasm = performance.now();
 
       const surfaceVerts = mergeFloat32Arrays(
         mergeFloat32Arrays(mergeFloat32Arrays(roadVerts, junctionVerts), signalVerts),
@@ -247,6 +251,12 @@ export function Viewport() {
       } else {
         renderer.uploadRoadVertices(surfaceVerts, { preserveLastVertexDataOnEmpty: true });
       }
+      const tDone = performance.now();
+      console.info(
+        `[Viewport:perf] updateSurfaceMesh total=${(tDone - tStart).toFixed(1)}ms | ` +
+        `service=${(tService - tStart).toFixed(1)} wasm=${(tWasm - tService).toFixed(1)} ` +
+        `upload=${(tDone - tWasm).toFixed(1)} roads=${visibleProject.roads.length} verts=${surfaceVerts.length / 7}`,
+      );
     } catch (err) {
       console.error('[Viewport] Failed to generate surface mesh:', err);
     }
@@ -637,6 +647,7 @@ export function Viewport() {
     rendererRef.current = renderer;
 
     const initRenderer = async () => {
+      const tMount = performance.now();
       // Size canvas to container
       const rect = canvas.parentElement?.getBoundingClientRect();
       if (rect) {
@@ -645,12 +656,14 @@ export function Viewport() {
       }
 
       const ok = await renderer.init(canvas);
+      const tInit = performance.now();
       if (ok) {
         setStatus('ready');
         renderer.start();
         renderer.setScaleChangeCallback((info) => {
           useProjectStore.getState().setViewportInfo(info);
         });
+        console.info(`[Viewport:perf] mount→ready ${(tInit - tMount).toFixed(1)}ms`);
       } else {
         setStatus('unsupported');
       }
