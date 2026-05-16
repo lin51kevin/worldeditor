@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mountGisToolsPlugin } from './gisTools.plugin';
 import { mountValidationPlugin } from './validation.plugin';
 import { mountTrafficPlugin } from './traffic.plugin';
-import { mountPointcloudPlugin } from './pointcloud.plugin';
-import { mountModels3dPlugin } from './models3d.plugin';
-import { mountSatellitePlugin } from './satellite.plugin';
-import { mountScriptingPlugin } from './scripting.plugin';
-import { mountEcosystemPlugin } from './ecosystem.plugin';
-import { mountLaneDetectPlugin } from './laneDetect.plugin';
+import { mountPointcloudPlugin } from './pointcloud-beta.plugin';
+import { mountModels3dPlugin } from './models-3d-beta.plugin';
+import { mountSatellitePlugin } from './satellite-beta.plugin';
+import { mountScriptingPlugin } from './scripting-beta.plugin';
+import { mountEcosystemPlugin } from './ecosystem-beta.plugin';
+import { mountLaneDetectPlugin } from './lane-detect-beta.plugin';
 import { mountConverterPlugin } from './converter.plugin';
 import { createEmptyProject } from './emptyProject';
 

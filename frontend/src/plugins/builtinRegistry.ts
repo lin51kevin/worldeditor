@@ -23,12 +23,12 @@ import { mountIoXodrExtPlugin } from './io-xodr-ext-stub.plugin';
 import { mountGisToolsPlugin } from './gisTools.plugin';
 import { mountValidationPlugin } from './validation.plugin';
 import { mountTrafficPlugin } from './traffic.plugin';
-import { mountPointcloudPlugin } from './pointcloud.plugin';
-import { mountSatellitePlugin } from './satellite.plugin';
-import { mountModels3dPlugin } from './models3d.plugin';
-import { mountScriptingPlugin } from './scripting.plugin';
-import { mountEcosystemPlugin } from './ecosystem.plugin';
-import { mountLaneDetectPlugin } from './laneDetect.plugin';
+import { mountPointcloudPlugin } from './pointcloud-beta.plugin';
+import { mountSatellitePlugin } from './satellite-beta.plugin';
+import { mountModels3dPlugin } from './models-3d-beta.plugin';
+import { mountScriptingPlugin } from './scripting-beta.plugin';
+import { mountEcosystemPlugin } from './ecosystem-beta.plugin';
+import { mountLaneDetectPlugin } from './lane-detect-beta.plugin';
 import { mountConverterPlugin } from './converter.plugin';
 
 /** Plugin entry with a mount function for App.tsx registration. */
@@ -56,11 +56,11 @@ const MOUNT_MAP: Record<string, () => () => void> = {
   'gis-tools': mountGisToolsPlugin,
   'validation': mountValidationPlugin,
   'traffic': mountTrafficPlugin,
-  'pointcloud': mountPointcloudPlugin,
-  'satellite': mountSatellitePlugin,
+  'pointcloud-beta': mountPointcloudPlugin,
+  'satellite-beta': mountSatellitePlugin,
   '3d-models': mountModels3dPlugin,
-  'scripting': mountScriptingPlugin,
-  'ecosystem': mountEcosystemPlugin,
+  'scripting-beta': mountScriptingPlugin,
+  'ecosystem-beta': mountEcosystemPlugin,
   'lane-detect': mountLaneDetectPlugin,
   'converter': mountConverterPlugin,
 };
@@ -117,11 +117,11 @@ const BUILTIN_META: PluginInfo[] = [
   { id: 'gis-tools', name: 'GIS Tools', nameKey: 'pluginManager.builtinGisToolsName', version: '1.0.0', description: 'Advanced GIS coordinate systems panel', descriptionKey: 'pluginManager.builtinGisToolsDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'validation', name: 'Validation', nameKey: 'pluginManager.builtinValidationName', version: '1.0.0', description: 'OpenDRIVE data quality and topology validation', descriptionKey: 'pluginManager.builtinValidationDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'traffic', name: 'Traffic', nameKey: 'pluginManager.builtinTrafficName', version: '1.0.0', description: 'Signal phasing, timing editor, SUMO I/O', descriptionKey: 'pluginManager.builtinTrafficDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
-  { id: 'pointcloud', name: 'Point Cloud', nameKey: 'pluginManager.builtinPointcloudName', version: '1.0.0', description: 'Point cloud loading and visualization (desktop only)', descriptionKey: 'pluginManager.builtinPointcloudDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
-  { id: 'satellite', name: 'Satellite', nameKey: 'pluginManager.builtinSatelliteName', version: '1.0.0', description: 'OSM tiles and satellite imagery overlay (desktop only)', descriptionKey: 'pluginManager.builtinSatelliteDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'pointcloud-beta', name: 'Point Cloud', nameKey: 'pluginManager.builtinPointcloudName', version: '1.0.0', description: 'Point cloud loading and visualization (desktop only)', descriptionKey: 'pluginManager.builtinPointcloudDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'satellite-beta', name: 'Satellite', nameKey: 'pluginManager.builtinSatelliteName', version: '1.0.0', description: 'OSM tiles and satellite imagery overlay (desktop only)', descriptionKey: 'pluginManager.builtinSatelliteDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: '3d-models', name: '3D Models', nameKey: 'pluginManager.builtin3dModelsName', version: '1.0.0', description: 'External 3D model loading OBJ/FBX (desktop only)', descriptionKey: 'pluginManager.builtin3dModelsDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
-  { id: 'scripting', name: 'Scripting', nameKey: 'pluginManager.builtinScriptingName', version: '1.0.0', description: 'Embedded Rhai script console', descriptionKey: 'pluginManager.builtinScriptingDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
-  { id: 'ecosystem', name: 'Ecosystem', nameKey: 'pluginManager.builtinEcosystemName', version: '1.0.0', description: 'Vegetation and tree placement panel', descriptionKey: 'pluginManager.builtinEcosystemDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'scripting-beta', name: 'Scripting', nameKey: 'pluginManager.builtinScriptingName', version: '1.0.0', description: 'Embedded Rhai script console', descriptionKey: 'pluginManager.builtinScriptingDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'ecosystem-beta', name: 'Ecosystem', nameKey: 'pluginManager.builtinEcosystemName', version: '1.0.0', description: 'Vegetation and tree placement panel', descriptionKey: 'pluginManager.builtinEcosystemDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'lane-detect', name: 'Lane Detection', nameKey: 'pluginManager.builtinLaneDetectName', version: '1.0.0', description: 'Automated lane detection (Phase 3)', descriptionKey: 'pluginManager.builtinLaneDetectDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'converter', name: 'Batch Converter', nameKey: 'pluginManager.builtinConverterName', version: '1.0.0', description: 'Batch format conversion panel', descriptionKey: 'pluginManager.builtinConverterDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
 ];

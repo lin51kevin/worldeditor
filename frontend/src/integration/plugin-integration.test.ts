@@ -267,7 +267,7 @@ describe('plugin-traffic', () => {
 
 describe('plugin-scripting', () => {
   it('mounts, registers panel and menu item, unmounts cleanly', async () => {
-    const { mountScriptingPlugin } = await import('../plugins/scripting.plugin');
+    const { mountScriptingPlugin } = await import('../plugins/scripting-beta.plugin');
     const unmount = mountScriptingPlugin();
     expect(store.registerPanel).toHaveBeenCalledOnce();
     expect(store.registerMenuItem.mock.calls.length).toBeGreaterThanOrEqual(1);
@@ -278,7 +278,7 @@ describe('plugin-scripting', () => {
 
 describe('plugin-ecosystem', () => {
   it('mounts, registers panel, unmounts cleanly', async () => {
-    const { mountEcosystemPlugin } = await import('../plugins/ecosystem.plugin');
+    const { mountEcosystemPlugin } = await import('../plugins/ecosystem-beta.plugin');
     const unmount = mountEcosystemPlugin();
     expect(store.registerPanel).toHaveBeenCalledOnce();
     unmount();
@@ -288,7 +288,7 @@ describe('plugin-ecosystem', () => {
 
 describe('plugin-lane-detect', () => {
   it('mounts, registers menu item, unmounts cleanly', async () => {
-    const { mountLaneDetectPlugin } = await import('../plugins/laneDetect.plugin');
+    const { mountLaneDetectPlugin } = await import('../plugins/lane-detect-beta.plugin');
     const unmount = mountLaneDetectPlugin();
     expect(store.registerMenuItem.mock.calls.length).toBeGreaterThanOrEqual(1);
     unmount();
@@ -308,7 +308,7 @@ describe('plugin-converter', () => {
 
 describe('plugin-pointcloud', () => {
   it('mounts, registers panel and viewport overlay, unmounts cleanly', async () => {
-    const { mountPointcloudPlugin } = await import('../plugins/pointcloud.plugin');
+    const { mountPointcloudPlugin } = await import('../plugins/pointcloud-beta.plugin');
     const unmount = mountPointcloudPlugin();
     expect(store.registerPanel).toHaveBeenCalledOnce();
     unmount();
@@ -318,7 +318,7 @@ describe('plugin-pointcloud', () => {
 
 describe('plugin-satellite', () => {
   it('mounts, registers panel and viewport overlay, unmounts cleanly', async () => {
-    const { mountSatellitePlugin } = await import('../plugins/satellite.plugin');
+    const { mountSatellitePlugin } = await import('../plugins/satellite-beta.plugin');
     const unmount = mountSatellitePlugin();
     expect(store.registerPanel).toHaveBeenCalledOnce();
     unmount();
@@ -328,7 +328,7 @@ describe('plugin-satellite', () => {
 
 describe('plugin-3d-models', () => {
   it('mounts, registers panel, unmounts cleanly', async () => {
-    const { mountModels3dPlugin } = await import('../plugins/models3d.plugin');
+    const { mountModels3dPlugin } = await import('../plugins/models-3d-beta.plugin');
     const unmount = mountModels3dPlugin();
     expect(store.registerPanel).toHaveBeenCalledOnce();
     unmount();

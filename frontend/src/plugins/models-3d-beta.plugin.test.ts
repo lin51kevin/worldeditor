@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 const rp = vi.fn(), ri = vi.fn(), u = vi.fn();
 vi.mock('../stores/pluginContribStore', () => ({ usePluginContribStore: { getState: vi.fn(() => ({ registerPanel: rp, registerImporter: ri, unregisterPlugin: u })) } }));
-import { mountModels3dPlugin } from './models3d.plugin';
-describe('models3d.plugin', () => {
+import { mountModels3dPlugin } from './models-3d-beta.plugin';
+describe('models-3d-beta.plugin', () => {
   beforeEach(() => vi.clearAllMocks());
   it('mounts', () => { const c = mountModels3dPlugin(); expect(typeof c).toBe('function'); c(); });
   it('registers panel', () => { const c = mountModels3dPlugin(); expect(rp).toHaveBeenCalled(); c(); });

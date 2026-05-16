@@ -2,7 +2,7 @@
 import { showAlert } from '../utils/dialog';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import { createEmptyProject } from './emptyProject';
-const PLUGIN_ID = 'pointcloud';
+const PLUGIN_ID = 'pointcloud-beta';
 export function mountPointcloudPlugin(): () => void {
   const { registerPanel, registerImporter, unregisterPlugin } = usePluginContribStore.getState();
   registerPanel({ id: `${PLUGIN_ID}:panel`, pluginId: PLUGIN_ID, title: 'Point Cloud', component: null as never, position: 'left' });

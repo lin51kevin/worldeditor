@@ -1,7 +1,7 @@
 /** plugin-ecosystem: Vegetation and tree placement panel. */
 import { showAlert } from '../utils/dialog';
 import { usePluginContribStore } from '../stores/pluginContribStore';
-const PLUGIN_ID = 'ecosystem';
+const PLUGIN_ID = 'ecosystem-beta';
 export function mountEcosystemPlugin(): () => void {
   const { registerPanel, registerMenuItem, unregisterPlugin } = usePluginContribStore.getState();
   registerPanel({ id: `${PLUGIN_ID}:panel`, pluginId: PLUGIN_ID, title: 'Ecosystem', component: null as never, position: 'left' });
