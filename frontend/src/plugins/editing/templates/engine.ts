@@ -204,32 +204,41 @@ function resolveArms(topology: JunctionTopology, cx: number, cy: number, gap: nu
   }
 }
 
-// ── Junction connections ─────────────────────────────────────────────────────
+// ── Connector road builder ───────────────────────────────────────────────────
 
-function buildAllPairsConnections(roads: Road[], section: SectionConfig): JunctionConnection[] {
-  const connections: JunctionConnection[] = [];
-  const laneIds = [
-    ...section.left.map((_: LaneConfig, i: number) => i + 1),
-    ...section.right.map((_: LaneConfig, i: number) => -(i + 1)),
-  ];
-  const laneLinks = laneIds.map((id) => ({ from: id, to: id }));
+/**
+ * Build a short straight connector road (junction_id set) spanning between
+ * the junction-edge points of two arm roads. This is the XODR-correct approach:
+ * the junction's `connecting_road` references these connectors, not the arms.
+ *
+ * Each arm road starts at the junction edge (plan_view[0].{x,y}) and extends
+ * outward. Connector roads bridge between two arms' junction-edge points.
+ */
+function buildConnectorRoad(armA: Road, armB: Road, junctionId: string): Road {
+  const geoA = armA.plan_view[0]!;
+  const geoB = armB.plan_view[0]!;
+  const dx = geoB.x - geoA.x;
+  const dy = geoB.y - geoA.y;
+  const length = Math.max(Math.sqrt(dx * dx + dy * dy), 0.5);
+  const hdg = Math.atan2(dy, dx);
 
-  for (let i = 0; i < roads.length; i++) {
-    for (let j = 0; j < roads.length; j++) {
-      if (i === j) continue;
-      const incoming = roads[i];
-      const connecting = roads[j];
-      if (!incoming || !connecting) continue;
-      connections.push({
-        id: genId('conn'),
-        incoming_road: incoming.id,
-        connecting_road: connecting.id,
-        contact_point: 'Start',
-        lane_links: laneLinks.map((ll) => ({ ...ll })),
-      });
-    }
-  }
-  return connections;
+  // Single right-side driving lane (movement from A towards B)
+  const connectorSection = buildLaneSection(
+    [],
+    [{ laneType: 'Driving', width: DEFAULT_LANE_WIDTH }],
+  );
+
+  return buildRoad(connectorSection, {
+    x: geoA.x,
+    y: geoA.y,
+    hdg,
+    length,
+    junctionId,
+    link: {
+      predecessor: { element_type: 'Road', element_id: armA.id, contact_point: 'Start' },
+      successor: { element_type: 'Road', element_id: armB.id, contact_point: 'Start' },
+    },
+  });
 }
 
 // ── Junction template → { junction, roads } ─────────────────────────────────
@@ -256,25 +265,45 @@ export function buildJunctionFromConfig(
     contact_point: null,
   };
 
-  const roads = arms.map((arm) =>
-    buildRoad(
-      // Each arm gets its own clone of the lane section
-      buildLaneSectionFromConfig(section),
-      {
-        x: arm.x,
-        y: arm.y,
-        hdg: arm.hdg,
-        length: effLength,
-        junctionId: null,
-        link: { predecessor: junctionLink, successor: null },
-      },
-    ),
+  // Arm roads: approach roads that start at the junction edge and extend outward.
+  // junction_id = null because they are approach roads, not internal connectors.
+  const armRoads = arms.map((arm) =>
+    buildRoad(buildLaneSectionFromConfig(section), {
+      x: arm.x,
+      y: arm.y,
+      hdg: arm.hdg,
+      length: effLength,
+      junctionId: null,
+      link: { predecessor: junctionLink, successor: null },
+    }),
   );
 
+  // Connector roads: one per ordered pair (i→j), spanning junction-edge to junction-edge.
+  // junction_id = junctionId marks them as internal connectors per the XODR spec.
+  const connectorRoads: Road[] = [];
+  const connections: JunctionConnection[] = [];
+  const rightLaneLinks = section.right.map((_: LaneConfig, i: number) => ({
+    from: -(i + 1),
+    to: -(i + 1),
+  }));
+
   const pattern = config.connectionPattern ?? 'all-pairs';
-  const connections = pattern === 'all-pairs'
-    ? buildAllPairsConnections(roads, section)
-    : [];
+  if (pattern === 'all-pairs') {
+    for (let i = 0; i < armRoads.length; i++) {
+      for (let j = 0; j < armRoads.length; j++) {
+        if (i === j) continue;
+        const connector = buildConnectorRoad(armRoads[i]!, armRoads[j]!, junctionId);
+        connectorRoads.push(connector);
+        connections.push({
+          id: genId('conn'),
+          incoming_road: armRoads[i]!.id,
+          connecting_road: connector.id,
+          contact_point: 'Start',
+          lane_links: rightLaneLinks.map((ll) => ({ ...ll })),
+        });
+      }
+    }
+  }
 
   const junction: Junction = {
     id: junctionId,
@@ -282,7 +311,7 @@ export function buildJunctionFromConfig(
     connections,
   };
 
-  return { junction, roads };
+  return { junction, roads: [...armRoads, ...connectorRoads] };
 }
 
 // ── Signal template → RoadSignal ─────────────────────────────────────────────

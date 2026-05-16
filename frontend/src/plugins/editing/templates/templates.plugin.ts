@@ -81,11 +81,16 @@ function signalConfigToItem(config: SignalTemplateConfig): TemplateItemDef {
     id: config.id,
     labelKey: config.labelKey,
     icon: config.icon,
-    onApply: () => {
+    onApply: (opts) => {
       const store = useProjectStore.getState();
-      if (!store.selectedRoadId) return;
-      const signal = buildSignalFromConfig(config);
-      store.addSignal(signal);
+      const targetRoadId = opts?.roadId ?? store.selectedRoadId;
+      if (!targetRoadId) return;
+      const signal = {
+        ...buildSignalFromConfig(config),
+        s: opts?.x ?? 0,
+        t: opts?.y ?? 0,
+      };
+      store.addRoadSignalItem(targetRoadId, signal);
     },
   };
 }
@@ -97,11 +102,12 @@ function markingConfigToItem(config: MarkingTemplateConfig): TemplateItemDef {
     id: config.id,
     labelKey: config.labelKey,
     icon: config.icon,
-    onApply: () => {
+    onApply: (opts) => {
       const mark: RoadMark = buildMarkFromConfig(config);
       const { selectedRoadId, project } = useProjectStore.getState();
-      if (!selectedRoadId) return;
-      const road = project.roads.find((r) => r.id === selectedRoadId);
+      const targetRoadId = opts?.roadId ?? selectedRoadId;
+      if (!targetRoadId) return;
+      const road = project.roads.find((r) => r.id === targetRoadId);
       if (!road || road.lane_sections.length === 0) return;
 
       const section = road.lane_sections[0]!;
@@ -123,7 +129,7 @@ function markingConfigToItem(config: MarkingTemplateConfig): TemplateItemDef {
       const { project: proj } = useProjectStore.getState();
       useProjectStore.getState().setProject({
         ...proj,
-        roads: proj.roads.map((r) => (r.id === selectedRoadId ? updatedRoad : r)),
+        roads: proj.roads.map((r) => (r.id === targetRoadId ? updatedRoad : r)),
       });
       useProjectStore.getState().markDirty();
     },
