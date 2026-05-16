@@ -40,6 +40,7 @@
     "zoomToSelected": "Zoom to Selected",
     "showGrid": "Show Grid",
     "showAxis": "Show Axis",
+    "showHoverHighlight": "Hover Highlight",
     "calculateRoadLength": "Calculate Road Length",
     "road": "Road",
     "resetPanels": "Reset Panel Positions",

@@ -24,7 +24,7 @@ export function useMenuActions() {
   const resetToSaved = useProjectStore((s) => s.resetToSaved);
   const setProject = useProjectStore((s) => s.setProject);
 
-  const { setDimension, toggleGrid, toggleAxis, toggleSnap, setMeasureMode } = useViewportStore();
+  const { setDimension, toggleGrid, toggleAxis, toggleHoverHighlight, toggleSnap, setMeasureMode } = useViewportStore();
   const { push: pushRecentFile, remove: removeRecentFile } = useRecentFilesStore();
   const { t } = useTranslation();
 
@@ -168,6 +168,10 @@ export function useMenuActions() {
     emitViewportEvent({ type: 'set-show-axis', show: newVal });
   }, [toggleAxis]);
 
+  const handleToggleHoverHighlight = useCallback(() => {
+    toggleHoverHighlight();
+  }, [toggleHoverHighlight]);
+
   const handleCalculateRoadLength = useCallback(async () => {
     const total = calculateTotalRoadLength(project);
     await showAlert(
@@ -198,7 +202,7 @@ export function useMenuActions() {
     handleImportOpenDrive, handleOpenRecentFile, handleExportOpenDrive,
     handleDelete, handleView3D, handleView2D,
     handleZoomToFit, handleZoomToSelected,
-    handleToggleGrid, handleToggleAxis,
+    handleToggleGrid, handleToggleAxis, handleToggleHoverHighlight,
     handleCalculateRoadLength, handleResetToSaved, handleExit,
   };
 }

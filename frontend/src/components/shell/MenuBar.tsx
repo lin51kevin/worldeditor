@@ -72,6 +72,7 @@ export function MenuBar({
     handleZoomToSelected,
     handleToggleGrid,
     handleToggleAxis,
+    handleToggleHoverHighlight,
     handleCalculateRoadLength,
     handleResetToSaved,
     handleExit,
@@ -80,6 +81,7 @@ export function MenuBar({
   const {
     showGrid,
     showAxis,
+    showHoverHighlight,
     dimension,
     snapEnabled,
     measureMode,
@@ -128,6 +130,13 @@ export function MenuBar({
     setHoveredSubItem(null);
   }, []);
 
+  const handleButtonMouseDownCapture = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if ((event.target as Element).closest('button')) {
+      event.preventDefault();
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    }
+  }, []);
+
   const getMenuSectionProps = (index: number) => ({
     isActive: hoveredMenu === index,
     hoveredSubItem,
@@ -174,6 +183,11 @@ export function MenuBar({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement as HTMLElement | null;
+      const tag = activeElement?.tagName;
+      if (activeElement?.closest('.menubar, .toolbar, .road-edit-toolbar') && tag !== 'INPUT' && tag !== 'TEXTAREA') {
+        activeElement.blur();
+      }
       const isCtrl = event.ctrlKey || event.metaKey;
       if (isCtrl && event.key === 'n') {
         event.preventDefault();
@@ -228,7 +242,7 @@ export function MenuBar({
   ]);
 
   return (
-    <div className="menubar" ref={menuBarRef}>
+    <div className="menubar" ref={menuBarRef} onMouseDownCapture={handleButtonMouseDownCapture}>
       <div className="menubar-left">
         <div className="menubar-item-wrapper">
           <button
@@ -283,6 +297,7 @@ export function MenuBar({
                 dimension={dimension}
                 showGrid={showGrid}
                 showAxis={showAxis}
+                showHoverHighlight={showHoverHighlight}
                 leftCollapsed={layout.leftCollapsed}
                 rightCollapsed={layout.rightCollapsed}
                 templatePanelCollapsed={layout.templatePanelCollapsed}
@@ -293,6 +308,7 @@ export function MenuBar({
                 onZoomToSelected={handleZoomToSelected}
                 onToggleGrid={handleToggleGrid}
                 onToggleAxis={handleToggleAxis}
+                onToggleHoverHighlight={handleToggleHoverHighlight}
                 onToggleLeftPanel={toggleLeftPanel}
                 onToggleRightPanel={toggleRightPanel}
                 onToggleTemplatePanel={toggleTemplatePanel}

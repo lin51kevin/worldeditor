@@ -10,6 +10,7 @@ interface ViewMenuProps extends MenuSectionInteractionProps {
   dimension: string;
   showGrid: boolean;
   showAxis: boolean;
+  showHoverHighlight: boolean;
   leftCollapsed: boolean;
   rightCollapsed: boolean;
   templatePanelCollapsed: boolean;
@@ -20,6 +21,7 @@ interface ViewMenuProps extends MenuSectionInteractionProps {
   onZoomToSelected: MenuAction;
   onToggleGrid: MenuAction;
   onToggleAxis: MenuAction;
+  onToggleHoverHighlight: MenuAction;
   onToggleLeftPanel: MenuAction;
   onToggleRightPanel: MenuAction;
   onToggleTemplatePanel: MenuAction;
@@ -32,6 +34,7 @@ export function ViewMenu({
   dimension,
   showGrid,
   showAxis,
+  showHoverHighlight,
   leftCollapsed,
   rightCollapsed,
   templatePanelCollapsed,
@@ -42,6 +45,7 @@ export function ViewMenu({
   onZoomToSelected,
   onToggleGrid,
   onToggleAxis,
+  onToggleHoverHighlight,
   onToggleLeftPanel,
   onToggleRightPanel,
   onToggleTemplatePanel,
@@ -95,6 +99,13 @@ export function ViewMenu({
             void onToggleAxis();
           },
           checked: showAxis,
+        },
+        {
+          label: t('menu.showHoverHighlight'),
+          action: () => {
+            void onToggleHoverHighlight();
+          },
+          checked: showHoverHighlight,
         },
         { separator: true, label: '' },
         {

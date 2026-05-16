@@ -40,6 +40,7 @@
     "zoomToSelected": "缩放到选中",
     "showGrid": "网格",
     "showAxis": "坐标轴",
+    "showHoverHighlight": "悬浮高亮",
     "resetPanels": "重置面板位置",
     "showLayerPanel": "导航器面板",
     "showPropertyPanel": "属性面板",

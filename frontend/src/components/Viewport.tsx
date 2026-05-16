@@ -41,7 +41,7 @@ export function Viewport() {
   const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
   const selectedRoadIds = useProjectStore((s) => s.selectedRoadIds);
   const selectedJunctionIds = useProjectStore((s) => s.selectedJunctionIds);
-  const { showGrid, showAxis, dimension, display, viewMode } = useViewportStore();
+  const { showGrid, showAxis, showHoverHighlight, dimension, display, viewMode } = useViewportStore();
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
@@ -54,6 +54,8 @@ export function Viewport() {
   const hoveredJunctionRef = useRef<string | null>(null);
   const hoveredSignalRef = useRef<{ roadId: string; signalId: string } | null>(null);
   const hoveredObjectRef = useRef<{ roadId: string; objectId: string } | null>(null);
+  const lastHoverMeshIdRef = useRef<string | null>(null);
+  const pickInFlightRef = useRef(false);
   const snapIndicatorDomRef = useRef<HTMLDivElement | null>(null);
   const touchStateRef = useRef<{
     touches: Array<{ id: number; x: number; y: number }>;
@@ -129,6 +131,17 @@ export function Viewport() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // When hover-highlight is toggled ON, invalidate the mesh cache so the next
+  // mousemove re-uploads the highlight. When toggled OFF, clear any stale highlight.
+  useEffect(() => {
+    if (showHoverHighlight) {
+      lastHoverMeshIdRef.current = null;
+    } else {
+      rendererRef.current?.clearHover();
+      lastHoverMeshIdRef.current = null;
+    }
+  }, [showHoverHighlight]);
+
   // ── Surface mesh (roads + junctions + signals + objects) ──
   // Only regenerates when geometry-affecting deps change; toggling
   // lane-line or reference-line visibility does NOT trigger this.
@@ -143,10 +156,13 @@ export function Viewport() {
   const visibleProjectRef = useRef<ReturnType<typeof buildRenderableProject> | null>(null);
   const visibleProjectKeyRef = useRef<string>('');
   const projectLoadVersion = useProjectStore((s) => s.projectLoadVersion);
+  const surfaceViewModeRef = useRef(viewMode);
+  const projectRef = useRef(project);
   const getVisibleProject = useCallback(() => {
     const key = JSON.stringify({ d: display, v: projectLoadVersion });
-    if (key !== visibleProjectKeyRef.current || !visibleProjectRef.current) {
+    if (key !== visibleProjectKeyRef.current || project !== projectRef.current || !visibleProjectRef.current) {
       visibleProjectKeyRef.current = key;
+      projectRef.current = project;
       visibleProjectRef.current = project ? buildRenderableProject(project, display) : null;
     }
     return visibleProjectRef.current;
@@ -190,25 +206,33 @@ export function Viewport() {
       const junctionsChanged =
         newJunctionRefs.size !== prev.junctionRefs.size ||
         [...newJunctionRefs].some(([id, ref]) => prev.junctionRefs.get(id) !== ref);
+      const modeChanged = surfaceViewModeRef.current !== viewMode;
 
       surfaceDepsRef.current = { roadRefs: newRoadRefs, junctionRefs: newJunctionRefs };
+      surfaceViewModeRef.current = viewMode;
 
-      if (!roadsChanged && !junctionsChanged && cachedSurfaceRef.current.length > 0) {
+      if (!roadsChanged && !junctionsChanged && !modeChanged && cachedSurfaceRef.current.length > 0) {
         // Nothing geometry-related changed — skip WASM calls entirely.
         return;
       }
 
       const empty = Promise.resolve(new Float32Array(0));
-      const signalProm = display.showSignals
+      const roadProm = viewMode === 'solid'
+        ? service.generateRoadVertices(visibleProject, 2.0, display.colorMode).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); })
+        : empty;
+      const junctionProm = viewMode === 'solid'
+        ? service.generateJunctionVertices(visibleProject).catch((e) => { console.warn('[Viewport] generateJunctionVertices failed:', e); return new Float32Array(0); })
+        : empty;
+      const signalProm = viewMode === 'solid' && display.showSignals
         ? service.generateSignalPaintVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
         : empty;
-      const objectProm = display.showObjects
+      const objectProm = viewMode === 'solid' && display.showObjects
         ? service.generateObjectVertices(visibleProject).catch(() => new Float32Array(0))
         : empty;
 
       const [roadVerts, junctionVerts, signalVerts, objectVerts] = await Promise.all([
-        service.generateRoadVertices(visibleProject, 2.0, display.colorMode).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); }),
-        service.generateJunctionVertices(visibleProject).catch((e) => { console.warn('[Viewport] generateJunctionVertices failed:', e); return new Float32Array(0); }),
+        roadProm,
+        junctionProm,
         signalProm,
         objectProm,
       ]);
@@ -225,6 +249,7 @@ export function Viewport() {
   }, [
     project,
     status,
+    viewMode,
     display.showSignals,
     display.showObjects,
     display.colorMode,
@@ -249,15 +274,25 @@ export function Viewport() {
       if (!visibleProject) return;
 
       const empty = Promise.resolve(new Float32Array(0));
-      const centerLineProm = display.showReferenceLine
+      const centerLineProm = (display.showReferenceLine || viewMode !== 'solid')
         ? service.generateCenterLineVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
         : empty;
-      const laneLineProm = display.showLaneLines
+      const laneBoundaryProm = viewMode !== 'solid'
+        ? service.generateLaneBoundaryVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
+        : empty;
+      const roadMarkProm = (viewMode === 'wire' || (viewMode === 'solid' && display.showLaneLines))
         ? service.generateLaneLineVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
         : empty;
 
-      const [laneLineVerts, centerLineVerts] = await Promise.all([laneLineProm, centerLineProm]);
-      const lineVerts = mergeFloat32Arrays(laneLineVerts, centerLineVerts);
+      const [laneBoundaryVerts, roadMarkVerts, centerLineVerts] = await Promise.all([
+        laneBoundaryProm,
+        roadMarkProm,
+        centerLineProm,
+      ]);
+      const lineVerts = mergeFloat32Arrays(
+        mergeFloat32Arrays(laneBoundaryVerts, roadMarkVerts),
+        centerLineVerts,
+      );
       renderer.uploadLaneLineVertices(lineVerts);
     } catch (err) {
       console.error('[Viewport] Failed to generate line mesh:', err);
@@ -265,6 +300,7 @@ export function Viewport() {
   }, [
     project,
     status,
+    viewMode,
     display.showLaneLines,
     display.showRoadMarks,
     display.showReferenceLine,
@@ -753,7 +789,8 @@ export function Viewport() {
       canvas.style.cursor = 'crosshair';
     }
 
-    if (isInSelectMode) {
+    if (isInSelectMode && !pickInFlightRef.current) {
+      pickInFlightRef.current = true;
       try {
         const service = await getPlatformService();
         const { project: currentProject } = useProjectStore.getState();
@@ -770,32 +807,42 @@ export function Viewport() {
             if (newHoveredRoad) {
               const { selectedRoadId } = useProjectStore.getState();
               if (newHoveredRoad !== selectedRoadId) {
-                const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
-                if (road) {
-                  const singleRoadProject = { ...currentProject, roads: [road], junctions: [] };
-                  const hoverVerts = tintVertices(
-                    await service.generateRoadVertices(singleRoadProject, 2.0),
-                    HOVER_HIGHLIGHT_COLOR,
-                  );
-                  rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
+                if (showHoverHighlight && newHoveredRoad !== lastHoverMeshIdRef.current) {
+                  const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
+                  if (road) {
+                    const singleRoadProject = { ...currentProject, roads: [road], junctions: [] };
+                    const hoverVerts = tintVertices(
+                      await service.generateRoadVertices(singleRoadProject, 2.0),
+                      HOVER_HIGHLIGHT_COLOR,
+                    );
+                    rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
+                    lastHoverMeshIdRef.current = newHoveredRoad;
+                  }
+                } else if (!showHoverHighlight) {
+                  rendererInst.clearHover();
+                  lastHoverMeshIdRef.current = null;
                 }
               } else {
                 rendererInst.clearHover();
+                lastHoverMeshIdRef.current = null;
               }
               if (!rendererInst.pointerDragging) {
                 canvas.style.cursor = 'pointer';
               }
             } else {
               rendererInst.clearHover();
+              lastHoverMeshIdRef.current = null;
               const newHoveredJunction = await service.pickJunctionAtPointCached(worldPos.x, worldPos.y, 3.0);
               hoveredJunctionRef.current = newHoveredJunction;
               if (newHoveredJunction) {
-                const hoverVerts = await service.generateSingleJunctionVertices(
-                  currentProject,
-                  newHoveredJunction,
-                  HOVER_HIGHLIGHT_COLOR,
-                );
-                rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
+                if (showHoverHighlight) {
+                  const hoverVerts = await service.generateSingleJunctionVertices(
+                    currentProject,
+                    newHoveredJunction,
+                    HOVER_HIGHLIGHT_COLOR,
+                  );
+                  rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
+                }
                 if (!rendererInst.pointerDragging) {
                   canvas.style.cursor = 'pointer';
                 }
@@ -823,6 +870,8 @@ export function Viewport() {
         }
       } catch {
         // Ignore hover detection errors.
+      } finally {
+        pickInFlightRef.current = false;
       }
     }
 
@@ -945,6 +994,7 @@ export function Viewport() {
           if (rendererInst) rendererInst.clearHover();
           hoveredRoadRef.current = null;
           hoveredJunctionRef.current = null;
+          lastHoverMeshIdRef.current = null;
           return;
         }
         const objectHit = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
@@ -956,6 +1006,7 @@ export function Viewport() {
           hoveredJunctionRef.current = null;
           hoveredSignalRef.current = null;
           hoveredObjectRef.current = null;
+          lastHoverMeshIdRef.current = null;
           return;
         }
       }
@@ -992,6 +1043,7 @@ export function Viewport() {
         if (rendererInst) rendererInst.clearHover();
         hoveredRoadRef.current = null;
         hoveredJunctionRef.current = null;
+        lastHoverMeshIdRef.current = null;
         return;
       }
       const junctionId = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
@@ -1001,6 +1053,7 @@ export function Viewport() {
         if (rendererInst) rendererInst.clearHover();
         hoveredRoadRef.current = null;
         hoveredJunctionRef.current = null;
+        lastHoverMeshIdRef.current = null;
       }
     } catch (err) {
       console.error('[Viewport] Pick failed:', err);
@@ -1044,6 +1097,7 @@ export function Viewport() {
       hoveredSignalRef.current = null;
       hoveredObjectRef.current = null;
       rendererRef.current?.clearHover();
+      lastHoverMeshIdRef.current = null;
     }
     clearGeometryEditHover();
     clearSplineDrawHover();

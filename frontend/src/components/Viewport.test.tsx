@@ -174,6 +174,7 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     generateRoadVertices: vi.fn().mockResolvedValue(vertices),
     generateSingleRoadVertices: vi.fn().mockResolvedValue(new Float32Array()),
     generateJunctionVertices: vi.fn().mockResolvedValue(new Float32Array()),
+    generateLaneBoundaryVertices: vi.fn().mockResolvedValue(new Float32Array()),
     generateLaneLineVertices: vi.fn().mockResolvedValue(new Float32Array()),
     generateCenterLineVertices: vi.fn().mockResolvedValue(new Float32Array()),
     generateSignalPaintVertices: vi.fn().mockResolvedValue(new Float32Array()),
@@ -496,6 +497,7 @@ describe('Viewport', () => {
 
     act(() => {
       useProjectStore.setState({ project: makeProjectWithRoad() });
+      useViewportStore.setState({ showHoverHighlight: true });
     });
 
     render(<Viewport />);
@@ -523,6 +525,7 @@ describe('Viewport', () => {
 
     act(() => {
       useProjectStore.setState({ project: makeProjectWithRoad() });
+      useViewportStore.setState({ showHoverHighlight: true });
     });
 
     render(<Viewport />);

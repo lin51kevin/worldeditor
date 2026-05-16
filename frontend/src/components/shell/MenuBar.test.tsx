@@ -85,6 +85,7 @@ function createPlatformMock() {
     generateRoadVertices: vi.fn<PlatformService['generateRoadVertices']>().mockResolvedValue(new Float32Array()),
     generateSingleRoadVertices: vi.fn<PlatformService['generateSingleRoadVertices']>().mockResolvedValue(new Float32Array()),
     generateJunctionVertices: vi.fn<PlatformService['generateJunctionVertices']>().mockResolvedValue(new Float32Array()),
+    generateLaneBoundaryVertices: vi.fn<PlatformService['generateLaneBoundaryVertices']>().mockResolvedValue(new Float32Array()),
     generateLaneLineVertices: vi.fn<PlatformService['generateLaneLineVertices']>().mockResolvedValue(new Float32Array()),
     generateCenterLineVertices: vi.fn<PlatformService['generateCenterLineVertices']>().mockResolvedValue(new Float32Array()),
     generateSignalPaintVertices: vi.fn<PlatformService['generateSignalPaintVertices']>().mockResolvedValue(new Float32Array()),
