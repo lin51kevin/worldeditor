@@ -28,18 +28,17 @@ export interface WelcomePageProps {
 }
 
 const SHORTCUTS = [
+  { labelKey: 'toolbar.zoomToFit',         key: 'F' },
   { labelKey: 'toolbar.selectMode',        key: 'V' },
   { labelKey: 'toolbar.splineDraw',        key: 'S' },
   { labelKey: 'toolbar.moveRoad',          key: 'M' },
   { labelKey: 'toolbar.rotateRoad',        key: 'R' },
   { labelKey: 'toolbar.toggleInspector',   key: 'I' },
   { labelKey: 'toolbar.toggleLeftPanel',   key: 'Ctrl+B' },
-  { labelKey: 'toolbar.toggleOutputPanel', key: 'Ctrl+J' },
-  { labelKey: 'toolbar.zoomToFit',         key: 'F' },
 ];
 
-const PROJECT_HOMEPAGE = 'https://github.com/worldeditor/worldeditor-next';
-const USER_MANUAL_URL = 'https://github.com/worldeditor/worldeditor-next/blob/main/docs/user-manual.md';
+const PROJECT_HOMEPAGE = 'https://github.com/lin51kevin/worldeditor';
+const USER_MANUAL_URL = 'https://github.com/lin51kevin/worldeditor/blob/master/docs/user-manual.md';
 
 /** Shorten a file path to show only the last 2 or 3 path segments. */
 function shortenPath(fullPath: string): string {
@@ -75,16 +74,14 @@ export function WelcomePage({
       {/* ── Header ── */}
       <header className="wp-header">
         <div className="wp-logo">
-          <Globe size={120} />
+          <Globe size={70} />
         </div>
         <h1 className="wp-title">{t('welcomePage.title', 'WorldEditor')}</h1>
         <p className="wp-subtitle">{t('welcomePage.subtitle', 'Autonomous driving road network editor')}</p>
       </header>
 
-      {/* ── Three-column body ── */}
-      <div className="wp-body">
-        {/* Left: Start */}
-        <div className="wp-col">
+      {/* ── Start (row 2, col 1) ── */}
+      <div className="wp-col wp-col-start">
           <h2 className="wp-section-title">{t('welcomePage.start', 'Start')}</h2>
           <ul className="wp-start-list">
             <li>
@@ -114,8 +111,8 @@ export function WelcomePage({
           </ul>
         </div>
 
-        {/* Middle: Shortcuts */}
-        <div className="wp-col">
+      {/* ── Shortcuts (row 2, col 2) ── */}
+      <div className="wp-col wp-col-shortcuts">
           <h2 className="wp-section-title">
             <Keyboard size={13} />
             {t('welcomePage.shortcutsSection', 'Keyboard Shortcuts')}
@@ -134,8 +131,8 @@ export function WelcomePage({
           </div>
         </div>
 
-        {/* Right: Recent files */}
-        <div className="wp-col">
+      {/* ── Recent files (row 2, col 3) ── */}
+      <div className="wp-col wp-col-recent">
           <h2 className="wp-section-title">
             <Clock size={13} />
             {t('welcomePage.recentSection', 'Recent Files')}
@@ -165,10 +162,9 @@ export function WelcomePage({
               {t('welcomePage.noRecentFiles', 'No recent files. Open a file to get started.')}
             </p>
           )}
-        </div>
       </div>
 
-      {/* ── Footer ── */}
+      {/* ── Footer (row 3, col 2) ── */}
       <footer className="wp-footer">
         <label className="wp-footer-left">
           <input
