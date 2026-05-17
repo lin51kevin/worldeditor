@@ -8,7 +8,7 @@
  * the manifest before execution and rejects plugins with invalid or missing fields.
  */
 
-import { installPluginApi, unloadExternalPlugin, type PluginPermission, ALL_PERMISSIONS } from './pluginApi';
+import { installPluginApi, unloadExternalPlugin, setManifestPermissions, type PluginPermission, ALL_PERMISSIONS } from './pluginApi';
 
 // ── Manifest schema ───────────────────────────────────────────────────────────
 
@@ -78,6 +78,12 @@ export async function loadPluginBundle(id: string, jsContent: string, manifest?:
   }
   // Ensure the global API is available before any plugin script runs
   installPluginApi();
+
+  // Security: pre-register manifest permissions BEFORE the bundle executes.
+  // registerPlugin() will consume this entry and use it as the authoritative
+  // permission set — ignoring whatever the bundle claims at runtime.
+  const grantedPermissions: readonly PluginPermission[] = manifest?.permissions ?? ALL_PERMISSIONS;
+  setManifestPermissions(id, grantedPermissions);
 
   // Unload previous instance if reloading
   if (loadedScripts.has(id)) {

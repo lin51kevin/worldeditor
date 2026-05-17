@@ -5,7 +5,8 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { BUILTIN_PLUGINS } from '../plugins/builtinRegistry';
-import { loadPluginBundle, unloadPluginBundle } from '../plugins/core/pluginLoader';
+import { loadPluginBundle, unloadPluginBundle, type PluginManifest } from '../plugins/core/pluginLoader';
+import type { PluginPermission } from '../plugins/core/pluginApi';
 import { useBuiltinPluginStore } from '../stores/builtinPluginStore';
 
 export interface PluginInfo {
@@ -104,13 +105,25 @@ export function usePlugins(): UsePluginsReturn {
     setError(null);
     try {
       const js = await invokeCommand<string>(TAURI_COMMANDS.getScript, { id });
-      await loadPluginBundle(id, js);
+      // Build a partial manifest from server-declared plugin info to enforce permissions.
+      // This prevents a bundle from claiming permissions beyond what manifest.json declared.
+      const info = serverPlugins.find(p => p.id === id);
+      const manifest: PluginManifest | undefined = info
+        ? {
+            id: info.id,
+            name: info.name,
+            version: info.version,
+            main: 'dist/plugin.js',
+            permissions: info.permissions as PluginPermission[],
+          }
+        : undefined;
+      await loadPluginBundle(id, js, manifest);
       setLoadedIds((prev) => new Set(prev).add(id));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       throw err;
     }
-  }, [invokeCommand]);
+  }, [invokeCommand, serverPlugins]);
 
   const unloadPlugin = useCallback(async (id: string) => {
     setError(null);

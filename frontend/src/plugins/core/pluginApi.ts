@@ -118,62 +118,110 @@ interface WePluginApi {
 /** Cleanup functions keyed by plugin ID */
 const cleanupFns = new Map<string, () => void>();
 
+/**
+ * Manifest-declared permissions per plugin ID.
+ * Set by `loadPluginBundle` *before* the external bundle is injected into the page,
+ * so that `registerPlugin()` always uses the server-verified manifest permissions
+ * rather than whatever the bundle claims at runtime.
+ */
+const manifestPermissions = new Map<string, readonly PluginPermission[]>();
+
+/**
+ * Pre-register manifest permissions for an external plugin before its JS bundle
+ * is executed. Called exclusively by `pluginLoader.loadPluginBundle`.
+ *
+ * This is the mechanism that prevents a malicious bundle from escalating its
+ * permissions beyond what the `manifest.json` declares.
+ */
+export function setManifestPermissions(id: string, permissions: readonly PluginPermission[]): void {
+  manifestPermissions.set(id, permissions);
+}
+
 /** Install the global plugin API (idempotent) */
 export function installPluginApi(): void {
   if (typeof window === 'undefined') return;
   if ((window as unknown as Record<string, unknown>)['__WE_PLUGIN_API__']) return;
 
   const api: WePluginApi = {
-    registerPlugin(id: string, setup: SetupFn, permissions?: readonly PluginPermission[]): void {
-      const granted = permissions ?? ALL_PERMISSIONS;
+    registerPlugin(id: string, setup: SetupFn, _claimedPermissions?: readonly PluginPermission[]): void {
+      // Security: use manifest-declared permissions (pre-set before the bundle loaded).
+      // Ignore what the bundle claims at runtime to prevent permission escalation.
+      const hasManifest = manifestPermissions.has(id);
+      const granted = manifestPermissions.get(id) ?? _claimedPermissions ?? ALL_PERMISSIONS;
+      manifestPermissions.delete(id); // Consume — prevents replay by a second registerPlugin call
+
+      /**
+       * For external plugins (those loaded via loadPluginBundle with a manifest), enforce
+       * that contribution IDs are prefixed with the plugin's own ID (e.g. 'my-plugin:action').
+       * This prevents one plugin from overwriting another plugin's contributions.
+       */
+      const checkContribId = (contribId: string, type: string): void => {
+        if (hasManifest && !contribId.startsWith(`${id}:`)) {
+          throw new Error(
+            `[Security] Plugin '${id}': ${type} id '${contribId}' must start with '${id}:'`,
+          );
+        }
+      };
+
       const contribStore = usePluginContribStore.getState();
       const ctx: PluginContext = {
         registerToolbarButton: (contrib) => {
           requirePermission(id, granted, 'ui:toolbar');
+          checkContribId(contrib.id, 'toolbar button');
           contribStore.registerToolbarButton(contrib);
         },
         registerMenuItem: (contrib) => {
           requirePermission(id, granted, 'ui:menu');
+          checkContribId(contrib.id, 'menu item');
           contribStore.registerMenuItem(contrib);
         },
         registerTemplateSection: (section) => {
           requirePermission(id, granted, 'ui:templates');
+          checkContribId(section.id, 'template section');
           contribStore.registerTemplateSection(section);
         },
         registerImporter: (contrib) => {
           requirePermission(id, granted, 'io:import');
+          checkContribId(contrib.id, 'importer');
           usePluginContribStore.getState().registerImporter(contrib);
         },
         registerExporter: (contrib) => {
           requirePermission(id, granted, 'io:export');
+          checkContribId(contrib.id, 'exporter');
           usePluginContribStore.getState().registerExporter(contrib);
         },
         registerPanel: (contrib) => {
           requirePermission(id, granted, 'ui:panel');
+          checkContribId(contrib.id, 'panel');
           usePluginContribStore.getState().registerPanel(contrib);
         },
         registerContextMenuItem: (contrib) => {
           requirePermission(id, granted, 'ui:context-menu');
+          checkContribId(contrib.id, 'context menu item');
           usePluginContribStore.getState().registerContextMenuItem(contrib);
         },
         registerViewportOverlay: (contrib) => {
           requirePermission(id, granted, 'ui:overlay');
+          checkContribId(contrib.id, 'viewport overlay');
           usePluginContribStore.getState().registerViewportOverlay(contrib);
         },
         registerSettings: (contrib) => {
           requirePermission(id, granted, 'ui:settings');
+          checkContribId(contrib.id, 'settings');
           usePluginContribStore.getState().registerSettings(contrib);
         },
 
         getProject: () => {
           requirePermission(id, granted, 'project:read');
-          return useProjectStore.getState().project;
+          // Deep-clone to prevent plugins from directly mutating live store state.
+          return structuredClone(useProjectStore.getState().project);
         },
 
         updateProject: (updater) => {
           requirePermission(id, granted, 'project:write');
-          const state = useProjectStore.getState();
-          const newProject = updater(state.project);
+          // Pass a clone to the updater so mutation of the input object has no side effects.
+          const projectCopy = structuredClone(useProjectStore.getState().project);
+          const newProject = updater(projectCopy);
           useProjectStore.setState({ project: newProject, isDirty: true });
         },
 
