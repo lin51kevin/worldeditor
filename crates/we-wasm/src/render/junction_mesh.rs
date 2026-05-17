@@ -1,4 +1,4 @@
-use super::{eval_lane_offset, road_point_at_s};
+use super::helpers::{eval_lane_offset, road_point_at_s};
 
 pub(super) fn append_junction_triangles(
     out: &mut Vec<f32>,

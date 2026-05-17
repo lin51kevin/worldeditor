@@ -1,4 +1,5 @@
-use super::{eval_lane_offset, mark_color, mark_line_width};
+use super::colors::{mark_color, mark_line_width};
+use super::helpers::eval_lane_offset;
 
 /// Emit all road-mark line vertices for a single `RoadMark` into `out`.
 ///

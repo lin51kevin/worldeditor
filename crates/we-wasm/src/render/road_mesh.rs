@@ -1,4 +1,4 @@
-use super::sum_widths_at_ds;
+use super::helpers::sum_widths_at_ds;
 
 /// Generate a colored triangle strip for one lane.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
