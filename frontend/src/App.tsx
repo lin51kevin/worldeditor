@@ -89,7 +89,14 @@ export function App() {
   useEffect(() => {
     const cleanups = BUILTIN_PLUGINS
       .filter((p) => !disabledBuiltins.includes(p.id))
-      .map((p) => p.mount());
+      .map((p) => {
+        try {
+          return p.mount();
+        } catch (err) {
+          console.error(`[Plugin] Failed to mount "${p.id}":`, err);
+          return () => {};
+        }
+      });
     return () => cleanups.forEach((fn) => fn());
   }, [disabledBuiltins]);
 
