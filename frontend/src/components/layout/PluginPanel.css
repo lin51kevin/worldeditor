@@ -1,0 +1,66 @@
+.plugin-panel-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: transparent;
+}
+
+.plugin-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--color-text-primary);
+  user-select: none;
+  cursor: move;
+  position: relative;
+}
+
+.plugin-panel-title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plugin-panel-close {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-text-secondary);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+
+.plugin-panel-shell:hover .plugin-panel-close,
+.plugin-panel-shell:focus-within .plugin-panel-close {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.plugin-panel-close:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.plugin-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: transparent;
+}
