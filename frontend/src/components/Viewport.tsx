@@ -10,9 +10,6 @@ import { getPlatformService } from '../services';
 import { showContextMenu } from '../services/contextMenu';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import {
-  buildHighlightProject,
-  buildRenderableProject,
-  isSceneSelectionVisible,
   tintVertices,
 } from '../utils/sceneGraph';
 import { useViewportDrop } from '../hooks/useViewportDrop';
@@ -21,12 +18,15 @@ import { useMoveRotateMode } from '../hooks/useMoveRotateMode';
 import { useSplineDrawMode } from '../hooks/useSplineDrawMode';
 import { useSplineDrawPreview } from '../hooks/useSplineDrawPreview';
 import { useGeometryEditMode } from '../hooks/useGeometryEditMode';
+import { useViewportKeyboard } from '../hooks/useViewportKeyboard';
+import { useViewportMeshes } from '../hooks/useViewportMeshes';
+import { useSelectionHighlight } from '../hooks/useSelectionHighlight';
 import './Viewport.css';
 
 import {
   HOVER_HIGHLIGHT_COLOR, HOVER_HIGHLIGHT_Z_LIFT,
   MouseGestureState,
-  mergeFloat32Arrays, liftMeshZ, exceededDragThreshold,
+  liftMeshZ, exceededDragThreshold,
   type SplineControlPoint,
 } from './viewportUtils';
 
@@ -36,12 +36,7 @@ export function Viewport() {
   const rendererRef = useRef<ViewportRenderer | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useViewportDrop(rendererRef, canvasRef);
-  const project = useProjectStore((s) => s.project);
-  const selectedJunctionId = useProjectStore((s) => s.selectedJunctionId);
-  const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
-  const selectedRoadIds = useProjectStore((s) => s.selectedRoadIds);
-  const selectedJunctionIds = useProjectStore((s) => s.selectedJunctionIds);
-  const { showGrid, showAxis, showHoverHighlight, dimension, display, viewMode } = useViewportStore();
+  const { showGrid, showAxis, showHoverHighlight, dimension, viewMode } = useViewportStore();
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
@@ -91,49 +86,7 @@ export function Viewport() {
     status,
   });
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const viewState = useViewportStore.getState();
-      const isDrawMode =
-        viewState.editMode === 'spline';
-
-      if (event.key === 'Escape') {
-        // Pending click-to-place mode takes priority — cancel it first
-        if (viewState.pendingTemplateId) {
-          viewState.clearPendingTemplate();
-          return;
-        }
-        if (viewState.pendingObjectTemplateId) {
-          viewState.clearPendingObjectTemplate();
-          return;
-        }
-        if (viewState.geometryEditRoadId || isDrawMode) {
-          return;
-        }
-        if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
-          viewState.setEditMode('default');
-          return;
-        }
-        const editorState = useProjectStore.getState();
-        if (
-          editorState.selectedRoadId ||
-          editorState.selectedJunctionId ||
-          editorState.selectedRoadIds.length > 0 ||
-          editorState.selectedJunctionIds.length > 0
-        ) {
-          editorState.selectRoad(null);
-        }
-        return;
-      }
-
-      if (event.key === 'Delete' && !viewState.geometryEditRoadId && !isDrawMode && !viewState.pendingTemplateId && !viewState.pendingObjectTemplateId) {
-        useProjectStore.getState().deleteSelected();
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  useViewportKeyboard();
 
   // When hover-highlight is toggled ON, invalidate the mesh cache so the next
   // mousemove re-uploads the highlight. When toggled OFF, clear any stale highlight.
@@ -146,201 +99,11 @@ export function Viewport() {
     }
   }, [showHoverHighlight]);
 
-  // ── Surface mesh (roads + junctions + signals + objects) ──
-  // Only regenerates when geometry-affecting deps change; toggling
-  // lane-line or reference-line visibility does NOT trigger this.
-  const surfaceDepsRef = useRef<{
-    roadRefs: Map<string, unknown>;
-    junctionRefs: Map<string, unknown>;
-  }>({ roadRefs: new Map(), junctionRefs: new Map() });
-  const cachedSurfaceRef = useRef<Float32Array>(new Float32Array(0));
-
-  // Shared renderable project — cached per (project, display) to avoid duplicate
-  // computation in updateSurfaceMesh / updateLineMesh.
-  const visibleProjectRef = useRef<ReturnType<typeof buildRenderableProject> | null>(null);
-  const visibleProjectKeyRef = useRef<string>('');
-  const projectLoadVersion = useProjectStore((s) => s.projectLoadVersion);
-  const surfaceViewModeRef = useRef(viewMode);
-  const projectRef = useRef(project);
-  const getVisibleProject = useCallback(() => {
-    const key = JSON.stringify({ d: display, v: projectLoadVersion });
-    if (key !== visibleProjectKeyRef.current || project !== projectRef.current || !visibleProjectRef.current) {
-      visibleProjectKeyRef.current = key;
-      projectRef.current = project;
-      visibleProjectRef.current = project ? buildRenderableProject(project, display) : null;
-    }
-    return visibleProjectRef.current;
-  }, [project, display, projectLoadVersion]);
-
-  // ── WASM project cache lifecycle ──
-  // Pushes the visible project into the WASM-side cache once per change,
-  // so that 60 Hz pick/snap calls avoid per-call JSON serialisation.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const vp = getVisibleProject();
-      if (!vp || cancelled) return;
-      try {
-        const service = await getPlatformService();
-        await service.setProjectCache(vp);
-      } catch {
-        // Non-fatal: cached pick will fall back to uncached path.
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [getVisibleProject]);
-
-  const updateSurfaceMesh = useCallback(async () => {
-    const renderer = rendererRef.current;
-    if (!renderer || status !== 'ready' || !project) return;
-    const tStart = performance.now();
-
-    try {
-      const service = await getPlatformService();
-      const tService = performance.now();
-      const visibleProject = getVisibleProject();
-      if (!visibleProject) return;
-
-      // Detect whether any road/junction actually changed via reference equality.
-      const prev = surfaceDepsRef.current;
-      const newRoadRefs = new Map(visibleProject.roads.map((r) => [r.id, r]));
-      const newJunctionRefs = new Map(visibleProject.junctions.map((j) => [j.id, j]));
-
-      const roadsChanged =
-        newRoadRefs.size !== prev.roadRefs.size ||
-        [...newRoadRefs].some(([id, ref]) => prev.roadRefs.get(id) !== ref);
-      const junctionsChanged =
-        newJunctionRefs.size !== prev.junctionRefs.size ||
-        [...newJunctionRefs].some(([id, ref]) => prev.junctionRefs.get(id) !== ref);
-      const modeChanged = surfaceViewModeRef.current !== viewMode;
-
-      surfaceDepsRef.current = { roadRefs: newRoadRefs, junctionRefs: newJunctionRefs };
-      surfaceViewModeRef.current = viewMode;
-
-      if (!roadsChanged && !junctionsChanged && !modeChanged && cachedSurfaceRef.current.length > 0) {
-        // Nothing geometry-related changed — skip WASM calls entirely.
-        console.info(`[Viewport:perf] updateSurfaceMesh skipped (no change) ${(performance.now() - tStart).toFixed(1)}ms`);
-        return;
-      }
-
-      const empty = Promise.resolve(new Float32Array(0));
-      const roadProm = viewMode === 'solid'
-        ? service.generateRoadVertices(visibleProject, 2.0, display.colorMode).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); })
-        : empty;
-      const junctionProm = viewMode === 'solid'
-        ? service.generateJunctionVertices(visibleProject).catch((e) => { console.warn('[Viewport] generateJunctionVertices failed:', e); return new Float32Array(0); })
-        : empty;
-      const signalProm = viewMode === 'solid' && display.showSignals
-        ? service.generateSignalPaintVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
-        : empty;
-      const objectProm = viewMode === 'solid' && display.showObjects
-        ? service.generateObjectVertices(visibleProject).catch(() => new Float32Array(0))
-        : empty;
-
-      const [roadVerts, junctionVerts, signalVerts, objectVerts] = await Promise.all([
-        roadProm,
-        junctionProm,
-        signalProm,
-        objectProm,
-      ]);
-      const tWasm = performance.now();
-
-      const surfaceVerts = mergeFloat32Arrays(
-        mergeFloat32Arrays(mergeFloat32Arrays(roadVerts, junctionVerts), signalVerts),
-        objectVerts,
-      );
-      cachedSurfaceRef.current = surfaceVerts;
-      if (viewMode === 'solid') {
-        renderer.uploadRoadVertices(surfaceVerts);
-      } else {
-        renderer.uploadRoadVertices(surfaceVerts, { preserveLastVertexDataOnEmpty: true });
-      }
-      const tDone = performance.now();
-      console.info(
-        `[Viewport:perf] updateSurfaceMesh total=${(tDone - tStart).toFixed(1)}ms | ` +
-        `service=${(tService - tStart).toFixed(1)} wasm=${(tWasm - tService).toFixed(1)} ` +
-        `upload=${(tDone - tWasm).toFixed(1)} roads=${visibleProject.roads.length} verts=${surfaceVerts.length / 7}`,
-      );
-    } catch (err) {
-      console.error('[Viewport] Failed to generate surface mesh:', err);
-    }
-  }, [
-    project,
+  // ── Mesh lifecycle (surface + lines + visible project + WASM cache) ──
+  const { getVisibleProject, updateSurfaceMesh, updateLineMesh } = useViewportMeshes({
+    rendererRef,
     status,
-    viewMode,
-    display.showSignals,
-    display.showObjects,
-    display.colorMode,
-    display.hiddenRoadIds,
-    display.hiddenJunctionIds,
-    display.hiddenLaneSectionKeys,
-    display.hiddenLaneKeys,
-    display.hiddenSignalKeys,
-    display.hiddenObjectKeys,
-  ]);
-
-  // ── Line mesh (lane lines + center/reference lines) ──
-  // Only regenerates when line-related deps change; road surface color
-  // mode changes do NOT trigger this.
-  const updateLineMesh = useCallback(async () => {
-    const renderer = rendererRef.current;
-    if (!renderer || status !== 'ready' || !project) return;
-
-    try {
-      const service = await getPlatformService();
-      const visibleProject = getVisibleProject();
-      if (!visibleProject) return;
-
-      const empty = Promise.resolve(new Float32Array(0));
-      const centerLineProm = (display.showReferenceLine || viewMode !== 'solid')
-        ? service.generateCenterLineVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
-        : empty;
-      const laneBoundaryProm = viewMode !== 'solid'
-        ? service.generateLaneBoundaryVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
-        : empty;
-      const roadMarkProm = (viewMode === 'wire' || (viewMode === 'solid' && display.showLaneLines))
-        ? service.generateLaneLineVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
-        : empty;
-
-      const [laneBoundaryVerts, roadMarkVerts, centerLineVerts] = await Promise.all([
-        laneBoundaryProm,
-        roadMarkProm,
-        centerLineProm,
-      ]);
-      const lineVerts = mergeFloat32Arrays(
-        mergeFloat32Arrays(laneBoundaryVerts, roadMarkVerts),
-        centerLineVerts,
-      );
-      renderer.uploadLaneLineVertices(lineVerts);
-    } catch (err) {
-      console.error('[Viewport] Failed to generate line mesh:', err);
-    }
-  }, [
-    project,
-    status,
-    viewMode,
-    display.showLaneLines,
-    display.showRoadMarks,
-    display.showReferenceLine,
-    display.hiddenRoadIds,
-    display.hiddenJunctionIds,
-    display.hiddenLaneSectionKeys,
-    display.hiddenLaneKeys,
-  ]);
-
-  // Reset caches when a genuinely new file is loaded (not on every mutation)
-  useEffect(() => {
-    const renderer = rendererRef.current;
-    if (status !== 'ready') return;
-    renderer?.clearVertexCache();
-    visibleProjectRef.current = null;
-    visibleProjectKeyRef.current = '';
-    surfaceDepsRef.current = { roadRefs: new Map(), junctionRefs: new Map() };
-    cachedSurfaceRef.current = new Float32Array(0);
-  }, [projectLoadVersion, status]);
-
-  useEffect(() => { updateSurfaceMesh(); }, [updateSurfaceMesh]);
-  useEffect(() => { updateLineMesh(); }, [updateLineMesh]);
+  });
 
   // Real-time road mesh preview while adding knots in draw mode
   useSplineDrawPreview({
@@ -352,92 +115,8 @@ export function Viewport() {
     }, [updateSurfaceMesh, updateLineMesh]),
   });
 
-  // Update selection highlight when scene selection changes
-  useEffect(() => {
-    const renderer = rendererRef.current;
-    if (!renderer || status !== 'ready') return;
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const service = await getPlatformService();
-        if (cancelled) return;
-
-        // Multi-select highlight (rubber-band box selection)
-        if (selectedRoadIds.length > 0 || selectedJunctionIds.length > 0) {
-          const parts: Float32Array[] = [];
-          if (selectedRoadIds.length > 0) {
-            const multiProject = { ...project, roads: project.roads.filter((r) => selectedRoadIds.includes(r.id)) };
-            const verts = await service.generateRoadVertices(multiProject, 2.0);
-            parts.push(tintVertices(verts, [0.95, 0.18, 0.18, 0.82]));
-          }
-          for (const jId of selectedJunctionIds) {
-            const jVerts = await service.generateSingleJunctionVertices(project, jId, [0.7, 0.4, 1.0, 0.65]);
-            parts.push(jVerts);
-          }
-          const combined = parts.reduce((acc, p) => mergeFloat32Arrays(acc, p), new Float32Array());
-          renderer.uploadHighlightVertices(combined);
-          return;
-        }
-
-        if (!isSceneSelectionVisible(selectedSceneNode, display)) {
-          renderer.clearHighlight();
-          return;
-        }
-
-        if (selectedSceneNode && selectedSceneNode.type !== 'junction') {
-          // For signal/object selections: render a small highlight marker at the element's position
-          if (selectedSceneNode.type === 'signal') {
-            const verts = await service.generateSingleSignalVertices(
-              project, selectedSceneNode.roadId, selectedSceneNode.signalId,
-              [0.2, 0.9, 0.9, 1.0],
-            );
-            if (verts.length > 0) renderer.uploadHighlightVertices(verts);
-            else renderer.clearHighlight();
-            return;
-          }
-          if (selectedSceneNode.type === 'object') {
-            const verts = await service.generateSingleObjectVertices(
-              project, selectedSceneNode.roadId, selectedSceneNode.objectId,
-              [0.2, 0.9, 0.9, 1.0],
-            );
-            if (verts.length > 0) renderer.uploadHighlightVertices(verts);
-            else renderer.clearHighlight();
-            return;
-          }
-          const highlightProject = buildHighlightProject(project, selectedSceneNode);
-          if (!highlightProject) {
-            renderer.clearHighlight();
-            return;
-          }
-          const highlightVerts = await service.generateRoadVertices(highlightProject, 2.0);
-          renderer.uploadHighlightVertices(
-            tintVertices(
-              highlightVerts,
-              selectedSceneNode.type === 'road'
-                ? [0.95, 0.18, 0.18, 0.82]
-                : [0.92, 0.3, 0.3, 0.72],
-            ),
-          );
-          return;
-        }
-
-        if (selectedJunctionId) {
-          const highlightVerts = await service.generateSingleJunctionVertices(
-            project, selectedJunctionId, [0.7, 0.4, 1.0, 0.65],
-          );
-          renderer.uploadHighlightVertices(highlightVerts);
-          return;
-        }
-        renderer.clearHighlight();
-      } catch (err) {
-        if (!cancelled) console.error('[Viewport] Failed to generate highlight mesh:', err);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [display, project, selectedJunctionId, selectedJunctionIds, selectedRoadIds, selectedSceneNode, status]);
+  // ── Selection highlight ──
+  useSelectionHighlight({ rendererRef, status });
 
   // Throttle Zustand cursor updates to once per animation frame
   useEffect(() => {
