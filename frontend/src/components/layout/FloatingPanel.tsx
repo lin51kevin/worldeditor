@@ -29,6 +29,8 @@ interface FloatingPanelProps {
   storageKey: string;
   /** Optional close callback — when provided a × button is rendered in the top-right corner */
   onClose?: () => void;
+  /** Optional callback fired on any mousedown inside the panel (use to bring to front) */
+  onMouseDown?: (e: React.MouseEvent) => void;
 }
 
 function loadState(key: string, defaultWidth: number): SavedState {
@@ -76,6 +78,7 @@ export function FloatingPanel({
   anchorHorizontal = 'left',
   storageKey,
   onClose,
+  onMouseDown,
 }: FloatingPanelProps) {
   const initialState = loadState(storageKey, defaultWidth);
   const [tx, setTx] = useState(initialState.tx);
@@ -119,6 +122,7 @@ export function FloatingPanel({
   // Drag: start when mousedown lands on the designated drag handle
   const handleContainerMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      onMouseDown?.(e);
       const target = e.target as Element;
       if (!target.closest(dragHandleSelector)) return;
       // Don't intercept clicks on buttons inside the header
@@ -133,7 +137,7 @@ export function FloatingPanel({
       };
       document.body.style.userSelect = 'none';
     },
-    [dragHandleSelector, tx, ty],
+    [dragHandleSelector, tx, ty, onMouseDown],
   );
 
   // Resize: start on edge handle mousedown
