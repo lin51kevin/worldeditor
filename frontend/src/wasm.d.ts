@@ -52,4 +52,23 @@ declare module '../../wasm/pkg/we_wasm' {
   export function road_to_spline(road_json: string, sample_step: number): string;
   export function move_spline_knot(spline_json: string, knot_index: number, x: number, y: number, z: number): string;
   export function spline_to_geometries(spline_json: string, mode: string): string;
+
+  // Lanelet2 I/O
+  export function import_from_lanelet2(xml: string): any;
+  export function export_to_lanelet2(project_json: string): string;
+  export function import_from_dxf(dxf: string): any;
+  export function export_to_dxf(project_json: string): string;
+  export function import_from_shapefile(bytes: Uint8Array): any;
+  export function export_to_shapefile(project_json: string): Uint8Array;
+  export function import_from_mif(mif: string): any;
+  export function export_to_mif(project_json: string): string;
+  export function import_from_nio(bytes: Uint8Array): any;
+  export function export_to_nio(project_json: string): Uint8Array;
+
+  // GIS extended
+  export function geodetic_to_ecef(lat_deg: number, lon_deg: number, alt_m: number): { x: number; y: number; z: number };
+  export function ecef_to_geodetic(x: number, y: number, z: number): { lat: number; lon: number; alt: number };
+  export function geo_to_mgrs(lat_deg: number, lon_deg: number, precision: number): string;
+  export function parse_proj4_crs(proj4_str: string): Record<string, string>;
+  export function parse_wkt_crs(wkt_str: string): { crs_type: string; name: string; epsg: number | null };
 }

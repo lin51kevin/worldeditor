@@ -74,9 +74,34 @@ export function export_roads_to_csv(project_json: string): string;
 export function export_signals_to_json(project_json: string): string;
 
 /**
+ * Export a project as DXF text.
+ */
+export function export_to_dxf(project_json: string): string;
+
+/**
  * Export the project to HD Map XML format.
  */
 export function export_to_hdmap_xml(project_json: string): string;
+
+/**
+ * Export a project (as JSON) to Lanelet2 OSM-XML.
+ */
+export function export_to_lanelet2(project_json: string): string;
+
+/**
+ * Export a project as MapInfo MIF text.
+ */
+export function export_to_mif(project_json: string): string;
+
+/**
+ * Export a project as NIO bytes.
+ */
+export function export_to_nio(project_json: string): Uint8Array;
+
+/**
+ * Export a project as a Shapefile bundle.
+ */
+export function export_to_shapefile(project_json: string): Uint8Array;
 
 /**
  * Fit an affine transform from Ground Control Points (GCPs).
@@ -285,6 +310,31 @@ export function get_signal_world_pos(project_json: string, road_id: string, sign
  * Returns `true` if a project cache has been initialised.
  */
 export function has_project_cache(): boolean;
+
+/**
+ * Import a DXF string and return the project as JSON.
+ */
+export function import_from_dxf(dxf: string): any;
+
+/**
+ * Import a Lanelet2 OSM-XML string and return the project as JSON.
+ */
+export function import_from_lanelet2(xml: string): any;
+
+/**
+ * Import a MapInfo MIF string and return the project as JSON.
+ */
+export function import_from_mif(mif: string): any;
+
+/**
+ * Import NIO bytes and return the project as JSON.
+ */
+export function import_from_nio(bytes: Uint8Array): any;
+
+/**
+ * Import a Shapefile bundle and return the project as JSON.
+ */
+export function import_from_shapefile(bytes: Uint8Array): any;
 
 /**
  * Import roads from CSV text.
@@ -555,7 +605,12 @@ export interface InitOutput {
     readonly export_project_to_obj: (a: number, b: number) => [number, number, number, number];
     readonly export_roads_to_csv: (a: number, b: number) => [number, number, number, number];
     readonly export_signals_to_json: (a: number, b: number) => [number, number, number, number];
+    readonly export_to_dxf: (a: number, b: number) => [number, number, number, number];
     readonly export_to_hdmap_xml: (a: number, b: number) => [number, number, number, number];
+    readonly export_to_lanelet2: (a: number, b: number) => [number, number, number, number];
+    readonly export_to_mif: (a: number, b: number) => [number, number, number, number];
+    readonly export_to_nio: (a: number, b: number) => [number, number, number, number];
+    readonly export_to_shapefile: (a: number, b: number) => [number, number, number, number];
     readonly fit_affine_from_gcps: (a: number, b: number) => [number, number, number];
     readonly gcj02_to_wgs84: (a: number, b: number, c: number) => any;
     readonly generate_center_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
@@ -579,6 +634,11 @@ export interface InitOutput {
     readonly get_road_templates: () => [number, number, number];
     readonly get_signal_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly has_project_cache: () => number;
+    readonly import_from_dxf: (a: number, b: number) => [number, number, number];
+    readonly import_from_lanelet2: (a: number, b: number) => [number, number, number];
+    readonly import_from_mif: (a: number, b: number) => [number, number, number];
+    readonly import_from_nio: (a: number, b: number) => [number, number, number];
+    readonly import_from_shapefile: (a: number, b: number) => [number, number, number];
     readonly import_roads_from_csv: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly import_signals_from_json: (a: number, b: number) => [number, number, number, number];
     readonly init: () => void;
