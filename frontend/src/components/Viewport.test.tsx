@@ -211,6 +211,7 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     pickRoadAtPointCached: vi.fn().mockResolvedValue(null),
     pickJunctionAtPointCached: vi.fn().mockResolvedValue(null),
     snapPointCached: vi.fn().mockResolvedValue({ x: 0, y: 0, snapped: false, snap_type: 'None', target_id: null }),
+    snapPointOnRoad: vi.fn().mockResolvedValue({ s: 0, t: 0, hdg: 0 }),
   };
 }
 
