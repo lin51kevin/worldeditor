@@ -1,0 +1,64 @@
+.scripting-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 12px;
+    min-height: 220px;
+}
+
+.scripting-panel__title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.scripting-panel__hint,
+.scripting-panel__empty {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+}
+
+.scripting-panel__controls {
+    display: flex;
+    gap: 8px;
+}
+
+.scripting-panel__controls input {
+    flex: 1;
+}
+
+.scripting-panel__controls button {
+    border: 0;
+    border-radius: 4px;
+    padding: 6px 10px;
+    background: var(--color-accent);
+    color: var(--color-text-inverse);
+    cursor: pointer;
+}
+
+.scripting-panel__log {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 260px;
+    overflow: auto;
+}
+
+.scripting-panel__entry {
+    padding: 8px;
+    background: var(--color-bg-secondary);
+    border-left: 3px solid var(--color-accent);
+}
+
+.scripting-panel__command {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.scripting-panel__output {
+    margin: 0;
+    white-space: pre-wrap;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 12px;
+}

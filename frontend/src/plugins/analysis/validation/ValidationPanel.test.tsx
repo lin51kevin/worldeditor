@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { ValidationPanel } from './ValidationPanel';
 
-vi.mock('../../stores/projectStore', () => ({
+vi.mock('../../../stores/projectStore', () => ({
   useProjectStore: (selector: (s: any) => any) =>
     selector({
       project: {

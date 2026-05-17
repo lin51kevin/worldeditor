@@ -1,0 +1,114 @@
+.gis-tools-panel {
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.gis-tools-title {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.gis-tools-crs-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gis-tools-crs-row label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+}
+
+.gis-tools-crs-row select {
+    padding: 4px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border-radius: 3px;
+}
+
+.gis-tools-arrow {
+    font-size: 18px;
+    margin-top: 14px;
+    color: var(--color-text-secondary);
+}
+
+.gis-tools-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gis-tools-inputs label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+}
+
+.gis-tools-inputs input {
+    padding: 4px 6px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.gis-tools-convert-btn {
+    padding: 6px 12px;
+    border: none;
+    background: var(--color-accent);
+    color: var(--color-text-inverse);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.gis-tools-convert-btn:hover {
+    background: var(--color-accent-hover);
+}
+
+.gis-tools-error {
+    color: var(--color-error);
+    font-size: 12px;
+    padding: 4px;
+}
+
+.gis-tools-results {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+}
+
+.gis-tools-result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.gis-tools-result-label {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+}
+
+.gis-tools-result-value {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--color-text-primary);
+    user-select: all;
+}

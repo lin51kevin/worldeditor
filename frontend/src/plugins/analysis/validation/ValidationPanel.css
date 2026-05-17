@@ -1,0 +1,73 @@
+.validation-panel {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: 100%;
+}
+
+.validation-panel__toolbar {
+    display: flex;
+    gap: 8px;
+}
+
+.validation-panel__btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+}
+
+.validation-panel__btn:hover {
+    background: var(--color-bg-hover);
+}
+
+.validation-panel__body {
+    flex: 1;
+    overflow: auto;
+}
+
+.validation-panel__empty {
+    color: var(--color-text-secondary);
+    text-align: center;
+    padding: 24px;
+}
+
+.validation-panel__empty-icon {
+    color: var(--color-success);
+    margin-bottom: 8px;
+}
+
+.validation-panel__issues {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.validation-panel__issue {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.validation-panel__icon--error {
+    color: var(--color-danger);
+}
+
+.validation-panel__icon--warning {
+    color: var(--color-warning);
+}
+
+.validation-panel__icon--info {
+    color: var(--color-info);
+}

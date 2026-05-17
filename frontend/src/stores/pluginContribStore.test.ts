@@ -23,7 +23,19 @@ function makeItem(id: string, pluginId = 'test-plugin'): MenuItemContrib {
 
 describe('usePluginContribStore', () => {
   beforeEach(() => {
-    usePluginContribStore.setState({ toolbarButtons: [], menuItems: [] });
+    usePluginContribStore.setState({
+      toolbarButtons: [],
+      menuItems: [],
+      templateSections: [],
+      importers: [],
+      exporters: [],
+      panels: [],
+      contextMenuItems: [],
+      viewportOverlays: [],
+      settingsContribs: [],
+      panelTabVisibility: {},
+      activeTabId: null,
+    });
   });
 
   it('registers a toolbar button', () => {
@@ -124,6 +136,18 @@ describe('usePluginContribStore', () => {
     expect(usePluginContribStore.getState().panels).toHaveLength(1);
     usePluginContribStore.getState().unregisterPanel('panel-1');
     expect(usePluginContribStore.getState().panels).toHaveLength(0);
+  });
+
+  it('rejects a panel with a null component', () => {
+    expect(() => {
+      usePluginContribStore.getState().registerPanel({
+        id: 'panel-invalid',
+        pluginId: 'plugin-gis',
+        title: 'Broken Panel',
+        component: null as never,
+        position: 'left',
+      });
+    }).toThrow(/panel component/i);
   });
 
   // --- ContextMenuItem ---

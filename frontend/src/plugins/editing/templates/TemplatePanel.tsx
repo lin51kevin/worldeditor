@@ -1,9 +1,9 @@
 import { useState, useMemo, useCallback, memo } from 'react';
 import { Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { usePluginContribStore } from '../../stores/pluginContribStore';
-import { useViewportStore } from '../../stores/viewportStore';
-import type { TemplateItemDef } from '../../stores/pluginContribStore';
+import { usePluginContribStore } from '../../../stores/pluginContribStore';
+import { useViewportStore } from '../../../stores/viewportStore';
+import type { TemplateItemDef } from '../../../stores/pluginContribStore';
 import './TemplatePanel.css';
 
 const FAVORITES_KEY = 'we_template_favorites';

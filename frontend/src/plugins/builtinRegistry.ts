@@ -15,12 +15,12 @@ import { mountIoObj3dPlugin } from './io/obj3d/ioObj3d.plugin';
 import { mountIoGeoZPlugin } from './io/geoz/ioGeoZ.plugin';
 import { mountIoOsmPlugin } from './io/osm/ioOsm.plugin';
 import { mountIoSignalsPlugin } from './io/signals/ioSignals.plugin';
-import { mountIoLanelet2Plugin } from './io/lanelet2/io-lanelet2-stub.plugin';
-import { mountIoShapefilePlugin } from './io/shapefile/io-shapefile-stub.plugin';
-import { mountIoDxfPlugin } from './io/dxf/io-dxf-stub.plugin';
-import { mountIoNioPlugin } from './io/nio/io-nio-stub.plugin';
-import { mountIoMifPlugin } from './io/mif/io-mif-stub.plugin';
-import { mountIoXodrExtPlugin } from './io/xodr-ext/io-xodr-ext-stub.plugin';
+import { mountIoLanelet2Plugin } from './io/lanelet2/ioLanelet2.plugin';
+import { mountIoShapefilePlugin } from './io/shapefile/ioShapefile.plugin';
+import { mountIoDxfPlugin } from './io/dxf/ioDxf.plugin';
+import { mountIoNioPlugin } from './io/nio/ioNio.plugin';
+import { mountIoMifPlugin } from './io/mif/ioMif.plugin';
+import { mountIoXodrExtPlugin } from './io/xodr-ext/ioXodrExt.plugin';
 import { mountValidationPlugin } from './analysis/validation/validation.plugin';
 import { mountTrafficPlugin } from './analysis/traffic/traffic.plugin';
 import { mountLaneDetectPlugin } from './analysis/lane-detect/lane-detect-beta.plugin';
@@ -44,15 +44,15 @@ const MOUNT_MAP: Record<string, () => () => void> = {
   'advanced-editing': mountAdvancedEditingPlugin,
   'io-csv-import': mountIoCsvPlugin,
   'io-obj3d-export': mountIoObj3dPlugin,
-  'io-lanelet2-stub': mountIoLanelet2Plugin,
-  'io-shapefile-stub': mountIoShapefilePlugin,
-  'io-dxf-stub': mountIoDxfPlugin,
-  'io-nio-stub': mountIoNioPlugin,
+  'io-lanelet2': mountIoLanelet2Plugin,
+  'io-shapefile': mountIoShapefilePlugin,
+  'io-dxf': mountIoDxfPlugin,
+  'io-nio': mountIoNioPlugin,
   'io-geoz-import': mountIoGeoZPlugin,
-  'io-mif-stub': mountIoMifPlugin,
+  'io-mif': mountIoMifPlugin,
   'io-osm-export': mountIoOsmPlugin,
   'io-signals': mountIoSignalsPlugin,
-  'io-xodr-ext-stub': mountIoXodrExtPlugin,
+  'io-xodr-ext': mountIoXodrExtPlugin,
   'gis-tools': mountGisToolsPlugin,
   'validation': mountValidationPlugin,
   'traffic': mountTrafficPlugin,
@@ -105,15 +105,15 @@ const BUILTIN_META: PluginInfo[] = [
   },
   { id: 'io-csv-import', name: 'CSV I/O', nameKey: 'pluginManager.builtinIoCsvName', version: '1.0.0', description: 'Import/export roads as CSV', descriptionKey: 'pluginManager.builtinIoCsvDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'io-obj3d-export', name: 'OBJ 3D Export', nameKey: 'pluginManager.builtinIoObj3dName', version: '1.0.0', description: 'Export 3D road mesh as OBJ', descriptionKey: 'pluginManager.builtinIoObj3dDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
-  { id: 'io-lanelet2-stub', name: 'Lanelet2 I/O', nameKey: 'pluginManager.builtinIoLanelet2Name', version: '1.0.0', description: 'Import/export Lanelet2 HD maps', descriptionKey: 'pluginManager.builtinIoLanelet2Desc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
-  { id: 'io-shapefile-stub', name: 'Shapefile I/O', nameKey: 'pluginManager.builtinIoShapefileName', version: '1.0.0', description: 'Import/export Shapefile format (Phase 3)', descriptionKey: 'pluginManager.builtinIoShapefileDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
-  { id: 'io-dxf-stub', name: 'DXF I/O', nameKey: 'pluginManager.builtinIoDxfName', version: '1.0.0', description: 'Import/export AutoCAD DXF format (Phase 3)', descriptionKey: 'pluginManager.builtinIoDxfDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
-  { id: 'io-nio-stub', name: 'NIO Proto I/O', nameKey: 'pluginManager.builtinIoNioName', version: '1.0.0', description: 'Import/export NIO Protobuf maps (Phase 3)', descriptionKey: 'pluginManager.builtinIoNioDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'io-lanelet2', name: 'Lanelet2 I/O', nameKey: 'pluginManager.builtinIoLanelet2Name', version: '1.0.0', description: 'Import/export Lanelet2 HD maps (OSM-XML)', descriptionKey: 'pluginManager.builtinIoLanelet2Desc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'io-shapefile', name: 'Shapefile I/O', nameKey: 'pluginManager.builtinIoShapefileName', version: '1.0.0', description: 'Import/export single-file Shapefile bundles', descriptionKey: 'pluginManager.builtinIoShapefileDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'io-dxf', name: 'DXF I/O', nameKey: 'pluginManager.builtinIoDxfName', version: '1.0.0', description: 'Import/export AutoCAD DXF centerlines', descriptionKey: 'pluginManager.builtinIoDxfDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'io-nio', name: 'NIO I/O', nameKey: 'pluginManager.builtinIoNioName', version: '1.0.0', description: 'Import/export NIO binary maps', descriptionKey: 'pluginManager.builtinIoNioDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'io-geoz-import', name: 'GeoZ Map Importer', version: '0.1.0', description: 'Import GeoZ format map files (ZIP + protobuf)', author: 'WorldEditor', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
-  { id: 'io-mif-stub', name: 'MIF/MID I/O', nameKey: 'pluginManager.builtinIoMifName', version: '1.0.0', description: 'Import/export MapInfo MIF/MID (Phase 3)', descriptionKey: 'pluginManager.builtinIoMifDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'io-mif', name: 'MIF/MID I/O', nameKey: 'pluginManager.builtinIoMifName', version: '1.0.0', description: 'Import/export MapInfo MIF geometry', descriptionKey: 'pluginManager.builtinIoMifDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'io-osm-export', name: 'OSM Export', nameKey: 'pluginManager.builtinIoOsmName', version: '1.0.0', description: 'Export roads as OpenStreetMap XML', descriptionKey: 'pluginManager.builtinIoOsmDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'io-signals', name: 'Signal JSON I/O', nameKey: 'pluginManager.builtinIoSignalsName', version: '1.0.0', description: 'Import signal JSON / export HD Map XML', descriptionKey: 'pluginManager.builtinIoSignalsDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
-  { id: 'io-xodr-ext-stub', name: 'OpenDRIVE Extensions', nameKey: 'pluginManager.builtinIoXodrExtName', version: '1.0.0', description: 'OpenDRIVE custom extensions I/O (Phase 3)', descriptionKey: 'pluginManager.builtinIoXodrExtDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'io-xodr-ext', name: 'OpenDRIVE Extensions', nameKey: 'pluginManager.builtinIoXodrExtName', version: '1.0.0', description: 'OpenDRIVE extended import with version migration', descriptionKey: 'pluginManager.builtinIoXodrExtDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'gis-tools', name: 'GIS Tools', nameKey: 'pluginManager.builtinGisToolsName', version: '1.0.0', description: 'Advanced GIS coordinate systems panel', descriptionKey: 'pluginManager.builtinGisToolsDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'validation', name: 'Validation', nameKey: 'pluginManager.builtinValidationName', version: '1.0.0', description: 'OpenDRIVE data quality and topology validation', descriptionKey: 'pluginManager.builtinValidationDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'traffic', name: 'Traffic', nameKey: 'pluginManager.builtinTrafficName', version: '1.0.0', description: 'Signal phasing, timing editor, SUMO I/O', descriptionKey: 'pluginManager.builtinTrafficDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },

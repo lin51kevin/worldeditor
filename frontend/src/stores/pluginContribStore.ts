@@ -15,6 +15,10 @@ import { create } from 'zustand';
 import type { ComponentType, ReactNode } from 'react';
 import type { Project } from '../services/platform';
 
+function isRenderableComponent(component: unknown): component is ComponentType<unknown> {
+  return component !== null && (typeof component === 'function' || typeof component === 'object');
+}
+
 export interface ToolbarButtonContrib {
   id: string;
   pluginId: string;
@@ -102,6 +106,8 @@ export interface PanelContrib {
   id: string;
   pluginId: string;
   title: string;
+  /** i18n key for the panel title; resolved at render time with fallback to `title` */
+  titleKey?: string;
   /** React component rendered inside the panel */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   component: ComponentType<any>;
@@ -163,6 +169,10 @@ interface PluginContribState {
   viewportOverlays: ViewportOverlayContrib[];
   settingsContribs: SettingsContrib[];
 
+  // Panel tab visibility management
+  panelTabVisibility: Record<string, boolean>;
+  activeTabId: string | null;
+
   registerToolbarButton: (contrib: ToolbarButtonContrib) => void;
   unregisterToolbarButton: (id: string) => void;
   registerMenuItem: (contrib: MenuItemContrib) => void;
@@ -183,9 +193,16 @@ interface PluginContribState {
   unregisterSettings: (id: string) => void;
   /** Remove all contributions from a given plugin at once */
   unregisterPlugin: (pluginId: string) => void;
+
+  // Panel tab visibility actions
+  showPanel: (tabId: string) => void;
+  hidePanel: (tabId: string) => void;
+  togglePanel: (tabId: string) => void;
+  isPanelVisible: (tabId: string) => boolean;
+  setActiveTab: (tabId: string | null) => void;
 }
 
-export const usePluginContribStore = create<PluginContribState>((set) => ({
+export const usePluginContribStore = create<PluginContribState>((set, get) => ({
   toolbarButtons: [],
   menuItems: [],
   templateSections: [],
@@ -195,6 +212,8 @@ export const usePluginContribStore = create<PluginContribState>((set) => ({
   contextMenuItems: [],
   viewportOverlays: [],
   settingsContribs: [],
+  panelTabVisibility: {},
+  activeTabId: null,
 
   registerToolbarButton: (contrib) =>
     set((state) => ({
@@ -251,10 +270,24 @@ export const usePluginContribStore = create<PluginContribState>((set) => ({
   unregisterExporter: (id) =>
     set((state) => ({ exporters: state.exporters.filter((e) => e.id !== id) })),
 
-  registerPanel: (contrib) =>
+  registerPanel: (contrib) => {
+    if (!isRenderableComponent(contrib.component)) {
+      throw new Error(`Panel component is required for panel '${contrib.id}'`);
+    }
+
+    // All plugin-contributed panels default to hidden on startup.
+    const defaultVisible = false;
+
     set((state) => ({
       panels: [...state.panels.filter((p) => p.id !== contrib.id), contrib],
-    })),
+      panelTabVisibility: {
+        ...state.panelTabVisibility,
+        ...(state.panelTabVisibility[contrib.id] === undefined
+          ? { [contrib.id]: defaultVisible }
+          : {}),
+      },
+    }));
+  },
 
   unregisterPanel: (id) =>
     set((state) => ({ panels: state.panels.filter((p) => p.id !== id) })),
@@ -287,15 +320,57 @@ export const usePluginContribStore = create<PluginContribState>((set) => ({
     set((state) => ({ settingsContribs: state.settingsContribs.filter((s) => s.id !== id) })),
 
   unregisterPlugin: (pluginId) =>
+    set((state) => {
+      const pluginTabIds = state.panels
+        .filter((p) => p.pluginId === pluginId)
+        .map((p) => p.id);
+      const nextVisibility = { ...state.panelTabVisibility };
+      for (const tabId of pluginTabIds) {
+        delete nextVisibility[tabId];
+      }
+      return {
+        toolbarButtons: state.toolbarButtons.filter((b) => b.pluginId !== pluginId),
+        menuItems: state.menuItems.filter((m) => m.pluginId !== pluginId),
+        templateSections: state.templateSections.filter((s) => s.pluginId !== pluginId),
+        importers: state.importers.filter((i) => i.pluginId !== pluginId),
+        exporters: state.exporters.filter((e) => e.pluginId !== pluginId),
+        panels: state.panels.filter((p) => p.pluginId !== pluginId),
+        contextMenuItems: state.contextMenuItems.filter((c) => c.pluginId !== pluginId),
+        viewportOverlays: state.viewportOverlays.filter((o) => o.pluginId !== pluginId),
+        settingsContribs: state.settingsContribs.filter((s) => s.pluginId !== pluginId),
+        panelTabVisibility: nextVisibility,
+        activeTabId: pluginTabIds.includes(state.activeTabId ?? '')
+          ? null
+          : state.activeTabId,
+      };
+    }),
+  showPanel: (tabId) =>
     set((state) => ({
-      toolbarButtons: state.toolbarButtons.filter((b) => b.pluginId !== pluginId),
-      menuItems: state.menuItems.filter((m) => m.pluginId !== pluginId),
-      templateSections: state.templateSections.filter((s) => s.pluginId !== pluginId),
-      importers: state.importers.filter((i) => i.pluginId !== pluginId),
-      exporters: state.exporters.filter((e) => e.pluginId !== pluginId),
-      panels: state.panels.filter((p) => p.pluginId !== pluginId),
-      contextMenuItems: state.contextMenuItems.filter((c) => c.pluginId !== pluginId),
-      viewportOverlays: state.viewportOverlays.filter((o) => o.pluginId !== pluginId),
-      settingsContribs: state.settingsContribs.filter((s) => s.pluginId !== pluginId),
+      panelTabVisibility: { ...state.panelTabVisibility, [tabId]: true },
     })),
+
+  hidePanel: (tabId) =>
+    set((state) => ({
+      panelTabVisibility: { ...state.panelTabVisibility, [tabId]: false },
+    })),
+
+  togglePanel: (tabId) =>
+    set((state) => ({
+      panelTabVisibility: {
+        ...state.panelTabVisibility,
+        [tabId]: !(state.panelTabVisibility[tabId] !== false),
+      },
+    })),
+
+  isPanelVisible: (tabId) => {
+    return get().panelTabVisibility[tabId] !== false;
+  },
+
+  setActiveTab: (tabId) =>
+    set({ activeTabId: tabId }),
 }));
+
+/** Selector: returns whether a panel tab is visible */
+export function usePanelTabVisibility(id: string): boolean {
+  return usePluginContribStore((s) => s.panelTabVisibility[id] !== false);
+}

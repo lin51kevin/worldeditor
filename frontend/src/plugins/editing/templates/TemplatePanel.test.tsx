@@ -1,7 +1,7 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TemplatePanel } from './TemplatePanel';
-import { mountTemplatesPlugin } from '../../plugins/editing/templates/templates.plugin';
+import { mountTemplatesPlugin } from './templates.plugin';
 
 let cleanupTemplates: () => void;
 

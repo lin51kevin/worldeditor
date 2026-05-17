@@ -106,6 +106,10 @@ export interface PluginContext {
 
   /** Subscribe to project changes; returns an unsubscribe function */
   onProjectChanged(callback: (project: Project) => void): () => void;
+
+  // Panel tab visibility
+  togglePanel(panelId: string): void;
+  isPanelVisible(panelId: string): boolean;
 }
 
 type SetupFn = (ctx: PluginContext) => (() => void) | void;
@@ -245,6 +249,14 @@ export function installPluginApi(): void {
           return useProjectStore.subscribe((state) => {
             callback(state.project);
           });
+        },
+
+        // Panel tab visibility
+        togglePanel: (panelId: string): void => {
+          usePluginContribStore.getState().togglePanel(panelId);
+        },
+        isPanelVisible: (panelId: string): boolean => {
+          return usePluginContribStore.getState().isPanelVisible(panelId);
         },
       };
 

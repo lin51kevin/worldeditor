@@ -27,6 +27,10 @@ vi.mock('../../stores/pluginContribStore', () => ({
       return {
         registerPanel: cap('panel'), registerMenuItem: cap('menuItem'),
         registerImporter: cap('importer'), registerExporter: cap('exporter'),
+        registerViewportOverlay: cap('viewportOverlay'),
+        isPanelVisible: vi.fn(() => false),
+        showPanel: vi.fn(),
+        setActiveTab: vi.fn(),
         unregisterPlugin: mockUnregister,
       };
     }),
@@ -50,7 +54,13 @@ const plugins: PluginDef[] = [
 ];
 
 describe('stub plugins — mount, register, and showAlert on click', () => {
-  beforeEach(() => { vi.clearAllMocks(); registered.length = 0; mockShowAlert.mockResolvedValue(undefined); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    registered.length = 0;
+    mockShowAlert.mockResolvedValue(undefined);
+    URL.createObjectURL = vi.fn(() => 'blob:test');
+    URL.revokeObjectURL = vi.fn();
+  });
 
   for (const p of plugins) {
     describe(`${p.name}`, () => {
@@ -70,6 +80,8 @@ describe('stub plugins — mount, register, and showAlert on click', () => {
         p.mount();
         const items = reg().filter(r => r.type === 'menuItem') as { data: { onClick: () => unknown } }[];
         if (items.length === 0) return; // skip plugins without menu items (e.g. pointcloud)
+        // gis-tools and converter now have real implementations — their menu items focus panels.
+        if (p.pluginId === 'gis-tools' || p.pluginId === 'converter') return;
         for (const item of items) {
           const result = item.data.onClick();
           if (result instanceof Promise) await result;
@@ -81,16 +93,16 @@ describe('stub plugins — mount, register, and showAlert on click', () => {
 
   it('traffic SUMO importer returns project + showAlert', async () => {
     mountTrafficPlugin();
-    const imp = reg().find(r => r.type === 'importer')!.data as { onImport: () => Promise<unknown> };
-    const result = await imp.onImport();
+    const imp = reg().find(r => r.type === 'importer')!.data as { onImport: (content: string, fileName: string) => Promise<unknown> };
+    const result = await imp.onImport('<?xml version="1.0"?><net><edge id="e1"><lane id="e1_0" shape="0,0 10,0"/></edge></net>', 'traffic.net.xml');
     expect(result).toHaveProperty('roads');
     expect(mockShowAlert).toHaveBeenCalled();
   });
 
   it('traffic SUMO exporter calls showAlert', async () => {
     mountTrafficPlugin();
-    const exp = reg().find(r => r.type === 'exporter')!.data as { onExport: () => Promise<unknown> };
-    await expect(exp.onExport()).resolves.toBeUndefined();
+    const exp = reg().find(r => r.type === 'exporter')!.data as { onExport: (project: ReturnType<typeof createEmptyProject>) => Promise<unknown> };
+    await expect(exp.onExport(createEmptyProject('Traffic Export'))).resolves.toBeUndefined();
     expect(mockShowAlert).toHaveBeenCalled();
   });
 
