@@ -7,11 +7,77 @@ import { createIOPlugin } from '../../core/ioPluginFactory';
 
 async function importSignals(content: string | ArrayBuffer): Promise<Project> {
   const text = typeof content === 'string' ? content : new TextDecoder().decode(content);
-  // Validate JSON structure
-  const signals = JSON.parse(text);
-  if (!Array.isArray(signals)) throw new Error('Expected JSON array of signal entries');
-  // Signals are not stored in Project yet — return empty project
-  return { name: 'Signal Import', header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null }, roads: [], junctions: [], signals: [], objects: [] };
+  const wasm = await import('../../../../wasm/pkg/we_wasm');
+
+  // Parse signal JSON via Rust WASM backend
+  const signalsJson = wasm.import_signals_from_json(text);
+  const signals = JSON.parse(signalsJson) as Array<{
+    road_id: string;
+    id: string;
+    name: string;
+    signal_type: string;
+    signal_subtype: string;
+    s: number;
+    t: number;
+    z_offset: number;
+    h_offset: number;
+    width: number;
+    height: number;
+    value: string;
+    orientation: string;
+    is_dynamic: boolean;
+  }>;
+
+  // Group signals by road_id
+  const roadSignalMap = new Map<string, typeof signals>();
+  for (const sig of signals) {
+    const roadId = sig.road_id || 'default';
+    const existing = roadSignalMap.get(roadId) ?? [];
+    existing.push(sig);
+    roadSignalMap.set(roadId, existing);
+  }
+
+  // Build roads from grouped signals
+  const roads = Array.from(roadSignalMap.entries()).map(([roadId, sigs]) => ({
+    id: roadId,
+    name: '',
+    length: Math.max(10, ...sigs.map((s) => s.s + 1)),
+    junction_id: null,
+    render_hidden: false,
+    link: null,
+    plan_view: [{ s: 0, x: 0, y: 0, hdg: 0, length: Math.max(10, ...sigs.map((s) => s.s + 1)), geo_type: 'Line' as const }],
+    elevation_profile: [],
+    lane_sections: [],
+    lane_offsets: [],
+    lateral_profile: { superelevations: [], crossfalls: [] },
+    bridges: [],
+    tunnels: [],
+    signals: sigs.map((s) => ({
+      id: s.id,
+      name: s.name || '',
+      signal_type: s.signal_type || '',
+      signal_subtype: s.signal_subtype || '',
+      s: s.s,
+      t: s.t,
+      z_offset: s.z_offset,
+      h_offset: s.h_offset,
+      width: s.width,
+      height: s.height,
+      value: s.value || '',
+      orientation: s.orientation || '+',
+      is_dynamic: s.is_dynamic ?? false,
+    })),
+    objects: [],
+  }));
+
+  return {
+    name: 'Signal Import',
+    header: { rev_major: 1, rev_minor: 6, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null },
+    roads,
+    junctions: [],
+    signals: [],
+    objects: [],
+  };
 }
 
 function escapeXml(s: string): string {
@@ -56,7 +122,6 @@ export const mountIoSignalsPlugin = createIOPlugin({
   importer: {
     formatName: 'Signal JSON',
     extensions: ['.json'],
-    disabled: true,
     onImport: importSignals,
   },
   exporter: {
