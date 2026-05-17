@@ -65,3 +65,89 @@ pub fn export_to_hdmap_xml(project_json: &str) -> Result<String, JsError> {
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
     Ok(we_io::signal_json::export_to_hdmap_xml(&project))
 }
+
+// ── MIF ───────────────────────────────────────────────────────────────────────
+
+/// Import a DXF string and return the project as JSON.
+#[wasm_bindgen]
+pub fn import_from_dxf(dxf: &str) -> Result<JsValue, JsError> {
+    let project = we_io::dxf_io::import_from_dxf(dxf).map_err(|e| JsError::new(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&project).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Export a project as DXF text.
+#[wasm_bindgen]
+pub fn export_to_dxf(project_json: &str) -> Result<String, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    we_io::dxf_io::export_to_dxf(&project).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Import a Shapefile bundle and return the project as JSON.
+#[wasm_bindgen]
+pub fn import_from_shapefile(bytes: &[u8]) -> Result<JsValue, JsError> {
+    let project = we_io::shapefile_io::import_from_shapefile(bytes)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&project).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Export a project as a Shapefile bundle.
+#[wasm_bindgen]
+pub fn export_to_shapefile(project_json: &str) -> Result<Vec<u8>, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    we_io::shapefile_io::export_to_shapefile(&project).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── MIF ───────────────────────────────────────────────────────────────────────
+
+/// Import a MapInfo MIF string and return the project as JSON.
+#[wasm_bindgen]
+pub fn import_from_mif(mif: &str) -> Result<JsValue, JsError> {
+    let project = we_io::mif_io::import_from_mif(mif).map_err(|e| JsError::new(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&project).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Export a project as MapInfo MIF text.
+#[wasm_bindgen]
+pub fn export_to_mif(project_json: &str) -> Result<String, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    we_io::mif_io::export_to_mif(&project).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── NIO ───────────────────────────────────────────────────────────────────────
+
+/// Import NIO bytes and return the project as JSON.
+#[wasm_bindgen]
+pub fn import_from_nio(bytes: &[u8]) -> Result<JsValue, JsError> {
+    let project = we_io::nio_proto::import_from_nio(bytes)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&project).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Export a project as NIO bytes.
+#[wasm_bindgen]
+pub fn export_to_nio(project_json: &str) -> Result<Vec<u8>, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    we_io::nio_proto::export_to_nio(&project).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── Lanelet2 ──────────────────────────────────────────────────────────────────
+
+/// Import a Lanelet2 OSM-XML string and return the project as JSON.
+#[wasm_bindgen]
+pub fn import_from_lanelet2(xml: &str) -> Result<JsValue, JsError> {
+    let project = we_core::lanelet2::parser::import_from_lanelet2(xml)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&project).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Export a project (as JSON) to Lanelet2 OSM-XML.
+#[wasm_bindgen]
+pub fn export_to_lanelet2(project_json: &str) -> Result<String, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    Ok(we_core::lanelet2::writer::export_to_lanelet2(&project))
+}
