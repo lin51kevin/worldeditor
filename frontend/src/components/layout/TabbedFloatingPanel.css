@@ -1,0 +1,130 @@
+/* ── TabbedFloatingPanel ── */
+
+.tp-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--floating-radius);
+  box-shadow: var(--glass-shadow);
+  overflow: hidden;
+  animation: panel-fade-in 200ms ease-out;
+}
+
+/* ── Tab bar ── */
+/* ── Header ── */
+.tp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  min-height: 36px;
+  background: var(--color-panel-header-bg, #383838);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 4px 0 0;
+}
+
+.tp-tabs {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 0;
+  flex: 1;
+  outline: none;
+}
+
+/* Hide scrollbar for cleanliness */
+.tp-tabs::-webkit-scrollbar {
+  height: 0;
+}
+
+/* ── Single tab ── */
+.tp-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  height: 100%;
+  font-size: 13px;
+  color: var(--color-panel-header-text, #bbbbbb);
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+  transition: color var(--transition-fast);
+  user-select: none;
+  border-bottom: 2px solid transparent;
+  flex-shrink: 0;
+  background: none;
+}
+
+/* 固定属性页样式 */
+.tp-tab--fixed {
+  background: var(--color-panel-header-fixed-bg, #2a2a2a);
+  font-weight: 600;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.tp-tab:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+/* ── Active tab ── */
+.tp-tab--active {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-accent);
+  background: var(--color-bg-hover, #232323);
+}
+
+/* ── Tab icon ── */
+.tp-tab-icon {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Tab title ── */
+.tp-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Tab close button ── */
+.tp-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+
+.tp-tab:hover .tp-tab-close {
+  opacity: 1;
+}
+
+.tp-tab-close:hover {
+  color: var(--color-danger);
+  background: var(--color-bg-hover);
+}
+
+/* ── Content area ── */
+.tp-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-bg-primary);
+  height: calc(100% - 36px);
+}
