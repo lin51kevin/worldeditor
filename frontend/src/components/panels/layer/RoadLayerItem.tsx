@@ -1,6 +1,5 @@
 import { ChevronDown, ChevronRight, Crosshair, Eye, EyeOff } from 'lucide-react';
 import { memo, useCallback } from 'react';
-import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Road } from '../../../services/platform';
 import { makeLaneSectionKey, type LaneSide, type SceneNodeSelection } from '../../../utils/sceneGraph';
