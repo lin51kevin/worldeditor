@@ -1,6 +1,6 @@
 import type { Project } from '../../services/platform';
 import type { EditorState, SliceCreator } from './types';
-import { pushUndo } from './types';
+import { MAX_UNDO, pushUndo } from './types';
 
 export interface UndoRedoSlice {
   undoStack: Project[];
@@ -27,7 +27,7 @@ export const createUndoRedoSlice: SliceCreator<UndoRedoSlice> = (set, get) => ({
       return {
         project: prev,
         undoStack: state.undoStack.slice(0, -1),
-        redoStack: [...state.redoStack, structuredClone(state.project)],
+        redoStack: [...state.redoStack, state.project].slice(-MAX_UNDO),
         isDirty: true,
       };
     }),
@@ -38,7 +38,7 @@ export const createUndoRedoSlice: SliceCreator<UndoRedoSlice> = (set, get) => ({
       const next = state.redoStack[state.redoStack.length - 1];
       return {
         project: next,
-        undoStack: [...state.undoStack, structuredClone(state.project)],
+        undoStack: [...state.undoStack, state.project].slice(-MAX_UNDO),
         redoStack: state.redoStack.slice(0, -1),
         isDirty: true,
       };
