@@ -1,4 +1,5 @@
 import type { Project } from '../../../services/platform';
+import { usePluginContribStore } from '../../../stores/pluginContribStore';
 import type { MenuItemContrib } from '../../../stores/pluginContribStore';
 import { appendPluginItems, type TranslateFn } from '../menuDefinitions';
 import { MenuSection, type MenuSectionInteractionProps } from './MenuSection';
@@ -29,6 +30,23 @@ export function ToolsMenu({
   onMeasureArea,
   ...menuProps
 }: ToolsMenuProps) {
+  const panelTabVisibility = usePluginContribStore((s) => s.panelTabVisibility);
+  const togglePanel = usePluginContribStore((s) => s.togglePanel);
+  const panels = usePluginContribStore((s) => s.panels);
+
+  const pluginPanelItems = panels.length > 0
+    ? [
+        { separator: true, label: '' } as const,
+        ...panels.map((panel) => ({
+          label: panel.titleKey ? t(panel.titleKey) : panel.title,
+          action: () => {
+            togglePanel(panel.id);
+          },
+          checked: panelTabVisibility[panel.id] !== false,
+        })),
+      ]
+    : [];
+
   const menu = appendPluginItems(
     {
       label: t('menu.tools'),
@@ -67,6 +85,7 @@ export function ToolsMenu({
             void onMeasureArea();
           },
         },
+        ...pluginPanelItems,
       ],
     },
     toolsPluginItems,

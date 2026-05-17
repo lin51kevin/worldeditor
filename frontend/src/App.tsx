@@ -8,12 +8,13 @@ import { Toolbar } from './components/shell/Toolbar';
 import { LayerPanel } from './components/panels/LayerPanel';
 import { Viewport } from './components/Viewport';
 import { PropertyPanel } from './components/panels/PropertyPanel';
-import { TemplatePanel } from './components/panels/TemplatePanel';
+import { TemplatePanel } from './plugins/editing/templates/TemplatePanel';
 import { StatusBar } from './components/shell/StatusBar';
 import { CommandPalette } from './components/CommandPalette';
+import { usePluginContribStore } from './stores/pluginContribStore';
 import { FloatingPanel } from './components/layout/FloatingPanel';
 import { MeasurementPanel } from './components/panels/MeasurementPanel';
-import { ValidationPanel } from './components/panels/ValidationPanel';
+// ValidationPanel is now rendered via PluginPanels
 import { SelectionDetailsPanel } from './components/panels/SelectionDetailsPanel';
 import { PluginManager } from './components/dialogs/PluginManager';
 import { PluginPanels } from './components/layout/PluginPanel';
@@ -38,9 +39,8 @@ const STARTUP_WELCOME_KEY = STORAGE_KEYS.SHOW_WELCOME_ON_STARTUP;
 // ── App component ──────────────────────────────────────────────────────────
 
 export function App() {
-  const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
-  const selectedJunctionId = useProjectStore((s) => s.selectedJunctionId);
   const projectName = useProjectStore((s) => s.project.name);
+
   const { initTheme } = useThemeStore();
   const { t, i18n } = useTranslation();
   const {
@@ -52,12 +52,13 @@ export function App() {
     toggleTemplatePanel,
     setEditMode,
     clearSplineKnots,
+    measureMode,
   } = useViewportStore();
   const { recentFiles, push: pushRecentFile, remove: removeRecentFile } = useRecentFilesStore();
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showPluginManager, setShowPluginManager] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showValidation, setShowValidation] = useState(false);
+  // Validation panel visibility is managed by pluginContribStore
 
   // showOnStartup: when false, skip welcome page on next launch
   const [showOnStartup, setShowOnStartup] = useState<boolean>(
@@ -117,7 +118,15 @@ export function App() {
     toggleLeftPanel,
     toggleRightPanel,
     toggleOutputPanel,
-    toggleValidationPanel: () => setShowValidation((v) => !v),
+    toggleValidationPanel: () => {
+      const store = usePluginContribStore.getState();
+      const vis = store.panelTabVisibility['core:validation'] !== false;
+      if (vis) {
+        store.hidePanel('core:validation');
+      } else {
+        store.showPanel('core:validation');
+      }
+    },
     onShowShortcutHelp: setShowShortcutHelp,
     onSetEditMode: (mode) => {
       // EditModes (move-road, rotate-road): toggle back to default if already active.
@@ -150,8 +159,7 @@ export function App() {
     onZoomToFit: () => emitViewportEvent({ type: 'zoom-to-fit' }),
   });
 
-  // Show right panel only when something is selected (Quick Inspector behavior)
-  const showRightPanel = !layout.rightCollapsed && (!!selectedRoadId || !!selectedJunctionId);
+
 
   // ── File operations ─────────────────────────────────────────────────────
 
@@ -239,6 +247,24 @@ export function App() {
           </FloatingPanel>
         )}
 
+        {/* Floating right property panel */}
+        {!layout.rightCollapsed && (
+          <FloatingPanel
+            className="floating-right"
+            dragHandleSelector=".prop-header"
+            defaultWidth={layout.rightWidth}
+            minWidth={220}
+            maxWidth={680}
+            minHeight={200}
+            resizeEdges={['top', 'right', 'bottom', 'left']}
+            anchorHorizontal="right"
+            storageKey="we-panel-right"
+            onClose={toggleRightPanel}
+          >
+            <PropertyPanel />
+          </FloatingPanel>
+        )}
+
         {/* Floating template panel — only shown when builtin-templates plugin is enabled */}
         {!layout.templatePanelCollapsed && templatePluginEnabled && (
         <FloatingPanel
@@ -256,49 +282,30 @@ export function App() {
         </FloatingPanel>
         )}
 
-        {/* Floating right panel — Quick Inspector (only when selected) */}
-        {showRightPanel && (
-          <FloatingPanel
-            className="floating-right"
-            dragHandleSelector=".prop-header"
-            defaultWidth={layout.rightWidth}
-            minWidth={220}
-            maxWidth={500}
-            minHeight={200}
-            resizeEdges={['top', 'right', 'bottom', 'left']}
-            anchorHorizontal="right"
-            storageKey="we-panel-right"
-            onClose={toggleRightPanel}
-          >
-            <PropertyPanel />
-          </FloatingPanel>
-        )}
+
 
         {/* Floating status chips */}
         <StatusBar />
         <CommandPalette />
-        <MeasurementPanel />
+        {measureMode !== 'none' && (
+          <FloatingPanel
+            className="floating-measurement"
+            dragHandleSelector=".measurement-header"
+            defaultWidth={260}
+            minWidth={220}
+            maxWidth={380}
+            minHeight={100}
+            resizeEdges={['top', 'right', 'bottom', 'left']}
+            storageKey="we-panel-measurement"
+          >
+            <MeasurementPanel />
+          </FloatingPanel>
+        )}
 
         {/* Selection details overlay — auto-hides when nothing is selected */}
         <SelectionDetailsPanel />
 
-        {/* Validation panel — toggled with Ctrl+Shift+V */}
-        {showValidation && (
-          <FloatingPanel
-            className="floating-validation"
-            dragHandleSelector=".floating-validation"
-            defaultWidth={340}
-            minWidth={260}
-            maxWidth={600}
-            minHeight={200}
-            resizeEdges={['top', 'right', 'bottom', 'left']}
-            anchorHorizontal="right"
-            storageKey="we-panel-validation"
-            onClose={() => setShowValidation(false)}
-          >
-            <ValidationPanel />
-          </FloatingPanel>
-        )}
+
 
         {/* Plugin Manager dialog */}
         <PluginManager open={showPluginManager} onClose={() => setShowPluginManager(false)} />
@@ -306,7 +313,7 @@ export function App() {
         {/* Settings dialog */}
         <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
 
-        {/* Plugin-contributed panels */}
+        {/* Plugin-contributed floating panels */}
         <PluginPanels />
 
         {/* Keyboard shortcut help overlay */}

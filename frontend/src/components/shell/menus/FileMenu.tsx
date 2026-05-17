@@ -6,6 +6,8 @@ import { showAlert } from '../../../utils/dialog';
 import type { MenuItem, TranslateFn } from '../menuDefinitions';
 import { MenuSection, type MenuSectionInteractionProps } from './MenuSection';
 
+const MAX_IMPORT_SIZE_BYTES = 50 * 1024 * 1024;
+
 type MenuAction = () => void | Promise<void>;
 
 interface FileMenuProps extends MenuSectionInteractionProps {
@@ -74,6 +76,10 @@ export function FileMenu({
           const file = input.files?.[0];
           if (!file) return;
           try {
+            if (file.size > MAX_IMPORT_SIZE_BYTES) {
+              await showAlert(`${t('dialog.importError')}: file exceeds 50 MB import limit`, t('dialog.errorTitle') || 'Error');
+              return;
+            }
             const content = await file.arrayBuffer();
             const importedProject = await importer.onImport(content, file.name);
             if (!importedProject || !Array.isArray(importedProject.roads)) {

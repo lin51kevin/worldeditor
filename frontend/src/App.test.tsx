@@ -60,7 +60,19 @@ describe('App', () => {
         redoStack: [],
       });
       // Clear plugin contrib store so road-tools Ctrl+D handler doesn't fire
-      usePluginContribStore.setState({ toolbarButtons: [], menuItems: [], templateSections: [] });
+      usePluginContribStore.setState({
+        toolbarButtons: [],
+        menuItems: [],
+        templateSections: [],
+        importers: [],
+        exporters: [],
+        panels: [],
+        contextMenuItems: [],
+        viewportOverlays: [],
+        settingsContribs: [],
+        panelTabVisibility: {},
+        activeTabId: null,
+      });
     });
   });
 
