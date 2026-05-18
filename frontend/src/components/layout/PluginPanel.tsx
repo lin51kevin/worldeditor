@@ -22,8 +22,9 @@ function getPanelClass(position: 'left' | 'right' | 'bottom' | 'float'): string 
     case 'bottom':
       return 'floating-output';
     case 'float':
+      return 'floating-right floating-plugin';
     default:
-      return 'floating-plugin';
+      return 'floating-right';
   }
 }
 
