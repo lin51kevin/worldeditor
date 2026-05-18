@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 /// A lane section along a road.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LaneSection {
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s: f64,
     pub single_side: bool,
     #[serde(default)]
@@ -34,10 +35,15 @@ pub struct Lane {
 /// Lane border polynomial entry (same format as LaneWidth).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LaneBorder {
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s_offset: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub a: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub b: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub c: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub d: f64,
 }
 
@@ -51,16 +57,18 @@ pub struct LaneLink {
 /// Road marking on a lane boundary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoadMark {
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s_offset: f64,
     pub mark_type: RoadMarkType,
     pub weight: RoadMarkWeight,
     pub color: RoadMarkColor,
     pub material: String,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub width: f64,
     pub lane_change: String,
     /// Vertical height of the road mark above the road surface.
     /// Defaults to 0 when omitted (standard flush marking).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub height: f64,
 }
 
@@ -133,10 +141,15 @@ pub enum RoadMarkWeight {
 /// Width polynomial entry for a lane.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LaneWidth {
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s_offset: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub a: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub b: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub c: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub d: f64,
 }
 
@@ -202,9 +215,37 @@ pub enum LaneType {
     None,
 }
 
+impl LaneType {
+    /// Returns `true` for lane types that carry traffic (driving, bus, taxi, etc.).
+    pub fn is_driving(&self) -> bool {
+        matches!(
+            self,
+            LaneType::Driving
+                | LaneType::Bus
+                | LaneType::Taxi
+                | LaneType::HOV
+                | LaneType::Entry
+                | LaneType::Exit
+                | LaneType::OffRamp
+                | LaneType::OnRamp
+                | LaneType::ConnectingRamp
+                | LaneType::Bidirectional
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_is_driving() {
+        assert!(LaneType::Driving.is_driving());
+        assert!(LaneType::Bus.is_driving());
+        assert!(!LaneType::Sidewalk.is_driving());
+        assert!(!LaneType::Shoulder.is_driving());
+        assert!(!LaneType::None.is_driving());
+    }
 
     #[test]
     fn test_lane_type_serialization() {

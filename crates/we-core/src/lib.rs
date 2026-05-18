@@ -13,9 +13,11 @@ pub mod osm_export;
 pub mod picking;
 pub mod road_ops;
 pub mod routing;
+pub mod serde_helpers;
 pub mod snapping;
 pub mod spatial_index;
 pub mod spline;
+pub mod topology;
 
 /// WorldEditor core version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -55,6 +55,7 @@ export const measure_area: (a: number, b: number) => [number, number, number];
 export const measure_distance: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const measure_road_length: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const move_spline_knot: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+export const optimize_junction: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const parse_opendrive: (a: number, b: number) => [number, number, number];
 export const parse_proj4_crs: (a: number, b: number) => [number, number, number];
 export const parse_wkt_crs: (a: number, b: number) => [number, number, number];
@@ -68,6 +69,7 @@ export const pick_spline_knot: (a: number, b: number, c: number, d: number, e: n
 export const point_in_junction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const project_is_valid: (a: number, b: number) => [number, number, number];
 export const query_elevation: (a: number, b: number, c: number) => [number, number, number];
+export const repair_topology: (a: number, b: number) => [number, number, number];
 export const road_to_spline: (a: number, b: number, c: number) => [number, number, number, number];
 export const rotate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
 export const sample_lane_boundary: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
@@ -81,6 +83,7 @@ export const spline_to_geometries: (a: number, b: number, c: number, d: number) 
 export const translate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
 export const utm_to_geo: (a: number, b: number, c: number, d: number, e: number) => any;
 export const validate_project: (a: number, b: number) => [number, number, number];
+export const validate_topology: (a: number, b: number) => [number, number, number];
 export const version: () => [number, number];
 export const wgs84_to_gcj02: (a: number, b: number, c: number) => any;
 export const write_opendrive: (a: number, b: number) => [number, number, number, number];

@@ -35,6 +35,9 @@ pub struct Road {
     /// Road objects (signs, barriers, etc.) on this road.
     #[serde(default)]
     pub objects: Vec<RoadObject>,
+    /// Maximum speed in m/s (optional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<f64>,
 }
 
 impl Road {
@@ -55,6 +58,7 @@ impl Road {
             tunnels: Vec::new(),
             signals: Vec::new(),
             objects: Vec::new(),
+            speed: None,
         }
     }
 
@@ -127,10 +131,15 @@ impl Road {
 /// Road geometry element (line, arc, spiral, etc.).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Geometry {
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub x: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub y: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub hdg: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub length: f64,
     pub geo_type: GeometryType,
 }
@@ -174,10 +183,15 @@ pub enum ParamPoly3Range {
 /// Elevation profile entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Elevation {
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub a: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub b: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub c: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub d: f64,
 }
 
@@ -195,10 +209,15 @@ impl Elevation {
 /// Lane offset polynomial entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LaneOffset {
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub a: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub b: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub c: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub d: f64,
 }
 
@@ -223,10 +242,15 @@ pub struct LateralProfile {
 /// Superelevation polynomial entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Superelevation {
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub a: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub b: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub c: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub d: f64,
 }
 
@@ -247,10 +271,15 @@ pub enum CrossfallSide {
 /// Crossfall polynomial entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Crossfall {
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub a: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub b: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub c: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub d: f64,
     pub side: CrossfallSide,
 }
@@ -269,7 +298,9 @@ impl Crossfall {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bridge {
     pub id: String,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub length: f64,
     pub bridge_type: String,
 }
@@ -278,7 +309,9 @@ pub struct Bridge {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tunnel {
     pub id: String,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub length: f64,
     pub tunnel_type: String,
 }
@@ -299,16 +332,22 @@ pub struct Signal {
     /// Human-readable name.
     pub name: String,
     /// s-coordinate along the road reference line (m).
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub s: f64,
     /// Lateral offset from the reference line, positive = left (m).
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub t: f64,
     /// Height above the road surface (m).
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub z_offset: f64,
     /// Additional heading offset relative to the road direction (rad).
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub h_offset: f64,
     /// Width of the signal (m); also used as scale for paint marks.
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub width: f64,
     /// Height/length of the signal (m).
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub height: f64,
     /// Raw `type` attribute string (e.g., `"Graphics"`, `"1010203800001413"`).
     pub signal_type: String,
@@ -334,8 +373,11 @@ pub struct Signal {
 /// 3D point with optional id reference.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Point3D {
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub x: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub y: f64,
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub z: f64,
     pub id: Option<String>,
 }
@@ -431,24 +473,27 @@ pub struct RoadObject {
     /// Position in road-local coordinates: x=s (station), y=t (lateral offset), z=zOffset.
     pub position: Point3D,
     /// Heading offset relative to road direction (degrees, 0 = forward, 180 = backward).
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub orientation: f64,
     /// Object heading in radians relative to the road direction.
     /// Used to interpret `cornerLocal` (u, v) geometry via rotation:
     ///   ds = u·cos(hdg) − v·sin(hdg), dt = u·sin(hdg) + v·cos(hdg)
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub hdg: f64,
     /// Pitch angle in radians (rotation about lateral axis).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub pitch: f64,
     /// Roll angle in radians (rotation about longitudinal axis).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub roll: f64,
     /// Object width (lateral extent in metres).
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub width: f64,
     /// Object height (vertical extent in metres).
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub height: f64,
     /// Object length along the road (metres). Used for objects that span a section.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub length: f64,
     /// Corner polygon in road-local (s, t) coordinates. Non-empty for area objects
     /// such as crosswalks, parking spaces, and cross-hatch areas.

@@ -189,7 +189,9 @@ export class ViewportRenderer {
     } else {
       adapter = await navigator.gpu.requestAdapter();
       if (this.disposed || !adapter) return false;
-      device = await adapter.requestDevice();
+      device = await adapter.requestDevice({
+        requiredLimits: { maxBufferSize: adapter.limits.maxBufferSize },
+      });
       if (this.disposed) {
         // Return fresh device to cache for next mount
         returnPrewarmedGPU({ adapter, device } as PrewarmedGPU);

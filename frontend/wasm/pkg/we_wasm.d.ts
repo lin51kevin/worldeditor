@@ -395,6 +395,13 @@ export function measure_road_length(road_json: string, s_start: number, s_end: n
 export function move_spline_knot(spline_json: string, knot_index: number, new_x: number, new_y: number, new_z: number): string;
 
 /**
+ * Optimize a junction's connections based on actual road topology.
+ *
+ * Returns the new connections as JSON, or null if the junction was not found.
+ */
+export function optimize_junction(project_json: string, junction_id: string): any;
+
+/**
  * Parse an OpenDRIVE XML string and return the project as JSON.
  */
 export function parse_opendrive(xml: string): any;
@@ -477,6 +484,14 @@ export function project_is_valid(project_json: string): boolean;
  * Returns JSON `{ elevation, grade, grade_pct }`.
  */
 export function query_elevation(road_json: string, s: number): any;
+
+/**
+ * Repair topology issues in a project and return the repaired project JSON
+ * along with a list of actions taken.
+ *
+ * Returns `{ project: string, actions: string[] }`.
+ */
+export function repair_topology(project_json: string): any;
 
 /**
  * Convert a road (as JSON) to an editable spline (as JSON).
@@ -574,6 +589,13 @@ export function utm_to_geo(easting: number, northing: number, zone: number, is_n
 export function validate_project(project_json: string): any;
 
 /**
+ * Validate the topology of a project and return a JSON report.
+ *
+ * The report contains issues with severity, kind, message, and element_id.
+ */
+export function validate_topology(project_json: string): any;
+
+/**
  * Get the core library version.
  */
 export function version(): string;
@@ -646,6 +668,7 @@ export interface InitOutput {
     readonly measure_distance: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly measure_road_length: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly move_spline_knot: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+    readonly optimize_junction: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly parse_opendrive: (a: number, b: number) => [number, number, number];
     readonly parse_proj4_crs: (a: number, b: number) => [number, number, number];
     readonly parse_wkt_crs: (a: number, b: number) => [number, number, number];
@@ -659,6 +682,7 @@ export interface InitOutput {
     readonly point_in_junction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly project_is_valid: (a: number, b: number) => [number, number, number];
     readonly query_elevation: (a: number, b: number, c: number) => [number, number, number];
+    readonly repair_topology: (a: number, b: number) => [number, number, number];
     readonly road_to_spline: (a: number, b: number, c: number) => [number, number, number, number];
     readonly rotate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly sample_lane_boundary: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
@@ -672,6 +696,7 @@ export interface InitOutput {
     readonly translate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly utm_to_geo: (a: number, b: number, c: number, d: number, e: number) => any;
     readonly validate_project: (a: number, b: number) => [number, number, number];
+    readonly validate_topology: (a: number, b: number) => [number, number, number];
     readonly version: () => [number, number];
     readonly wgs84_to_gcj02: (a: number, b: number, c: number) => any;
     readonly write_opendrive: (a: number, b: number) => [number, number, number, number];

@@ -24,7 +24,9 @@ function startPrewarm(): void {
       const t0 = performance.now();
       const adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return;
-      const device = await adapter.requestDevice();
+      const device = await adapter.requestDevice({
+        requiredLimits: { maxBufferSize: adapter.limits.maxBufferSize },
+      });
       cachedGPU = { adapter, device };
       console.info(
         `[GPU:prewarm] adapter+device ready in ${(performance.now() - t0).toFixed(1)}ms`,
