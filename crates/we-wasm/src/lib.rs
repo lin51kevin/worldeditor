@@ -13,6 +13,7 @@ pub mod opendrive;
 pub mod picking;
 pub mod render;
 pub mod spline;
+pub mod topology;
 pub mod validation;
 
 // Set up better panic messages in the browser console.

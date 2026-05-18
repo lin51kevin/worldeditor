@@ -10,6 +10,7 @@ mod road;
 mod road_ops;
 mod signal;
 mod spline;
+mod topology;
 
 #[cfg(test)]
 mod tests;
@@ -22,6 +23,7 @@ pub use road::*;
 pub use road_ops::*;
 pub use signal::*;
 pub use spline::*;
+pub use topology::*;
 
 use we_core::model::*;
 
