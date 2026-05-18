@@ -344,6 +344,7 @@ mod tests {
                 tunnels: vec![],
                 signals: vec![],
                 objects: vec![],
+                speed: None,
             }],
             junctions: vec![],
             ..Default::default()
@@ -396,6 +397,7 @@ mod tests {
             tunnels: vec![],
             signals: vec![],
             objects: vec![],
+            speed: None,
         }
     }
 

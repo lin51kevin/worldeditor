@@ -75,7 +75,7 @@ pub struct Junction {
 }
 
 /// A connection within a junction.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct JunctionConnection {
     pub id: String,
     pub incoming_road: String,
@@ -85,7 +85,7 @@ pub struct JunctionConnection {
 }
 
 /// Lane link within a junction connection.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JunctionLaneLink {
     pub from: i32,
     pub to: i32,
