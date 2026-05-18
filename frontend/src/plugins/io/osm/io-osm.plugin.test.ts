@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const e = vi.fn(), u = vi.fn();
 vi.mock('../../../stores/pluginContribStore', () => ({ usePluginContribStore: { getState: vi.fn(() => ({ registerExporter: e, unregisterPlugin: u })) } }));
 vi.mock('../../../utils/download', () => ({ downloadBlob: vi.fn() }));
-import { mountIoOsmPlugin } from './ioOsm.plugin';
+import { mountIoOsmPlugin } from './io-osm.plugin';
 import type { Project } from '../../../services/platform';
 
 function makeProject(roads: Project['roads'] = []): Project {
@@ -27,7 +27,7 @@ function parseXml(xml: string) {
   return { nodeIds, ways };
 }
 
-describe('ioOsm.plugin', () => {
+describe('io-osm.plugin', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('mounts', () => { const c = mountIoOsmPlugin(); expect(typeof c).toBe('function'); c(); });

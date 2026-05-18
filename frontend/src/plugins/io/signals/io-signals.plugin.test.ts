@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 const m = vi.fn(), e = vi.fn(), u = vi.fn();
 vi.mock('../../../stores/pluginContribStore', () => ({ usePluginContribStore: { getState: vi.fn(() => ({ registerImporter: m, registerExporter: e, unregisterPlugin: u })) } }));
-import { mountIoSignalsPlugin, generateHdMapXml } from './ioSignals.plugin';
+import { mountIoSignalsPlugin, generateHdMapXml } from './io-signals.plugin';
 
 function buildProject(overrides?: { roads?: any[]; signals?: any[]; objects?: any[] }) {
   return {
@@ -18,7 +18,7 @@ function buildRoad(id: string, length: number, signals?: any[], objects?: any[])
   return { id, name: `Road ${id}`, length, signals: signals ?? [], objects: objects ?? [] };
 }
 
-describe('ioSignals.plugin', () => {
+describe('io-signals.plugin', () => {
   beforeEach(() => vi.clearAllMocks());
   it('mounts', () => { const c = mountIoSignalsPlugin(); expect(typeof c).toBe('function'); c(); });
   it('registers importer with .json extension', () => { const c = mountIoSignalsPlugin(); const call = m.mock.calls[0]; expect(call?.[0].extensions).toContain('.json'); c(); });

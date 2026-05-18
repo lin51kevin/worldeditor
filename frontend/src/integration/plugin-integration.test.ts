@@ -105,7 +105,7 @@ afterEach(() => {
 
 describe('plugin-io-lanelet2', () => {
   it('mounts, registers importer+exporter, and unmounts cleanly', async () => {
-    const { mountIoLanelet2Plugin } = await import('../plugins/io/lanelet2/ioLanelet2.plugin');
+    const { mountIoLanelet2Plugin } = await import('../plugins/io/lanelet2/io-lanelet2.plugin');
     const unmount = mountIoLanelet2Plugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -117,7 +117,7 @@ describe('plugin-io-lanelet2', () => {
 
 describe('plugin-io-shapefile', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoShapefilePlugin } = await import('../plugins/io/shapefile/ioShapefile.plugin');
+    const { mountIoShapefilePlugin } = await import('../plugins/io/shapefile/io-shapefile.plugin');
     const unmount = mountIoShapefilePlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -128,7 +128,7 @@ describe('plugin-io-shapefile', () => {
 
 describe('plugin-io-csv', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoCsvPlugin } = await import('../plugins/io/csv/ioCsv.plugin');
+    const { mountIoCsvPlugin } = await import('../plugins/io/csv/io-csv.plugin');
     const unmount = mountIoCsvPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -139,7 +139,7 @@ describe('plugin-io-csv', () => {
 
 describe('plugin-io-osm', () => {
   it('mounts and registers exporter', async () => {
-    const { mountIoOsmPlugin } = await import('../plugins/io/osm/ioOsm.plugin');
+    const { mountIoOsmPlugin } = await import('../plugins/io/osm/io-osm.plugin');
     const unmount = mountIoOsmPlugin();
     expect(store.registerExporter).toHaveBeenCalledOnce();
     unmount();
@@ -149,7 +149,7 @@ describe('plugin-io-osm', () => {
 
 describe('plugin-io-obj3d', () => {
   it('mounts and registers exporter', async () => {
-    const { mountIoObj3dPlugin } = await import('../plugins/io/obj3d/ioObj3d.plugin');
+    const { mountIoObj3dPlugin } = await import('../plugins/io/obj3d/io-obj3d.plugin');
     const unmount = mountIoObj3dPlugin();
     expect(store.registerExporter).toHaveBeenCalledOnce();
     unmount();
@@ -159,7 +159,7 @@ describe('plugin-io-obj3d', () => {
 
 describe('plugin-io-mif', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoMifPlugin } = await import('../plugins/io/mif/ioMif.plugin');
+    const { mountIoMifPlugin } = await import('../plugins/io/mif/io-mif.plugin');
     const unmount = mountIoMifPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -170,7 +170,7 @@ describe('plugin-io-mif', () => {
 
 describe('plugin-io-nio', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoNioPlugin } = await import('../plugins/io/nio/ioNio.plugin');
+    const { mountIoNioPlugin } = await import('../plugins/io/nio/io-nio.plugin');
     const unmount = mountIoNioPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -181,7 +181,7 @@ describe('plugin-io-nio', () => {
 
 describe('plugin-io-geoz', () => {
   it('mounts and registers importer', async () => {
-    const { mountIoGeoZPlugin } = await import('../plugins/io/geoz/ioGeoZ.plugin');
+    const { mountIoGeoZPlugin } = await import('../plugins/io/geoz/io-geoz.plugin');
     const unmount = mountIoGeoZPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     unmount();
@@ -191,7 +191,7 @@ describe('plugin-io-geoz', () => {
 
 describe('plugin-io-signals', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoSignalsPlugin } = await import('../plugins/io/signals/ioSignals.plugin');
+    const { mountIoSignalsPlugin } = await import('../plugins/io/signals/io-signals.plugin');
     const unmount = mountIoSignalsPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -202,7 +202,7 @@ describe('plugin-io-signals', () => {
 
 describe('plugin-io-dxf', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoDxfPlugin } = await import('../plugins/io/dxf/ioDxf.plugin');
+    const { mountIoDxfPlugin } = await import('../plugins/io/dxf/io-dxf.plugin');
     const unmount = mountIoDxfPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -213,7 +213,7 @@ describe('plugin-io-dxf', () => {
 
 describe('plugin-io-xodr-ext', () => {
   it('mounts and registers importer+exporter', async () => {
-    const { mountIoXodrExtPlugin } = await import('../plugins/io/xodr-ext/ioXodrExt.plugin');
+    const { mountIoXodrExtPlugin } = await import('../plugins/io/xodr-ext/io-xodr-ext.plugin');
     const unmount = mountIoXodrExtPlugin();
     expect(store.registerImporter).toHaveBeenCalledOnce();
     expect(store.registerExporter).toHaveBeenCalledOnce();
@@ -226,7 +226,7 @@ describe('plugin-io-xodr-ext', () => {
 
 describe('plugin-gis-tools', () => {
   it('mounts, registers a panel, unmounts cleanly', async () => {
-    const { mountGisToolsPlugin } = await import('../plugins/gis-viz/gis-tools/gisTools.plugin');
+    const { mountGisToolsPlugin } = await import('../plugins/gis-viz/gis-tools/gis-tools.plugin');
     const unmount = mountGisToolsPlugin();
     expect(store.registerPanel).toHaveBeenCalledOnce();
     unmount();
@@ -329,7 +329,7 @@ describe('plugin-3d-models', () => {
 
 describe('plugin-advanced-editing', () => {
   it('mounts, registers menu items and context menu items, unmounts cleanly', async () => {
-    const { mountAdvancedEditingPlugin } = await import('../plugins/editing/advanced-editing/advancedEditing.plugin');
+    const { mountAdvancedEditingPlugin } = await import('../plugins/editing/advanced-editing/advanced-editing.plugin');
     const unmount = mountAdvancedEditingPlugin();
     expect(store.registerMenuItem.mock.calls.length).toBeGreaterThanOrEqual(5);
     unmount();

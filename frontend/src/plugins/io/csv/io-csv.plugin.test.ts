@@ -16,7 +16,7 @@ vi.mock('../../../stores/pluginContribStore', () => ({
 
 vi.mock('../../../utils/download', () => ({ downloadBlob: vi.fn() }));
 
-import { mountIoCsvPlugin } from './ioCsv.plugin';
+import { mountIoCsvPlugin } from './io-csv.plugin';
 import { downloadBlob } from '../../../utils/download';
 const mockDownloadBlob = downloadBlob as unknown as ReturnType<typeof vi.fn>;
 
@@ -27,7 +27,7 @@ function getImporter() {
   return call;
 }
 
-describe('ioCsv.plugin', () => {
+describe('io-csv.plugin', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('should mount and return a cleanup function', () => {

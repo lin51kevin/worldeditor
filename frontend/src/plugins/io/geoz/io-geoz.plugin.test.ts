@@ -13,9 +13,9 @@ vi.mock('../../../stores/pluginContribStore', () => ({
   },
 }));
 
-import { buildGeoZProtoRoot, mountIoGeoZPlugin } from './ioGeoZ.plugin';
+import { buildGeoZProtoRoot, mountIoGeoZPlugin } from './io-geoz.plugin';
 
-describe('ioGeoZ.plugin', () => {
+describe('io-geoz.plugin', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

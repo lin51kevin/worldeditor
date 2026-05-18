@@ -32,9 +32,9 @@ vi.mock('../../../utils/dialog', () => ({
   showAlert: vi.fn(),
 }));
 
-import { mountAdvancedEditingPlugin } from './advancedEditing.plugin';
+import { mountAdvancedEditingPlugin } from './advanced-editing.plugin';
 
-describe('advancedEditing.plugin', () => {
+describe('advanced-editing.plugin', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mountGisToolsPlugin } from '../gis-viz/gis-tools/gisTools.plugin';
+import { mountGisToolsPlugin } from '../gis-viz/gis-tools/gis-tools.plugin';
 import { mountValidationPlugin } from '../analysis/validation/validation.plugin';
 import { mountTrafficPlugin } from '../analysis/traffic/traffic.plugin';
 import { mountPointcloudPlugin } from '../gis-viz/pointcloud/pointcloud-beta.plugin';
@@ -11,15 +11,17 @@ import { mountLaneDetectPlugin } from '../analysis/lane-detect/lane-detect-beta.
 import { mountConverterPlugin } from '../editing/converter/converter.plugin';
 import { createEmptyProject } from './emptyProject';
 
-const { mockShowAlert, registered, mockUnregister } = vi.hoisted(() => {
+const { mockShowAlert, mockDownloadBlob, registered, mockUnregister } = vi.hoisted(() => {
   return {
     mockShowAlert: vi.fn().mockResolvedValue(undefined),
+    mockDownloadBlob: vi.fn(),
     registered: [] as { type: string; data: unknown }[],
     mockUnregister: vi.fn(),
   };
 });
 
 vi.mock('../../utils/dialog', () => ({ showAlert: mockShowAlert }));
+vi.mock('../../utils/download', () => ({ downloadBlob: mockDownloadBlob }));
 vi.mock('../../stores/pluginContribStore', () => ({
   usePluginContribStore: {
     getState: vi.fn(() => {
@@ -58,8 +60,6 @@ describe('stub plugins — mount, register, and showAlert on click', () => {
     vi.clearAllMocks();
     registered.length = 0;
     mockShowAlert.mockResolvedValue(undefined);
-    URL.createObjectURL = vi.fn(() => 'blob:test');
-    URL.revokeObjectURL = vi.fn();
   });
 
   for (const p of plugins) {

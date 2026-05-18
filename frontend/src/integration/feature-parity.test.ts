@@ -31,7 +31,7 @@ const FEATURE_PARITY_TABLE: FeatureRecord[] = [
   { csharp: 'Bridge / Tunnel', status: 'core', impl: 'crates/we-core/src/model/bridge_tunnel.rs' },
   { csharp: 'CRG profile', status: 'core', impl: 'crates/we-core/src/model/crg.rs' },
   { csharp: 'Zone', status: 'core', impl: 'crates/we-core/src/model/zone.rs' },
-  { csharp: 'SignalPhase / SignalGroup', status: 'plugin', impl: 'frontend/src/plugins/traffic.plugin.ts' },
+  { csharp: 'SignalPhase / SignalGroup', status: 'plugin', impl: 'frontend/src/plugins/analysis/traffic/traffic.plugin.ts' },
 
   // ── OpenDRIVE I/O ─────────────────────────────────────────────────────────
   { csharp: 'OpenDRIVE parser', status: 'core', impl: 'crates/we-core/src/opendrive/parser.rs' },
@@ -53,7 +53,7 @@ const FEATURE_PARITY_TABLE: FeatureRecord[] = [
   { csharp: 'Proj4 CRS parser', status: 'core', impl: 'crates/we-core/src/gis/proj4.rs' },
   { csharp: 'WKT CRS parser', status: 'core', impl: 'crates/we-core/src/gis/wkt.rs' },
   { csharp: 'Ground Control Points (GCP)', status: 'core', impl: 'crates/we-core/src/gis/gcp.rs' },
-  { csharp: 'GIS Tools panel', status: 'plugin', impl: 'frontend/src/plugins/gisTools.plugin.ts' },
+  { csharp: 'GIS Tools panel', status: 'plugin', impl: 'frontend/src/plugins/gis-viz/gis-tools/gis-tools.plugin.ts' },
 
   // ── Rendering ─────────────────────────────────────────────────────────────
   { csharp: 'Road surface rendering', status: 'core', impl: 'crates/we-render/src/' },
@@ -64,9 +64,9 @@ const FEATURE_PARITY_TABLE: FeatureRecord[] = [
   { csharp: 'Road endpoint markers', status: 'core', impl: 'crates/we-render/src/endpoint_render.rs' },
   { csharp: 'Translate/rotate gizmos', status: 'core', impl: 'crates/we-render/src/gizmo.rs' },
   { csharp: 'Road surface texture (asphalt)', status: 'core', impl: 'crates/we-render/src/shaders/road_textured.wgsl' },
-  { csharp: 'Point cloud rendering', status: 'plugin', impl: 'frontend/src/plugins/pointcloud.plugin.ts' },
-  { csharp: 'Satellite tile overlay', status: 'plugin', impl: 'frontend/src/plugins/satellite.plugin.ts' },
-  { csharp: '3D model loading (OBJ/FBX)', status: 'plugin', impl: 'frontend/src/plugins/models3d.plugin.ts' },
+  { csharp: 'Point cloud rendering', status: 'plugin', impl: 'frontend/src/plugins/gis-viz/pointcloud/pointcloud-beta.plugin.ts' },
+  { csharp: 'Satellite tile overlay', status: 'plugin', impl: 'frontend/src/plugins/gis-viz/satellite/satellite-beta.plugin.ts' },
+  { csharp: '3D model loading (OBJ/FBX)', status: 'plugin', impl: 'frontend/src/plugins/gis-viz/models-3d/models-3d-beta.plugin.ts' },
 
   // ── Editing commands ──────────────────────────────────────────────────────
   { csharp: 'Add / Delete Road', status: 'core', impl: 'crates/we-service/src/commands/' },
@@ -74,43 +74,43 @@ const FEATURE_PARITY_TABLE: FeatureRecord[] = [
   { csharp: 'Add / Delete Signal', status: 'core', impl: 'crates/we-service/src/commands/' },
   { csharp: 'Add / Delete Object', status: 'core', impl: 'crates/we-service/src/commands/' },
   { csharp: 'Undo / Redo', status: 'core', impl: 'crates/we-service/src/undo.rs' },
-  { csharp: 'Road splitting', status: 'plugin', impl: 'frontend/src/plugins/advancedEditing.plugin.ts' },
-  { csharp: 'Road weld/connect', status: 'plugin', impl: 'frontend/src/plugins/advancedEditing.plugin.ts' },
-  { csharp: 'Auto-build junction connectors', status: 'plugin', impl: 'frontend/src/plugins/advancedEditing.plugin.ts' },
-  { csharp: 'Auto-deploy sidewalks, markings, crosswalks', status: 'plugin', impl: 'frontend/src/plugins/advancedEditing.plugin.ts' },
-  { csharp: 'Lane optimisation', status: 'plugin', impl: 'frontend/src/plugins/advancedEditing.plugin.ts' },
-  { csharp: 'Zone operations', status: 'plugin', impl: 'frontend/src/plugins/advancedEditing.plugin.ts' },
-  { csharp: 'Route/path planning', status: 'plugin', impl: 'frontend/src/plugins/advancedEditing.plugin.ts' },
-  { csharp: 'Bridge/tunnel creation', status: 'plugin', impl: 'frontend/src/plugins/advancedEditing.plugin.ts' },
+  { csharp: 'Road splitting', status: 'plugin', impl: 'frontend/src/plugins/editing/advanced-editing/advanced-editing.plugin.ts' },
+  { csharp: 'Road weld/connect', status: 'plugin', impl: 'frontend/src/plugins/editing/advanced-editing/advanced-editing.plugin.ts' },
+  { csharp: 'Auto-build junction connectors', status: 'plugin', impl: 'frontend/src/plugins/editing/advanced-editing/advanced-editing.plugin.ts' },
+  { csharp: 'Auto-deploy sidewalks, markings, crosswalks', status: 'plugin', impl: 'frontend/src/plugins/editing/advanced-editing/advanced-editing.plugin.ts' },
+  { csharp: 'Lane optimisation', status: 'plugin', impl: 'frontend/src/plugins/editing/advanced-editing/advanced-editing.plugin.ts' },
+  { csharp: 'Zone operations', status: 'plugin', impl: 'frontend/src/plugins/editing/advanced-editing/advanced-editing.plugin.ts' },
+  { csharp: 'Route/path planning', status: 'plugin', impl: 'frontend/src/plugins/editing/advanced-editing/advanced-editing.plugin.ts' },
+  { csharp: 'Bridge/tunnel creation', status: 'plugin', impl: 'frontend/src/plugins/editing/advanced-editing/advanced-editing.plugin.ts' },
   { csharp: 'Tangent handle editing', status: 'core', impl: 'frontend/src/viewport/tangentHandleController.ts' },
   { csharp: 'Soft selection', status: 'core', impl: 'frontend/src/components/SoftSelectionPanel.tsx' },
 
   // ── I/O formats ──────────────────────────────────────────────────────────
-  { csharp: 'Lanelet2 OSM-XML import/export', status: 'plugin', impl: 'frontend/src/plugins/ioLanelet2.plugin.ts' },
-  { csharp: 'Shapefile import/export', status: 'plugin', impl: 'frontend/src/plugins/ioShapefile.plugin.ts' },
-  { csharp: 'DXF CAD import/export', status: 'plugin', impl: 'frontend/src/plugins/ioDxf.plugin.ts' },
-  { csharp: 'CSV coordinate import/export', status: 'plugin', impl: 'frontend/src/plugins/ioCsv.plugin.ts' },
-  { csharp: 'Wavefront OBJ 3D export', status: 'plugin', impl: 'frontend/src/plugins/ioObj3d.plugin.ts' },
-  { csharp: 'NIO ProtoBuf import/export', status: 'plugin', impl: 'frontend/src/plugins/ioNio.plugin.ts' },
-  { csharp: 'MapInfo MIF/MID import/export', status: 'plugin', impl: 'frontend/src/plugins/ioMif.plugin.ts' },
-  { csharp: 'OpenStreetMap XML export', status: 'plugin', impl: 'frontend/src/plugins/ioOsm.plugin.ts' },
-  { csharp: 'Signal JSON / HDMap XML', status: 'plugin', impl: 'frontend/src/plugins/ioSignals.plugin.ts' },
-  { csharp: 'OpenDRIVE custom extensions', status: 'plugin', impl: 'frontend/src/plugins/ioXodrExt.plugin.ts' },
+  { csharp: 'Lanelet2 OSM-XML import/export', status: 'plugin', impl: 'frontend/src/plugins/io/lanelet2/io-lanelet2.plugin.ts' },
+  { csharp: 'Shapefile import/export', status: 'plugin', impl: 'frontend/src/plugins/io/shapefile/io-shapefile.plugin.ts' },
+  { csharp: 'DXF CAD import/export', status: 'plugin', impl: 'frontend/src/plugins/io/dxf/io-dxf.plugin.ts' },
+  { csharp: 'CSV coordinate import/export', status: 'plugin', impl: 'frontend/src/plugins/io/csv/io-csv.plugin.ts' },
+  { csharp: 'Wavefront OBJ 3D export', status: 'plugin', impl: 'frontend/src/plugins/io/obj3d/io-obj3d.plugin.ts' },
+  { csharp: 'NIO ProtoBuf import/export', status: 'plugin', impl: 'frontend/src/plugins/io/nio/io-nio.plugin.ts' },
+  { csharp: 'MapInfo MIF/MID import/export', status: 'plugin', impl: 'frontend/src/plugins/io/mif/io-mif.plugin.ts' },
+  { csharp: 'OpenStreetMap XML export', status: 'plugin', impl: 'frontend/src/plugins/io/osm/io-osm.plugin.ts' },
+  { csharp: 'Signal JSON / HDMap XML', status: 'plugin', impl: 'frontend/src/plugins/io/signals/io-signals.plugin.ts' },
+  { csharp: 'OpenDRIVE custom extensions', status: 'plugin', impl: 'frontend/src/plugins/io/xodr-ext/io-xodr-ext.plugin.ts' },
 
   // ── Validation ───────────────────────────────────────────────────────────
-  { csharp: 'Data quality validation', status: 'plugin', impl: 'frontend/src/plugins/validation.plugin.ts' },
-  { csharp: 'Topology checker', status: 'plugin', impl: 'frontend/src/plugins/validation.plugin.ts' },
-  { csharp: 'Pred/succ road connectivity check', status: 'plugin', impl: 'frontend/src/plugins/validation.plugin.ts' },
+  { csharp: 'Data quality validation', status: 'plugin', impl: 'frontend/src/plugins/analysis/validation/validation.plugin.ts' },
+  { csharp: 'Topology checker', status: 'plugin', impl: 'frontend/src/plugins/analysis/validation/validation.plugin.ts' },
+  { csharp: 'Pred/succ road connectivity check', status: 'plugin', impl: 'frontend/src/plugins/analysis/validation/validation.plugin.ts' },
 
   // ── Traffic ───────────────────────────────────────────────────────────────
-  { csharp: 'Signal phase / group editor', status: 'plugin', impl: 'frontend/src/plugins/traffic.plugin.ts' },
-  { csharp: 'SUMO I/O', status: 'plugin', impl: 'frontend/src/plugins/traffic.plugin.ts' },
+  { csharp: 'Signal phase / group editor', status: 'plugin', impl: 'frontend/src/plugins/analysis/traffic/traffic.plugin.ts' },
+  { csharp: 'SUMO I/O', status: 'plugin', impl: 'frontend/src/plugins/analysis/traffic/traffic.plugin.ts' },
 
   // ── Special tools ──────────────────────────────────────────────────────────
-  { csharp: 'Rhai script console', status: 'plugin', impl: 'frontend/src/plugins/scripting.plugin.ts' },
-  { csharp: 'Vegetation / Ecosystem placement', status: 'plugin', impl: 'frontend/src/plugins/ecosystem.plugin.ts' },
-  { csharp: 'Lane detection (auto)', status: 'plugin', impl: 'frontend/src/plugins/laneDetect.plugin.ts' },
-  { csharp: 'Batch format converter', status: 'plugin', impl: 'frontend/src/plugins/converter.plugin.ts' },
+  { csharp: 'Rhai script console', status: 'plugin', impl: 'frontend/src/plugins/gis-viz/scripting/scripting-beta.plugin.ts' },
+  { csharp: 'Vegetation / Ecosystem placement', status: 'plugin', impl: 'frontend/src/plugins/gis-viz/ecosystem/ecosystem-beta.plugin.ts' },
+  { csharp: 'Lane detection (auto)', status: 'plugin', impl: 'frontend/src/plugins/analysis/lane-detect/lane-detect-beta.plugin.ts' },
+  { csharp: 'Batch format converter', status: 'plugin', impl: 'frontend/src/plugins/editing/converter/converter.plugin.ts' },
 
   // ── Camera / Selection / Measurement ──────────────────────────────────────
   { csharp: 'Camera (orbit, pan, zoom)', status: 'core', impl: 'frontend/src/viewport/renderer.ts' },

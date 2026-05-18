@@ -14,14 +14,14 @@ vi.mock('../../../stores/pluginContribStore', () => ({
 
 vi.mock('../../../utils/download', () => ({ downloadBlob: vi.fn() }));
 
-import { mountIoObj3dPlugin, generateObjContent } from './ioObj3d.plugin';
+import { mountIoObj3dPlugin, generateObjContent } from './io-obj3d.plugin';
 import type { Project } from '../../../services/platform';
 
 function makeProject(roads: Project['roads'] = []): Project {
   return { name: 'test', roads, signals: [], objects: [], junctions: [], header: { rev_major: 1, rev_minor: 1, name: '', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null } } as Project;
 }
 
-describe('ioObj3d.plugin', () => {
+describe('io-obj3d.plugin', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('should mount and return a cleanup function', () => {
