@@ -44,6 +44,27 @@ pub enum BatchEntry {
         junction_id: String,
         new_name: String,
     },
+    /// Set the speed limit (max speed attribute) on a road.
+    SetRoadSpeed {
+        road_id: String,
+        new_speed: f64,
+    },
+    /// Toggle render visibility for a set of roads.
+    SetRoadsVisibility {
+        road_ids: Vec<String>,
+        visible: bool,
+    },
+    /// Toggle render visibility for a set of lane sections.
+    SetLaneSectionsVisibility {
+        road_id: String,
+        section_indices: Vec<usize>,
+        visible: bool,
+    },
+    /// Align elevations of multiple roads to a single target value at their endpoints.
+    AlignElevations {
+        road_ids: Vec<String>,
+        target_elevation: f64,
+    },
 }
 
 /// Execute multiple commands as a single undoable operation.
@@ -137,6 +158,59 @@ impl Command for BatchCommand {
                             ))
                         })?;
                     junction.name = new_name.clone();
+                }
+                BatchEntry::SetRoadSpeed {
+                    road_id,
+                    new_speed,
+                } => {
+                    let road = find_road_mut(&mut p, road_id)?;
+                    road.speed = Some(*new_speed);
+                }
+                BatchEntry::SetRoadsVisibility {
+                    road_ids,
+                    visible,
+                } => {
+                    for rid in road_ids {
+                        if let Some(road) = p.roads.iter_mut().find(|r| r.id == *rid) {
+                            road.render_hidden = !visible;
+                        }
+                    }
+                }
+                BatchEntry::SetLaneSectionsVisibility {
+                    road_id,
+                    section_indices,
+                    visible,
+                } => {
+                    let road = find_road_mut(&mut p, road_id)?;
+                    for &idx in section_indices {
+                        if let Some(section) = road.lane_sections.get_mut(idx) {
+                            section.render_hidden = !visible;
+                        }
+                    }
+                }
+                BatchEntry::AlignElevations {
+                    road_ids,
+                    target_elevation,
+                } => {
+                    for rid in road_ids {
+                        if let Some(road) = p.roads.iter_mut().find(|r| r.id == *rid) {
+                            // Set or replace the first and last elevation entries
+                            if road.elevation_profile.is_empty() {
+                                road.elevation_profile.push(Elevation {
+                                    s: 0.0,
+                                    a: *target_elevation,
+                                    b: 0.0,
+                                    c: 0.0,
+                                    d: 0.0,
+                                });
+                            } else {
+                                road.elevation_profile[0].a = *target_elevation;
+                                if let Some(last) = road.elevation_profile.last_mut() {
+                                    last.a = *target_elevation;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
