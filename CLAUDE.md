@@ -4,15 +4,19 @@
 
 ## 项目概述
 
-WorldEditor 是自动驾驶道路网络编辑器，从 C#/.NET 重写为 Rust + TypeScript。
-支持三个部署目标：Tauri 桌面、Web 浏览器 (WASM)、REST API 服务器。
-当前版本 **0.1.1**，处于 **Phase 1**（功能完善阶段）。
+- 以下列表不包含 2026-05-14 ~ 2026-05-15 已修复的 crosswalk / parking space / `objectReference` 问题。
+
+- 点云加载未实现（we-native 占位，Phase 4 预留）
+- GDAL/LAS 依赖尚未启用（保留为桌面插件/扩展路线）
+- DXF / Shapefile / SUMO 导入导出为 stub（Phase 4 预留）
 
 ## 技术栈速查
 
 | 组件 | 技术 | 版本 |
-|------|------|------|
-| 核心逻辑 | Rust | edition 2024 |
+- 实例化渲染尚未补齐，dense scene 性能仍需继续提升
+- 前端 Visual Regression 还未纳入 CI 门禁
+- 大项目下的拾取/吸附缓存路径仍需持续回归验证
+- 网格生成为全量重建，增量更新待做
 | 前端 | React + Zustand | 19 / 5 |
 | 桌面壳 | Tauri | 2.x |
 | 渲染 | wgpu + WebGPU | 24 |
@@ -514,15 +518,19 @@ Playwright 测试位于 `frontend/e2e/` (17 spec files)，覆盖以下场景：
 
 ## 已知限制
 
-- 点云加载未实现（we-native 占位，Phase 3）
-- GDAL/LAS 依赖暂未启用（we-native 代码已注释就绪）
-- DXF / Shapefile / SUMO 导入导出为 stub（Phase 3 预留）
+- 以下列表不包含 2026-05-14 ~ 2026-05-15 已修复的 crosswalk / parking space / `objectReference` 问题。
+
+- 点云加载未实现（we-native 占位，Phase 4 预留）
+- GDAL/LAS 依赖尚未启用（保留为桌面插件/扩展路线）
+- DXF / Shapefile / SUMO 导入导出为 stub（Phase 4 预留）
 - we-server WebSocket 协作编辑为占位实现
 - we-server S3 存储后端为 stub
 - CSP 策略包含 `unsafe-eval`（安全加固中）
 - 插件 JavaScript 代码未沙箱化（安全风险）
-- `pushUndo()` 对整个 project 进行 `structuredClone`（大项目性能瓶颈）
-- 网格生成为全量重建，未做增量更新
+- 实例化渲染尚未补齐，dense scene 性能仍需继续提升
+- 前端 Visual Regression 还未纳入 CI 门禁
+- 大项目下的拾取/吸附缓存路径仍需持续回归验证
+- 网格生成为全量重建，增量更新待做
 
 ## 参考资料
 

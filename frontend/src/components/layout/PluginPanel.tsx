@@ -22,7 +22,7 @@ function getPanelClass(position: 'left' | 'right' | 'bottom' | 'float'): string 
     case 'bottom':
       return 'floating-output';
     case 'float':
-      return 'floating-right floating-plugin';
+      return 'floating-plugin';
     default:
       return 'floating-right';
   }
@@ -84,6 +84,7 @@ export function PluginPanels() {
             resizeEdges={['top', 'right', 'bottom', 'left']}
             anchorHorizontal={contrib.position === 'right' ? 'right' : 'left'}
             storageKey={`we-plugin-panel-${contrib.id}`}
+            initialCenter={contrib.position === 'float'}
             onMouseDown={() => setActiveId(contrib.id)}
             style={{
               ...(contrib.position !== 'bottom' && contrib.position !== 'float'

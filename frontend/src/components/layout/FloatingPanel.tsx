@@ -1,13 +1,18 @@
-import { useRef, useState, useCallback, useEffect, type CSSProperties } from 'react';
+import { useRef, useState, useCallback, useEffect, useLayoutEffect, type CSSProperties } from 'react';
 import { X } from 'lucide-react';
 import './FloatingPanel.css';
 import { STORAGE_KEYS } from '../../constants/storage';
+
+/** Bump whenever the CSS position anchor for initially-centered panels changes. */
+const STATE_VERSION = 1;
 
 interface SavedState {
   tx: number;
   ty: number;
   width: number | null;
   height: number | null;
+  /** Written by STATE_VERSION; absent in states saved before the anchor change. */
+  v?: number;
 }
 
 interface FloatingPanelProps {
@@ -31,21 +36,42 @@ interface FloatingPanelProps {
   onClose?: () => void;
   /** Optional callback fired on any mousedown inside the panel (use to bring to front) */
   onMouseDown?: (e: React.MouseEvent) => void;
+  /** When true and no saved position exists, the panel opens centered in the viewport */
+  initialCenter?: boolean;
+  /** Additional pixel offset applied to the centered position (useful to stagger multiple panels) */
+  initialCenterOffset?: { x: number; y: number };
 }
 
-function loadState(key: string, defaultWidth: number): SavedState {
+function loadState(key: string, defaultWidth: number, initialCenter?: boolean): [SavedState, boolean] {
   try {
     const saved = localStorage.getItem(key);
-    if (saved) return JSON.parse(saved) as SavedState;
+    if (saved) {
+      const parsed = JSON.parse(saved) as SavedState;
+      // Accept the saved state unless this is a centered panel whose anchor has
+      // changed since the state was written (stale state has no v field).
+      if (!initialCenter || (parsed.v ?? 0) >= STATE_VERSION) {
+        return [parsed, false];
+      }
+    }
   } catch {
     // ignore
   }
-  return { tx: 0, ty: 0, width: defaultWidth, height: null };
+  if (initialCenter) {
+    // Pre-compute approximate center so the very first render is already
+    // positioned correctly — avoids any visible flash before useLayoutEffect.
+    return [{
+      tx: Math.round((window.innerWidth - defaultWidth) / 2),
+      ty: Math.round(window.innerHeight / 2 - 150), // 150 = rough half-height estimate
+      width: defaultWidth,
+      height: null,
+    }, true];
+  }
+  return [{ tx: 0, ty: 0, width: defaultWidth, height: null }, true];
 }
 
 function saveState(key: string, state: SavedState): void {
   try {
-    localStorage.setItem(key, JSON.stringify(state));
+    localStorage.setItem(key, JSON.stringify({ ...state, v: STATE_VERSION }));
   } catch {
     // ignore
   }
@@ -79,12 +105,15 @@ export function FloatingPanel({
   storageKey,
   onClose,
   onMouseDown,
+  initialCenter,
+  initialCenterOffset,
 }: FloatingPanelProps) {
-  const initialState = loadState(storageKey, defaultWidth);
-  const [tx, setTx] = useState(initialState.tx);
-  const [ty, setTy] = useState(initialState.ty);
-  const [width, setWidth] = useState<number | null>(initialState.width);
-  const [height, setHeight] = useState<number | null>(initialState.height);
+  const [savedState, savedWasDefault] = loadState(storageKey, defaultWidth, initialCenter);
+  const wasDefaultRef = useRef(savedWasDefault);
+  const [tx, setTx] = useState(savedState.tx);
+  const [ty, setTy] = useState(savedState.ty);
+  const [width, setWidth] = useState<number | null>(savedState.width);
+  const [height, setHeight] = useState<number | null>(savedState.height);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const txRef = useRef(tx);
@@ -118,6 +147,20 @@ export function FloatingPanel({
   useEffect(() => {
     saveState(storageKey, { tx, ty, width, height });
   }, [tx, ty, width, height, storageKey]);
+
+  // Center in viewport on first open when no saved position exists.
+  // useLayoutEffect fires before paint so there is no visible flash.
+  useLayoutEffect(() => {
+    if (!initialCenter || !wasDefaultRef.current) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const newTx = Math.round((window.innerWidth - rect.width) / 2) + (initialCenterOffset?.x ?? 0);
+    const newTy = Math.round((window.innerHeight - rect.height) / 2) + (initialCenterOffset?.y ?? 0);
+    setTx(newTx);
+    setTy(newTy);
+    wasDefaultRef.current = false;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Drag: start when mousedown lands on the designated drag handle
   const handleContainerMouseDown = useCallback(

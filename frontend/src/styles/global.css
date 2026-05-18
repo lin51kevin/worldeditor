@@ -344,7 +344,11 @@ body,
   border-radius: var(--floating-radius);
   box-shadow: var(--glass-shadow);
   overflow: hidden;
-  animation: panel-fade-in 200ms ease-out;
+  /* Use opacity-only animation to avoid transform conflict with
+     FloatingPanel's inline translate(tx, ty) — same reason as .floating-plugin.
+     panel-fade-in animated transform which CSS animations override inline styles,
+     causing a visible snap when the animation ends and the saved tx/ty kicks back in. */
+  animation: panel-fade-only 200ms ease-out;
 }
 
 @keyframes panel-fade-in {
@@ -356,6 +360,20 @@ body,
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* All floating panels that use FloatingPanel (which manages transform via inline style)
+   must use this opacity-only animation. panel-fade-in (above) animates transform, which
+   CSS animations override inline styles — causing a snap when the animation ends and
+   the saved tx/ty kicks back in. panel-fade-only avoids that entirely. */
+@keyframes panel-fade-only {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
   }
 }
 
@@ -383,13 +401,13 @@ body,
   }
 }
 
-.floating-left {
+/* .floating-left {
   animation-name: panel-slide-left;
 }
 
 .floating-right {
   animation-name: panel-slide-right;
-}
+} */
 
 .floating-left {
   top: calc(var(--menubar-height) + 12px);
@@ -435,7 +453,7 @@ body,
   width: var(--floating-panel-width);
   display: flex;
   flex-direction: column;
-  animation-name: panel-slide-left;
+  /* animation-name: panel-slide-left; */
 }
 
 /* Measurement panel — centered floating */
@@ -447,26 +465,23 @@ body,
   flex-direction: column;
 }
 
-/* Plugin float panels — centered, opacity-only animation avoids
-   transform conflict with FloatingPanel's inline translate(tx, ty) */
-@keyframes panel-fade-only {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
+/* Plugin float panels — fixed to viewport; JS (useLayoutEffect) centers them. */
 .floating-plugin {
-  top: calc(var(--menubar-height) + var(--toolbar-height) + 60px);
-  left: calc(50% - 170px);
-  /* half of 340px default width */
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 340px;
   display: flex;
   flex-direction: column;
-  animation-name: panel-fade-only;
+  z-index: var(--z-panel);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--floating-radius);
+  box-shadow: var(--glass-shadow);
+  overflow: hidden;
+  animation: panel-fade-only 200ms ease-out;
 }
 
 /* ── Card component ── */

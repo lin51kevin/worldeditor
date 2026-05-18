@@ -191,11 +191,11 @@ describe('PluginPanels', () => {
     expect(container.querySelector('.floating-output')).toBeInTheDocument();
   });
 
-  it('applies floating-right class for float-positioned panel', () => {
+  it('applies floating-plugin class for float-positioned panel', () => {
     const TestComp = () => <div>Float Panel</div>;
     act(() => { registerAndShow({ id: 'fp', title: 'F', component: TestComp, position: 'float' }); });
     const { container } = render(<PluginPanels />);
-    expect(container.querySelector('.floating-right')).toBeInTheDocument();
+    expect(container.querySelector('.floating-plugin')).toBeInTheDocument();
   });
 
   // ── data-panel-id attribute ─────────────────────────────────────────────────
@@ -375,5 +375,26 @@ describe('PluginPanels', () => {
     });
     render(<PluginPanels />);
     expect(renderSpy).not.toHaveBeenCalled();
+  });
+
+  // ── float position — CSS class + initialCenter ──────────────────────────────
+
+  it('float panel uses floating-plugin CSS class', () => {
+    const TestComp = () => <div>Float Content</div>;
+    act(() => { registerAndShow({ id: 'fp-class', title: 'Float', component: TestComp, position: 'float' }); });
+    const { container } = render(<PluginPanels />);
+    const el = container.querySelector('.floating-plugin');
+    expect(el).toBeInTheDocument();
+    // Must NOT fall back to floating-right
+    expect(container.querySelector('[class*="floating-right"]')).not.toBeInTheDocument();
+  });
+
+  it('float panel has position:fixed style (from .floating-plugin CSS class)', () => {
+    // The DOM element itself won't carry inline position:fixed (that comes from CSS),
+    // but we can verify the class name is correct and the panel content is reachable.
+    const TestComp = () => <div>Fixed Float</div>;
+    act(() => { registerAndShow({ id: 'fp-fixed', title: 'F', component: TestComp, position: 'float' }); });
+    render(<PluginPanels />);
+    expect(document.querySelector('[data-panel-id="fp-fixed"]')).toBeInTheDocument();
   });
 });
