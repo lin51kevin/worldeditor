@@ -178,7 +178,7 @@ pub fn generate_center_line_vertices(
         let [r, g, b, a]: [f32; 4] = if road.junction_id.is_some() {
             [1.0, 0.6, 0.0, 0.85]
         } else {
-            [0.0, 0.5, 1.0, 0.85]
+            [0.0, 0.55, 1.0, 0.90]
         };
 
         for i in 0..ref_pts.len() - 1 {
@@ -230,7 +230,7 @@ pub fn generate_lane_boundary_vertices(
     let mut all_floats = Vec::new();
     let line_half_w = 0.08f64; // ~0.16 m thin ribbon
     let z_lift = 0.04f32;
-    let [r, g, b, a]: [f32; 4] = [0.15, 0.15, 0.15, 0.9];
+    let [r, g, b, a]: [f32; 4] = [0.45, 0.45, 0.50, 0.85]; // mid-gray, visible on both dark & light themes
 
     // Emit a thin ribbon at a given lateral offset for the segment pt0→pt1.
     let emit_boundary_segment =

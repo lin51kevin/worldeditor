@@ -10,7 +10,8 @@ import { useViewportStore } from '../stores/viewportStore';
 
 /**
  * Registers global keydown handlers for viewport-level shortcuts:
- *   - **Escape**: cancel pending template, exit draw/move/rotate mode, deselect
+ *   - **Escape**: cancel pending template, exit draw/move/rotate mode,
+ *     clear measurement points, deselect
  *   - **Delete**: delete selected road/junction/signal/object
  */
 export function useViewportKeyboard(): void {
@@ -27,6 +28,11 @@ export function useViewportKeyboard(): void {
         }
         if (viewState.pendingObjectTemplateId) {
           viewState.clearPendingObjectTemplate();
+          return;
+        }
+        // Clear measurement points when in measure mode
+        if (viewState.measureMode !== 'none') {
+          viewState.clearMeasurePoints();
           return;
         }
         if (viewState.geometryEditRoadId || isDrawMode) {

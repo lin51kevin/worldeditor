@@ -21,6 +21,7 @@ import { useGeometryEditMode } from '../hooks/useGeometryEditMode';
 import { useViewportKeyboard } from '../hooks/useViewportKeyboard';
 import { useViewportMeshes } from '../hooks/useViewportMeshes';
 import { useSelectionHighlight } from '../hooks/useSelectionHighlight';
+import { useMeasureOverlay } from '../hooks/useMeasureOverlay';
 import './Viewport.css';
 
 import {
@@ -45,6 +46,7 @@ export function Viewport() {
   const hoveredControlPointRef = useRef<SplineControlPoint | null>(null);
   const { rubberBandRef, rubberBandOverlayRef, startRubberBand, updateRubberBand, commitRubberBand } = useRubberBandSelect(rendererRef, canvasRef);
   const { startMoveRotateDrag, updateMoveRotateDrag, commitMoveRotateDrag } = useMoveRotateMode(rendererRef, canvasRef, isPreviewingRoadRef, pendingCursorRef);
+  useMeasureOverlay({ rendererRef, canvasRef, status });
   const hoveredRoadRef = useRef<string | null>(null);
   const hoveredJunctionRef = useRef<string | null>(null);
   const hoveredSignalRef = useRef<{ roadId: string; signalId: string } | null>(null);
@@ -633,10 +635,22 @@ export function Viewport() {
       try {
         const service = await getPlatformService();
         if (measureMode === 'distance' && pts.length >= 2) {
-          const p0 = pts[0]!;
-          const p1 = pts[1]!;
-          const result = await service.measureDistance(p0.x, p0.y, p0.z, p1.x, p1.y, p1.z);
-          setMeasurementResult({ type: 'distance', value: result });
+          // Continuous distance: measure every segment and sum them
+          let totalStraight = 0;
+          let totalHorizontal = 0;
+          let totalVertical = 0;
+          for (let i = 0; i < pts.length - 1; i++) {
+            const pa = pts[i]!;
+            const pb = pts[i + 1]!;
+            const seg = await service.measureDistance(pa.x, pa.y, pa.z, pb.x, pb.y, pb.z);
+            totalStraight += seg.straight;
+            totalHorizontal += seg.horizontal;
+            totalVertical += seg.vertical;
+          }
+          setMeasurementResult({
+            type: 'distance',
+            value: { straight: totalStraight, horizontal: totalHorizontal, vertical: totalVertical },
+          });
         } else if (measureMode === 'angle' && pts.length >= 3) {
           const p0 = pts[0]!;
           const p1 = pts[1]!;
@@ -827,6 +841,11 @@ export function Viewport() {
     }
     // Right-click in draw mode finalizes (or cancels) the road being drawn
     if (handleSplineDrawRightClick()) return;
+    // Clear measurement points on right-click when in measure mode
+    if (viewState.measureMode !== 'none') {
+      viewState.clearMeasurePoints();
+      return;
+    }
     showContextMenu(e.clientX, e.clientY, 'viewport');
   }, [handleSplineDrawRightClick]);
 

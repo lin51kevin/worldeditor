@@ -41,7 +41,21 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
     try {
       const content = await readTextFile(filePath);
       const name = filePath.split(/[/\\]/).pop() ?? 'untitled';
-      return { name, content, path: filePath };
+      // Ensure we store an absolute path for "recent files" re-opening.
+      // On Windows, dialog open() may return a relative-style path in some
+      // edge cases (UNC, mapped drives).  Normalize with resolveResourcePath
+      // so that openFileByPath can always find the file later.
+      let absolutePath = filePath;
+      if (!filePath.match(/^(?:[A-Za-z]:\\|\\\\|\/)/)) {
+        try {
+          const { resolve } = await import('@tauri-apps/api/path');
+          absolutePath = await resolve(filePath);
+        } catch {
+          // Fallback: leave as-is, console.warn for debugging
+          console.warn('[openFile] Could not resolve absolute path for:', filePath);
+        }
+      }
+      return { name, content, path: absolutePath };
     } catch (error) {
       throw new Error(`Failed to read selected file: ${String(error)}`);
     }

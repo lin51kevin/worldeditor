@@ -107,6 +107,12 @@ export function MeasurementPanel() {
             {t('measurement.needMorePoints', { count: remaining })}
           </span>
         )}
+        {/* Distance mode: after 2 points, hint that user can keep clicking */}
+        {measureMode === 'distance' && remaining === 0 && (
+          <span className="measurement-hint">
+            {t('measurement.continueClicking', 'Click to add more segments')}
+          </span>
+        )}
       </div>
 
       {lastMeasurement && formatResult(lastMeasurement, t)}
