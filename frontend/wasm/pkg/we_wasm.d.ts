@@ -166,8 +166,6 @@ export function generate_lane_boundary_vertices(project_json: string, sample_ste
 export function generate_lane_line_vertices(project_json: string, sample_step: number): Float32Array;
 
 /**
- * Generate road mesh data as JSON from a single road's geometry.
- *
  * Generate road object vertices from a project JSON. Returns vertex data as Float32Array.
  *
  * Each vertex is 7 floats: [x, y, z, r, g, b, a].
