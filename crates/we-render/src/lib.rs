@@ -7,6 +7,7 @@ pub mod camera;
 pub mod endpoint_render;
 pub mod gizmo;
 pub mod gpu;
+pub mod instance_render;
 pub mod junction_render;
 pub mod mark_render;
 pub mod object_render;
