@@ -212,6 +212,7 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     pickJunctionAtPointCached: vi.fn().mockResolvedValue(null),
     snapPointCached: vi.fn().mockResolvedValue({ x: 0, y: 0, snapped: false, snap_type: 'None', target_id: null }),
     snapPointOnRoad: vi.fn().mockResolvedValue({ s: 0, t: 0, hdg: 0 }),
+    pickLaneAtPointCached: vi.fn().mockResolvedValue(null),
   };
 }
 
@@ -814,6 +815,155 @@ describe('Viewport', () => {
       });
 
       expect(onApply).not.toHaveBeenCalled();
+    });
+
+    // --- Lane/LaneSection selection mode tests ---
+
+    function makeProjectWithRoadSections(): Project {
+      return {
+        ...makeProject(),
+        roads: [{
+          id: 'road-1',
+          name: 'Road 1',
+          length: 30,
+          junction_id: null,
+          link: { predecessor: null, successor: null },
+          plan_view: [],
+          elevation_profile: [],
+          lane_sections: [
+            { s: 0, single_side: false, left: [], center: [], right: [] },
+            { s: 10, single_side: false, left: [], center: [], right: [] },
+            { s: 20, single_side: false, left: [], center: [], right: [] },
+          ],
+        }],
+      };
+    }
+
+    async function setupLaneTest(editMode: string, mockFn?: (platform: ReturnType<typeof createPlatformMock>) => void) {
+      const platform = createPlatformMock();
+      rendererMocks.isSupported.mockReturnValue(true);
+      rendererMocks.init.mockResolvedValue(true);
+      rendererMocks.unprojectToGround.mockReturnValue({ x: 10, y: 20 });
+      vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+      if (mockFn) mockFn(platform);
+
+      act(() => {
+        useProjectStore.setState({ project: makeProjectWithRoadSections() });
+        useViewportStore.setState({ editMode: editMode as any });
+      });
+
+      render(<Viewport />);
+      await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+      const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+      fireEvent.mouseDown(canvas, { button: 0, clientX: 24, clientY: 32 });
+      fireEvent.click(canvas, { button: 0, clientX: 24, clientY: 32 });
+      return platform;
+    }
+
+    it('lanesection mode selects lane section at clicked position', async () => {
+      await setupLaneTest('lanesection', (platform) => {
+        (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+        (platform.snapPointOnRoad as ReturnType<typeof vi.fn>).mockResolvedValue({ s: 15, t: 0, hdg: 0 });
+      });
+
+      await waitFor(() => {
+        const state = useProjectStore.getState();
+        expect((state as any).selectedSceneNode).toEqual({ type: 'laneSection', roadId: 'road-1', sectionIndex: 1 });
+      });
+    });
+
+    it('lane mode selects lane with positive laneId as left', async () => {
+      await setupLaneTest('lane', (platform) => {
+        (platform.pickLaneAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue({ roadId: 'road-1', sectionIndex: 0, laneId: 1 });
+      });
+
+      await waitFor(() => {
+        const state = useProjectStore.getState();
+        expect((state as any).selectedSceneNode).toEqual({ type: 'lane', roadId: 'road-1', sectionIndex: 0, side: 'left', laneId: 1 });
+      });
+    });
+
+    it('lane mode selects lane with negative laneId as right', async () => {
+      await setupLaneTest('lane', (platform) => {
+        (platform.pickLaneAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue({ roadId: 'road-1', sectionIndex: 0, laneId: -2 });
+      });
+
+      await waitFor(() => {
+        const state = useProjectStore.getState();
+        expect((state as any).selectedSceneNode).toEqual({ type: 'lane', roadId: 'road-1', sectionIndex: 0, side: 'right', laneId: -2 });
+      });
+    });
+
+    it('lane mode falls back to selectRoad when pickLane returns null', async () => {
+      await setupLaneTest('lane', (platform) => {
+        (platform.pickLaneAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+        (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+      });
+
+      await waitFor(() => {
+        expect(useProjectStore.getState().selectedRoadId).toBe('road-1');
+      });
+    });
+
+    describe('adjust-edge mode', () => {
+      it('handleClick does not trigger road selection in adjust-edge mode', async () => {
+        rendererMocks.isSupported.mockReturnValue(true);
+        rendererMocks.init.mockResolvedValue(true);
+        const vertices = new Float32Array([0, 0, 0]);
+        const platform = createPlatformMock(vertices);
+        vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+        useProjectStore.setState({
+          project: makeProjectWithRoad(),
+        } as any);
+        useViewportStore.setState({
+          display: { ...DEFAULT_DISPLAY },
+          geometryEditSpline: null,
+          geometryEditRoadId: null,
+          editMode: 'adjust-edge',
+          splineKnots: [],
+        });
+
+        const { container } = render(<Viewport />);
+        await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+        const canvas = container.querySelector('canvas')!;
+        await act(async () => {
+          fireEvent.click(canvas);
+        });
+
+        // adjust-edge mode skips click selection
+        expect(useProjectStore.getState().selectedRoadId).toBeFalsy();
+      });
+
+      it('handleMouseDown does not throw in adjust-edge mode', async () => {
+        rendererMocks.isSupported.mockReturnValue(true);
+        rendererMocks.init.mockResolvedValue(true);
+        const vertices = new Float32Array([0, 0, 0]);
+        const platform = createPlatformMock(vertices);
+        vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+        useProjectStore.setState({
+          project: makeProjectWithRoad(),
+        } as any);
+        useViewportStore.setState({
+          display: { ...DEFAULT_DISPLAY },
+          geometryEditSpline: null,
+          geometryEditRoadId: null,
+          editMode: 'adjust-edge',
+          splineKnots: [],
+        });
+
+        const { container } = render(<Viewport />);
+        await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+
+        const canvas = container.querySelector('canvas')!;
+        await act(async () => {
+          fireEvent.mouseDown(canvas, { button: 0 });
+        });
+        // Should complete without error
+      });
     });
   });
 });

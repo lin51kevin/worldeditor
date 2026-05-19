@@ -392,6 +392,9 @@ export interface PlatformService {
   /** Pick junction using cached project. Call setProjectCache() first. */
   pickJunctionAtPointCached(x: number, y: number, threshold: number): Promise<string | null>;
 
+  /** Pick lane using cached project. Call setProjectCache() first. */
+  pickLaneAtPointCached(x: number, y: number, threshold: number): Promise<{ roadId: string; sectionIndex: number; laneId: number } | null>;
+
   /** Snap point using cached project. Call setProjectCache() first. */
   snapPointCached(x: number, y: number, config: SnapConfig, excludeRoadId?: string): Promise<SnapResult>;
 

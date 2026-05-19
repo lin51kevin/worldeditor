@@ -34,8 +34,30 @@ describe('platform services', () => {
         generateRoadVertices: expect.any(Function),
         generateSingleRoadVertices: expect.any(Function),
         pickRoadAtPoint: expect.any(Function),
+        pickLaneAtPointCached: expect.any(Function),
       })
     );
+  });
+
+  describe('pickLaneAtPointCached', () => {
+    it('returns lane info when WASM finds a lane', async () => {
+      const { WebPlatformService } = await import('./web');
+      const service = new WebPlatformService();
+      const laneResult = { roadId: 'road1', sectionIndex: 0, laneId: -1 };
+      (service as any).getWasm = () => Promise.resolve({ pick_lane_at_point_cached: () => laneResult });
+
+      const result = await service.pickLaneAtPointCached(100, 200, 5);
+      expect(result).toEqual(laneResult);
+    });
+
+    it('returns null when no lane found', async () => {
+      const { WebPlatformService } = await import('./web');
+      const service = new WebPlatformService();
+      (service as any).getWasm = () => Promise.resolve({ pick_lane_at_point_cached: () => null });
+
+      const result = await service.pickLaneAtPointCached(100, 200, 5);
+      expect(result).toBeNull();
+    });
   });
 
   it('WebPlatformService.getPlatformInfo returns the correct type', async () => {

@@ -15,6 +15,7 @@ import {
 import { useViewportDrop } from '../hooks/useViewportDrop';
 import { useRubberBandSelect } from '../hooks/useRubberBandSelect';
 import { useMoveRotateMode } from '../hooks/useMoveRotateMode';
+import { useAdjustEdgeMode } from '../hooks/useAdjustEdgeMode';
 import { useSplineDrawMode } from '../hooks/useSplineDrawMode';
 import { useSplineDrawPreview } from '../hooks/useSplineDrawPreview';
 import { useGeometryEditMode } from '../hooks/useGeometryEditMode';
@@ -46,6 +47,7 @@ export function Viewport() {
   const hoveredControlPointRef = useRef<SplineControlPoint | null>(null);
   const { rubberBandRef, rubberBandOverlayRef, startRubberBand, updateRubberBand, commitRubberBand } = useRubberBandSelect(rendererRef, canvasRef);
   const { startMoveRotateDrag, updateMoveRotateDrag, commitMoveRotateDrag } = useMoveRotateMode(rendererRef, canvasRef, isPreviewingRoadRef, pendingCursorRef);
+  const { startAdjustEdgeDrag, updateAdjustEdgeDrag, commitAdjustEdgeDrag } = useAdjustEdgeMode(rendererRef, canvasRef, isPreviewingRoadRef, pendingCursorRef);
   useMeasureOverlay({ rendererRef, canvasRef, status });
   const hoveredRoadRef = useRef<string | null>(null);
   const hoveredJunctionRef = useRef<string | null>(null);
@@ -413,6 +415,7 @@ export function Viewport() {
     if (!worldPos) return;
 
     if (updateMoveRotateDrag(worldPos)) return;
+    if (await updateAdjustEdgeDrag(worldPos)) return;
 
     const viewState = useViewportStore.getState();
     if (await handleGeometryEditMouseMove(worldPos, canvas, renderer)) return;
@@ -481,6 +484,7 @@ export function Viewport() {
       viewState.editMode !== 'spline' &&
       viewState.editMode !== 'move-road' &&
       viewState.editMode !== 'rotate-road' &&
+      viewState.editMode !== 'adjust-edge' &&
       !viewState.geometryEditSpline &&
       !viewState.draggingKnot &&
       !rubberBandRef.current;
@@ -577,11 +581,54 @@ export function Viewport() {
       }
     }
 
+    // adjust-edge hover: detect proximity to road edges and show resize cursor
+    if (viewState.editMode === 'adjust-edge' && !pickInFlightRef.current) {
+      pickInFlightRef.current = true;
+      try {
+        const service = await getPlatformService();
+        const visibleProject = getVisibleProject();
+        const selRoadId = useProjectStore.getState().selectedRoadId;
+        if (visibleProject && selRoadId) {
+          const road = visibleProject.roads.find(r => r.id === selRoadId);
+          if (road) {
+            const snap = await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
+            // Compute total lane width on each side at the snap point
+            let section: typeof road.lane_sections[0] | null = null;
+            for (let si = road.lane_sections.length - 1; si >= 0; si--) {
+              const ls = road.lane_sections[si];
+              if (ls && ls.s <= snap.s + 1e-9) { section = ls; break; }
+            }
+            if (section) {
+              const leftTotal = section.left.reduce((sum: number, l: typeof section.left[0]) => {
+                const w = l.width[0]; return sum + (w ? w.a : 3.5);
+              }, 0);
+              const rightTotal = section.right.reduce((sum: number, l: typeof section.right[0]) => {
+                const w = l.width[0]; return sum + (w ? w.a : 3.5);
+              }, 0);
+              const onRoadSurface = (snap.t >= -(rightTotal + 2.0)) && (snap.t <= leftTotal + 2.0);
+              const awayFromCenter = Math.abs(snap.t) > 0.5;
+              if (onRoadSurface && awayFromCenter) {
+                // Rotate cursor to be perpendicular to road heading
+                const headingDeg = (snap.hdg * 180 / Math.PI) % 180;
+                canvas.style.cursor = `url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M4 12h16" stroke="%23333" stroke-width="2" stroke-linecap="round"/><path d="M18 8l4 4-4 4" stroke="%23333" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>') ${-headingDeg} ew-resize`;
+              } else {
+                canvas.style.cursor = '';
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignore hover detection errors.
+      } finally {
+        pickInFlightRef.current = false;
+      }
+    }
+
     emitCursorMove(worldPos.x, worldPos.y);
     pendingCursorRef.current = worldPos;
   }, [handleGeometryEditMouseMove, handleSplineDrawMouseMove, getVisibleProject]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleMouseDown = useCallback(async (e: React.MouseEvent) => {
     mouseGestureRef.current = {
       button: e.button,
       startX: e.clientX,
@@ -600,6 +647,7 @@ export function Viewport() {
       return;
     }
     if (startMoveRotateDrag(e, renderer, canvas)) return;
+    if (await startAdjustEdgeDrag(e)) return;
     if (
       e.shiftKey &&
       viewState.editMode !== 'spline' &&
@@ -607,7 +655,7 @@ export function Viewport() {
     ) {
       startRubberBand(e, renderer);
     }
-  }, [handleGeometryEditMouseDown, handleSplineDrawMouseDown, startMoveRotateDrag, startRubberBand]);
+  }, [handleGeometryEditMouseDown, handleSplineDrawMouseDown, startMoveRotateDrag, startAdjustEdgeDrag, startRubberBand]);
 
   const handleClick = useCallback(async (e: React.MouseEvent) => {
     const gesture = mouseGestureRef.current;
@@ -669,7 +717,52 @@ export function Viewport() {
     }
 
     const viewState = useViewportStore.getState();
-    if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
+    if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road' || viewState.editMode === 'adjust-edge') {
+      return;
+    }
+
+    // Lane selection modes (road-markings reuses lane picking to let user select a target lane)
+    if (viewState.editMode === 'lanesection' || viewState.editMode === 'lane' || viewState.editMode === 'road-markings') {
+      try {
+        const service = await getPlatformService();
+        const visibleProject = getVisibleProject();
+        if (visibleProject) {
+          if (viewState.editMode === 'lanesection') {
+            const roadId = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
+            if (roadId) {
+              const road = visibleProject.roads.find(r => r.id === roadId);
+              if (road) {
+                const snap = await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
+                let sectionIndex = -1;
+                for (let i = road.lane_sections.length - 1; i >= 0; i--) {
+                  const sec = road.lane_sections[i];
+                  if (sec && sec.s <= snap.s + 1e-9) { sectionIndex = i; break; }
+                }
+                if (sectionIndex >= 0) {
+                  useProjectStore.getState().selectLaneSection(roadId, sectionIndex);
+                } else {
+                  useProjectStore.getState().selectRoad(roadId);
+                }
+              }
+            }
+          } else {
+            // lane or road-markings mode: pick individual lane
+            const laneResult = await service.pickLaneAtPointCached(worldPos.x, worldPos.y, 5.0);
+            if (laneResult) {
+              const { roadId, sectionIndex, laneId } = laneResult;
+              const side = laneId > 0 ? 'left' as const : 'right' as const;
+              useProjectStore.getState().selectLane(roadId, sectionIndex, side, laneId);
+            } else {
+              const roadId = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
+              if (roadId) {
+                useProjectStore.getState().selectRoad(roadId);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[Viewport] Lane pick failed:', err);
+      }
       return;
     }
 
@@ -814,9 +907,10 @@ export function Viewport() {
   const handleMouseUp = useCallback(async (e: React.MouseEvent) => {
     if (commitRubberBand(e)) return;
     if (commitMoveRotateDrag()) return;
+    if (commitAdjustEdgeDrag()) return;
     if (await handleGeometryEditMouseUp()) return;
     handleSplineDrawMouseUp();
-  }, [commitMoveRotateDrag, commitRubberBand, handleGeometryEditMouseUp, handleSplineDrawMouseUp]);
+  }, [commitMoveRotateDrag, commitAdjustEdgeDrag, commitRubberBand, handleGeometryEditMouseUp, handleSplineDrawMouseUp]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

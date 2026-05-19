@@ -53,20 +53,28 @@ export function mountRoadToolsPlugin(): () => void {
       icon: '⊞',
       labelKey: 'toolPanel.adjustEdge',
       group: 'mode',
-      isActive: () => false,
-      isDisabled: () => true, // not yet implemented
-      onClick: () => {},
+      isActive: () => useViewportStore.getState().editMode === 'adjust-edge',
+      isDisabled: () => !useProjectStore.getState().selectedRoadId,
+      onClick: () => {
+        const vs = useViewportStore.getState();
+        const entering = vs.editMode !== 'adjust-edge';
+        vs.setEditMode(entering ? 'adjust-edge' : 'default');
+      },
     },
-    {
-      id: `${PLUGIN_ID}:edit-markings`,
-      pluginId: PLUGIN_ID,
-      icon: '▬',
-      labelKey: 'toolPanel.editRoadMarkings',
-      group: 'mode',
-      isActive: () => false,
-      isDisabled: () => true, // not yet implemented
-      onClick: () => {},
-    },
+    // {
+    //   id: `${PLUGIN_ID}:edit-markings`,
+    //   pluginId: PLUGIN_ID,
+    //   icon: '▬',
+    //   labelKey: 'toolPanel.editRoadMarkings',
+    //   group: 'mode',
+    //   isActive: () => useViewportStore.getState().editMode === 'road-markings',
+    //   isDisabled: () => !useProjectStore.getState().selectedRoadId,
+    //   onClick: () => {
+    //     const vs = useViewportStore.getState();
+    //     const entering = vs.editMode !== 'road-markings';
+    //     vs.setEditMode(entering ? 'road-markings' : 'default');
+    //   },
+    // },
   ];
 
   // ── Toolbar: action buttons ────────────────────────────────────────────────

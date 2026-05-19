@@ -61,6 +61,7 @@ export const parse_proj4_crs: (a: number, b: number) => [number, number, number]
 export const parse_wkt_crs: (a: number, b: number) => [number, number, number];
 export const pick_junction_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const pick_junction_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
+export const pick_lane_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
 export const pick_object_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const pick_road_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const pick_road_at_point_cached: (a: number, b: number, c: number) => [number, number, number];

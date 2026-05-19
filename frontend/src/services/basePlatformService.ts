@@ -163,6 +163,11 @@ export abstract class BasePlatformService implements PlatformService {
     return wasm.pick_junction_at_point_cached(x, y, threshold);
   }
 
+  async pickLaneAtPointCached(x: number, y: number, threshold: number): Promise<{ roadId: string; sectionIndex: number; laneId: number } | null> {
+    const wasm = await this.getWasm();
+    return wasm.pick_lane_at_point_cached(x, y, threshold);
+  }
+
   async snapPointCached(x: number, y: number, config: SnapConfig, excludeRoadId?: string): Promise<SnapResult> {
     const wasm = await this.getWasm();
     return wasm.snap_point_cached(x, y, JSON.stringify(config), excludeRoadId);

@@ -93,6 +93,28 @@ mod tests {
     }
 
     #[test]
+    fn test_pick_lane_via_core() {
+        // Directly test we_core::picking::pick_lane (no wasm_bindgen dependency).
+        let mut project = we_core::model::Project::default();
+        project.roads.push(we_core::model::Road::from_centerline(
+            "1",
+            vec![we_core::model::Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 100.0,
+                geo_type: we_core::model::GeometryType::Line,
+            }],
+        ));
+        let result = we_core::picking::pick_lane(&project, 50.0, -1.75, 5.0);
+        assert!(result.is_some());
+        let (road_id, _section_idx, lane_id) = result.unwrap();
+        assert_eq!(road_id, "1");
+        assert!(lane_id < 0); // right lane
+    }
+
+    #[test]
     fn test_snap_config_serde_roundtrip() {
         let config = we_core::snapping::SnapConfig::default();
         let json = serde_json::to_string(&config).unwrap();
@@ -727,6 +749,40 @@ pub fn pick_junction_at_point_cached(
             None => Ok(JsValue::NULL),
         }
     })
+}
+
+/// Pick the nearest lane using the cached project + spatial index.
+///
+/// Returns JSON `{ "roadId": string, "sectionIndex": number, "laneId": number }` or null.
+#[wasm_bindgen]
+pub fn pick_lane_at_point_cached(
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Result<JsValue, JsError> {
+    PROJECT_CACHE.with(|cell| {
+        let mut borrow = cell.borrow_mut();
+        let cache = borrow
+            .as_mut()
+            .ok_or_else(|| JsError::new("Project cache not initialised — call set_project_cache() first"))?;
+        match we_core::picking::pick_lane_cached(cache, x, y, threshold) {
+            Some((road_id, section_index, lane_id)) => {
+                let result = LanePickResult { road_id, section_index, lane_id };
+                serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+            }
+            None => Ok(JsValue::NULL),
+        }
+    })
+}
+
+#[derive(Serialize)]
+struct LanePickResult {
+    #[serde(rename = "roadId")]
+    road_id: String,
+    #[serde(rename = "sectionIndex")]
+    section_index: usize,
+    #[serde(rename = "laneId")]
+    lane_id: i32,
 }
 
 /// Project a world-space point onto a road's reference line, returning road-local

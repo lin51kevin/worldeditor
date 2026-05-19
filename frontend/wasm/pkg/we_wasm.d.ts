@@ -432,6 +432,13 @@ export function pick_junction_at_point(project_json: string, x: number, y: numbe
 export function pick_junction_at_point_cached(x: number, y: number, threshold: number): any;
 
 /**
+ * Pick the nearest lane using the cached project + spatial index.
+ *
+ * Returns JSON `{ "roadId": string, "sectionIndex": number, "laneId": number }` or null.
+ */
+export function pick_lane_at_point_cached(x: number, y: number, threshold: number): any;
+
+/**
  * Pick the closest road object to a world-space point.
  *
  * Returns JSON `{ "roadId": string, "objectId": string }` or null.
@@ -674,6 +681,7 @@ export interface InitOutput {
     readonly parse_wkt_crs: (a: number, b: number) => [number, number, number];
     readonly pick_junction_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pick_junction_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
+    readonly pick_lane_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
     readonly pick_object_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pick_road_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pick_road_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
