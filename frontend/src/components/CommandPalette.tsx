@@ -22,40 +22,32 @@ export function CommandPalette() {
   const { t } = useTranslation();
 
   const commands = useMemo<Command[]>(() => {
-    const { toggleGrid, toggleAxis, setEditMode, setViewMode, toggleLeftPanel, toggleRightPanel, toggleOutputPanel, toggleSnap, setMeasureMode } =
+    const { toggleGrid, toggleAxis, setEditMode, toggleLeftPanel, toggleRightPanel, toggleOutputPanel, toggleSnap, setMeasureMode } =
       useViewportStore.getState();
     const { toggleTheme } = useThemeStore.getState();
 
     return [
       // View
-      { id: 'toggle-grid', label: t('toolbar.grid'), shortcut: 'G', category: 'View', action: toggleGrid },
-      { id: 'toggle-axis', label: t('toolbar.axis'), shortcut: 'A', category: 'View', action: toggleAxis },
-      { id: 'toggle-left', label: t('commandPalette.toggleLeft', 'Toggle Left Panel'), shortcut: 'Ctrl+B', category: 'View', action: toggleLeftPanel },
-      { id: 'toggle-right', label: t('commandPalette.toggleRight', 'Toggle Right Panel'), category: 'View', action: toggleRightPanel },
-      { id: 'toggle-output', label: t('commandPalette.toggleOutput', 'Toggle Output Panel'), shortcut: 'Ctrl+J', category: 'View', action: toggleOutputPanel },
-      { id: 'toggle-theme', label: t('commandPalette.toggleTheme', 'Toggle Theme'), category: 'View', action: toggleTheme },
+      { id: 'toggle-grid', label: t('toolbar.grid'), shortcut: 'G', category: t('commandPalette.categoryView'), action: toggleGrid },
+      { id: 'toggle-axis', label: t('toolbar.axis'), shortcut: 'A', category: t('commandPalette.categoryView'), action: toggleAxis },
+      { id: 'toggle-left', label: t('commandPalette.toggleLeft'), shortcut: 'Ctrl+B', category: t('commandPalette.categoryView'), action: toggleLeftPanel },
+      { id: 'toggle-right', label: t('commandPalette.toggleRight'), category: t('commandPalette.categoryView'), action: toggleRightPanel },
+      { id: 'toggle-output', label: t('commandPalette.toggleOutput'), shortcut: 'Ctrl+J', category: t('commandPalette.categoryView'), action: toggleOutputPanel },
+      { id: 'toggle-theme', label: t('commandPalette.toggleTheme'), category: t('commandPalette.categoryView'), action: toggleTheme },
 
       // Edit mode
-      { id: 'mode-select', label: t('toolbar.select'), shortcut: 'V', category: 'Edit', action: () => setEditMode('default') },
-      { id: 'mode-road', label: t('toolbar.road'), shortcut: 'R', category: 'Edit', action: () => setEditMode('road') },
-      { id: 'mode-spline', label: t('toolbar.splineEdit'), shortcut: 'S', category: 'Edit', action: () => setEditMode('spline') },
-      { id: 'mode-lane', label: t('toolbar.lane'), shortcut: 'L', category: 'Edit', action: () => setEditMode('lane') },
-      { id: 'mode-lanesection', label: t('toolbar.laneSectionEdit'), shortcut: 'J', category: 'Edit', action: () => setEditMode('lanesection') },
-
-      // View mode
-      { id: 'view-sketch', label: t('toolbar.sketch'), category: 'Display', action: () => setViewMode('sketch') },
-      { id: 'view-wire', label: t('toolbar.wireframe'), category: 'Display', action: () => setViewMode('wire') },
-      { id: 'view-solid', label: t('toolbar.solid'), category: 'Display', action: () => setViewMode('solid') },
-
+      { id: 'mode-select', label: t('toolbar.select'), shortcut: 'V', category: t('commandPalette.categoryEdit'), action: () => setEditMode('default') },
+      { id: 'mode-spline', label: t('toolbar.splineEdit'), shortcut: 'S', category: t('commandPalette.categoryEdit'), action: () => setEditMode('spline') },
+      
       // Tools
-      { id: 'toggle-snap', label: t('toolbar.snap'), category: 'Tools', action: toggleSnap },
-      { id: 'measure-distance', label: t('measurement.distance'), category: 'Tools', action: () => setMeasureMode('distance') },
-      { id: 'measure-angle', label: t('measurement.angle'), category: 'Tools', action: () => setMeasureMode('angle') },
-      { id: 'measure-area', label: t('measurement.area'), category: 'Tools', action: () => setMeasureMode('area') },
+      { id: 'toggle-snap', label: t('toolbar.snap'), category: t('commandPalette.categoryTools'), action: toggleSnap },
+      { id: 'measure-distance', label: t('measurement.distance'), category: t('commandPalette.categoryTools'), action: () => setMeasureMode('distance') },
+      { id: 'measure-angle', label: t('measurement.angle'), category: t('commandPalette.categoryTools'), action: () => setMeasureMode('angle') },
+      { id: 'measure-area', label: t('measurement.area'), category: t('commandPalette.categoryTools'), action: () => setMeasureMode('area') },
 
       // Actions
-      { id: 'undo', label: t('menuBar.undo'), shortcut: 'Ctrl+Z', category: 'Edit', action: () => { if (useProjectStore.getState().canUndo()) useProjectStore.getState().undo(); } },
-      { id: 'redo', label: t('menuBar.redo'), shortcut: 'Ctrl+Shift+Z', category: 'Edit', action: () => { if (useProjectStore.getState().canRedo()) useProjectStore.getState().redo(); } },
+      { id: 'undo', label: t('commandPalette.undo'), shortcut: 'Ctrl+Z', category: t('commandPalette.categoryEdit'), action: () => { if (useProjectStore.getState().canUndo()) useProjectStore.getState().undo(); } },
+      { id: 'redo', label: t('commandPalette.redo'), shortcut: 'Ctrl+Shift+Z', category: t('commandPalette.categoryEdit'), action: () => { if (useProjectStore.getState().canRedo()) useProjectStore.getState().redo(); } },
     ];
   }, [t]);
 

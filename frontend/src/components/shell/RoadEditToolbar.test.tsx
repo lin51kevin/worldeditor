@@ -14,7 +14,6 @@ vi.mock('react-i18next', () => ({
         'toolPanel.moveRoad': 'Move Road',
         'toolPanel.rotateRoad': 'Rotate Road',
         'toolPanel.optimizeNode': 'Optimize Nodes',
-        'toolPanel.editRoadMarkings': 'Road Markings',
         'toolPanel.cloneRoad': 'Clone Road',
         'toolPanel.reverseRoad': 'Reverse Road',
         'toolPanel.mirrorRoad': 'Mirror Road',
@@ -54,7 +53,7 @@ describe('RoadEditToolbar', () => {
     expect(screen.getByTitle('Adjust Edge Line')).toBeInTheDocument();
     expect(screen.getByTitle('Move Road [M]')).toBeInTheDocument();
     expect(screen.getByTitle('Rotate Road [R]')).toBeInTheDocument();
-    expect(screen.getByTitle('Road Markings')).toBeInTheDocument();
     expect(screen.getByTitle('Optimize Nodes')).toBeInTheDocument();
+    expect(screen.queryByTitle('Road Markings')).not.toBeInTheDocument();
   });
 });

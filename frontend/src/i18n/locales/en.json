@@ -526,7 +526,13 @@
     "toggleRight": "Toggle Right Panel",
     "toggleOutput": "Toggle Output Panel",
     "toggleTheme": "Toggle Theme",
-    "noResults": "No results"
+    "noResults": "No results",
+    "categoryView": "View",
+    "categoryEdit": "Edit",
+    "categoryDisplay": "Display",
+    "categoryTools": "Tools",
+    "undo": "Undo",
+    "redo": "Redo"
   },
   "advancedEditing": {
     "splitRoad": "Split Road at Midpoint…",

@@ -25,21 +25,50 @@ describe('Toolbar', () => {
     vi.clearAllMocks();
   });
 
+  it('renders three select mode buttons', () => {
+    render(<Toolbar />);
+
+    expect(screen.getByRole('button', { name: '道路' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '车道簇' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '车道' })).toBeInTheDocument();
+  });
+
+  it('clicking lane section button sets editMode to lanesection', () => {
+    render(<Toolbar />);
+    fireEvent.click(screen.getByRole('button', { name: '车道簇' }));
+    expect(useViewportStore.getState().editMode).toBe('lanesection');
+  });
+
+  it('clicking lane button sets editMode to lane', () => {
+    render(<Toolbar />);
+    fireEvent.click(screen.getByRole('button', { name: '车道' }));
+    expect(useViewportStore.getState().editMode).toBe('lane');
+  });
+
+  it('clicking road button sets editMode to default', () => {
+    render(<Toolbar />);
+    fireEvent.click(screen.getByRole('button', { name: '道路' }));
+    expect(useViewportStore.getState().editMode).toBe('default');
+  });
+
+  it('active button has active class', () => {
+    act(() => {
+      useViewportStore.setState({ editMode: 'lanesection' });
+    });
+    render(<Toolbar />);
+    const btn = screen.getByRole('button', { name: '车道簇' });
+    expect(btn.classList.contains('active')).toBe(true);
+    expect(screen.getByRole('button', { name: '道路' }).classList.contains('active')).toBe(false);
+  });
+
   it('renders edit mode buttons', () => {
     render(<Toolbar />);
 
-    // Only default/select and draw mode buttons are shown.
-    // Road/Lane/LaneSection select modes are hidden.
-    expect(screen.getByRole('button', { name: '默认' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '道路' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '样条' })).toBeInTheDocument();
-    // '直线', '圆弧', '回旋线' have been removed from the toolbar
     expect(screen.queryByRole('button', { name: '直线' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '圆弧' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '回旋线' })).not.toBeInTheDocument();
-    // Hidden buttons must NOT be present
-    expect(screen.queryByRole('button', { name: '道路' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '车道' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '车道簇' })).not.toBeInTheDocument();
   });
 
   it('renders view mode buttons', () => {
@@ -72,7 +101,7 @@ describe('Toolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: '样条' }));
     expect(useViewportStore.getState().editMode).toBe('spline');
 
-    fireEvent.click(screen.getByRole('button', { name: '默认' }));
+    fireEvent.click(screen.getByRole('button', { name: '道路' }));
     expect(useViewportStore.getState().editMode).toBe('default');
   });
 });

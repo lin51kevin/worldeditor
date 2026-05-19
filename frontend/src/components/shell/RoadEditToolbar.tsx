@@ -135,13 +135,6 @@ export function RoadEditToolbar() {
         >
           {t('toolPanel.optimizeNode')}
         </button>
-        <button
-          className="toolbar-btn"
-          title={t('toolPanel.editRoadMarkings')}
-          disabled={!hasRoad}
-        >
-          {t('toolPanel.editRoadMarkings')}
-        </button>
       </div>
 
       {/* Action buttons — only when a road is selected */}

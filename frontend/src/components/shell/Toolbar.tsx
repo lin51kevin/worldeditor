@@ -4,6 +4,7 @@ import {
   MousePointer,
   Route,
   Layers,
+  MoveHorizontal,
   GitBranch,
   Box,
 } from 'lucide-react';
@@ -92,17 +93,37 @@ export const Toolbar = memo(function Toolbar() {
       onMouseDownCapture={handleButtonMouseDownCapture}
       onMouseDown={handleMouseDown}
     >
-      {/* SelectMode group: only default/select — road/lane/lanesection hidden for now */}
+      {/* SelectMode group */}
       <div className="toolbar-group">
         <button
           className={`toolbar-btn toolbar-toggle ${editMode === 'default' ? 'active' : ''}`}
           onClick={() => { setEditMode('default'); clearSplineKnots(); }}
-          title={t('toolbar.selectModeTitle')}
-          aria-label={t('toolbar.selectMode')}
+          title={t('toolbar.roadEditTitle')}
+          aria-label={t('toolbar.roadEdit')}
           aria-pressed={editMode === 'default'}
         >
           <MousePointer size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.selectMode')}</span>
+          <span className="tb-label">{t('toolbar.roadEdit')}</span>
+        </button>
+        {/* <button
+          className={`toolbar-btn toolbar-toggle ${editMode === 'lanesection' ? 'active' : ''}`}
+          onClick={() => { setEditMode('lanesection'); clearSplineKnots(); }}
+          title={t('toolbar.laneSectionEditTitle')}
+          aria-label={t('toolbar.laneSectionEdit')}
+          aria-pressed={editMode === 'lanesection'}
+        >
+          <Layers size={16} className="tb-icon" />
+          <span className="tb-label">{t('toolbar.laneSectionEdit')}</span>
+        </button> */}
+        <button
+          className={`toolbar-btn toolbar-toggle ${editMode === 'lane' ? 'active' : ''}`}
+          onClick={() => { setEditMode('lane'); clearSplineKnots(); }}
+          title={t('toolbar.laneEditTitle')}
+          aria-label={t('toolbar.laneEdit')}
+          aria-pressed={editMode === 'lane'}
+        >
+          <MoveHorizontal size={16} className="tb-icon" />
+          <span className="tb-label">{t('toolbar.laneEdit')}</span>
         </button>
       </div>
 

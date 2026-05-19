@@ -526,7 +526,13 @@
     "toggleRight": "切换右侧面板",
     "toggleOutput": "切换输出面板",
     "toggleTheme": "切换主题",
-    "noResults": "无结果"
+    "noResults": "无结果",
+    "categoryView": "视图",
+    "categoryEdit": "编辑",
+    "categoryDisplay": "显示",
+    "categoryTools": "工具",
+    "undo": "撤销",
+    "redo": "重做"
   },
   "advancedEditing": {
     "splitRoad": "从中点分割道路...",
