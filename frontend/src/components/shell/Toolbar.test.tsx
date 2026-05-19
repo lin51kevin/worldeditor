@@ -25,18 +25,12 @@ describe('Toolbar', () => {
     vi.clearAllMocks();
   });
 
-  it('renders three select mode buttons', () => {
+  it('renders two select mode buttons (lane section removed)', () => {
     render(<Toolbar />);
 
     expect(screen.getByRole('button', { name: '道路' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '车道簇' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '车道' })).toBeInTheDocument();
-  });
-
-  it('clicking lane section button sets editMode to lanesection', () => {
-    render(<Toolbar />);
-    fireEvent.click(screen.getByRole('button', { name: '车道簇' }));
-    expect(useViewportStore.getState().editMode).toBe('lanesection');
+    expect(screen.queryByRole('button', { name: '车道簇' })).not.toBeInTheDocument();
   });
 
   it('clicking lane button sets editMode to lane', () => {
@@ -53,10 +47,10 @@ describe('Toolbar', () => {
 
   it('active button has active class', () => {
     act(() => {
-      useViewportStore.setState({ editMode: 'lanesection' });
+      useViewportStore.setState({ editMode: 'lane' });
     });
     render(<Toolbar />);
-    const btn = screen.getByRole('button', { name: '车道簇' });
+    const btn = screen.getByRole('button', { name: '车道' });
     expect(btn.classList.contains('active')).toBe(true);
     expect(screen.getByRole('button', { name: '道路' }).classList.contains('active')).toBe(false);
   });
