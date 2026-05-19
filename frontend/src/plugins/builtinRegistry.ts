@@ -10,6 +10,7 @@ import { mountRoadToolsPlugin } from './editing/road-tools/road-tools.plugin';
 import { mountTemplatesPlugin } from './editing/templates/templates.plugin';
 import { mountAdvancedEditingPlugin } from './editing/advanced-editing/advanced-editing.plugin';
 import { mountConverterPlugin } from './editing/converter/converter.plugin';
+import { mountAiCopilotPlugin } from './editing/ai-copilot/ai-copilot.plugin';
 import { mountIoCsvPlugin } from './io/csv/io-csv.plugin';
 import { mountIoObj3dPlugin } from './io/obj3d/io-obj3d.plugin';
 import { mountIoGeoZPlugin } from './io/geoz/io-geoz.plugin';
@@ -63,6 +64,7 @@ const MOUNT_MAP: Record<string, () => () => void> = {
   'ecosystem-beta': mountEcosystemPlugin,
   'lane-detect': mountLaneDetectPlugin,
   'converter': mountConverterPlugin,
+  'ai-copilot': mountAiCopilotPlugin,
 };
 
 /** Static metadata for all built-in plugins. */
@@ -124,6 +126,7 @@ const BUILTIN_META: PluginInfo[] = [
   { id: 'ecosystem-beta', name: 'Ecosystem', nameKey: 'pluginManager.builtinEcosystemName', version: '1.0.0', description: 'Vegetation and tree placement panel', descriptionKey: 'pluginManager.builtinEcosystemDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'lane-detect', name: 'Lane Detection', nameKey: 'pluginManager.builtinLaneDetectName', version: '1.0.0', description: 'Automated lane detection (Phase 3)', descriptionKey: 'pluginManager.builtinLaneDetectDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'converter', name: 'Batch Converter', nameKey: 'pluginManager.builtinConverterName', version: '1.0.0', description: 'Batch format conversion panel', descriptionKey: 'pluginManager.builtinConverterDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'ai-copilot', name: 'AI Copilot', version: '1.0.0', description: 'AI assistant panel for road editing', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
 ];
 
 /** Builtin plugins with mount functions attached. */

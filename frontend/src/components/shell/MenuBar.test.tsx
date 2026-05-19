@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GisCoord, PlatformService, Project, Road, UtmCoord } from '../../services/platform';
 import { useProjectStore } from '../../stores/projectStore';
 import { useRecentFilesStore } from '../../stores/recentFilesStore';
+import { usePluginContribStore } from '../../stores/pluginContribStore';
 import { getPlatformService } from '../../services';
 import { emitViewportEvent } from '../../viewport/viewportEvents';
 import { showAlert, showConfirm, showPrompt } from '../../utils/dialog';
@@ -519,6 +520,53 @@ describe('MenuBar', () => {
       reactAct(() => {
         usePluginContribStore.getState().unregisterExporter('exp-click');
       });
+    });
+  });
+
+  describe('AI Copilot button', () => {
+    beforeEach(() => {
+      act(() => {
+        usePluginContribStore.setState({ panels: [], panelTabVisibility: {} });
+        // Register the ai-copilot panel so the store has the panel
+        usePluginContribStore.getState().registerPanel({
+          id: 'ai-copilot:panel',
+          pluginId: 'ai-copilot',
+          title: 'AI Copilot',
+          titleKey: 'copilot.title',
+          component: () => null,
+          position: 'right',
+        });
+      });
+    });
+
+    it('renders the AI Copilot (Sparkles) button in the quick-action bar', () => {
+      render(<MenuBar />);
+      expect(screen.getByTitle('AI 助手 (Ctrl+Alt+I)')).toBeInTheDocument();
+    });
+
+    it('toggles the AI Copilot panel when the button is clicked', () => {
+      render(<MenuBar />);
+
+      const btn = screen.getByTitle('AI 助手 (Ctrl+Alt+I)');
+      expect(usePluginContribStore.getState().panelTabVisibility['ai-copilot:panel']).toBeFalsy();
+
+      fireEvent.click(btn);
+      expect(usePluginContribStore.getState().panelTabVisibility['ai-copilot:panel']).toBe(true);
+
+      fireEvent.click(btn);
+      expect(usePluginContribStore.getState().panelTabVisibility['ai-copilot:panel']).toBe(false);
+    });
+
+    it('toggles the AI Copilot panel with Ctrl+Alt+I shortcut', () => {
+      render(<MenuBar />);
+
+      expect(usePluginContribStore.getState().panelTabVisibility['ai-copilot:panel']).toBeFalsy();
+
+      dispatchWindowKey({ key: 'i', ctrlKey: true, altKey: true });
+      expect(usePluginContribStore.getState().panelTabVisibility['ai-copilot:panel']).toBe(true);
+
+      dispatchWindowKey({ key: 'I', ctrlKey: true, altKey: true });
+      expect(usePluginContribStore.getState().panelTabVisibility['ai-copilot:panel']).toBe(false);
     });
   });
 });

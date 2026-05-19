@@ -117,6 +117,8 @@
     "snapTitle": "Toggle Snap",
     "measure": "Measure",
     "measureTitle": "Measure Tool",
+    "copilot": "AI Copilot",
+    "copilotTitle": "AI Copilot (Ctrl+Alt+I)",
     "splineDraw": "Draw Spline",
     "moveRoad": "Move Road",
     "rotateRoad": "Rotate Road",
@@ -631,5 +633,19 @@
       "leftPanel": "Toggle layer panel",
       "help": "Show this shortcut help"
     }
+  },
+  "copilot": {
+    "title": "Chat",
+    "emptyHint": "Send a message or enter a / command to start",
+    "inputPlaceholder": "Describe what you want to do...",
+    "newChat": "New Chat",
+    "tipHint": "Tip: type /road add to add a road",
+    "stop": "Stop",
+    "send": "Send",
+    "applyModeAuto": "Auto",
+    "applyModeManual": "Manual",
+    "applyModeAutoTooltip": "Auto-apply changes",
+    "applyModeManualTooltip": "Manually confirm changes",
+    "noProvider": "No provider configured"
   }
 }

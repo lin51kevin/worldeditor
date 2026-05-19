@@ -13,6 +13,7 @@ import {
   Magnet,
   Ruler,
   RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
 import { useBuiltinPluginStore } from '../../stores/builtinPluginStore';
@@ -62,6 +63,7 @@ export function MenuBar({
     handleOpen,
     handleSave,
     handleSaveAs,
+    handleClose,
     handleImportOpenDrive,
     handleOpenRecentFile,
     handleExportOpenDrive,
@@ -96,6 +98,10 @@ export function MenuBar({
   const allMenuItems = usePluginContribStore((state) => state.menuItems);
   const importers = usePluginContribStore((state) => state.importers);
   const exporters = usePluginContribStore((state) => state.exporters);
+  const copilotPanelVisible = usePluginContribStore((state) => state.panelTabVisibility['ai-copilot:panel'] ?? false);
+  const toggleCopilotPanel = useCallback(() => {
+    usePluginContribStore.getState().togglePanel('ai-copilot:panel');
+  }, []);
   const { recentFiles, clear: clearRecentFiles } = useRecentFilesStore();
   const templatePluginEnabled = useBuiltinPluginStore(
     (state) => !state.disabledBuiltins.includes('builtin-templates'),
@@ -202,6 +208,9 @@ export function MenuBar({
         } else {
           void handleSave();
         }
+      } else if (isCtrl && event.key === 'w') {
+        event.preventDefault();
+        void handleClose();
       } else if (isCtrl && event.key === 'd') {
         event.preventDefault();
         const roadClone = usePluginContribStore.getState().menuItems.find(
@@ -222,6 +231,9 @@ export function MenuBar({
       } else if (event.key === 'f' || event.key === 'F') {
         event.preventDefault();
         handleZoomToSelected();
+      } else if (isCtrl && event.altKey && (event.key === 'i' || event.key === 'I')) {
+        event.preventDefault();
+        toggleCopilotPanel();
       }
     };
 
@@ -238,6 +250,7 @@ export function MenuBar({
     handleZoomToFit,
     handleZoomToSelected,
     redo,
+    toggleCopilotPanel,
     undo,
   ]);
 
@@ -272,6 +285,7 @@ export function MenuBar({
                 exporters={exporters}
                 clearRecentFiles={clearRecentFiles}
                 onNew={handleNew}
+                onCloseFile={handleClose}
                 onOpen={handleOpen}
                 onSave={handleSave}
                 onSaveAs={handleSaveAs}
@@ -416,6 +430,14 @@ export function MenuBar({
             title={t('toolbar.measureTitle')}
           >
             <Ruler size={14} />
+          </button>
+          <button
+            className={`menubar-action-btn ${copilotPanelVisible ? 'active' : ''}`}
+            onClick={toggleCopilotPanel}
+            title={t('toolbar.copilotTitle')}
+            aria-label={t('toolbar.copilot')}
+          >
+            <Sparkles size={14} />
           </button>
         </div>
       </div>

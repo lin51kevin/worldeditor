@@ -117,6 +117,8 @@
     "snapTitle": "开关吸附",
     "measure": "测量",
     "measureTitle": "测量工具",
+    "copilot": "AI 助手",
+    "copilotTitle": "AI 助手 (Ctrl+Alt+I)",
     "splineDraw": "绘制样条",
     "moveRoad": "移动道路",
     "rotateRoad": "旋转道路",
@@ -631,5 +633,19 @@
       "leftPanel": "切换图层面板",
       "help": "显示快捷键帮助"
     }
+  },
+  "copilot": {
+    "title": "对话",
+    "emptyHint": "发送消息或输入 / 命令开始",
+    "inputPlaceholder": "描述你想做什么...",
+    "newChat": "新对话",
+    "tipHint": "提示：输入 /road add 添加道路",
+    "stop": "停止",
+    "send": "发送",
+    "applyModeAuto": "自动",
+    "applyModeManual": "手动",
+    "applyModeAutoTooltip": "自动应用更改",
+    "applyModeManualTooltip": "手动确认更改",
+    "noProvider": "未配置服务商"
   }
 }
