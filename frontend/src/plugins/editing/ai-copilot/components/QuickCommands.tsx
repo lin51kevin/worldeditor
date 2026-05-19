@@ -11,13 +11,12 @@ export interface CommandItem {
 
 interface Props {
   visible: boolean;
-  position: { top: number; left: number };
   commands: CommandItem[];
   onSelect: (cmd: string) => void;
   filter?: string;
 }
 
-export function QuickCommands({ visible, position, commands, onSelect, filter = '' }: Props) {
+export function QuickCommands({ visible, commands, onSelect, filter = '' }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const filtered = filter
@@ -62,7 +61,6 @@ export function QuickCommands({ visible, position, commands, onSelect, filter = 
   return (
     <div
       className="copilot-quick-cmds"
-      style={{ top: position.top, left: position.left }}
     >
       {filtered.map((cmd, i) => (
         <div
