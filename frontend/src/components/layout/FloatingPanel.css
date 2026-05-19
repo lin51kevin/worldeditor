@@ -46,86 +46,94 @@
     z-index: 10;
 }
 
-/* Top edge */
+/* Corner handle size — edges are inset by this many px to avoid overlap */
+:root { --fp-corner: 14px; }
+
+/* Top edge — inset from corners */
 .fp-resize-top {
     top: -4px;
-    left: 0;
-    right: 0;
+    left: var(--fp-corner);
+    right: var(--fp-corner);
     height: 8px;
     cursor: row-resize;
 }
 
-.fp-resize-top:hover {
-    border-radius: 4px;
-}
+.fp-resize-top:hover { border-radius: 4px; }
 
-/* Right edge */
+/* Right edge — inset from corners */
 .fp-resize-right {
-    top: 0;
+    top: var(--fp-corner);
     right: -4px;
     width: 8px;
-    height: 100%;
+    bottom: var(--fp-corner);
     cursor: col-resize;
 }
 
-.fp-resize-right:hover {
-    border-radius: 4px;
-}
+.fp-resize-right:hover { border-radius: 4px; }
 
-/* Left edge */
+/* Left edge — inset from corners */
 .fp-resize-left {
-    top: 0;
+    top: var(--fp-corner);
     left: -4px;
     width: 8px;
-    height: 100%;
+    bottom: var(--fp-corner);
     cursor: col-resize;
 }
 
-.fp-resize-left:hover {
-    border-radius: 4px;
-}
+.fp-resize-left:hover { border-radius: 4px; }
 
-/* Bottom edge */
+/* Bottom edge — inset from corners */
 .fp-resize-bottom {
     bottom: -4px;
-    left: 0;
-    right: 0;
+    left: var(--fp-corner);
+    right: var(--fp-corner);
     height: 8px;
     cursor: row-resize;
 }
 
-.fp-resize-bottom:hover {
-    border-radius: 4px;
-}
+.fp-resize-bottom:hover { border-radius: 4px; }
 
-/* Bottom-right corner handle */
+/* ── Corner handles ── */
+
+/* Bottom-right (br) */
 .fp-resize-corner-br {
-    position: absolute;
     bottom: 0;
     right: 0;
-    width: 14px;
-    height: 14px;
+    width: var(--fp-corner);
+    height: var(--fp-corner);
     cursor: nwse-resize;
-    z-index: 10;
 }
 
-.fp-resize-corner-br::after {
-    content: '';
-    position: absolute;
-    bottom: 3px;
-    right: 3px;
-    width: 8px;
-    height: 8px;
-    border-right: 2px solid var(--color-border);
-    border-bottom: 2px solid var(--color-border);
-    border-radius: 0 0 2px 0;
-    opacity: 0.5;
+
+/* Bottom-left (lb) */
+.fp-resize-corner-lb {
+    bottom: 0;
+    left: 0;
+    width: var(--fp-corner);
+    height: var(--fp-corner);
+    cursor: nesw-resize;
 }
 
-.fp-resize-corner-br:hover::after {
-    opacity: 1;
-    border-color: var(--color-accent, #4a90e2);
+
+/* Top-right (rt) */
+.fp-resize-corner-rt {
+    top: 0;
+    right: 0;
+    width: var(--fp-corner);
+    height: var(--fp-corner);
+    cursor: nesw-resize;
 }
+
+
+/* Top-left (lt) */
+.fp-resize-corner-lt {
+    top: 0;
+    left: 0;
+    width: var(--fp-corner);
+    height: var(--fp-corner);
+    cursor: nwse-resize;
+}
+
 
 /* ── Cursor hints on drag-handle areas ── */
 

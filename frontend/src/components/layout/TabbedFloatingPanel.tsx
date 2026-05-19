@@ -15,7 +15,6 @@ export interface TabConfig {
 
 export interface TabbedFloatingPanelProps {
   storageKey: string;
-  anchorHorizontal: 'left' | 'right';
   defaultWidth: number;
   minWidth?: number;
   maxWidth?: number;
@@ -29,7 +28,6 @@ export interface TabbedFloatingPanelProps {
 
 export function TabbedFloatingPanel({
   storageKey,
-  anchorHorizontal,
   defaultWidth,
   minWidth = 180,
   maxWidth = 600,
@@ -91,7 +89,6 @@ export function TabbedFloatingPanel({
   return (
     <FloatingPanel
       storageKey={storageKey}
-      anchorHorizontal={anchorHorizontal}
       defaultWidth={defaultWidth}
       minWidth={minWidth}
       maxWidth={maxWidth}

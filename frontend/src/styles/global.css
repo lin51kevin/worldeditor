@@ -410,6 +410,7 @@ body,
 } */
 
 .floating-left {
+  /* Initial position — read by FloatingPanel useLayoutEffect on first mount */
   top: calc(var(--menubar-height) + 12px);
   left: 12px;
   width: var(--floating-panel-width);
@@ -420,6 +421,7 @@ body,
 }
 
 .floating-right {
+  /* Initial position — read by FloatingPanel useLayoutEffect on first mount */
   top: calc(var(--menubar-height) + 12px);
   right: 12px;
   width: var(--floating-right-width);
@@ -448,6 +450,7 @@ body,
 
 /* Template panel — standalone floating */
 .floating-template {
+  /* Initial position — read by FloatingPanel useLayoutEffect on first mount */
   top: calc(100% - 260px);
   left: 12px;
   width: var(--floating-panel-width);
@@ -458,6 +461,7 @@ body,
 
 /* Measurement panel — centered floating */
 .floating-measurement {
+  /* Initial position — read by FloatingPanel useLayoutEffect on first mount */
   top: calc(var(--menubar-height) + var(--toolbar-height) + 16px);
   left: calc(50% - 130px);
   width: 260px;

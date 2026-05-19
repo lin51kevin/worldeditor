@@ -82,7 +82,6 @@ export function PluginPanels() {
             maxWidth={680}
             minHeight={140}
             resizeEdges={['top', 'right', 'bottom', 'left']}
-            anchorHorizontal={contrib.position === 'right' ? 'right' : 'left'}
             storageKey={`we-plugin-panel-${contrib.id}`}
             initialCenter={contrib.position === 'float'}
             onMouseDown={() => setActiveId(contrib.id)}

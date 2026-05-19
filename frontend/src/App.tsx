@@ -264,7 +264,6 @@ export function App() {
             maxWidth={680}
             minHeight={200}
             resizeEdges={['top', 'right', 'bottom', 'left']}
-            anchorHorizontal="right"
             storageKey="we-panel-right"
             onClose={toggleRightPanel}
           >
