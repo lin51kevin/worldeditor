@@ -604,6 +604,58 @@
     "learnMore": "User Manual",
     "version": "Version"
   },
+  "roadMarkings": {
+    "title": "Road Markings",
+    "addMarking": "Add Marking",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "sOffset": "s Offset",
+    "type": "Type",
+    "weight": "Weight",
+    "color": "Color",
+    "width": "Width",
+    "laneChange": "Lane Change",
+    "material": "Material",
+    "height": "Height",
+    "noLaneSelected": "Select a lane to edit markings",
+    "road": "Road",
+    "section": "Section",
+    "lane": "Lane",
+    "markTypes": {
+      "Solid": "Solid",
+      "Broken": "Broken",
+      "SolidSolid": "Double Solid",
+      "SolidBroken": "Solid-Broken",
+      "BrokenSolid": "Broken-Solid",
+      "BrokenBroken": "Double Broken",
+      "BottsDots": "Botts Dots",
+      "Curb": "Curb",
+      "Grass": "Grass",
+      "None": "None"
+    },
+    "weightOptions": {
+      "standard": "Standard",
+      "bold": "Bold",
+      "none": "None"
+    },
+    "colorOptions": {
+      "standard": "Standard (White)",
+      "white": "White",
+      "yellow": "Yellow",
+      "green": "Green",
+      "blue": "Blue",
+      "red": "Red",
+      "orange": "Orange"
+    },
+    "laneChangeOptions": {
+      "increase": "Increase",
+      "decrease": "Decrease",
+      "none": "None",
+      "both": "Both"
+    }
+  },
   "roadMarkType": {
     "solid": "Solid",
     "broken": "Broken",

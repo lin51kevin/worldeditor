@@ -87,6 +87,18 @@ export function LayerPanel() {
       setExpandedRoads((prev) => new Set(prev).add(roadId));
       setExpandedRoadObjects((prev) => new Set(prev).add(roadId));
       id = `object-${roadId}-${objectId}`;
+    } else if (selectedSceneNode?.type === 'laneSection') {
+      const { roadId, sectionIndex } = selectedSceneNode;
+      setSceneListCollapsed(false);
+      setExpandedRoads((prev) => new Set(prev).add(roadId));
+      setExpandedLaneSections((prev) => new Set(prev).add(makeLaneSectionKey(roadId, sectionIndex)));
+      id = `lsec-${roadId}-${sectionIndex}`;
+    } else if (selectedSceneNode?.type === 'lane') {
+      const { roadId, sectionIndex, side, laneId } = selectedSceneNode;
+      setSceneListCollapsed(false);
+      setExpandedRoads((prev) => new Set(prev).add(roadId));
+      setExpandedLaneSections((prev) => new Set(prev).add(makeLaneSectionKey(roadId, sectionIndex)));
+      id = `lane-${roadId}-${sectionIndex}-${side}-${laneId}`;
     } else {
       id = selectedRoadId ? `road-${selectedRoadId}` : selectedJunctionId ? `junc-${selectedJunctionId}` : null;
       if (id) setSceneListCollapsed(false);
@@ -484,6 +496,8 @@ export function LayerPanel() {
                 onSelectSignal={(signalId) => handleSelectSignal(road.id, signalId)}
                 onToggleSignalVisibility={(signalId) => toggleSignalVisibilityInStore(road.id, signalId)}
                 isSignalVisible={(signalId) => isSignalVisible(road.id, signalId)}
+                registerLaneSectionRef={(sectionIndex, el) => registerRowRef(`lsec-${road.id}-${sectionIndex}`, el)}
+                registerLaneRef={(sectionIndex, side, laneId, el) => registerRowRef(`lane-${road.id}-${sectionIndex}-${side}-${laneId}`, el)}
                 registerSignalRef={(signalId, el) => registerRowRef(`signal-${road.id}-${signalId}`, el)}
                 onToggleObjectsExpand={() => toggleRoadObjectsExpand(road.id)}
                 onSelectObject={(objectId) => handleSelectObject(road.id, objectId)}

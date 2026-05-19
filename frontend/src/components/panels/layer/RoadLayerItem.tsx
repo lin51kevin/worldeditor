@@ -31,6 +31,8 @@ export interface RoadLayerItemProps {
   onSelectSignal: (signalId: string) => void;
   onToggleSignalVisibility: (signalId: string) => void;
   isSignalVisible: (signalId: string) => boolean;
+  registerLaneSectionRef?: (sectionIndex: number, el: HTMLDivElement | null) => void;
+  registerLaneRef?: (sectionIndex: number, side: LaneSide, laneId: number, el: HTMLDivElement | null) => void;
   registerSignalRef?: (signalId: string, el: HTMLDivElement | null) => void;
   onToggleObjectsExpand: () => void;
   onSelectObject: (objectId: string) => void;
@@ -66,6 +68,8 @@ export const RoadLayerItem = memo(function RoadLayerItem({
   onSelectSignal,
   onToggleSignalVisibility,
   isSignalVisible,
+  registerLaneSectionRef,
+  registerLaneRef,
   registerSignalRef,
   onToggleObjectsExpand,
   onSelectObject,
@@ -133,6 +137,7 @@ export const RoadLayerItem = memo(function RoadLayerItem({
               <div
                 key={sectionIndex}
                 className={`road-detail-lane-section ${sectionExpanded ? 'expanded' : ''}`}
+                ref={(el) => registerLaneSectionRef?.(sectionIndex, el)}
               >
                 <div
                   className={`layer-item layer-item-child layer-item-section ${isLaneSectionSelected(sectionIndex) ? 'selected' : ''} ${!sectionVisible ? 'layer-item-hidden' : ''}`}
@@ -170,6 +175,7 @@ export const RoadLayerItem = memo(function RoadLayerItem({
                       return (
                         <div
                           key={`l${lane.id}`}
+                          ref={(el) => registerLaneRef?.(sectionIndex, 'left', lane.id, el)}
                           className={`layer-item layer-item-child layer-item-lane ${isLaneSelected(sectionIndex, 'left', lane.id) ? 'selected' : ''} ${!laneVisible ? 'layer-item-hidden' : ''}`}
                           onClick={() => onSelectLane(sectionIndex, 'left', lane.id)}
                         >
@@ -196,6 +202,7 @@ export const RoadLayerItem = memo(function RoadLayerItem({
                       return (
                         <div
                           key={`r${lane.id}`}
+                          ref={(el) => registerLaneRef?.(sectionIndex, 'right', lane.id, el)}
                           className={`layer-item layer-item-child layer-item-lane ${isLaneSelected(sectionIndex, 'right', lane.id) ? 'selected' : ''} ${!laneVisible ? 'layer-item-hidden' : ''}`}
                           onClick={() => onSelectLane(sectionIndex, 'right', lane.id)}
                         >

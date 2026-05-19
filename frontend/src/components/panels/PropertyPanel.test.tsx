@@ -195,4 +195,32 @@ describe('PropertyPanel', () => {
     expect(newLane.id).toBeGreaterThan(0);
     expect(newLane.lane_type).toBe('Driving');
   });
+
+  describe('RoadMarkingPanel integration', () => {
+    it('renders RoadMarkingPanel when a lane is selected', () => {
+      const road = makeRoad();
+      act(() => {
+        useProjectStore.setState({
+          project: makeProject([road]),
+          selectedRoadId: road.id,
+          selectedSceneNode: { type: 'lane', roadId: road.id, sectionIndex: 0, side: 'right', laneId: -1 },
+        });
+      });
+      render(<PropertyPanel />);
+      expect(screen.getByRole('region')).toBeInTheDocument();
+    });
+
+    it('does not render RoadMarkingPanel when no lane is selected', () => {
+      const road = makeRoad();
+      act(() => {
+        useProjectStore.setState({
+          project: makeProject([road]),
+          selectedRoadId: road.id,
+          selectedSceneNode: null,
+        });
+      });
+      render(<PropertyPanel />);
+      expect(screen.queryByRole('region')).not.toBeInTheDocument();
+    });
+  });
 });

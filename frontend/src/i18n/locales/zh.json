@@ -604,6 +604,58 @@
     "learnMore": "用户手册",
     "version": "版本"
   },
+  "roadMarkings": {
+    "title": "道路标线",
+    "addMarking": "添加标线",
+    "edit": "编辑",
+    "delete": "删除",
+    "save": "保存",
+    "cancel": "取消",
+    "sOffset": "s 偏移",
+    "type": "类型",
+    "weight": "线宽",
+    "color": "颜色",
+    "width": "宽度",
+    "laneChange": "变道",
+    "material": "材质",
+    "height": "高度",
+    "noLaneSelected": "选择一条车道以编辑标线",
+    "road": "道路",
+    "section": "段",
+    "lane": "车道",
+    "markTypes": {
+      "Solid": "实线",
+      "Broken": "虚线",
+      "SolidSolid": "双实线",
+      "SolidBroken": "实虚线",
+      "BrokenSolid": "虚实线",
+      "BrokenBroken": "双虚线",
+      "BottsDots": "突起路标",
+      "Curb": "路缘",
+      "Grass": "草地",
+      "None": "无"
+    },
+    "weightOptions": {
+      "standard": "标准",
+      "bold": "加粗",
+      "none": "无"
+    },
+    "colorOptions": {
+      "standard": "标准（白色）",
+      "white": "白色",
+      "yellow": "黄色",
+      "green": "绿色",
+      "blue": "蓝色",
+      "red": "红色",
+      "orange": "橙色"
+    },
+    "laneChangeOptions": {
+      "increase": "增加",
+      "decrease": "减少",
+      "none": "无",
+      "both": "双向"
+    }
+  },
   "roadMarkType": {
     "solid": "实线",
     "broken": "虚线",

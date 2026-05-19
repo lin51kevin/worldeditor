@@ -263,6 +263,62 @@ describe('LayerPanel', () => {
     expect(screen.getByText('无匹配结果')).toBeInTheDocument();
   });
 
+  // ── Auto-scroll tests for laneSection and lane ───────────────────────────
+
+  it('auto-expands road and laneSection when laneSection is selected from viewport', () => {
+    act(() => {
+      useProjectStore.setState({
+        project: makeProject([makeRoad('r-1', '测试道路')]),
+      });
+      useProjectStore.setState((state) => ({
+        project: {
+          ...state.project,
+          roads: [{ ...state.project.roads[0]!, lane_sections: [makeLaneSection()] }],
+        },
+      }));
+    });
+
+    render(<LayerPanel />);
+
+    // Simulate viewport selecting a laneSection
+    act(() => {
+      useProjectStore.setState({
+        selectedSceneNode: { type: 'laneSection', roadId: 'r-1', sectionIndex: 0 },
+      });
+    });
+
+    // Road should be expanded → laneSection header visible
+    expect(screen.getByText('车道段 #1')).toBeInTheDocument();
+    // LaneSection group should be expanded → lane children visible
+    expect(screen.getByText(/车道 L2/)).toBeInTheDocument();
+  });
+
+  it('auto-expands road and laneSection when lane is selected from viewport', () => {
+    act(() => {
+      useProjectStore.setState({
+        project: makeProject([makeRoad('r-1', '测试道路')]),
+      });
+      useProjectStore.setState((state) => ({
+        project: {
+          ...state.project,
+          roads: [{ ...state.project.roads[0]!, lane_sections: [makeLaneSection()] }],
+        },
+      }));
+    });
+
+    render(<LayerPanel />);
+
+    // Simulate viewport selecting a lane
+    act(() => {
+      useProjectStore.setState({
+        selectedSceneNode: { type: 'lane', roadId: 'r-1', sectionIndex: 0, side: 'left', laneId: 2 },
+      });
+    });
+
+    // Road + laneSection should be expanded → lane row visible
+    expect(screen.getByText(/车道 L2/)).toBeInTheDocument();
+  });
+
   it('restores full list when search is cleared', () => {
     act(() => {
       useProjectStore.setState({

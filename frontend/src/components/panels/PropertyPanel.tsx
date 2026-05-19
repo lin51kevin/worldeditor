@@ -5,6 +5,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useViewportStore } from '../../stores/viewportStore';
 import { getPlatformService } from '../../services';
 import type { RoadSignal, RoadObjectItem } from '../../services/platform';
+import { RoadMarkingPanel } from './RoadMarkingPanel';
 import './PropertyPanel.css';
 
 interface CardSectionProps {
@@ -542,6 +543,7 @@ export function PropertyPanel() {
           ) : (
             <div className="property-empty">{t('propertyPanel.noSelection')}</div>
           )}
+          <RoadMarkingPanel />
         </div>
     </div>
   );
