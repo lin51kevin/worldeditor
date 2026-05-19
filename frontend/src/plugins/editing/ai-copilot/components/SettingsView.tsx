@@ -1,9 +1,11 @@
 import { useState, useCallback } from 'react';
-import { Eye, EyeOff, Save, X } from 'lucide-react';
+import { Eye, EyeOff, Save, X, Plug, Check, ExternalLink } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { PROVIDER_PRESETS, getPreset } from '../providers/provider-registry';
 import type { CopilotConfig } from '../core/config-store';
 import { saveConfig } from '../core/config-store';
 import type { AIProviderConfig } from '../providers/types';
+import { OpenAICompatibleProvider } from '../providers/openai-compatible';
 import './CopilotPanel.css';
 
 interface SettingsViewProps {
@@ -13,6 +15,7 @@ interface SettingsViewProps {
 }
 
 export function SettingsView({ config: initialConfig, onSave, onClose }: SettingsViewProps) {
+  const { t } = useTranslation();
   const [activeProviderId, setActiveProviderId] = useState(initialConfig.activeProviderId);
   const [baseUrl, setBaseUrl] = useState(
     initialConfig.providers[initialConfig.activeProviderId]?.baseUrl ?? ''
@@ -23,11 +26,12 @@ export function SettingsView({ config: initialConfig, onSave, onClose }: Setting
   const [model, setModel] = useState(
     initialConfig.providers[initialConfig.activeProviderId]?.model ?? ''
   );
-  const [applyMode, setApplyMode] = useState(initialConfig.applyMode);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<boolean | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
 
   const preset = getPreset(activeProviderId);
-  const models = preset?.models ?? [];
 
   const handleProviderChange = useCallback(
     (newId: string) => {
@@ -42,9 +46,45 @@ export function SettingsView({ config: initialConfig, onSave, onClose }: Setting
         setModel('');
         setApiKey('');
       }
+      setTestResult(null);
+      setTestError(null);
     },
     [initialConfig.providers]
   );
+
+  const handleTestConnection = useCallback(async () => {
+    const url = baseUrl.trim();
+    if (!url) {
+      setTestResult(false);
+      setTestError(t('copilot.settingsInvalidConfig'));
+      return;
+    }
+
+    setTesting(true);
+    setTestResult(null);
+    setTestError(null);
+
+    try {
+      const providerCfg: AIProviderConfig = {
+        id: activeProviderId,
+        name: preset?.name ?? 'Custom',
+        baseUrl: url,
+        apiKey,
+        model,
+      };
+      const provider = new OpenAICompatibleProvider(providerCfg);
+      const ok = await provider.healthCheck();
+      setTestResult(ok);
+      if (!ok) {
+        setTestError(t('copilot.settingsFailed'));
+      }
+    } catch (err) {
+      setTestResult(false);
+      setTestError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTesting(false);
+    }
+  }, [baseUrl, apiKey, model, activeProviderId, preset, t]);
 
   const handleSave = useCallback(() => {
     const providerConfig: AIProviderConfig = {
@@ -62,118 +102,152 @@ export function SettingsView({ config: initialConfig, onSave, onClose }: Setting
         ...initialConfig.providers,
         [activeProviderId]: providerConfig,
       },
-      applyMode,
     };
 
     saveConfig(updated);
     onSave(updated);
-  }, [activeProviderId, baseUrl, apiKey, model, applyMode, initialConfig, onSave]);
+  }, [activeProviderId, baseUrl, apiKey, model, initialConfig, onSave]);
+
+  const isCloud = preset ? preset.type === 'cloud' : true;
 
   return (
     <div className="copilot-settings">
+      {/* Header */}
       <div className="copilot-settings-header">
-        <span>⚙️ AI 助手设置</span>
-        <button className="copilot-settings-close-btn" onClick={onClose} aria-label="关闭">
-          <X size={18} />
+        <span>{t('copilot.settingsTitle')}</span>
+        <button className="copilot-settings-close-btn" onClick={onClose} aria-label={t('copilot.settingsClose')}>
+          <X size={14} />
         </button>
       </div>
 
+      {/* Provider input with datalist */}
       <div className="copilot-settings-field">
-        <label>AI Provider</label>
-        <select
+        <label>{t('copilot.settingsProvider')}</label>
+        <input
+          type="text"
+          list="copilot-provider-list"
           value={activeProviderId}
           onChange={(e) => handleProviderChange(e.target.value)}
-        >
+          placeholder={t('copilot.settingsProviderHint')}
+        />
+        <datalist id="copilot-provider-list">
           {PROVIDER_PRESETS.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
           ))}
-        </select>
-      </div>
-
-      <div className="copilot-settings-field">
-        <label>API 地址</label>
-        <input
-          type="text"
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
-        />
-      </div>
-
-      <div className="copilot-settings-field">
-        <label>API Key</label>
-        <div className="copilot-settings-password-wrap">
-          <input
-            type={showApiKey ? 'text' : 'password'}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="(可选)"
-          />
-          <button
-            className="copilot-settings-toggle-pw"
-            onClick={() => setShowApiKey(!showApiKey)}
-            type="button"
-            tabIndex={-1}
-          >
-            {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
-        </div>
-      </div>
-
-      <div className="copilot-settings-field">
-        <label>模型</label>
-        {models.length > 0 ? (
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-          >
-            {models.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            type="text"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            placeholder="输入模型名称"
-          />
+        </datalist>
+        {/* Provider description */}
+        {preset?.description && (
+          <div className="copilot-settings-desc">
+            {preset.name} — {preset.description}
+          </div>
         )}
       </div>
 
-      <div className="copilot-settings-field">
-        <label>应用模式</label>
-        <div className="copilot-settings-radios">
-          <label className="copilot-settings-radio">
-            <input
-              type="radio"
-              name="applyMode"
-              value="manual"
-              checked={applyMode === 'manual'}
-              onChange={() => setApplyMode('manual')}
-            />
-            手动确认 (推荐)
-          </label>
-          <label className="copilot-settings-radio">
-            <input
-              type="radio"
-              name="applyMode"
-              value="auto"
-              checked={applyMode === 'auto'}
-              onChange={() => setApplyMode('auto')}
-            />
-            自动执行
-          </label>
+      {/* Provider config section */}
+      <div className="copilot-settings-section">
+        {/* API Key — only for cloud providers */}
+        {isCloud && (
+          <div className="copilot-settings-field">
+            <div className="copilot-settings-label-row">
+              <label>{t('copilot.settingsApiKey')}</label>
+              {preset?.apiKeyUrl && (
+                <a
+                  href={preset.apiKeyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="copilot-settings-link"
+                >
+                  {t('copilot.settingsGetApiKey')}
+                  <ExternalLink size={10} />
+                </a>
+              )}
+            </div>
+            <div className="copilot-settings-password-wrap">
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={(e) => { setApiKey(e.target.value); setTestResult(null); }}
+                placeholder={preset?.apiKeyPlaceholder ?? t('copilot.settingsApiKeyPlaceholder')}
+              />
+              <button
+                className="copilot-settings-toggle-pw"
+                onClick={() => setShowApiKey(!showApiKey)}
+                type="button"
+                tabIndex={-1}
+              >
+                {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Base URL */}
+        <div className="copilot-settings-field">
+          <label>{t('copilot.settingsApiUrl')}</label>
+          <input
+            type="text"
+            value={baseUrl}
+            onChange={(e) => { setBaseUrl(e.target.value); setTestResult(null); }}
+            placeholder={preset?.baseUrl || 'https://api.example.com/v1'}
+          />
+        </div>
+
+        {/* Model — input with datalist */}
+        <div className="copilot-settings-field">
+          <label>{t('copilot.settingsModel')}</label>
+          <input
+            type="text"
+            list={`copilot-model-list-${activeProviderId}`}
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder={preset?.defaultModel || t('copilot.settingsModelPlaceholder')}
+          />
+          {preset && preset.models.length > 0 && (
+            <datalist id={`copilot-model-list-${activeProviderId}`}>
+              {preset.models.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+          )}
+        </div>
+
+        {/* Test connection */}
+        <div className="copilot-settings-test-row">
+          <button
+            className="copilot-settings-test-btn"
+            onClick={handleTestConnection}
+            disabled={testing}
+            data-testid="test-connection-btn"
+          >
+            <Plug size={12} />
+            {testing ? t('copilot.settingsTesting') : t('copilot.settingsTestConnection')}
+          </button>
+          {testResult !== null && (
+            <span className={`copilot-settings-test-status ${testResult ? 'copilot-settings-test-status--ok' : 'copilot-settings-test-status--fail'}`}>
+              {testResult ? <Check size={12} /> : <X size={12} />}
+              {testResult ? t('copilot.settingsConnected') : t('copilot.settingsFailed')}
+            </span>
+          )}
+          {testError && !testResult && (
+            <span className="copilot-settings-test-error" title={testError}>
+              {testError}
+            </span>
+          )}
         </div>
       </div>
 
-      <button className="copilot-settings-save-btn" onClick={handleSave}>
-        <Save size={16} />
-        保存设置
-      </button>
+      {/* Footer: Cancel + Save */}
+      <div className="copilot-settings-footer">
+        <button className="copilot-settings-cancel-btn" onClick={onClose}>
+          {t('copilot.settingsCancel')}
+        </button>
+        <button className="copilot-settings-save-btn" onClick={handleSave}>
+          <Save size={12} />
+          {t('copilot.settingsSave')}
+        </button>
+      </div>
     </div>
   );
 }

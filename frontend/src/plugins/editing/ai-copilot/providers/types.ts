@@ -19,4 +19,6 @@ export interface AIProviderConfig {
 
 export interface AIProvider {
   chat(messages: CopilotMessage[], onChunk: (chunk: StreamChunk) => void): AbortController;
+  /** Lightweight connectivity check (e.g. GET /models). Returns true if reachable. */
+  healthCheck(): Promise<boolean>;
 }

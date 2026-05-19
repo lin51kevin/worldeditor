@@ -23,6 +23,7 @@ export function mountAiCopilotPlugin(): () => void {
     component: CopilotPanel,
     position: 'right',
     icon: <Sparkles size={14} />,
+    headerless: true,
   };
 
   registerPanel(panel);

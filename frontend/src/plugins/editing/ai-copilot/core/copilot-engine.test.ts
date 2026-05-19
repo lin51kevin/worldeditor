@@ -39,6 +39,7 @@ function makeMockProvider(responseChunks: StreamChunk[] = []): { provider: AIPro
       });
       return ac;
     }),
+    healthCheck: vi.fn().mockResolvedValue(true),
   };
   return { provider, abortController: ac };
 }
@@ -195,6 +196,7 @@ describe('CopilotEngine', () => {
       const abortController = new AbortController();
       const provider: AIProvider = {
         chat: vi.fn(() => abortController),
+        healthCheck: vi.fn().mockResolvedValue(true),
       };
 
       const engine = new CopilotEngine();

@@ -8,10 +8,11 @@ import type { ActionResult } from '../core/action-executor';
 
 // ─── Mock engine with configurable behavior ───
 
-const { mockHandleInput, mockAbort } = vi.hoisted(() => {
+const { mockHandleInput, mockAbort, mockConfigure } = vi.hoisted(() => {
   const mockHandleInput = vi.fn().mockResolvedValue(undefined);
   const mockAbort = vi.fn();
-  return { mockHandleInput, mockAbort };
+  const mockConfigure = vi.fn();
+  return { mockHandleInput, mockAbort, mockConfigure };
 });
 
 vi.mock('../core/config-store', () => ({
@@ -33,7 +34,7 @@ vi.mock('../core/copilot-engine', () => {
       abort: () => mockAbort(),
       reset: vi.fn(),
       getHistory: vi.fn().mockReturnValue([]),
-      configure: vi.fn(),
+      configure: (...args: any[]) => mockConfigure(...args),
     })),
   };
 });
@@ -45,6 +46,22 @@ vi.mock('../core/intent-parser', () => ({
     { command: '/road delete', label: 'Delete Road', description: 'Delete selected road' },
     { command: '/help', label: 'Help', description: 'Show commands' },
   ]),
+}));
+
+vi.mock('../providers/openai-compatible', () => ({
+  OpenAICompatibleProvider: vi.fn().mockImplementation(() => ({
+    healthCheck: vi.fn().mockResolvedValue(true),
+    chat: vi.fn(),
+  })),
+}));
+
+const mockHidePanel = vi.fn();
+
+vi.mock('../../../../stores/pluginContribStore', () => ({
+  usePluginContribStore: (selector: any) => {
+    const state = { hidePanel: mockHidePanel };
+    return selector(state);
+  },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -63,6 +80,28 @@ vi.mock('react-i18next', () => ({
         'copilot.applyModeAutoTooltip': '自动应用更改',
         'copilot.applyModeManualTooltip': '手动确认更改',
         'copilot.noProvider': '未配置服务商',
+        'copilot.settings': '设置',
+        'copilot.closePanel': '关闭面板',
+        'copilot.settingsTitle': 'AI 助手设置',
+        'copilot.settingsProvider': 'AI Provider',
+        'copilot.settingsApiUrl': '接口地址 (Base URL)',
+        'copilot.settingsApiKey': 'API Key',
+        'copilot.settingsModel': '模型',
+        'copilot.settingsApplyMode': '应用模式',
+        'copilot.settingsSave': '保存',
+        'copilot.settingsCancel': '取消',
+        'copilot.settingsManual': '手动确认 (推荐)',
+        'copilot.settingsAuto': '自动执行',
+        'copilot.settingsApiKeyPlaceholder': '(可选)',
+        'copilot.settingsModelPlaceholder': '输入模型名称',
+        'copilot.settingsClose': '关闭',
+        'copilot.settingsProviderHint': '输入或选择服务商',
+        'copilot.settingsGetApiKey': '获取 API Key',
+        'copilot.settingsTestConnection': '测试连接',
+        'copilot.settingsTesting': '测试中...',
+        'copilot.settingsConnected': '已连接',
+        'copilot.settingsFailed': '连接失败',
+        'copilot.settingsInvalidConfig': '配置无效',
       };
       return map[key] || key;
     },
@@ -272,5 +311,59 @@ describe('CopilotPanel', () => {
     await waitFor(() => {
       expect(screen.queryByText('提示：输入 /road add 添加道路')).not.toBeInTheDocument();
     });
+  });
+
+  it('15. 点击设置按钮弹出设置面板', async () => {
+    renderPanel();
+    const settingsBtn = screen.getByTitle('设置');
+    await act(async () => { fireEvent.click(settingsBtn); });
+
+    expect(screen.getByText(/AI 助手设置/)).toBeInTheDocument();
+    expect(screen.getByText('AI Provider')).toBeInTheDocument();
+  });
+
+  it('16. 设置面板关闭后恢复聊天视图', async () => {
+    renderPanel();
+    const settingsBtn = screen.getByTitle('设置');
+
+    // Open settings
+    await act(async () => { fireEvent.click(settingsBtn); });
+    expect(screen.getByText(/AI 助手设置/)).toBeInTheDocument();
+
+    // Close settings via close button
+    const closeBtn = screen.getByLabelText('关闭');
+    await act(async () => { fireEvent.click(closeBtn); });
+
+    // Chat view should be back
+    expect(screen.queryByText(/AI 助手设置/)).not.toBeInTheDocument();
+    expect(getInput()).toBeInTheDocument();
+  });
+
+  it('17. 保存设置后配置 engine', async () => {
+    renderPanel();
+    const settingsBtn = screen.getByTitle('设置');
+    await act(async () => { fireEvent.click(settingsBtn); });
+
+    // Click save
+    const saveBtn = screen.getByText('保存');
+    await act(async () => { fireEvent.click(saveBtn); });
+
+    // Engine should have been configured (initial + after save)
+    expect(mockConfigure).toHaveBeenCalled();
+  });
+
+  it('18. 关闭面板按钮调用 hidePanel', async () => {
+    renderPanel();
+    const closeBtn = screen.getByTitle('关闭面板');
+    await act(async () => { fireEvent.click(closeBtn); });
+
+    expect(mockHidePanel).toHaveBeenCalledWith('ai-copilot:panel');
+  });
+
+  it('19. 面板只有一个标题栏（无重复 header）', () => {
+    renderPanel();
+    const titles = screen.getAllByText('AI 助手');
+    // Only one title should exist (the copilot-header, no plugin-panel-header)
+    expect(titles).toHaveLength(1);
   });
 });

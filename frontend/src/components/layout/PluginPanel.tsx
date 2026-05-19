@@ -93,17 +93,19 @@ export function PluginPanels() {
             }}
           >
             <div className="plugin-panel-shell" data-panel-id={contrib.id}>
-              <div className="plugin-panel-header">
-                <span className="plugin-panel-title">{title}</span>
-                <button
-                  className="plugin-panel-close"
-                  aria-label={`关闭 ${title}`}
-                  onClick={() => hidePanel(contrib.id)}
-                  type="button"
-                >
-                  <X size={14} />
-                </button>
-              </div>
+              {!contrib.headerless && (
+                <div className="plugin-panel-header">
+                  <span className="plugin-panel-title">{title}</span>
+                  <button
+                    className="plugin-panel-close"
+                    aria-label={`关闭 ${title}`}
+                    onClick={() => hidePanel(contrib.id)}
+                    type="button"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
               <div className="plugin-panel-body">
                 <Component />
               </div>

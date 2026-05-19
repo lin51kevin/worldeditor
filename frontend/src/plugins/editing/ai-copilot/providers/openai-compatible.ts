@@ -14,6 +14,31 @@ export class OpenAICompatibleProvider implements AIProvider {
     this.model = config.model;
   }
 
+  /** Lightweight connectivity check — GET /models with 5s timeout */
+  async healthCheck(): Promise<boolean> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.apiKey) {
+        headers['Authorization'] = `Bearer ${this.apiKey}`;
+      }
+
+      const response = await fetch(`${this.baseUrl}/models`, {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
+      });
+
+      return response.ok;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   chat(messages: CopilotMessage[], onChunk: (chunk: StreamChunk) => void): AbortController {
     const controller = new AbortController();
 

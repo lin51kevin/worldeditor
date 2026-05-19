@@ -113,6 +113,8 @@ export interface PanelContrib {
   component: ComponentType<any>;
   position: 'left' | 'right' | 'bottom' | 'float';
   icon?: ReactNode;
+  /** When true, the generic plugin-panel-header is not rendered; the component manages its own header */
+  headerless?: boolean;
 }
 
 /** Context passed to `ContextMenuContrib.isVisible` for conditional visibility */

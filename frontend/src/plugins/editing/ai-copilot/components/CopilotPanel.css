@@ -53,6 +53,14 @@
 }
 
 /* ── Messages area ── */
+.copilot-messages-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .copilot-messages {
   flex: 1;
   overflow-y: auto;
@@ -370,14 +378,14 @@
 
 /* ── Settings view ── */
 .copilot-settings {
-  padding: var(--space-4, 16px);
-  max-width: 420px;
+  padding: var(--space-3, 12px);
   width: 100%;
   color: var(--color-text-primary, #e0e0e0);
-  background: var(--glass-bg, rgba(30, 30, 46, 0.95));
-  backdrop-filter: var(--glass-blur, blur(12px));
-  border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  font-size: var(--font-size-sm, 12px);
+  overflow-y: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .copilot-settings-header {
@@ -385,7 +393,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--space-4, 16px);
-  font-size: var(--font-size-md, 14px);
+  font-size: var(--font-size-sm, 13px);
   font-weight: var(--font-weight-semibold, 600);
 }
 
@@ -394,7 +402,7 @@
   border: none;
   color: var(--color-text-secondary, #888);
   cursor: pointer;
-  padding: var(--space-1, 4px);
+  padding: 2px;
   display: flex;
   align-items: center;
   border-radius: var(--radius-sm, 4px);
@@ -411,17 +419,17 @@
 .copilot-settings label {
   display: block;
   margin-bottom: var(--space-1, 4px);
-  font-size: var(--font-size-sm, 12px);
+  font-size: 11px;
   color: var(--color-text-secondary, #888);
 }
 
 .copilot-settings input,
 .copilot-settings select {
   width: 100%;
-  padding: var(--space-2, 8px) 10px;
+  padding: 4px 8px;
   background: var(--color-bg-card, rgba(255, 255, 255, 0.05));
   border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.15));
-  border-radius: var(--radius-sm, 4px);
+  border-radius: 3px;
   color: var(--color-text-primary, #e0e0e0);
   font-size: var(--font-size-sm, 12px);
   box-sizing: border-box;
@@ -431,6 +439,51 @@
 .copilot-settings input:focus,
 .copilot-settings select:focus {
   border-color: var(--accent-color, #89b4fa);
+}
+
+/* Provider description text */
+.copilot-settings-desc {
+  font-size: 11px;
+  color: var(--color-text-secondary, #888);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+/* Label row with link (e.g. "API Key" + "获取 API Key ↗") */
+.copilot-settings-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.copilot-settings-label-row label {
+  margin-bottom: 0;
+}
+
+.copilot-settings-link {
+  font-size: 11px;
+  color: var(--accent-color, #89b4fa);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.copilot-settings-link:hover {
+  text-decoration: underline;
+}
+
+/* Provider config section (bordered box) */
+.copilot-settings-section {
+  margin-bottom: var(--space-3, 12px);
+  padding: 10px;
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: var(--radius-sm, 4px);
+}
+
+.copilot-settings-section .copilot-settings-field:last-child {
+  margin-bottom: 0;
 }
 
 .copilot-settings-password-wrap {
@@ -455,36 +508,102 @@
   align-items: center;
 }
 
-.copilot-settings-radios {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.copilot-settings-radio {
+/* Test connection row */
+.copilot-settings-test-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: var(--font-size-sm, 12px);
-  cursor: pointer;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.copilot-settings-test-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.15));
+  border-radius: 3px;
+  background: var(--color-bg-card, rgba(255, 255, 255, 0.05));
   color: var(--color-text-primary, #e0e0e0);
+  cursor: pointer;
+}
+
+.copilot-settings-test-btn:hover {
+  background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
+}
+
+.copilot-settings-test-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.copilot-settings-test-status {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+}
+
+.copilot-settings-test-status--ok {
+  color: #a6e3a1;
+}
+
+.copilot-settings-test-status--fail {
+  color: #f38ba8;
+}
+
+.copilot-settings-test-error {
+  font-size: 10px;
+  color: #f38ba8;
+  background: var(--color-bg-card, rgba(255, 255, 255, 0.05));
+  padding: 2px 6px;
+  border-radius: 2px;
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.1));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+/* Footer: Cancel + Save */
+.copilot-settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: var(--space-3, 12px);
+}
+
+.copilot-settings-cancel-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.15));
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-text-secondary, #ccc);
+  cursor: pointer;
+}
+
+.copilot-settings-cancel-btn:hover {
+  background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
 }
 
 .copilot-settings-save-btn {
-  width: 100%;
-  padding: 10px;
-  background: var(--accent-color, #89b4fa);
-  color: #1e1e2e;
-  border: none;
-  border-radius: var(--radius-sm, 4px);
-  font-size: var(--font-size-sm, 12px);
-  font-weight: 500;
-  cursor: pointer;
-  margin-top: var(--space-4, 16px);
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: none;
+  border-radius: 3px;
+  background: var(--accent-color, #89b4fa);
+  color: #fff;
+  cursor: pointer;
 }
 
 .copilot-settings-save-btn:hover {
@@ -510,4 +629,21 @@
 
 .copilot-btn:hover {
   background: var(--color-bg-tertiary, rgba(255, 255, 255, 0.15));
+}
+
+/* ── Settings wrapper (fills available space) ── */
+.copilot-settings-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.copilot-settings-wrap .copilot-settings {
+  flex: 1;
+  border: none;
+  border-radius: 0;
+  max-width: none;
 }

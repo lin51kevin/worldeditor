@@ -2,6 +2,7 @@ import { parseIntent } from './intent-parser';
 import { assembleContext, contextToPrompt } from './context-assembler';
 import { buildSystemPrompt, buildUserPrompt } from './prompt-builder';
 import { executeIntent } from './action-executor';
+import type { ParsedIntent } from './types';
 import type { CopilotMessage, AIProvider, AIProviderConfig, StreamChunk } from '../providers/types';
 import { OpenAICompatibleProvider } from '../providers/openai-compatible';
 
@@ -11,6 +12,9 @@ export interface CopilotEngineCallbacks {
   onDone: () => void;
   onError: (error: string) => void;
 }
+
+/** Regex to extract [ACTION]{...}[/ACTION] from AI response */
+const ACTION_TAG_RE = /\[ACTION\]\s*(\{[\s\S]*?\})\s*\[\/ACTION\]/;
 
 export class CopilotEngine {
   private messages: CopilotMessage[] = [];
@@ -72,6 +76,8 @@ export class CopilotEngine {
           } else if (chunk.type === 'done') {
             if (fullReply) {
               this.messages.push({ role: 'assistant', content: fullReply });
+              // Try to extract and execute embedded action
+              this.tryExecuteEmbeddedAction(fullReply, callbacks);
             }
             callbacks.onDone();
           }
@@ -81,6 +87,29 @@ export class CopilotEngine {
       const errMsg = err instanceof Error ? err.message : String(err);
       callbacks.onError(errMsg);
       callbacks.onDone();
+    }
+  }
+
+  /** Extract [ACTION]...[/ACTION] from AI reply and execute if found */
+  private async tryExecuteEmbeddedAction(reply: string, callbacks: CopilotEngineCallbacks): Promise<void> {
+    const match = reply.match(ACTION_TAG_RE);
+    if (!match) return;
+
+    try {
+      const parsed = JSON.parse(match[1]!) as { action: string; params?: Record<string, any> };
+      if (!parsed.action) return;
+
+      const intent: ParsedIntent = {
+        action: parsed.action as ParsedIntent['action'],
+        params: parsed.params ?? {},
+        confidence: 0.9,
+        rawInput: reply,
+      };
+
+      const result = await executeIntent(intent);
+      callbacks.onAction(result);
+    } catch {
+      // Silently ignore malformed action tags
     }
   }
 
