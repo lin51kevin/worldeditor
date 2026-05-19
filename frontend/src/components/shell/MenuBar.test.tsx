@@ -182,16 +182,16 @@ describe('MenuBar', () => {
     const hamburger = screen.getByTitle('文件');
     fireEvent.click(hamburger);
     fireEvent.click(screen.getByText('文件'));
-    expect(screen.getByText('新建项目')).toBeInTheDocument();
+    expect(screen.getByText('新建')).toBeInTheDocument();
     expect(screen.getByText('Ctrl+N')).toBeInTheDocument();
     expect(screen.getByText('Ctrl+Shift+S')).toBeInTheDocument();
 
     fireEvent.click(hamburger);
-    expect(screen.queryByText('新建项目')).not.toBeInTheDocument();
+    expect(screen.queryByText('新建')).not.toBeInTheDocument();
 
     fireEvent.click(hamburger);
     fireEvent.mouseDown(document.body);
-    expect(screen.queryByText('新建项目')).not.toBeInTheDocument();
+    expect(screen.queryByText('新建')).not.toBeInTheDocument();
   });
 
   it('shows disabled and enabled file actions based on project state', () => {

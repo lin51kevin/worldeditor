@@ -197,6 +197,13 @@ export function useMenuActions() {
     resetToSaved();
   }, [isDirty, savedProject, resetToSaved, t]);
 
+  const handleClose = useCallback(async () => {
+    if (isDirty) {
+      if (!await showConfirm(t('dialog.confirmClose'))) return;
+    }
+    reset();
+  }, [isDirty, reset, t]);
+
   const handleExit = useCallback(async () => {
     if (isDirty) {
       const confirmed = await showConfirm(t('dialog.exitUnsaved'));
@@ -210,7 +217,7 @@ export function useMenuActions() {
     undo, redo, canUndo, canRedo,
     toggleSnap, setMeasureMode,
     handleNew, handleOpen, handleSave, handleSaveAs,
-    handleImportOpenDrive, handleOpenRecentFile, handleExportOpenDrive,
+    handleClose, handleImportOpenDrive, handleOpenRecentFile, handleExportOpenDrive,
     handleDelete, handleView3D, handleView2D,
     handleZoomToFit, handleZoomToSelected,
     handleToggleGrid, handleToggleAxis, handleToggleHoverHighlight,

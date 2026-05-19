@@ -19,6 +19,7 @@ interface FileMenuProps extends MenuSectionInteractionProps {
   exporters: ExporterContrib[];
   clearRecentFiles: () => void;
   onNew: MenuAction;
+  onCloseFile: MenuAction;
   onOpen: MenuAction;
   onSave: MenuAction;
   onSaveAs: MenuAction;
@@ -37,6 +38,7 @@ export function FileMenu({
   exporters,
   clearRecentFiles,
   onNew,
+  onCloseFile,
   onOpen,
   onSave,
   onSaveAs,
@@ -128,7 +130,7 @@ export function FileMenu({
     label: t('menu.file'),
     items: [
       {
-        label: t('menu.newProject'),
+        label: t('menu.new'),
         shortcut: 'Ctrl+N',
         action: () => {
           void onNew();
@@ -162,6 +164,13 @@ export function FileMenu({
         },
       },
       { separator: true, label: '' },
+      {
+        label: t('menu.closeFile'),
+        shortcut: 'Ctrl+W',
+        action: () => {
+          void onCloseFile();
+        },
+      },
       {
         label: t('menu.exit'),
         action: () => {
