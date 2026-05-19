@@ -27,7 +27,6 @@ export function CopilotPanel() {
   const [showSettings, setShowSettings] = useState(false);
   const [actionResult, setActionResult] = useState<ActionResult | null>(null);
   const [quickCmdFilter, setQuickCmdFilter] = useState('');
-  const [commandPos, setCommandPos] = useState({ top: 0, left: 0 });
   const [config, setConfig] = useState<CopilotConfig>(() => loadConfig());
 
   const engineRef = useRef<CopilotEngine | null>(null);
@@ -137,14 +136,6 @@ export function CopilotPanel() {
     if (value.startsWith('/') && !value.includes(' ')) {
       setShowCommands(true);
       setQuickCmdFilter(value);
-      if (inputRef.current && panelRef.current) {
-        const panelRect = panelRef.current.getBoundingClientRect();
-        const inputRect = inputRef.current.getBoundingClientRect();
-        setCommandPos({
-          top: inputRect.top - panelRect.top - 200,
-          left: inputRect.left - panelRect.left,
-        });
-      }
     } else {
       setShowCommands(false);
     }
@@ -189,8 +180,8 @@ export function CopilotPanel() {
 
   return (
     <div ref={panelRef} className="copilot-panel">
-      {/* Title bar */}
-      <div className="copilot-header">
+      {/* Title bar — also acts as FloatingPanel drag handle */}
+      <div className="copilot-header plugin-panel-header">
         <span className="copilot-title">{t('copilot.title')}</span>
         <div className="copilot-header-actions">
           <button
@@ -248,7 +239,6 @@ export function CopilotPanel() {
             {/* Slash command popup - positions relative to input-area */}
             <QuickCommands
               visible={showCommands}
-              position={commandPos}
               commands={commands}
               onSelect={handleCommandSelect}
               filter={quickCmdFilter}
