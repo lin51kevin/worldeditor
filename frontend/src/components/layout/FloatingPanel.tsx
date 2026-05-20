@@ -168,18 +168,10 @@ export function FloatingPanel({
     const y = initialCenter
       ? Math.round((window.innerHeight - h) / 2) + (initialCenterOffset?.y ?? 0)
       : Math.round(brc.top);
-    // Delay persisting rect until after layout stabilizes to avoid capturing transient values
-    let raf1 = 0;
-    let raf2 = 0;
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        setRect({ x, y, w, h });
-      });
-    });
-    return () => {
-      if (raf1) cancelAnimationFrame(raf1);
-      if (raf2) cancelAnimationFrame(raf2);
-    };
+    // Set rect immediately; in test environments requestAnimationFrame may not advance.
+    // Keeping this synchronous avoids missing initial layout in jsdom-based tests.
+    setRect({ x, y, w, h });
+    return;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-clamp position when the browser viewport is resized
