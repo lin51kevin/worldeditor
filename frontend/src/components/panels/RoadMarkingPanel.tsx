@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../stores/projectStore';
+import { showConfirm } from '../../utils/dialog';
 import type { RoadMark } from '../../services/platform';
 import './RoadMarkingPanel.css';
 
@@ -41,9 +42,12 @@ export function RoadMarkingPanel() {
     useProjectStore.getState().addRoadMark(laneInfo.roadId, laneInfo.sectionIndex, laneInfo.side, laneInfo.laneId, { ...defaultMark });
   };
 
-  const handleDelete = (markIndex: number) => {
+  const handleDelete = async (markIndex: number) => {
     if (!laneInfo) return;
-    useProjectStore.getState().removeRoadMark(laneInfo.roadId, laneInfo.sectionIndex, laneInfo.side, laneInfo.laneId, markIndex);
+    const confirmed = await showConfirm(t('dialog.confirmDeleteMarking', 'Delete this road marking?'));
+    if (confirmed) {
+      useProjectStore.getState().removeRoadMark(laneInfo.roadId, laneInfo.sectionIndex, laneInfo.side, laneInfo.laneId, markIndex);
+    }
   };
 
   const handleEdit = (mark: RoadMark, index: number) => {

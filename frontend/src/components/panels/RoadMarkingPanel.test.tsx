@@ -1,9 +1,13 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LaneSection, RoadMark } from '../../services/platform';
 import type { SceneNodeSelection } from '../../utils/sceneGraph';
 import { useProjectStore } from '../../stores/projectStore';
 import { RoadMarkingPanel } from './RoadMarkingPanel';
+
+vi.mock('../../utils/dialog', () => ({
+  showConfirm: vi.fn().mockResolvedValue(true),
+}));
 
 function makeLaneSection(marks: RoadMark[] = []): LaneSection {
   return {
@@ -75,14 +79,16 @@ describe('RoadMarkingPanel', () => {
     expect(marks[0]!.mark_type).toBe('Solid');
   });
 
-  it('deletes a marking', () => {
+  it('deletes a marking', async () => {
     setupStore([defaultMark, { ...defaultMark, s_offset: 50, mark_type: 'Broken' }], laneNode);
     render(<RoadMarkingPanel />);
     const deleteButtons = screen.getAllByText('删除');
     expect(deleteButtons[0]).toBeDefined();
     fireEvent.click(deleteButtons[0]!);
-    const marks = useProjectStore.getState().project.roads[0]!.lane_sections[0]!.right[0]!.road_marks;
-    expect(marks).toHaveLength(1);
+    await waitFor(() => {
+      const marks = useProjectStore.getState().project.roads[0]!.lane_sections[0]!.right[0]!.road_marks;
+      expect(marks).toHaveLength(1);
+    });
   });
 
   it('edits and saves a marking', () => {

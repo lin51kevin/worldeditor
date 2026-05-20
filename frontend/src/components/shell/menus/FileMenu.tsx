@@ -2,7 +2,7 @@ import type { Project } from '../../../services/platform';
 import { useProjectStore } from '../../../stores/projectStore';
 import type { ExporterContrib, ImporterContrib } from '../../../stores/pluginContribStore';
 import type { RecentFile } from '../../../stores/recentFilesStore';
-import { showAlert } from '../../../utils/dialog';
+import { showAlert, showConfirm } from '../../../utils/dialog';
 import type { MenuItem, TranslateFn } from '../menuDefinitions';
 import { MenuSection, type MenuSectionInteractionProps } from './MenuSection';
 
@@ -58,7 +58,10 @@ export function FileMenu({
           },
         })),
         { separator: true, label: '' },
-        { label: t('menu.clearRecentFiles'), action: clearRecentFiles },
+        { label: t('menu.clearRecentFiles'), action: async () => {
+          const confirmed = await showConfirm(t('dialog.confirmClearRecent'));
+          if (confirmed) clearRecentFiles();
+        } },
       ];
 
   const importSubmenu: MenuItem[] = [

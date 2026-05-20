@@ -79,7 +79,8 @@ export function MeasurementPanel() {
         <button
           className="measurement-close"
           onClick={() => setMeasureMode('none')}
-          title={t('measurement.clear')}
+          title={t('measurement.close')}
+          aria-label={t('measurement.close')}
         >
           &times;
         </button>

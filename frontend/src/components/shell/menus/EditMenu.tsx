@@ -1,4 +1,5 @@
 import type { MenuItemContrib } from '../../../stores/pluginContribStore';
+import { showConfirm } from '../../../utils/dialog';
 import { appendRoadItemsToEdit, type TranslateFn } from '../menuDefinitions';
 import { MenuSection, type MenuSectionInteractionProps } from './MenuSection';
 
@@ -48,8 +49,9 @@ export function EditMenu({
         {
           label: t('menu.deleteSelected'),
           shortcut: 'Del',
-          action: () => {
-            void onDelete();
+          action: async () => {
+            const confirmed = await showConfirm(t('dialog.confirmDelete'));
+            if (confirmed) void onDelete();
           },
         },
       ],
