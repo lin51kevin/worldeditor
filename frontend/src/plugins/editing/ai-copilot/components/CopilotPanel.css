@@ -16,6 +16,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: relative;
   padding: var(--space-2, 8px) var(--space-3, 12px);
   border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
   flex-shrink: 0;
@@ -26,13 +27,16 @@
 .copilot-title {
   font-weight: var(--font-weight-semibold, 600);
   font-size: var(--font-size-sm, 12px);
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .copilot-header-actions {
   display: flex;
   align-items: center;
   gap: 2px;
+  margin-left: auto;
 }
 
 .copilot-icon-btn {
@@ -214,7 +218,6 @@
 .copilot-provider-name {
   font-size: var(--font-size-xs, 11px);
   color: var(--color-text-secondary, #888);
-  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

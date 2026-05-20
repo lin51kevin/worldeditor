@@ -69,7 +69,7 @@ export function QuickCommands({ visible, commands, onSelect, filter = '' }: Prop
           onClick={() => onSelect(cmd.command + ' ')}
           className={`copilot-quick-cmd-item ${i === selectedIndex ? 'copilot-quick-cmd-item--selected' : ''}`}
         >
-          <span className="copilot-quick-cmd-label">{cmd.label}</span>
+          <span className="copilot-quick-cmd-label">{cmd.command}</span>
           <span className="copilot-quick-cmd-desc">{cmd.description}</span>
         </div>
       ))}

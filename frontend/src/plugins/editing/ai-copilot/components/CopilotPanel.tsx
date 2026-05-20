@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { CopilotEngine } from '../core/copilot-engine';
 import type { CopilotEngineCallbacks } from '../core/copilot-engine';
 import { getQuickCommandList } from '../core/intent-parser';
-import { loadConfig, saveConfig } from '../core/config-store';
+import { loadConfig } from '../core/config-store';
 import type { CopilotConfig } from '../core/config-store';
 import type { ActionResult } from '../core/action-executor';
 import { usePluginContribStore } from '../../../../stores/pluginContribStore';
@@ -157,13 +157,6 @@ export function CopilotPanel() {
     engineRef.current?.reset();
   }, []);
 
-  const handleToggleApplyMode = useCallback(() => {
-    const next = config.applyMode === 'auto' ? 'manual' : 'auto';
-    const newConfig: CopilotConfig = { ...config, applyMode: next };
-    setConfig(newConfig);
-    saveConfig(newConfig);
-  }, [config]);
-
   const handleSettingsSave = useCallback((newConfig: CopilotConfig) => {
     setConfig(newConfig);
     setShowSettings(false);
@@ -175,14 +168,13 @@ export function CopilotPanel() {
 
   const commands = getQuickCommandList();
   const activeProvider = config.providers[config.activeProviderId];
-  const isAuto = config.applyMode === 'auto';
   const tipCommand = commands[0]?.command ?? '/road add';
 
   return (
     <div ref={panelRef} className="copilot-panel">
       {/* Title bar — also acts as FloatingPanel drag handle */}
       <div className="copilot-header plugin-panel-header">
-        <span className="copilot-title">{t('copilot.title')}</span>
+        <span className="copilot-title">AI Copilot</span>
         <div className="copilot-header-actions">
           <button
             className="copilot-icon-btn"
@@ -264,7 +256,7 @@ export function CopilotPanel() {
                 rows={2}
               />
 
-              {/* Footer: provider name + apply mode badge + send/stop button */}
+              {/* Footer: provider name + send/stop button */}
               <div className="copilot-input-footer">
                 <div className="copilot-input-footer-left">
                   <span className="copilot-provider-name">
@@ -272,13 +264,6 @@ export function CopilotPanel() {
                       ? `${activeProvider.name} (${activeProvider.model})`
                       : t('copilot.noProvider')}
                   </span>
-                  <button
-                    className={`copilot-mode-badge${isAuto ? ' copilot-mode-badge--auto' : ''}`}
-                    onClick={handleToggleApplyMode}
-                    title={isAuto ? t('copilot.applyModeAutoTooltip') : t('copilot.applyModeManualTooltip')}
-                  >
-                    {isAuto ? t('copilot.applyModeAuto') : t('copilot.applyModeManual')}
-                  </button>
                 </div>
                 {isLoading ? (
                   <button

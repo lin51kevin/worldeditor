@@ -134,9 +134,9 @@ async function typeAndSubmit(text: string) {
 // ─── Tests ───
 
 describe('CopilotPanel', () => {
-  it('1. 面板渲染：显示标题"AI 助手"和输入框', () => {
+  it('1. 面板渲染：显示标题"AI Copilot"和输入框', () => {
     renderPanel();
-    expect(screen.getByText('AI 助手')).toBeInTheDocument();
+    expect(screen.getByText('AI Copilot')).toBeInTheDocument();
     expect(getInput()).toBeInTheDocument();
   });
 
@@ -151,8 +151,8 @@ describe('CopilotPanel', () => {
     const input = getInput();
     fireEvent.change(input, { target: { value: '/' } });
     await act(async () => {});
-    expect(screen.getByText('Add Road')).toBeInTheDocument();
-    expect(screen.getByText('Delete Road')).toBeInTheDocument();
+    expect(screen.getByText('/road add [length]')).toBeInTheDocument();
+    expect(screen.getByText('/road delete')).toBeInTheDocument();
   });
 
   it('4. 选择快捷命令：输入框填入命令文本', async () => {
@@ -160,7 +160,7 @@ describe('CopilotPanel', () => {
     const input = getInput();
     fireEvent.change(input, { target: { value: '/' } });
     await act(async () => {});
-    fireEvent.click(screen.getByText('Add Road'));
+    fireEvent.click(screen.getByText('/road add [length]'));
     await act(async () => {});
     expect(input.value).toBe('/road add [length] ');
   });
@@ -353,7 +353,7 @@ describe('CopilotPanel', () => {
 
   it('19. 面板只有一个标题栏（无重复 header）', () => {
     renderPanel();
-    const titles = screen.getAllByText('AI 助手');
+    const titles = screen.getAllByText('AI Copilot');
     // Only one title should exist (the copilot-header, no plugin-panel-header)
     expect(titles).toHaveLength(1);
   });

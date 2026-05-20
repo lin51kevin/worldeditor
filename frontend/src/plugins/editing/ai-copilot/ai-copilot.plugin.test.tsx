@@ -63,8 +63,8 @@ describe('AI Copilot Plugin', () => {
 
     render(<PanelComponent />);
 
-    // Title renders (zh locale: "对话")
-    expect(screen.getByText('对话')).toBeInTheDocument();
+    // Title renders as hardcoded "AI Copilot"
+    expect(screen.getByText('AI Copilot')).toBeInTheDocument();
 
     // Message area exists
     const messageArea = screen.getByTestId('copilot-messages');
