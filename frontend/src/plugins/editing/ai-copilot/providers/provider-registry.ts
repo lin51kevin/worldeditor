@@ -54,16 +54,63 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
     type: 'cloud',
     baseUrl: 'https://openrouter.ai/api/v1',
     models: [
+      // ── 免费模型 ──
       'meta-llama/llama-3.3-70b-instruct:free',
       'qwen/qwen3-coder:free',
       'google/gemma-3-27b-it:free',
+      'mistralai/mistral-small-3.1-24b-instruct:free',
+      // ── DeepSeek ──
+      'deepseek/deepseek-chat-v3-0324',
       'deepseek/deepseek-chat',
       'deepseek/deepseek-r1',
+      'deepseek/deepseek-r1-0528',
+      'deepseek/deepseek-v3-0324',
+      'deepseek/deepseek-prover-v2',
+      // ── 智谱 (Zhipu) ──
+      'zhipu/glm-4-plus',
+      'zhipu/glm-4-air',
+      'zhipu/glm-4-flash',
+      'zhipu/glm-4-long',
+      // ── MiniMax ──
+      'minimax/minimax-01',
+      'minimax/minimax-m1',
+      // ── Moonshot / Kimi ──
+      'moonshot/moonshot-v1-auto',
+      'moonshot/moonshot-v1-32k',
+      'moonshot/moonshot-v1-128k',
+      // ── Qwen (通义千问) ──
+      'qwen/qwen3-235b-a22b',
+      'qwen/qwen3-32b',
+      'qwen/qwen3-30b-a3b',
+      'qwen/qwen3-coder',
+      'qwen/qwen-turbo',
+      'qwen/qwen-plus',
+      'qwen/qwen-max',
+      // ── Google ──
+      'google/gemini-2.5-pro-preview',
+      'google/gemini-2.5-flash-preview',
+      'google/gemini-2.0-flash-001',
+      // ── OpenAI ──
       'openai/gpt-4o',
+      'openai/gpt-4o-mini',
+      'openai/gpt-4.1',
+      'openai/gpt-4.1-mini',
+      'openai/o3-mini',
+      // ── Anthropic ──
       'anthropic/claude-sonnet-4',
+      'anthropic/claude-3.5-sonnet',
+      'anthropic/claude-3.5-haiku',
+      // ── Meta Llama ──
+      'meta-llama/llama-3.3-70b-instruct',
+      'meta-llama/llama-4-maverick',
+      'meta-llama/llama-4-scout',
+      // ── Mistral ──
+      'mistralai/mistral-large-2411',
+      'mistralai/mistral-medium-3',
+      'mistralai/codestral-2501',
     ],
-    defaultModel: 'meta-llama/llama-3.3-70b-instruct:free',
-    description: '200+ 模型统一入口，免费模型 ID 末尾带 :free',
+    defaultModel: 'deepseek/deepseek-chat',
+    description: '200+ 模型统一入口，支持手动输入任意模型 ID',
     apiKeyUrl: 'https://openrouter.ai/settings/keys',
     apiKeyPlaceholder: 'sk-or-v1-...',
   },
