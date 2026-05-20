@@ -38,7 +38,11 @@ export function Viewport() {
   const rendererRef = useRef<ViewportRenderer | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useViewportDrop(rendererRef, canvasRef);
-  const { showGrid, showAxis, showHoverHighlight, dimension, viewMode } = useViewportStore();
+  const showGrid = useViewportStore((s) => s.showGrid);
+  const showAxis = useViewportStore((s) => s.showAxis);
+  const showHoverHighlight = useViewportStore((s) => s.showHoverHighlight);
+  const dimension = useViewportStore((s) => s.dimension);
+  const viewMode = useViewportStore((s) => s.viewMode);
   const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
