@@ -13,7 +13,7 @@ import {
   Magnet,
   Ruler,
   RotateCcw,
-  Sparkles,
+  Bot,
 } from 'lucide-react';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
 import { useBuiltinPluginStore } from '../../stores/builtinPluginStore';
@@ -431,14 +431,6 @@ export function MenuBar({
           >
             <Ruler size={14} />
           </button>
-          <button
-            className={`menubar-action-btn ${copilotPanelVisible ? 'active' : ''}`}
-            onClick={toggleCopilotPanel}
-            title={t('toolbar.copilotTitle')}
-            aria-label={t('toolbar.copilot')}
-          >
-            <Sparkles size={14} />
-          </button>
         </div>
       </div>
 
@@ -449,6 +441,14 @@ export function MenuBar({
       </div>
 
       <div className="menubar-right">
+        <button
+          className={`menubar-action-btn ${copilotPanelVisible ? 'active' : ''}`}
+          onClick={toggleCopilotPanel}
+          title={t('toolbar.copilotTitle')}
+          aria-label={t('toolbar.copilot')}
+        >
+          <Bot size={14} />
+        </button>
         <button
           className="menubar-icon-btn"
           onClick={toggleLanguage}
@@ -463,7 +463,9 @@ export function MenuBar({
           onClick={toggleTheme}
           title={theme === 'dark' ? t('toolbar.switchToLight') : t('toolbar.switchToDark')}
         >
-          {theme === 'dark' ? '☀' : '☾'}
+           <span className="menubar-lang-label">
+            {theme === 'dark' ? '☀' : '☾'}
+          </span>
         </button>
       </div>
     </div>

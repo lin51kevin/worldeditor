@@ -1,5 +1,7 @@
 .menubar {
-  position: absolute;
+  /* Make menubar fixed to viewport top so it is not affected by stacking contexts
+     (floating panels may create new stacking contexts using transform/opacity). */
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
@@ -210,10 +212,18 @@
 }
 
 .menubar-lang-label {
+  margin-top: 4px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  /* match icon size */
+  height: 14px;
+  text-align: center;
 }
 
 .menubar-brand {
