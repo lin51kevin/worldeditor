@@ -208,15 +208,16 @@ interface SectionAccumulator {
   rightLanes: ProtoLaneTopo[];
 }
 
+const pb: any = (protobuf as any).default ?? protobuf;
 let protoRootPromise: Promise<protobuf.Root> | null = null;
 
 /** Builds and caches the GeoZ protobuf schema root from bundled .proto sources. */
 export async function buildGeoZProtoRoot(): Promise<protobuf.Root> {
   if (!protoRootPromise) {
     protoRootPromise = Promise.resolve().then(() => {
-      const root = new protobuf.Root();
+      const root = new (pb.Root)();
       for (const source of PROTO_SOURCES) {
-        protobuf.parse(source.content, root, {
+        pb.parse(source.content, root, {
           keepCase: true,
           alternateCommentMode: true,
         });
