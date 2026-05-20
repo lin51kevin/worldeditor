@@ -168,7 +168,18 @@ export function FloatingPanel({
     const y = initialCenter
       ? Math.round((window.innerHeight - h) / 2) + (initialCenterOffset?.y ?? 0)
       : Math.round(brc.top);
-    setRect({ x, y, w, h });
+    // Delay persisting rect until after layout stabilizes to avoid capturing transient values
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setRect({ x, y, w, h });
+      });
+    });
+    return () => {
+      if (raf1) cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-clamp position when the browser viewport is resized

@@ -89,7 +89,8 @@ export function PluginPanels() {
               ...(contrib.position !== 'bottom' && contrib.position !== 'float'
                 ? { top: `calc(var(--menubar-height) + ${12 + index * 24}px)` }
                 : {}),
-              zIndex: activeId === contrib.id ? 25 : undefined,
+              // Keep plugin panels below menubar by capping zIndex to < var(--z-menubar).
+              zIndex: activeId === contrib.id ? 35 : undefined,
             }}
           >
             <div className="plugin-panel-shell" data-panel-id={contrib.id}>
