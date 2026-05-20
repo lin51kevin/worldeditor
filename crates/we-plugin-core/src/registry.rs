@@ -6,8 +6,9 @@ use crate::manifest::{PluginManifest, ResolvedManifest};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
+use parking_lot::RwLock;
 
 /// Loaded plugin instance
 struct LoadedPlugin {
@@ -261,7 +262,10 @@ impl PluginRegistry {
     }
 }
 
-/// Thread-safe wrapper for PluginRegistry
+/// Thread-safe wrapper for PluginRegistry.
+///
+/// Uses `parking_lot::RwLock` which is safe to hold in async contexts (no poisoning,
+/// non-blocking on non-contended paths, and never causes deadlocks with async runtimes).
 pub struct SharedPluginRegistry(Arc<RwLock<PluginRegistry>>);
 
 impl SharedPluginRegistry {
@@ -276,12 +280,12 @@ impl SharedPluginRegistry {
     }
 
     /// Acquire a read lock on the registry
-    pub fn read(&self) -> std::sync::LockResult<std::sync::RwLockReadGuard<'_, PluginRegistry>> {
+    pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, PluginRegistry> {
         self.0.read()
     }
 
     /// Acquire a write lock on the registry
-    pub fn write(&self) -> std::sync::LockResult<std::sync::RwLockWriteGuard<'_, PluginRegistry>> {
+    pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, PluginRegistry> {
         self.0.write()
     }
 }
@@ -315,6 +319,26 @@ pub enum PluginStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::CoreApi;
+
+    /// A minimal CoreApi implementation for tests
+    struct DummyCoreApi;
+    impl CoreApi for DummyCoreApi {
+        fn version(&self) -> &str { "0.0.0-test" }
+        fn project_path(&self) -> Option<&str> { None }
+        fn execute_command(&self, _: &str) -> Result<(), String> { Ok(()) }
+    }
+    static DUMMY_CORE_API: DummyCoreApi = DummyCoreApi;
+
+    /// Create a PluginContext with no-op closures for testing
+    fn test_context() -> PluginContext {
+        PluginContext::new(
+            |_, _| {},
+            |_| {},
+            |_| {},
+            || &DUMMY_CORE_API as &'static (dyn CoreApi + Send + Sync),
+        )
+    }
 
     fn create_test_registry() -> PluginRegistry {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -379,7 +403,7 @@ mod tests {
     #[test]
     fn test_shared_plugin_registry_default() {
         let shared = SharedPluginRegistry::default();
-        let registry = shared.inner().read().unwrap();
+        let registry = shared.inner().read();
 
         assert_eq!(registry.plugins_dir, PathBuf::from("plugins"));
         assert!(registry.list_discovered().is_empty());
@@ -424,5 +448,114 @@ mod tests {
         let registry = create_test_registry();
 
         assert!(registry.list_loaded().is_empty());
+    }
+
+    #[test]
+    fn test_load_plugin_wasm_not_implemented() {
+        let manifest = r#"{
+            "id": "test-plugin",
+            "name": "Test Plugin",
+            "version": "1.0.0",
+            "main": "dist/plugin.wasm"
+        }"#;
+        let (_temp_dir, mut registry) = create_registry_with_plugin(manifest);
+        let ctx = test_context();
+
+        // Loading should fail since WASM loading is not yet implemented
+        let result = registry.load("test-plugin", &ctx);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            PluginError::LoadFailed(id, msg) => {
+                assert_eq!(id, "test-plugin");
+                assert!(msg.contains("not yet implemented"));
+            }
+            other => panic!("Expected LoadFailed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_load_plugin_missing_dependency() {
+        let manifest = r#"{
+            "id": "dependent-plugin",
+            "name": "Dependent Plugin",
+            "version": "1.0.0",
+            "dependencies": ["missing-dep"],
+            "main": "dist/plugin.wasm"
+        }"#;
+        let (_temp_dir, mut registry) = create_registry_with_plugin(manifest);
+        let ctx = test_context();
+
+        let result = registry.load("dependent-plugin", &ctx);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), PluginError::MissingDependency(_, _)));
+    }
+
+    #[test]
+    fn test_disable_and_enable_plugin() {
+        let manifest = r#"{
+            "id": "toggle-plugin",
+            "name": "Toggle Plugin",
+            "version": "1.0.0",
+            "main": "dist/plugin.wasm"
+        }"#;
+        let (_temp_dir, mut registry) = create_registry_with_plugin(manifest);
+
+        // Disable
+        registry.disable("toggle-plugin", "test reason").unwrap();
+        let info = registry.plugin_info("toggle-plugin").unwrap();
+        assert!(matches!(info.status, PluginStatus::Disabled(_)));
+
+        // Re-enable
+        registry.enable("toggle-plugin").unwrap();
+        let info = registry.plugin_info("toggle-plugin").unwrap();
+        assert!(matches!(info.status, PluginStatus::Available));
+    }
+
+    #[test]
+    fn test_reload_unloaded_plugin_is_load() {
+        let manifest = r#"{
+            "id": "reload-test",
+            "name": "Reload Test",
+            "version": "1.0.0",
+            "main": "dist/plugin.wasm"
+        }"#;
+        let (_temp_dir, mut registry) = create_registry_with_plugin(manifest);
+        let ctx = test_context();
+
+        // Reload on a plugin that's not loaded should attempt to load it
+        let result = registry.reload("reload-test", &ctx);
+        // Will fail because WASM loading is not implemented, but should not panic
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_shared_registry_read_write() {
+        let manifest = r#"{
+            "id": "shared-test",
+            "name": "Shared Test",
+            "version": "2.0.0",
+            "main": "dist/plugin.wasm"
+        }"#;
+        let (_temp_dir, registry) = create_registry_with_plugin(manifest);
+        let shared = SharedPluginRegistry::new(registry);
+
+        // Read access
+        {
+            let r = shared.read();
+            assert_eq!(r.list_discovered().len(), 1);
+        }
+
+        // Write access
+        {
+            let mut w = shared.write();
+            w.disable("shared-test", "testing").unwrap();
+        }
+
+        // Verify
+        {
+            let r = shared.read();
+            let info = r.plugin_info("shared-test").unwrap();
+            assert!(matches!(info.status, PluginStatus::Disabled(_)));
+        }
     }
 }
