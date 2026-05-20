@@ -34,7 +34,7 @@ pub fn get_version() -> String {
 pub fn wgs84_to_gcj02(lat: f64, lon: f64, alt: f64) -> Value {
     let coord = we_core::gis::GeoCoord::new(lat, lon, alt);
     let result = we_core::gis::wgs84_to_gcj02(&coord);
-    serde_json::json!({ "lat": result.lat, "lon": result.lon, "alt": result.alt })
+    geo_coord_to_json(&result)
 }
 
 /// Convert GCJ-02 coordinates to WGS84.
@@ -42,7 +42,7 @@ pub fn wgs84_to_gcj02(lat: f64, lon: f64, alt: f64) -> Value {
 pub fn gcj02_to_wgs84(lat: f64, lon: f64, alt: f64) -> Value {
     let coord = we_core::gis::GeoCoord::new(lat, lon, alt);
     let result = we_core::gis::gcj02_to_wgs84(&coord);
-    serde_json::json!({ "lat": result.lat, "lon": result.lon, "alt": result.alt })
+    geo_coord_to_json(&result)
 }
 
 /// Convert WGS84 to UTM.
@@ -64,6 +64,11 @@ pub fn geo_to_utm(lat: f64, lon: f64, alt: f64) -> Value {
 pub fn utm_to_geo(easting: f64, northing: f64, zone: u8, is_northern: bool, alt: f64) -> Value {
     let utm = we_core::gis::UtmCoord::new(easting, northing, zone, is_northern, alt);
     let coord = we_core::gis::utm_to_geo(&utm);
+    geo_coord_to_json(&coord)
+}
+
+/// Helper to serialize a GeoCoord to JSON.
+fn geo_coord_to_json(coord: &we_core::gis::GeoCoord) -> Value {
     serde_json::json!({ "lat": coord.lat, "lon": coord.lon, "alt": coord.alt })
 }
 
@@ -86,13 +91,7 @@ pub struct PluginInfoDto {
 /// List all plugins discovered in the plugins directory with their current status.
 #[tauri::command]
 pub fn plugin_list(registry: State<'_, SharedPluginRegistry>) -> Vec<PluginInfoDto> {
-    let inner = match registry.read() {
-        Ok(r) => r,
-        Err(e) => {
-            log::error!("plugin_list: registry lock poisoned: {}", e);
-            return vec![];
-        }
-    };
+    let inner = registry.read();
 
     let ids: Vec<String> = inner
         .list_discovered()
@@ -131,7 +130,7 @@ pub fn plugin_get_script(
     if id.contains('/') || id.contains('\\') || id.contains("..") || id.is_empty() {
         return Err("Invalid plugin id".to_string());
     }
-    let inner = registry.read().map_err(|e| e.to_string())?;
+    let inner = registry.read();
     let script_path = inner.plugins_dir().join(&id).join("dist").join("plugin.js");
     std::fs::read_to_string(&script_path)
         .map_err(|e| format!("Cannot read plugin script for '{}': {}", id, e))
@@ -142,7 +141,6 @@ pub fn plugin_get_script(
 pub fn plugin_enable(id: String, registry: State<'_, SharedPluginRegistry>) -> Result<(), String> {
     registry
         .write()
-        .map_err(|e| e.to_string())?
         .enable(&id)
         .map_err(|e| e.to_string())
 }
@@ -156,12 +154,14 @@ pub fn plugin_disable(
 ) -> Result<(), String> {
     registry
         .write()
-        .map_err(|e| e.to_string())?
         .disable(&id, &reason)
         .map_err(|e| e.to_string())
 }
 
 /// Copy a plugin directory into the managed plugins folder and re-discover.
+///
+/// Uses an atomic "copy to temp then rename" strategy to prevent data loss
+/// if the copy fails mid-way.
 ///
 /// `src_path` must be the path to a plugin directory containing a `manifest.json`.
 #[tauri::command]
@@ -191,20 +191,47 @@ pub fn plugin_install(
     manifest.validate().map_err(|e| e.to_string())?;
 
     let dest = {
-        let inner = registry.read().map_err(|e| e.to_string())?;
+        let inner = registry.read();
         let dir_name = canonical
             .file_name()
             .ok_or("Invalid source path: no directory name")?;
         inner.plugins_dir().join(dir_name)
     };
 
-    if dest.exists() {
-        std::fs::remove_dir_all(&dest)
-            .map_err(|e| format!("Cannot remove existing plugin: {}", e))?;
+    // Atomic install: copy to a temporary directory first, then rename.
+    // This prevents data loss if the copy fails mid-way.
+    let temp_dest = dest.with_extension("_installing");
+    if temp_dest.exists() {
+        std::fs::remove_dir_all(&temp_dest)
+            .map_err(|e| format!("Cannot clean up temp install dir: {}", e))?;
     }
-    copy_dir_all(&canonical, &dest).map_err(|e| format!("Cannot copy plugin files: {}", e))?;
+    copy_dir_all(&canonical, &temp_dest)
+        .map_err(|e| {
+            // Clean up partial temp on failure
+            let _ = std::fs::remove_dir_all(&temp_dest);
+            format!("Cannot copy plugin files: {}", e)
+        })?;
 
-    registry.write().map_err(|e| e.to_string())?.discover();
+    // Now atomically replace the old directory
+    if dest.exists() {
+        let backup = dest.with_extension("_backup");
+        if backup.exists() {
+            let _ = std::fs::remove_dir_all(&backup);
+        }
+        std::fs::rename(&dest, &backup)
+            .map_err(|e| format!("Cannot backup existing plugin: {}", e))?;
+        if let Err(e) = std::fs::rename(&temp_dest, &dest) {
+            // Restore backup on failure
+            let _ = std::fs::rename(&backup, &dest);
+            return Err(format!("Cannot install plugin: {}", e));
+        }
+        let _ = std::fs::remove_dir_all(&backup);
+    } else {
+        std::fs::rename(&temp_dest, &dest)
+            .map_err(|e| format!("Cannot install plugin: {}", e))?;
+    }
+
+    registry.write().discover();
     log::info!("Installed plugin from: {}", src_path);
     Ok(())
 }
