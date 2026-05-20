@@ -93,6 +93,8 @@ pub struct SpatialIndex {
     cell_size: f64,
     grid: HashMap<CellKey, Vec<usize>>,
     entries: Vec<SpatialEntry>,
+    /// O(1) ID-to-index lookup.
+    id_index: HashMap<String, usize>,
 }
 
 impl SpatialIndex {
@@ -120,11 +122,13 @@ impl SpatialIndex {
         let cell_size = cell_size.max(1.0); // prevent degenerate cells
         let mut entries = Vec::new();
         let mut grid: HashMap<CellKey, Vec<usize>> = HashMap::new();
+        let mut id_index: HashMap<String, usize> = HashMap::new();
 
         // Index roads
         for road in &project.roads {
             if let Some(aabb) = compute_road_aabb(road) {
                 let idx = entries.len();
+                id_index.insert(road.id.clone(), idx);
                 entries.push(SpatialEntry {
                     id: road.id.clone(),
                     kind: ElementKind::Road,
@@ -138,6 +142,7 @@ impl SpatialIndex {
         for junction in &project.junctions {
             if let Some(aabb) = compute_junction_aabb(project, junction) {
                 let idx = entries.len();
+                id_index.insert(junction.id.clone(), idx);
                 entries.push(SpatialEntry {
                     id: junction.id.clone(),
                     kind: ElementKind::Junction,
@@ -151,6 +156,7 @@ impl SpatialIndex {
             cell_size,
             grid,
             entries,
+            id_index,
         }
     }
 
@@ -195,8 +201,10 @@ impl SpatialIndex {
     }
 
     /// Get the bounding box of a specific element.
+    ///
+    /// Uses a HashMap lookup for O(1) average access instead of linear scan.
     pub fn get_aabb(&self, id: &str) -> Option<Aabb> {
-        self.entries.iter().find(|e| e.id == id).map(|e| e.aabb)
+        self.id_index.get(id).map(|&idx| self.entries[idx].aabb)
     }
 
     /// Total number of indexed elements.

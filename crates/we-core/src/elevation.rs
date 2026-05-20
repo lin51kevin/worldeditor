@@ -113,19 +113,24 @@ pub fn move_elevation_point(
 ///
 /// Each interior point's height is averaged with its neighbors.
 /// `iterations` controls how many smoothing passes to apply.
+///
+/// Uses double-buffering to avoid per-iteration cloning for better performance.
 pub fn smooth_elevation_profile(profile: &[Elevation], iterations: u32) -> Vec<Elevation> {
     if profile.len() < 3 {
         return profile.to_vec();
     }
-    let mut result = profile.to_vec();
+    let mut current = profile.to_vec();
+    let mut scratch: Vec<f64> = current.iter().map(|e| e.a).collect();
     for _ in 0..iterations {
-        let prev = result.clone();
-        for i in 1..prev.len() - 1 {
-            result[i].a = (prev[i - 1].a + prev[i].a + prev[i + 1].a) / 3.0;
+        for i in 1..current.len() - 1 {
+            scratch[i] = (current[i - 1].a + current[i].a + current[i + 1].a) / 3.0;
+        }
+        for i in 1..current.len() - 1 {
+            current[i].a = scratch[i];
         }
     }
-    recompute_elevation_tangents(&mut result);
-    result
+    recompute_elevation_tangents(&mut current);
+    current
 }
 
 /// Recompute tangent coefficients (b, c, d) for smooth cubic interpolation

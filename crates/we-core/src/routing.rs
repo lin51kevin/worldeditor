@@ -189,39 +189,49 @@ pub fn find_reachable_roads(
             .push((&edge.to, edge.weight));
     }
 
-    let mut visited: HashMap<&RouteNode, (f64, Vec<String>)> = HashMap::new();
-    let mut queue: Vec<(&RouteNode, f64, Vec<String>, usize)> =
-        vec![(source, 0.0, vec![source.road_id.clone()], 0)];
+    // Use predecessor-based path reconstruction to avoid cloning paths per expansion.
+    let mut visited: HashMap<&RouteNode, (f64, Option<&RouteNode>, usize)> = HashMap::new();
+    let mut queue: Vec<(&RouteNode, f64, Option<&RouteNode>, usize)> =
+        vec![(source, 0.0, None, 0)];
 
-    while let Some((node, cost, path, depth)) = queue.pop() {
+    while let Some((node, cost, prev, depth)) = queue.pop() {
         if depth > max_hops {
             continue;
         }
         if visited.contains_key(node) {
             continue;
         }
-        visited.insert(node, (cost, path.clone()));
+        visited.insert(node, (cost, prev, depth));
 
         if let Some(neighbors) = adj.get(node) {
             for (next, weight) in neighbors {
                 if !visited.contains_key(next) {
-                    let mut new_path = path.clone();
-                    new_path.push(next.road_id.clone());
-                    queue.push((next, cost + weight, new_path, depth + 1));
+                    queue.push((next, cost + weight, Some(node), depth + 1));
                 }
             }
         }
     }
 
+    // Reconstruct paths from predecessors
     visited
-        .into_iter()
-        .filter(|(node, _)| *node != source)
-        .map(|(node, (total_length, road_ids))| {
+        .iter()
+        .filter(|(node, _)| **node != source)
+        .map(|(node, (total_length, _, _))| {
+            let mut road_ids = Vec::new();
+            let mut current: &RouteNode = node;
+            road_ids.push(current.road_id.clone());
+            while let Some((_, Some(prev), _)) = visited.get(current) {
+                current = prev;
+                road_ids.push(current.road_id.clone());
+            }
+            road_ids.reverse();
+            // Deduplicate consecutive identical road IDs
+            road_ids.dedup();
             (
-                node.clone(),
+                (*node).clone(),
                 Route {
                     road_ids,
-                    total_length,
+                    total_length: *total_length,
                 },
             )
         })
