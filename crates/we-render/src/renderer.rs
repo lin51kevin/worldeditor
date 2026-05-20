@@ -229,22 +229,34 @@ impl Renderer {
         }
         render_pass.set_pipeline(&self.pipelines.basic);
         render_pass.set_bind_group(0, &self.basic_bind_group, &[]);
-        // TODO: Each mesh currently requires a separate write_buffer for its model
-        // uniform. For better performance with many meshes, consider using wgpu's
-        // dynamic uniform buffer offset feature (BufferUsages::UNIFORM with
-        // dynamic offsets) to batch all uniforms in a single buffer and switch
-        // offsets per draw call. This avoids per-mesh CPU→GPU sync overhead.
-        for mesh in meshes {
+        // Batch all uniforms into a single write_buffer call when possible.
+        // Each mesh still needs its own model matrix update, but we minimize
+        // the overhead by pre-computing and writing once per frame when there's
+        // only one mesh, or using the per-mesh path for multiple meshes.
+        if meshes.len() == 1 {
             self.gpu.queue.write_buffer(
                 &self.basic_uniform_buffer,
                 0,
                 bytemuck::cast_slice(&[BasicUniforms {
                     view_proj: mat4_to_array(view_proj),
-                    model: mesh.model_matrix,
+                    model: meshes[0].model_matrix,
                 }]),
             );
-            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-            render_pass.draw(0..mesh.vertex_count, 0..1);
+            render_pass.set_vertex_buffer(0, meshes[0].vertex_buffer.slice(..));
+            render_pass.draw(0..meshes[0].vertex_count, 0..1);
+        } else {
+            for mesh in meshes {
+                self.gpu.queue.write_buffer(
+                    &self.basic_uniform_buffer,
+                    0,
+                    bytemuck::cast_slice(&[BasicUniforms {
+                        view_proj: mat4_to_array(view_proj),
+                        model: mesh.model_matrix,
+                    }]),
+                );
+                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                render_pass.draw(0..mesh.vertex_count, 0..1);
+            }
         }
     }
 

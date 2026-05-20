@@ -120,7 +120,7 @@ pub fn generate_sign_post(
     sign_height: f64,
     color: [f32; 4],
 ) -> Vec<ColorVertex> {
-    let mut vertices = Vec::new();
+    let mut vertices = Vec::with_capacity(72); // 2 boxes * 36 vertices
 
     // Generate the pole (thin vertical cylinder approximated as box)
     let pole_color = [0.3, 0.3, 0.3, 1.0]; // Dark gray pole
@@ -152,7 +152,8 @@ pub fn generate_sign_post(
 
 /// Generate render data for all objects on a road.
 pub fn generate_object_render_data(objects: &[RoadObject]) -> Vec<ColorVertex> {
-    let mut vertices = Vec::new();
+    // Pre-allocate based on estimated vertex count (36 per box per object)
+    let mut vertices = Vec::with_capacity(objects.len() * 36);
 
     for obj in objects {
         let color = object_color(&obj.object_type);
