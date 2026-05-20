@@ -251,8 +251,8 @@ function clamp(value: number, min: number, max: number): number {
 function saveLayout(layout: PanelLayout): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
-  } catch {
-    // Ignore storage errors
+  } catch (e) {
+    console.warn('[ViewportStore] Failed to save layout:', e);
   }
 }
 
@@ -263,8 +263,8 @@ function loadLayout(): PanelLayout {
       const parsed = JSON.parse(saved) as Partial<PanelLayout>;
       return { ...DEFAULT_LAYOUT, ...parsed };
     }
-  } catch {
-    // Ignore parse errors
+  } catch (e) {
+    console.warn('[ViewportStore] Failed to load layout, using defaults:', e);
   }
   return DEFAULT_LAYOUT;
 }
@@ -278,8 +278,8 @@ function saveDisplay(display: DisplaySettings): void {
   displayPersistTimer = setTimeout(() => {
     try {
       localStorage.setItem(DISPLAY_STORAGE_KEY, JSON.stringify(display));
-    } catch {
-      // Ignore storage errors
+    } catch (e) {
+      console.warn('[ViewportStore] Failed to save display settings:', e);
     }
   }, 100);
 }
@@ -291,16 +291,56 @@ function loadDisplay(): DisplaySettings {
       const parsed = JSON.parse(saved) as Partial<DisplaySettings>;
       return { ...DEFAULT_DISPLAY, ...parsed };
     }
-  } catch {
-    // Ignore parse errors
+  } catch (e) {
+    console.warn('[ViewportStore] Failed to load display settings, using defaults:', e);
   }
   return DEFAULT_DISPLAY;
 }
 
+// User preferences persistence (editMode, snap settings, grid/axis visibility)
+interface UserPreferences {
+  showGrid?: boolean;
+  showAxis?: boolean;
+  snapEnabled?: boolean;
+  snapMode?: SnapType;
+  snapThreshold?: number;
+  gridSnapSize?: number;
+  dimension?: ViewDimension;
+  viewMode?: 'sketch' | 'wire' | 'solid';
+}
+
+const PREFS_STORAGE_KEY = STORAGE_KEYS.USER_PREFERENCES;
+
+let prefsPersistTimer: ReturnType<typeof setTimeout> | null = null;
+
+function savePrefs(prefs: UserPreferences): void {
+  if (prefsPersistTimer) clearTimeout(prefsPersistTimer);
+  prefsPersistTimer = setTimeout(() => {
+    try {
+      const existing = loadPrefs();
+      localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ ...existing, ...prefs }));
+    } catch (e) {
+      console.warn('[ViewportStore] Failed to save user preferences:', e);
+    }
+  }, 100);
+}
+
+function loadPrefs(): UserPreferences {
+  try {
+    const saved = localStorage.getItem(PREFS_STORAGE_KEY);
+    if (saved) return JSON.parse(saved) as UserPreferences;
+  } catch (e) {
+    console.warn('[ViewportStore] Failed to load user preferences:', e);
+  }
+  return {};
+}
+
+const storedPrefs = loadPrefs();
+
 export const useViewportStore = create<EditorViewState>((set) => ({
-  dimension: '2d',
-  showGrid: true,
-  showAxis: true,
+  dimension: storedPrefs.dimension ?? '2d',
+  showGrid: storedPrefs.showGrid ?? true,
+  showAxis: storedPrefs.showAxis ?? true,
   showHoverHighlight: false,
   editMode: 'default',
   splineTemplateId: 'tpl:road:single',
@@ -312,13 +352,13 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   tangentCoupling: 'mirror' as TangentCoupling,
   draggingKnot: null,
   cursorPreviewPos: null,
-  viewMode: 'solid',
+  viewMode: storedPrefs.viewMode ?? 'solid',
   display: loadDisplay(),
   layout: DEFAULT_LAYOUT,
-  snapEnabled: false,
-  snapMode: 'Grid' as SnapType,
-  snapThreshold: 5.0,
-  gridSnapSize: 1.0,
+  snapEnabled: storedPrefs.snapEnabled ?? false,
+  snapMode: storedPrefs.snapMode ?? 'Grid' as SnapType,
+  snapThreshold: storedPrefs.snapThreshold ?? 5.0,
+  gridSnapSize: storedPrefs.gridSnapSize ?? 1.0,
   drawSnapResult: null,
   snappedEndpoints: [],
   measureMode: 'none' as MeasureMode,
@@ -328,9 +368,9 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   geometryEditSpline: null,
   softSelectionRadius: 50.0,
 
-  setDimension: (dimension) => set({ dimension }),
-  toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
-  toggleAxis: () => set((state) => ({ showAxis: !state.showAxis })),
+  setDimension: (dimension) => { set({ dimension }); savePrefs({ dimension }); },
+  toggleGrid: () => set((state) => { const showGrid = !state.showGrid; savePrefs({ showGrid }); return { showGrid }; }),
+  toggleAxis: () => set((state) => { const showAxis = !state.showAxis; savePrefs({ showAxis }); return { showAxis }; }),
   toggleHoverHighlight: () => set((state) => ({ showHoverHighlight: !state.showHoverHighlight })),
   setEditMode: (editMode) => set({ editMode }),
   setSplineTemplateId: (splineTemplateId) => set({ splineTemplateId }),
@@ -354,13 +394,13 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   setSplineTangentInOverrides: (overrides) => set({ splineTangentInOverrides: overrides }),
   clearSplineTangentOverrides: () => set({ splineTangentOverrides: {}, splineTangentInOverrides: {} }),
   setTangentCoupling: (tangentCoupling) => set({ tangentCoupling }),
-  setViewMode: (viewMode) => set({ viewMode }),
+  setViewMode: (viewMode) => { set({ viewMode }); savePrefs({ viewMode }); },
 
   // Snapping actions
-  toggleSnap: () => set((state) => ({ snapEnabled: !state.snapEnabled })),
-  setSnapMode: (snapMode) => set({ snapMode }),
-  setSnapThreshold: (snapThreshold) => set({ snapThreshold: Math.max(0.1, snapThreshold) }),
-  setGridSnapSize: (gridSnapSize) => set({ gridSnapSize: Math.max(0.01, gridSnapSize) }),
+  toggleSnap: () => set((state) => { const snapEnabled = !state.snapEnabled; savePrefs({ snapEnabled }); return { snapEnabled }; }),
+  setSnapMode: (snapMode) => { set({ snapMode }); savePrefs({ snapMode }); },
+  setSnapThreshold: (snapThreshold) => { const val = Math.max(0.1, snapThreshold); set({ snapThreshold: val }); savePrefs({ snapThreshold: val }); },
+  setGridSnapSize: (gridSnapSize) => { const val = Math.max(0.01, gridSnapSize); set({ gridSnapSize: val }); savePrefs({ gridSnapSize: val }); },
 
   // Draw-mode endpoint snap actions
   setDrawSnapResult: (drawSnapResult) => set({ drawSnapResult }),

@@ -30,7 +30,8 @@ function loadFromStorage(): RecentFile[] {
         return { name, path, lastOpened: typeof r.lastOpened === 'number' ? r.lastOpened : 0 };
       })
       .filter((x): x is RecentFile => x !== null);
-  } catch {
+  } catch (e) {
+    console.warn('[RecentFiles] Failed to parse stored recent files, resetting:', e);
     return [];
   }
 }

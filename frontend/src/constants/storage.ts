@@ -21,6 +21,7 @@ export const STORAGE_KEYS = {
   // Viewport
   EDITOR_VIEW: 'we-editor-view',
   DISPLAY_SETTINGS: 'we-display-settings',
+  USER_PREFERENCES: 'we-user-prefs',
 
   // Events (read-only, not stored)
   LOG_EVENT: 'we-log',
