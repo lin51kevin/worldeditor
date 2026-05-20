@@ -157,3 +157,107 @@ describe('useKeyboardShortcuts — L/A/P no longer set draw modes', () => {
     expect(config.onSetEditMode).not.toHaveBeenCalled();
   });
 });
+
+describe('useKeyboardShortcuts — Ctrl+V/C/A pass through in editable targets', () => {
+  let config: ShortcutsConfig;
+
+  beforeEach(() => {
+    config = makeConfig();
+    renderHook(() => useKeyboardShortcuts(config));
+  });
+
+  it('Ctrl+V is not intercepted when focused on an input element', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true, cancelable: true, key: 'v', ctrlKey: true,
+    });
+    act(() => { input.dispatchEvent(event); });
+
+    // Native paste should work — event NOT prevented
+    expect(event.defaultPrevented).toBe(false);
+    document.body.removeChild(input);
+  });
+
+  it('Ctrl+C is not intercepted when focused on a textarea element', () => {
+    const textarea = document.createElement('textarea');
+    document.body.appendChild(textarea);
+    textarea.focus();
+
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true, cancelable: true, key: 'c', ctrlKey: true,
+    });
+    act(() => { textarea.dispatchEvent(event); });
+
+    expect(event.defaultPrevented).toBe(false);
+    document.body.removeChild(textarea);
+  });
+
+  it('Ctrl+A is not intercepted when focused on an input element', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true, cancelable: true, key: 'a', ctrlKey: true,
+    });
+    act(() => { input.dispatchEvent(event); });
+
+    expect(event.defaultPrevented).toBe(false);
+    document.body.removeChild(input);
+  });
+
+  it('Ctrl+Z is not intercepted when focused on an input element', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true, cancelable: true, key: 'z', ctrlKey: true,
+    });
+    act(() => { input.dispatchEvent(event); });
+
+    expect(event.defaultPrevented).toBe(false);
+    document.body.removeChild(input);
+  });
+
+  it('Ctrl+V still triggers editor paste when not on an editable element', () => {
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true, cancelable: true, key: 'v', ctrlKey: true,
+    });
+    act(() => { window.dispatchEvent(event); });
+
+    // Editor paste intercepted the event
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('Ctrl+B still toggles left panel when focused on an input', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true, cancelable: true, key: 'b', ctrlKey: true,
+    });
+    act(() => { input.dispatchEvent(event); });
+
+    expect(config.toggleLeftPanel).toHaveBeenCalledTimes(1);
+    document.body.removeChild(input);
+  });
+
+  it('Ctrl+J still toggles output panel when focused on an input', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true, cancelable: true, key: 'j', ctrlKey: true,
+    });
+    act(() => { input.dispatchEvent(event); });
+
+    expect(config.toggleOutputPanel).toHaveBeenCalledTimes(1);
+    document.body.removeChild(input);
+  });
+});

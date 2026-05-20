@@ -71,21 +71,44 @@ export async function executeIntent(intent: ParsedIntent): Promise<ActionResult>
   switch (action) {
     case 'addRoad': {
       const id = `Road-${Date.now()}`;
+      const length = params.length ? Number(params.length) : 100;
+      const totalLanes = params.lanes ? Number(params.lanes) : 2;
+      const bidirectional = params.bidirectional === true;
+      const laneWidth = params.laneWidth ? Number(params.laneWidth) : 3.5;
+
+      // Determine lane distribution
+      let leftCount: number;
+      let rightCount: number;
+      if (bidirectional) {
+        // Bidirectional: split lanes evenly left and right
+        leftCount = Math.floor(totalLanes / 2);
+        rightCount = Math.ceil(totalLanes / 2);
+      } else {
+        // Unidirectional: all lanes on right side
+        leftCount = 0;
+        rightCount = totalLanes;
+      }
+
+      const makeLane = (laneId: number, w: number) => ({
+        id: laneId, lane_type: 'driving', level: 0,
+        width: [{ s_offset: 0, a: w, b: 0, c: 0, d: 0 }],
+        road_marks: [], borders: [],
+        link: { predecessor: null, successor: null },
+      });
+
+      const leftLanes = Array.from({ length: leftCount }, (_, i) => makeLane(i + 1, laneWidth));
+      const rightLanes = Array.from({ length: rightCount }, (_, i) => makeLane(-(i + 1), laneWidth));
+
       const newRoad = {
         id,
         name: id,
-        length: 100,
-        plan_view: [{ s: 0, x: 0, y: 0, hdg: 0, length: 100, geo_type: 'Line' as const }],
+        length,
+        plan_view: [{ s: 0, x: 0, y: 0, hdg: 0, length, geo_type: 'Line' as const }],
         lane_sections: [{
-          s: 0, single_side: false,
-          left: [],
+          s: 0, single_side: !bidirectional && leftCount === 0,
+          left: leftLanes,
           center: [{ id: 0, lane_type: 'none', level: 0, width: [], road_marks: [], borders: [], link: { predecessor: null, successor: null } }],
-          right: [{
-            id: -1, lane_type: 'driving', level: 0,
-            width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }],
-            road_marks: [], borders: [],
-            link: { predecessor: null, successor: null },
-          }],
+          right: rightLanes,
         }],
         elevation_profile: [],
         link: { predecessor: null, successor: null },
@@ -93,7 +116,10 @@ export async function executeIntent(intent: ParsedIntent): Promise<ActionResult>
         signals: [],
       };
       store.addRoad(newRoad as any);
-      return { success: true, description: `已添加道路 ${id}` };
+
+      // Build description
+      const dirText = bidirectional ? '双向' : '单向';
+      return { success: true, description: `已添加${dirText}${totalLanes}车道、${length}米长的道路 ${id}` };
     }
 
     case 'removeRoad':

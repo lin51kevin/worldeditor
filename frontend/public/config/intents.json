@@ -1,0 +1,207 @@
+{
+  "version": 1,
+  "intents": [
+    {
+      "action": "addRoad",
+      "keywords": ["添加道路", "创建道路", "新建道路", "画道路", "添加一条路", "创建一条路"],
+      "synonyms": {
+        "添加": ["加", "创建", "新建", "画", "生成", "建"],
+        "道路": ["路", "公路", "马路", "街道"]
+      },
+      "paramPatterns": {
+        "length": {
+          "patterns": ["(\\d+(?:\\.\\d+)?)\\s*(?:米|m|M|米长)"],
+          "type": "number",
+          "default": 100
+        },
+        "lanes": {
+          "patterns": ["(\\d+)\\s*车道"],
+          "type": "number",
+          "default": 2
+        },
+        "bidirectional": {
+          "patterns": ["双向"],
+          "type": "boolean",
+          "default": false
+        },
+        "laneWidth": {
+          "patterns": ["(\\d+(?:\\.\\d+)?)\\s*(?:米|m)\\s*宽", "宽度?\\s*(\\d+(?:\\.\\d+)?)\\s*(?:米|m)"],
+          "type": "number",
+          "default": 3.5
+        }
+      },
+      "requiresSelection": false,
+      "priority": 10,
+      "description": "添加新道路（支持指定长度、车道数、双向）"
+    },
+    {
+      "action": "removeRoad",
+      "keywords": ["删除道路", "删掉道路", "移除道路"],
+      "synonyms": {
+        "删除": ["删掉", "移除", "去掉", "干掉"],
+        "道路": ["路", "这条路", "选中的路", "当前道路"]
+      },
+      "paramPatterns": {},
+      "requiresSelection": true,
+      "priority": 8,
+      "description": "删除选中的道路"
+    },
+    {
+      "action": "splitRoad",
+      "keywords": ["切分道路", "分割道路", "切开道路", "切割道路"],
+      "synonyms": {
+        "切分": ["分割", "切开", "切割", "拆分", "劈开"],
+        "道路": ["路", "这条路", "当前道路"]
+      },
+      "paramPatterns": {},
+      "requiresSelection": true,
+      "priority": 8,
+      "description": "将选中的道路切分为两段"
+    },
+    {
+      "action": "reverseRoad",
+      "keywords": ["反转道路", "翻转道路"],
+      "synonyms": {
+        "反转": ["翻转", "调头", "掉头", "倒转"],
+        "道路": ["路", "这条路", "方向"]
+      },
+      "paramPatterns": {},
+      "requiresSelection": true,
+      "priority": 8,
+      "description": "反转选中道路的方向"
+    },
+    {
+      "action": "mirrorRoad",
+      "keywords": ["镜像道路", "镜像车道"],
+      "synonyms": {
+        "镜像": ["对称", "翻转车道"],
+        "道路": ["路", "这条路", "车道布局"]
+      },
+      "paramPatterns": {},
+      "requiresSelection": true,
+      "priority": 8,
+      "description": "镜像选中道路的车道布局"
+    },
+    {
+      "action": "addLane",
+      "keywords": ["添加车道", "加车道", "增加车道"],
+      "synonyms": {
+        "添加": ["加", "增加", "补", "新增"],
+        "车道": ["行车道"]
+      },
+      "paramPatterns": {
+        "side": {
+          "patterns": ["(左|左侧|左边)", "(右|右侧|右边)"],
+          "type": "enum",
+          "mapping": {
+            "左": "left", "左侧": "left", "左边": "left",
+            "右": "right", "右侧": "right", "右边": "right"
+          },
+          "default": "right"
+        },
+        "type": {
+          "patterns": ["(driving|turning|biking|walking|行车|转弯|自行车|人行)"],
+          "type": "enum",
+          "mapping": {
+            "行车": "driving", "转弯": "turning", "自行车": "biking", "人行": "walking",
+            "driving": "driving", "turning": "turning", "biking": "biking", "walking": "walking"
+          },
+          "default": "driving"
+        }
+      },
+      "requiresSelection": true,
+      "priority": 5,
+      "description": "为选中道路添加车道"
+    },
+    {
+      "action": "removeLane",
+      "keywords": ["删除车道", "去掉车道", "移除车道"],
+      "synonyms": {
+        "删除": ["去掉", "移除", "删掉", "减少"],
+        "车道": ["行车道"]
+      },
+      "paramPatterns": {
+        "side": {
+          "patterns": ["(左|左侧|左边)", "(右|右侧|右边)"],
+          "type": "enum",
+          "mapping": {
+            "左": "left", "左侧": "left", "左边": "left",
+            "右": "right", "右侧": "right", "右边": "right"
+          },
+          "default": "right"
+        }
+      },
+      "requiresSelection": true,
+      "priority": 5,
+      "description": "删除选中道路的车道"
+    },
+    {
+      "action": "updateLaneWidth",
+      "keywords": ["车道宽度", "修改车道宽", "调整车道宽"],
+      "synonyms": {
+        "修改": ["改", "调整", "设置", "设为", "改成", "调为"],
+        "宽度": ["宽"]
+      },
+      "paramPatterns": {
+        "width": {
+          "patterns": ["(\\d+(?:\\.\\d+)?)\\s*(?:米|m|M)"],
+          "type": "number",
+          "default": 3.5
+        }
+      },
+      "requiresSelection": true,
+      "priority": 6,
+      "description": "修改选中道路的车道宽度"
+    },
+    {
+      "action": "createJunction",
+      "keywords": ["创建路口", "建路口", "添加路口", "创建交叉口"],
+      "synonyms": {
+        "创建": ["建", "添加", "新建", "生成"],
+        "路口": ["交叉口", "十字路口", "丁字路口", "交叉路口"]
+      },
+      "paramPatterns": {},
+      "requiresSelection": false,
+      "priority": 7,
+      "description": "创建一个路口"
+    },
+    {
+      "action": "addSignal",
+      "keywords": ["添加信号灯", "加信号灯", "放置信号灯"],
+      "synonyms": {
+        "添加": ["加", "放置", "安装", "设置"],
+        "信号灯": ["红绿灯", "交通灯", "交通信号"]
+      },
+      "paramPatterns": {},
+      "requiresSelection": false,
+      "priority": 7,
+      "description": "添加交通信号灯"
+    },
+    {
+      "action": "addRoadMark",
+      "keywords": ["添加标线", "加标线", "添加地面标线"],
+      "synonyms": {
+        "添加": ["加", "画", "绘制"],
+        "标线": ["地面标线", "道路标线", "车道线", "路面标记"]
+      },
+      "paramPatterns": {},
+      "requiresSelection": false,
+      "priority": 7,
+      "description": "添加道路地面标线"
+    }
+  ],
+  "slashCommands": [
+    { "pattern": "/road add", "action": "addRoad", "paramHint": "[length]" },
+    { "pattern": "/road delete", "action": "removeRoad" },
+    { "pattern": "/road split", "action": "splitRoad" },
+    { "pattern": "/road reverse", "action": "reverseRoad" },
+    { "pattern": "/road mirror", "action": "mirrorRoad" },
+    { "pattern": "/lane add", "action": "addLane", "paramHint": "[side] [type]" },
+    { "pattern": "/lane delete", "action": "removeLane", "paramHint": "[side]" },
+    { "pattern": "/lane width", "action": "updateLaneWidth", "paramHint": "<meters>" },
+    { "pattern": "/junction create", "action": "createJunction" },
+    { "pattern": "/signal add", "action": "addSignal" },
+    { "pattern": "/marking add", "action": "addRoadMark" },
+    { "pattern": "/help", "action": "help" }
+  ]
+}

@@ -64,6 +64,39 @@ export function useKeyboardShortcuts({
 
       // ── Modifier shortcuts ────────────────────────────────────────────────
 
+      // When focus is on an editable element (input/textarea/select/dialog),
+      // allow native browser behavior for text-editing shortcuts (Ctrl+Z/Y/A/C/V/X).
+      if (mod && isEditableTarget(e)) {
+        // Ctrl+Shift+V (validation panel toggle) is not a text shortcut — still handle it.
+        if (e.shiftKey && (e.key === 'v' || e.key === 'V')) {
+          e.preventDefault();
+          toggleValidationPanel?.();
+          return;
+        }
+        // Ctrl+B (toggle left panel) is not a text shortcut — still handle it.
+        if (e.key === 'b') {
+          e.preventDefault();
+          toggleLeftPanel();
+          return;
+        }
+        // Ctrl+J (toggle output panel) is not a text shortcut — still handle it.
+        if (e.key === 'j') {
+          e.preventDefault();
+          toggleOutputPanel();
+          return;
+        }
+        // All other Ctrl+key combos in editable elements: let the browser handle natively
+        return;
+      }
+
+      // When text is selected anywhere in the document, allow native Ctrl+C/X for copy/cut
+      if (mod && (e.key === 'c' || e.key === 'x')) {
+        const selection = window.getSelection();
+        if (selection && selection.toString().length > 0) {
+          return; // Let native copy/cut work
+        }
+      }
+
       if (mod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         const { canUndo, undo } = useProjectStore.getState();

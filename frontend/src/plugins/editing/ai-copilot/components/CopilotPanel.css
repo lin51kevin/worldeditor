@@ -102,6 +102,8 @@
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+  user-select: text;
+  cursor: text;
 }
 
 .copilot-msg-assistant {
@@ -115,6 +117,8 @@
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+  user-select: text;
+  cursor: text;
 }
 
 /* ── Typing indicator ── */
@@ -215,31 +219,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   flex-shrink: 1;
-}
-
-/* Apply mode badge pill */
-.copilot-mode-badge {
-  display: flex;
-  align-items: center;
-  height: 16px;
-  padding: 0 6px;
-  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.2));
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text-secondary, #888);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  cursor: pointer;
-  user-select: none;
-  flex-shrink: 0;
-  transition: background var(--transition-fast, 0.1s), border-color var(--transition-fast, 0.1s), color var(--transition-fast, 0.1s);
-}
-
-.copilot-mode-badge--auto {
-  border-color: var(--accent-color, #89b4fa);
-  background: rgba(137, 180, 250, 0.15);
-  color: var(--accent-color, #89b4fa);
 }
 
 /* Arrow-up send button */

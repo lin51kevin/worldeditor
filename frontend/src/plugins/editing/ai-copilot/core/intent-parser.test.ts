@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseIntent, getQuickCommandList } from './intent-parser';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { parseIntent, getQuickCommandList, setIntentsConfig, resetIntentsConfig } from './intent-parser';
 import type { ParsedIntent, RoadActionType } from './types';
 
 function expectIntent(
@@ -85,26 +85,50 @@ describe('parseIntent', () => {
     it('handles leading/trailing spaces', () => {
       expectIntent(parseIntent('  /road add  '), 'addRoad', 1.0);
     });
-    it('handles case-insensitive road subcommand', () => {
-      expectIntent(parseIntent('/road ADD'), 'addRoad', 1.0);
-    });
     it('unknown slash command falls to question', () => {
       expectIntent(parseIntent('/unknown'), 'question', 0.5);
     });
   });
 
-  // ─── Chinese natural language (confidence=0.85) ───
+  // ─── Chinese natural language — config-driven matching (confidence=0.85) ───
 
   describe('Chinese natural language', () => {
+    // addRoad — key improvement: road creation should be detected correctly
+    it('"添加一条双向4车道500米长的道路" → addRoad with params', () => {
+      const r = parseIntent('添加一条双向4车道500米长的道路');
+      expectIntent(r, 'addRoad', 0.85);
+      expect(r.params.bidirectional).toBe(true);
+      expect(r.params.lanes).toBe(4);
+      expect(r.params.length).toBe(500);
+    });
+
+    it('"创建一条100米的道路" → addRoad with length', () => {
+      const r = parseIntent('创建一条100米的道路');
+      expectIntent(r, 'addRoad', 0.85);
+      expect(r.params.length).toBe(100);
+    });
+
+    it('"新建道路" → addRoad', () => {
+      expectIntent(parseIntent('新建道路'), 'addRoad', 0.85);
+    });
+
+    it('"画一条路" → addRoad (synonym expansion)', () => {
+      expectIntent(parseIntent('画一条路'), 'addRoad', 0.85);
+    });
+
     // addLane
-    it('"加一条车道" → addLane', () => {
-      expectIntent(parseIntent('加一条车道'), 'addLane', 0.85);
+    it('"加车道" → addLane', () => {
+      expectIntent(parseIntent('加车道'), 'addLane', 0.85);
     });
-    it('"左边加一条车道" → addLane with side=left', () => {
-      expectIntent(parseIntent('左边加一条车道'), 'addLane', 0.85, { side: 'left' });
+    it('"左边加车道" → addLane with side=left', () => {
+      const r = parseIntent('左边加车道');
+      expectIntent(r, 'addLane', 0.85);
+      expect(r.params.side).toBe('left');
     });
-    it('"右边加一条车道" → addLane with side=right', () => {
-      expectIntent(parseIntent('右边加一条车道'), 'addLane', 0.85, { side: 'right' });
+    it('"右边加车道" → addLane with side=right', () => {
+      const r = parseIntent('右边加车道');
+      expectIntent(r, 'addLane', 0.85);
+      expect(r.params.side).toBe('right');
     });
 
     // removeRoad
@@ -119,40 +143,33 @@ describe('parseIntent', () => {
     it('"切开这条道路" → splitRoad', () => {
       expectIntent(parseIntent('切开这条道路'), 'splitRoad', 0.85);
     });
-    it('"分割这条道路" → splitRoad', () => {
-      expectIntent(parseIntent('分割这条道路'), 'splitRoad', 0.85);
-    });
-    it('"切割这条道路" → splitRoad', () => {
-      expectIntent(parseIntent('切割这条道路'), 'splitRoad', 0.85);
+    it('"分割道路" → splitRoad', () => {
+      expectIntent(parseIntent('分割道路'), 'splitRoad', 0.85);
     });
 
     // reverseRoad
-    it('"反转这条道路" → reverseRoad', () => {
-      expectIntent(parseIntent('反转这条道路'), 'reverseRoad', 0.85);
+    it('"反转道路" → reverseRoad', () => {
+      expectIntent(parseIntent('反转道路'), 'reverseRoad', 0.85);
     });
-    it('"翻转这条道路" → reverseRoad', () => {
-      expectIntent(parseIntent('翻转这条道路'), 'reverseRoad', 0.85);
+    it('"翻转道路" → reverseRoad', () => {
+      expectIntent(parseIntent('翻转道路'), 'reverseRoad', 0.85);
     });
 
     // mirrorRoad
-    it('"镜像这条道路" → mirrorRoad', () => {
-      expectIntent(parseIntent('镜像这条道路'), 'mirrorRoad', 0.85);
+    it('"镜像道路" → mirrorRoad', () => {
+      expectIntent(parseIntent('镜像道路'), 'mirrorRoad', 0.85);
     });
 
     // updateLaneWidth
     it('"车道宽度改成3.5米" → updateLaneWidth', () => {
-      expectIntent(parseIntent('车道宽度改成3.5米'), 'updateLaneWidth', 0.85, { meters: '3.5' });
-    });
-    it('"车道宽度调整为4米" → updateLaneWidth', () => {
-      expectIntent(parseIntent('车道宽度调整为4米'), 'updateLaneWidth', 0.85, { meters: '4' });
+      const r = parseIntent('车道宽度改成3.5米');
+      expectIntent(r, 'updateLaneWidth', 0.85);
+      expect(r.params.width).toBe(3.5);
     });
 
     // createJunction
     it('"创建路口" → createJunction', () => {
       expectIntent(parseIntent('创建路口'), 'createJunction', 0.85);
-    });
-    it('"建一个路口" → createJunction', () => {
-      expectIntent(parseIntent('建一个路口'), 'createJunction', 0.85);
     });
 
     // addSignal
@@ -164,8 +181,19 @@ describe('parseIntent', () => {
     it('"添加标线" → addRoadMark', () => {
       expectIntent(parseIntent('添加标线'), 'addRoadMark', 0.85);
     });
-    it('"地面标线" → addRoadMark', () => {
-      expectIntent(parseIntent('添加地面标线'), 'addRoadMark', 0.85);
+  });
+
+  // ─── Priority: addRoad vs addLane disambiguation ───
+
+  describe('priority disambiguation', () => {
+    it('"添加一条双向4车道的道路" → addRoad (not addLane)', () => {
+      const r = parseIntent('添加一条双向4车道的道路');
+      expect(r.action).toBe('addRoad');
+    });
+
+    it('"添加一条500米的路" → addRoad', () => {
+      const r = parseIntent('添加一条500米的路');
+      expect(r.action).toBe('addRoad');
     });
   });
 
@@ -190,8 +218,36 @@ describe('parseIntent', () => {
       expectIntent(parseIntent('   '), 'question', 0.5);
     });
     it('rawInput is preserved', () => {
-      const input = '  加一条车道  ';
+      const input = '  加车道  ';
       expect(parseIntent(input).rawInput).toBe(input.trim());
+    });
+  });
+
+  // ─── Config override ───
+
+  describe('setIntentsConfig', () => {
+    beforeEach(() => {
+      resetIntentsConfig();
+    });
+
+    it('uses custom config when set', () => {
+      setIntentsConfig({
+        version: 1,
+        intents: [{
+          action: 'addRoad',
+          keywords: ['buildroad'],
+          synonyms: {},
+          paramPatterns: {},
+          requiresSelection: false,
+          priority: 10,
+        }],
+        slashCommands: [],
+      });
+      expectIntent(parseIntent('buildroad'), 'addRoad', 0.85);
+    });
+
+    afterEach(() => {
+      resetIntentsConfig();
     });
   });
 

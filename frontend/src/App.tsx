@@ -20,6 +20,7 @@ import { PluginManager } from './components/dialogs/PluginManager';
 import { PluginPanels } from './components/layout/PluginPanel';
 import { SettingsDialog } from './components/dialogs/SettingsDialog';
 import { DialogHost } from './components/common/Dialog';
+import { TextContextMenu } from './components/common/TextContextMenu';
 import { WelcomePage } from './components/shell/WelcomePage';
 import { ShortcutHelpOverlay } from './components/dialogs/ShortcutHelpOverlay';
 import { useProjectStore } from './stores/projectStore';
@@ -223,7 +224,17 @@ export function App() {
   return (
     <ErrorBoundary t={(key, fallback) => t(key) || fallback || key}>
     {isEditorOpen ? (
-      <div className="app-container" onContextMenu={(e) => e.preventDefault()}>
+      <div className="app-container" onContextMenu={(e) => {
+        // Allow native context menu (with paste) on editable elements
+        const target = e.target as HTMLElement;
+        if (
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable
+        ) return;
+        e.preventDefault();
+      }}>
         {/* Full-bleed viewport as base layer */}
         <div className="canvas-viewport">
           <Viewport />
@@ -341,6 +352,8 @@ export function App() {
     )}
     {/* Themed dialog host — always mounted so dialogs show on WelcomePage too */}
     <DialogHost />
+    {/* Custom text context menu (Cut/Copy/Paste/SelectAll) for inputs and selected text */}
+    <TextContextMenu />
     </ErrorBoundary>
   );
 }
