@@ -9,9 +9,6 @@ import { useThemeStore } from '../stores/themeStore';
 import { getPlatformService } from '../services';
 import { showContextMenu } from '../services/contextMenu';
 import { usePluginContribStore } from '../stores/pluginContribStore';
-import {
-  tintVertices,
-} from '../utils/sceneGraph';
 import { useViewportDrop } from '../hooks/useViewportDrop';
 import { useRubberBandSelect } from '../hooks/useRubberBandSelect';
 import { useMoveRotateMode } from '../hooks/useMoveRotateMode';
@@ -23,12 +20,13 @@ import { useViewportKeyboard } from '../hooks/useViewportKeyboard';
 import { useViewportMeshes } from '../hooks/useViewportMeshes';
 import { useSelectionHighlight } from '../hooks/useSelectionHighlight';
 import { useMeasureOverlay } from '../hooks/useMeasureOverlay';
+import { useViewportTouch } from '../hooks/useViewportTouch';
+import { useViewportHoverPick } from '../hooks/useViewportHoverPick';
 import './Viewport.css';
 
 import {
-  HOVER_HIGHLIGHT_COLOR, HOVER_HIGHLIGHT_Z_LIFT,
   MouseGestureState,
-  liftMeshZ, exceededDragThreshold,
+  exceededDragThreshold,
   type SplineControlPoint,
 } from './viewportUtils';
 
@@ -40,7 +38,6 @@ export function Viewport() {
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useViewportDrop(rendererRef, canvasRef);
   const showGrid = useViewportStore((s) => s.showGrid);
   const showAxis = useViewportStore((s) => s.showAxis);
-  const showHoverHighlight = useViewportStore((s) => s.showHoverHighlight);
   const dimension = useViewportStore((s) => s.dimension);
   const viewMode = useViewportStore((s) => s.viewMode);
   const theme = useThemeStore((s) => s.theme);
@@ -53,19 +50,7 @@ export function Viewport() {
   const { startMoveRotateDrag, updateMoveRotateDrag, commitMoveRotateDrag } = useMoveRotateMode(rendererRef, canvasRef, isPreviewingRoadRef, pendingCursorRef);
   const { startAdjustEdgeDrag, updateAdjustEdgeDrag, commitAdjustEdgeDrag } = useAdjustEdgeMode(rendererRef, canvasRef, isPreviewingRoadRef, pendingCursorRef);
   useMeasureOverlay({ rendererRef, canvasRef, status });
-  const hoveredRoadRef = useRef<string | null>(null);
-  const hoveredJunctionRef = useRef<string | null>(null);
-  const hoveredSignalRef = useRef<{ roadId: string; signalId: string } | null>(null);
-  const hoveredObjectRef = useRef<{ roadId: string; objectId: string } | null>(null);
-  const lastHoverMeshIdRef = useRef<string | null>(null);
-  const pickInFlightRef = useRef(false);
-  const pendingPickRafRef = useRef(0);
-  const pendingPickPosRef = useRef<{ x: number; y: number } | null>(null);
   const snapIndicatorDomRef = useRef<HTMLDivElement | null>(null);
-  const touchStateRef = useRef<{
-    touches: Array<{ id: number; x: number; y: number }>;
-    lastPinchDist: number | null;
-  }>({ touches: [], lastPinchDist: null });
 
   const {
     clearSplineDrawHover,
@@ -98,21 +83,30 @@ export function Viewport() {
 
   useViewportKeyboard();
 
-  // When hover-highlight is toggled ON, invalidate the mesh cache so the next
-  // mousemove re-uploads the highlight. When toggled OFF, clear any stale highlight.
-  useEffect(() => {
-    if (showHoverHighlight) {
-      lastHoverMeshIdRef.current = null;
-    } else {
-      rendererRef.current?.clearHover();
-      lastHoverMeshIdRef.current = null;
-    }
-  }, [showHoverHighlight]);
-
   // ── Mesh lifecycle (surface + lines + visible project + WASM cache) ──
   const { getVisibleProject, updateSurfaceMesh, updateLineMesh } = useViewportMeshes({
     rendererRef,
     status,
+  });
+  const {
+    executeHoverPick,
+    clearHoverPick,
+    hoveredRoadRef,
+    hoveredJunctionRef,
+    hoveredSignalRef,
+    hoveredObjectRef,
+    lastHoverMeshIdRef,
+    pickInFlightRef,
+    pendingPickRafRef,
+    pendingPickPosRef,
+  } = useViewportHoverPick({
+    rendererRef,
+    canvasRef,
+    getVisibleProject,
+  });
+  const { handleTouchStart, handleTouchMove, handleTouchEnd } = useViewportTouch({
+    rendererRef,
+    canvasRef,
   });
 
   // Real-time road mesh preview while adding knots in draw mode
@@ -399,92 +393,6 @@ export function Viewport() {
       canvasRef.current ?? undefined,
     );
   }, [viewportOverlays]);
-
-  const executeHoverPick = useCallback(async () => {
-    const pos = pendingPickPosRef.current;
-    if (!pos) return;
-    const canvas = canvasRef.current;
-    const rendererInst = rendererRef.current;
-    if (!canvas || !rendererInst) return;
-    pickInFlightRef.current = true;
-    try {
-      const service = await getPlatformService();
-      const { project: currentProject } = useProjectStore.getState();
-      const visibleProject = getVisibleProject();
-      if (!visibleProject) return;
-      const newHoveredRoad = await service.pickRoadAtPointCached(pos.x, pos.y, 2.5);
-      if (newHoveredRoad !== hoveredRoadRef.current || hoveredJunctionRef.current !== null) {
-        hoveredRoadRef.current = newHoveredRoad;
-        hoveredJunctionRef.current = null;
-        hoveredSignalRef.current = null;
-        hoveredObjectRef.current = null;
-        if (newHoveredRoad) {
-          const { selectedRoadId } = useProjectStore.getState();
-          if (newHoveredRoad !== selectedRoadId) {
-            if (showHoverHighlight && newHoveredRoad !== lastHoverMeshIdRef.current) {
-              const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
-              if (road) {
-                const singleRoadProject = { ...currentProject, roads: [road], junctions: [] };
-                const hoverVerts = tintVertices(
-                  await service.generateRoadVertices(singleRoadProject, 2.0),
-                  HOVER_HIGHLIGHT_COLOR,
-                );
-                rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
-                lastHoverMeshIdRef.current = newHoveredRoad;
-              }
-            } else if (!showHoverHighlight) {
-              rendererInst.clearHover();
-              lastHoverMeshIdRef.current = null;
-            }
-          } else {
-            rendererInst.clearHover();
-            lastHoverMeshIdRef.current = null;
-          }
-          if (!rendererInst.pointerDragging) {
-            canvas.style.cursor = 'pointer';
-          }
-        } else {
-          rendererInst.clearHover();
-          lastHoverMeshIdRef.current = null;
-          const newHoveredJunction = await service.pickJunctionAtPointCached(pos.x, pos.y, 3.0);
-          hoveredJunctionRef.current = newHoveredJunction;
-          if (newHoveredJunction) {
-            if (showHoverHighlight) {
-              const hoverVerts = await service.generateSingleJunctionVertices(
-                currentProject,
-                newHoveredJunction,
-                HOVER_HIGHLIGHT_COLOR,
-              );
-              rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
-            }
-            if (!rendererInst.pointerDragging) {
-              canvas.style.cursor = 'pointer';
-            }
-          } else {
-            const signalHit = await service.pickSignalAtPoint(visibleProject, pos.x, pos.y, 4.0);
-            if (signalHit !== null) {
-              hoveredSignalRef.current = signalHit;
-              if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';
-            } else {
-              hoveredSignalRef.current = null;
-              const objectHit = await service.pickObjectAtPoint(visibleProject, pos.x, pos.y, 4.0);
-              if (objectHit !== null) {
-                hoveredObjectRef.current = objectHit;
-                if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';
-              } else {
-                hoveredObjectRef.current = null;
-                if (!rendererInst.pointerDragging) canvas.style.cursor = '';
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // Ignore hover detection errors.
-    } finally {
-      pickInFlightRef.current = false;
-    }
-  }, [getVisibleProject, showHoverHighlight]);
 
   const handleMouseMove = useCallback(async (e: React.MouseEvent) => {
     const gesture = mouseGestureRef.current;
@@ -965,69 +873,14 @@ export function Viewport() {
   }, [handleSplineDrawRightClick]);
 
   const handleMouseLeave = useCallback(() => {
-    if (hoveredRoadRef.current !== null || hoveredJunctionRef.current !== null ||
-        hoveredSignalRef.current !== null || hoveredObjectRef.current !== null) {
-      hoveredRoadRef.current = null;
-      hoveredJunctionRef.current = null;
-      hoveredSignalRef.current = null;
-      hoveredObjectRef.current = null;
-      rendererRef.current?.clearHover();
-      lastHoverMeshIdRef.current = null;
-    }
+    clearHoverPick();
     clearGeometryEditHover();
     clearSplineDrawHover();
     const canvas = canvasRef.current;
     if (canvas) canvas.style.cursor = '';
     const snapEl = snapIndicatorDomRef.current;
     if (snapEl) snapEl.style.display = 'none';
-  }, [clearGeometryEditHover, clearSplineDrawHover]);
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
-    const touches = Array.from(e.touches).map((t) => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
-    touchStateRef.current.touches = touches;
-    if (touches.length === 2) {
-      const dx = touches[1]!.x - touches[0]!.x;
-      const dy = touches[1]!.y - touches[0]!.y;
-      touchStateRef.current.lastPinchDist = Math.sqrt(dx * dx + dy * dy);
-    } else {
-      touchStateRef.current.lastPinchDist = null;
-    }
-  }, []);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
-    const renderer = rendererRef.current;
-    const canvas = canvasRef.current;
-    if (!renderer || !canvas) return;
-
-    const prev = touchStateRef.current.touches;
-    const curr = Array.from(e.touches).map((t) => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
-    touchStateRef.current.touches = curr;
-
-    if (curr.length === 1 && prev.length === 1) {
-      // Single-finger pan
-      const p = prev[0]!;
-      const c = curr[0]!;
-      renderer.applyPan(canvas, [p.x, p.y], [c.x, c.y]);
-    } else if (curr.length === 2 && prev.length >= 2) {
-      // Two-finger pinch-to-zoom
-      const dx = curr[1]!.x - curr[0]!.x;
-      const dy = curr[1]!.y - curr[0]!.y;
-      const newDist = Math.sqrt(dx * dx + dy * dy);
-      const oldDist = touchStateRef.current.lastPinchDist;
-      if (oldDist && oldDist > 0) {
-        renderer.applyZoomFactor(oldDist / newDist);
-      }
-      touchStateRef.current.lastPinchDist = newDist;
-    }
-  }, []);
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    const curr = Array.from(e.touches).map((t) => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
-    touchStateRef.current.touches = curr;
-    if (curr.length < 2) touchStateRef.current.lastPinchDist = null;
-  }, []);
+  }, [canvasRef, clearGeometryEditHover, clearHoverPick, clearSplineDrawHover]);
 
   return (
     <div
