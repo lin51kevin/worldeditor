@@ -10,7 +10,9 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(yarn test *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(yarn typecheck *)",
+      "Bash(cargo check *)"
     ]
   }
 }
