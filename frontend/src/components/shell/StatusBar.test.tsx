@@ -58,27 +58,34 @@ describe('StatusBar', () => {
     expect(screen.getByText(/道路:\s*1/)).toBeInTheDocument();
   });
 
-  it('renders scale bar label matching grid spacing', () => {
-    // gridSpacing = 10m → label "10m"
+  it('computes scale bar label dynamically from viewportMpp', () => {
+    // mpp = 0.1 → rawDist = 100 * 0.1 = 10 → niceNumber(10) = 10 → label "10m"
     render(<StatusBar />);
     expect(screen.getByText('10m')).toBeInTheDocument();
   });
 
-  it('shows km label for large grid spacing', () => {
+  it('shows km label when zoomed out', () => {
+    // mpp = 20 → rawDist = 100 * 20 = 2000 → niceNumber(2000) = 2000 → label "2km"
     act(() => {
-      useProjectStore.setState({ gridSpacing: 2000, viewportMpp: 1.0 });
+      useProjectStore.setState({ viewportMpp: 20.0 });
     });
     render(<StatusBar />);
     expect(screen.getByText('2km')).toBeInTheDocument();
   });
 
-  it('clamps scale bar pixel width between 20 and 180', () => {
-    // gridSpacing = 10, mpp = 0.001 → raw barPx = 10000 → clamped to 180
+  it('shows smaller label when zoomed in', () => {
+    // mpp = 0.01 → rawDist = 100 * 0.01 = 1 → niceNumber(1) = 1 → label "1m"
     act(() => {
-      useProjectStore.setState({ gridSpacing: 10, viewportMpp: 0.001 });
+      useProjectStore.setState({ viewportMpp: 0.01 });
     });
+    render(<StatusBar />);
+    expect(screen.getByText('1m')).toBeInTheDocument();
+  });
+
+  it('computes bar pixel width as niceDistance / mpp', () => {
+    // mpp = 0.1, niceDistance = 10, barPx = 10 / 0.1 = 100
     const { container } = render(<StatusBar />);
     const bar = container.querySelector('.scale-bar-track') as HTMLElement;
-    expect(parseInt(bar.style.width)).toBeLessThanOrEqual(180);
+    expect(parseInt(bar.style.width)).toBe(100);
   });
 });

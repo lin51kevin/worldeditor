@@ -46,8 +46,6 @@
   background: currentColor;
   border-left: 2px solid currentColor;
   border-right: 2px solid currentColor;
-  min-width: 20px;
-  max-width: 180px;
 }
 
 .scale-bar-label {

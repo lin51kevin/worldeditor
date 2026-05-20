@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { MapPin, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../stores/projectStore';
 import { useViewportStore } from '../../stores/viewportStore';
 import { onCursorMove } from '../../viewport/cursorEvents';
+import { niceNumber } from '../../viewport/viewportMath';
 import './StatusBar.css';
 
 function formatDist(m: number): string {
@@ -12,8 +13,10 @@ function formatDist(m: number): string {
   return `${m}m`;
 }
 
+/** Target scale bar pixel width used for the calculation baseline. */
+const SCALE_TARGET_PX = 100;
+
 export function StatusBar() {
-  const gridSpacing = useProjectStore((s) => s.gridSpacing);
   const viewportMpp = useProjectStore((s) => s.viewportMpp);
   const roadCount = useProjectStore((s) => s.project.roads.length);
   const editMode = useViewportStore((s) => s.editMode);
@@ -29,7 +32,13 @@ export function StatusBar() {
     return unsubscribe;
   }, [t]);
 
-  const barPx = Math.min(180, Math.max(20, Math.round(gridSpacing / viewportMpp)));
+  const { barPx, scaleDist } = useMemo(() => {
+    const rawDist = SCALE_TARGET_PX * viewportMpp;
+    const niceDist = niceNumber(rawDist);
+    const px = Math.round(niceDist / viewportMpp);
+    return { barPx: px, scaleDist: niceDist };
+  }, [viewportMpp]);
+
   const modeLabel = t(`statusBar.modes.${editMode}`, editMode);
 
   return (
@@ -45,7 +54,7 @@ export function StatusBar() {
       <span className="statusbar-item">{t('statusBar.roads')}: {roadCount}</span>
       <span className="statusbar-item statusbar-scale">
         <span className="scale-bar-track" style={{ width: `${barPx}px` }} />
-        <span className="scale-bar-label">{formatDist(gridSpacing)}</span>
+        <span className="scale-bar-label">{formatDist(scaleDist)}</span>
       </span>
     </div>
   );
