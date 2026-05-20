@@ -638,22 +638,26 @@ export function Viewport() {
 
     if (e.button !== 0) return;
 
-    const canvas = canvasRef.current;
-    const renderer = rendererRef.current;
-    if (!canvas || !renderer) return;
+    try {
+      const canvas = canvasRef.current;
+      const renderer = rendererRef.current;
+      if (!canvas || !renderer) return;
 
-    const viewState = useViewportStore.getState();
-    if (handleGeometryEditMouseDown(e, canvas, renderer) || handleSplineDrawMouseDown(e, canvas, renderer)) {
-      return;
-    }
-    if (startMoveRotateDrag(e, renderer, canvas)) return;
-    if (await startAdjustEdgeDrag(e)) return;
-    if (
-      e.shiftKey &&
-      viewState.editMode !== 'spline' &&
-      !viewState.geometryEditSpline
-    ) {
-      startRubberBand(e, renderer);
+      const viewState = useViewportStore.getState();
+      if (handleGeometryEditMouseDown(e, canvas, renderer) || handleSplineDrawMouseDown(e, canvas, renderer)) {
+        return;
+      }
+      if (startMoveRotateDrag(e, renderer, canvas)) return;
+      if (await startAdjustEdgeDrag(e)) return;
+      if (
+        e.shiftKey &&
+        viewState.editMode !== 'spline' &&
+        !viewState.geometryEditSpline
+      ) {
+        startRubberBand(e, renderer);
+      }
+    } catch (err) {
+      console.error('[Viewport] handleMouseDown error:', err);
     }
   }, [handleGeometryEditMouseDown, handleSplineDrawMouseDown, startMoveRotateDrag, startAdjustEdgeDrag, startRubberBand]);
 
