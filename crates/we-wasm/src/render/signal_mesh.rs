@@ -296,6 +296,7 @@ pub(super) fn emit_rect_outline(
 /// - `cos_t, sin_t`: cosine/sine of road heading at origin
 /// - `alpha_min, alpha_max`: along-road AABB of the polygon (for scan line extent)
 /// - `beta`: lateral position at which to intersect (in road-frame)
+#[allow(dead_code)]
 fn clip_scanline_alpha(
     world_poly: &[(f64, f64)],
     ox: f64,

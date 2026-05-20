@@ -88,6 +88,8 @@ export function App() {
 
   // Conditionally mount enabled builtin plugins via registry
   useEffect(() => {
+    const { suspendPanelUpdates } = usePluginContribStore.getState();
+    const flush = suspendPanelUpdates();
     const cleanups = BUILTIN_PLUGINS
       .filter((p) => !disabledBuiltins.includes(p.id))
       .map((p) => {
@@ -98,6 +100,7 @@ export function App() {
           return () => {};
         }
       });
+    flush(); // batch-register all panels in one state update
     return () => cleanups.forEach((fn) => fn());
   }, [disabledBuiltins]);
 

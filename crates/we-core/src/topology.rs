@@ -5,7 +5,7 @@
 //! Also provides repair operations that produce a corrected [`Project`].
 
 use crate::model::{
-    ContactPoint, Junction, JunctionConnection, LinkElement, LinkElementType, Project, Road,
+    ContactPoint, JunctionConnection, LinkElement, LinkElementType, Project, Road,
 };
 use serde::{Deserialize, Serialize};
 

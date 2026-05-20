@@ -103,6 +103,7 @@ describe('FloatingPanel — initialCenter', () => {
 
   beforeEach(() => {
     localStorage.clear();
+    vi.useFakeTimers();
     Object.defineProperty(window, 'innerWidth',  { value: VIEWPORT_W, configurable: true, writable: true });
     Object.defineProperty(window, 'innerHeight', { value: VIEWPORT_H, configurable: true, writable: true });
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -113,18 +114,31 @@ describe('FloatingPanel — initialCenter', () => {
   });
 
   afterEach(() => {
+    vi.runAllTimers();
+    vi.useRealTimers();
     vi.restoreAllMocks();
     localStorage.clear();
   });
+
+  /** Render panel and flush the double-rAF delay in useLayoutEffect. */
+  function renderAndFlush(props?: Partial<React.ComponentProps<typeof FloatingPanel>>) {
+    let container!: HTMLElement;
+    act(() => {
+      ({ container } = render(makePanel(props)));
+    });
+    // Fire the two queued rAF callbacks inside a fresh act() so React
+    // picks up the setRect state update correctly.
+    act(() => {
+      vi.runAllTimers();
+    });
+    return container;
+  }
 
   it('centers panel in viewport when no saved state', () => {
     const expectedX = Math.round((VIEWPORT_W - PANEL_W) / 2);
     const expectedY = Math.round((VIEWPORT_H - PANEL_H) / 2);
 
-    let container!: HTMLElement;
-    act(() => {
-      ({ container } = render(makePanel({ storageKey: 'fp-center-new', initialCenter: true })));
-    });
+    const container = renderAndFlush({ storageKey: 'fp-center-new', initialCenter: true });
     const el = getPanel(container);
     expect(el.style.left).toBe(`${expectedX}px`);
     expect(el.style.top).toBe(`${expectedY}px`);
@@ -146,10 +160,7 @@ describe('FloatingPanel — initialCenter', () => {
     const expectedX = Math.round((VIEWPORT_W - PANEL_W) / 2);
     const expectedY = Math.round((VIEWPORT_H - PANEL_H) / 2);
 
-    let container!: HTMLElement;
-    act(() => {
-      ({ container } = render(makePanel({ storageKey: 'fp-center-stale', initialCenter: true })));
-    });
+    const container = renderAndFlush({ storageKey: 'fp-center-stale', initialCenter: true });
     const el = getPanel(container);
     expect(el.style.left).toBe(`${expectedX}px`);
     expect(el.style.top).toBe(`${expectedY}px`);
@@ -159,13 +170,10 @@ describe('FloatingPanel — initialCenter', () => {
     const expectedX = Math.round((VIEWPORT_W - PANEL_W) / 2) + 20;
     const expectedY = Math.round((VIEWPORT_H - PANEL_H) / 2) + 30;
 
-    let container!: HTMLElement;
-    act(() => {
-      ({ container } = render(makePanel({
-        storageKey: 'fp-center-offset',
-        initialCenter: true,
-        initialCenterOffset: { x: 20, y: 30 },
-      })));
+    const container = renderAndFlush({
+      storageKey: 'fp-center-offset',
+      initialCenter: true,
+      initialCenterOffset: { x: 20, y: 30 },
     });
     const el = getPanel(container);
     expect(el.style.left).toBe(`${expectedX}px`);
@@ -173,9 +181,7 @@ describe('FloatingPanel — initialCenter', () => {
   });
 
   it('writes v:2 to localStorage after first render', () => {
-    act(() => {
-      render(makePanel({ storageKey: 'fp-center-persist', initialCenter: true }));
-    });
+    renderAndFlush({ storageKey: 'fp-center-persist', initialCenter: true });
     const saved = JSON.parse(localStorage.getItem('fp-center-persist')!);
     expect(saved.v).toBe(2);
   });

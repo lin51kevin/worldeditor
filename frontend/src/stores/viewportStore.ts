@@ -187,6 +187,8 @@ interface EditorViewState {
   setCursorPreviewPos: (pos: [number, number, number] | null) => void;
   setSplineTangentOverride: (index: number, tangent: [number, number, number]) => void;
   setSplineTangentInOverride: (index: number, tangent: [number, number, number]) => void;
+  setSplineTangentOverrides: (overrides: Record<number, [number, number, number]>) => void;
+  setSplineTangentInOverrides: (overrides: Record<number, [number, number, number]>) => void;
   clearSplineTangentOverrides: () => void;
   setTangentCoupling: (coupling: TangentCoupling) => void;
   setViewMode: (m: 'sketch' | 'wire' | 'solid') => void;
@@ -348,6 +350,8 @@ export const useViewportStore = create<EditorViewState>((set) => ({
     set((state) => ({ splineTangentOverrides: { ...state.splineTangentOverrides, [index]: tangent } })),
   setSplineTangentInOverride: (index, tangent) =>
     set((state) => ({ splineTangentInOverrides: { ...state.splineTangentInOverrides, [index]: tangent } })),
+  setSplineTangentOverrides: (overrides) => set({ splineTangentOverrides: overrides }),
+  setSplineTangentInOverrides: (overrides) => set({ splineTangentInOverrides: overrides }),
   clearSplineTangentOverrides: () => set({ splineTangentOverrides: {}, splineTangentInOverrides: {} }),
   setTangentCoupling: (tangentCoupling) => set({ tangentCoupling }),
   setViewMode: (viewMode) => set({ viewMode }),

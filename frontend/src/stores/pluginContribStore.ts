@@ -196,6 +196,15 @@ interface PluginContribState {
   /** Remove all contributions from a given plugin at once */
   unregisterPlugin: (pluginId: string) => void;
 
+  /** Batch-register multiple panels in a single state update */
+  registerPanelsBatch: (contribs: PanelContrib[]) => void;
+
+  /** Suspend panel store updates (for batch plugin mounting); returns a flush function */
+  suspendPanelUpdates: () => () => void;
+
+  /** @internal */ _panelUpdateSuspended?: boolean;
+  /** @internal */ _pendingPanelBatch?: PanelContrib[];
+
   // Panel tab visibility actions
   showPanel: (tabId: string) => void;
   hidePanel: (tabId: string) => void;
@@ -272,19 +281,29 @@ export const usePluginContribStore = create<PluginContribState>((set, get) => ({
   unregisterExporter: (id) =>
     set((state) => ({ exporters: state.exporters.filter((e) => e.id !== id) })),
 
+  _panelUpdateSuspended: false,
+  _pendingPanelBatch: [] as PanelContrib[],
+
   registerPanel: (contrib) => {
     if (!isRenderableComponent(contrib.component)) {
       throw new Error(`Panel component is required for panel '${contrib.id}'`);
     }
 
+    const state = get();
+    if (state._panelUpdateSuspended) {
+      // Collect into pending batch instead of triggering re-render
+      (state._pendingPanelBatch ??= []).push(contrib);
+      return;
+    }
+
     // All plugin-contributed panels default to hidden on startup.
     const defaultVisible = false;
 
-    set((state) => ({
-      panels: [...state.panels.filter((p) => p.id !== contrib.id), contrib],
+    set((s) => ({
+      panels: [...s.panels.filter((p) => p.id !== contrib.id), contrib],
       panelTabVisibility: {
-        ...state.panelTabVisibility,
-        ...(state.panelTabVisibility[contrib.id] === undefined
+        ...s.panelTabVisibility,
+        ...(s.panelTabVisibility[contrib.id] === undefined
           ? { [contrib.id]: defaultVisible }
           : {}),
       },
@@ -320,6 +339,47 @@ export const usePluginContribStore = create<PluginContribState>((set, get) => ({
 
   unregisterSettings: (id) =>
     set((state) => ({ settingsContribs: state.settingsContribs.filter((s) => s.id !== id) })),
+
+  registerPanelsBatch: (contribs) => {
+    const { _pendingPanelBatch, ...state } = get();
+    const allContribs = [...(_pendingPanelBatch ?? []), ...contribs];
+    const existingIds = new Set(state.panels.map((p) => p.id));
+    const newPanels = allContribs.filter((c) => !existingIds.has(c.id));
+    if (newPanels.length === 0) {
+      // Flush pending even if empty to clear
+      set({ _pendingPanelBatch: [], _panelUpdateSuspended: false });
+      return;
+    }
+
+    const mergedPanels = [...state.panels];
+    const nextVisibility = { ...state.panelTabVisibility };
+
+    for (const contrib of newPanels) {
+      if (!isRenderableComponent(contrib.component)) {
+        console.warn(`[PluginBatch] Skipping panel '${contrib.id}' — component is not renderable`);
+        continue;
+      }
+      mergedPanels.push(contrib);
+      if (nextVisibility[contrib.id] === undefined) {
+        nextVisibility[contrib.id] = false;
+      }
+    }
+
+    set({
+      panels: mergedPanels,
+      panelTabVisibility: nextVisibility,
+      _pendingPanelBatch: [],
+      _panelUpdateSuspended: false,
+    });
+  },
+
+  suspendPanelUpdates: () => {
+    set({ _panelUpdateSuspended: true, _pendingPanelBatch: [] });
+    return () => {
+      const { registerPanelsBatch } = get();
+      registerPanelsBatch([]); // flush whatever was collected
+    };
+  },
 
   unregisterPlugin: (pluginId) =>
     set((state) => {

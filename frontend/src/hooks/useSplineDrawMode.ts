@@ -213,14 +213,17 @@ export function useSplineDrawMode({
             coupling,
             constraint,
           );
-          // Batch-update out-tangent overrides
+          // Batch all tangent override updates into a single setState
+          const outOverrides = { ...viewState.splineTangentOverrides };
+          const inOverrides = { ...viewState.splineTangentInOverrides };
           for (const [key, val] of Object.entries(result.out)) {
-            viewState.setSplineTangentOverride(Number(key), val);
+            outOverrides[Number(key)] = val;
           }
-          // Batch-update in-tangent overrides
           for (const [key, val] of Object.entries(result.in_)) {
-            viewState.setSplineTangentInOverride(Number(key), val);
+            inOverrides[Number(key)] = val;
           }
+          viewState.setSplineTangentOverrides(outOverrides);
+          viewState.setSplineTangentInOverrides(inOverrides);
           // If Alt was pressed, persist broken coupling for this session
           if (mouseEvent?.altKey && viewState.tangentCoupling !== 'broken') {
             viewState.setTangentCoupling('broken');

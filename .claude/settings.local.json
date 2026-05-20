@@ -8,7 +8,9 @@
       "Bash(node -e \"const d = require\\('./src/i18n/locales/zh.json'\\); console.log\\(JSON.stringify\\(d.toolPanel, null, 2\\)\\)\")",
       "Bash(git stash *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(yarn test *)",
+      "Bash(git *)"
     ]
   }
 }

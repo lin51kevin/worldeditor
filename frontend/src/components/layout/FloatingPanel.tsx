@@ -6,7 +6,6 @@ import { STORAGE_KEYS } from '../../constants/storage';
 /** Format version 2 — unified rect {x,y,w,h}. Version 1 used tx/ty and is discarded. */
 const STATE_VERSION = 2;
 
-const KEEP_PX = 40;
 
 interface Rect { x: number; y: number; w: number; h: number }
 
@@ -180,8 +179,8 @@ export function FloatingPanel({
       setRect((r) =>
         r ? {
           ...r,
-          x: clamp(r.x, KEEP_PX - r.w, window.innerWidth  - KEEP_PX),
-          y: clamp(r.y, KEEP_PX - r.h, window.innerHeight - KEEP_PX),
+          x: clamp(r.x, 0, window.innerWidth  - r.w),
+          y: clamp(r.y, 0, window.innerHeight - r.h),
         } : r,
       );
     window.addEventListener('resize', onResize);
@@ -204,8 +203,8 @@ export function FloatingPanel({
         const { ox, oy, ow, oh } = drag.current;
         setRect((r) => r ? {
           ...r,
-          x: clamp(ox + dx, KEEP_PX - ow, window.innerWidth  - KEEP_PX),
-          y: clamp(oy + dy, KEEP_PX - oh, window.innerHeight - KEEP_PX),
+          x: clamp(ox + dx, 0, window.innerWidth  - ow),
+          y: clamp(oy + dy, 0, window.innerHeight - oh),
         } : r);
         return;
       }
@@ -288,7 +287,7 @@ export function FloatingPanel({
   const panelStyle: CSSProperties = rect
     ? {
         ...style,
-        position: 'absolute',
+        position: 'fixed',
         left: rect.x,
         top: rect.y,
         right: 'auto',

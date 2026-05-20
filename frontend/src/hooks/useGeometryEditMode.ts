@@ -66,7 +66,7 @@ export function useGeometryEditMode({
     renderer.refreshSplineMarkers(nextHover, undefined);
   }, [hoveredControlPointRef]);
 
-  const previewEditedRoad = useCallback((roadId: string, splineJson: ReturnType<typeof useViewportStore.getState>['geometryEditSpline']) => {
+  const previewEditedRoad = useCallback((roadId: string, splineJson: ReturnType<typeof useViewportStore.getState>['geometryEditSpline'], resolution = 2.0) => {
     const renderer = rendererRef.current;
     if (!renderer || !splineJson) {
       return;
@@ -84,9 +84,9 @@ export function useGeometryEditMode({
           return;
         }
         const previewRoad = { ...baseRoad, plan_view: geometries, length: totalLength };
-        const singleRoadVerts = await service.generateSingleRoadVertices(previewRoad, 2.0, [0.35, 0.35, 0.35, 1.0]);
+        const singleRoadVerts = await service.generateSingleRoadVertices(previewRoad, resolution, [0.35, 0.35, 0.35, 1.0]);
         const singleProject = { ...currentProject, roads: [previewRoad] };
-        const singleLaneLineVerts = await service.generateLaneLineVertices(singleProject, 2.0);
+        const singleLaneLineVerts = await service.generateLaneLineVertices(singleProject, resolution);
         rendererRef.current?.uploadRoadVertices(singleRoadVerts);
         rendererRef.current?.uploadLaneLineVertices(singleLaneLineVerts);
       } catch {
@@ -181,7 +181,7 @@ export function useGeometryEditMode({
 
         viewState.setGeometryEditSpline(updatedSpline);
         if (viewState.geometryEditRoadId) {
-          previewEditedRoad(viewState.geometryEditRoadId, updatedSpline);
+          previewEditedRoad(viewState.geometryEditRoadId, updatedSpline, 8.0);
         }
       }
 

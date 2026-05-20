@@ -55,6 +55,8 @@ export function Viewport() {
   const hoveredObjectRef = useRef<{ roadId: string; objectId: string } | null>(null);
   const lastHoverMeshIdRef = useRef<string | null>(null);
   const pickInFlightRef = useRef(false);
+  const pendingPickRafRef = useRef(0);
+  const pendingPickPosRef = useRef<{ x: number; y: number } | null>(null);
   const snapIndicatorDomRef = useRef<HTMLDivElement | null>(null);
   const touchStateRef = useRef<{
     touches: Array<{ id: number; x: number; y: number }>;
@@ -394,6 +396,92 @@ export function Viewport() {
     );
   }, [viewportOverlays]);
 
+  const executeHoverPick = useCallback(async () => {
+    const pos = pendingPickPosRef.current;
+    if (!pos) return;
+    const canvas = canvasRef.current;
+    const rendererInst = rendererRef.current;
+    if (!canvas || !rendererInst) return;
+    pickInFlightRef.current = true;
+    try {
+      const service = await getPlatformService();
+      const { project: currentProject } = useProjectStore.getState();
+      const visibleProject = getVisibleProject();
+      if (!visibleProject) return;
+      const newHoveredRoad = await service.pickRoadAtPointCached(pos.x, pos.y, 2.5);
+      if (newHoveredRoad !== hoveredRoadRef.current || hoveredJunctionRef.current !== null) {
+        hoveredRoadRef.current = newHoveredRoad;
+        hoveredJunctionRef.current = null;
+        hoveredSignalRef.current = null;
+        hoveredObjectRef.current = null;
+        if (newHoveredRoad) {
+          const { selectedRoadId } = useProjectStore.getState();
+          if (newHoveredRoad !== selectedRoadId) {
+            if (showHoverHighlight && newHoveredRoad !== lastHoverMeshIdRef.current) {
+              const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
+              if (road) {
+                const singleRoadProject = { ...currentProject, roads: [road], junctions: [] };
+                const hoverVerts = tintVertices(
+                  await service.generateRoadVertices(singleRoadProject, 2.0),
+                  HOVER_HIGHLIGHT_COLOR,
+                );
+                rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
+                lastHoverMeshIdRef.current = newHoveredRoad;
+              }
+            } else if (!showHoverHighlight) {
+              rendererInst.clearHover();
+              lastHoverMeshIdRef.current = null;
+            }
+          } else {
+            rendererInst.clearHover();
+            lastHoverMeshIdRef.current = null;
+          }
+          if (!rendererInst.pointerDragging) {
+            canvas.style.cursor = 'pointer';
+          }
+        } else {
+          rendererInst.clearHover();
+          lastHoverMeshIdRef.current = null;
+          const newHoveredJunction = await service.pickJunctionAtPointCached(pos.x, pos.y, 3.0);
+          hoveredJunctionRef.current = newHoveredJunction;
+          if (newHoveredJunction) {
+            if (showHoverHighlight) {
+              const hoverVerts = await service.generateSingleJunctionVertices(
+                currentProject,
+                newHoveredJunction,
+                HOVER_HIGHLIGHT_COLOR,
+              );
+              rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
+            }
+            if (!rendererInst.pointerDragging) {
+              canvas.style.cursor = 'pointer';
+            }
+          } else {
+            const signalHit = await service.pickSignalAtPoint(visibleProject, pos.x, pos.y, 4.0);
+            if (signalHit !== null) {
+              hoveredSignalRef.current = signalHit;
+              if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';
+            } else {
+              hoveredSignalRef.current = null;
+              const objectHit = await service.pickObjectAtPoint(visibleProject, pos.x, pos.y, 4.0);
+              if (objectHit !== null) {
+                hoveredObjectRef.current = objectHit;
+                if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';
+              } else {
+                hoveredObjectRef.current = null;
+                if (!rendererInst.pointerDragging) canvas.style.cursor = '';
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore hover detection errors.
+    } finally {
+      pickInFlightRef.current = false;
+    }
+  }, [getVisibleProject, showHoverHighlight]);
+
   const handleMouseMove = useCallback(async (e: React.MouseEvent) => {
     const gesture = mouseGestureRef.current;
     if (gesture && !gesture.dragged && exceededDragThreshold(gesture.startX, gesture.startY, e.clientX, e.clientY)) {
@@ -496,88 +584,13 @@ export function Viewport() {
     }
 
     if (isInSelectMode && !pickInFlightRef.current) {
-      pickInFlightRef.current = true;
-      try {
-        const service = await getPlatformService();
-        const { project: currentProject } = useProjectStore.getState();
-        const visibleProject = getVisibleProject();
-        if (!visibleProject) return;
-        const rendererInst = rendererRef.current;
-        const newHoveredRoad = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 2.5);
-        if (newHoveredRoad !== hoveredRoadRef.current || hoveredJunctionRef.current !== null) {
-          hoveredRoadRef.current = newHoveredRoad;
-          hoveredJunctionRef.current = null;
-          hoveredSignalRef.current = null;
-          hoveredObjectRef.current = null;
-          if (rendererInst) {
-            if (newHoveredRoad) {
-              const { selectedRoadId } = useProjectStore.getState();
-              if (newHoveredRoad !== selectedRoadId) {
-                if (showHoverHighlight && newHoveredRoad !== lastHoverMeshIdRef.current) {
-                  const road = currentProject.roads.find((r) => r.id === newHoveredRoad);
-                  if (road) {
-                    const singleRoadProject = { ...currentProject, roads: [road], junctions: [] };
-                    const hoverVerts = tintVertices(
-                      await service.generateRoadVertices(singleRoadProject, 2.0),
-                      HOVER_HIGHLIGHT_COLOR,
-                    );
-                    rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
-                    lastHoverMeshIdRef.current = newHoveredRoad;
-                  }
-                } else if (!showHoverHighlight) {
-                  rendererInst.clearHover();
-                  lastHoverMeshIdRef.current = null;
-                }
-              } else {
-                rendererInst.clearHover();
-                lastHoverMeshIdRef.current = null;
-              }
-              if (!rendererInst.pointerDragging) {
-                canvas.style.cursor = 'pointer';
-              }
-            } else {
-              rendererInst.clearHover();
-              lastHoverMeshIdRef.current = null;
-              const newHoveredJunction = await service.pickJunctionAtPointCached(worldPos.x, worldPos.y, 3.0);
-              hoveredJunctionRef.current = newHoveredJunction;
-              if (newHoveredJunction) {
-                if (showHoverHighlight) {
-                  const hoverVerts = await service.generateSingleJunctionVertices(
-                    currentProject,
-                    newHoveredJunction,
-                    HOVER_HIGHLIGHT_COLOR,
-                  );
-                  rendererInst.uploadHoverVertices(liftMeshZ(hoverVerts, HOVER_HIGHLIGHT_Z_LIFT));
-                }
-                if (!rendererInst.pointerDragging) {
-                  canvas.style.cursor = 'pointer';
-                }
-              } else {
-                // No road or junction hovered – try signal/object
-                // Signals and objects sit ON roads, check with moderate threshold.
-                const signalHit = await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
-                if (signalHit !== null) {
-                  hoveredSignalRef.current = signalHit;
-                  if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';
-                } else {
-                  hoveredSignalRef.current = null;
-                  const objectHit = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
-                  if (objectHit !== null) {
-                    hoveredObjectRef.current = objectHit;
-                    if (!rendererInst.pointerDragging) canvas.style.cursor = 'pointer';
-                  } else {
-                    hoveredObjectRef.current = null;
-                    if (!rendererInst.pointerDragging) canvas.style.cursor = '';
-                  }
-                }
-              }
-            }
-          }
-        }
-      } catch {
-        // Ignore hover detection errors.
-      } finally {
-        pickInFlightRef.current = false;
+      // rAF throttle: only schedule one pick per animation frame
+      pendingPickPosRef.current = { x: worldPos.x, y: worldPos.y };
+      if (!pendingPickRafRef.current) {
+        pendingPickRafRef.current = requestAnimationFrame(() => {
+          pendingPickRafRef.current = 0;
+          void executeHoverPick();
+        });
       }
     }
 

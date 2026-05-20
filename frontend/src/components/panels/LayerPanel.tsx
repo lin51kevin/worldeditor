@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, ChevronDown, Search, X } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
@@ -11,6 +11,7 @@ import {
 import { emitViewportEvent } from '../../viewport/viewportEvents';
 import { JunctionLayerItem } from './layer/JunctionLayerItem';
 import { RoadLayerItem } from './layer/RoadLayerItem';
+import { VirtualList } from '../shared/VirtualList';
 import './LayerPanel.css';
 
 const DISPLAY_TOGGLES = [
@@ -307,6 +308,70 @@ export function LayerPanel() {
     );
   }, [project.junctions, searchQuery]);
 
+  const sceneListItems = useMemo(() => {
+    const result: { key: string; element: ReactNode }[] = [];
+    for (const road of filteredRoads) {
+      result.push({
+        key: `road-${road.id}`,
+        element: (
+          <RoadLayerItem
+            road={road}
+            selectedSceneNode={selectedSceneNode}
+            isSelected={isRoadSelected(road.id)}
+            isVisible={isRoadVisible(road.id)}
+            isExpanded={expandedRoads.has(road.id)}
+            signalsExpanded={expandedRoadSignals.has(road.id)}
+            objectsExpanded={expandedRoadObjects.has(road.id)}
+            laneSectionsExpanded={expandedLaneSections}
+            entryRef={(element) => registerRowRef(`road-${road.id}`, element)}
+            isLaneSectionSelected={(sectionIndex) => isLaneSectionSelected(road.id, sectionIndex)}
+            isLaneSelected={(sectionIndex, side, laneId) => isLaneSelected(road.id, sectionIndex, side, laneId)}
+            isLaneSectionVisible={(sectionIndex) => isLaneSectionVisible(road.id, sectionIndex)}
+            isLaneVisible={(sectionIndex, side, laneId) => isLaneVisible(road.id, sectionIndex, side, laneId)}
+            onSelect={() => handleSelectRoad(road.id)}
+            onToggleExpand={() => toggleRoadExpand(road.id)}
+            onZoom={() => handleZoomToRoad(road.id)}
+            onToggleVisibility={() => toggleRoadVisibility(road.id)}
+            onSelectLaneSection={(sectionIndex) => selectRoadChildSection(road.id, sectionIndex)}
+            onToggleLaneSectionExpand={(sectionIndex) => toggleLaneSectionExpand(makeLaneSectionKey(road.id, sectionIndex))}
+            onToggleLaneSectionVisibility={(sectionIndex) => toggleLaneSectionVisibility(makeLaneSectionKey(road.id, sectionIndex))}
+            onSelectLane={(sectionIndex, side, laneId) => selectRoadChildLane(road.id, sectionIndex, side, laneId)}
+            onToggleLaneVisibility={(sectionIndex, side, laneId) => toggleLaneVisibility(road.id, sectionIndex, side, laneId)}
+            onToggleSignalsExpand={() => toggleRoadSignalsExpand(road.id)}
+            onSelectSignal={(signalId) => handleSelectSignal(road.id, signalId)}
+            onToggleSignalVisibility={(signalId) => toggleSignalVisibilityInStore(road.id, signalId)}
+            isSignalVisible={(signalId) => isSignalVisible(road.id, signalId)}
+            registerLaneSectionRef={(sectionIndex, el) => registerRowRef(`lsec-${road.id}-${sectionIndex}`, el)}
+            registerLaneRef={(sectionIndex, side, laneId, el) => registerRowRef(`lane-${road.id}-${sectionIndex}-${side}-${laneId}`, el)}
+            registerSignalRef={(signalId, el) => registerRowRef(`signal-${road.id}-${signalId}`, el)}
+            onToggleObjectsExpand={() => toggleRoadObjectsExpand(road.id)}
+            onSelectObject={(objectId) => handleSelectObject(road.id, objectId)}
+            onToggleObjectVisibility={(objectId) => toggleObjectVisibilityInStore(road.id, objectId)}
+            isObjectVisible={(objectId) => isObjectVisible(road.id, objectId)}
+            registerObjectRef={(objectId, el) => registerRowRef(`object-${road.id}-${objectId}`, el)}
+          />
+        ),
+      });
+    }
+    for (const junc of filteredJunctions) {
+      result.push({
+        key: `junc-${junc.id}`,
+        element: (
+          <JunctionLayerItem
+            junction={junc}
+            isSelected={isJunctionItemSelected(junc.id)}
+            isVisible={isJunctionVisible(junc.id)}
+            entryRef={(element) => registerRowRef(`junc-${junc.id}`, element)}
+            onSelect={() => handleSelectJunction(junc.id)}
+            onZoom={() => handleZoomToJunction(junc.id)}
+            onToggleVisibility={() => toggleJunctionVisibility(junc.id)}
+          />
+        ),
+      });
+    }
+    return result;
+  }, [filteredRoads, filteredJunctions, selectedSceneNode, expandedRoads, expandedRoadSignals, expandedRoadObjects, expandedLaneSections, registerRowRef, isRoadSelected, isRoadVisible, isLaneSectionSelected, isLaneSelected, isLaneSectionVisible, isLaneVisible, isJunctionItemSelected, isJunctionVisible, handleSelectRoad, toggleRoadExpand, handleZoomToRoad, toggleRoadVisibility, selectRoadChildSection, toggleLaneSectionExpand, toggleLaneSectionVisibility, selectRoadChildLane, toggleLaneVisibility, toggleRoadSignalsExpand, handleSelectSignal, toggleSignalVisibilityInStore, isSignalVisible, toggleRoadObjectsExpand, handleSelectObject, toggleObjectVisibilityInStore, isObjectVisible, handleSelectJunction, handleZoomToJunction, toggleJunctionVisibility]);
+
   const header = project.header;
   const loaded = hasProjectData(project);
 
@@ -465,62 +530,15 @@ export function LayerPanel() {
                   </button>
                 )}
               </div>
-          <div className="road-list">
-            {/* Roads */}
-            {filteredRoads.map((road) => (
-              <RoadLayerItem
-                key={`road-${road.id}`}
-                road={road}
-                selectedSceneNode={selectedSceneNode}
-                isSelected={isRoadSelected(road.id)}
-                isVisible={isRoadVisible(road.id)}
-                isExpanded={expandedRoads.has(road.id)}
-                signalsExpanded={expandedRoadSignals.has(road.id)}
-                objectsExpanded={expandedRoadObjects.has(road.id)}
-                laneSectionsExpanded={expandedLaneSections}
-                entryRef={(element) => registerRowRef(`road-${road.id}`, element)}
-                isLaneSectionSelected={(sectionIndex) => isLaneSectionSelected(road.id, sectionIndex)}
-                isLaneSelected={(sectionIndex, side, laneId) => isLaneSelected(road.id, sectionIndex, side, laneId)}
-                isLaneSectionVisible={(sectionIndex) => isLaneSectionVisible(road.id, sectionIndex)}
-                isLaneVisible={(sectionIndex, side, laneId) => isLaneVisible(road.id, sectionIndex, side, laneId)}
-                onSelect={() => handleSelectRoad(road.id)}
-                onToggleExpand={() => toggleRoadExpand(road.id)}
-                onZoom={() => handleZoomToRoad(road.id)}
-                onToggleVisibility={() => toggleRoadVisibility(road.id)}
-                onSelectLaneSection={(sectionIndex) => selectRoadChildSection(road.id, sectionIndex)}
-                onToggleLaneSectionExpand={(sectionIndex) => toggleLaneSectionExpand(makeLaneSectionKey(road.id, sectionIndex))}
-                onToggleLaneSectionVisibility={(sectionIndex) => toggleLaneSectionVisibility(makeLaneSectionKey(road.id, sectionIndex))}
-                onSelectLane={(sectionIndex, side, laneId) => selectRoadChildLane(road.id, sectionIndex, side, laneId)}
-                onToggleLaneVisibility={(sectionIndex, side, laneId) => toggleLaneVisibility(road.id, sectionIndex, side, laneId)}
-                onToggleSignalsExpand={() => toggleRoadSignalsExpand(road.id)}
-                onSelectSignal={(signalId) => handleSelectSignal(road.id, signalId)}
-                onToggleSignalVisibility={(signalId) => toggleSignalVisibilityInStore(road.id, signalId)}
-                isSignalVisible={(signalId) => isSignalVisible(road.id, signalId)}
-                registerLaneSectionRef={(sectionIndex, el) => registerRowRef(`lsec-${road.id}-${sectionIndex}`, el)}
-                registerLaneRef={(sectionIndex, side, laneId, el) => registerRowRef(`lane-${road.id}-${sectionIndex}-${side}-${laneId}`, el)}
-                registerSignalRef={(signalId, el) => registerRowRef(`signal-${road.id}-${signalId}`, el)}
-                onToggleObjectsExpand={() => toggleRoadObjectsExpand(road.id)}
-                onSelectObject={(objectId) => handleSelectObject(road.id, objectId)}
-                onToggleObjectVisibility={(objectId) => toggleObjectVisibilityInStore(road.id, objectId)}
-                isObjectVisible={(objectId) => isObjectVisible(road.id, objectId)}
-                registerObjectRef={(objectId, el) => registerRowRef(`object-${road.id}-${objectId}`, el)}
-              />
-            ))}
-
-            {/* Junctions (after roads, same level — flat tree) */}
-            {filteredJunctions.map((junc) => (
-              <JunctionLayerItem
-                key={`junc-${junc.id}`}
-                junction={junc}
-                isSelected={isJunctionItemSelected(junc.id)}
-                isVisible={isJunctionVisible(junc.id)}
-                entryRef={(element) => registerRowRef(`junc-${junc.id}`, element)}
-                onSelect={() => handleSelectJunction(junc.id)}
-                onZoom={() => handleZoomToJunction(junc.id)}
-                onToggleVisibility={() => toggleJunctionVisibility(junc.id)}
-              />
-            ))}
-          </div>
+          <VirtualList
+            items={sceneListItems}
+            height={Math.min(600, Math.max(300, window.innerHeight - 300))}
+            estimatedItemHeight={36}
+            overscan={5}
+            className="road-list"
+            getItemKey={(item) => item.key}
+            renderItem={(item) => item.element}
+          />
           {filteredRoads.length === 0 && filteredJunctions.length === 0 && searchQuery.trim() && (
             <div className="scene-list-empty">{t('layerPanel.noSearchResults')}</div>
           )}

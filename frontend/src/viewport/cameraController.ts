@@ -67,6 +67,8 @@ export class CameraController {
   private cachedViewProjForRender: Float32Array | null = null;
   private onScaleChange: ((info: ScaleInfo) => void) | null = null;
   private onScaleMetricsChanged: ((info: ScaleInfo) => void) | null = null;
+  /** Callback invoked every time viewDirty is set to true. Used to wake the render loop. */
+  private onViewBecameDirty: (() => void) | null = null;
   private lastReportedMpp = -1;
   private lastReportedGridSpacing = -1;
 
@@ -76,6 +78,9 @@ export class CameraController {
 
   get isViewDirty(): boolean {
     return this.viewDirty;
+  }
+  set isViewDirty(v: boolean) {
+    this.viewDirty = v;
   }
 
   get pointerDragging(): boolean {
@@ -103,14 +108,21 @@ export class CameraController {
     this.onScaleMetricsChanged = cb;
   }
 
+  /** Register a callback called whenever the view becomes dirty (needs re-render). */
+  setViewDirtyCallback(cb: (() => void) | null): void {
+    this.onViewBecameDirty = cb;
+  }
+
   setViewportSize(width: number, height: number): void {
     this.width = width;
     this.height = height;
     this.viewDirty = true;
+    this.onViewBecameDirty?.();
   }
 
   markDirty(): void {
     this.viewDirty = true;
+    this.onViewBecameDirty?.();
   }
 
   /** Compute current meters-per-pixel (perspective approximation at target distance). */
@@ -170,6 +182,7 @@ export class CameraController {
         this._animStartUp[2] + (this._animEndUp[2] - this._animStartUp[2]) * ease,
       ];
       this.viewDirty = true;
+      this.onViewBecameDirty?.();
       if (t < 1) {
         requestAnimationFrame(step);
       } else {
@@ -280,6 +293,7 @@ export class CameraController {
     this.camera.near = Math.max(0.1, maxExtent * 0.001);
     this.camera.far = Math.max(100000, maxExtent * 10);
     this.viewDirty = true;
+    this.onViewBecameDirty?.();
     this.reportScale();
   }
 
@@ -322,6 +336,7 @@ export class CameraController {
     this.camera.near = Math.max(0.1, camDist * 0.001);
     this.camera.far = Math.max(100000, camDist * 100);
     this.viewDirty = true;
+    this.onViewBecameDirty?.();
     this.reportScale();
   }
 
@@ -433,6 +448,7 @@ export class CameraController {
       tz + r * Math.cos(phi),
     ];
     this.viewDirty = true;
+    this.onViewBecameDirty?.();
     this.reportScale();
   }
 
@@ -453,6 +469,7 @@ export class CameraController {
     this.camera.near = Math.max(0.1, dist * 0.001);
     this.camera.far = Math.max(100000, dist * 100);
     this.viewDirty = true;
+    this.onViewBecameDirty?.();
     this.reportScale();
   }
 
@@ -471,6 +488,7 @@ export class CameraController {
     this.camera.position = [px + offset.x, py + offset.y, pz];
     this.camera.target = [tx + offset.x, ty + offset.y, tz];
     this.viewDirty = true;
+    this.onViewBecameDirty?.();
     this.reportScale();
   }
 

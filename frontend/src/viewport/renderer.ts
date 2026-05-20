@@ -3,6 +3,9 @@ export type { SignalData, ObjectData, MarkingData, MouseDragAction } from './vie
 export { resolveMouseDragAction, computeGroundPanOffset } from './viewportTypes';
 import { takePrewarmedGPU, returnPrewarmedGPU } from './gpuDeviceCache';
 import type { PrewarmedGPU } from './gpuDeviceCache';
+import { createRenderLoop } from './renderLoop';
+import type { RenderLoop } from './renderLoop';
+import { batchMeshes } from './meshBatcher';
 
 /**
  * WebGPU viewport renderer.
@@ -72,7 +75,7 @@ export class ViewportRenderer {
   private activeDragHandle: ControlPointRef | null = null;
   private width = 0;
   private height = 0;
-  private animFrameId = 0;
+  private renderLoop: RenderLoop | null = null;
   private deviceLost = false;
   // Set to true by dispose(); guards against async init() completing after cleanup
   private disposed = false;
@@ -491,28 +494,31 @@ export class ViewportRenderer {
    */
   markSceneDirty(): void {
     this.sceneDirty = true;
+    this.renderLoop?.wakeUp();
   }
 
-  /** Start the render loop (render-on-demand: skips GPU work when idle). */
+  /** Start the render loop (render-on-demand: stops when idle, wakes on events). */
   start(): void {
     this.cameraController.reportScale();
-    const loop = () => {
-      // Only submit GPU work when something actually changed.
-      if (this.sceneDirty || this.cameraController.isViewDirty) {
+    // Wake the loop whenever the camera controller marks the view as dirty.
+    this.cameraController.setViewDirtyCallback(() => this.renderLoop?.wakeUp());
+    this.renderLoop = createRenderLoop({
+      isDirty: () => this.sceneDirty || this.cameraController.isViewDirty,
+      onRender: () => {
         this.renderFrame();
+      },
+      onDirtyCleared: () => {
         this.sceneDirty = false;
-      }
-      this.animFrameId = requestAnimationFrame(loop);
-    };
-    this.animFrameId = requestAnimationFrame(loop);
+        this.cameraController.isViewDirty = false;
+      },
+    });
+    this.renderLoop.start();
   }
 
   /** Stop the render loop. */
   stop(): void {
-    if (this.animFrameId) {
-      cancelAnimationFrame(this.animFrameId);
-      this.animFrameId = 0;
-    }
+    this.renderLoop?.stop();
+    this.renderLoop = null;
   }
 
   /** Clear the vertex data cache so the next uploadRoadVertices triggers auto-fit.
@@ -619,9 +625,12 @@ export class ViewportRenderer {
     if (this.meshes.length > 0) {
       pass.setPipeline(this.basicPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
-      for (const mesh of this.meshes) {
-        pass.setVertexBuffer(0, mesh.vertexBuffer);
-        pass.draw(mesh.vertexCount);
+      const batches = batchMeshes(this.meshes, 'basic');
+      for (const batch of batches) {
+        for (const mesh of batch.meshes) {
+          pass.setVertexBuffer(0, mesh.vertexBuffer);
+          pass.draw(mesh.vertexCount);
+        }
       }
     }
 
@@ -629,9 +638,12 @@ export class ViewportRenderer {
     if (this.hoverMeshes.length > 0) {
       pass.setPipeline(this.highlightPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
-      for (const mesh of this.hoverMeshes) {
-        pass.setVertexBuffer(0, mesh.vertexBuffer);
-        pass.draw(mesh.vertexCount);
+      const batches = batchMeshes(this.hoverMeshes, 'highlight');
+      for (const batch of batches) {
+        for (const mesh of batch.meshes) {
+          pass.setVertexBuffer(0, mesh.vertexBuffer);
+          pass.draw(mesh.vertexCount);
+        }
       }
     }
 
@@ -639,9 +651,12 @@ export class ViewportRenderer {
     if (this.highlightMeshes.length > 0) {
       pass.setPipeline(this.highlightPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
-      for (const mesh of this.highlightMeshes) {
-        pass.setVertexBuffer(0, mesh.vertexBuffer);
-        pass.draw(mesh.vertexCount);
+      const batches = batchMeshes(this.highlightMeshes, 'highlight');
+      for (const batch of batches) {
+        for (const mesh of batch.meshes) {
+          pass.setVertexBuffer(0, mesh.vertexBuffer);
+          pass.draw(mesh.vertexCount);
+        }
       }
     }
 
@@ -649,9 +664,12 @@ export class ViewportRenderer {
     if (this.laneLineMeshes.length > 0) {
       pass.setPipeline(this.highlightPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
-      for (const mesh of this.laneLineMeshes) {
-        pass.setVertexBuffer(0, mesh.vertexBuffer);
-        pass.draw(mesh.vertexCount);
+      const batches = batchMeshes(this.laneLineMeshes, 'highlight');
+      for (const batch of batches) {
+        for (const mesh of batch.meshes) {
+          pass.setVertexBuffer(0, mesh.vertexBuffer);
+          pass.draw(mesh.vertexCount);
+        }
       }
     }
 
@@ -659,9 +677,12 @@ export class ViewportRenderer {
     if (this.markerRenderer.curveMeshes.length > 0) {
       pass.setPipeline(this.basicPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
-      for (const mesh of this.markerRenderer.curveMeshes) {
-        pass.setVertexBuffer(0, mesh.vertexBuffer);
-        pass.draw(mesh.vertexCount);
+      const batches = batchMeshes(this.markerRenderer.curveMeshes, 'basic');
+      for (const batch of batches) {
+        for (const mesh of batch.meshes) {
+          pass.setVertexBuffer(0, mesh.vertexBuffer);
+          pass.draw(mesh.vertexCount);
+        }
       }
     }
 
@@ -669,9 +690,12 @@ export class ViewportRenderer {
     if (this.markerRenderer.markerMeshes.length > 0) {
       pass.setPipeline(this.basicPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
-      for (const mesh of this.markerRenderer.markerMeshes) {
-        pass.setVertexBuffer(0, mesh.vertexBuffer);
-        pass.draw(mesh.vertexCount);
+      const batches = batchMeshes(this.markerRenderer.markerMeshes, 'basic');
+      for (const batch of batches) {
+        for (const mesh of batch.meshes) {
+          pass.setVertexBuffer(0, mesh.vertexBuffer);
+          pass.draw(mesh.vertexCount);
+        }
       }
     }
 
