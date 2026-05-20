@@ -17,8 +17,15 @@ export interface AIProviderConfig {
   model: string;
 }
 
+export interface ModelInfo {
+  id: string;
+  name?: string;
+}
+
 export interface AIProvider {
   chat(messages: CopilotMessage[], onChunk: (chunk: StreamChunk) => void): AbortController;
   /** Lightweight connectivity check (e.g. GET /models). Returns true if reachable. */
   healthCheck(): Promise<boolean>;
+  /** Fetch available models from the provider API. */
+  listModels(): Promise<ModelInfo[]>;
 }

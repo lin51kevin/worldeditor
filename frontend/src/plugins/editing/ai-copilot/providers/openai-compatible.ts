@@ -1,4 +1,4 @@
-import type { AIProvider, AIProviderConfig, CopilotMessage, StreamChunk } from './types';
+import type { AIProvider, AIProviderConfig, CopilotMessage, ModelInfo, StreamChunk } from './types';
 
 /**
  * OpenAI-compatible streaming provider using native fetch + ReadableStream.
@@ -32,8 +32,48 @@ export class OpenAICompatibleProvider implements AIProvider {
       });
 
       return response.ok;
-    } catch {
+    } catch (err) {
+      if (err instanceof TypeError) {
+        // TypeError typically indicates a network error or CORS failure
+        throw new Error('network_error');
+      }
       return false;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  /** Fetch available models from the provider's /models endpoint */
+  async listModels(): Promise<ModelInfo[]> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.apiKey) {
+        headers['Authorization'] = `Bearer ${this.apiKey}`;
+      }
+
+      const response = await fetch(`${this.baseUrl}/models`, {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const json = await response.json();
+      const data = json.data ?? json;
+      if (!Array.isArray(data)) return [];
+
+      return data.map((m: { id: string; name?: string }) => ({
+        id: m.id,
+        name: m.name,
+      }));
+    } catch {
+      return [];
     } finally {
       clearTimeout(timeout);
     }
