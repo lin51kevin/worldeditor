@@ -4,8 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { PROVIDER_PRESETS, getPreset } from '../providers/provider-registry';
 import type { CopilotConfig } from '../core/config-store';
 import { saveConfig } from '../core/config-store';
+import { getIntentsConfigPathHint } from '../core/intent-parser';
 import type { AIProviderConfig } from '../providers/types';
 import { OpenAICompatibleProvider } from '../providers/openai-compatible';
+import { ModelCombobox } from './ModelCombobox';
 import './CopilotPanel.css';
 
 interface SettingsViewProps {
@@ -80,7 +82,11 @@ export function SettingsView({ config: initialConfig, onSave, onClose }: Setting
       }
     } catch (err) {
       setTestResult(false);
-      setTestError(err instanceof Error ? err.message : String(err));
+      if (err instanceof Error && err.message === 'network_error') {
+        setTestError(t('copilot.settingsCorsHint') || 'Connection failed (CORS?). For Ollama, add --cors when starting.');
+      } else {
+        setTestError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       setTesting(false);
     }
@@ -118,6 +124,11 @@ export function SettingsView({ config: initialConfig, onSave, onClose }: Setting
         <button className="copilot-settings-close-btn" onClick={onClose} aria-label={t('copilot.settingsClose')}>
           <X size={14} />
         </button>
+      </div>
+
+      <div className="copilot-settings-desc">
+        Intent config is loaded from the bundled default and can be overridden at
+        <code> {getIntentsConfigPathHint()}</code> in the user config directory.
       </div>
 
       {/* Provider input with datalist */}
@@ -194,23 +205,27 @@ export function SettingsView({ config: initialConfig, onSave, onClose }: Setting
           />
         </div>
 
-        {/* Model — input with datalist */}
+        {/* Model — custom combobox with search, paste, and fetch */}
         <div className="copilot-settings-field">
           <label>{t('copilot.settingsModel')}</label>
-          <input
-            type="text"
-            list={`copilot-model-list-${activeProviderId}`}
+          <ModelCombobox
             value={model}
-            onChange={(e) => setModel(e.target.value)}
+            onChange={setModel}
+            presetModels={preset?.models ?? []}
             placeholder={preset?.defaultModel || t('copilot.settingsModelPlaceholder')}
+            onFetchModels={async () => {
+              const providerCfg: AIProviderConfig = {
+                id: activeProviderId,
+                name: preset?.name ?? 'Custom',
+                baseUrl: baseUrl.trim(),
+                apiKey,
+                model,
+              };
+              const provider = new OpenAICompatibleProvider(providerCfg);
+              const models = await provider.listModels();
+              return models.map((m) => m.id);
+            }}
           />
-          {preset && preset.models.length > 0 && (
-            <datalist id={`copilot-model-list-${activeProviderId}`}>
-              {preset.models.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-          )}
         </div>
 
         {/* Test connection */}

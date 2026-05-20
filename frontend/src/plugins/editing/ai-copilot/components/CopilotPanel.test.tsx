@@ -46,6 +46,7 @@ vi.mock('../core/intent-parser', () => ({
     { command: '/road delete', label: 'Delete Road', description: 'Delete selected road' },
     { command: '/help', label: 'Help', description: 'Show commands' },
   ]),
+  getIntentsConfigPathHint: vi.fn().mockReturnValue('plugins/ai-copilot/intents.json'),
 }));
 
 vi.mock('../providers/openai-compatible', () => ({
@@ -75,10 +76,6 @@ vi.mock('react-i18next', () => ({
         'copilot.tipHint': '提示：输入 /road add 添加道路',
         'copilot.stop': '停止',
         'copilot.send': '发送',
-        'copilot.applyModeAuto': '自动',
-        'copilot.applyModeManual': '手动',
-        'copilot.applyModeAutoTooltip': '自动应用更改',
-        'copilot.applyModeManualTooltip': '手动确认更改',
         'copilot.noProvider': '未配置服务商',
         'copilot.settings': '设置',
         'copilot.closePanel': '关闭面板',
@@ -87,13 +84,16 @@ vi.mock('react-i18next', () => ({
         'copilot.settingsApiUrl': '接口地址 (Base URL)',
         'copilot.settingsApiKey': 'API Key',
         'copilot.settingsModel': '模型',
-        'copilot.settingsApplyMode': '应用模式',
         'copilot.settingsSave': '保存',
         'copilot.settingsCancel': '取消',
-        'copilot.settingsManual': '手动确认 (推荐)',
-        'copilot.settingsAuto': '自动执行',
         'copilot.settingsApiKeyPlaceholder': '(可选)',
         'copilot.settingsModelPlaceholder': '输入模型名称',
+        'copilot.settingsModelHint': '支持手动输入或粘贴任意模型 ID',
+        'copilot.settingsFetchModels': '从 API 获取',
+        'copilot.settingsFetchingModels': '获取中...',
+        'copilot.settingsFetchModelsError': '获取模型列表失败',
+        'copilot.settingsNoMatchingModels': '无匹配模型',
+        'copilot.settingsNoModels': '暂无模型',
         'copilot.settingsClose': '关闭',
         'copilot.settingsProviderHint': '输入或选择服务商',
         'copilot.settingsGetApiKey': '获取 API Key',
@@ -283,15 +283,6 @@ describe('CopilotPanel', () => {
     await act(async () => { fireEvent.click(newChatBtn); });
 
     expect(screen.queryByText('test')).not.toBeInTheDocument();
-  });
-
-  it('12. 应用模式徽标：显示当前模式并可切换', async () => {
-    renderPanel();
-    const badge = screen.getByText('手动');
-    expect(badge).toBeInTheDocument();
-
-    await act(async () => { fireEvent.click(badge); });
-    expect(screen.getByText('自动')).toBeInTheDocument();
   });
 
   it('13. 空对话时显示提示行', () => {

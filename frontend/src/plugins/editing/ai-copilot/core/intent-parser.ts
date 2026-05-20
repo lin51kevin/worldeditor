@@ -35,26 +35,31 @@ interface IntentsConfigFile {
 
 let _configCache: IntentsConfigFile | null = null;
 let _configLoading: Promise<IntentsConfigFile> | null = null;
+const USER_CONFIG_RELATIVE_PATH = ['plugins', 'ai-copilot', 'intents.json'];
 
 /** Load intents config from public/config/intents.json */
 async function loadConfig(): Promise<IntentsConfigFile> {
   if (_configCache) return _configCache;
   if (_configLoading) return _configLoading;
 
-  _configLoading = fetch('/config/intents.json')
-    .then((res) => {
-      if (!res.ok) throw new Error(`Failed to load intents config: ${res.status}`);
-      return res.json() as Promise<IntentsConfigFile>;
-    })
-    .then((config) => {
-      _configCache = config;
-      return config;
-    })
-    .catch(() => {
-      // Fallback: return embedded default config
-      _configCache = getDefaultConfig();
-      return _configCache;
-    });
+  _configLoading = (async () => {
+    const bundled = await loadBundledConfig();
+
+    if (!isTauriRuntime()) {
+      _configCache = bundled;
+      return bundled;
+    }
+
+    try {
+      const userConfig = await loadUserConfig(bundled);
+      _configCache = userConfig;
+      return userConfig;
+    } catch (error) {
+      console.warn('[intent-parser] Falling back to bundled config:', error);
+      _configCache = bundled;
+      return bundled;
+    }
+  })();
 
   return _configLoading;
 }
@@ -66,6 +71,57 @@ function getCachedConfig(): IntentsConfigFile | null {
 
 /** Pre-load config at module init */
 void loadConfig();
+
+function isTauriRuntime(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+async function loadBundledConfig(): Promise<IntentsConfigFile> {
+  if (import.meta.env.MODE === 'test') {
+    return getDefaultConfig();
+  }
+
+  try {
+    const res = await fetch(getBundledConfigUrl());
+    if (!res.ok) {
+      throw new Error(`Failed to load intents config: ${res.status}`);
+    }
+    return (await res.json()) as IntentsConfigFile;
+  } catch (error) {
+    console.warn('[intent-parser] Bundled config load failed, using embedded defaults:', error);
+    return getDefaultConfig();
+  }
+}
+
+function getBundledConfigUrl(): string {
+  if (typeof window !== 'undefined' && window.location?.href) {
+    return new URL('/config/intents.json', window.location.href).toString();
+  }
+  return 'http://localhost/config/intents.json';
+}
+
+async function loadUserConfig(defaultConfig: IntentsConfigFile): Promise<IntentsConfigFile> {
+  const { appConfigDir, join } = await import('@tauri-apps/api/path');
+  const { exists, mkdir, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
+
+  const configDir = await join(await appConfigDir(), ...USER_CONFIG_RELATIVE_PATH.slice(0, -1));
+  const configPath = await join(configDir, USER_CONFIG_RELATIVE_PATH[2]!);
+
+  if (!(await exists(configPath))) {
+    await mkdir(configDir, { recursive: true });
+    await writeTextFile(configPath, JSON.stringify(defaultConfig, null, 2));
+    return defaultConfig;
+  }
+
+  try {
+    const raw = await readTextFile(configPath);
+    const parsed = JSON.parse(raw) as IntentsConfigFile;
+    return parsed;
+  } catch (error) {
+    console.warn(`[intent-parser] Invalid user config at ${configPath}, using bundled default:`, error);
+    return defaultConfig;
+  }
+}
 
 // ─── Synonym expansion ───
 
@@ -302,6 +358,10 @@ export function resetIntentsConfig(): void {
   _configLoading = null;
 }
 
+export function getIntentsConfigPathHint(): string {
+  return USER_CONFIG_RELATIVE_PATH.join('/');
+}
+
 // ─── Default fallback config (embedded) ───
 
 function getDefaultQuickCommands() {
@@ -442,4 +502,3 @@ function getDefaultConfig(): IntentsConfigFile {
     ],
   };
 }
-
