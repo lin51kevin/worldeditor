@@ -803,13 +803,17 @@ function getOutgoingArrowSubtype(drivingLaneCount: number, laneIndex: number): {
  * and lane position index (1-based from innermost).
  * Matches C# GetPaintSubTye logic for right-hand driving, incoming direction.
  */
-function getIncomingArrowSubtype(drivingLaneCount: number, laneIndex: number): { subType: string; name: string } {
+function getIncomingArrowSubtype(drivingLaneCount: number, laneIndex: number, armCount?: number): { subType: string; name: string } {
   if (drivingLaneCount === 1) {
     return { subType: 'StraightOrLeftOrRightTurnArrow', name: 'Straight Left or Right Turn Arrow Paint' };
   } else if (drivingLaneCount === 2) {
     if (laneIndex === 1) {
       return { subType: 'LeftOrRightTurnArrow', name: 'Left or Right Turn Arrow Paint' };
     } else {
+      // For T-junction (3 arms), outer lane can also go straight
+      if (armCount === 3) {
+        return { subType: 'StraightOrRightTurnArrow', name: 'Straight Right Turn Arrow Paint' };
+      }
       return { subType: 'RightTurnArrow', name: 'Right Turn Arrow Paint' };
     }
   } else {
@@ -828,7 +832,7 @@ function getIncomingArrowSubtype(drivingLaneCount: number, laneIndex: number): {
  * - Right-side (incoming traffic): placed at s ≈ length - 4m, t < 0
  * - Left-side (outgoing traffic): placed at s ≈ 4m, t > 0
  */
-function addTurnArrows(armRoads: Road[]): void {
+function addTurnArrows(armRoads: Road[], armCount?: number): void {
   const SIGNAL_S_DELTA = 4.0;
   for (const road of armRoads) {
     if (!road.signals) road.signals = [];
@@ -840,7 +844,7 @@ function addTurnArrows(armRoads: Road[]): void {
       const signalS = Math.max(road.length - SIGNAL_S_DELTA, 0.5);
       for (let i = 0; i < rightLaneCount; i++) {
         const laneIndex = i + 1;
-        const { subType, name } = getIncomingArrowSubtype(rightLaneCount, laneIndex);
+        const { subType, name } = getIncomingArrowSubtype(rightLaneCount, laneIndex, armCount);
         const lane = rightDrivingLanes[i]!;
         const laneWidth = lane.width[0]?.a ?? DEFAULT_LANE_WIDTH;
         const tOffset = -(i * laneWidth + laneWidth / 2);
@@ -1074,11 +1078,12 @@ export function buildJunctionFromConfig(
         if (cwDist === 1) {
           // Adjacent CW: all lanes (shoulder + driving)
           lanesToConnect = rightLanes.map((cfg, idx) => ({ laneIdx: idx, config: cfg }));
-        } else if (cwDist === n - 1) {
+        } else if (cwDist === n - 1 && config.topology !== 'T') {
           // Reverse CCW (1 step backward): innermost driving lane only
+          // Exception: T-topology has no true reverse (max 90° separation)
           lanesToConnect = [{ laneIdx: 0, config: rightLanes[0]! }];
         } else {
-          // Non-adjacent: driving lanes only (no shoulder)
+          // Non-adjacent (or T-topology cwDist=n-1): driving lanes only (no shoulder)
           lanesToConnect = rightLanes
             .map((cfg, idx) => ({ laneIdx: idx, config: cfg }))
             .filter(l => l.config.laneType === 'Driving');
@@ -1108,7 +1113,7 @@ export function buildJunctionFromConfig(
   // ── Post-processing: add road furniture ────────────────────────────────────
 
   // Add turn arrows on arm roads
-  addTurnArrows(armRoads);
+  addTurnArrows(armRoads, n);
 
   // Add crosswalks at junction-adjacent ends
   addCrosswalks(armRoads);

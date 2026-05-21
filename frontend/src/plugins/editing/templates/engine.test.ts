@@ -287,9 +287,10 @@ describe('buildJunctionFromConfig', () => {
     };
     const { roads } = buildJunctionFromConfig(minimal, 0, 0);
     // Default section: [Driving, Driving, Shoulder] per side = 3 right lanes
-    // 3 arms, per-lane connectors: CW adj (3 pairs × 3 lanes) + reverse (3 pairs × 1 lane) = 12
-    // Total: 3 arms + 12 connectors = 15
-    expect(roads).toHaveLength(15);
+    // T-topology: all pairs connect driving lanes (no reverse reduction)
+    // CW adj (3 pairs × 3 lanes) + non-adj (3 pairs × 2 driving lanes) = 9 + 6 = 15
+    // Total: 3 arms + 15 connectors = 18
+    expect(roads).toHaveLength(18);
     // First arm road has default 3L + 3R lanes (2 driving + 1 shoulder per side)
     const armRoads = roads.filter((r) => r.junction_id === null);
     const firstArm = armRoads[0]!;
