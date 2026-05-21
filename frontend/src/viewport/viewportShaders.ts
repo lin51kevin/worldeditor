@@ -20,7 +20,7 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(@builtin(vertex_index) idx: u32) -> VertexOutput {
-  let size = 10000.0;
+  let size = 100000.0;
   var positions = array<vec2<f32>, 6>(
     vec2<f32>(-size, -size),
     vec2<f32>( size, -size),
@@ -30,7 +30,8 @@ fn vs_main(@builtin(vertex_index) idx: u32) -> VertexOutput {
     vec2<f32>(-size,  size),
   );
   let pos2d = positions[idx];
-  let world_pos = vec3<f32>(pos2d.x, pos2d.y, 0.0);
+  // Center grid quad on camera position so grid covers visible area regardless of world offset
+  let world_pos = vec3<f32>(pos2d.x + uniforms.camera_pos.x, pos2d.y + uniforms.camera_pos.y, 0.0);
   var out: VertexOutput;
   out.clip_position = uniforms.view_proj * vec4<f32>(world_pos, 1.0);
   out.world_pos = world_pos;

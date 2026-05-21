@@ -2,6 +2,7 @@ import { mouseButtonMask, resolveMouseDragAction, computeGroundPanOffset } from 
 import type { MouseDragAction } from './viewportTypes';
 import {
   perspectiveMatrix,
+  orthographicMatrix,
   lookAtMatrix,
   multiplyMatrices,
   arraysEqual,
@@ -31,8 +32,19 @@ const DEPTH_CORRECTION = new Float32Array([
   0, 0, 0.5, 1,
 ]);
 
-const MIN_CAM_DIST = 2.0;
-const MAX_CAM_DIST = 2000.0;
+const MIN_CAM_DIST = 0.5;
+const MAX_CAM_DIST = 50000.0;
+
+/** 2D mode: fixed camera height above target (same as C# version). */
+const ORTHO_CAM_HEIGHT = 10000;
+/** 2D mode: minimum pixels per meter (fully zoomed out — shows huge area). */
+const MINIMAL_SCALE = 0.0625 / 256;
+/** 2D mode: maximum pixels per meter (fully zoomed in — shows tiny area). */
+const MAXIMAL_SCALE = 256;
+/** 2D mode: default pixels per meter. */
+const DEFAULT_SCALE = 1;
+/** Target grid cell size in screen pixels (same as C# GridSizePerSquare). */
+const GRID_TARGET_PX = 50;
 
 /** Camera state, transforms, and orbit/pan/zoom input handling for the viewport. */
 export class CameraController {
@@ -60,7 +72,6 @@ export class CameraController {
   private lastMouse: [number, number] = [0, 0];
   private cameraLocked = false;
   private dimensionMode: '3d' | '2d' = '3d';
-  private gridSpacing = 10.0;
   private cachedViewProj: Float32Array | null = null;
   private cachedInverseViewProj: Float32Array | null = null;
   private viewDirty = true;
@@ -71,6 +82,15 @@ export class CameraController {
   private onViewBecameDirty: (() => void) | null = null;
   private lastReportedMpp = -1;
   private lastReportedGridSpacing = -1;
+
+  /** 2D mode: pixels per meter (controls zoom level in orthographic projection). */
+  private numPixelsPerMeter = DEFAULT_SCALE;
+  /** 2D pan: mouse position at drag start. */
+  private panStartMouse: [number, number] = [0, 0];
+  /** 2D pan: camera target at drag start. */
+  private panStartTarget: [number, number, number] = [0, 0, 0];
+  /** 2D pan: camera position at drag start. */
+  private panStartPosition: [number, number, number] = [0, 0, 0];
 
   get state(): Readonly<CameraState> {
     return this.camera;
@@ -85,6 +105,7 @@ export class CameraController {
       near: 0.1,
       far: 100000,
     };
+    this.numPixelsPerMeter = DEFAULT_SCALE;
     this.cachedViewProj = null;
     this.cachedInverseViewProj = null;
     this.viewDirty = true;
@@ -111,7 +132,9 @@ export class CameraController {
   }
 
   get currentGridSpacing(): number {
-    return this.gridSpacing;
+    // Dynamic grid spacing: adapts to current zoom level so grid cells are ~50px on screen
+    const mpp = this.getMetersPerPixel();
+    return niceNumber(Math.max(GRID_TARGET_PX * mpp, 0.01));
   }
 
   setScaleChangeCallback(cb: ((info: ScaleInfo) => void) | null): void {
@@ -140,8 +163,11 @@ export class CameraController {
     this.onViewBecameDirty?.();
   }
 
-  /** Compute current meters-per-pixel (perspective approximation at target distance). */
+  /** Compute current meters-per-pixel. In 2D mode uses numPixelsPerMeter directly. */
   getMetersPerPixel(): number {
+    if (this.dimensionMode === '2d') {
+      return 1 / this.numPixelsPerMeter;
+    }
     const [px, py, pz] = this.camera.position;
     const [tx, ty, tz] = this.camera.target;
     const camDist = Math.sqrt((px - tx) ** 2 + (py - ty) ** 2 + (pz - tz) ** 2);
@@ -150,7 +176,7 @@ export class CameraController {
   }
 
   reportScale(): void {
-    const info = { gridSpacing: this.gridSpacing, mpp: this.getMetersPerPixel() };
+    const info = { gridSpacing: this.currentGridSpacing, mpp: this.getMetersPerPixel() };
     if (info.mpp === this.lastReportedMpp && info.gridSpacing === this.lastReportedGridSpacing) return;
     this.lastReportedMpp = info.mpp;
     this.lastReportedGridSpacing = info.gridSpacing;
@@ -163,13 +189,20 @@ export class CameraController {
     if (this._animatingDimension) return;
 
     const [tx, ty, tz] = this.camera.target;
-    const dist = this.getCameraDistance();
 
     if (dimension === '2d') {
-      this._animEndPos = [tx, ty, tz + dist];
+      // Compute numPixelsPerMeter from current perspective view so that the
+      // visible area is approximately the same after switching to ortho.
+      const currentMpp = this.getMetersPerPixel();
+      this.numPixelsPerMeter = Math.max(MINIMAL_SCALE, Math.min(MAXIMAL_SCALE, 1 / currentMpp));
+      this._animEndPos = [tx, ty, tz + ORTHO_CAM_HEIGHT];
       this._animEndUp = [0, 1, 0];
     } else {
-      this._animEndPos = [tx, ty - dist * 0.5, tz + dist * 0.7];
+      // Switch back to 3D perspective: compute a camera distance from current scale
+      const mpp = 1 / this.numPixelsPerMeter;
+      const halfWorld = mpp * this.height / 2;
+      const perspDist = halfWorld / Math.tan(this.camera.fovY / 2);
+      this._animEndPos = [tx, ty - perspDist * 0.5, tz + perspDist * 0.7];
       this._animEndUp = [0, 0, 1];
     }
 
@@ -294,19 +327,24 @@ export class CameraController {
     const extentZ = maxZ - minZ;
     const maxExtent = Math.max(extentX, extentY, extentZ, 1);
 
-    this.gridSpacing = niceNumber(Math.max(maxExtent / 10, 0.5));
-
-    const dist = maxExtent * 0.8;
     this.camera.target = [cx, cy, cz];
     if (this.dimensionMode === '2d') {
-      this.camera.position = [cx, cy, cz + dist];
+      // 2D: orthographic — compute numPixelsPerMeter so that the scene fills ~80% of viewport
+      const viewMeters = maxExtent / 0.8;
+      const fitScaleH = this.width > 0 ? this.width / viewMeters : DEFAULT_SCALE;
+      const fitScaleV = this.height > 0 ? this.height / viewMeters : DEFAULT_SCALE;
+      this.numPixelsPerMeter = Math.max(MINIMAL_SCALE, Math.min(MAXIMAL_SCALE, Math.min(fitScaleH, fitScaleV)));
+      this.camera.position = [cx, cy, cz + ORTHO_CAM_HEIGHT];
       this.camera.up = [0, 1, 0];
+      this.camera.near = 0.1;
+      this.camera.far = ORTHO_CAM_HEIGHT * 2 + 100;
     } else {
+      const dist = maxExtent * 0.8;
       this.camera.position = [cx, cy - dist * 0.5, cz + dist];
       this.camera.up = [0, 0, 1];
+      this.camera.near = Math.max(0.1, maxExtent * 0.001);
+      this.camera.far = Math.max(100000, maxExtent * 10);
     }
-    this.camera.near = Math.max(0.1, maxExtent * 0.001);
-    this.camera.far = Math.max(100000, maxExtent * 10);
     this.viewDirty = true;
     this.onViewBecameDirty?.();
     this.reportScale();
@@ -363,6 +401,12 @@ export class CameraController {
     this.activeMouseButton = button;
     this.activeDragAction = action;
     this.lastMouse = [event.clientX, event.clientY];
+    // Store start state for 2D pan (C# style: compute total offset from start)
+    if (this.dimensionMode === '2d') {
+      this.panStartMouse = [event.clientX, event.clientY];
+      this.panStartTarget = [...this.camera.target] as [number, number, number];
+      this.panStartPosition = [...this.camera.position] as [number, number, number];
+    }
     return true;
   }
 
@@ -387,7 +431,11 @@ export class CameraController {
       const dy = (event.clientY - previousMouse[1]) * 0.005;
       this.orbit(dx, dy);
     } else if (dragAction === 'pan' || (dragAction === 'orbit' && this.dimensionMode === '2d')) {
-      this.pan(canvas, previousMouse, this.lastMouse);
+      if (this.dimensionMode === '2d') {
+        this.pan2D(event.clientX, event.clientY);
+      } else {
+        this.pan(canvas, previousMouse, this.lastMouse);
+      }
     }
 
     return this.isDragging;
@@ -412,19 +460,57 @@ export class CameraController {
     return Math.sqrt((px - tx) ** 2 + (py - ty) ** 2 + (pz - tz) ** 2);
   }
 
+  /** Get the effective distance for grid fade calculation.
+   *  In 2D mode, returns visible half-extent so grid fades at screen edges.
+   *  In 3D mode, returns actual camera distance. */
+  getGridFadeDistance(): number {
+    if (this.dimensionMode === '2d') {
+      const halfH = (Math.max(1, this.height) / 2) / this.numPixelsPerMeter;
+      const aspect = Math.max(1, this.width) / Math.max(1, this.height);
+      return Math.max(halfH, halfH * aspect);
+    }
+    return this.getCameraDistance();
+  }
+
   applyPan(canvas: HTMLCanvasElement, prevClientXY: [number, number], currClientXY: [number, number]): void {
     if (this.cameraLocked) return;
-    this.pan(canvas, prevClientXY, currClientXY);
+    if (this.dimensionMode === '2d') {
+      // For touch pan in 2D: compute incremental offset directly
+      const dx = (prevClientXY[0] - currClientXY[0]) / this.numPixelsPerMeter;
+      const dy = (prevClientXY[1] - currClientXY[1]) / this.numPixelsPerMeter;
+      const [px, py, pz] = this.camera.position;
+      const [tx, ty, tz] = this.camera.target;
+      this.camera.position = [px + dx, py - dy, pz];
+      this.camera.target = [tx + dx, ty - dy, tz];
+      this.viewDirty = true;
+      this.onViewBecameDirty?.();
+      this.reportScale();
+    } else {
+      this.pan(canvas, prevClientXY, currClientXY);
+    }
   }
 
   applyZoomFactor(factor: number): void {
     if (this.cameraLocked) return;
-    this.zoom(factor);
+    if (this.dimensionMode === '2d') {
+      // For touch pinch in 2D: factor > 1 zooms out, < 1 zooms in
+      this.numPixelsPerMeter /= factor;
+      this.numPixelsPerMeter = Math.max(MINIMAL_SCALE, Math.min(MAXIMAL_SCALE, this.numPixelsPerMeter));
+      this.viewDirty = true;
+      this.onViewBecameDirty?.();
+      this.reportScale();
+    } else {
+      this.zoom(factor);
+    }
   }
 
   handleWheel(deltaY: number): void {
     if (this.cameraLocked) return;
-    this.zoom(deltaY > 0 ? 1.1 : 0.9);
+    if (this.dimensionMode === '2d') {
+      this.zoom2D(deltaY);
+    } else {
+      this.zoom(deltaY > 0 ? 1.1 : 0.9);
+    }
   }
 
   computeViewProj(): Float32Array {
@@ -432,8 +518,18 @@ export class CameraController {
       return this.cachedViewProjForRender;
     }
     const aspect = this.width / this.height;
-    const proj = perspectiveMatrix(this.camera.fovY, aspect, this.camera.near, this.camera.far);
     const view = lookAtMatrix(this.camera.position, this.camera.target, this.camera.up);
+
+    let proj: Float32Array;
+    if (this.dimensionMode === '2d') {
+      // Orthographic projection: visible area determined by numPixelsPerMeter
+      const halfH = (this.height / 2) / this.numPixelsPerMeter;
+      const halfW = halfH * aspect;
+      proj = orthographicMatrix(-halfW, halfW, -halfH, halfH, this.camera.near, this.camera.far);
+    } else {
+      proj = perspectiveMatrix(this.camera.fovY, aspect, this.camera.near, this.camera.far);
+    }
+
     const result = multiplyMatrices(DEPTH_CORRECTION, multiplyMatrices(proj, view));
     this.cachedViewProjForRender = result;
     this.viewDirty = false;
@@ -483,6 +579,42 @@ export class CameraController {
     ];
     this.camera.near = Math.max(0.1, dist * 0.001);
     this.camera.far = Math.max(100000, dist * 100);
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+    this.reportScale();
+  }
+
+  /** 2D zoom: adjust numPixelsPerMeter (matching C# Camera2D.OnMouseWheel). */
+  private zoom2D(deltaY: number): void {
+    const zoomSpeed = 0.1;
+    // deltaY > 0 means scroll down (zoom out), deltaY < 0 means scroll up (zoom in)
+    // Normalize: typical deltaY is ±100-120 per notch
+    const notches = deltaY / 120;
+    this.numPixelsPerMeter *= Math.pow(1.0 + zoomSpeed, -notches);
+    this.numPixelsPerMeter = Math.max(MINIMAL_SCALE, Math.min(MAXIMAL_SCALE, this.numPixelsPerMeter));
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+    this.reportScale();
+  }
+
+  /**
+   * 2D pan: compute total offset from drag start (C# Camera2D.OnMouseMove style).
+   * This keeps the world point under the initial click exactly under the cursor.
+   */
+  private pan2D(clientX: number, clientY: number): void {
+    const dx = (this.panStartMouse[0] - clientX) / this.numPixelsPerMeter;
+    const dy = (this.panStartMouse[1] - clientY) / this.numPixelsPerMeter;
+
+    this.camera.target = [
+      this.panStartTarget[0] + dx,
+      this.panStartTarget[1] - dy,
+      this.panStartTarget[2],
+    ];
+    this.camera.position = [
+      this.panStartPosition[0] + dx,
+      this.panStartPosition[1] - dy,
+      this.panStartPosition[2],
+    ];
     this.viewDirty = true;
     this.onViewBecameDirty?.();
     this.reportScale();

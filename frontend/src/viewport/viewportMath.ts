@@ -11,6 +11,22 @@ export function perspectiveMatrix(fovY: number, aspect: number, near: number, fa
   ]);
 }
 
+/** Column-major 4x4 orthographic projection matrix. */
+export function orthographicMatrix(
+  left: number, right: number, bottom: number, top: number,
+  near: number, far: number,
+): Float32Array {
+  const rl = 1 / (right - left);
+  const tb = 1 / (top - bottom);
+  const fn = 1 / (far - near);
+  return new Float32Array([
+    2 * rl, 0, 0, 0,
+    0, 2 * tb, 0, 0,
+    0, 0, -2 * fn, 0,
+    -(right + left) * rl, -(top + bottom) * tb, -(far + near) * fn, 1,
+  ]);
+}
+
 /** Column-major 4x4 look-at view matrix. */
 export function lookAtMatrix(eye: [number, number, number], center: [number, number, number], up: [number, number, number]): Float32Array {
   const zx = eye[0] - center[0], zy = eye[1] - center[1], zz = eye[2] - center[2];

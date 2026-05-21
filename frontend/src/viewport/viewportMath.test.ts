@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   perspectiveMatrix,
+  orthographicMatrix,
   lookAtMatrix,
   multiplyMatrices,
   arraysEqual,
@@ -161,6 +162,46 @@ describe('viewportMath', () => {
     it('should work for fractions', () => {
       expect(niceNumber(0.3)).toBe(0.5);
       expect(niceNumber(0.15)).toBe(0.2);
+    });
+  });
+
+  describe('orthographicMatrix', () => {
+    it('should produce a 16-element Float32Array', () => {
+      const m = orthographicMatrix(-1, 1, -1, 1, 0.1, 100);
+      expect(m).toHaveLength(16);
+    });
+
+    it('should have correct scale entries on the diagonal', () => {
+      // orthographicMatrix(-2, 2, -3, 3, 0, 100)
+      // rl = 1/4, tb = 1/6, fn = 1/100
+      const m = orthographicMatrix(-2, 2, -3, 3, 0, 100);
+      expect(m[0]).toBeCloseTo(0.5, 5);        // 2*rl = 2*(1/4)
+      expect(m[5]).toBeCloseTo(1 / 3, 5);     // 2*tb = 2*(1/6)
+      expect(m[10]).toBeCloseTo(-0.02, 5);     // -2*fn = -2*(1/100)
+      expect(m[15]).toBe(1);
+    });
+
+    it('should have zero XY translation for a symmetric frustum', () => {
+      // right+left = 0, top+bottom = 0 → m[12] and m[13] must be 0
+      const m = orthographicMatrix(-2, 2, -3, 3, 0, 100);
+      expect(m[12]).toBeCloseTo(0, 5);
+      expect(m[13]).toBeCloseTo(0, 5);
+    });
+
+    it('should map frustum boundary corner to NDC (1, 1)', () => {
+      // With orthographicMatrix(-2, 2, -3, 3, 0, 100), the right/top
+      // boundary point (2, 3) should project to NDC x=1, y=1
+      const m = orthographicMatrix(-2, 2, -3, 3, 0, 100);
+      const corner = transformPoint(m, [2, 3, 0]);
+      expect(corner[0]).toBeCloseTo(1, 5);
+      expect(corner[1]).toBeCloseTo(1, 5);
+    });
+
+    it('should map origin to NDC (0, 0) for symmetric frustum', () => {
+      const m = orthographicMatrix(-5, 5, -3, 3, 0.1, 1000);
+      const center = transformPoint(m, [0, 0, 0]);
+      expect(center[0]).toBeCloseTo(0, 5);
+      expect(center[1]).toBeCloseTo(0, 5);
     });
   });
 });

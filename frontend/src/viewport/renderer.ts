@@ -583,10 +583,9 @@ export class ViewportRenderer {
       const gridData = this.gridUniformData;
       gridData.set(viewProj, 0);
       gridData.set(camera.position, 16);
-      const camDist = this.cameraController.getCameraDistance();
       gridData[19] = this.cameraController.currentGridSpacing;
       gridData.set(this.gridColor, 20);
-      gridData[23] = camDist; // cam_dist for fade radius calculation
+      gridData[23] = this.cameraController.getGridFadeDistance();
       gridData[24] = this.showGrid ? 1.0 : 0.0;
       gridData[25] = this.showAxis ? 1.0 : 0.0;
       this.device.queue.writeBuffer(this.gridUniformBuffer, 0, gridData);
