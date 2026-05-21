@@ -6,6 +6,7 @@
 
 use crate::render_config::RoadRenderConfig;
 use crate::vertex::ColorVertex;
+use we_core::geometry::eval::{evaluate_geometry, evaluate_lane_width, offset_point};
 use we_core::model::Project;
 
 /// Z-offset for junction surfaces (road surface sinks slightly below).
@@ -35,16 +36,36 @@ pub fn generate_junction_meshes(project: &Project, config: &RoadRenderConfig) ->
         let color = config.color_junction_surface;
         let rgba = [color.x, color.y, color.z, color.w];
 
-        // Collect unique arm-road (incoming_road) start positions.
-        // Using a HashSet on &str avoids duplicates when multiple connections share the same arm.
+        // Collect arm-road boundary points (center + lane-width offsets) for each unique arm.
+        // This gives a wider junction polygon that reflects actual road width at the junction face,
+        // rather than just the reference line points (which was the previous bug).
         let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
         let mut points: Vec<[f32; 3]> = Vec::new();
 
         for conn in &junction.connections {
             if seen.insert(conn.incoming_road.as_str()) {
                 if let Some(road) = road_map.get(conn.incoming_road.as_str()) {
-                    let (x, y, z) = road_contact_position(road);
-                    points.push([x, y, z + HEIGHT_OFFSET]);
+                    let (cx, cy, cz) = road_contact_position(road);
+                    // Collect center + left/right lane boundary offsets
+                    if road.lane_sections.is_empty() {
+                        points.push([cx, cy, cz]);
+                    } else if let Some(geo) = road.plan_view.first() {
+                        let first_ls = &road.lane_sections[0];
+                        // Use first right lane's width (right-hand traffic: outgoing road on right side)
+                        let widths = first_ls.right.first().map(|l| &l.width)
+                            .or_else(|| first_ls.left.first().map(|l| &l.width));
+                        let Some(widths) = widths else {
+                            points.push([cx, cy, cz]);
+                            continue;
+                        };
+                        let ref_pt = evaluate_geometry(geo, 0.0);
+                        let half_w = evaluate_lane_width(widths, 0.0) / 2.0;
+                        let (lx, ly, _) = offset_point(&ref_pt, half_w, 0.0);
+                        let (rx, ry, _) = offset_point(&ref_pt, -half_w, 0.0);
+                        points.push([cx, cy, cz]);
+                        points.push([lx as f32, ly as f32, cz]);
+                        points.push([rx as f32, ry as f32, cz]);
+                    }
                 }
             }
         }
@@ -52,6 +73,9 @@ pub fn generate_junction_meshes(project: &Project, config: &RoadRenderConfig) ->
         if points.len() < 3 {
             continue;
         }
+
+        // Boundary points include center + lane edges; add HEIGHT_OFFSET to z.
+        let mut points: Vec<[f32; 3]> = points.into_iter().map(|mut p| { p[2] += HEIGHT_OFFSET; p }).collect();
 
         // Compute centroid
         let n = points.len() as f32;
