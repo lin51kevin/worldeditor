@@ -236,7 +236,8 @@ function resolveArmCount(topology: JunctionTopology, armCount?: number): number 
 
 // ── Roundabout builder ─────────────────────────────────────────────────────
 
-const DEFAULT_ROUNDABOUT_RADIUS = 15;
+const DEFAULT_ROUNDABOUT_RADIUS = 50;
+const DEFAULT_ROAD_TO_CENTER = 20;
 
 /** Result for roundabout: multiple junctions. */
 export interface RoundaboutBuildResult {
@@ -247,16 +248,27 @@ export interface RoundaboutBuildResult {
 /**
  * Build a roundabout with multi-junction topology (matching C# reference).
  *
- * Architecture:
+ * Architecture (matching C# BuildJunctionRoundabout):
  *   - N junctions (one at each arm-ring intersection point)
- *   - N ring arc roads connecting adjacent junctions (non-junction roads)
- *   - N arm roads approaching each junction from outside (non-junction roads)
+ *   - N ring arc roads (partial arcs with gaps between them at junction locations)
+ *   - N arm roads approaching each junction from outside
  *   - Connector roads within each junction bridging arm↔ring traffic
  *
- * Ring arcs:
- *   arc[i]: predecessor=junction[i], successor=junction[(i+1)%N]
- * Arm roads:
- *   arm[i]: successor=junction[i] (points inward toward junction)
+ * C# key parameters:
+ *   radius = 50 (ring center radius)
+ *   roadToCenter = 20 (gap between ring edge and arm road end)
+ *   oneSegmentDegree = 240/N (arc span per segment)
+ *   ratio = 0.5 (controls gap size between arcs)
+ *   startDegree = 90 - oneSegmentDegree/2
+ *
+ * Ring arc[i]:
+ *   Starts at startDegree + i*(1+ratio)*oneSegmentDegree
+ *   Spans oneSegmentDegree degrees (NOT full angle between arms)
+ *   predecessor=junction[i], successor=junction[(i+1)%N]
+ *
+ * Arm[i]:
+ *   At angle = startDegree + (1+0.5*ratio)*oneSegmentDegree + i*(1+ratio)*oneSegmentDegree
+ *   Points inward, successor=junction[i]
  */
 function buildRoundaboutFromConfig(
   config: JunctionTemplateConfig,
@@ -265,9 +277,27 @@ function buildRoundaboutFromConfig(
 ): JunctionBuildResult {
   const n = config.armCount ?? 3;
   const radius = config.roundaboutRadius ?? DEFAULT_ROUNDABOUT_RADIUS;
+  const roadToCenter = DEFAULT_ROAD_TO_CENTER;
   const armLength = config.armLength;
   const W = DEFAULT_LANE_WIDTH; // 3.5
   const SW = 2.0; // shoulder width matching C# reference
+
+  // ── C# angle calculations ─────────────────────────────────────────────────
+  const oneSegmentDeg = 240.0 / n;
+  const startDeg = 90.0 - oneSegmentDeg / 2;
+  const ratio = 0.5;
+  const deg2rad = Math.PI / 180;
+
+  // Compute arc start/end angles and arm angles (in degrees)
+  const arcStartAngles: number[] = [];
+  const arcEndAngles: number[] = [];
+  const armAnglesDeg: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const arcStart = startDeg + i * (1 + ratio) * oneSegmentDeg;
+    arcStartAngles.push(arcStart);
+    arcEndAngles.push(arcStart + oneSegmentDeg);
+    armAnglesDeg.push(startDeg + (1 + 0.5 * ratio) * oneSegmentDeg + i * (1 + ratio) * oneSegmentDeg);
+  }
 
   // ── Ring lane section (matching C# reference) ─────────────────────────────
   // left=[shoulder w=2], right=[driving w=3.5, driving w=3.5, shoulder w=2]
@@ -281,7 +311,7 @@ function buildRoundaboutFromConfig(
   );
 
   // ── Arm lane section (matching C# reference) ──────────────────────────────
-  // left=[shoulder w=2, driving w=3.5], right=[driving w=3.5, shoulder w=2]
+  // left=[driving w=3.5, shoulder w=2], right=[driving w=3.5, shoulder w=2]
   const armSection = buildLaneSectionFromConfig(
     config.armSection ?? {
       left: [
@@ -295,38 +325,27 @@ function buildRoundaboutFromConfig(
     },
   );
 
-  // ── Evenly space N arms around the circle ─────────────────────────────────
-  const armAngles: number[] = [];
-  for (let i = 0; i < n; i++) {
-    armAngles.push((i * 2 * Math.PI) / n);
-  }
-
   // ── Create N junctions ────────────────────────────────────────────────────
   const junctionIds: string[] = [];
   for (let i = 0; i < n; i++) {
     junctionIds.push(genId('junction'));
   }
 
-  // ── Ring arc roads (between adjacent junctions, clockwise) ────────────────
-  // arc[i] goes from junction[i] to junction[(i+1)%N]
+  // ── Ring arc roads (partial arcs with gaps at junctions) ──────────────────
+  // arc[i] starts at arcStartAngles[i], spans oneSegmentDeg degrees
+  // predecessor=junction[i], successor=junction[(i+1)%N]
   const arcRoads: Road[] = [];
   for (let i = 0; i < n; i++) {
     const nextIdx = (i + 1) % n;
-    const startAngle = armAngles[i]!;
-    const endAngle = armAngles[nextIdx]!;
-
-    // Arc span (clockwise in screen coords = positive angle in math coords)
-    let arcSpan = endAngle - startAngle;
-    if (arcSpan <= 0) arcSpan += 2 * Math.PI;
-
-    const arcLen = radius * arcSpan;
+    const arcStartRad = arcStartAngles[i]! * deg2rad;
+    const arcSpanRad = oneSegmentDeg * deg2rad;
+    const arcLen = radius * arcSpanRad;
 
     // Start point on ring circle
-    const sx = cx + radius * Math.cos(startAngle);
-    const sy = cy + radius * Math.sin(startAngle);
-    // Tangent direction for CCW ring (perpendicular to radius, counter-clockwise)
-    // In our coordinate system: heading = angle + π/2 for CCW travel
-    const hdg = startAngle + Math.PI / 2;
+    const sx = cx + radius * Math.cos(arcStartRad);
+    const sy = cy + radius * Math.sin(arcStartRad);
+    // Tangent: perpendicular to radius, CCW direction (angle + π/2)
+    const hdg = arcStartRad + Math.PI / 2;
     const curvature = 1 / radius; // CCW = positive curvature
 
     const arcRoad = buildRoad(ringSection, {
@@ -347,12 +366,13 @@ function buildRoundaboutFromConfig(
   // ── Arm roads (radiate outward, point inward toward junction) ──────────────
   const armRoads: Road[] = [];
   for (let i = 0; i < n; i++) {
-    const armAngle = armAngles[i]!;
-    // Arm tip is at outer edge (away from center)
-    const tipX = cx + (radius + armLength) * Math.cos(armAngle);
-    const tipY = cy + (radius + armLength) * Math.sin(armAngle);
+    const armAngleRad = armAnglesDeg[i]! * deg2rad;
+    // Arm tip (start point) is at outer edge
+    const tipDist = radius + roadToCenter + armLength;
+    const tipX = cx + tipDist * Math.cos(armAngleRad);
+    const tipY = cy + tipDist * Math.sin(armAngleRad);
     // Inward heading (toward center)
-    const inwardHdg = armAngle + Math.PI;
+    const inwardHdg = armAngleRad + Math.PI;
 
     const junctionLink: LinkElement = {
       element_type: 'Junction',
@@ -372,18 +392,18 @@ function buildRoundaboutFromConfig(
   }
 
   // ── Build connector roads and connections per junction ─────────────────────
-  // At junction[i] (matching C# 7-connection pattern):
-  //   Incoming roads: arc[(i-1+n)%n] (ring arriving), arm[i] (from outside)
-  //   Outgoing roads: arc[i] (ring departing), arm[i] (to outside)
+  // At junction[i], the following roads meet:
+  //   - arc[(i-1+n)%n] END (previous ring arc arriving)
+  //   - arc[i] START (next ring arc departing)
+  //   - arm[i] END (arm road arriving from outside)
   //
-  // 7 connections per junction:
-  //   1. ring→ring: arc_prev right -1 → arc_i (inner driving, pass-through)
-  //   2. ring→ring: arc_prev right -2 → arc_i (outer driving, pass-through)
-  //   3. ring→arm exit: arc_prev right -3 → arm_i (shoulder lane exit)
-  //   4. ring→arm exit: arc_prev right -2 → arm_i (driving lane exit)
-  //   5. arm→ring entry: arm_i right -1 → arc_i (driving lane entry)
-  //   6. arm→ring entry: arm_i right -2 → arc_i (shoulder lane entry)
-  //   7. outgoing arc left → incoming arc (reverse shoulder flow)
+  // C# connector groups (6 per junction):
+  //   result0: arc[prev].Right.End → arc[i].Right.Start (ring pass-through)
+  //   result1: arc[i].Left.Start → arc[prev].Left.End (reverse shoulder)
+  //   result2: arc[prev].Right.End → arm[i].Left.End (ring exit to arm)
+  //   result3: arm[i].Right.End → arc[i].Right.Start (arm entry to ring)
+  //   result4: arm[i].Right.End → arc[prev].Left.End (U-turn into ring behind)
+  //   result5: arc[i].Left.Start → arm[i].Left.End (ring forward exit to arm)
 
   const junctions: Junction[] = [];
   const connectorRoads: Road[] = [];
@@ -391,25 +411,23 @@ function buildRoundaboutFromConfig(
   for (let i = 0; i < n; i++) {
     const connections: JunctionConnection[] = [];
     const prevArcIdx = (i - 1 + n) % n;
+    const nextArcIdx = i;
 
-    // Helper: compute arc end point
-    const arcEndPt = arcEndPoint(arcRoads[prevArcIdx]!);
-    // Helper: arm end point (junction edge)
+    // Compute key positions
+    const prevArcEnd = arcEndPoint(arcRoads[prevArcIdx]!);
+    const nextArcStart = arcStartPoint(arcRoads[nextArcIdx]!);
     const armEnd = roadEndPoint(armRoads[i]!);
-    // Helper: arc start point (where arc[i] begins)
-    const arcStartAngle = armAngles[i]!;
-    const arcStartX = cx + radius * Math.cos(arcStartAngle);
-    const arcStartY = cy + radius * Math.sin(arcStartAngle);
-    const arcStartHdg = arcStartAngle + Math.PI / 2;
 
-    // 1 & 2: Ring pass-through (arc_prev → arc_i), one per driving lane
+    // result0: ring pass-through (arc[prev].Right → arc[i].Right)
+    // One connector per driving lane (2 driving lanes on right side)
     for (let laneIdx = 0; laneIdx < 2; laneIdx++) {
       const connector = buildRoundaboutConnector(
-        arcEndPt.x, arcEndPt.y, arcEndPt.hdg,
-        arcStartX, arcStartY, arcStartHdg,
+        prevArcEnd.x, prevArcEnd.y, prevArcEnd.hdg,
+        nextArcStart.x, nextArcStart.y, nextArcStart.hdg,
         { laneType: 'Driving', width: W },
         junctionIds[i]!,
-        arcRoads[prevArcIdx]!.id, arcRoads[i]!.id,
+        arcRoads[prevArcIdx]!.id, arcRoads[nextArcIdx]!.id,
+        'End', 'Start',
       );
       connectorRoads.push(connector);
       connections.push({
@@ -421,36 +439,37 @@ function buildRoundaboutFromConfig(
       });
     }
 
-    // 3: Outgoing arc left lane → incoming arc (reverse shoulder connector)
-    const connector3 = buildRoundaboutConnector(
-      arcStartX, arcStartY, arcStartHdg + Math.PI, // reversed direction
-      arcEndPt.x, arcEndPt.y, arcEndPt.hdg + Math.PI, // reversed arrival
+    // result1: reverse shoulder pass-through (arc[i].Left.Start → arc[prev].Left.End)
+    const connector1 = buildRoundaboutConnector(
+      nextArcStart.x, nextArcStart.y, nextArcStart.hdg + Math.PI,
+      prevArcEnd.x, prevArcEnd.y, prevArcEnd.hdg + Math.PI,
       { laneType: 'Shoulder', width: SW },
       junctionIds[i]!,
-      arcRoads[i]!.id, arcRoads[prevArcIdx]!.id,
+      arcRoads[nextArcIdx]!.id, arcRoads[prevArcIdx]!.id,
+      'Start', 'End',
     );
-    connectorRoads.push(connector3);
+    connectorRoads.push(connector1);
     connections.push({
       id: genId('conn'),
-      incoming_road: arcRoads[i]!.id,
-      connecting_road: connector3.id,
+      incoming_road: arcRoads[nextArcIdx]!.id,
+      connecting_road: connector1.id,
       contact_point: 'Start',
       lane_links: [{ from: 1, to: -1 }],
     });
 
-    // 4 & 5: Ring → arm exit (driving + shoulder from ring to arm)
-    // Ring right lanes: -1=driving(inner), -2=driving(outer), -3=shoulder
-    const ringExitLanes = [
+    // result2: ring exit to arm (arc[prev].Right.End → arm[i].Left.End)
+    const armExitHdg = armEnd.hdg + Math.PI; // outbound direction on arm
+    for (const { fromLane, cfg } of [
       { fromLane: -3, cfg: { laneType: 'Shoulder' as const, width: SW } },
       { fromLane: -2, cfg: { laneType: 'Driving' as const, width: W } },
-    ];
-    for (const { fromLane, cfg } of ringExitLanes) {
+    ]) {
       const connector = buildRoundaboutConnector(
-        arcEndPt.x, arcEndPt.y, arcEndPt.hdg,
-        armEnd.x, armEnd.y, armEnd.hdg + Math.PI, // arm exit direction (outward)
+        prevArcEnd.x, prevArcEnd.y, prevArcEnd.hdg,
+        armEnd.x, armEnd.y, armExitHdg,
         cfg,
         junctionIds[i]!,
         arcRoads[prevArcIdx]!.id, armRoads[i]!.id,
+        'End', 'End',
       );
       connectorRoads.push(connector);
       connections.push({
@@ -462,18 +481,18 @@ function buildRoundaboutFromConfig(
       });
     }
 
-    // 6 & 7: Arm → ring entry (driving + shoulder from arm to ring)
-    const armEntryLanes = [
+    // result3: arm entry to ring (arm[i].Right.End → arc[i].Right.Start)
+    for (const { fromLane, cfg } of [
       { fromLane: -2, cfg: { laneType: 'Shoulder' as const, width: SW } },
       { fromLane: -1, cfg: { laneType: 'Driving' as const, width: W } },
-    ];
-    for (const { fromLane, cfg } of armEntryLanes) {
+    ]) {
       const connector = buildRoundaboutConnector(
         armEnd.x, armEnd.y, armEnd.hdg,
-        arcStartX, arcStartY, arcStartHdg,
+        nextArcStart.x, nextArcStart.y, nextArcStart.hdg,
         cfg,
         junctionIds[i]!,
-        armRoads[i]!.id, arcRoads[i]!.id,
+        armRoads[i]!.id, arcRoads[nextArcIdx]!.id,
+        'End', 'Start',
       );
       connectorRoads.push(connector);
       connections.push({
@@ -555,6 +574,14 @@ function arcEndPoint(arcRoad: Road): { x: number; y: number; hdg: number } {
 }
 
 /**
+ * Compute the start point of an arc road (where it begins at the junction).
+ */
+function arcStartPoint(arcRoad: Road): { x: number; y: number; hdg: number } {
+  const geo = arcRoad.plan_view[0]!;
+  return { x: geo.x, y: geo.y, hdg: geo.hdg };
+}
+
+/**
  * Build a single-lane connector for roundabout junctions.
  * Uses Hermite paramPoly3 geometry (matching C# reference).
  */
@@ -565,6 +592,8 @@ function buildRoundaboutConnector(
   junctionId: string,
   predRoadId: string,
   succRoadId: string,
+  predContactPoint: 'Start' | 'End' = 'End',
+  succContactPoint: 'Start' | 'End' = 'Start',
 ): Road {
   const connectorSection = buildLaneSection([], [laneCfg]);
   const geometries = buildHermiteConnectorGeometry(startX, startY, startHdg, endX, endY, endHdg);
@@ -577,8 +606,8 @@ function buildRoundaboutConnector(
     length: totalLength,
     junctionId,
     link: {
-      predecessor: { element_type: 'Road', element_id: predRoadId, contact_point: 'End' },
-      successor: { element_type: 'Road', element_id: succRoadId, contact_point: 'Start' },
+      predecessor: { element_type: 'Road', element_id: predRoadId, contact_point: predContactPoint },
+      successor: { element_type: 'Road', element_id: succRoadId, contact_point: succContactPoint },
     },
   });
   road.plan_view = geometries;
