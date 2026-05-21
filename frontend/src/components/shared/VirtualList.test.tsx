@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { VirtualList } from '../VirtualList';
+import { VirtualList } from './VirtualList';
 
 const ITEM_HEIGHT = 32;
 const VISIBLE_HEIGHT = 200;

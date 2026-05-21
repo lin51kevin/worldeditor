@@ -2,7 +2,7 @@
  * Test: useSplineDrawMode exposes the expected handler API.
  */
 import { renderHook } from '@testing-library/react';
-import { useSplineDrawMode } from '../useSplineDrawMode';
+import { useSplineDrawMode } from './useSplineDrawMode';
 
 describe('useSplineDrawMode', () => {
   it('should expose all required handler functions', () => {

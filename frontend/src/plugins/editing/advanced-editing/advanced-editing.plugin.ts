@@ -252,7 +252,7 @@ export function mountAdvancedEditingPlugin(): () => void {
     {
       id: `${PLUGIN_ID}:split-road`,
       pluginId: PLUGIN_ID,
-      icon: '✂',
+      icon: 'Scissors',
       labelKey: 'advancedEditing.splitRoad',
       group: 'action',
       isActive: () => false,
@@ -262,7 +262,7 @@ export function mountAdvancedEditingPlugin(): () => void {
     {
       id: `${PLUGIN_ID}:weld-roads`,
       pluginId: PLUGIN_ID,
-      icon: '🔗',
+      icon: 'Link2',
       labelKey: 'advancedEditing.weldRoads',
       group: 'action',
       isActive: () => false,

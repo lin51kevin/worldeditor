@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next';
 import {
   MousePointer,
   Route,
-  Layers,
   MoveHorizontal,
-  GitBranch,
+  Square,
+  Grid3x3,
   Box,
 } from 'lucide-react';
+import { resolveIcon } from '../shared/IconRenderer';
 import { useViewportStore } from '../../stores/viewportStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
@@ -112,7 +113,7 @@ export const Toolbar = memo(function Toolbar() {
           aria-label={t('toolbar.laneSectionEdit')}
           aria-pressed={editMode === 'lanesection'}
         >
-          <Layers size={16} className="tb-icon" />
+          <Grid3x3 size={16} className="tb-icon" />
           <span className="tb-label">{t('toolbar.laneSectionEdit')}</span>
         </button> */}
         <button
@@ -140,7 +141,7 @@ export const Toolbar = memo(function Toolbar() {
                 onClick={btn.onClick}
                 title={t(btn.tooltipKey ?? btn.labelKey)}
               >
-                <span className="tb-icon tb-plugin-icon">{btn.icon}</span>
+                <span className="tb-icon tb-plugin-icon">{resolveIcon(btn.icon)}</span>
               </button>
             ))}
           </div>
@@ -175,7 +176,7 @@ export const Toolbar = memo(function Toolbar() {
                 onClick={btn.onClick}
                 title={t(btn.tooltipKey ?? btn.labelKey)}
               >
-                <span className="tb-icon tb-plugin-icon">{btn.icon}</span>
+                <span className="tb-icon tb-plugin-icon">{resolveIcon(btn.icon)}</span>
               </button>
             ))}
           </div>
@@ -192,7 +193,7 @@ export const Toolbar = memo(function Toolbar() {
           aria-label={t('toolbar.sketch', 'Sketch')}
           aria-pressed={viewMode === 'sketch'}
         >
-          <GitBranch size={16} className="tb-icon" />
+          <Square size={16} className="tb-icon" />
         </button>
         <button
           className={`toolbar-btn toolbar-toggle ${viewMode === 'wire' ? 'active' : ''}`}
@@ -201,7 +202,7 @@ export const Toolbar = memo(function Toolbar() {
           aria-label={t('toolbar.wireframe', 'Wireframe')}
           aria-pressed={viewMode === 'wire'}
         >
-          <Layers size={16} className="tb-icon" />
+          <Grid3x3 size={16} className="tb-icon" />
         </button>
         <button
           className={`toolbar-btn toolbar-toggle ${viewMode === 'solid' ? 'active' : ''}`}

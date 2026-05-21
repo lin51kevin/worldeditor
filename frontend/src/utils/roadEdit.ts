@@ -49,6 +49,68 @@ function makeSidewalkLane(id: number, width: number): Lane {
   };
 }
 
+// ─── evalGeometryAtS ─────────────────────────────────────────────────────────
+
+/**
+ * Evaluate geometry at a local arclength offset `ds` from the geometry start.
+ * Returns { x, y, hdg } in world coordinates.
+ */
+function evalGeometryAtS(geo: Geometry, ds: number): { x: number; y: number; hdg: number } {
+  const { x: x0, y: y0, hdg: hdg0, geo_type } = geo;
+
+  if (geo_type === 'Line') {
+    return { x: x0 + ds * Math.cos(hdg0), y: y0 + ds * Math.sin(hdg0), hdg: hdg0 };
+  }
+
+  if ('Arc' in geo_type) {
+    const kappa = geo_type.Arc.curvature;
+    if (Math.abs(kappa) < 1e-12) {
+      return { x: x0 + ds * Math.cos(hdg0), y: y0 + ds * Math.sin(hdg0), hdg: hdg0 };
+    }
+    const theta = kappa * ds;
+    const lx = Math.sin(theta) / kappa;
+    const ly = (1 - Math.cos(theta)) / kappa;
+    return {
+      x: x0 + lx * Math.cos(hdg0) - ly * Math.sin(hdg0),
+      y: y0 + lx * Math.sin(hdg0) + ly * Math.cos(hdg0),
+      hdg: hdg0 + theta,
+    };
+  }
+
+  if ('Spiral' in geo_type) {
+    const { curv_start: c0, curv_end: c1 } = geo_type.Spiral;
+    const L = geo.length;
+    // heading at ds: theta = c0*ds + (c1-c0)*ds^2/(2L)
+    const thetaAt = (t: number) => c0 * t + ((c1 - c0) * t * t) / (2 * L);
+    // Numerical integration (Gauss-Legendre 5-point)
+    const gaussX = [0, 0.5384693101056831, -0.5384693101056831, 0.9061798459386640, -0.9061798459386640];
+    const gaussW = [0.5688888888888889, 0.4786286704993665, 0.4786286704993665, 0.2369268850561891, 0.2369268850561891];
+    const lx = (gaussW.reduce((sum, w, i) => sum + w * Math.cos(thetaAt(ds / 2 * (1 + (gaussX[i] ?? 0)))), 0)) * ds / 2;
+    const ly = (gaussW.reduce((sum, w, i) => sum + w * Math.sin(thetaAt(ds / 2 * (1 + (gaussX[i] ?? 0)))), 0)) * ds / 2;
+    return {
+      x: x0 + lx * Math.cos(hdg0) - ly * Math.sin(hdg0),
+      y: y0 + lx * Math.sin(hdg0) + ly * Math.cos(hdg0),
+      hdg: hdg0 + thetaAt(ds),
+    };
+  }
+
+  if ('Poly3' in geo_type) {
+    const { a, b, c, d } = geo_type.Poly3;
+    // local coords: x_local = ds, y_local = a + b*ds + c*ds^2 + d*ds^3
+    const yl = a + b * ds + c * ds * ds + d * ds * ds * ds;
+    const dyl = b + 2 * c * ds + 3 * d * ds * ds;
+    const localHdg = Math.atan2(dyl, 1);
+    return {
+      x: x0 + ds * Math.cos(hdg0) - yl * Math.sin(hdg0),
+      y: y0 + ds * Math.sin(hdg0) + yl * Math.cos(hdg0),
+      hdg: hdg0 + localHdg,
+    };
+  }
+
+  // ParamPoly3 or unknown: fall back to line approximation
+  return { x: x0 + ds * Math.cos(hdg0), y: y0 + ds * Math.sin(hdg0), hdg: hdg0 };
+}
+
 // ─── splitRoadAt ─────────────────────────────────────────────────────────────
 
 /**
@@ -96,11 +158,11 @@ export function splitRoadAt(
       // Split falls within this segment
       const before = splitS - geo.s;
       const after = geoEnd - splitS;
-      const hdg = geo.hdg;
 
-      split2X = geo.x + before * Math.cos(hdg);
-      split2Y = geo.y + before * Math.sin(hdg);
-      split2Hdg = hdg;
+      const splitPt = evalGeometryAtS(geo, before);
+      split2X = splitPt.x;
+      split2Y = splitPt.y;
+      split2Hdg = splitPt.hdg;
 
       pv1.push({ ...geo, length: before });
       pv2.push({
@@ -161,7 +223,7 @@ export function splitRoadAt(
     lane_sections: ls1,
     link: {
       predecessor: road.link?.predecessor ?? null,
-      successor: { element_id: junctionId, element_type: 'Junction', contact_point: 'Start' },
+      successor: { element_id: junctionId, element_type: 'Junction', contact_point: 'End' },
     },
   };
 
@@ -173,7 +235,7 @@ export function splitRoadAt(
     plan_view: pv2,
     lane_sections: ls2,
     link: {
-      predecessor: { element_id: junctionId, element_type: 'Junction', contact_point: 'End' },
+      predecessor: { element_id: junctionId, element_type: 'Junction', contact_point: 'Start' },
       successor: road.link?.successor ?? null,
     },
   };

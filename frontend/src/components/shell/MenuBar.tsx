@@ -106,6 +106,9 @@ export function MenuBar({
   const templatePluginEnabled = useBuiltinPluginStore(
     (state) => !state.disabledBuiltins.includes('builtin-templates'),
   );
+  const aiCopilotEnabled = useBuiltinPluginStore(
+    (state) => !state.disabledBuiltins.includes('ai-copilot'),
+  );
 
   const roadMenuItems = useMemo(
     () => allMenuItems.filter((item) => item.menu === 'road'),
@@ -441,14 +444,16 @@ export function MenuBar({
       </div>
 
       <div className="menubar-right">
-        <button
-          className={`menubar-action-btn ${copilotPanelVisible ? 'active' : ''}`}
-          onClick={toggleCopilotPanel}
-          title={t('toolbar.copilotTitle')}
-          aria-label={t('toolbar.copilot')}
-        >
-          <Bot size={14} />
-        </button>
+        {aiCopilotEnabled && (
+          <button
+            className={`menubar-action-btn ${copilotPanelVisible ? 'active' : ''}`}
+            onClick={toggleCopilotPanel}
+            title={t('toolbar.copilotTitle')}
+            aria-label={t('toolbar.copilot')}
+          >
+            <Bot size={14} />
+          </button>
+        )}
         <button
           className="menubar-icon-btn"
           onClick={toggleLanguage}

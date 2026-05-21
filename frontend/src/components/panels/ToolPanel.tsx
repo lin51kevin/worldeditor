@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { RoadEditToolbar } from '../shell/RoadEditToolbar';
+import { resolveIcon } from '../shared/IconRenderer';
 import './ToolPanel.css';
 
 interface ToolItem {
@@ -10,16 +11,16 @@ interface ToolItem {
 }
 
 const TOOLS: ToolItem[] = [
-  { icon: '📏', labelKey: 'toolPanel.calculateRoadLength' },
-  { icon: '🚶', labelKey: 'toolPanel.createPedestrian', disabled: true },
-  { icon: '🔦', labelKey: 'toolPanel.autoCreateStreetLight', disabled: true },
-  { icon: '🗑', labelKey: 'toolPanel.autoCreateTrashBin', disabled: true },
-  { icon: '✂', labelKey: 'toolPanel.autoSplitOverlapping', disabled: true },
-  { icon: '◇', labelKey: 'toolPanel.autoCreateJunction', disabled: true },
-  { icon: '🪧', labelKey: 'toolPanel.autoCreateSignBoard', disabled: true },
-  { icon: '🔗', labelKey: 'toolPanel.autoCreateContinuousRoad', disabled: true },
-  { icon: '🚦', labelKey: 'toolPanel.autoCreateTrafficSignal', disabled: true },
-  { icon: '↔', labelKey: 'toolPanel.swapRoadDirection', disabled: true },
+  { icon: 'Ruler', labelKey: 'toolPanel.calculateRoadLength' },
+  { icon: 'Footprints', labelKey: 'toolPanel.createPedestrian', disabled: true },
+  { icon: 'TrafficCone', labelKey: 'toolPanel.autoCreateStreetLight', disabled: true },
+  { icon: 'Trash2', labelKey: 'toolPanel.autoCreateTrashBin', disabled: true },
+  { icon: 'Scissors', labelKey: 'toolPanel.autoSplitOverlapping', disabled: true },
+  { icon: 'Diamond', labelKey: 'toolPanel.autoCreateJunction', disabled: true },
+  { icon: 'PanelTop', labelKey: 'toolPanel.autoCreateSignBoard', disabled: true },
+  { icon: 'Link2', labelKey: 'toolPanel.autoCreateContinuousRoad', disabled: true },
+  { icon: 'TrafficCone', labelKey: 'toolPanel.autoCreateTrafficSignal', disabled: true },
+  { icon: 'ArrowLeftRight', labelKey: 'toolPanel.swapRoadDirection', disabled: true },
 ];
 
 export function ToolPanel() {
@@ -42,7 +43,7 @@ export function ToolPanel() {
             disabled={tool.disabled}
             title={t(tool.labelKey)}
           >
-            <span className="tool-icon">{tool.icon}</span>
+            <span className="tool-icon">{resolveIcon(tool.icon)}</span>
             <span className="tool-name">{t(tool.labelKey)}</span>
           </button>
         ))}
