@@ -56,7 +56,7 @@ export type GeometryType =
   | { Arc: { curvature: number } }
   | { Spiral: { curv_start: number; curv_end: number } }
   | { Poly3: { a: number; b: number; c: number; d: number } }
-  | { ParamPoly3: { au: number; bu: number; cu: number; du: number; av: number; bv: number; cv: number; dv: number; p_range: 'ArcLength' | 'Normalized' } };
+  | { ParamPoly3: { a_u: number; b_u: number; c_u: number; d_u: number; a_v: number; b_v: number; c_v: number; d_v: number; p_range: 'ArcLength' | 'Normalized' } };
 
 export interface Elevation {
   s: number;

@@ -286,13 +286,13 @@ describe('buildJunctionFromConfig', () => {
       armLength: 60,
     };
     const { roads } = buildJunctionFromConfig(minimal, 0, 0);
-    // 3 arm + 6 connector = 9 roads
+    // 3 arm + 3*(3-1)=6 connectors = 9 roads total
     expect(roads).toHaveLength(9);
-    // First arm road has default 1L + 1R lanes
+    // First arm road has default 3L + 3R lanes (2 driving + 1 shoulder per side)
     const armRoads = roads.filter((r) => r.junction_id === null);
     const firstArm = armRoads[0]!;
-    expect(firstArm.lane_sections[0]!.left).toHaveLength(1);
-    expect(firstArm.lane_sections[0]!.right).toHaveLength(1);
+    expect(firstArm.lane_sections[0]!.left).toHaveLength(3);
+    expect(firstArm.lane_sections[0]!.right).toHaveLength(3);
   });
 
   it('should position arms with gap from center', () => {
@@ -311,16 +311,17 @@ describe('buildJunctionFromConfig', () => {
     const { junction } = buildJunctionFromConfig(tConfig, 0, 0);
     for (const conn of junction.connections) {
       expect(conn.lane_links.length).toBeGreaterThan(0);
-      // Each link maps from negative lane id to same negative lane id
+      // Full-width connector: lane links map driving lanes 1:1
+      // tConfig has 1 driving lane per side → 1 lane link per connection
+      expect(conn.lane_links).toHaveLength(1);
       for (const link of conn.lane_links) {
         expect(link.from).toBeLessThan(0);
         expect(link.to).toBeLessThan(0);
-        expect(link.from).toBe(link.to);
       }
     }
   });
 
-  it('should differentiate left-turn connections (1 lane) from straight/right (full lanes)', () => {
+  it('should create full-width connectors with multi-lane links', () => {
     const crossConfig: JunctionTemplateConfig = {
       ...tConfig,
       id: 'test:jct:cross',
@@ -336,14 +337,22 @@ describe('buildJunctionFromConfig', () => {
         ],
       },
     };
-    const { junction } = buildJunctionFromConfig(crossConfig, 0, 0);
-    // For 4-way with 2 lanes: 4 straight(2 links) + 4 right(2 links) + 4 left(1 link)
-    const fullLinkConns = junction.connections.filter(c => c.lane_links.length === 2);
-    const singleLinkConns = junction.connections.filter(c => c.lane_links.length === 1);
-    // 4 straight + 4 right = 8 full-lane connections
-    expect(fullLinkConns).toHaveLength(8);
-    // 4 left-turn connections with single lane
-    expect(singleLinkConns).toHaveLength(4);
+    const { junction, roads } = buildJunctionFromConfig(crossConfig, 0, 0);
+    // 4 arms × 3 targets each = 12 connections (all-pairs)
+    expect(junction.connections).toHaveLength(12);
+    // Each connection has 2 lane links (for 2 driving lanes)
+    for (const conn of junction.connections) {
+      expect(conn.lane_links).toHaveLength(2);
+      expect(conn.lane_links[0]!.from).toBe(-1);
+      expect(conn.lane_links[0]!.to).toBe(-1);
+      expect(conn.lane_links[1]!.from).toBe(-2);
+      expect(conn.lane_links[1]!.to).toBe(-2);
+    }
+    // Connector roads have 2 right lanes (matching arm right-side count)
+    const connectors = roads.filter(r => r.junction_id === junction.id);
+    for (const conn of connectors) {
+      expect(conn.lane_sections[0]!.right).toHaveLength(2);
+    }
   });
 
   it('should add turn arrow signals to arm roads', () => {
@@ -351,9 +360,9 @@ describe('buildJunctionFromConfig', () => {
     const armRoads = roads.filter((r) => r.junction_id === null);
     for (const road of armRoads) {
       expect(road.signals.length).toBeGreaterThan(0);
-      // Each signal should be a road paint arrow
+      // Each signal should be a Graphics arrow (matching C# reference)
       for (const signal of road.signals) {
-        expect(signal.signal_type).toBe('RoadPaint');
+        expect(signal.signal_type).toBe('Graphics');
         expect(signal.signal_subtype).toContain('Arrow');
       }
     }
@@ -363,7 +372,7 @@ describe('buildJunctionFromConfig', () => {
     const { roads } = buildJunctionFromConfig(tConfig, 0, 0);
     const armRoads = roads.filter((r) => r.junction_id === null);
     for (const road of armRoads) {
-      const crosswalks = road.objects!.filter(o => o.object_type === 'crosswalk');
+      const crosswalks = road.objects!.filter(o => o.object_type === 'Crosswalk');
       expect(crosswalks.length).toBe(1);
     }
   });

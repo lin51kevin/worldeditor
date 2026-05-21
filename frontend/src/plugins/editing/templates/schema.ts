@@ -75,7 +75,7 @@ export interface JunctionTemplateConfig {
   topology: JunctionTopology;
   /** Number of arms (ignored for 'T'=3 and 'Cross'=4) */
   armCount?: number;
-  /** Arm length in metres from center to tip */
+  /** Arm road length in metres (gap from center is computed automatically and is additional) */
   armLength: number;
   /** Cross-section applied to each arm road. Defaults to dual-2-lane driving. */
   armSection?: SectionConfig;

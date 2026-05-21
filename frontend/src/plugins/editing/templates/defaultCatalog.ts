@@ -125,16 +125,18 @@ const catalog: TemplateCatalog = {
       labelKey: 'templatePanel.junctions.tIntersection',
       icon: '⊤',
       topology: 'T',
-      armLength: 80,
+      armLength: 100,
       name: 'T-Intersection',
       armSection: {
         left: [
-          { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
         ],
         right: [
-          { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
         ],
       },
       connectionPattern: 'all-pairs',
@@ -147,8 +149,14 @@ const catalog: TemplateCatalog = {
       armLength: 60,
       name: 'T-Intersection Single',
       armSection: {
-        left: [{ laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } }],
-        right: [{ laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } }],
+        left: [
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
+        ],
+        right: [
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
+        ],
       },
       connectionPattern: 'all-pairs',
     },
@@ -157,16 +165,18 @@ const catalog: TemplateCatalog = {
       labelKey: 'templatePanel.junctions.crossIntersection',
       icon: '✜',
       topology: 'Cross',
-      armLength: 80,
+      armLength: 100,
       name: 'Cross Intersection',
       armSection: {
         left: [
-          { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
         ],
         right: [
-          { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
         ],
       },
       connectionPattern: 'all-pairs',
@@ -176,8 +186,20 @@ const catalog: TemplateCatalog = {
       labelKey: 'templatePanel.junctions.fork',
       icon: '⑂',
       topology: 'T',
-      armLength: 80,
+      armLength: 100,
       name: 'Fork',
+      armSection: {
+        left: [
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
+        ],
+        right: [
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
+        ],
+      },
       connectionPattern: 'all-pairs',
     },
     {
@@ -186,8 +208,20 @@ const catalog: TemplateCatalog = {
       icon: '✳',
       topology: 'Radial',
       armCount: 5,
-      armLength: 80,
+      armLength: 100,
       name: '5-Way Intersection',
+      armSection: {
+        left: [
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
+        ],
+        right: [
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
+        ],
+      },
       connectionPattern: 'all-pairs',
     },
     {
@@ -196,8 +230,20 @@ const catalog: TemplateCatalog = {
       icon: '✴',
       topology: 'Radial',
       armCount: 6,
-      armLength: 80,
+      armLength: 100,
       name: '6-Way Intersection',
+      armSection: {
+        left: [
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
+        ],
+        right: [
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
+          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
+        ],
+      },
       connectionPattern: 'all-pairs',
     },
     {
