@@ -4,21 +4,20 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../stores/projectStore';
 import { useViewportStore } from '../../stores/viewportStore';
 import { onCursorMove } from '../../viewport/cursorEvents';
-import { niceNumber } from '../../viewport/viewportMath';
 import './StatusBar.css';
 
 function formatDist(m: number): string {
-  if (m >= 1000) return `${m / 1000}km`;
-  if (m < 1) return `${Math.round(m * 100)}cm`;
-  return `${m}m`;
+  if (m >= 1000) return `${+(m / 1000).toPrecision(3)}km`;
+  if (m >= 1) return `${+m.toPrecision(3)}m`;
+  if (m >= 0.01) return `${+(m * 100).toPrecision(3)}cm`;
+  return `${+(m * 1000).toPrecision(3)}mm`;
 }
 
-/** Target scale bar pixel width used for the calculation baseline. */
-const SCALE_TARGET_PX = 100;
+/** Fixed scale bar pixel width (does not change on zoom). */
+const SCALE_BAR_PX = 100;
 
 export function StatusBar() {
   const viewportMpp = useProjectStore((s) => s.viewportMpp);
-  const roadCount = useProjectStore((s) => s.project.roads.length);
   const editMode = useViewportStore((s) => s.editMode);
   const { t } = useTranslation();
   const coordRef = useRef<HTMLSpanElement>(null);
@@ -32,12 +31,7 @@ export function StatusBar() {
     return unsubscribe;
   }, [t]);
 
-  const { barPx, scaleDist } = useMemo(() => {
-    const rawDist = SCALE_TARGET_PX * viewportMpp;
-    const niceDist = niceNumber(rawDist);
-    const px = Math.round(niceDist / viewportMpp);
-    return { barPx: px, scaleDist: niceDist };
-  }, [viewportMpp]);
+  const scaleDist = useMemo(() => SCALE_BAR_PX * viewportMpp, [viewportMpp]);
 
   const modeLabel = t(`statusBar.modes.${editMode}`, editMode);
 
@@ -51,9 +45,8 @@ export function StatusBar() {
         <Pencil size={11} />
         <span className="statusbar-mode">{t('statusBar.mode')}: {modeLabel}</span>
       </span>
-      <span className="statusbar-item">{t('statusBar.roads')}: {roadCount}</span>
       <span className="statusbar-item statusbar-scale">
-        <span className="scale-bar-track" style={{ width: `${barPx}px` }} />
+        <span className="scale-bar-track" style={{ width: `${SCALE_BAR_PX}px` }} />
         <span className="scale-bar-label">{formatDist(scaleDist)}</span>
       </span>
     </div>
