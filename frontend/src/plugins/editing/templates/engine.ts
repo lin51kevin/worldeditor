@@ -333,10 +333,12 @@ function buildRoundaboutFromConfig(
 
   // ── Ring arc roads (partial arcs with gaps at junctions) ──────────────────
   // arc[i] starts at arcStartAngles[i], spans oneSegmentDeg degrees
-  // predecessor=junction[i], successor=junction[(i+1)%N]
+  // Junction[i] sits at the gap between arc[i].End and arc[(i+1)%n].Start
+  // So: arc[i].predecessor = junction[(i-1+n)%n] (where it starts from)
+  //     arc[i].successor = junction[i] (where it ends at)
   const arcRoads: Road[] = [];
   for (let i = 0; i < n; i++) {
-    const nextIdx = (i + 1) % n;
+    const prevJunctionIdx = (i - 1 + n) % n;
     const arcStartRad = arcStartAngles[i]! * deg2rad;
     const arcSpanRad = oneSegmentDeg * deg2rad;
     const arcLen = radius * arcSpanRad;
@@ -355,8 +357,8 @@ function buildRoundaboutFromConfig(
       length: arcLen,
       junctionId: null,
       link: {
-        predecessor: { element_type: 'Junction', element_id: junctionIds[i]!, contact_point: null },
-        successor: { element_type: 'Junction', element_id: junctionIds[nextIdx]!, contact_point: null },
+        predecessor: { element_type: 'Junction', element_id: junctionIds[prevJunctionIdx]!, contact_point: null },
+        successor: { element_type: 'Junction', element_id: junctionIds[i]!, contact_point: null },
       },
     });
     arcRoad.plan_view = [arcGeometry(sx, sy, hdg, arcLen, curvature)];
@@ -392,106 +394,106 @@ function buildRoundaboutFromConfig(
   }
 
   // ── Build connector roads and connections per junction ─────────────────────
-  // At junction[i], the following roads meet:
-  //   - arc[(i-1+n)%n] END (previous ring arc arriving)
-  //   - arc[i] START (next ring arc departing)
+  // At junction[i] (in the gap between arc[i].End and arc[(i+1)%n].Start):
+  //   - arc[i] END (ring arc arriving from CCW direction)
+  //   - arc[(i+1)%n] START (ring arc departing in CCW direction)
   //   - arm[i] END (arm road arriving from outside)
   //
   // C# connector groups (6 per junction):
-  //   result0: arc[prev].Right.End → arc[i].Right.Start (ring pass-through)
-  //   result1: arc[i].Left.Start → arc[prev].Left.End (reverse shoulder)
-  //   result2: arc[prev].Right.End → arm[i].Left.End (ring exit to arm)
-  //   result3: arm[i].Right.End → arc[i].Right.Start (arm entry to ring)
-  //   result4: arm[i].Right.End → arc[prev].Left.End (U-turn into ring behind)
-  //   result5: arc[i].Left.Start → arm[i].Left.End (ring forward exit to arm)
+  //   result0: arc[i].Right.End → arc[(i+1)%n].Right.Start (ring pass-through)
+  //   result1: arc[(i+1)%n].Left.Start → arc[i].Left.End (reverse shoulder)
+  //   result2: arc[i].Right.End → arm[i].Left.End (ring exit to arm)
+  //   result3: arm[i].Right.End → arc[(i+1)%n].Right.Start (arm entry to ring)
+  //   result4: arm[i].Right.End → arc[i].Left.End (U-turn into ring behind)
+  //   result5: arc[(i+1)%n].Left.Start → arm[i].Left.End (ring forward exit to arm)
 
   const junctions: Junction[] = [];
   const connectorRoads: Road[] = [];
 
   for (let i = 0; i < n; i++) {
     const connections: JunctionConnection[] = [];
-    const prevArcIdx = (i - 1 + n) % n;
-    const nextArcIdx = i;
+    const arrivingArcIdx = i;            // arc[i] ends at this junction
+    const departingArcIdx = (i + 1) % n; // arc[(i+1)%n] starts from this junction
 
     // Compute key positions
-    const prevArcEnd = arcEndPoint(arcRoads[prevArcIdx]!);
-    const nextArcStart = arcStartPoint(arcRoads[nextArcIdx]!);
+    const arcArriveEnd = arcEndPoint(arcRoads[arrivingArcIdx]!);
+    const arcDepartStart = arcStartPoint(arcRoads[departingArcIdx]!);
     const armEnd = roadEndPoint(armRoads[i]!);
 
-    // result0: ring pass-through (arc[prev].Right → arc[i].Right)
+    // result0: ring pass-through (arc[i].Right.End → arc[(i+1)%n].Right.Start)
     // One connector per driving lane (2 driving lanes on right side)
     for (let laneIdx = 0; laneIdx < 2; laneIdx++) {
       const connector = buildRoundaboutConnector(
-        prevArcEnd.x, prevArcEnd.y, prevArcEnd.hdg,
-        nextArcStart.x, nextArcStart.y, nextArcStart.hdg,
+        arcArriveEnd.x, arcArriveEnd.y, arcArriveEnd.hdg,
+        arcDepartStart.x, arcDepartStart.y, arcDepartStart.hdg,
         { laneType: 'Driving', width: W },
         junctionIds[i]!,
-        arcRoads[prevArcIdx]!.id, arcRoads[nextArcIdx]!.id,
+        arcRoads[arrivingArcIdx]!.id, arcRoads[departingArcIdx]!.id,
         'End', 'Start',
       );
       connectorRoads.push(connector);
       connections.push({
         id: genId('conn'),
-        incoming_road: arcRoads[prevArcIdx]!.id,
+        incoming_road: arcRoads[arrivingArcIdx]!.id,
         connecting_road: connector.id,
         contact_point: 'Start',
         lane_links: [{ from: -(laneIdx + 1), to: -1 }],
       });
     }
 
-    // result1: reverse shoulder pass-through (arc[i].Left.Start → arc[prev].Left.End)
+    // result1: reverse shoulder pass-through (arc[(i+1)%n].Left.Start → arc[i].Left.End)
     const connector1 = buildRoundaboutConnector(
-      nextArcStart.x, nextArcStart.y, nextArcStart.hdg + Math.PI,
-      prevArcEnd.x, prevArcEnd.y, prevArcEnd.hdg + Math.PI,
+      arcDepartStart.x, arcDepartStart.y, arcDepartStart.hdg + Math.PI,
+      arcArriveEnd.x, arcArriveEnd.y, arcArriveEnd.hdg + Math.PI,
       { laneType: 'Shoulder', width: SW },
       junctionIds[i]!,
-      arcRoads[nextArcIdx]!.id, arcRoads[prevArcIdx]!.id,
+      arcRoads[departingArcIdx]!.id, arcRoads[arrivingArcIdx]!.id,
       'Start', 'End',
     );
     connectorRoads.push(connector1);
     connections.push({
       id: genId('conn'),
-      incoming_road: arcRoads[nextArcIdx]!.id,
+      incoming_road: arcRoads[departingArcIdx]!.id,
       connecting_road: connector1.id,
       contact_point: 'Start',
       lane_links: [{ from: 1, to: -1 }],
     });
 
-    // result2: ring exit to arm (arc[prev].Right.End → arm[i].Left.End)
+    // result2: ring exit to arm (arc[i].Right.End → arm[i].Left.End)
     const armExitHdg = armEnd.hdg + Math.PI; // outbound direction on arm
     for (const { fromLane, cfg } of [
       { fromLane: -3, cfg: { laneType: 'Shoulder' as const, width: SW } },
       { fromLane: -2, cfg: { laneType: 'Driving' as const, width: W } },
     ]) {
       const connector = buildRoundaboutConnector(
-        prevArcEnd.x, prevArcEnd.y, prevArcEnd.hdg,
+        arcArriveEnd.x, arcArriveEnd.y, arcArriveEnd.hdg,
         armEnd.x, armEnd.y, armExitHdg,
         cfg,
         junctionIds[i]!,
-        arcRoads[prevArcIdx]!.id, armRoads[i]!.id,
+        arcRoads[arrivingArcIdx]!.id, armRoads[i]!.id,
         'End', 'End',
       );
       connectorRoads.push(connector);
       connections.push({
         id: genId('conn'),
-        incoming_road: arcRoads[prevArcIdx]!.id,
+        incoming_road: arcRoads[arrivingArcIdx]!.id,
         connecting_road: connector.id,
         contact_point: 'Start',
         lane_links: [{ from: fromLane, to: -1 }],
       });
     }
 
-    // result3: arm entry to ring (arm[i].Right.End → arc[i].Right.Start)
+    // result3: arm entry to ring (arm[i].Right.End → arc[(i+1)%n].Right.Start)
     for (const { fromLane, cfg } of [
       { fromLane: -2, cfg: { laneType: 'Shoulder' as const, width: SW } },
       { fromLane: -1, cfg: { laneType: 'Driving' as const, width: W } },
     ]) {
       const connector = buildRoundaboutConnector(
         armEnd.x, armEnd.y, armEnd.hdg,
-        nextArcStart.x, nextArcStart.y, nextArcStart.hdg,
+        arcDepartStart.x, arcDepartStart.y, arcDepartStart.hdg,
         cfg,
         junctionIds[i]!,
-        armRoads[i]!.id, arcRoads[nextArcIdx]!.id,
+        armRoads[i]!.id, arcRoads[departingArcIdx]!.id,
         'End', 'Start',
       );
       connectorRoads.push(connector);
