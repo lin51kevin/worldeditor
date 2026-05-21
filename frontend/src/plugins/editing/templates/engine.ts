@@ -174,35 +174,20 @@ const DEFAULT_ARM_SECTION: SectionConfig = {
 /**
  * Compute the gap distance from junction center to arm road endpoints.
  *
- * Uses angular-clearance formula ensuring adjacent arm edges don't overlap:
- *   gap = totalRoadWidth × (1 / sin(π/N)) × scaleFactor
- *
- * For standard 5-way (width=18m): 18 × 1.70 × 1.5 ≈ 46m (C# reference uses 50).
- * Minimum gap is 20m to ensure visible junction polygon.
+ * Uses armLength/2 as the standard gap (matching C# reference which uses gap=50
+ * for armLength=100 uniformly for all arm counts). A minimum overlap-prevention
+ * check ensures very wide roads or high arm counts don't cause overlap.
  */
-function computeArmGap(section: SectionConfig, armCount: number): number {
+function computeArmGap(section: SectionConfig, armCount: number, armLength: number): number {
   const totalWidth = [...section.left, ...section.right]
     .reduce((sum, lane) => sum + (lane.width ?? DEFAULT_LANE_WIDTH), 0);
   const n = Math.max(armCount, 3);
   const angularFactor = 1 / Math.sin(Math.PI / n);
-  return Math.max(totalWidth * angularFactor * 1.5, 20);
-}
-
-function tArms(cx: number, cy: number, gap: number): ArmDef[] {
-  return [
-    { x: cx + gap, y: cy, hdg: 0 },             // East
-    { x: cx - gap, y: cy, hdg: Math.PI },        // West
-    { x: cx, y: cy + gap, hdg: Math.PI / 2 },    // North
-  ];
-}
-
-function crossArms(cx: number, cy: number, gap: number): ArmDef[] {
-  return [
-    { x: cx + gap, y: cy, hdg: 0 },              // East
-    { x: cx - gap, y: cy, hdg: Math.PI },         // West
-    { x: cx, y: cy + gap, hdg: Math.PI / 2 },     // North
-    { x: cx, y: cy - gap, hdg: -Math.PI / 2 },    // South
-  ];
+  // Minimum gap to prevent adjacent arm edges from overlapping
+  const minForNonOverlap = totalWidth * angularFactor * 1.0;
+  // C# uses armLength/2 as standard gap (50m for 100m arms)
+  const standardGap = armLength * 0.5;
+  return Math.max(minForNonOverlap, standardGap);
 }
 
 function radialArms(cx: number, cy: number, gap: number, count: number): ArmDef[] {
@@ -220,12 +205,11 @@ function radialArms(cx: number, cy: number, gap: number, count: number): ArmDef[
 
 function resolveArms(topology: JunctionTopology, cx: number, cy: number, gap: number, armCount?: number): ArmDef[] {
   switch (topology) {
-    case 'T': return tArms(cx, cy, gap);
-    case 'Cross': return crossArms(cx, cy, gap);
+    case 'T': return radialArms(cx, cy, gap, 3);
+    case 'Cross': return radialArms(cx, cy, gap, 4);
     case 'Radial':
       return radialArms(cx, cy, gap, armCount ?? 4);
     case 'Roundabout':
-      // Roundabout arms are placed at specific positions, handled by buildRoundaboutFromConfig
       return radialArms(cx, cy, gap, armCount ?? 4);
   }
 }
@@ -1000,7 +984,7 @@ export function buildJunctionFromConfig(
 
   const section = config.armSection ?? DEFAULT_ARM_SECTION;
   const armCount = resolveArmCount(config.topology, config.armCount);
-  const gap = computeArmGap(section, armCount);
+  const gap = computeArmGap(section, armCount, config.armLength);
   const arms = resolveArms(config.topology, cx, cy, gap, config.armCount);
   // Road length = armLength (gap is additional space beyond road, matching C# reference)
   const effLength = config.armLength;
