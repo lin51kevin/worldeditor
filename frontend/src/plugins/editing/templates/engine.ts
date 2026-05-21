@@ -362,51 +362,72 @@ function buildRoundaboutFromConfig(
 // ── Connector road builder ───────────────────────────────────────────────────
 
 /**
- * Build a short straight connector road (junction_id set) spanning between
- * the junction-edge points of two arm roads. This is the XODR-correct approach:
- * the junction's `connecting_road` references these connectors, not the arms.
- *
- * Each arm road starts at the junction edge (plan_view[0].{x,y}) and extends
- * outward. Connector roads bridge between two arms' junction-edge points.
+ * Compute the end point of a road (junction edge for inward-pointing arm roads).
  */
-function buildConnectorRoad(armA: Road, armB: Road, junctionId: string): Road {
-  const geoA = armA.plan_view[0]!;
-  const geoB = armB.plan_view[0]!;
-  const dx = geoB.x - geoA.x;
-  const dy = geoB.y - geoA.y;
+function roadEndPoint(road: Road): { x: number; y: number; hdg: number } {
+  const geo = road.plan_view[0]!;
+  return {
+    x: geo.x + Math.cos(geo.hdg) * road.length,
+    y: geo.y + Math.sin(geo.hdg) * road.length,
+    hdg: geo.hdg,
+  };
+}
+
+/**
+ * Build a connector road spanning between the junction-edge ends of two arm roads.
+ * The connector has `laneCount` right-side driving lanes to match the connected
+ * lane set. Arm roads point inward (start=tip, end=junction edge), so connectors
+ * bridge end→end.
+ *
+ * Connection type:
+ * - 'straight' or 'right': full lane count
+ * - 'left': typically 1 lane (innermost only)
+ */
+function buildConnectorRoad(
+  armA: Road,
+  armB: Road,
+  junctionId: string,
+  laneCount: number,
+  laneWidth = DEFAULT_LANE_WIDTH,
+): Road {
+  const endA = roadEndPoint(armA);
+  const endB = roadEndPoint(armB);
+  const dx = endB.x - endA.x;
+  const dy = endB.y - endA.y;
   const length = Math.max(Math.sqrt(dx * dx + dy * dy), 0.5);
   const hdg = Math.atan2(dy, dx);
 
-  // Single right-side driving lane (movement from A towards B)
-  const connectorSection = buildLaneSection(
-    [],
-    [{ laneType: 'Driving', width: DEFAULT_LANE_WIDTH }],
-  );
+  // Build right-side driving lanes matching laneCount
+  const rightLanes: LaneConfig[] = [];
+  for (let i = 0; i < laneCount; i++) {
+    rightLanes.push({ laneType: 'Driving', width: laneWidth });
+  }
+  const connectorSection = buildLaneSection([], rightLanes);
 
   const road = buildRoad(connectorSection, {
-    x: geoA.x,
-    y: geoA.y,
+    x: endA.x,
+    y: endA.y,
     hdg,
     length,
     junctionId,
     link: {
-      predecessor: { element_type: 'Road', element_id: armA.id, contact_point: 'Start' },
-      successor: { element_type: 'Road', element_id: armB.id, contact_point: 'Start' },
+      predecessor: { element_type: 'Road', element_id: armA.id, contact_point: 'End' },
+      successor: { element_type: 'Road', element_id: armB.id, contact_point: 'End' },
     },
   });
 
   // Replace Line with Arc for a smooth curve through the junction.
-  // Use the heading from armA's geometry to determine turn direction
-  const hdgA = geoA.hdg;
-  const hdgB = geoB.hdg;
-  const angleDiff = ((hdgB - hdgA) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
-  // curvature inversely proportional to length for smooth arc
+  // Compute curvature from the heading difference between arm directions.
+  // armA points inward: at its end the heading = armA.hdg → traffic arrives with heading armA.hdg
+  // armB points inward: at its end traffic should depart with heading (armB.hdg + PI) to flow into armB's left lanes
+  const arrivalHdg = endA.hdg; // direction of arrival from armA
+  const departureHdg = endB.hdg + Math.PI; // direction leaving toward armB's outgoing side
+  const angleDiff = ((departureHdg - arrivalHdg) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
   const curvature = (2 / length) * Math.sin(angleDiff / 2);
-  // Clamp curvature to a reasonable range
-  const clampedCurvature = Math.max(-0.15, Math.min(0.15, curvature));
+  const clampedCurvature = Math.max(-0.2, Math.min(0.2, curvature));
 
   road.plan_view = [
-    { s: 0, x: geoA.x, y: geoA.y, hdg, length, geo_type: { Arc: { curvature: clampedCurvature } } },
+    { s: 0, x: endA.x, y: endA.y, hdg, length, geo_type: { Arc: { curvature: clampedCurvature } } },
   ];
 
   return road;
@@ -417,6 +438,148 @@ function buildConnectorRoad(armA: Road, armB: Road, junctionId: string): Road {
 export interface JunctionBuildResult {
   junction: Junction;
   roads: Road[];
+}
+
+// ── Turn arrow helpers ───────────────────────────────────────────────────────
+
+/**
+ * Determine arrow signal subtype for a given lane based on total driving lane count
+ * and lane position index (1-based, innermost to outermost).
+ * Matches C# GetPaintSubTye logic for right-hand driving.
+ */
+function getArrowSubtype(drivingLaneCount: number, laneIndex: number): { subType: string; name: string } {
+  if (drivingLaneCount === 1) {
+    return { subType: 'StraightOrLeftOrRightTurnArrow', name: 'Straight Left or Right Turn Arrow Paint' };
+  } else if (drivingLaneCount === 2) {
+    if (laneIndex === 1) {
+      return { subType: 'StraightOrLeftTurnArrow', name: 'Straight Left Turn Arrow Paint' };
+    } else {
+      return { subType: 'StraightOrRightTurnArrow', name: 'Straight Right Turn Arrow Paint' };
+    }
+  } else {
+    // 3+ lanes
+    if (laneIndex === 1) {
+      return { subType: 'LeftTurnArrow', name: 'Left Turn Arrow Paint' };
+    } else if (laneIndex === drivingLaneCount) {
+      return { subType: 'RightTurnArrow', name: 'Right Turn Arrow Paint' };
+    } else {
+      return { subType: 'StraightAheadArrow', name: 'Straight Arrow Paint' };
+    }
+  }
+}
+
+/**
+ * Add turn arrow signals to arm roads near the junction entry.
+ * Arrows are placed on right-side driving lanes (incoming traffic) at s ≈ length - 4m.
+ */
+function addTurnArrows(armRoads: Road[]): void {
+  const SIGNAL_S_DELTA = 4.0;
+  for (const road of armRoads) {
+    const rightDrivingLanes = road.lane_sections[0]!.right.filter(l => l.lane_type === 'Driving');
+    const laneCount = rightDrivingLanes.length;
+    if (laneCount < 1) continue;
+
+    if (!road.signals) road.signals = [];
+    const signalS = Math.max(road.length - SIGNAL_S_DELTA, 0.5);
+
+    for (let i = 0; i < laneCount; i++) {
+      const laneIndex = i + 1; // 1-based from innermost
+      const { subType, name } = getArrowSubtype(laneCount, laneIndex);
+      const lane = rightDrivingLanes[i]!;
+      const laneWidth = lane.width[0]?.a ?? DEFAULT_LANE_WIDTH;
+      // t offset: center of the lane (negative for right side)
+      const tOffset = -(i * laneWidth + laneWidth / 2);
+
+      const signal: RoadSignal = {
+        id: genId('signal'),
+        name,
+        s: signalS,
+        t: tOffset,
+        z_offset: 0.01,
+        h_offset: 0,
+        width: 1.8,
+        height: 0.01,
+        signal_type: 'RoadPaint',
+        signal_subtype: subType,
+        value: null,
+        orientation: '+',
+        is_dynamic: false,
+      };
+      road.signals!.push(signal);
+    }
+  }
+}
+
+/**
+ * Add crosswalk objects at the junction-adjacent end of each arm road.
+ * For inward-pointing arm roads, junction edge is at s=length (successor=junction).
+ */
+function addCrosswalks(armRoads: Road[]): void {
+  const CROSSWALK_WIDTH = 4.0;
+  const CROSSWALK_DELTA = 3.0;
+  for (const road of armRoads) {
+    const leftLanes = road.lane_sections[0]!.left;
+    const rightLanes = road.lane_sections[0]!.right;
+    const leftWidth = leftLanes.reduce((sum, l) => sum + (l.width[0]?.a ?? DEFAULT_LANE_WIDTH), 0);
+    const rightWidth = rightLanes.reduce((sum, l) => sum + (l.width[0]?.a ?? DEFAULT_LANE_WIDTH), 0);
+    const totalRoadWidth = leftWidth + rightWidth;
+
+    if (!road.objects) road.objects = [];
+    road.objects.push({
+      id: genId('obj'),
+      object_type: 'crosswalk',
+      name: 'Zebra Strips Area',
+      position: { x: road.length - CROSSWALK_DELTA, y: 0, z: 0.01, id: null },
+      orientation: 0,
+      hdg: 0,
+      width: totalRoadWidth + 0.2,
+      height: 0.01,
+      length: CROSSWALK_WIDTH,
+      corners: [],
+      validity: null,
+    });
+  }
+}
+
+/**
+ * Convert broken lane marks to solid near the junction entry.
+ * For inward-pointing arm roads, junction edge is at s=length.
+ * Split broken marks: solid for last SOLIDATE_LENGTH, broken for the rest.
+ */
+function solidateBrokenLinesNearJunction(armRoads: Road[]): void {
+  const SOLIDATE_LENGTH = 10.0;
+  for (const road of armRoads) {
+    const section = road.lane_sections[0];
+    if (!section) continue;
+
+    // Process right-side lanes (incoming traffic)
+    for (const lane of section.right) {
+      if (lane.road_marks.length === 0) continue;
+      const mark = lane.road_marks[0]!;
+      if (mark.mark_type === 'Broken' && road.length > SOLIDATE_LENGTH) {
+        // Replace with two marks: broken for most of the road, solid near junction
+        const solidStart = road.length - SOLIDATE_LENGTH;
+        lane.road_marks = [
+          { ...mark, s_offset: 0 }, // broken from start
+          { ...mark, s_offset: solidStart, mark_type: 'Solid', lane_change: 'None' }, // solid near junction
+        ];
+      }
+    }
+
+    // Process left-side lanes (outgoing traffic)
+    for (const lane of section.left) {
+      if (lane.road_marks.length === 0) continue;
+      const mark = lane.road_marks[0]!;
+      if (mark.mark_type === 'Broken' && road.length > SOLIDATE_LENGTH) {
+        // For left lanes (outgoing), solid near junction entry (s=length end)
+        const solidStart = road.length - SOLIDATE_LENGTH;
+        lane.road_marks = [
+          { ...mark, s_offset: 0 },
+          { ...mark, s_offset: solidStart, mark_type: 'Solid', lane_change: 'None' },
+        ];
+      }
+    }
+  }
 }
 
 export function buildJunctionFromConfig(
@@ -440,23 +603,29 @@ export function buildJunctionFromConfig(
     contact_point: null,
   };
 
-  // Arm roads: approach roads that start at the junction edge and extend outward.
-  // junction_id = null because they are approach roads, not internal connectors.
-  const armRoads = arms.map((arm) =>
-    buildRoad(buildLaneSectionFromConfig(section), {
-      x: arm.x,
-      y: arm.y,
-      hdg: arm.hdg,
+  // Arm roads: approach roads that start at the outer tip and end at the junction edge.
+  // They point INWARD (toward the junction center), matching OpenDRIVE convention where
+  // right-side lanes (negative IDs) carry traffic toward the junction (incoming).
+  // successor = Junction because junction is at the end (s=length) of each arm road.
+  const armRoads = arms.map((arm) => {
+    // arm.x/y is the junction edge position; compute tip position (outer end)
+    const tipX = arm.x + Math.cos(arm.hdg) * effLength;
+    const tipY = arm.y + Math.sin(arm.hdg) * effLength;
+    // Inward heading (toward junction center)
+    const inwardHdg = arm.hdg + Math.PI;
+
+    return buildRoad(buildLaneSectionFromConfig(section), {
+      x: tipX,
+      y: tipY,
+      hdg: inwardHdg,
       length: effLength,
       junctionId: null,
-      link: { predecessor: junctionLink, successor: null },
-    }),
-  );
+      link: { predecessor: null, successor: junctionLink },
+    });
+  });
 
-  // Connector roads: one per ordered pair (i→j), spanning junction-edge to junction-edge.
-  // junction_id = junctionId marks them as internal connectors per the XODR spec.
   // Add stop line at junction entry for each arm road.
-  // Arm roads have predecessor = junction, so the junction edge is at s = 0.
+  // Arm roads point inward, so junction edge is at s = length.
   const roadWidth = section.right.reduce((sum, l) => sum + (l.width ?? 3.5), 0);
   for (const arm of armRoads) {
     if (!arm.objects) arm.objects = [];
@@ -464,7 +633,7 @@ export function buildJunctionFromConfig(
       id: genId('obj'),
       object_type: 'StopLine',
       name: 'stop_line',
-      position: { x: 0.1, y: 0, z: 0.01, id: null },
+      position: { x: arm.length - 0.1, y: 0, z: 0.01, id: null },
       orientation: 0,
       hdg: 0,
       width: roadWidth,
@@ -475,30 +644,94 @@ export function buildJunctionFromConfig(
     });
   }
 
+  // ── Build connections following C# topology ────────────────────────────────
+  // Right-side lanes (negative IDs) = incoming traffic (toward junction)
+  // Left-side lanes (positive IDs) = outgoing traffic (away from junction)
+  //
+  // Connection directions (for right-hand driving):
+  //   - Straight: arm[i].Right → arm[(i+2+j)%N].Left (opposite arms)
+  //   - Right turn: arm[i].Right → arm[(i+1)%N].Left (adjacent clockwise)
+  //   - Left turn: arm[(i+1)%N].Right → arm[i].Left (innermost lane only)
+  //
+  // In OpenDRIVE terms:
+  //   - incoming_road = source arm (provides traffic from its right lanes)
+  //   - connecting_road = connector (bridges junction interior)
+  //   - lane_links: from = right-side lane IDs on incoming arm, to = right-side lane IDs on connector
+
   const connectorRoads: Road[] = [];
   const connections: JunctionConnection[] = [];
-  const rightLaneLinks = section.right.map((_: LaneConfig, i: number) => ({
+  const n = armRoads.length;
+
+  // Lane count for full connections (straight + right turn)
+  const numRightLanes = section.right.length;
+  const fullLaneLinks = section.right.map((_: LaneConfig, i: number) => ({
     from: -(i + 1),
     to: -(i + 1),
   }));
 
+  // Lane links for left-turn (innermost lane only = lane -1)
+  const leftTurnLaneLinks = [{ from: -1, to: -1 }];
+
   const pattern = config.connectionPattern ?? 'all-pairs';
   if (pattern === 'all-pairs') {
-    for (let i = 0; i < armRoads.length; i++) {
-      for (let j = 0; j < armRoads.length; j++) {
-        if (i === j) continue;
-        const connector = buildConnectorRoad(armRoads[i]!, armRoads[j]!, junctionId);
-        connectorRoads.push(connector);
-        connections.push({
-          id: genId('conn'),
-          incoming_road: armRoads[i]!.id,
-          connecting_road: connector.id,
-          contact_point: 'Start',
-          lane_links: rightLaneLinks.map((ll) => ({ ...ll })),
-        });
+    // --- Straight connections (for N > 3) ---
+    // Each arm connects to arms that are neither adjacent nor itself
+    if (n > 3) {
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n - 3; j++) {
+          const targetIdx = (i + 2 + j) % n;
+          const connector = buildConnectorRoad(armRoads[i]!, armRoads[targetIdx]!, junctionId, numRightLanes);
+          connectorRoads.push(connector);
+          connections.push({
+            id: genId('conn'),
+            incoming_road: armRoads[i]!.id,
+            connecting_road: connector.id,
+            contact_point: 'Start',
+            lane_links: fullLaneLinks.map((ll) => ({ ...ll })),
+          });
+        }
       }
     }
+
+    // --- Right-turn connections (adjacent clockwise) ---
+    for (let i = 0; i < n; i++) {
+      const targetIdx = (i + 1) % n;
+      const connector = buildConnectorRoad(armRoads[i]!, armRoads[targetIdx]!, junctionId, numRightLanes);
+      connectorRoads.push(connector);
+      connections.push({
+        id: genId('conn'),
+        incoming_road: armRoads[i]!.id,
+        connecting_road: connector.id,
+        contact_point: 'Start',
+        lane_links: fullLaneLinks.map((ll) => ({ ...ll })),
+      });
+    }
+
+    // --- Left-turn connections (adjacent counterclockwise, innermost lane only) ---
+    for (let i = 0; i < n; i++) {
+      const sourceIdx = (i + 1) % n;
+      const connector = buildConnectorRoad(armRoads[sourceIdx]!, armRoads[i]!, junctionId, 1);
+      connectorRoads.push(connector);
+      connections.push({
+        id: genId('conn'),
+        incoming_road: armRoads[sourceIdx]!.id,
+        connecting_road: connector.id,
+        contact_point: 'Start',
+        lane_links: leftTurnLaneLinks.map((ll) => ({ ...ll })),
+      });
+    }
   }
+
+  // ── Post-processing: add road furniture ────────────────────────────────────
+
+  // Add turn arrows on arm roads
+  addTurnArrows(armRoads);
+
+  // Add crosswalks at junction-adjacent ends
+  addCrosswalks(armRoads);
+
+  // Convert broken lines to solid near junction entry
+  solidateBrokenLinesNearJunction(armRoads);
 
   const junction: Junction = {
     id: junctionId,

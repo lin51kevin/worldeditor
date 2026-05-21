@@ -210,12 +210,12 @@ describe('buildJunctionFromConfig', () => {
     expect(junction.name).toBe('T-Intersection');
   });
 
-  it('should link each arm road to the junction via predecessor', () => {
+  it('should link each arm road to the junction via successor', () => {
     const { junction, roads } = buildJunctionFromConfig(tConfig, 0, 0);
     const armRoads = roads.filter((r) => r.junction_id === null);
     for (const road of armRoads) {
-      expect(road.link?.predecessor?.element_type).toBe('Junction');
-      expect(road.link?.predecessor?.element_id).toBe(junction.id);
+      expect(road.link?.successor?.element_type).toBe('Junction');
+      expect(road.link?.successor?.element_id).toBe(junction.id);
     }
   });
 
@@ -228,6 +228,9 @@ describe('buildJunctionFromConfig', () => {
       expect(conn.link?.successor?.element_type).toBe('Road');
       expect(armIds.has(conn.link!.predecessor!.element_id)).toBe(true);
       expect(armIds.has(conn.link!.successor!.element_id)).toBe(true);
+      // Connectors bridge end-to-end (arm roads point inward, junction at s=length)
+      expect(conn.link!.predecessor!.contact_point).toBe('End');
+      expect(conn.link!.successor!.contact_point).toBe('End');
     }
   });
 
@@ -308,10 +311,60 @@ describe('buildJunctionFromConfig', () => {
     const { junction } = buildJunctionFromConfig(tConfig, 0, 0);
     for (const conn of junction.connections) {
       expect(conn.lane_links.length).toBeGreaterThan(0);
-      // Each link maps from lane id to same lane id
+      // Each link maps from negative lane id to same negative lane id
       for (const link of conn.lane_links) {
+        expect(link.from).toBeLessThan(0);
+        expect(link.to).toBeLessThan(0);
         expect(link.from).toBe(link.to);
       }
+    }
+  });
+
+  it('should differentiate left-turn connections (1 lane) from straight/right (full lanes)', () => {
+    const crossConfig: JunctionTemplateConfig = {
+      ...tConfig,
+      id: 'test:jct:cross',
+      topology: 'Cross',
+      armSection: {
+        left: [
+          { laneType: 'Driving', width: 3.5, mark: { type: 'Solid', color: 'Yellow' } },
+          { laneType: 'Driving', width: 3.5, mark: { type: 'Broken' } },
+        ],
+        right: [
+          { laneType: 'Driving', width: 3.5, mark: { type: 'Solid', color: 'Yellow' } },
+          { laneType: 'Driving', width: 3.5, mark: { type: 'Broken' } },
+        ],
+      },
+    };
+    const { junction } = buildJunctionFromConfig(crossConfig, 0, 0);
+    // For 4-way with 2 lanes: 4 straight(2 links) + 4 right(2 links) + 4 left(1 link)
+    const fullLinkConns = junction.connections.filter(c => c.lane_links.length === 2);
+    const singleLinkConns = junction.connections.filter(c => c.lane_links.length === 1);
+    // 4 straight + 4 right = 8 full-lane connections
+    expect(fullLinkConns).toHaveLength(8);
+    // 4 left-turn connections with single lane
+    expect(singleLinkConns).toHaveLength(4);
+  });
+
+  it('should add turn arrow signals to arm roads', () => {
+    const { roads } = buildJunctionFromConfig(tConfig, 0, 0);
+    const armRoads = roads.filter((r) => r.junction_id === null);
+    for (const road of armRoads) {
+      expect(road.signals.length).toBeGreaterThan(0);
+      // Each signal should be a road paint arrow
+      for (const signal of road.signals) {
+        expect(signal.signal_type).toBe('RoadPaint');
+        expect(signal.signal_subtype).toContain('Arrow');
+      }
+    }
+  });
+
+  it('should add crosswalk objects to arm roads', () => {
+    const { roads } = buildJunctionFromConfig(tConfig, 0, 0);
+    const armRoads = roads.filter((r) => r.junction_id === null);
+    for (const road of armRoads) {
+      const crosswalks = road.objects!.filter(o => o.object_type === 'crosswalk');
+      expect(crosswalks.length).toBe(1);
     }
   });
 });
