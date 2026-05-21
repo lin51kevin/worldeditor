@@ -157,6 +157,17 @@ export function Viewport() {
     renderer.setViewMode(viewMode);
   }, [viewMode, status]);
 
+  // Handle viewport camera reset event (from resetDisplay / context menu)
+  useEffect(() => {
+    const handler = () => {
+      const renderer = rendererRef.current;
+      if (!renderer || status !== 'ready') return;
+      renderer.resetCamera();
+    };
+    window.addEventListener('viewport:resetCamera', handler);
+    return () => window.removeEventListener('viewport:resetCamera', handler);
+  }, [status]);
+
   // Sync theme colors to WebGPU renderer
   useEffect(() => {
     const renderer = rendererRef.current;
@@ -590,7 +601,15 @@ export function Viewport() {
     const gesture = mouseGestureRef.current;
     mouseGestureRef.current = null;
     if (!gesture || gesture.button !== 0) return;
-    if (gesture.dragged || exceededDragThreshold(gesture.startX, gesture.startY, e.clientX, e.clientY)) {
+    // In click-to-place modes (draw, template, measure), skip the drag threshold
+    // so that slight hand tremor doesn't swallow the click event.
+    const viewState0 = useViewportStore.getState();
+    const isClickToPlace =
+      viewState0.editMode === 'spline' ||
+      !!viewState0.pendingTemplateId ||
+      !!viewState0.pendingObjectTemplateId ||
+      viewState0.measureMode !== 'none';
+    if (!isClickToPlace && (gesture.dragged || exceededDragThreshold(gesture.startX, gesture.startY, e.clientX, e.clientY))) {
       return;
     }
 
