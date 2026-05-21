@@ -414,17 +414,20 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   addMeasurePoint: (point) =>
     set((state) => ({ measurePoints: [...state.measurePoints, point] })),
   clearMeasurePoints: () => set({ measurePoints: [], lastMeasurement: null }),
-  resetDisplay: () => set((state) => ({
-    display: {
-      ...state.display,
-      hiddenRoadIds: [],
-      hiddenJunctionIds: [],
-      hiddenLaneSectionKeys: [],
-      hiddenLaneKeys: [],
-      hiddenSignalKeys: [],
-      hiddenObjectKeys: [],
-    }
-  })),
+  resetDisplay: () => {
+    set((state) => ({
+      display: {
+        ...state.display,
+        hiddenRoadIds: [],
+        hiddenJunctionIds: [],
+        hiddenLaneSectionKeys: [],
+        hiddenLaneKeys: [],
+        hiddenSignalKeys: [],
+        hiddenObjectKeys: [],
+      }
+    }));
+    window.dispatchEvent(new CustomEvent('viewport:resetCamera'));
+  },
   setMeasurementResult: (lastMeasurement) => set({ lastMeasurement }),
 
   // Geometry editing actions

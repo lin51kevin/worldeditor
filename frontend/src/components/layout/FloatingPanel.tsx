@@ -77,12 +77,12 @@ export const PANEL_STORAGE_KEYS = [
   STORAGE_KEYS.PANEL_TEMPLATE,
 ];
 
-/** Clear persisted position/size for all floating panels and reload so CSS defaults apply. */
+/** Clear persisted position/size for all floating panels and notify components to reset. */
 export function resetAllPanels(): void {
   PANEL_STORAGE_KEYS.forEach((k) => {
     try { localStorage.removeItem(k); } catch { /* ignore */ }
   });
-  window.location.reload();
+  window.dispatchEvent(new CustomEvent('panels:reset'));
 }
 
 interface FloatingPanelProps {
@@ -144,6 +144,32 @@ export function FloatingPanel({
   const didDrag = useRef(false);
   // Resize state
   const resize = useRef<{ id: string; sx: number; sy: number; origin: Rect } | null>(null);
+
+  // Listen for global panel reset event
+  useEffect(() => {
+    const handler = () => {
+      setRect(null);
+      localStorage.removeItem(storageKey);
+      // Trigger re-layout on next frame to pick up CSS defaults
+      requestAnimationFrame(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const brc = el.getBoundingClientRect();
+        setRect({
+          x: initialCenter
+            ? Math.round((window.innerWidth - brc.width) / 2) + (initialCenterOffset?.x ?? 0)
+            : Math.round(brc.left),
+          y: initialCenter
+            ? Math.round((window.innerHeight - brc.height) / 2) + (initialCenterOffset?.y ?? 0)
+            : Math.round(brc.top),
+          w: Math.round(brc.width) || defaultWidth,
+          h: Math.round(brc.height),
+        });
+      });
+    };
+    window.addEventListener('panels:reset', handler);
+    return () => window.removeEventListener('panels:reset', handler);
+  }, [defaultWidth, initialCenter, initialCenterOffset]);
 
   // Persist rect to localStorage on every change
   useEffect(() => {
