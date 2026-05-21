@@ -18,9 +18,9 @@ describe('loadCatalog', () => {
     expect(catalog.roads).toHaveLength(7);
   });
 
-  it('should contain 7 junction templates', () => {
+  it('should contain 8 junction templates', () => {
     const catalog = loadCatalog();
-    expect(catalog.junctions).toHaveLength(7);
+    expect(catalog.junctions).toHaveLength(8);
   });
 
   it('should contain 13 signal templates', () => {

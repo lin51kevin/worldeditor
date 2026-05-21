@@ -307,7 +307,8 @@
       "fork": "叉路",
       "fiveWay": "五叉路口",
       "sixWay": "六叉路口",
-      "roundabout": "环形路口"
+      "roundabout": "环岛3",
+      "roundabout4": "环岛4"
     },
     "signals": {
       "trafficLight": "交通灯",

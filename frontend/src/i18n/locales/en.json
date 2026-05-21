@@ -307,7 +307,8 @@
       "fork": "Fork",
       "fiveWay": "5-Way",
       "sixWay": "6-Way",
-      "roundabout": "Roundabout"
+      "roundabout": "Roundabout 3",
+      "roundabout4": "Roundabout 4"
     },
     "signals": {
       "trafficLight": "Traffic Light",
