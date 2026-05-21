@@ -427,15 +427,19 @@ function buildRoundaboutFromConfig(
     const armEnd = roadEndPoint(armRoads[i]!);
 
     // result0: ring pass-through (arc[i].Right.End → arc[(i+1)%n].Right.Start)
-    // One connector per driving lane (2 driving lanes on right side)
-    for (let laneIdx = 0; laneIdx < 2; laneIdx++) {
-      const lateralOffset = laneIdx * W; // 0 for lane -1, W for lane -2
-      const startPt = offsetPoint(arcArriveEnd, lateralOffset);
-      const endPt = offsetPoint(arcDepartStart, lateralOffset);
+    // One connector per right-side lane (2 driving + 1 shoulder)
+    const ringPassLanes = [
+      { laneId: -1, offset: 0, cfg: { laneType: 'Driving' as const, width: W } },
+      { laneId: -2, offset: W, cfg: { laneType: 'Driving' as const, width: W } },
+      { laneId: -3, offset: 2 * W, cfg: { laneType: 'Shoulder' as const, width: SW } },
+    ];
+    for (const { laneId, offset, cfg } of ringPassLanes) {
+      const startPt = offsetPoint(arcArriveEnd, offset);
+      const endPt = offsetPoint(arcDepartStart, offset);
       const connector = buildRoundaboutConnector(
         startPt.x, startPt.y, arcArriveEnd.hdg,
         endPt.x, endPt.y, arcDepartStart.hdg,
-        { laneType: 'Driving', width: W },
+        cfg,
         junctionIds[i]!,
         arcRoads[arrivingArcIdx]!.id, arcRoads[departingArcIdx]!.id,
         'End', 'Start',
@@ -446,7 +450,7 @@ function buildRoundaboutFromConfig(
         incoming_road: arcRoads[arrivingArcIdx]!.id,
         connecting_road: connector.id,
         contact_point: 'Start',
-        lane_links: [{ from: -(laneIdx + 1), to: -1 }],
+        lane_links: [{ from: laneId, to: -1 }],
       });
     }
 
