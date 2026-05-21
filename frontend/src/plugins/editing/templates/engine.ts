@@ -203,9 +203,19 @@ function radialArms(cx: number, cy: number, gap: number, count: number): ArmDef[
   return arms;
 }
 
+function tArms(cx: number, cy: number, gap: number): ArmDef[] {
+  // Classic T-shape: stem at 0° (east), arms at 90° (north) and -90° (south)
+  const angles = [0, Math.PI / 2, -Math.PI / 2];
+  return angles.map(angle => ({
+    x: cx + gap * Math.cos(angle),
+    y: cy + gap * Math.sin(angle),
+    hdg: angle,
+  }));
+}
+
 function resolveArms(topology: JunctionTopology, cx: number, cy: number, gap: number, armCount?: number): ArmDef[] {
   switch (topology) {
-    case 'T': return radialArms(cx, cy, gap, 3);
+    case 'T': return tArms(cx, cy, gap);
     case 'Cross': return radialArms(cx, cy, gap, 4);
     case 'Radial':
       return radialArms(cx, cy, gap, armCount ?? 4);

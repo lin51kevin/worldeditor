@@ -185,7 +185,8 @@ const catalog: TemplateCatalog = {
       id: 'tpl:jct:fork',
       labelKey: 'templatePanel.junctions.fork',
       icon: '⑂',
-      topology: 'T',
+      topology: 'Radial',
+      armCount: 3,
       armLength: 100,
       name: 'Fork',
       armSection: {
