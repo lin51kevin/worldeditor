@@ -115,6 +115,8 @@ export function useViewportMeshes({
       }
 
       const empty = Promise.resolve(new Float32Array(0));
+      // Connector roads render their road surfaces but NOT lane lines.
+      // Road surface rendering uses full visibleProject (includes connectors).
       const roadProm = viewMode === 'solid'
         ? service.generateRoadVertices(visibleProject, 2.0, display.colorMode).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); })
         : empty;
@@ -178,14 +180,20 @@ export function useViewportMeshes({
       if (!visibleProject) return;
 
       const empty = Promise.resolve(new Float32Array(0));
+      // Exclude connector roads from line rendering — their surfaces are shown
+      // but lane lines/marks inside the junction area are hidden (C# reference behavior).
+      const nonConnectorProject = {
+        ...visibleProject,
+        roads: visibleProject.roads.filter((r) => !r.junction_id),
+      };
       const centerLineProm = (display.showReferenceLine || viewMode !== 'solid')
-        ? service.generateCenterLineVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
+        ? service.generateCenterLineVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0))
         : empty;
       const laneBoundaryProm = viewMode !== 'solid'
-        ? service.generateLaneBoundaryVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
+        ? service.generateLaneBoundaryVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0))
         : empty;
       const roadMarkProm = (viewMode === 'wire' || (viewMode === 'solid' && display.showLaneLines))
-        ? service.generateLaneLineVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
+        ? service.generateLaneLineVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0))
         : empty;
 
       const [laneBoundaryVerts, roadMarkVerts, centerLineVerts] = await Promise.all([
