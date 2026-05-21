@@ -11,7 +11,7 @@
 import type { TemplateCatalog } from './schema';
 
 const W = 3.5;   // standard driving lane width (m)
-const SW = 2.5;  // shoulder width (m)
+const SW = 2.0;  // shoulder width (m) — matching C# reference
 
 const catalog: TemplateCatalog = {
   version: '1.0.0',
