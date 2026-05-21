@@ -407,6 +407,12 @@ function buildRoundaboutFromConfig(
   //   result4: arm[i].Right.End → arc[i].Left.End (U-turn into ring behind)
   //   result5: arc[(i+1)%n].Left.Start → arm[i].Left.End (ring forward exit to arm)
 
+  // Helper: offset a point to the RIGHT by 'dist' (perpendicular to heading)
+  const offsetPoint = (pt: { x: number; y: number; hdg: number }, dist: number) => ({
+    x: pt.x + Math.sin(pt.hdg) * dist,
+    y: pt.y - Math.cos(pt.hdg) * dist,
+  });
+
   const junctions: Junction[] = [];
   const connectorRoads: Road[] = [];
 
@@ -423,9 +429,12 @@ function buildRoundaboutFromConfig(
     // result0: ring pass-through (arc[i].Right.End → arc[(i+1)%n].Right.Start)
     // One connector per driving lane (2 driving lanes on right side)
     for (let laneIdx = 0; laneIdx < 2; laneIdx++) {
+      const lateralOffset = laneIdx * W; // 0 for lane -1, W for lane -2
+      const startPt = offsetPoint(arcArriveEnd, lateralOffset);
+      const endPt = offsetPoint(arcDepartStart, lateralOffset);
       const connector = buildRoundaboutConnector(
-        arcArriveEnd.x, arcArriveEnd.y, arcArriveEnd.hdg,
-        arcDepartStart.x, arcDepartStart.y, arcDepartStart.hdg,
+        startPt.x, startPt.y, arcArriveEnd.hdg,
+        endPt.x, endPt.y, arcDepartStart.hdg,
         { laneType: 'Driving', width: W },
         junctionIds[i]!,
         arcRoads[arrivingArcIdx]!.id, arcRoads[departingArcIdx]!.id,
@@ -442,6 +451,7 @@ function buildRoundaboutFromConfig(
     }
 
     // result1: reverse shoulder pass-through (arc[(i+1)%n].Left.Start → arc[i].Left.End)
+    // Left lane +1 is on the left side of the reference line (offset = 0 from ref in left direction)
     const connector1 = buildRoundaboutConnector(
       arcDepartStart.x, arcDepartStart.y, arcDepartStart.hdg + Math.PI,
       arcArriveEnd.x, arcArriveEnd.y, arcArriveEnd.hdg + Math.PI,
@@ -461,13 +471,16 @@ function buildRoundaboutFromConfig(
 
     // result2: ring exit to arm (arc[i].Right.End → arm[i].Left.End)
     const armExitHdg = armEnd.hdg + Math.PI; // outbound direction on arm
-    for (const { fromLane, cfg } of [
-      { fromLane: -3, cfg: { laneType: 'Shoulder' as const, width: SW } },
-      { fromLane: -2, cfg: { laneType: 'Driving' as const, width: W } },
-    ]) {
+    const ringExitLanes = [
+      { fromLane: -3, ringOffset: 2 * W, armOffset: W, cfg: { laneType: 'Shoulder' as const, width: SW } },
+      { fromLane: -2, ringOffset: W, armOffset: 0, cfg: { laneType: 'Driving' as const, width: W } },
+    ];
+    for (const { fromLane, ringOffset, armOffset, cfg } of ringExitLanes) {
+      const startPt = offsetPoint(arcArriveEnd, ringOffset);
+      const endPt = offsetPoint({ ...armEnd, hdg: armExitHdg }, armOffset);
       const connector = buildRoundaboutConnector(
-        arcArriveEnd.x, arcArriveEnd.y, arcArriveEnd.hdg,
-        armEnd.x, armEnd.y, armExitHdg,
+        startPt.x, startPt.y, arcArriveEnd.hdg,
+        endPt.x, endPt.y, armExitHdg,
         cfg,
         junctionIds[i]!,
         arcRoads[arrivingArcIdx]!.id, armRoads[i]!.id,
@@ -484,13 +497,16 @@ function buildRoundaboutFromConfig(
     }
 
     // result3: arm entry to ring (arm[i].Right.End → arc[(i+1)%n].Right.Start)
-    for (const { fromLane, cfg } of [
-      { fromLane: -2, cfg: { laneType: 'Shoulder' as const, width: SW } },
-      { fromLane: -1, cfg: { laneType: 'Driving' as const, width: W } },
-    ]) {
+    const armEntryLanes = [
+      { fromLane: -2, armOffset: W, ringOffset: 2 * W, cfg: { laneType: 'Shoulder' as const, width: SW } },
+      { fromLane: -1, armOffset: 0, ringOffset: 0, cfg: { laneType: 'Driving' as const, width: W } },
+    ];
+    for (const { fromLane, armOffset, ringOffset, cfg } of armEntryLanes) {
+      const startPt = offsetPoint(armEnd, armOffset);
+      const endPt = offsetPoint(arcDepartStart, ringOffset);
       const connector = buildRoundaboutConnector(
-        armEnd.x, armEnd.y, armEnd.hdg,
-        arcDepartStart.x, arcDepartStart.y, arcDepartStart.hdg,
+        startPt.x, startPt.y, armEnd.hdg,
+        endPt.x, endPt.y, arcDepartStart.hdg,
         cfg,
         junctionIds[i]!,
         armRoads[i]!.id, arcRoads[departingArcIdx]!.id,
@@ -507,10 +523,10 @@ function buildRoundaboutFromConfig(
     }
 
     // result4: arm left turn into ring behind (arm[i].Right.End → arc[i].Left.End)
-    // Traffic from arm turns left to go backwards on the arriving arc's left shoulder
     {
+      const startPt = offsetPoint(armEnd, 0);
       const connector = buildRoundaboutConnector(
-        armEnd.x, armEnd.y, armEnd.hdg,
+        startPt.x, startPt.y, armEnd.hdg,
         arcArriveEnd.x, arcArriveEnd.y, arcArriveEnd.hdg + Math.PI,
         { laneType: 'Driving', width: W },
         junctionIds[i]!,
@@ -528,11 +544,11 @@ function buildRoundaboutFromConfig(
     }
 
     // result5: ring forward exit to arm (arc[(i+1)%n].Left.Start → arm[i].Left.End)
-    // Traffic from departing arc's left side exits to arm's outbound direction
     {
+      const endPt = offsetPoint({ ...armEnd, hdg: armExitHdg }, 0);
       const connector = buildRoundaboutConnector(
         arcDepartStart.x, arcDepartStart.y, arcDepartStart.hdg + Math.PI,
-        armEnd.x, armEnd.y, armExitHdg,
+        endPt.x, endPt.y, armExitHdg,
         { laneType: 'Driving', width: W },
         junctionIds[i]!,
         arcRoads[departingArcIdx]!.id, armRoads[i]!.id,
