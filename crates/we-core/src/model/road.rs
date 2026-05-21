@@ -409,51 +409,75 @@ pub enum CornerType {
 }
 
 /// Road object types.
+///
+/// Lowercase aliases accepted on deserialization for TypeScript interop.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObjectType {
     /// Traffic sign/notice board
+    #[serde(alias = "sign")]
     Sign,
     /// Guardrail along road edge
+    #[serde(alias = "guardrail")]
     Guardrail,
     /// Barrier (concrete, water, etc.)
+    #[serde(alias = "barrier")]
     Barrier,
     /// Physical curb
+    #[serde(alias = "curb")]
     Curb,
     /// Wall
+    #[serde(alias = "wall")]
     Wall,
     /// Pillar / pole
+    #[serde(alias = "pillar")]
     Pillar,
     /// Traffic cone
+    #[serde(alias = "trafficCone", alias = "traffic_cone")]
     TrafficCone,
     /// Parking space (outline polygon)
+    #[serde(alias = "parkingSpace", alias = "parking_space")]
     ParkingSpace,
     /// Crosswalk / zebra crossing
+    #[serde(alias = "crosswalk")]
     Crosswalk,
     /// Stop line
+    #[serde(alias = "stopLine", alias = "stop_line")]
     StopLine,
     /// Cross-hatch no-stopping area
+    #[serde(alias = "crossHatchArea", alias = "cross_hatch_area")]
     CrossHatchArea,
     /// Woven / weave merge area
+    #[serde(alias = "wovenArea", alias = "woven_area")]
     WovenArea,
     /// Forward waiting area (stop box)
+    #[serde(alias = "forwardWaitingArea", alias = "forward_waiting_area")]
     ForwardWaitingArea,
     /// Left-turn waiting area
+    #[serde(alias = "turnLeftWaitingArea", alias = "turn_left_waiting_area")]
     TurnLeftWaitingArea,
     /// Slow-down-to-yield line
+    #[serde(alias = "slowDownToYieldLine", alias = "slow_down_to_yield_line")]
     SlowDownToYieldLine,
     /// Stop-to-yield line
+    #[serde(alias = "stopToYieldLine", alias = "stop_to_yield_line")]
     StopToYieldLine,
     /// Simple signal pole
+    #[serde(alias = "simpleSignalPole", alias = "simple_signal_pole")]
     SimpleSignalPole,
     /// Traffic light pole
+    #[serde(alias = "trafficLightPole", alias = "traffic_light_pole")]
     TrafficLightPole,
     /// Street light pole
+    #[serde(alias = "streetLightPole", alias = "street_light_pole")]
     StreetLightPole,
     /// Sign gantry / overhead sign structure
+    #[serde(alias = "signGantry", alias = "sign_gantry")]
     SignGantry,
     /// Simple (L-type) signal pole
+    #[serde(alias = "lTypeSignalPole", alias = "l_type_signal_pole")]
     LTypeSignalPole,
     /// Custom object
+    #[serde(alias = "custom")]
     Custom(String),
 }
 
