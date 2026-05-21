@@ -427,11 +427,10 @@ function buildRoundaboutFromConfig(
     const armEnd = roadEndPoint(armRoads[i]!);
 
     // result0: ring pass-through (arc[i].Right.End → arc[(i+1)%n].Right.Start)
-    // One connector per right-side lane (2 driving + 1 shoulder)
+    // Only driving lanes pass through the ring; shoulder connects via arm entry/exit
     const ringPassLanes = [
       { laneId: -1, offset: 0, cfg: { laneType: 'Driving' as const, width: W } },
       { laneId: -2, offset: W, cfg: { laneType: 'Driving' as const, width: W } },
-      { laneId: -3, offset: 2 * W, cfg: { laneType: 'Shoulder' as const, width: SW } },
     ];
     for (const { laneId, offset, cfg } of ringPassLanes) {
       const startPt = offsetPoint(arcArriveEnd, offset);
@@ -517,6 +516,50 @@ function buildRoundaboutFromConfig(
         connecting_road: connector.id,
         contact_point: 'Start',
         lane_links: [{ from: -1, to: -1 }],
+      });
+    }
+
+    // result4: shoulder exit (ring shoulder -3 → arm left shoulder +2)
+    {
+      const startPt = offsetPoint(arcArriveEnd, 2 * W); // ring lane -3 (shoulder, offset=2W)
+      const endPt = offsetPoint({ ...armEnd, hdg: armExitHdg }, W); // arm left shoulder +2 (offset=W from exit hdg)
+      const connector = buildRoundaboutConnector(
+        startPt.x, startPt.y, arcArriveEnd.hdg,
+        endPt.x, endPt.y, armExitHdg,
+        { laneType: 'Shoulder', width: SW },
+        junctionIds[i]!,
+        arcRoads[arrivingArcIdx]!.id, armRoads[i]!.id,
+        'End', 'End',
+      );
+      connectorRoads.push(connector);
+      connections.push({
+        id: genId('conn'),
+        incoming_road: arcRoads[arrivingArcIdx]!.id,
+        connecting_road: connector.id,
+        contact_point: 'Start',
+        lane_links: [{ from: -3, to: -1 }],
+      });
+    }
+
+    // result5: shoulder entry (arm right shoulder -2 → ring shoulder -3)
+    {
+      const startPt = offsetPoint(armEnd, W); // arm lane -2 (shoulder, offset=W)
+      const endPt = offsetPoint(arcDepartStart, 2 * W); // ring lane -3 (shoulder, offset=2W)
+      const connector = buildRoundaboutConnector(
+        startPt.x, startPt.y, armEnd.hdg,
+        endPt.x, endPt.y, arcDepartStart.hdg,
+        { laneType: 'Shoulder', width: SW },
+        junctionIds[i]!,
+        armRoads[i]!.id, arcRoads[departingArcIdx]!.id,
+        'End', 'Start',
+      );
+      connectorRoads.push(connector);
+      connections.push({
+        id: genId('conn'),
+        incoming_road: armRoads[i]!.id,
+        connecting_road: connector.id,
+        contact_point: 'Start',
+        lane_links: [{ from: -2, to: -1 }],
       });
     }
 
