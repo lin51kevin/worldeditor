@@ -1,26 +1,27 @@
 //! Junction surface mesh generation.
 //!
-//! Generates triangle meshes covering junction areas based on the junction's
-//! connections. Uses a fan-triangulation approach from the junction center
-//! through the arm road boundary points, angularly sorted for a correct polygon.
+//! Generates triangle meshes covering junction areas. Uses a per-arm star
+//! triangulation: each arm road contributes its left/right boundary edges,
+//! and a triangle is formed from the junction centroid to those edges.
+//! This produces a star/cross shape with hollow areas between arms,
+//! matching the C# reference rendering.
 
 use crate::render_config::RoadRenderConfig;
 use crate::vertex::ColorVertex;
 use we_core::geometry::eval::{evaluate_geometry, evaluate_lane_width, offset_point};
 use we_core::model::Project;
 
-/// Z-offset for junction surfaces (road surface sinks slightly below).
+/// Z-offset for junction surfaces (slightly below road surfaces).
 const HEIGHT_OFFSET: f32 = -0.24;
 
-/// Generate junction surface triangles.
+/// Generate junction surface triangles (star-shaped, per-arm).
 ///
-/// For each junction, collects the unique *arm road* start positions (the points
-/// that face the junction interior), sorts them angularly around their centroid,
-/// then fans out triangles from the centroid to successive boundary points.
+/// For each junction, collects the unique arm road boundary edges (left/right
+/// at full road width), computes the centroid, then creates one triangle per arm
+/// from centroid to the arm's left and right edge points.
 ///
-/// Arm roads are identified by being the `incoming_road` in each connection.
-/// Connector roads (those with `junction_id` set) are excluded from boundary
-/// collection to avoid mixing internal geometry with the outer polygon.
+/// This produces a star/cross shape with hollow cutouts between adjacent arms,
+/// matching the C# reference rendering.
 pub fn generate_junction_meshes(project: &Project, config: &RoadRenderConfig) -> Vec<ColorVertex> {
     let mut all_verts = Vec::new();
 
@@ -36,81 +37,88 @@ pub fn generate_junction_meshes(project: &Project, config: &RoadRenderConfig) ->
         let color = config.color_junction_surface;
         let rgba = [color.x, color.y, color.z, color.w];
 
-        // Collect arm-road boundary points (center + lane-width offsets) for each unique arm.
-        // This gives a wider junction polygon that reflects actual road width at the junction face,
-        // rather than just the reference line points (which was the previous bug).
+        // Collect per-arm boundary edges (left_edge, right_edge) for each unique arm road.
         let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
-        let mut points: Vec<[f32; 3]> = Vec::new();
+        let mut arm_edges: Vec<([f32; 3], [f32; 3])> = Vec::new();
 
         for conn in &junction.connections {
             if seen.insert(conn.incoming_road.as_str()) {
                 if let Some(road) = road_map.get(conn.incoming_road.as_str()) {
-                    let (cx, cy, cz) = road_contact_position(road);
-                    // Collect center + left/right lane boundary offsets
-                    if road.lane_sections.is_empty() {
-                        points.push([cx, cy, cz]);
-                    } else if let Some(geo) = road.plan_view.first() {
-                        let first_ls = &road.lane_sections[0];
-                        // Use first right lane's width (right-hand traffic: outgoing road on right side)
-                        let widths = first_ls.right.first().map(|l| &l.width)
-                            .or_else(|| first_ls.left.first().map(|l| &l.width));
-                        let Some(widths) = widths else {
-                            points.push([cx, cy, cz]);
-                            continue;
-                        };
-                        let ref_pt = evaluate_geometry(geo, 0.0);
-                        let half_w = evaluate_lane_width(widths, 0.0) / 2.0;
-                        let (lx, ly, _) = offset_point(&ref_pt, half_w, 0.0);
-                        let (rx, ry, _) = offset_point(&ref_pt, -half_w, 0.0);
-                        points.push([cx, cy, cz]);
-                        points.push([lx as f32, ly as f32, cz]);
-                        points.push([rx as f32, ry as f32, cz]);
+                    if let Some((left, right)) = compute_arm_edges(road) {
+                        arm_edges.push((left, right));
                     }
                 }
             }
         }
 
-        if points.len() < 3 {
+        if arm_edges.is_empty() {
             continue;
         }
 
-        // Boundary points include center + lane edges; add HEIGHT_OFFSET to z.
-        let mut points: Vec<[f32; 3]> = points.into_iter().map(|mut p| { p[2] += HEIGHT_OFFSET; p }).collect();
+        // Compute centroid of all edge points
+        let total_points = arm_edges.len() * 2;
+        let mut cx = 0.0f32;
+        let mut cy = 0.0f32;
+        let mut cz = 0.0f32;
+        for (left, right) in &arm_edges {
+            cx += left[0] + right[0];
+            cy += left[1] + right[1];
+            cz += left[2] + right[2];
+        }
+        cx /= total_points as f32;
+        cy /= total_points as f32;
+        cz /= total_points as f32;
+        let center = [cx, cy, cz + HEIGHT_OFFSET];
 
-        // Compute centroid
-        let n = points.len() as f32;
-        let cx = points.iter().map(|p| p[0]).sum::<f32>() / n;
-        let cy = points.iter().map(|p| p[1]).sum::<f32>() / n;
-        let cz = points.iter().map(|p| p[2]).sum::<f32>() / n;
-        let center = [cx, cy, cz];
-
-        // Angular sort so fan triangulation produces a non-self-intersecting polygon
-        points.sort_by(|a, b| {
-            let angle_a = f32::atan2(a[1] - cy, a[0] - cx);
-            let angle_b = f32::atan2(b[1] - cy, b[0] - cx);
-            angle_a.partial_cmp(&angle_b).unwrap_or(std::cmp::Ordering::Equal)
-        });
-
-        // Fan triangulation from center to each edge
-        for i in 0..points.len() {
-            let j = (i + 1) % points.len();
+        // Per-arm triangulation: one triangle per arm (centroid → left → right)
+        for (left, right) in &arm_edges {
+            let l = [left[0], left[1], left[2] + HEIGHT_OFFSET];
+            let r = [right[0], right[1], right[2] + HEIGHT_OFFSET];
             all_verts.push(ColorVertex::new(center, rgba));
-            all_verts.push(ColorVertex::new(points[i], rgba));
-            all_verts.push(ColorVertex::new(points[j], rgba));
+            all_verts.push(ColorVertex::new(l, rgba));
+            all_verts.push(ColorVertex::new(r, rgba));
         }
     }
 
     all_verts
 }
 
-/// Get the start position of a road (plan_view[0], the junction-facing edge).
-fn road_contact_position(road: &we_core::model::Road) -> (f32, f32, f32) {
-    if let Some(geo) = road.plan_view.first() {
-        let z = we_core::geometry::eval::evaluate_elevation(&road.elevation_profile, 0.0) as f32;
-        (geo.x as f32, geo.y as f32, z)
-    } else {
-        (0.0, 0.0, HEIGHT_OFFSET)
+/// Compute left and right boundary edge points of an arm road at the junction face.
+///
+/// Returns (left_edge, right_edge) at the road's start position (plan_view[0]),
+/// using the full road width (sum of all left + right lane widths).
+fn compute_arm_edges(road: &we_core::model::Road) -> Option<([f32; 3], [f32; 3])> {
+    let geo = road.plan_view.first()?;
+    let z = we_core::geometry::eval::evaluate_elevation(&road.elevation_profile, 0.0) as f32;
+
+    if road.lane_sections.is_empty() {
+        return None;
     }
+
+    let first_ls = &road.lane_sections[0];
+
+    // Compute full left-side width (sum of all left lane widths at s=0)
+    let left_total: f64 = first_ls.left.iter()
+        .map(|lane| evaluate_lane_width(&lane.width, 0.0))
+        .sum();
+
+    // Compute full right-side width (sum of all right lane widths at s=0)
+    let right_total: f64 = first_ls.right.iter()
+        .map(|lane| evaluate_lane_width(&lane.width, 0.0))
+        .sum();
+
+    if left_total + right_total < 0.01 {
+        return None;
+    }
+
+    let ref_pt = evaluate_geometry(geo, 0.0);
+
+    // Left edge: offset by full left-side width (positive t direction)
+    let (lx, ly, _) = offset_point(&ref_pt, left_total, 0.0);
+    // Right edge: offset by full right-side width (negative t direction)
+    let (rx, ry, _) = offset_point(&ref_pt, -right_total, 0.0);
+
+    Some(([lx as f32, ly as f32, z], [rx as f32, ry as f32, z]))
 }
 
 #[cfg(test)]
@@ -124,6 +132,42 @@ mod tests {
             s: 0.0, x, y, hdg,
             length: 50.0,
             geo_type: GeometryType::Line,
+        }];
+        // Add a lane section with left+right lanes for proper edge computation
+        road.lane_sections = vec![LaneSection {
+            s: 0.0,
+            single_side: false,
+            left: vec![Lane {
+                id: 1,
+                lane_type: LaneType::Driving,
+                level: 0,
+                render_hidden: false,
+                link: None,
+                width: vec![LaneWidth { s_offset: 0.0, a: 3.5, b: 0.0, c: 0.0, d: 0.0 }],
+                borders: vec![],
+                road_marks: vec![],
+            }],
+            center: vec![Lane {
+                id: 0,
+                lane_type: LaneType::None,
+                level: 0,
+                render_hidden: false,
+                link: None,
+                width: vec![],
+                borders: vec![],
+                road_marks: vec![],
+            }],
+            right: vec![Lane {
+                id: -1,
+                lane_type: LaneType::Driving,
+                level: 0,
+                render_hidden: false,
+                link: None,
+                width: vec![LaneWidth { s_offset: 0.0, a: 3.5, b: 0.0, c: 0.0, d: 0.0 }],
+                borders: vec![],
+                road_marks: vec![],
+            }],
+            render_hidden: false,
         }];
         road
     }
@@ -213,11 +257,11 @@ mod tests {
 
         let config = RoadRenderConfig::default();
         let verts = generate_junction_meshes(&project, &config);
-        // 4 unique arm roads → 4 boundary points → 4 triangles → 12 vertices
+        // 4 unique arm roads with lane sections → 4 arm edges → 4 triangles → 12 vertices
         assert_eq!(verts.len(), 12);
 
         // All vertices within reasonable distance of center (0,0)
-        let max_dist: f32 = gap as f32 * 1.5;
+        let max_dist: f32 = gap as f32 + 5.0; // arm position + lane width
         for v in &verts {
             let (vx, vy) = (v.position[0], v.position[1]);
             let d = (vx * vx + vy * vy).sqrt();
