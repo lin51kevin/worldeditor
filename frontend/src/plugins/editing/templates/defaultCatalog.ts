@@ -207,6 +207,7 @@ const catalog: TemplateCatalog = {
       topology: 'Roundabout',
       armCount: 4,
       armLength: 60,
+      roundaboutRadius: 15,
       name: 'Roundabout',
       connectionPattern: 'all-pairs',
     },

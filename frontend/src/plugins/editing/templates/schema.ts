@@ -83,6 +83,9 @@ export interface JunctionTemplateConfig {
   connectionPattern?: ConnectionPattern;
   /** Junction display name. Defaults to '' */
   name?: string;
+  /** Roundabout: radius of the circular ring road in metres. Defaults to 15. */
+  roundaboutRadius?: number;
+  roundaboutArcCount?: number;
 }
 
 // ── Signal Template ──────────────────────────────────────────────────────────

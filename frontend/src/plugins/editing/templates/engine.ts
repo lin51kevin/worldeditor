@@ -95,6 +95,10 @@ function lineGeometry(x: number, y: number, hdg: number, length: number): Geomet
   return { s: 0, x, y, hdg, length, geo_type: 'Line' };
 }
 
+function arcGeometry(x: number, y: number, hdg: number, length: number, curvature: number): Geometry {
+  return { s: 0, x, y, hdg, length, geo_type: { Arc: { curvature } } };
+}
+
 // ── Road builder ─────────────────────────────────────────────────────────────
 
 interface RoadBuildOpts {
@@ -199,9 +203,160 @@ function resolveArms(topology: JunctionTopology, cx: number, cy: number, gap: nu
     case 'T': return tArms(cx, cy, gap);
     case 'Cross': return crossArms(cx, cy, gap);
     case 'Radial':
+      return radialArms(cx, cy, gap, armCount ?? 4);
     case 'Roundabout':
+      // Roundabout arms are placed at specific positions, handled by buildRoundaboutFromConfig
       return radialArms(cx, cy, gap, armCount ?? 4);
   }
+}
+
+// ── Roundabout builder ─────────────────────────────────────────────────────
+
+const DEFAULT_ROUNDABOUT_RADIUS = 15;
+
+/**
+ * Build a roundabout junction with arc-shaped ring road segments.
+ *
+ * Layout (N = armCount arcs):
+ *   - Center island at (cx, cy)
+ *   - Ring road: N arc segments forming a circle of `radius` around center
+ *   - Each arc spans (360 - N*gapDeg) / N degrees with small gaps between arcs
+ *   - Arm roads radiate outward from ring at evenly spaced angles
+ *   - Each arm-to-arc intersection gets a small junction with connector roads
+ *
+ * Reference: BuildJunctionRoundabout.cs angle calculation with ratio=0.5 pattern
+ */
+function buildRoundaboutFromConfig(
+  config: JunctionTemplateConfig,
+  cx: number,
+  cy: number,
+): JunctionBuildResult {
+  const section = config.armSection ?? DEFAULT_ARM_SECTION;
+  const n = config.armCount ?? 4;
+  const radius = config.roundaboutRadius ?? DEFAULT_ROUNDABOUT_RADIUS;
+  const junctionId = genId('junction');
+
+  // Angle calculation inspired by BuildJunctionRoundabout.cs (ratio=0.5 case)
+  const segDeg = 240.0 / n;
+  const startDeg = 90.0 - segDeg * 0.5;
+  const ratio = 0.5;
+
+  // ── Ring road arcs ─────────────────────────────────────────────────────
+  const laneWidth = DEFAULT_LANE_WIDTH;
+
+  const arcRoads: Road[] = [];
+  const arcDeg2Rad = Math.PI / 180;
+
+  // Ring road lane section: single driving lane on each side
+  const ringSection = buildLaneSection(
+    [{ laneType: 'Driving', width: laneWidth, mark: { type: 'Solid' } }],
+    [{ laneType: 'Driving', width: laneWidth, mark: { type: 'Solid' } }],
+  );
+
+  for (let i = 0; i < n; i++) {
+    const sDeg = startDeg + i * (1 + ratio) * segDeg;
+    const eDeg = sDeg + segDeg;
+    const sRad = sDeg * arcDeg2Rad;
+    const eRad = eDeg * arcDeg2Rad;
+    const arcAngle = eRad - sRad;
+
+    // Arc length = radius * angle
+    const arcLen = radius * arcAngle;
+
+    // Start point on circle: (cx + r*cos(sRad), cy - r*sin(sRad))
+    // OpenDRIVE heading is tangent to arc at start point
+    // For a clockwise circle, heading at start = sRad + PI/2
+    const sx = cx + radius * Math.cos(sRad);
+    const sy = cy - radius * Math.sin(sRad);
+    const hdg = sRad + Math.PI / 2; // tangent direction (clockwise)
+
+    // Clockwise in y-down screen coords → negative curvature in OpenDRIVE y-up convention
+    // Angles increase counterclockwise in math (visually clockwise on screen in y-down coords),
+    // which corresponds to negative curvature in OpenDRIVE.
+    const curvature = -1 / radius;
+
+    const arcRoad = buildRoad(ringSection, {
+      x: sx,
+      y: sy,
+      hdg,
+      length: arcLen,
+      junctionId,
+      link: { predecessor: null, successor: null },
+    });
+    // Replace Line geometry with Arc geometry
+    arcRoad.plan_view = [arcGeometry(sx, sy, hdg, arcLen, curvature)];
+    arcRoads.push(arcRoad);
+  }
+
+  // ── Arm roads ──────────────────────────────────────────────────────────
+  const armRoads: Road[] = [];
+  const junctionLink: LinkElement = {
+    element_type: 'Junction',
+    element_id: junctionId,
+    contact_point: null,
+  };
+
+  for (let i = 0; i < n; i++) {
+    // Arm angle: midpoint of the gap between arc i and arc (i+1)%n
+    const armDeg = startDeg + (1 + 0.5 * ratio) * segDeg + i * (1 + ratio) * segDeg;
+    const armRad = armDeg * arcDeg2Rad;
+
+    // Arm starts at ring edge, extends outward
+    const ax = cx + radius * Math.cos(armRad);
+    const ay = cy - radius * Math.sin(armRad);
+    const ahdg = armRad + Math.PI / 2; // tangent (pointing clockwise)
+
+    const effLength = config.armLength - radius;
+    const armRoad = buildRoad(buildLaneSectionFromConfig(section), {
+      x: ax,
+      y: ay,
+      hdg: ahdg,
+      length: Math.max(effLength, 5),
+      junctionId: null,
+      link: { predecessor: junctionLink, successor: null },
+    });
+    armRoads.push(armRoad);
+  }
+
+  // ── Connections ────────────────────────────────────────────────────────
+  // Each arm connects to adjacent arcs: arc[i] and arc[(i+1)%n]
+  const connections: JunctionConnection[] = [];
+  const rightLaneLinks = section.right.map((_: LaneConfig, i: number) => ({
+    from: -(i + 1),
+    to: -(i + 1),
+  }));
+
+  if (config.connectionPattern !== 'none') {
+    for (let i = 0; i < n; i++) {
+      // Arm → next arc (entering roundabout)
+      const nextArc = arcRoads[(i + 1) % n]!;
+      const prevArc = arcRoads[i]!;
+
+      connections.push({
+        id: genId('conn'),
+        incoming_road: armRoads[i]!.id,
+        connecting_road: nextArc.id,
+        contact_point: 'Start',
+        lane_links: rightLaneLinks.map((ll) => ({ ...ll })),
+      });
+      // Arc → arm (exiting roundabout)
+      connections.push({
+        id: genId('conn'),
+        incoming_road: prevArc.id,
+        connecting_road: armRoads[i]!.id,
+        contact_point: 'Start',
+        lane_links: rightLaneLinks.map((ll) => ({ ...ll })),
+      });
+    }
+  }
+
+  const junction: Junction = {
+    id: junctionId,
+    name: config.name ?? '',
+    connections,
+  };
+
+  return { junction, roads: [...arcRoads, ...armRoads] };
 }
 
 // ── Connector road builder ───────────────────────────────────────────────────
@@ -228,7 +383,7 @@ function buildConnectorRoad(armA: Road, armB: Road, junctionId: string): Road {
     [{ laneType: 'Driving', width: DEFAULT_LANE_WIDTH }],
   );
 
-  return buildRoad(connectorSection, {
+  const road = buildRoad(connectorSection, {
     x: geoA.x,
     y: geoA.y,
     hdg,
@@ -239,6 +394,22 @@ function buildConnectorRoad(armA: Road, armB: Road, junctionId: string): Road {
       successor: { element_type: 'Road', element_id: armB.id, contact_point: 'Start' },
     },
   });
+
+  // Replace Line with Arc for a smooth curve through the junction.
+  // Use the heading from armA's geometry to determine turn direction
+  const hdgA = geoA.hdg;
+  const hdgB = geoB.hdg;
+  const angleDiff = ((hdgB - hdgA) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+  // curvature inversely proportional to length for smooth arc
+  const curvature = (2 / length) * Math.sin(angleDiff / 2);
+  // Clamp curvature to a reasonable range
+  const clampedCurvature = Math.max(-0.15, Math.min(0.15, curvature));
+
+  road.plan_view = [
+    { s: 0, x: geoA.x, y: geoA.y, hdg, length, geo_type: { Arc: { curvature: clampedCurvature } } },
+  ];
+
+  return road;
 }
 
 // ── Junction template → { junction, roads } ─────────────────────────────────
@@ -253,6 +424,10 @@ export function buildJunctionFromConfig(
   cx: number,
   cy: number,
 ): JunctionBuildResult {
+  if (config.topology === 'Roundabout') {
+    return buildRoundaboutFromConfig(config, cx, cy);
+  }
+
   const section = config.armSection ?? DEFAULT_ARM_SECTION;
   const gap = computeArmGap(section);
   const arms = resolveArms(config.topology, cx, cy, gap, config.armCount);
@@ -280,6 +455,26 @@ export function buildJunctionFromConfig(
 
   // Connector roads: one per ordered pair (i→j), spanning junction-edge to junction-edge.
   // junction_id = junctionId marks them as internal connectors per the XODR spec.
+  // Add stop line at junction entry for each arm road.
+  // Arm roads have predecessor = junction, so the junction edge is at s = 0.
+  const roadWidth = section.right.reduce((sum, l) => sum + (l.width ?? 3.5), 0);
+  for (const arm of armRoads) {
+    if (!arm.objects) arm.objects = [];
+    arm.objects.push({
+      id: genId('obj'),
+      object_type: 'StopLine',
+      name: 'stop_line',
+      position: { x: 0.1, y: 0, z: 0.01, id: null },
+      orientation: 0,
+      hdg: 0,
+      width: roadWidth,
+      height: 0.01,
+      length: 0.3,
+      corners: [],
+      validity: null,
+    });
+  }
+
   const connectorRoads: Road[] = [];
   const connections: JunctionConnection[] = [];
   const rightLaneLinks = section.right.map((_: LaneConfig, i: number) => ({
