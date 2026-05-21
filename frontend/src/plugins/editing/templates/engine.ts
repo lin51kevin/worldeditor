@@ -379,7 +379,10 @@ function buildRoundaboutFromConfig(
 
     // a) arm[i] right lanes → ring arc[i] (entering ring)
     for (let laneIdx = 0; laneIdx < numRightLanes; laneIdx++) {
-      const connector = buildConnectorRoad(armRoads[i]!, arcRoads[i]!, junctionIds[i]!, [{ laneType: 'Driving', width: laneWidth }]);
+      const connector = buildSingleLaneConnector(
+        armRoads[i]!, arcRoads[i]!, junctionIds[i]!,
+        { laneType: 'Driving', width: laneWidth }, 0, [{ laneType: 'Driving', width: laneWidth }],
+      );
       connectorRoads.push(connector);
       connections.push({
         id: genId('conn'),
@@ -404,7 +407,10 @@ function buildRoundaboutFromConfig(
     }
 
     // c) previous arc → current arc (pass through)
-    const passConnector = buildConnectorRoad(arcRoads[prevArcIdx]!, arcRoads[i]!, junctionIds[i]!, [{ laneType: 'Driving', width: laneWidth }]);
+    const passConnector = buildSingleLaneConnector(
+      arcRoads[prevArcIdx]!, arcRoads[i]!, junctionIds[i]!,
+      { laneType: 'Driving', width: laneWidth }, 0, [{ laneType: 'Driving', width: laneWidth }],
+    );
     connectorRoads.push(passConnector);
     connections.push({
       id: genId('conn'),
@@ -523,40 +529,74 @@ function roadEndPoint(road: Road): { x: number; y: number; hdg: number } {
 }
 
 /**
- * Build a connector road spanning between the junction-edge ends of two arm roads.
- * Uses Hermite-interpolated paramPoly3 geometry (matching C# reference connector style).
+ * Build a single-lane connector road between two arm roads (matching C# per-lane pattern).
  *
- * The connector has `laneCount` right-side driving lanes. Arm roads point inward
- * (start=tip, end=junction edge), so connectors bridge end→end.
+ * Each connector carries exactly ONE lane. The connector reference line is offset
+ * laterally from the arm road's end to align with the inner edge of the target lane.
+ *
+ * @param armA - Source arm road (incoming traffic)
+ * @param armB - Target arm road (outgoing traffic)
+ * @param junctionId - Junction ID
+ * @param laneCfg - Lane type/width for this connector
+ * @param laneIdx - 0-based index of the lane (0=innermost, counting outward)
+ * @param allLanes - All right-side lanes (for computing cumulative offset)
  */
-function buildConnectorRoad(
+function buildSingleLaneConnector(
   armA: Road,
   armB: Road,
   junctionId: string,
-  laneConfigs: LaneConfig[],
+  laneCfg: LaneConfig,
+  laneIdx: number,
+  allLanes: LaneConfig[],
 ): Road {
   const endA = roadEndPoint(armA);
   const endB = roadEndPoint(armB);
 
-  // Build right-side lanes matching the arm section lane types and widths
-  const connectorSection = buildLaneSection([], laneConfigs);
+  // Compute lateral offset: cumulative width of all lanes inside this one
+  let cumulativeOffset = 0;
+  for (let k = 0; k < laneIdx; k++) {
+    cumulativeOffset += allLanes[k]!.width ?? DEFAULT_LANE_WIDTH;
+  }
 
-  // Arrival direction: traffic flows along armA's heading (armA points inward → end is junction edge)
-  const arrivalHdg = endA.hdg;
-  // Departure direction: traffic must enter armB which points inward, so departure = armB.hdg + π
+  // Offset direction: perpendicular right from road heading = (sin(hdg), -cos(hdg))
+  const offsetAx = Math.sin(endA.hdg) * cumulativeOffset;
+  const offsetAy = -Math.cos(endA.hdg) * cumulativeOffset;
+
+  // For target arm: the connector arrives at armB's left-side lane (positive IDs).
+  // The target lane index mirrors the source. Offset from armB end is the same amount
+  // but in the perpendicular-left direction of armB's heading (since it enters from the left).
+  // ArmB heading + π = departure direction. Perpendicular right of departure = perpendicular left of armB.
   const departureHdg = endB.hdg + Math.PI;
+  const offsetBx = Math.sin(departureHdg) * cumulativeOffset;
+  const offsetBy = -Math.cos(departureHdg) * cumulativeOffset;
+
+  // Connector start/end with lateral offsets
+  const startX = endA.x + offsetAx;
+  const startY = endA.y + offsetAy;
+  const endX = endB.x + offsetBx;
+  const endY = endB.y + offsetBy;
+
+  // Build single-lane section
+  const connectorSection = buildLaneSection([], [laneCfg]);
+
+  // Arrival direction: traffic flows along armA's heading
+  const arrivalHdg = endA.hdg;
 
   // Generate paramPoly3 geometry segments for smooth S-curve
   const geometries = buildHermiteConnectorGeometry(
-    endA.x, endA.y, arrivalHdg,
-    endB.x, endB.y, departureHdg,
+    startX, startY, arrivalHdg,
+    endX, endY, departureHdg,
   );
 
   const totalLength = geometries.reduce((sum, g) => sum + g.length, 0);
 
+  // Lane link in road: connector's lane -1 links to source lane and target lane
+  const sourceLaneId = -(laneIdx + 1); // e.g., -1, -2, -3
+  const targetLaneId = laneIdx + 1;     // e.g., 1, 2, 3 (left-side of target arm)
+
   const road = buildRoad(connectorSection, {
-    x: endA.x,
-    y: endA.y,
+    x: startX,
+    y: startY,
     hdg: arrivalHdg,
     length: totalLength,
     junctionId,
@@ -565,6 +605,15 @@ function buildConnectorRoad(
       successor: { element_type: 'Road', element_id: armB.id, contact_point: 'End' },
     },
   });
+
+  // Store lane links inside the lane section for OpenDRIVE compatibility
+  const connLane = road.lane_sections[0]?.right[0];
+  if (connLane) {
+    connLane.link = {
+      predecessor: sourceLaneId,
+      successor: targetLaneId,
+    };
+  }
 
   road.plan_view = geometries;
   return road;
@@ -1005,42 +1054,59 @@ export function buildJunctionFromConfig(
     });
   }
 
-  // ── Build connections with full-width connectors ─────────────────────────────
-  // Each direction pair (arm A → arm B) gets ONE connector road with the full
-  // right-side lane set (matching arm road width). Lane links map each right-side
-  // lane from the incoming arm to the corresponding lane in the connector.
-  // This produces visually wide connectors filling the junction area.
+  // ── Build per-lane connectors (matching C# reference) ────────────────────────
+  // Each lane gets its own connector road (1 lane per connector).
+  // Lane selection depends on the angular distance between arms:
+  //   - Adjacent CW (1 step): all lanes (shoulder + driving)
+  //   - Non-adjacent (2 to N-2 steps): driving lanes only (no shoulder)
+  //   - Reverse CCW (N-1 steps = 1 step backward): innermost driving lane only
 
   const connectorRoads: Road[] = [];
   const connections: JunctionConnection[] = [];
   const n = armRoads.length;
 
-  // Only count driving lanes for lane links (exclude shoulder)
-  const drivingLanes = section.right.filter(l => l.laneType === 'Driving');
-  const numDrivingLanes = drivingLanes.length;
-  // Full right-side lane configs for connector (preserves types and widths)
-  const connectorLaneConfigs = section.right;
+  const rightLanes = section.right; // [Driving, Driving, Shoulder] ordered inside→outside
 
   const pattern = config.connectionPattern ?? 'all-pairs';
   if (pattern === 'all-pairs') {
-    // Create one connector per direction pair (all-pairs: N*(N-1) connectors)
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         if (i === j) continue;
-        const connector = buildConnectorRoad(armRoads[i]!, armRoads[j]!, junctionId, connectorLaneConfigs);
-        connectorRoads.push(connector);
-        // Lane links for all driving lanes (not shoulder)
-        const laneLinks = [];
-        for (let laneIdx = 0; laneIdx < numDrivingLanes; laneIdx++) {
-          laneLinks.push({ from: -(laneIdx + 1), to: -(laneIdx + 1) });
+        // CW distance: how many steps clockwise from i to j
+        const cwDist = (j - i + n) % n;
+
+        // Select which lanes to connect based on distance
+        let lanesToConnect: { laneIdx: number; config: LaneConfig }[];
+        if (cwDist === 1) {
+          // Adjacent CW: all lanes (shoulder + driving)
+          lanesToConnect = rightLanes.map((cfg, idx) => ({ laneIdx: idx, config: cfg }));
+        } else if (cwDist === n - 1) {
+          // Reverse CCW (1 step backward): innermost driving lane only
+          lanesToConnect = [{ laneIdx: 0, config: rightLanes[0]! }];
+        } else {
+          // Non-adjacent: driving lanes only (no shoulder)
+          lanesToConnect = rightLanes
+            .map((cfg, idx) => ({ laneIdx: idx, config: cfg }))
+            .filter(l => l.config.laneType === 'Driving');
         }
-        connections.push({
-          id: genId('conn'),
-          incoming_road: armRoads[i]!.id,
-          connecting_road: connector.id,
-          contact_point: 'Start',
-          lane_links: laneLinks,
-        });
+
+        // Create one connector per lane
+        for (const { laneIdx, config: laneCfg } of lanesToConnect) {
+          const connector = buildSingleLaneConnector(
+            armRoads[i]!, armRoads[j]!, junctionId,
+            laneCfg, laneIdx, rightLanes,
+          );
+          connectorRoads.push(connector);
+          // Lane link: from incoming arm's lane to connector's single lane
+          const fromLaneId = -(laneIdx + 1); // arm lane ID (e.g., -1, -2, -3)
+          connections.push({
+            id: genId('conn'),
+            incoming_road: armRoads[i]!.id,
+            connecting_road: connector.id,
+            contact_point: 'Start',
+            lane_links: [{ from: fromLaneId, to: -1 }],
+          });
+        }
       }
     }
   }

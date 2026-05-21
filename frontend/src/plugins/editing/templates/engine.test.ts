@@ -286,8 +286,10 @@ describe('buildJunctionFromConfig', () => {
       armLength: 60,
     };
     const { roads } = buildJunctionFromConfig(minimal, 0, 0);
-    // 3 arm + 3*(3-1)=6 connectors = 9 roads total
-    expect(roads).toHaveLength(9);
+    // Default section: [Driving, Driving, Shoulder] per side = 3 right lanes
+    // 3 arms, per-lane connectors: CW adj (3 pairs × 3 lanes) + reverse (3 pairs × 1 lane) = 12
+    // Total: 3 arms + 12 connectors = 15
+    expect(roads).toHaveLength(15);
     // First arm road has default 3L + 3R lanes (2 driving + 1 shoulder per side)
     const armRoads = roads.filter((r) => r.junction_id === null);
     const firstArm = armRoads[0]!;
@@ -321,7 +323,7 @@ describe('buildJunctionFromConfig', () => {
     }
   });
 
-  it('should create full-width connectors with multi-lane links', () => {
+  it('should create per-lane connectors with correct lane links', () => {
     const crossConfig: JunctionTemplateConfig = {
       ...tConfig,
       id: 'test:jct:cross',
@@ -338,20 +340,23 @@ describe('buildJunctionFromConfig', () => {
       },
     };
     const { junction, roads } = buildJunctionFromConfig(crossConfig, 0, 0);
-    // 4 arms × 3 targets each = 12 connections (all-pairs)
-    expect(junction.connections).toHaveLength(12);
-    // Each connection has 2 lane links (for 2 driving lanes)
+    // 4 arms, 2 driving lanes (no shoulder):
+    //   CW adj (dist=1): 4 pairs × 2 lanes = 8
+    //   Non-adj (dist=2): 4 pairs × 2 lanes = 8 (all driving)
+    //   Reverse (dist=3=N-1): 4 pairs × 1 lane = 4
+    //   Total: 20 connections
+    expect(junction.connections).toHaveLength(20);
+    // Each connection has exactly 1 lane link (per-lane: from source lane to connector lane -1)
     for (const conn of junction.connections) {
-      expect(conn.lane_links).toHaveLength(2);
-      expect(conn.lane_links[0]!.from).toBe(-1);
+      expect(conn.lane_links).toHaveLength(1);
+      expect(conn.lane_links[0]!.from).toBeLessThan(0);
       expect(conn.lane_links[0]!.to).toBe(-1);
-      expect(conn.lane_links[1]!.from).toBe(-2);
-      expect(conn.lane_links[1]!.to).toBe(-2);
     }
-    // Connector roads have 2 right lanes (matching arm right-side count)
+    // All connector roads have exactly 1 right lane (single-lane connectors)
     const connectors = roads.filter(r => r.junction_id === junction.id);
+    expect(connectors).toHaveLength(20);
     for (const conn of connectors) {
-      expect(conn.lane_sections[0]!.right).toHaveLength(2);
+      expect(conn.lane_sections[0]!.right).toHaveLength(1);
     }
   });
 
