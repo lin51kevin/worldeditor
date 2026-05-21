@@ -76,6 +76,21 @@ export class CameraController {
     return this.camera;
   }
 
+  resetCamera(): void {
+    this.camera = {
+      position: [0, -100, 50],
+      target: [0, 0, 0],
+      up: [0, 0, 1],
+      fovY: Math.PI / 4,
+      near: 0.1,
+      far: 100000,
+    };
+    this.cachedViewProj = null;
+    this.cachedInverseViewProj = null;
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+  }
+
   get isViewDirty(): boolean {
     return this.viewDirty;
   }

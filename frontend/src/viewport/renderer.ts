@@ -117,7 +117,7 @@ export class ViewportRenderer {
       if (this.markerRenderer.knotCount === 0) return;
       this.markerRenderer.refreshSplineCurve(mpp);
       this.markerRenderer.refreshSplineMarkers(mpp, this.clearColor);
-      this.sceneDirty = true;
+      this.markSceneDirty();
     });
   }
 
@@ -128,7 +128,7 @@ export class ViewportRenderer {
   ): void {
     this.overlayRenderers = renderers;
     if (canvas) this.overlayCanvas = canvas;
-    this.sceneDirty = true;
+    this.markSceneDirty();
   }
 
   /**
@@ -298,7 +298,7 @@ export class ViewportRenderer {
     const preserveLastVertexDataOnEmpty = options?.preserveLastVertexDataOnEmpty === true;
 
     if (vertexData.length === 0) {
-      if (this.meshes.length > 0) this.sceneDirty = true;
+      if (this.meshes.length > 0) this.markSceneDirty();
       for (const m of this.meshes) { m.vertexBuffer.destroy(); }
       this.meshes = [];
       if (preserveLastVertexDataOnEmpty) {
@@ -314,7 +314,7 @@ export class ViewportRenderer {
     }
 
     this.uploadMeshData(this.meshes, vertexData);
-    this.sceneDirty = true;
+    this.markSceneDirty();
 
     // Store for later zoomToFit calls
     this.lastVertexData = vertexData;
@@ -332,7 +332,7 @@ export class ViewportRenderer {
       return;
     }
     this.uploadMeshData(this.highlightMeshes, vertexData);
-    this.sceneDirty = true;
+    this.markSceneDirty();
   }
 
   /** Clear the selection highlight mesh. */
@@ -342,7 +342,7 @@ export class ViewportRenderer {
       m.vertexBuffer.destroy();
     }
     this.highlightMeshes = [];
-    this.sceneDirty = true;
+    this.markSceneDirty();
   }
 
   /** Upload hover highlight vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
@@ -352,7 +352,7 @@ export class ViewportRenderer {
       return;
     }
     this.uploadMeshData(this.hoverMeshes, vertexData);
-    this.sceneDirty = true;
+    this.markSceneDirty();
   }
 
   /** Clear the hover highlight mesh. */
@@ -362,33 +362,38 @@ export class ViewportRenderer {
       m.vertexBuffer.destroy();
     }
     this.hoverMeshes = [];
-    this.sceneDirty = true;
+    this.markSceneDirty();
   }
 
   /** Set visibility of the grid. */
   setShowGrid(show: boolean): void {
     this.showGrid = show;
-    this.sceneDirty = true;
+    this.markSceneDirty();
     this.cameraController.markDirty();
   }
 
   /** Set visibility of the axis indicator. */
   setShowAxis(show: boolean): void {
     this.showAxis = show;
-    this.sceneDirty = true;
+    this.markSceneDirty();
     this.cameraController.markDirty();
   }
 
   /** Trigger redraw when the viewport view mode changes. */
+  /** Reset camera to default position/zoom. */
+  resetCamera(): void {
+    this.cameraController.resetCamera();
+  }
+
   setViewMode(_mode: 'solid' | 'wire' | 'sketch'): void {
-    this.sceneDirty = true;
+    this.markSceneDirty();
     this.cameraController.markDirty();
   }
 
   /** Set the WebGPU clear (background) color. */
   setClearColor(r: number, g: number, b: number): void {
     this.clearColor = { r, g, b, a: 1.0 };
-    this.sceneDirty = true;
+    this.markSceneDirty();
     if (this.markerRenderer.knotCount > 0) {
       this.markerRenderer.refreshSplineMarkers(this.getMetersPerPixel(), this.clearColor);
     }
@@ -397,7 +402,7 @@ export class ViewportRenderer {
   /** Set the grid line color. */
   setGridColor(r: number, g: number, b: number): void {
     this.gridColor = [r, g, b];
-    this.sceneDirty = true;
+    this.markSceneDirty();
     this.cameraController.markDirty();
   }
 
@@ -423,11 +428,11 @@ export class ViewportRenderer {
       if (this.laneLineMeshes.length === 0) return;
       for (const m of this.laneLineMeshes) { m.vertexBuffer.destroy(); }
       this.laneLineMeshes = [];
-      this.sceneDirty = true;
+      this.markSceneDirty();
       return;
     }
     this.uploadMeshData(this.laneLineMeshes, vertexData);
-    this.sceneDirty = true;
+    this.markSceneDirty();
   }
 
   /**
@@ -444,7 +449,7 @@ export class ViewportRenderer {
     isDrawMode = false,
   ): void {
     this.markerRenderer.setSplinePreviewKnots(knots, tangentOverrides, this.getMetersPerPixel(), this.clearColor, isDrawMode);
-    this.sceneDirty = true;
+    this.markSceneDirty();
   }
 
   /**
@@ -456,7 +461,7 @@ export class ViewportRenderer {
     selected?: { index: number; type: 'knot' | 'in' | 'out' } | null,
   ): void {
     this.markerRenderer.refreshSplineMarkers(this.getMetersPerPixel(), this.clearColor, hovered, selected);
-    this.sceneDirty = true;
+    this.markSceneDirty();
   }
 
   /** Compute bounding box of vertex data and move camera to see all geometry. */
@@ -479,7 +484,7 @@ export class ViewportRenderer {
     if (width <= 0 || height <= 0) return;
     this.width = width;
     this.height = height;
-    this.sceneDirty = true;
+    this.markSceneDirty();
     this.cameraController.setViewportSize(width, height);
     this.depthTexture?.destroy();
     this.msaaTexture?.destroy();
@@ -830,7 +835,7 @@ export class ViewportRenderer {
             const mpp = this.getMetersPerPixel();
             this.markerRenderer.refreshSplineCurve(mpp);
             this.markerRenderer.refreshSplineMarkers(mpp, this.clearColor);
-            this.sceneDirty = true;
+            this.markSceneDirty();
           };
 
           onDocUp = () => {
