@@ -33,6 +33,9 @@ export function TextContextMenu() {
     const handleContextMenu = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
 
+      // Canvas handles its own context menu (e.g. drawing mode finalize on right-click)
+      if (target.tagName === 'CANVAS') return;
+
       // Check if right-click is on a text-relevant element
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
       const isContentEditable = target.isContentEditable;

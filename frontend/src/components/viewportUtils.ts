@@ -7,6 +7,7 @@
 
 import { getSplineHandlePoints } from '../viewport/splineUtils';
 import type { EditableSpline, Junction, Project, Road, SplineKnot } from '../services/platform';
+import { genId } from '../plugins/editing/templates/engine';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -141,14 +142,7 @@ export function junctionIntersectsAABB(
 }
 
 export function nextSplineRoadId(existingRoadIds: string[]): string {
-  let index = existingRoadIds.length + 1;
-  let id = `road_spline_${index}`;
-  const idSet = new Set(existingRoadIds);
-  while (idSet.has(id)) {
-    index += 1;
-    id = `road_spline_${index}`;
-  }
-  return id;
+  return genId(existingRoadIds);
 }
 
 /** Extract renderer-compatible knot positions and tangent overrides from an EditableSpline. */

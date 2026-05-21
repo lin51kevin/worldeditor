@@ -86,7 +86,7 @@ pub fn import_roads_from_csv(csv: &str, opts: &CsvImportOptions) -> Result<Vec<R
             .id_col
             .and_then(|c| cols.get(c))
             .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| format!("csv_{id_counter}"));
+            .unwrap_or_else(|| format!("{id_counter}"));
 
         let geom = Geometry {
             s: 0.0,
@@ -252,8 +252,8 @@ mod tests {
             ..Default::default()
         };
         let roads = import_roads_from_csv(csv, &opts).unwrap();
-        assert!(roads[0].id.starts_with("csv_"));
-        assert!(roads[1].id.starts_with("csv_"));
+        assert_eq!(roads[0].id, "1");
+        assert_eq!(roads[1].id, "2");
         assert_ne!(roads[0].id, roads[1].id);
     }
 

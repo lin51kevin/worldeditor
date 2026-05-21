@@ -23,11 +23,29 @@ const DEFAULT_LANE_WIDTH = 3.5;
 
 // ── Unique ID generation ─────────────────────────────────────────────────────
 
-let _seq = 0;
+let _globalSeq = 0;
 
-/** Generate a unique ID with a prefix, timestamp, and sequence counter. */
-export function genId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${(++_seq).toString(36)}`;
+/**
+ * Generate a globally unique numeric ID string.
+ *
+ * If `existingIds` is provided, ensures the returned ID is greater than any
+ * existing numeric ID to avoid collisions.
+ */
+export function genId(existingIds?: string[]): string {
+  if (existingIds && existingIds.length > 0) {
+    for (const id of existingIds) {
+      const n = parseInt(id, 10);
+      if (!isNaN(n) && n > _globalSeq) {
+        _globalSeq = n;
+      }
+    }
+  }
+  return String(++_globalSeq);
+}
+
+/** Reset the global ID counter (for testing only). */
+export function resetIdCounter(val = 0): void {
+  _globalSeq = val;
 }
 
 // ── Mark helpers ─────────────────────────────────────────────────────────────
@@ -120,7 +138,7 @@ export function buildRoad(laneSection: LaneSection, opts: RoadBuildOpts = {}): R
   const hdg = opts.hdg ?? 0;
   const length = opts.length ?? DEFAULT_ROAD_LENGTH;
   return {
-    id: genId('road'),
+    id: genId(),
     name: '',
     length,
     junction_id: opts.junctionId ?? null,
@@ -328,7 +346,7 @@ function buildRoundaboutFromConfig(
   // ── Create N junctions ────────────────────────────────────────────────────
   const junctionIds: string[] = [];
   for (let i = 0; i < n; i++) {
-    junctionIds.push(genId('junction'));
+    junctionIds.push(genId());
   }
 
   // ── Ring arc roads (partial arcs with gaps at junctions) ──────────────────
@@ -445,7 +463,7 @@ function buildRoundaboutFromConfig(
       );
       connectorRoads.push(connector);
       connections.push({
-        id: genId('conn'),
+        id: genId(),
         incoming_road: arcRoads[arrivingArcIdx]!.id,
         connecting_road: connector.id,
         contact_point: 'Start',
@@ -465,7 +483,7 @@ function buildRoundaboutFromConfig(
     );
     connectorRoads.push(connector1);
     connections.push({
-      id: genId('conn'),
+      id: genId(),
       incoming_road: arcRoads[departingArcIdx]!.id,
       connecting_road: connector1.id,
       contact_point: 'Start',
@@ -488,7 +506,7 @@ function buildRoundaboutFromConfig(
       );
       connectorRoads.push(connector);
       connections.push({
-        id: genId('conn'),
+        id: genId(),
         incoming_road: arcRoads[arrivingArcIdx]!.id,
         connecting_road: connector.id,
         contact_point: 'Start',
@@ -511,7 +529,7 @@ function buildRoundaboutFromConfig(
       );
       connectorRoads.push(connector);
       connections.push({
-        id: genId('conn'),
+        id: genId(),
         incoming_road: armRoads[i]!.id,
         connecting_road: connector.id,
         contact_point: 'Start',
@@ -533,7 +551,7 @@ function buildRoundaboutFromConfig(
       );
       connectorRoads.push(connector);
       connections.push({
-        id: genId('conn'),
+        id: genId(),
         incoming_road: arcRoads[arrivingArcIdx]!.id,
         connecting_road: connector.id,
         contact_point: 'Start',
@@ -555,7 +573,7 @@ function buildRoundaboutFromConfig(
       );
       connectorRoads.push(connector);
       connections.push({
-        id: genId('conn'),
+        id: genId(),
         incoming_road: armRoads[i]!.id,
         connecting_road: connector.id,
         contact_point: 'Start',
@@ -585,7 +603,7 @@ function buildRoundaboutFromConfig(
   for (const arm of armRoads) {
     if (!arm.objects) arm.objects = [];
     arm.objects.push({
-      id: genId('obj'),
+      id: genId(),
       object_type: 'StopLine',
       name: 'stop_line',
       position: { x: arm.length - 0.1, y: 0, z: 0.01, id: null },
@@ -1015,7 +1033,7 @@ function addTurnArrows(armRoads: Road[], armCount?: number): void {
         const tOffset = -(i * laneWidth + laneWidth / 2);
 
         road.signals!.push({
-          id: genId('signal'),
+          id: genId(),
           name,
           s: signalS,
           t: tOffset,
@@ -1045,7 +1063,7 @@ function addTurnArrows(armRoads: Road[], armCount?: number): void {
         const tOffset = i * laneWidth + laneWidth / 2;
 
         road.signals!.push({
-          id: genId('signal'),
+          id: genId(),
           name,
           s: signalS,
           t: tOffset,
@@ -1096,7 +1114,7 @@ function addCrosswalks(armRoads: Road[]): void {
 
     if (!road.objects) road.objects = [];
     road.objects.push({
-      id: genId('obj'),
+      id: genId(),
       object_type: 'Crosswalk',
       name: 'Zebra Strips Area',
       position: { x: crosswalkS, y: 0, z: 0.01, id: null },
@@ -1167,7 +1185,7 @@ export function buildJunctionFromConfig(
   const arms = resolveArms(config.topology, cx, cy, gap, config.armCount);
   // Road length = armLength (gap is additional space beyond road, matching C# reference)
   const effLength = config.armLength;
-  const junctionId = genId('junction');
+  const junctionId = genId();
 
   const junctionLink: LinkElement = {
     element_type: 'Junction',
@@ -1203,7 +1221,7 @@ export function buildJunctionFromConfig(
   for (const arm of armRoads) {
     if (!arm.objects) arm.objects = [];
     arm.objects.push({
-      id: genId('obj'),
+      id: genId(),
       object_type: 'StopLine',
       name: 'stop_line',
       position: { x: arm.length - 0.1, y: 0, z: 0.01, id: null },
@@ -1264,7 +1282,7 @@ export function buildJunctionFromConfig(
           // Lane link: from incoming arm's lane to connector's single lane
           const fromLaneId = -(laneIdx + 1); // arm lane ID (e.g., -1, -2, -3)
           connections.push({
-            id: genId('conn'),
+            id: genId(),
             incoming_road: armRoads[i]!.id,
             connecting_road: connector.id,
             contact_point: 'Start',
@@ -1299,7 +1317,7 @@ export function buildJunctionFromConfig(
 
 export function buildSignalFromConfig(config: SignalTemplateConfig): RoadSignal {
   return {
-    id: genId('signal'),
+    id: genId(),
     name: '',
     s: 0,
     t: 0,
@@ -1330,7 +1348,7 @@ export function buildRoadObjectFromConfig(
   hdg = 0,
 ): RoadObjectItem {
   return {
-    id: genId('obj'),
+    id: genId(),
     object_type: config.objectType,
     name: '',
     position: { x: s, y: t, z: 0.1, id: null },
@@ -1353,7 +1371,7 @@ export function buildSignFromConfig(
   hdg = 0,
 ): RoadObjectItem {
   return {
-    id: genId('sign'),
+    id: genId(),
     object_type: config.objectType,
     name: '',
     position: { x: s, y: t, z: 0.1, id: null },

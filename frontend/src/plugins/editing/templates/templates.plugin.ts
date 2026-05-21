@@ -68,13 +68,12 @@ function junctionConfigToItem(config: JunctionTemplateConfig): TemplateItemDef {
       if (opts?.x === undefined || opts?.y === undefined) return;
       const { junction, roads, extraJunctions } = buildJunctionFromConfig(config, opts.x, opts.y);
       const store = useProjectStore.getState();
-      store.addJunctionWithRoads(junction, roads);
-      // Add extra junctions from roundabout multi-junction topology
-      if (extraJunctions) {
-        for (const ej of extraJunctions) {
-          store.addJunctionWithRoads(ej, []);
-        }
-      }
+      // Batch all junctions + roads into a single undo entry
+      store.executePluginCommand('Add junction template', (project) => ({
+        ...project,
+        roads: [...project.roads, ...roads],
+        junctions: [...project.junctions, junction, ...(extraJunctions ?? [])],
+      }));
       store.selectJunction(junction.id);
     },
   };
