@@ -506,6 +506,48 @@ function buildRoundaboutFromConfig(
       });
     }
 
+    // result4: arm left turn into ring behind (arm[i].Right.End → arc[i].Left.End)
+    // Traffic from arm turns left to go backwards on the arriving arc's left shoulder
+    {
+      const connector = buildRoundaboutConnector(
+        armEnd.x, armEnd.y, armEnd.hdg,
+        arcArriveEnd.x, arcArriveEnd.y, arcArriveEnd.hdg + Math.PI,
+        { laneType: 'Driving', width: W },
+        junctionIds[i]!,
+        armRoads[i]!.id, arcRoads[arrivingArcIdx]!.id,
+        'End', 'End',
+      );
+      connectorRoads.push(connector);
+      connections.push({
+        id: genId('conn'),
+        incoming_road: armRoads[i]!.id,
+        connecting_road: connector.id,
+        contact_point: 'Start',
+        lane_links: [{ from: -1, to: -1 }],
+      });
+    }
+
+    // result5: ring forward exit to arm (arc[(i+1)%n].Left.Start → arm[i].Left.End)
+    // Traffic from departing arc's left side exits to arm's outbound direction
+    {
+      const connector = buildRoundaboutConnector(
+        arcDepartStart.x, arcDepartStart.y, arcDepartStart.hdg + Math.PI,
+        armEnd.x, armEnd.y, armExitHdg,
+        { laneType: 'Driving', width: W },
+        junctionIds[i]!,
+        arcRoads[departingArcIdx]!.id, armRoads[i]!.id,
+        'Start', 'End',
+      );
+      connectorRoads.push(connector);
+      connections.push({
+        id: genId('conn'),
+        incoming_road: arcRoads[departingArcIdx]!.id,
+        connecting_road: connector.id,
+        contact_point: 'Start',
+        lane_links: [{ from: 1, to: -1 }],
+      });
+    }
+
     junctions.push({
       id: junctionIds[i]!,
       name: config.name ? `${config.name} (${i + 1})` : '',
