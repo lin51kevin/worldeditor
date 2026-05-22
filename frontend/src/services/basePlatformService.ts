@@ -87,6 +87,11 @@ export abstract class BasePlatformService implements PlatformService {
     return wasm.generate_road_vertices(JSON.stringify(project), sampleStep, colorMode ?? 'byLaneType');
   }
 
+  async generateRoadVerticesCached(sampleStep: number, colorMode?: string): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_road_vertices_cached(sampleStep, colorMode ?? 'byLaneType');
+  }
+
   async generateSingleRoadVertices(road: Road, sampleStep: number, color: [number, number, number, number]): Promise<Float32Array> {
     const wasm = await this.getWasm();
     return wasm.generate_single_road_vertices(

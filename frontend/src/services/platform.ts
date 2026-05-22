@@ -405,6 +405,9 @@ export interface PlatformService {
   /** Generate road mesh vertices from a project. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateRoadVertices(project: Project, sampleStep: number, colorMode?: string): Promise<Float32Array>;
 
+  /** Generate road mesh using cached project (skips JSON serialization). */
+  generateRoadVerticesCached(sampleStep: number, colorMode?: string): Promise<Float32Array>;
+
   /** Generate vertices for a single road with a custom color. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateSingleRoadVertices(road: Road, sampleStep: number, color: [number, number, number, number]): Promise<Float32Array>;
 

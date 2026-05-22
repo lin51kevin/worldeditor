@@ -222,6 +222,14 @@ export function generate_road_mesh_from_json(road_json: string, sample_step: num
 export function generate_road_vertices(project_json: string, sample_step: number, color_mode: string): Float32Array;
 
 /**
+ * Generate road mesh vertices using the cached project (avoids JSON serialization).
+ *
+ * Requires `set_project_cache()` to have been called previously.
+ * Falls back to error if cache is empty.
+ */
+export function generate_road_vertices_cached(sample_step: number, color_mode: string): Float32Array;
+
+/**
  * Generate signal paint mark vertices from a project JSON. Returns Float32Array.
  *
  * Each vertex is 7 floats: [x, y, z, r, g, b, a].
@@ -301,11 +309,25 @@ export function geodetic_to_ecef(lat_deg: number, lon_deg: number, alt_m: number
 export function get_junction_arms(project_json: string, junction_id: string): string;
 
 /**
+ * Compute the world position of a lane center at a specific s-coordinate using the cached project.
+ *
+ * Returns `{ x, y }` or null.
+ */
+export function get_lane_world_pos_cached(road_id: string, section_index: number, lane_id: number): any;
+
+/**
  * Compute the world-space position (x, y) of a road object given its road-local position.
  *
  * Returns JSON `{ "x": f64, "y": f64 }` or null if the road/object is not found.
  */
 export function get_object_world_pos(project_json: string, road_id: string, object_id: string): any;
+
+/**
+ * Compute the world position of a road object using the cached project (no JSON serialization per call).
+ *
+ * Returns `{ x, y }` or null.
+ */
+export function get_object_world_pos_cached(road_id: string, object_id: string): any;
 
 /**
  * Get the position and heading at a road endpoint for tangent inheritance.
@@ -333,20 +355,6 @@ export function get_signal_world_pos(project_json: string, road_id: string, sign
  * Returns `{ x, y }` or null.
  */
 export function get_signal_world_pos_cached(road_id: string, signal_id: string): any;
-
-/**
- * Compute the world position of a road object using the cached project (no JSON serialization per call).
- *
- * Returns `{ x, y }` or null.
- */
-export function get_object_world_pos_cached(road_id: string, object_id: string): any;
-
-/**
- * Compute the world position of a lane center using the cached project.
- *
- * Returns `{ x, y }` or null.
- */
-export function get_lane_world_pos_cached(road_id: string, section_index: number, lane_id: number): any;
 
 /**
  * Returns `true` if a project cache has been initialised.
@@ -717,10 +725,13 @@ export interface InitOutput {
     readonly geo_to_utm: (a: number, b: number, c: number) => any;
     readonly geodetic_to_ecef: (a: number, b: number, c: number) => [number, number, number];
     readonly get_junction_arms: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly get_lane_world_pos_cached: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly get_object_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly get_object_world_pos_cached: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly get_road_endpoint_tangent: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly get_road_templates: () => [number, number, number];
     readonly get_signal_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly get_signal_world_pos_cached: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly has_project_cache: () => number;
     readonly import_from_dxf: (a: number, b: number) => [number, number, number];
     readonly import_from_lanelet2: (a: number, b: number) => [number, number, number];

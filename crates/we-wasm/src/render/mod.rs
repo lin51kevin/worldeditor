@@ -153,6 +153,141 @@ pub fn generate_road_vertices(
     Ok(all_floats)
 }
 
+/// Generate road mesh vertices using the cached project (avoids JSON serialization).
+///
+/// Requires `set_project_cache()` to have been called previously.
+/// Falls back to error if cache is empty.
+#[wasm_bindgen]
+pub fn generate_road_vertices_cached(
+    sample_step: f64,
+    color_mode: &str,
+) -> Result<Vec<f32>, JsError> {
+    use crate::picking::with_project_cache;
+
+    with_project_cache(|cache| {
+        generate_road_vertices_from_project(&cache.project, sample_step, color_mode)
+    })
+}
+
+/// Internal: generate road vertices from a parsed Project reference.
+fn generate_road_vertices_from_project(
+    project: &we_core::model::Project,
+    sample_step: f64,
+    color_mode: &str,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{
+        evaluate_elevation, evaluate_lane_width, offset_point, sample_road_reference_line,
+    };
+
+    let mut all_floats = Vec::new();
+
+    for (road_idx, road) in project.roads.iter().enumerate() {
+        if road.render_hidden {
+            continue;
+        }
+
+        let ref_pts = sample_road_reference_line(road, sample_step);
+        if ref_pts.len() < 2 {
+            continue;
+        }
+
+        let mut road_verts: Vec<[f32; 7]> = Vec::new();
+
+        for section in &road.lane_sections {
+            if section.render_hidden {
+                continue;
+            }
+
+            let section_end_s = road
+                .lane_sections
+                .iter()
+                .find(|ls| ls.s > section.s + 1e-9)
+                .map(|ls| ls.s)
+                .unwrap_or(road.length);
+
+            let section_pts: Vec<_> = ref_pts
+                .iter()
+                .filter(|p| p.s >= section.s - 1e-9 && p.s <= section_end_s + 1e-9)
+                .collect();
+
+            if section_pts.len() < 2 {
+                continue;
+            }
+
+            // Right lanes (negative IDs, inner to outer)
+            let mut right_sorted: Vec<_> = section.right.iter().collect();
+            right_sorted.sort_by_key(|l| l.id.abs());
+            let mut right_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
+            for lane in &right_sorted {
+                if !lane.render_hidden {
+                    let color = select_lane_color(color_mode, lane.lane_type, road_idx);
+                    road_verts.extend(gen_lane_strip(
+                        &section_pts,
+                        &lane.width,
+                        section.s,
+                        &road.elevation_profile,
+                        &road.lane_offsets,
+                        &right_prev_widths,
+                        false,
+                        color,
+                        &evaluate_elevation,
+                        &evaluate_lane_width,
+                        &eval_lane_offset,
+                        &offset_point,
+                    ));
+                }
+                right_prev_widths.push(&lane.width);
+            }
+
+            // Left lanes (positive IDs, inner to outer)
+            let mut left_sorted: Vec<_> = section.left.iter().collect();
+            left_sorted.sort_by_key(|l| l.id);
+            let mut left_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
+            for lane in &left_sorted {
+                if !lane.render_hidden {
+                    let color = select_lane_color(color_mode, lane.lane_type, road_idx);
+                    road_verts.extend(gen_lane_strip(
+                        &section_pts,
+                        &lane.width,
+                        section.s,
+                        &road.elevation_profile,
+                        &road.lane_offsets,
+                        &left_prev_widths,
+                        true,
+                        color,
+                        &evaluate_elevation,
+                        &evaluate_lane_width,
+                        &eval_lane_offset,
+                        &offset_point,
+                    ));
+                }
+                left_prev_widths.push(&lane.width);
+            }
+        }
+
+        // Fall back to default gray ribbon when no lane sections are defined
+        if road_verts.is_empty() && road.lane_sections.is_empty() {
+            let ribbon_color = match color_mode {
+                "single" => [0.45f32, 0.45, 0.45, 1.0],
+                "byRoad" => road_hue_color(road_idx),
+                _ => [0.35, 0.35, 0.38, 1.0],
+            };
+            road_verts.extend(gen_default_ribbon(
+                &ref_pts,
+                &road.elevation_profile,
+                3.5,
+                ribbon_color,
+            ));
+        }
+
+        for v in &road_verts {
+            all_floats.extend_from_slice(v);
+        }
+    }
+
+    Ok(all_floats)
+}
+
 /// Generate junction surface mesh vertices from a project JSON. Returns Float32Array.
 ///
 /// Each vertex is 7 floats: [x, y, z, r, g, b, a].

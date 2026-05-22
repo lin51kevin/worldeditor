@@ -47,6 +47,22 @@ pub fn has_project_cache() -> bool {
     PROJECT_CACHE.with(|cell| cell.borrow().is_some())
 }
 
+/// Access the cached project for internal cross-module use (e.g. render).
+///
+/// Calls the closure with an immutable reference to the `ProjectCache`.
+/// Returns an error if the cache has not been initialised.
+pub(crate) fn with_project_cache<T>(
+    f: impl FnOnce(&ProjectCache) -> Result<T, JsError>,
+) -> Result<T, JsError> {
+    PROJECT_CACHE.with(|cell| {
+        let borrow = cell.borrow();
+        let cache = borrow.as_ref().ok_or_else(|| {
+            JsError::new("Project cache not initialised — call set_project_cache() first")
+        })?;
+        f(cache)
+    })
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
