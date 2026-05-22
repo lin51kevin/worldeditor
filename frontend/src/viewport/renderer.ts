@@ -105,6 +105,9 @@ export class ViewportRenderer {
   // Last uploaded vertex data (needed for zoomToFit re-trigger)
   private lastVertexData: Float32Array | null = null;
 
+  // When true, the next uploadVertices call with non-empty data will fitToVertices.
+  private pendingFitToVertices = false;
+
   // Pre-allocated uniform buffers (avoid per-frame GC)
   // 28 floats = 112 bytes: mat4x4(16) + vec3(3)+f32(1) + vec3(3)+f32(1) + f32 show_grid + f32 show_axis + 2 pad
   private gridUniformData = new Float32Array(28);
@@ -321,8 +324,9 @@ export class ViewportRenderer {
     // Store for later zoomToFit calls
     this.lastVertexData = vertexData;
 
-    // Auto-fit camera only on first load (when there was no geometry before)
-    if (wasEmpty) {
+    // Auto-fit camera on first load or when a pending fit was requested (new file open)
+    if (wasEmpty || this.pendingFitToVertices) {
+      this.pendingFitToVertices = false;
       this.fitToVertices(vertexData);
     }
   }
@@ -383,8 +387,9 @@ export class ViewportRenderer {
 
   /** Trigger redraw when the viewport view mode changes. */
   /** Reset camera to default position/zoom. */
-  resetCamera(): void {
-    this.cameraController.resetCamera();
+  resetCamera(dimension?: '3d' | '2d'): void {
+    this.cameraController.resetCamera(dimension);
+    this.pendingFitToVertices = true;
   }
 
   setViewMode(_mode: 'solid' | 'wire' | 'sketch'): void {

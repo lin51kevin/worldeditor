@@ -416,6 +416,7 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   clearMeasurePoints: () => set({ measurePoints: [], lastMeasurement: null }),
   resetDisplay: () => {
     set((state) => ({
+      dimension: '2d' as ViewDimension,
       display: {
         ...state.display,
         hiddenRoadIds: [],

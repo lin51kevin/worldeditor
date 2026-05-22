@@ -163,7 +163,8 @@ export function Viewport() {
     const handler = () => {
       const renderer = rendererRef.current;
       if (!renderer || status !== 'ready') return;
-      renderer.resetCamera();
+      const dim = useViewportStore.getState().dimension;
+      renderer.resetCamera(dim);
     };
     window.addEventListener('viewport:resetCamera', handler);
     return () => window.removeEventListener('viewport:resetCamera', handler);

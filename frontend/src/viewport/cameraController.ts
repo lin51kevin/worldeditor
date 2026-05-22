@@ -96,16 +96,31 @@ export class CameraController {
     return this.camera;
   }
 
-  resetCamera(): void {
-    this.camera = {
-      position: [0, -100, 50],
-      target: [0, 0, 0],
-      up: [0, 0, 1],
-      fovY: Math.PI / 4,
-      near: 0.1,
-      far: 100000,
-    };
+  resetCamera(dimension?: '2d' | '3d'): void {
+    const targetDim = dimension ?? this.dimensionMode;
+    if (targetDim === '2d') {
+      this.camera = {
+        position: [0, 0, ORTHO_CAM_HEIGHT],
+        target: [0, 0, 0],
+        up: [0, 1, 0],
+        fovY: Math.PI / 4,
+        near: 0.1,
+        far: 100000,
+      };
+      this.dimensionMode = '2d';
+    } else {
+      this.camera = {
+        position: [0, -100, 50],
+        target: [0, 0, 0],
+        up: [0, 0, 1],
+        fovY: Math.PI / 4,
+        near: 0.1,
+        far: 100000,
+      };
+      this.dimensionMode = '3d';
+    }
     this.numPixelsPerMeter = DEFAULT_SCALE;
+    this._animatingDimension = false;
     this.cachedViewProj = null;
     this.cachedInverseViewProj = null;
     this.viewDirty = true;
