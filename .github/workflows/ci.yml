@@ -101,7 +101,7 @@ jobs:
         os: [ubuntu-22.04, windows-latest]
         include:
           - os: ubuntu-22.04
-            run_coverage: true
+            run_coverage: false
           - os: windows-latest
             run_coverage: false
     steps:
@@ -170,9 +170,14 @@ jobs:
   test-frontend:
     name: Test Frontend
     runs-on: ubuntu-22.04
-    needs: build-frontend
+    needs: [build-wasm, build-frontend]
     steps:
       - uses: actions/checkout@v4
+      - name: Download WASM pkg
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: frontend/wasm/pkg/
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

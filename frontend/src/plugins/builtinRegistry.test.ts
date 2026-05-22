@@ -35,6 +35,7 @@ const mounts = vi.hoisted(() => {
     models3d: createMountPair(),
     scripting: createMountPair(),
     ecosystem: createMountPair(),
+    shapeEditor: createMountPair(),
   };
 });
 
@@ -63,6 +64,7 @@ vi.mock('./gis-viz/satellite/satellite-beta.plugin', () => ({ mountSatellitePlug
 vi.mock('./gis-viz/models-3d/models-3d-beta.plugin', () => ({ mountModels3dPlugin: mounts.models3d.mount }));
 vi.mock('./gis-viz/scripting/scripting-beta.plugin', () => ({ mountScriptingPlugin: mounts.scripting.mount }));
 vi.mock('./gis-viz/ecosystem/ecosystem-beta.plugin', () => ({ mountEcosystemPlugin: mounts.ecosystem.mount }));
+vi.mock('./editing/shape-editor/shape-editor.plugin', () => ({ mountShapeEditorPlugin: mounts.shapeEditor.mount }));
 
 import { BUILTIN_PLUGINS } from './builtinRegistry';
 
@@ -92,6 +94,7 @@ const mountById = {
   '3d-models': mounts.models3d,
   'scripting-beta': mounts.scripting,
   'ecosystem-beta': mounts.ecosystem,
+  'shape-editor': mounts.shapeEditor,
 } satisfies Record<string, { mount: ReturnType<typeof vi.fn>; cleanup: ReturnType<typeof vi.fn> }>;
 
 describe('builtinRegistry', () => {

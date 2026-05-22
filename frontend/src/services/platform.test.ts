@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { PlatformService } from './platform';
 
+vi.mock('../../wasm/pkg/we_wasm', () => ({
+  default: vi.fn().mockResolvedValue(undefined),
+  parse_opendrive: vi.fn(),
+  write_opendrive: vi.fn(),
+}));
+
 describe('platform services', () => {
   beforeEach(() => {
     vi.resetModules();
