@@ -22,3 +22,22 @@ pub fn write_opendrive(project_json: &str) -> Result<String, JsError> {
 pub fn version() -> String {
     we_core::VERSION.to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{version, write_opendrive};
+    use we_core::model::Project;
+
+    #[test]
+    fn test_version_matches_core_version() {
+        assert_eq!(version(), we_core::VERSION);
+    }
+
+    #[test]
+    fn test_write_opendrive_serializes_project_json() {
+        let json = serde_json::to_string(&Project::default()).unwrap();
+        let xml = write_opendrive(&json).unwrap();
+
+        assert!(xml.contains("<OpenDRIVE"));
+    }
+}

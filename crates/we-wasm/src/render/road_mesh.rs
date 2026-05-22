@@ -101,3 +101,118 @@ pub(super) fn gen_default_ribbon(
 
     verts
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{gen_default_ribbon, gen_lane_strip};
+    use we_core::geometry::eval::RefLinePoint;
+    use we_core::model::{Elevation, LaneOffset, LaneWidth};
+
+    fn ref_points() -> Vec<RefLinePoint> {
+        vec![
+            RefLinePoint {
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                s: 0.0,
+            },
+            RefLinePoint {
+                x: 5.0,
+                y: 0.0,
+                hdg: 0.0,
+                s: 5.0,
+            },
+        ]
+    }
+
+    fn width(a: f64) -> LaneWidth {
+        LaneWidth {
+            s_offset: 0.0,
+            a,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }
+    }
+
+    #[test]
+    fn test_gen_lane_strip_left_lane_applies_lane_offset_and_inner_widths() {
+        let ref_pts = ref_points();
+        let ref_refs = vec![&ref_pts[0], &ref_pts[1]];
+        let prev_widths = [width(2.0)];
+        let verts = gen_lane_strip(
+            &ref_refs,
+            &[width(3.0)],
+            0.0,
+            &[Elevation {
+                s: 0.0,
+                a: 0.5,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            }],
+            &[LaneOffset {
+                s: 0.0,
+                a: 1.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            }],
+            &[&prev_widths],
+            true,
+            [0.2, 0.3, 0.4, 0.5],
+            &|elevs: &[Elevation], _| elevs[0].a,
+            &|widths: &[LaneWidth], _| widths[0].a,
+            &|offsets: &[LaneOffset], _| offsets[0].a,
+            &|pt: &RefLinePoint, t, _| (pt.x, pt.y + t, 0.0),
+        );
+
+        assert_eq!(verts.len(), 6);
+        assert_eq!(verts[0], [0.0, 3.0, 0.5, 0.2, 0.3, 0.4, 0.5]);
+        assert_eq!(verts[1], [0.0, 6.0, 0.5, 0.2, 0.3, 0.4, 0.5]);
+        assert_eq!(verts[4], [5.0, 6.0, 0.5, 0.2, 0.3, 0.4, 0.5]);
+    }
+
+    #[test]
+    fn test_gen_lane_strip_skips_segments_with_zero_width() {
+        let ref_pts = ref_points();
+        let ref_refs = vec![&ref_pts[0], &ref_pts[1]];
+        let verts = gen_lane_strip(
+            &ref_refs,
+            &[width(0.0)],
+            0.0,
+            &[],
+            &[],
+            &[],
+            false,
+            [1.0, 1.0, 1.0, 1.0],
+            &|_, _| 0.0,
+            &|widths: &[LaneWidth], _| widths[0].a,
+            &|_, _| 0.0,
+            &|pt: &RefLinePoint, t, _| (pt.x, pt.y + t, 0.0),
+        );
+
+        assert!(verts.is_empty());
+    }
+
+    #[test]
+    fn test_gen_default_ribbon_generates_two_triangles_per_segment() {
+        let verts = gen_default_ribbon(
+            &ref_points(),
+            &[Elevation {
+                s: 0.0,
+                a: 1.25,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            }],
+            2.0,
+            [0.9, 0.8, 0.7, 0.6],
+        );
+
+        assert_eq!(verts.len(), 6);
+        assert_eq!(verts[0], [0.0, 2.0, 1.25, 0.9, 0.8, 0.7, 0.6]);
+        assert_eq!(verts[1], [0.0, -2.0, 1.25, 0.9, 0.8, 0.7, 0.6]);
+        assert_eq!(verts[5], [5.0, 2.0, 1.25, 0.9, 0.8, 0.7, 0.6]);
+    }
+}

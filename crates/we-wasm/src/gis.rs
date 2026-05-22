@@ -51,7 +51,7 @@ pub fn utm_to_geo(easting: f64, northing: f64, zone: u8, is_northern: bool, alt:
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
-    use we_core::gis::{GeoCoord, gcj02_to_wgs84, wgs84_to_gcj02, geo_to_utm, utm_to_geo};
+    use we_core::gis::{GeoCoord, gcj02_to_wgs84, geo_to_utm, utm_to_geo, wgs84_to_gcj02};
 
     #[test]
     fn test_wgs84_gcj02_roundtrip_near_origin() {
@@ -59,8 +59,16 @@ mod tests {
         let original = GeoCoord::new(39.9042, 116.4074, 0.0); // Beijing
         let gcj = wgs84_to_gcj02(&original);
         let back = gcj02_to_wgs84(&gcj);
-        assert!((back.lat - original.lat).abs() < 1e-4, "lat diff = {}", (back.lat - original.lat).abs());
-        assert!((back.lon - original.lon).abs() < 1e-4, "lon diff = {}", (back.lon - original.lon).abs());
+        assert!(
+            (back.lat - original.lat).abs() < 1e-4,
+            "lat diff = {}",
+            (back.lat - original.lat).abs()
+        );
+        assert!(
+            (back.lon - original.lon).abs() < 1e-4,
+            "lon diff = {}",
+            (back.lon - original.lon).abs()
+        );
     }
 
     #[test]

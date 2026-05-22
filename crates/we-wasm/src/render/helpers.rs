@@ -61,3 +61,81 @@ pub(crate) fn road_point_at_s(
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{eval_lane_offset, road_point_at_s, sum_widths_at_ds};
+    use std::f64::consts::FRAC_PI_2;
+    use we_core::model::{Geometry, GeometryType, LaneOffset, LaneWidth};
+
+    #[test]
+    fn test_sum_widths_at_ds_accumulates_across_lane_lists() {
+        let lane_a = vec![LaneWidth {
+            s_offset: 0.0,
+            a: 2.0,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }];
+        let lane_b = vec![LaneWidth {
+            s_offset: 0.0,
+            a: 1.5,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }];
+
+        let total = sum_widths_at_ds(&[&lane_a, &lane_b], 3.0, &|widths: &[LaneWidth], _| {
+            widths[0].a
+        });
+
+        assert!((total - 3.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_eval_lane_offset_uses_latest_applicable_polynomial() {
+        let offsets = vec![
+            LaneOffset {
+                s: 0.0,
+                a: 1.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            LaneOffset {
+                s: 5.0,
+                a: 2.0,
+                b: 0.5,
+                c: 0.0,
+                d: 0.0,
+            },
+        ];
+
+        assert!((eval_lane_offset(&offsets, 2.0) - 1.0).abs() < f64::EPSILON);
+        assert!((eval_lane_offset(&offsets, 7.0) - 3.0).abs() < f64::EPSILON);
+        assert_eq!(eval_lane_offset(&[], 7.0), 0.0);
+    }
+
+    #[test]
+    fn test_road_point_at_s_returns_none_for_empty_plan_view() {
+        assert!(road_point_at_s(&[], 1.0).is_none());
+    }
+
+    #[test]
+    fn test_road_point_at_s_extrapolates_beyond_last_geometry() {
+        let plan_view = vec![Geometry {
+            s: 0.0,
+            x: 10.0,
+            y: 0.0,
+            hdg: FRAC_PI_2,
+            length: 5.0,
+            geo_type: GeometryType::Line,
+        }];
+
+        let pt = road_point_at_s(&plan_view, 12.0).unwrap();
+
+        assert!((pt.x - 10.0).abs() < 1e-6);
+        assert!((pt.y - 12.0).abs() < 1e-6);
+        assert!((pt.hdg - FRAC_PI_2).abs() < 1e-6);
+    }
+}

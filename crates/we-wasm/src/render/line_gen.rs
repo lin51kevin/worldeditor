@@ -233,24 +233,23 @@ pub fn generate_lane_boundary_vertices(
     let [r, g, b, a]: [f32; 4] = [0.45, 0.45, 0.50, 0.85]; // mid-gray, visible on both dark & light themes
 
     // Emit a thin ribbon at a given lateral offset for the segment pt0→pt1.
-    let emit_boundary_segment =
-        |pt0: &we_core::geometry::eval::RefLinePoint,
-         pt1: &we_core::geometry::eval::RefLinePoint,
-         elev0: f32,
-         elev1: f32,
-         lat: f64,
-         out: &mut Vec<f32>| {
-            let (lx0, ly0, _) = offset_point(pt0, lat + line_half_w, 0.0);
-            let (rx0, ry0, _) = offset_point(pt0, lat - line_half_w, 0.0);
-            let (lx1, ly1, _) = offset_point(pt1, lat + line_half_w, 0.0);
-            let (rx1, ry1, _) = offset_point(pt1, lat - line_half_w, 0.0);
-            out.extend_from_slice(&[lx0 as f32, ly0 as f32, elev0, r, g, b, a]);
-            out.extend_from_slice(&[rx0 as f32, ry0 as f32, elev0, r, g, b, a]);
-            out.extend_from_slice(&[lx1 as f32, ly1 as f32, elev1, r, g, b, a]);
-            out.extend_from_slice(&[rx0 as f32, ry0 as f32, elev0, r, g, b, a]);
-            out.extend_from_slice(&[rx1 as f32, ry1 as f32, elev1, r, g, b, a]);
-            out.extend_from_slice(&[lx1 as f32, ly1 as f32, elev1, r, g, b, a]);
-        };
+    let emit_boundary_segment = |pt0: &we_core::geometry::eval::RefLinePoint,
+                                 pt1: &we_core::geometry::eval::RefLinePoint,
+                                 elev0: f32,
+                                 elev1: f32,
+                                 lat: f64,
+                                 out: &mut Vec<f32>| {
+        let (lx0, ly0, _) = offset_point(pt0, lat + line_half_w, 0.0);
+        let (rx0, ry0, _) = offset_point(pt0, lat - line_half_w, 0.0);
+        let (lx1, ly1, _) = offset_point(pt1, lat + line_half_w, 0.0);
+        let (rx1, ry1, _) = offset_point(pt1, lat - line_half_w, 0.0);
+        out.extend_from_slice(&[lx0 as f32, ly0 as f32, elev0, r, g, b, a]);
+        out.extend_from_slice(&[rx0 as f32, ry0 as f32, elev0, r, g, b, a]);
+        out.extend_from_slice(&[lx1 as f32, ly1 as f32, elev1, r, g, b, a]);
+        out.extend_from_slice(&[rx0 as f32, ry0 as f32, elev0, r, g, b, a]);
+        out.extend_from_slice(&[rx1 as f32, ry1 as f32, elev1, r, g, b, a]);
+        out.extend_from_slice(&[lx1 as f32, ly1 as f32, elev1, r, g, b, a]);
+    };
 
     for road in &project.roads {
         if road.render_hidden {
@@ -289,10 +288,8 @@ pub fn generate_lane_boundary_vertices(
                     for i in 0..section_pts.len() - 1 {
                         let pt0 = section_pts[i];
                         let pt1 = section_pts[i + 1];
-                        let z0 =
-                            evaluate_elevation(&road.elevation_profile, pt0.s) as f32 + z_lift;
-                        let z1 =
-                            evaluate_elevation(&road.elevation_profile, pt1.s) as f32 + z_lift;
+                        let z0 = evaluate_elevation(&road.elevation_profile, pt0.s) as f32 + z_lift;
+                        let z1 = evaluate_elevation(&road.elevation_profile, pt1.s) as f32 + z_lift;
                         emit_boundary_segment(pt0, pt1, z0, z1, lat, out);
                     }
                 }
@@ -311,8 +308,7 @@ pub fn generate_lane_boundary_vertices(
                 };
                 // Use midpoint of section to sample the cumulative width
                 let ds_mid = (section_end_s - section.s) * 0.5;
-                let offset =
-                    -sum_widths_at_ds(&all_widths, ds_mid, &evaluate_lane_width);
+                let offset = -sum_widths_at_ds(&all_widths, ds_mid, &evaluate_lane_width);
                 right_offsets.push(offset);
                 right_prev_widths.push(&lane.width);
             }
@@ -339,4 +335,97 @@ pub fn generate_lane_boundary_vertices(
     }
 
     Ok(all_floats)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        generate_center_line_vertices, generate_lane_boundary_vertices, generate_lane_line_vertices,
+    };
+    use we_core::model::{
+        Geometry, GeometryType, Project, Road, RoadMark, RoadMarkColor, RoadMarkType,
+        RoadMarkWeight,
+    };
+
+    fn straight_road(id: &str, y: f64, junction_id: Option<&str>) -> Road {
+        let mut road = Road::from_centerline(
+            id,
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y,
+                hdg: 0.0,
+                length: 10.0,
+                geo_type: GeometryType::Line,
+            }],
+        );
+        road.junction_id = junction_id.map(str::to_string);
+        road
+    }
+
+    fn road_mark(mark_type: RoadMarkType) -> RoadMark {
+        RoadMark {
+            s_offset: 0.0,
+            mark_type,
+            weight: RoadMarkWeight::Standard,
+            color: RoadMarkColor::Yellow,
+            material: String::new(),
+            width: 0.2,
+            lane_change: String::new(),
+            height: 0.0,
+        }
+    }
+
+    #[test]
+    fn test_generate_center_line_vertices_uses_different_colors_for_junction_roads() {
+        let project = Project {
+            roads: vec![
+                straight_road("road", 0.0, None),
+                straight_road("connector", 10.0, Some("j1")),
+            ],
+            ..Project::default()
+        };
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts = generate_center_line_vertices(&json, 10.0).unwrap();
+
+        assert_eq!(verts.len(), 2 * 6 * 7);
+        assert_eq!(&verts[3..7], &[0.0, 0.55, 1.0, 0.90]);
+        assert_eq!(&verts[45..49], &[1.0, 0.6, 0.0, 0.85]);
+    }
+
+    #[test]
+    fn test_generate_lane_boundary_vertices_emits_outer_edges_for_left_and_right_lanes() {
+        let project = Project {
+            roads: vec![straight_road("road", 0.0, None)],
+            ..Project::default()
+        };
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts = generate_lane_boundary_vertices(&json, 10.0).unwrap();
+
+        assert_eq!(verts.len(), 2 * 6 * 7);
+        assert!(verts.chunks(7).any(|v| v[1] < -3.4));
+        assert!(verts.chunks(7).any(|v| v[1] > 3.4));
+    }
+
+    #[test]
+    fn test_generate_lane_line_vertices_emits_mark_geometry_for_center_lane() {
+        let mut road = straight_road("road", 0.0, None);
+        road.lane_sections[0].center[0]
+            .road_marks
+            .push(road_mark(RoadMarkType::Solid));
+        let project = Project {
+            roads: vec![road],
+            ..Project::default()
+        };
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts = generate_lane_line_vertices(&json, 10.0).unwrap();
+
+        assert_eq!(verts.len(), 6 * 7);
+        assert_eq!(&verts[3..7], &[0.976, 0.827, 0.137, 1.0]);
+        assert!(verts.chunks(7).any(|v| (v[1] - 0.1).abs() < 0.01));
+        assert!(verts.chunks(7).any(|v| (v[1] + 0.1).abs() < 0.01));
+    }
 }

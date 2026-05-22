@@ -222,3 +222,126 @@ pub(super) fn gen_road_mark_line(
 
     verts
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{emit_road_mark, gen_road_mark_line};
+    use we_core::geometry::eval::RefLinePoint;
+    use we_core::model::{
+        Elevation, LaneOffset, RoadMark, RoadMarkColor, RoadMarkType, RoadMarkWeight,
+    };
+
+    fn ref_points() -> Vec<RefLinePoint> {
+        vec![
+            RefLinePoint {
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                s: 0.0,
+            },
+            RefLinePoint {
+                x: 5.0,
+                y: 0.0,
+                hdg: 0.0,
+                s: 5.0,
+            },
+            RefLinePoint {
+                x: 10.0,
+                y: 0.0,
+                hdg: 0.0,
+                s: 10.0,
+            },
+        ]
+    }
+
+    fn sample_mark(mark_type: RoadMarkType) -> RoadMark {
+        RoadMark {
+            s_offset: 0.0,
+            mark_type,
+            weight: RoadMarkWeight::Standard,
+            color: RoadMarkColor::Yellow,
+            material: String::new(),
+            width: 0.2,
+            lane_change: String::new(),
+            height: 0.0,
+        }
+    }
+
+    #[test]
+    fn test_gen_road_mark_line_solid_emits_triangles_for_each_segment() {
+        let ref_pts = ref_points();
+        let ref_refs = vec![&ref_pts[0], &ref_pts[1], &ref_pts[2]];
+        let verts = gen_road_mark_line(
+            &ref_refs,
+            &[Elevation {
+                s: 0.0,
+                a: 1.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            }],
+            0.0,
+            &[LaneOffset {
+                s: 0.0,
+                a: 1.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            }],
+            &|_| 0.0,
+            0.2,
+            [0.8, 0.7, 0.6, 0.5],
+            false,
+            &|elevs: &[Elevation], _| elevs[0].a,
+            &|offsets: &[LaneOffset], _| offsets[0].a,
+            &|pt: &RefLinePoint, t, _| (pt.x, pt.y + t, 0.0),
+        );
+
+        assert_eq!(verts.len(), 12);
+        assert_eq!(verts[0], [0.0, 1.1, 1.015, 0.8, 0.7, 0.6, 0.5]);
+        assert_eq!(verts[1], [0.0, 0.9, 1.015, 0.8, 0.7, 0.6, 0.5]);
+        assert_eq!(verts[11], [10.0, 1.1, 1.015, 0.8, 0.7, 0.6, 0.5]);
+    }
+
+    #[test]
+    fn test_gen_road_mark_line_dashed_skips_gap_segments() {
+        let ref_pts = ref_points();
+        let ref_refs = vec![&ref_pts[0], &ref_pts[1], &ref_pts[2]];
+        let verts = gen_road_mark_line(
+            &ref_refs,
+            &[],
+            0.0,
+            &[],
+            &|_| 0.0,
+            0.2,
+            [1.0, 1.0, 1.0, 1.0],
+            true,
+            &|_, _| 0.0,
+            &|_, _| 0.0,
+            &|pt: &RefLinePoint, t, _| (pt.x, pt.y + t, 0.0),
+        );
+
+        assert_eq!(verts.len(), 6);
+        assert!(verts.iter().all(|v| v[0] <= 5.0));
+    }
+
+    #[test]
+    fn test_emit_road_mark_double_line_appends_two_parallel_lines() {
+        let ref_pts = ref_points();
+        let ref_refs = vec![&ref_pts[0], &ref_pts[1], &ref_pts[2]];
+        let mut out = Vec::new();
+
+        emit_road_mark(
+            &sample_mark(RoadMarkType::SolidSolid),
+            &ref_refs,
+            &[],
+            0.0,
+            &[],
+            &|_| 0.0,
+            &mut out,
+        );
+
+        assert_eq!(out.len(), 24 * 7);
+        assert_eq!(&out[3..7], &[0.976, 0.827, 0.137, 1.0]);
+    }
+}

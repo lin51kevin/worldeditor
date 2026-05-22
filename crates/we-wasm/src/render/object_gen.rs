@@ -3,8 +3,7 @@ use wasm_bindgen::prelude::*;
 use super::helpers::road_point_at_s;
 use super::signal_mesh::{
     emit_crosswalk_stripes, emit_longitudinal_strip, emit_polygon_outline,
-    emit_polygon_outline_road_corners, emit_rect_outline, emit_square_marker,
-    emit_transverse_bar,
+    emit_polygon_outline_road_corners, emit_rect_outline, emit_square_marker, emit_transverse_bar,
 };
 
 /// Generate road object vertices from a project JSON. Returns vertex data as Float32Array.
@@ -108,7 +107,12 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                             + 0.02;
                         (if w > 0.01 { w } else { obj.width.max(3.5) }, center, rp, z)
                     } else {
-                        (if obj.width > 0.0 { obj.width } else { 3.5 }, t, ref_pt, z_road)
+                        (
+                            if obj.width > 0.0 { obj.width } else { 3.5 },
+                            t,
+                            ref_pt,
+                            z_road,
+                        )
                     };
                     emit_transverse_bar(
                         &stop_ref_pt,
@@ -538,4 +542,97 @@ pub fn generate_single_object_vertices(
         floats.extend_from_slice(&[p[0], p[1], p[2], r, g, b, a]);
     }
     Ok(floats)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{generate_object_vertices, generate_single_object_vertices};
+    use we_core::model::{Geometry, GeometryType, ObjectType, Point3D, Project, Road, RoadObject};
+
+    fn road_with_object(object: RoadObject, junction_id: Option<&str>) -> Project {
+        let mut road = Road::from_centerline(
+            "road-1",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 10.0,
+                geo_type: GeometryType::Line,
+            }],
+        );
+        road.junction_id = junction_id.map(str::to_string);
+        road.objects.push(object);
+        Project {
+            roads: vec![road],
+            ..Project::default()
+        }
+    }
+
+    fn road_object(id: &str, object_type: ObjectType, s: f64, t: f64) -> RoadObject {
+        RoadObject {
+            id: id.to_string(),
+            object_type,
+            name: String::new(),
+            position: Point3D::new(s, t, 0.0),
+            orientation: 0.0,
+            hdg: 0.0,
+            pitch: 0.0,
+            roll: 0.0,
+            width: 0.5,
+            height: 0.0,
+            length: 0.0,
+            corners: vec![],
+            corner_type: Default::default(),
+            validity: None,
+            from_object_ref: false,
+            user_data: vec![],
+        }
+    }
+
+    #[test]
+    fn test_generate_single_object_vertices_returns_colored_square_marker() {
+        let project = road_with_object(road_object("obj-1", ObjectType::Sign, 5.0, 2.0), None);
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts =
+            generate_single_object_vertices(&json, "road-1", "obj-1", 0.1, 0.2, 0.3, 0.4).unwrap();
+
+        assert_eq!(verts.len(), 6 * 7);
+        assert_eq!(&verts[3..7], &[0.1, 0.2, 0.3, 0.4]);
+        assert!(
+            verts
+                .chunks(7)
+                .any(|v| (v[0] - 4.4).abs() < 0.01 && (v[1] - 1.4).abs() < 0.01)
+        );
+        assert!(
+            verts
+                .chunks(7)
+                .any(|v| (v[0] - 5.6).abs() < 0.01 && (v[1] - 2.6).abs() < 0.01)
+        );
+    }
+
+    #[test]
+    fn test_generate_single_object_vertices_returns_empty_when_lookup_fails() {
+        let project = road_with_object(road_object("obj-1", ObjectType::Sign, 5.0, 2.0), None);
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts = generate_single_object_vertices(&json, "road-1", "missing", 1.0, 1.0, 1.0, 1.0)
+            .unwrap();
+
+        assert!(verts.is_empty());
+    }
+
+    #[test]
+    fn test_generate_object_vertices_skips_traffic_markings_on_junction_connectors() {
+        let project = road_with_object(
+            road_object("obj-1", ObjectType::Crosswalk, 5.0, 0.0),
+            Some("junction-1"),
+        );
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts = generate_object_vertices(&json).unwrap();
+
+        assert!(verts.is_empty());
+    }
 }

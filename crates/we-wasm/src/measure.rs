@@ -99,14 +99,21 @@ pub fn compute_road_width(road_json: &str, s: f64) -> Result<JsValue, JsError> {
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
-    use we_core::measurement::{measure_distance, measure_angle, measure_road_length};
-    use we_core::model::{Road, Geometry, GeometryType};
+    use we_core::measurement::{measure_angle, measure_distance, measure_road_length};
+    use we_core::model::{Geometry, GeometryType, Road};
 
     fn simple_road(length: f64) -> Road {
-        Road::from_centerline("r1", vec![Geometry {
-            s: 0.0, x: 0.0, y: 0.0, hdg: 0.0, length,
-            geo_type: GeometryType::Line,
-        }])
+        Road::from_centerline(
+            "r1",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length,
+                geo_type: GeometryType::Line,
+            }],
+        )
     }
 
     #[test]
@@ -118,7 +125,11 @@ mod tests {
     #[test]
     fn test_measure_distance_horizontal() {
         let result = measure_distance(0.0, 0.0, 0.0, 3.0, 4.0, 0.0);
-        assert!((result.horizontal - 5.0).abs() < 1e-9, "horizontal = {}", result.horizontal);
+        assert!(
+            (result.horizontal - 5.0).abs() < 1e-9,
+            "horizontal = {}",
+            result.horizontal
+        );
         assert!(result.vertical.abs() < 1e-9);
     }
 
@@ -132,7 +143,11 @@ mod tests {
     fn test_measure_angle_right_angle() {
         // p1=(1,0), p2=(0,0), p3=(0,1) → 90°
         let result = measure_angle(1.0, 0.0, 0.0, 0.0, 0.0, 1.0);
-        assert!((result.degrees - 90.0).abs() < 1e-9, "degrees = {}", result.degrees);
+        assert!(
+            (result.degrees - 90.0).abs() < 1e-9,
+            "degrees = {}",
+            result.degrees
+        );
     }
 
     #[test]

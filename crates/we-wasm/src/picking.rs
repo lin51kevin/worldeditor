@@ -476,13 +476,12 @@ pub fn get_road_endpoint_tangent(
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
     let road = project.roads.iter().find(|r| r.id == road_id);
     match road {
-        Some(road) => {
-            match we_core::snapping::get_road_endpoint_tangent(road, contact_point) {
-                Some(result) => serde_wasm_bindgen::to_value(&result)
-                    .map_err(|e| JsError::new(&e.to_string())),
-                None => Ok(JsValue::NULL),
+        Some(road) => match we_core::snapping::get_road_endpoint_tangent(road, contact_point) {
+            Some(result) => {
+                serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
             }
-        }
+            None => Ok(JsValue::NULL),
+        },
         None => Ok(JsValue::NULL),
     }
 }
@@ -665,16 +664,12 @@ pub fn pick_object_at_point(
 ///
 /// Falls back to the uncached path if no cache has been set.
 #[wasm_bindgen]
-pub fn pick_road_at_point_cached(
-    x: f64,
-    y: f64,
-    threshold: f64,
-) -> Result<JsValue, JsError> {
+pub fn pick_road_at_point_cached(x: f64, y: f64, threshold: f64) -> Result<JsValue, JsError> {
     PROJECT_CACHE.with(|cell| {
         let mut borrow = cell.borrow_mut();
-        let cache = borrow
-            .as_mut()
-            .ok_or_else(|| JsError::new("Project cache not initialised — call set_project_cache() first"))?;
+        let cache = borrow.as_mut().ok_or_else(|| {
+            JsError::new("Project cache not initialised — call set_project_cache() first")
+        })?;
         match we_core::picking::pick_road_cached(cache, x, y, threshold) {
             Some(result) => Ok(JsValue::from_str(&result.id)),
             None => Ok(JsValue::NULL),
@@ -696,32 +691,23 @@ pub fn snap_point_cached(
         serde_json::from_str(config_json).map_err(|e| JsError::new(&e.to_string()))?;
     PROJECT_CACHE.with(|cell| {
         let mut borrow = cell.borrow_mut();
-        let cache = borrow
-            .as_mut()
-            .ok_or_else(|| JsError::new("Project cache not initialised — call set_project_cache() first"))?;
-        let result = we_core::snapping::snap_point_cached(
-            x,
-            y,
-            &config,
-            cache,
-            exclude_road_id.as_deref(),
-        );
+        let cache = borrow.as_mut().ok_or_else(|| {
+            JsError::new("Project cache not initialised — call set_project_cache() first")
+        })?;
+        let result =
+            we_core::snapping::snap_point_cached(x, y, &config, cache, exclude_road_id.as_deref());
         serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
     })
 }
 
 /// Pick the nearest junction using the cached project.
 #[wasm_bindgen]
-pub fn pick_junction_at_point_cached(
-    x: f64,
-    y: f64,
-    threshold: f64,
-) -> Result<JsValue, JsError> {
+pub fn pick_junction_at_point_cached(x: f64, y: f64, threshold: f64) -> Result<JsValue, JsError> {
     PROJECT_CACHE.with(|cell| {
         let mut borrow = cell.borrow_mut();
-        let cache = borrow
-            .as_mut()
-            .ok_or_else(|| JsError::new("Project cache not initialised — call set_project_cache() first"))?;
+        let cache = borrow.as_mut().ok_or_else(|| {
+            JsError::new("Project cache not initialised — call set_project_cache() first")
+        })?;
         // Use the project from cache for junction picking (no spatial-index optimised path yet)
         let project = &cache.project;
         let mut best: Option<String> = None;
@@ -755,19 +741,19 @@ pub fn pick_junction_at_point_cached(
 ///
 /// Returns JSON `{ "roadId": string, "sectionIndex": number, "laneId": number }` or null.
 #[wasm_bindgen]
-pub fn pick_lane_at_point_cached(
-    x: f64,
-    y: f64,
-    threshold: f64,
-) -> Result<JsValue, JsError> {
+pub fn pick_lane_at_point_cached(x: f64, y: f64, threshold: f64) -> Result<JsValue, JsError> {
     PROJECT_CACHE.with(|cell| {
         let mut borrow = cell.borrow_mut();
-        let cache = borrow
-            .as_mut()
-            .ok_or_else(|| JsError::new("Project cache not initialised — call set_project_cache() first"))?;
+        let cache = borrow.as_mut().ok_or_else(|| {
+            JsError::new("Project cache not initialised — call set_project_cache() first")
+        })?;
         match we_core::picking::pick_lane_cached(cache, x, y, threshold) {
             Some((road_id, section_index, lane_id)) => {
-                let result = LanePickResult { road_id, section_index, lane_id };
+                let result = LanePickResult {
+                    road_id,
+                    section_index,
+                    lane_id,
+                };
                 serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
             }
             None => Ok(JsValue::NULL),
@@ -811,7 +797,11 @@ pub fn snap_point_on_road(road_json: &str, world_x: f64, world_y: f64) -> Result
     let samples = sample_road_reference_line(&road, 1.0);
 
     let result = if samples.is_empty() {
-        RoadLocalPos { s: 0.0, t: 0.0, hdg: 0.0 }
+        RoadLocalPos {
+            s: 0.0,
+            t: 0.0,
+            hdg: 0.0,
+        }
     } else {
         // Find the closest reference-line sample
         let mut best_idx = 0usize;
@@ -833,7 +823,11 @@ pub fn snap_point_on_road(road_json: &str, world_x: f64, world_y: f64) -> Result
         let sin_h = pt.hdg.sin();
         // t = perpendicular component (positive = left of heading direction)
         let t = -dx * sin_h + dy * cos_h;
-        RoadLocalPos { s: pt.s, t, hdg: pt.hdg }
+        RoadLocalPos {
+            s: pt.s,
+            t,
+            hdg: pt.hdg,
+        }
     };
 
     serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))

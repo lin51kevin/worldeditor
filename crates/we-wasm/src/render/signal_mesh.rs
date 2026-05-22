@@ -314,7 +314,10 @@ fn clip_scanline_alpha(
     // Scan line endpoints in world space — extend 1 m past the AABB so the line
     // fully spans the polygon regardless of floating-point boundary touches.
     let world_xy = |alpha: f64, b: f64| -> (f64, f64) {
-        (ox + alpha * cos_t - b * sin_t, oy + alpha * sin_t + b * cos_t)
+        (
+            ox + alpha * cos_t - b * sin_t,
+            oy + alpha * sin_t + b * cos_t,
+        )
     };
     let (sx0, sy0) = world_xy(alpha_min - 1.0, beta);
     let (sx1, sy1) = world_xy(alpha_max + 1.0, beta);
@@ -468,7 +471,7 @@ pub(super) fn emit_crosswalk_stripes(
         .iter()
         .map(|c| {
             let alpha = c.x * cos_h - c.y * sin_h;
-            let beta  = c.x * sin_h + c.y * cos_h;
+            let beta = c.x * sin_h + c.y * cos_h;
             (
                 ox + alpha * cos_road - beta * sin_road,
                 oy + alpha * sin_road + beta * cos_road,
@@ -613,10 +616,10 @@ pub(super) fn emit_polygon_outline(
         .iter()
         .map(|c| {
             let alpha = c.x * cos_h - c.y * sin_h;
-            let beta  = c.x * sin_h + c.y * cos_h;
+            let beta = c.x * sin_h + c.y * cos_h;
             let wx = ox + alpha * cos_t - beta * sin_t;
             let wy = oy + alpha * sin_t + beta * cos_t;
-            let z  = z_base_eval + c.z as f32;
+            let z = z_base_eval + c.z as f32;
             (wx, wy, z)
         })
         .collect();
@@ -661,7 +664,10 @@ pub(super) fn emit_polygon_outline_road_corners(
     bar_thickness: f64,
     color: [f32; 4],
     offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
-    road_point_at_s: &impl Fn(&[we_core::model::Geometry], f64) -> Option<we_core::geometry::eval::RefLinePoint>,
+    road_point_at_s: &impl Fn(
+        &[we_core::model::Geometry],
+        f64,
+    ) -> Option<we_core::geometry::eval::RefLinePoint>,
     out: &mut Vec<f32>,
 ) {
     use we_core::geometry::eval::evaluate_elevation;
@@ -768,7 +774,12 @@ mod tests {
     /// Helper: straight road along +x with ref_pts at s=0..10 (1m steps).
     fn straight_road_pts() -> Vec<RefLinePoint> {
         (0..=10)
-            .map(|i| RefLinePoint { s: i as f64, x: i as f64, y: 0.0, hdg: 0.0 })
+            .map(|i| RefLinePoint {
+                s: i as f64,
+                x: i as f64,
+                y: 0.0,
+                hdg: 0.0,
+            })
             .collect()
     }
 
@@ -788,29 +799,74 @@ mod tests {
         // Corners: hdg=0 (no rotation), so alpha=u, beta=v.
         // alpha range [1,5] (along road), beta range [-1,1] (lateral) → 4m × 2m crosswalk.
         let corners = vec![
-            Point3D { x: 1.0, y: -1.0, z: 0.0, id: None },
-            Point3D { x: 5.0, y: -1.0, z: 0.0, id: None },
-            Point3D { x: 5.0, y: 1.0, z: 0.0, id: None },
-            Point3D { x: 1.0, y: 1.0, z: 0.0, id: None },
+            Point3D {
+                x: 1.0,
+                y: -1.0,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 5.0,
+                y: -1.0,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 5.0,
+                y: 1.0,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 1.0,
+                y: 1.0,
+                z: 0.0,
+                id: None,
+            },
         ];
         let elevations: Vec<Elevation> = vec![];
         let mut out = Vec::new();
         let offset_fn = &offset_pt_flat;
 
-        emit_crosswalk_stripes(&corners, &ref_pts[9], &elevations, 9.0, 0.0, 0.0, 0.0, offset_fn, 0.0, 0.0, 0.0, 4.0, 2.0, &mut out);
+        emit_crosswalk_stripes(
+            &corners,
+            &ref_pts[9],
+            &elevations,
+            9.0,
+            0.0,
+            0.0,
+            0.0,
+            offset_fn,
+            0.0,
+            0.0,
+            0.0,
+            4.0,
+            2.0,
+            &mut out,
+        );
 
         // Must produce at least one valid (non-degenerate) stripe quad = 6 vertices × 7 floats.
-        assert!(out.len() >= 42, "Expected at least one stripe but got {} floats", out.len());
+        assert!(
+            out.len() >= 42,
+            "Expected at least one stripe but got {} floats",
+            out.len()
+        );
 
         // Lateral-sweep: road along +x (theta=0), sweep along +y.
         // Corners in world: x ∈ [10,14], y ∈ [-1,1]. Bars extend in x, spaced in y.
         // Verify stripe vertices are within the crosswalk world-space bounds.
         let all_x: Vec<f32> = out.chunks(7).map(|v| v[0]).collect();
         let all_y: Vec<f32> = out.chunks(7).map(|v| v[1]).collect();
-        assert!(all_x.iter().all(|&x| x >= 9.5 && x <= 14.5),
-            "Stripe x coords should be in [10,14] range, got {:?}", all_x);
-        assert!(all_y.iter().all(|&y| y >= -1.5 && y <= 1.5),
-            "Stripe y coords should be in [-1,1] range, got {:?}", all_y);
+        assert!(
+            all_x.iter().all(|&x| x >= 9.5 && x <= 14.5),
+            "Stripe x coords should be in [10,14] range, got {:?}",
+            all_x
+        );
+        assert!(
+            all_y.iter().all(|&y| y >= -1.5 && y <= 1.5),
+            "Stripe y coords should be in [-1,1] range, got {:?}",
+            all_y
+        );
     }
 
     /// Verify that a crosswalk with hdg=π/2 and length=0/width=0 (junction_crosswalk_signal
@@ -823,10 +879,30 @@ mod tests {
     fn test_crosswalk_stripes_hdg_pi_half_perpendicular_to_road() {
         let ref_pts = straight_road_pts();
         let corners = vec![
-            Point3D { x: -3.6, y: -1.0, z: 0.0, id: None },
-            Point3D { x:  7.1, y: -1.0, z: 0.0, id: None },
-            Point3D { x:  7.1, y: -5.0, z: 0.0, id: None },
-            Point3D { x: -3.6, y: -5.0, z: 0.0, id: None },
+            Point3D {
+                x: -3.6,
+                y: -1.0,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 7.1,
+                y: -1.0,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 7.1,
+                y: -5.0,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: -3.6,
+                y: -5.0,
+                z: 0.0,
+                id: None,
+            },
         ];
         let elevations: Vec<Elevation> = vec![];
         let mut out = Vec::new();
@@ -834,24 +910,46 @@ mod tests {
 
         // length=0, width=0 → apply hdg rotation
         emit_crosswalk_stripes(
-            &corners, &ref_pts[5], &elevations,
-            5.0, 0.0, std::f64::consts::FRAC_PI_2, 0.0, offset_fn, 0.0, 0.0, 0.0,
-            0.0, 0.0, &mut out,
+            &corners,
+            &ref_pts[5],
+            &elevations,
+            5.0,
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            0.0,
+            offset_fn,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            &mut out,
         );
 
         assert!(!out.is_empty(), "Expected stripes for hdg=π/2 crosswalk");
 
         // With rotation: lateral range = 10.7m; period = 1.05m → ~10 stripes.
         let num_stripes = out.len() / 42;
-        assert!(num_stripes >= 8 && num_stripes <= 12,
-            "Expected ~10 stripes for 10.7 m lateral range, got {num_stripes}");
+        assert!(
+            num_stripes >= 8 && num_stripes <= 12,
+            "Expected ~10 stripes for 10.7 m lateral range, got {num_stripes}"
+        );
 
         // Each stripe bar spans the along-road extent (~4m in x after rotation).
         let first_stripe_xs: Vec<f32> = out[..42].chunks(7).map(|v| v[0]).collect();
-        let x_min = first_stripe_xs.iter().cloned().fold(f32::INFINITY, f32::min);
-        let x_max = first_stripe_xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        assert!((x_max - x_min) > 3.0,
-            "First stripe along-road extent={:.1}, expected ~4.0m", x_max - x_min);
+        let x_min = first_stripe_xs
+            .iter()
+            .cloned()
+            .fold(f32::INFINITY, f32::min);
+        let x_max = first_stripe_xs
+            .iter()
+            .cloned()
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert!(
+            (x_max - x_min) > 3.0,
+            "First stripe along-road extent={:.1}, expected ~4.0m",
+            x_max - x_min
+        );
     }
 
     /// Verify that a crosswalk with hdg=π/2 and length>0/width>0 (CityScape style)
@@ -864,10 +962,30 @@ mod tests {
     fn test_crosswalk_stripes_hdg_pi_half_cityscape_style() {
         let ref_pts = straight_road_pts();
         let corners = vec![
-            Point3D { x: -2.16, y:  4.36, z: 0.0, id: None },
-            Point3D { x:  1.48, y:  4.36, z: 0.0, id: None },
-            Point3D { x:  1.48, y: -6.57, z: 0.0, id: None },
-            Point3D { x: -2.16, y: -6.57, z: 0.0, id: None },
+            Point3D {
+                x: -2.16,
+                y: 4.36,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 1.48,
+                y: 4.36,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 1.48,
+                y: -6.57,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: -2.16,
+                y: -6.57,
+                z: 0.0,
+                id: None,
+            },
         ];
         let elevations: Vec<Elevation> = vec![];
         let mut out = Vec::new();
@@ -875,24 +993,49 @@ mod tests {
 
         // length=3.64, width=10.99 → don't apply hdg rotation
         emit_crosswalk_stripes(
-            &corners, &ref_pts[5], &elevations,
-            5.0, 0.0, std::f64::consts::FRAC_PI_2, 0.0, offset_fn, 0.0, 0.0, 0.0,
-            3.64, 10.99, &mut out,
+            &corners,
+            &ref_pts[5],
+            &elevations,
+            5.0,
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            0.0,
+            offset_fn,
+            0.0,
+            0.0,
+            0.0,
+            3.64,
+            10.99,
+            &mut out,
         );
 
-        assert!(!out.is_empty(), "Expected stripes for CityScape-style crosswalk");
+        assert!(
+            !out.is_empty(),
+            "Expected stripes for CityScape-style crosswalk"
+        );
 
         // Without rotation: lateral range = 10.9m; period = 1.05m → ~10 stripes.
         let num_stripes = out.len() / 42;
-        assert!(num_stripes >= 8 && num_stripes <= 12,
-            "Expected ~10 stripes for 10.9 m lateral range, got {num_stripes}");
+        assert!(
+            num_stripes >= 8 && num_stripes <= 12,
+            "Expected ~10 stripes for 10.9 m lateral range, got {num_stripes}"
+        );
 
         // Each stripe bar spans the along-road extent (~3.6m in x, no rotation).
         let first_stripe_xs: Vec<f32> = out[..42].chunks(7).map(|v| v[0]).collect();
-        let x_min = first_stripe_xs.iter().cloned().fold(f32::INFINITY, f32::min);
-        let x_max = first_stripe_xs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        assert!((x_max - x_min) > 2.5,
-            "First stripe along-road extent={:.1}, expected ~3.6m", x_max - x_min);
+        let x_min = first_stripe_xs
+            .iter()
+            .cloned()
+            .fold(f32::INFINITY, f32::min);
+        let x_max = first_stripe_xs
+            .iter()
+            .cloned()
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert!(
+            (x_max - x_min) > 2.5,
+            "First stripe along-road extent={:.1}, expected ~3.6m",
+            x_max - x_min
+        );
     }
 
     /// Verify that parking spaces with road-frame convention (e.g. parkinglot.xodr, length=0/width=0)
@@ -909,7 +1052,12 @@ mod tests {
         let ref_pts: Vec<RefLinePoint> = (0..=200)
             .map(|i| {
                 let s = i as f64 * 0.1;
-                RefLinePoint { s, x: s, y: 0.0, hdg: 0.0 }
+                RefLinePoint {
+                    s,
+                    x: s,
+                    y: 0.0,
+                    hdg: 0.0,
+                }
             })
             .collect();
         let elevations: Vec<Elevation> = vec![];
@@ -917,24 +1065,66 @@ mod tests {
 
         // Space 50: s=0.81, v_span(3.45) > u_span(2.27), hdg=π/2
         let corners_50 = vec![
-            Point3D { x: -1.12, y: -2.77, z: 0.0, id: None },
-            Point3D { x: -1.12, y:  0.68, z: 0.0, id: None },
-            Point3D { x:  1.15, y:  0.68, z: 0.0, id: None },
-            Point3D { x:  1.15, y: -2.77, z: 0.0, id: None },
-            Point3D { x: -1.12, y: -2.77, z: 0.0, id: None },
+            Point3D {
+                x: -1.12,
+                y: -2.77,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: -1.12,
+                y: 0.68,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 1.15,
+                y: 0.68,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 1.15,
+                y: -2.77,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: -1.12,
+                y: -2.77,
+                z: 0.0,
+                id: None,
+            },
         ];
 
         let mut out50 = Vec::new();
-        emit_polygon_outline(&corners_50, &ref_pts[8], &elevations, 0.81, 0.0,
-            std::f64::consts::FRAC_PI_2, 0.0, 0.10,
-            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out50,
-            0.0, 0.0); // length=0, width=0 → road-frame → no rotation
+        emit_polygon_outline(
+            &corners_50,
+            &ref_pts[8],
+            &elevations,
+            0.81,
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            0.0,
+            0.10,
+            [0.0, 1.0, 0.0, 1.0],
+            offset_fn,
+            &mut out50,
+            0.0,
+            0.0,
+        ); // length=0, width=0 → road-frame → no rotation
 
-        assert!(!out50.is_empty(), "Space 50 should produce outline vertices");
+        assert!(
+            !out50.is_empty(),
+            "Space 50 should produce outline vertices"
+        );
 
         // Detection: obj_length=0, obj_width=0 → road-frame → no rotation.
         // ds = u → x ∈ [0.81-1.12, 0.81+1.15] = [-0.31, 1.96]
-        let x_max_50 = out50.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
+        let x_max_50 = out50
+            .chunks(7)
+            .map(|v| v[0])
+            .fold(f32::NEG_INFINITY, f32::max);
         let x_min_50 = out50.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
 
         // Without rotation: x_max ≈ 0.81 + 1.15 + hw(0.05) ≈ 2.01
@@ -946,7 +1136,10 @@ mod tests {
         );
 
         // dt = v → lateral extent ≈ 3.45m (v_span). This is the stall depth.
-        let y_max_50 = out50.chunks(7).map(|v| v[1]).fold(f32::NEG_INFINITY, f32::max);
+        let y_max_50 = out50
+            .chunks(7)
+            .map(|v| v[1])
+            .fold(f32::NEG_INFINITY, f32::max);
         let y_min_50 = out50.chunks(7).map(|v| v[1]).fold(f32::INFINITY, f32::min);
         let y_extent = y_max_50 - y_min_50;
 
@@ -972,7 +1165,12 @@ mod tests {
         let ref_pts: Vec<RefLinePoint> = (0..=100)
             .map(|i| {
                 let s = i as f64 * 0.1;
-                RefLinePoint { s, x: s, y: 0.0, hdg: 0.0 }
+                RefLinePoint {
+                    s,
+                    x: s,
+                    y: 0.0,
+                    hdg: 0.0,
+                }
             })
             .collect();
         let elevations: Vec<Elevation> = vec![];
@@ -982,31 +1180,81 @@ mod tests {
         // uSpan > vSpan → rotation applied.  alpha = -v ∈ [-0.994, 1.491]
         // x_range: [4.57 - 0.994, 4.57 + 1.491] = [3.576, 6.061]
         let corners_a = vec![
-            Point3D { x: -3.156, y: -1.491, z: 0.0, id: None },
-            Point3D { x:  2.094, y: -1.491, z: 0.0, id: None },
-            Point3D { x:  2.094, y:  0.994, z: 0.0, id: None },
-            Point3D { x: -3.156, y:  0.994, z: 0.0, id: None },
-            Point3D { x: -3.156, y: -1.491, z: 0.0, id: None },
+            Point3D {
+                x: -3.156,
+                y: -1.491,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 2.094,
+                y: -1.491,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 2.094,
+                y: 0.994,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: -3.156,
+                y: 0.994,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: -3.156,
+                y: -1.491,
+                z: 0.0,
+                id: None,
+            },
         ];
 
         // Space at s=7.07: same corner shape → x_range: [7.07 - 0.994, 7.07 + 1.491] = [6.076, 8.561]
         let corners_b = corners_a.clone();
 
         let mut out_a = Vec::new();
-        emit_polygon_outline(&corners_a, &ref_pts[46], &elevations, 4.57, 0.0,
-            std::f64::consts::FRAC_PI_2, 0.0, 0.10,
-            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out_a,
-            5.25, 2.48); // non-zero length/width → spec-compliant → rotation applied
+        emit_polygon_outline(
+            &corners_a,
+            &ref_pts[46],
+            &elevations,
+            4.57,
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            0.0,
+            0.10,
+            [0.0, 1.0, 0.0, 1.0],
+            offset_fn,
+            &mut out_a,
+            5.25,
+            2.48,
+        ); // non-zero length/width → spec-compliant → rotation applied
         let mut out_b = Vec::new();
-        emit_polygon_outline(&corners_b, &ref_pts[71], &elevations, 7.07, 0.0,
-            std::f64::consts::FRAC_PI_2, 0.0, 0.10,
-            [0.0, 1.0, 0.0, 1.0], offset_fn, &mut out_b,
-            5.25, 2.48);
+        emit_polygon_outline(
+            &corners_b,
+            &ref_pts[71],
+            &elevations,
+            7.07,
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            0.0,
+            0.10,
+            [0.0, 1.0, 0.0, 1.0],
+            offset_fn,
+            &mut out_b,
+            5.25,
+            2.48,
+        );
 
         assert!(!out_a.is_empty(), "Space A should produce vertices");
         assert!(!out_b.is_empty(), "Space B should produce vertices");
 
-        let x_max_a = out_a.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
+        let x_max_a = out_a
+            .chunks(7)
+            .map(|v| v[0])
+            .fold(f32::NEG_INFINITY, f32::max);
         let x_min_b = out_b.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
 
         // With hdg rotation: space A x_max ≈ 4.57+1.491+hw ≈ 6.11, space B x_min ≈ 7.07-0.994-hw ≈ 6.02
@@ -1034,7 +1282,12 @@ mod tests {
         let ref_pts: Vec<RefLinePoint> = (0..=200)
             .map(|i| {
                 let s = i as f64 * 0.1;
-                RefLinePoint { s, x: s, y: 0.0, hdg: 0.0 }
+                RefLinePoint {
+                    s,
+                    x: s,
+                    y: 0.0,
+                    hdg: 0.0,
+                }
             })
             .collect();
         let elevations: Vec<Elevation> = vec![];
@@ -1043,23 +1296,57 @@ mod tests {
         // Space 58 (Road 10): u∈[-0.68, 2.75] (u_span=3.43), v∈[-1.16, 1.18] (v_span=2.34)
         // u_span > v_span, but length=0 width=0 → road-frame → NO rotation.
         let corners_58 = vec![
-            Point3D { x: -0.684, y: -1.161, z: 0.03, id: None },
-            Point3D { x:  2.745, y: -1.144, z: 0.03, id: None },
-            Point3D { x:  2.729, y:  1.176, z: 0.03, id: None },
-            Point3D { x: -0.716, y:  1.136, z: 0.03, id: None },
+            Point3D {
+                x: -0.684,
+                y: -1.161,
+                z: 0.03,
+                id: None,
+            },
+            Point3D {
+                x: 2.745,
+                y: -1.144,
+                z: 0.03,
+                id: None,
+            },
+            Point3D {
+                x: 2.729,
+                y: 1.176,
+                z: 0.03,
+                id: None,
+            },
+            Point3D {
+                x: -0.716,
+                y: 1.136,
+                z: 0.03,
+                id: None,
+            },
         ];
 
         let mut out = Vec::new();
-        emit_polygon_outline(&corners_58, &ref_pts[11], &elevations, 1.11, 3.62,
-            std::f64::consts::FRAC_PI_2, 0.0, 0.15,
-            [0.424, 0.549, 0.278, 1.0], offset_fn, &mut out,
-            0.0, 0.0); // length=0, width=0 → road-frame → no rotation
+        emit_polygon_outline(
+            &corners_58,
+            &ref_pts[11],
+            &elevations,
+            1.11,
+            3.62,
+            std::f64::consts::FRAC_PI_2,
+            0.0,
+            0.15,
+            [0.424, 0.549, 0.278, 1.0],
+            offset_fn,
+            &mut out,
+            0.0,
+            0.0,
+        ); // length=0, width=0 → road-frame → no rotation
 
         assert!(!out.is_empty(), "Space 58 should produce outline vertices");
 
         // Without rotation: u maps to x → x_extent ≈ 3.43m (u_span)
         // With rotation (wrong): u maps to y → x_extent ≈ 2.34m (v_span)
-        let x_max = out.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
+        let x_max = out
+            .chunks(7)
+            .map(|v| v[0])
+            .fold(f32::NEG_INFINITY, f32::max);
         let x_min = out.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
         let x_extent = x_max - x_min;
 
@@ -1071,7 +1358,10 @@ mod tests {
         );
 
         // Without rotation: y_extent ≈ 2.34m (v_span). With rotation: y_extent ≈ 3.43m.
-        let y_max = out.chunks(7).map(|v| v[1]).fold(f32::NEG_INFINITY, f32::max);
+        let y_max = out
+            .chunks(7)
+            .map(|v| v[1])
+            .fold(f32::NEG_INFINITY, f32::max);
         let y_min = out.chunks(7).map(|v| v[1]).fold(f32::INFINITY, f32::min);
         let y_extent = y_max - y_min;
         assert!(

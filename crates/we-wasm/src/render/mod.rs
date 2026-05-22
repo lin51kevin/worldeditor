@@ -15,13 +15,13 @@ pub(crate) use junction_mesh::{build_junction_polygon_points, point_in_polygon};
 use colors::{road_hue_color, select_lane_color};
 use junction_mesh::append_junction_triangles;
 use road_mesh::{gen_default_ribbon, gen_lane_strip};
-use signal_mesh::{
-    arrow_triangles, sign_marker_color,
-};
+use signal_mesh::{arrow_triangles, sign_marker_color};
 
 // Re-export submodule wasm_bindgen functions for tests
 #[cfg(test)]
-use line_gen::{generate_center_line_vertices, generate_lane_boundary_vertices, generate_lane_line_vertices};
+use line_gen::{
+    generate_center_line_vertices, generate_lane_boundary_vertices, generate_lane_line_vertices,
+};
 #[cfg(test)]
 use object_gen::{generate_object_vertices, generate_single_object_vertices};
 // ── Public wasm_bindgen functions ─────────────────────────────────────────────
@@ -565,11 +565,8 @@ mod tests {
     /// WITHOUT the fix the bar would be at x≈10; WITH the fix it should be at x≈6.5.
     #[test]
     fn test_stop_line_nonzero_v_corners_uses_corrected_s() {
-        let json = make_stop_line_project(
-            10.0,
-            std::f64::consts::FRAC_PI_2,
-            &[(0.0, 3.5), (7.0, 3.5)],
-        );
+        let json =
+            make_stop_line_project(10.0, std::f64::consts::FRAC_PI_2, &[(0.0, 3.5), (7.0, 3.5)]);
         let verts = generate_object_vertices(&json).unwrap();
         assert!(!verts.is_empty(), "Expected vertices for stop line");
         let x_avg = verts.chunks(7).map(|v| v[0]).sum::<f32>() / (verts.len() / 7) as f32;
@@ -592,8 +589,14 @@ mod tests {
         let forward = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, 0.0_f32, 1.0);
         let reversed = arrow_triangles("StraightAheadArrow", 0.0, 0.0, 0.0, PI, 1.0);
 
-        let forward_max_x = forward.chunks(7).map(|v| v[0]).fold(f32::NEG_INFINITY, f32::max);
-        let reversed_min_x = reversed.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
+        let forward_max_x = forward
+            .chunks(7)
+            .map(|v| v[0])
+            .fold(f32::NEG_INFINITY, f32::max);
+        let reversed_min_x = reversed
+            .chunks(7)
+            .map(|v| v[0])
+            .fold(f32::INFINITY, f32::min);
 
         assert!(
             forward_max_x > 0.4,
@@ -715,10 +718,22 @@ mod tests {
         //   Road 16: vertical, hdg≈4.7, parking at x≈[-15, -9]
         //   Road 19: horizontal west-going (hdg≈π), t=-6.3→north, parking at y≈[2.5, 5]
         // All stalls are in the y>0 range (no parking at y<0)
-        assert!(x_min < -9.0, "Expected parking stalls at x<-9 (Road 16), got x_min={x_min}");
-        assert!(x_max > 5.0, "Expected parking stalls at x>5 (Road 13), got x_max={x_max}");
-        assert!(y_min < 3.0, "Expected parking stalls at y<3 (Road 10/19), got y_min={y_min}");
-        assert!(y_max > 10.0, "Expected parking stalls at y>10 (Road 13), got y_max={y_max}");
+        assert!(
+            x_min < -9.0,
+            "Expected parking stalls at x<-9 (Road 16), got x_min={x_min}"
+        );
+        assert!(
+            x_max > 5.0,
+            "Expected parking stalls at x>5 (Road 13), got x_max={x_max}"
+        );
+        assert!(
+            y_min < 3.0,
+            "Expected parking stalls at y<3 (Road 10/19), got y_min={y_min}"
+        );
+        assert!(
+            y_max > 10.0,
+            "Expected parking stalls at y>10 (Road 13), got y_max={y_max}"
+        );
 
         println!(
             "All parking stalls render: {} vertices, bbox x=[{x_min:.1}, {x_max:.1}] y=[{y_min:.1}, {y_max:.1}]",
@@ -738,7 +753,8 @@ mod tests {
             we_core::opendrive::parse_xodr(&xodr).expect("parse parkinglot.xodr");
         let json = serde_json::to_string(&project).expect("serialize project");
 
-        let verts = generate_road_vertices(&json, 1.0, "byLaneType").expect("generate_road_vertices");
+        let verts =
+            generate_road_vertices(&json, 1.0, "byLaneType").expect("generate_road_vertices");
         assert!(!verts.is_empty(), "Expected non-empty road vertices");
 
         let xs: Vec<f32> = verts.chunks(7).map(|v| v[0]).collect();
@@ -752,10 +768,22 @@ mod tests {
         //   Road 25: x=[-61.5, -39.7], y=[-12.2, 22.2]  (the farthest left/bottom road)
         //   Road 1:  x=[54.6, 75.3], y=[-18.2, 18.0]    (the farthest right road)
         // Overall: x∈[-61.5, 75.3], y∈[-18.2, 22.2]
-        assert!(x_min < -55.0, "Expected road surface reaching x<-55 (Road 25), got x_min={x_min}");
-        assert!(x_max > 70.0, "Expected road surface reaching x>70 (Road 1), got x_max={x_max}");
-        assert!(y_min < -15.0, "Expected road surface reaching y<-15 (Road 1), got y_min={y_min}");
-        assert!(y_max > 20.0, "Expected road surface reaching y>20 (Road 25), got y_max={y_max}");
+        assert!(
+            x_min < -55.0,
+            "Expected road surface reaching x<-55 (Road 25), got x_min={x_min}"
+        );
+        assert!(
+            x_max > 70.0,
+            "Expected road surface reaching x>70 (Road 1), got x_max={x_max}"
+        );
+        assert!(
+            y_min < -15.0,
+            "Expected road surface reaching y<-15 (Road 1), got y_min={y_min}"
+        );
+        assert!(
+            y_max > 20.0,
+            "Expected road surface reaching y>20 (Road 25), got y_max={y_max}"
+        );
     }
 
     /// Left-lane signal (t > 0) with hOffset=-π (compliant XODR for reverse-facing)
@@ -817,7 +845,11 @@ mod tests {
             "extrapolated x should be 15, got {}",
             pt.x
         );
-        assert!(pt.y.abs() < 1e-6, "extrapolated y should be 0, got {}", pt.y);
+        assert!(
+            pt.y.abs() < 1e-6,
+            "extrapolated y should be 0, got {}",
+            pt.y
+        );
         assert!(pt.hdg.abs() < 1e-6, "heading preserved at 0");
     }
 

@@ -118,7 +118,8 @@ pub fn create_road_from_spline(
     };
 
     let output_mode = parse_spline_output_mode(mode);
-    let cmd = we_service::commands::CreateRoadFromSpline::new(road_id, spline, template, output_mode);
+    let cmd =
+        we_service::commands::CreateRoadFromSpline::new(road_id, spline, template, output_mode);
     let result = cmd
         .execute(&project)
         .map_err(|e| JsError::new(&e.to_string()))?;
@@ -177,15 +178,22 @@ pub fn rotate_road(
 #[cfg(test)]
 mod tests {
     use super::parse_spline_output_mode;
+    use we_core::model::{Geometry, GeometryType, Road};
     use we_core::spline::SplineOutputMode;
-    use we_core::model::{Road, Geometry, GeometryType};
     use we_service::editor::Command;
 
     fn simple_road(length: f64) -> Road {
-        Road::from_centerline("r1", vec![Geometry {
-            s: 0.0, x: 0.0, y: 0.0, hdg: 0.0, length,
-            geo_type: GeometryType::Line,
-        }])
+        Road::from_centerline(
+            "r1",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length,
+                geo_type: GeometryType::Line,
+            }],
+        )
     }
 
     #[test]

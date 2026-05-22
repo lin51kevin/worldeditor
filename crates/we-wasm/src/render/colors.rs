@@ -86,3 +86,73 @@ pub(super) fn mark_line_width(rm: &we_core::model::RoadMark) -> f32 {
         _ => 0.15,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        lane_surface_color, mark_color, mark_line_width, road_hue_color, select_lane_color,
+    };
+    use we_core::model::{LaneType, RoadMark, RoadMarkColor, RoadMarkType, RoadMarkWeight};
+
+    fn road_mark(width: f64, weight: RoadMarkWeight) -> RoadMark {
+        RoadMark {
+            s_offset: 0.0,
+            mark_type: RoadMarkType::Solid,
+            weight,
+            color: RoadMarkColor::Standard,
+            material: String::new(),
+            width,
+            lane_change: String::new(),
+            height: 0.0,
+        }
+    }
+
+    #[test]
+    fn test_select_lane_color_single_mode_returns_uniform_gray() {
+        assert_eq!(
+            select_lane_color("single", LaneType::Driving, 3),
+            [0.45, 0.45, 0.45, 1.0]
+        );
+    }
+
+    #[test]
+    fn test_select_lane_color_by_road_matches_generated_hue() {
+        assert_eq!(
+            select_lane_color("byRoad", LaneType::Driving, 2),
+            road_hue_color(2)
+        );
+    }
+
+    #[test]
+    fn test_road_hue_color_is_stable_and_opaque() {
+        let color = road_hue_color(5);
+        assert_eq!(color[3], 1.0);
+        assert_ne!(color, road_hue_color(6));
+    }
+
+    #[test]
+    fn test_lane_surface_and_mark_colors_match_expected_palette() {
+        assert_eq!(
+            lane_surface_color(LaneType::Driving),
+            [0.298, 0.298, 0.298, 1.0]
+        );
+        assert_eq!(
+            mark_color(RoadMarkColor::Yellow),
+            [0.976, 0.827, 0.137, 1.0]
+        );
+    }
+
+    #[test]
+    fn test_mark_line_width_prefers_explicit_width_then_weight_defaults() {
+        assert!(
+            (mark_line_width(&road_mark(0.3, RoadMarkWeight::Standard)) - 0.3).abs() < f32::EPSILON
+        );
+        assert!(
+            (mark_line_width(&road_mark(0.0, RoadMarkWeight::Bold)) - 0.25).abs() < f32::EPSILON
+        );
+        assert!(
+            (mark_line_width(&road_mark(0.0, RoadMarkWeight::Standard)) - 0.15).abs()
+                < f32::EPSILON
+        );
+    }
+}

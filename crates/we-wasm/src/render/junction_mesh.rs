@@ -173,3 +173,116 @@ pub(crate) fn point_in_polygon(x: f64, y: f64, poly: &[[f32; 3]]) -> bool {
     }
     inside
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{append_junction_triangles, build_junction_polygon_points, point_in_polygon};
+    use std::f64::consts::FRAC_PI_2;
+    use we_core::model::{ContactPoint, Junction, JunctionConnection, Project, Road};
+
+    fn make_junction_project() -> (Project, Junction) {
+        let incoming = Road::from_centerline(
+            "incoming",
+            vec![we_core::model::Geometry {
+                s: 0.0,
+                x: -10.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 10.0,
+                geo_type: we_core::model::GeometryType::Line,
+            }],
+        );
+        let connecting = Road::from_centerline(
+            "connecting",
+            vec![we_core::model::Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: FRAC_PI_2,
+                length: 10.0,
+                geo_type: we_core::model::GeometryType::Line,
+            }],
+        );
+        let junction = Junction {
+            id: "j1".to_string(),
+            name: "junction".to_string(),
+            connections: vec![
+                JunctionConnection {
+                    id: "c1".to_string(),
+                    incoming_road: "incoming".to_string(),
+                    connecting_road: "connecting".to_string(),
+                    contact_point: ContactPoint::Start,
+                    lane_links: vec![],
+                },
+                JunctionConnection {
+                    id: "c2".to_string(),
+                    incoming_road: "incoming".to_string(),
+                    connecting_road: "connecting".to_string(),
+                    contact_point: ContactPoint::Start,
+                    lane_links: vec![],
+                },
+            ],
+        };
+        (
+            Project {
+                roads: vec![incoming, connecting],
+                junctions: vec![junction.clone()],
+                ..Project::default()
+            },
+            junction,
+        )
+    }
+
+    #[test]
+    fn test_build_junction_polygon_points_deduplicates_connection_boundaries() {
+        let (project, junction) = make_junction_project();
+        let points = build_junction_polygon_points(&project, &junction);
+
+        assert_eq!(points.len(), 4);
+        assert!(
+            points
+                .iter()
+                .any(|p| p[0].abs() < 0.01 && (p[1] - 3.5).abs() < 0.01)
+        );
+        assert!(
+            points
+                .iter()
+                .any(|p| p[0].abs() < 0.01 && (p[1] + 3.5).abs() < 0.01)
+        );
+        assert!(
+            points
+                .iter()
+                .any(|p| (p[0] - 3.5).abs() < 0.01 && p[1].abs() < 0.01)
+        );
+        assert!(
+            points
+                .iter()
+                .any(|p| (p[0] + 3.5).abs() < 0.01 && p[1].abs() < 0.01)
+        );
+    }
+
+    #[test]
+    fn test_append_junction_triangles_emits_triangle_fan() {
+        let (project, junction) = make_junction_project();
+        let mut out = Vec::new();
+
+        append_junction_triangles(&mut out, &project, &junction, [0.1, 0.2, 0.3, 0.4]);
+
+        assert_eq!(out.len(), 4 * 3 * 7);
+        assert_eq!(&out[3..7], &[0.1, 0.2, 0.3, 0.4]);
+        assert_eq!(&out[10..14], &[0.1, 0.2, 0.3, 0.4]);
+    }
+
+    #[test]
+    fn test_point_in_polygon_returns_expected_membership() {
+        let poly = vec![
+            [-1.0, -1.0, 0.0],
+            [1.0, -1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [-1.0, 1.0, 0.0],
+        ];
+
+        assert!(point_in_polygon(0.0, 0.0, &poly));
+        assert!(!point_in_polygon(2.0, 0.0, &poly));
+    }
+}

@@ -95,9 +95,27 @@ mod tests {
             geo_type: we_core::model::GeometryType::Line,
         };
         let mut road = we_core::model::Road::from_centerline("r1", vec![geo]);
-        road.elevation_profile.push(we_core::model::Elevation { s: 0.0, a: 0.0, b: 0.0, c: 0.0, d: 0.0 });
-        road.elevation_profile.push(we_core::model::Elevation { s: 50.0, a: 5.0, b: 0.0, c: 0.0, d: 0.0 });
-        road.elevation_profile.push(we_core::model::Elevation { s: 100.0, a: 10.0, b: 0.0, c: 0.0, d: 0.0 });
+        road.elevation_profile.push(we_core::model::Elevation {
+            s: 0.0,
+            a: 0.0,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        });
+        road.elevation_profile.push(we_core::model::Elevation {
+            s: 50.0,
+            a: 5.0,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        });
+        road.elevation_profile.push(we_core::model::Elevation {
+            s: 100.0,
+            a: 10.0,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        });
         road
     }
 
@@ -129,7 +147,11 @@ mod tests {
         let cmd = we_service::commands::AddElevationPoint::new("r1", 25.0, 2.5, old_profile);
         let new_project = cmd.execute(&project).unwrap();
         let road = new_project.roads.iter().find(|r| r.id == "r1").unwrap();
-        assert!(road.elevation_profile.iter().any(|ep| (ep.s - 25.0).abs() < 1e-9));
+        assert!(
+            road.elevation_profile
+                .iter()
+                .any(|ep| (ep.s - 25.0).abs() < 1e-9)
+        );
     }
 
     #[test]
