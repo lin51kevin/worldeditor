@@ -1,16 +1,15 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, ChevronDown, Search, X } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useProjectStore } from '../../stores/projectStore';
 import { useViewportStore } from '../../stores/viewportStore';
 import {
-  makeLaneKey,
   makeLaneSectionKey,
-  type LaneSide,
 } from '../../utils/sceneGraph';
-import { emitViewportEvent } from '../../viewport/viewportEvents';
-import { JunctionLayerItem } from './layer/JunctionLayerItem';
-import { RoadLayerItem } from './layer/RoadLayerItem';
+import { flattenLayerTree } from './layer/flattenLayerTree';
+import { VirtualLayerRow } from './layer/VirtualLayerRow';
+import { ROW_HEIGHT, INDENT_PER_LEVEL } from './layer/virtualLayerTypes';
 import './LayerPanel.css';
 
 const DISPLAY_TOGGLES = [
@@ -21,34 +20,18 @@ const DISPLAY_TOGGLES = [
   'showObjects',
 ] as const;
 
-/** Check whether the project has any real data loaded (non-empty roads or header name). */
-function hasProjectData(project: { roads: unknown[]; junctions: unknown[]; header: { name: string } }): boolean {
-  return project.roads.length > 0 || project.junctions.length > 0 || !!project.header.name;
-}
-
 export function LayerPanel() {
-  const project = useProjectStore((s) => s.project);
+  const roads = useProjectStore((s) => s.project.roads);
+  const junctions = useProjectStore((s) => s.project.junctions);
+  const header = useProjectStore((s) => s.project.header);
+  const projectName = useProjectStore((s) => s.project.name);
   const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
   const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
   const selectedJunctionId = useProjectStore((s) => s.selectedJunctionId);
-  const selectedRoadIds = useProjectStore((s) => s.selectedRoadIds);
-  const selectedJunctionIds = useProjectStore((s) => s.selectedJunctionIds);
-  const selectRoad = useProjectStore((s) => s.selectRoad);
-  const selectJunction = useProjectStore((s) => s.selectJunction);
-  const selectLaneSection = useProjectStore((s) => s.selectLaneSection);
-  const selectLane = useProjectStore((s) => s.selectLane);
-  const selectSignal = useProjectStore((s) => s.selectSignal);
-  const selectObject = useProjectStore((s) => s.selectObject);
   const {
     display,
     toggleDisplaySetting,
     setColorMode,
-    toggleRoadVisibility: toggleRoadVisibilityInStore,
-    toggleJunctionVisibility: toggleJunctionVisibilityInStore,
-    toggleLaneSectionVisibility: toggleLaneSectionVisibilityInStore,
-    toggleLaneVisibility: toggleLaneVisibilityInStore,
-    toggleSignalVisibility: toggleSignalVisibilityInStore,
-    toggleObjectVisibility: toggleObjectVisibilityInStore,
   } = useViewportStore();
   const [expandedRoads, setExpandedRoads] = useState<Set<string>>(new Set());
   const [expandedLaneSections, setExpandedLaneSections] = useState<Set<string>>(new Set());
@@ -60,12 +43,17 @@ export function LayerPanel() {
   const [searchQuery, setSearchQuery] = useState('');
   const { t } = useTranslation();
 
-  // Refs for auto-scroll: track each row's DOM element
-  const rowRefs = useRef(new Map<string, HTMLElement>());
-  // Track whether the last selection came from within the panel (to avoid unwanted auto-scroll)
+  // Refs for auto-scroll
   const selectionSourceRef = useRef<'panel' | 'viewport'>('viewport');
+  const pendingScrollRef = useRef<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to the selected road/junction/signal/object when selection originates from viewport
+  // Track selection source from panel clicks
+  const markSelectionFromPanel = useCallback(() => {
+    selectionSourceRef.current = 'panel';
+  }, []);
+
+  // Auto-scroll to the selected item when selection originates from viewport
   useEffect(() => {
     if (selectionSourceRef.current === 'panel') {
       selectionSourceRef.current = 'viewport';
@@ -76,7 +64,6 @@ export function LayerPanel() {
 
     if (selectedSceneNode?.type === 'signal') {
       const { roadId, signalId } = selectedSceneNode;
-      // Ensure road row + signals group are expanded so the item is reachable
       setSceneListCollapsed(false);
       setExpandedRoads((prev) => new Set(prev).add(roadId));
       setExpandedRoadSignals((prev) => new Set(prev).add(roadId));
@@ -94,178 +81,70 @@ export function LayerPanel() {
       setExpandedLaneSections((prev) => new Set(prev).add(makeLaneSectionKey(roadId, sectionIndex)));
       id = `lsec-${roadId}-${sectionIndex}`;
     } else if (selectedSceneNode?.type === 'lane') {
-      const { roadId, sectionIndex, side, laneId } = selectedSceneNode;
+      const { roadId, sectionIndex } = selectedSceneNode;
       setSceneListCollapsed(false);
       setExpandedRoads((prev) => new Set(prev).add(roadId));
       setExpandedLaneSections((prev) => new Set(prev).add(makeLaneSectionKey(roadId, sectionIndex)));
-      id = `lane-${roadId}-${sectionIndex}-${side}-${laneId}`;
+      id = `lane-${roadId}-${sectionIndex}-${selectedSceneNode.side}-${selectedSceneNode.laneId}`;
     } else {
       id = selectedRoadId ? `road-${selectedRoadId}` : selectedJunctionId ? `junc-${selectedJunctionId}` : null;
       if (id) setSceneListCollapsed(false);
     }
 
-    if (!id) return;
-    // Double rAF ensures expand animation completes before scrolling
-    const rafId = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const el = rowRefs.current.get(id!);
-        if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      });
-    });
-    return () => cancelAnimationFrame(rafId);
+    // Store the target for the scroll effect (resolved after flatItems updates)
+    pendingScrollRef.current = id;
   }, [selectedRoadId, selectedJunctionId, selectedSceneNode]);
 
-
-  const toggleRoadExpand = (roadId: string) => {
+  const toggleRoadExpand = useCallback((roadId: string) => {
     setExpandedRoads((prev) => {
       const next = new Set(prev);
       if (next.has(roadId)) next.delete(roadId); else next.add(roadId);
       return next;
     });
-  };
+  }, []);
 
-  const toggleLaneSectionExpand = (sectionKey: string) => {
+  const toggleLaneSectionExpand = useCallback((sectionKey: string) => {
     setExpandedLaneSections((prev) => {
       const next = new Set(prev);
       if (next.has(sectionKey)) next.delete(sectionKey); else next.add(sectionKey);
       return next;
     });
-  };
+  }, []);
 
-  const toggleRoadSignalsExpand = (roadId: string) => {
+  const toggleRoadSignalsExpand = useCallback((roadId: string) => {
     setExpandedRoadSignals((prev) => {
       const next = new Set(prev);
       if (next.has(roadId)) next.delete(roadId); else next.add(roadId);
       return next;
     });
-  };
+  }, []);
 
-  const toggleRoadObjectsExpand = (roadId: string) => {
+  const toggleRoadObjectsExpand = useCallback((roadId: string) => {
     setExpandedRoadObjects((prev) => {
       const next = new Set(prev);
       if (next.has(roadId)) next.delete(roadId); else next.add(roadId);
       return next;
     });
-  };
-
-  const toggleRoadVisibility = (roadId: string) => {
-    toggleRoadVisibilityInStore(roadId);
-  };
-
-  const toggleJunctionVisibility = (junctionId: string) => {
-    toggleJunctionVisibilityInStore(junctionId);
-  };
-
-  const toggleLaneSectionVisibility = (sectionKey: string) => {
-    toggleLaneSectionVisibilityInStore(sectionKey);
-  };
-
-  const toggleLaneVisibility = (
-    roadId: string,
-    sectionIndex: number,
-    side: LaneSide,
-    laneId: number,
-  ) => {
-    toggleLaneVisibilityInStore(roadId, sectionIndex, side, laneId);
-  };
-
-  const isRoadVisible = (roadId: string) => !display.hiddenRoadIds.includes(roadId);
-  const isJunctionVisible = (junctionId: string) => !display.hiddenJunctionIds.includes(junctionId);
-  const isLaneSectionVisible = (roadId: string, sectionIndex: number) =>
-    isRoadVisible(roadId) && !display.hiddenLaneSectionKeys.includes(makeLaneSectionKey(roadId, sectionIndex));
-  const isLaneVisible = (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) =>
-    isLaneSectionVisible(roadId, sectionIndex) && !display.hiddenLaneKeys.includes(
-      makeLaneKey(roadId, sectionIndex, side, laneId),
-    );
-  const isSignalVisible = (roadId: string, signalId: string) =>
-    !( display.hiddenSignalKeys ?? []).includes(`${roadId}::signal::${signalId}`);
-  const isObjectVisible = (roadId: string, objectId: string) =>
-    !(display.hiddenObjectKeys ?? []).includes(`${roadId}::object::${objectId}`);
-
-  const selectRoadChildSection = (roadId: string, sectionIndex: number) => {
-    setExpandedRoads((prev) => new Set(prev).add(roadId));
-    setExpandedLaneSections((prev) => new Set(prev).add(makeLaneSectionKey(roadId, sectionIndex)));
-    selectLaneSection(roadId, sectionIndex);
-  };
-
-  const selectRoadChildLane = (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => {
-    setExpandedRoads((prev) => new Set(prev).add(roadId));
-    setExpandedLaneSections((prev) => new Set(prev).add(makeLaneSectionKey(roadId, sectionIndex)));
-    selectLane(roadId, sectionIndex, side, laneId);
-  };
-
-  const isRoadSelected = (roadId: string) =>
-    (selectedSceneNode?.type === 'road' && selectedSceneNode.roadId === roadId)
-    || selectedRoadIds.includes(roadId);
-  const isJunctionItemSelected = (junctionId: string) =>
-    selectedJunctionId === junctionId || selectedJunctionIds.includes(junctionId);
-  const isLaneSectionSelected = (roadId: string, sectionIndex: number) =>
-    selectedSceneNode?.type === 'laneSection'
-    && selectedSceneNode.roadId === roadId
-    && selectedSceneNode.sectionIndex === sectionIndex;
-  const isLaneSelected = (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) =>
-    selectedSceneNode?.type === 'lane'
-    && selectedSceneNode.roadId === roadId
-    && selectedSceneNode.sectionIndex === sectionIndex
-    && selectedSceneNode.side === side
-    && selectedSceneNode.laneId === laneId;
-
-  /** Called when the user clicks a road in the panel — select + pan viewport. */
-  const handleSelectRoad = useCallback((roadId: string) => {
-    selectionSourceRef.current = 'panel';
-    selectRoad(roadId);
-    emitViewportEvent({ type: 'pan-to-road', roadId });
-  }, [selectRoad]);
-
-  /** Called when the user clicks a junction in the panel — select + pan viewport. */
-  const handleSelectJunction = useCallback((junctionId: string) => {
-    selectionSourceRef.current = 'panel';
-    selectJunction(junctionId);
-    emitViewportEvent({ type: 'pan-to-junction', junctionId });
-  }, [selectJunction]);
-
-  const handleSelectSignal = useCallback((roadId: string, signalId: string) => {
-    selectionSourceRef.current = 'panel';
-    setExpandedRoads((prev) => new Set(prev).add(roadId));
-    setExpandedRoadSignals((prev) => new Set(prev).add(roadId));
-    selectSignal(roadId, signalId);
-    emitViewportEvent({ type: 'pan-to-signal', roadId, signalId });
-  }, [selectSignal]);
-
-  const handleSelectObject = useCallback((roadId: string, objectId: string) => {
-    selectionSourceRef.current = 'panel';
-    setExpandedRoads((prev) => new Set(prev).add(roadId));
-    setExpandedRoadObjects((prev) => new Set(prev).add(roadId));
-    selectObject(roadId, objectId);
-    emitViewportEvent({ type: 'pan-to-object', roadId, objectId });
-  }, [selectObject]);
-
-  const handleZoomToRoad = useCallback((roadId: string) => {
-    emitViewportEvent({ type: 'zoom-to-selected', roadId });
   }, []);
 
-  const handleZoomToJunction = useCallback((junctionId: string) => {
-    emitViewportEvent({ type: 'zoom-to-junction', junctionId });
-  }, []);
-
-  const registerRowRef = useCallback((id: string, element: HTMLElement | null) => {
-    if (element) rowRefs.current.set(id, element);
-    else rowRefs.current.delete(id);
+  const ensureLaneSectionExpand = useCallback((sectionKey: string) => {
+    setExpandedLaneSections((prev) => {
+      if (prev.has(sectionKey)) return prev;
+      return new Set(prev).add(sectionKey);
+    });
   }, []);
 
   const filteredRoads = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return project.roads;
-    return project.roads.filter((r) => {
+    if (!q) return roads;
+    return roads.filter((r) => {
       if (r.id.toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q)) return true;
-      // Match signals
       if ((r.signals ?? []).some((s) =>
         s.id.toLowerCase().includes(q) ||
         (s.name || '').toLowerCase().includes(q) ||
         s.signal_type.toLowerCase().includes(q) ||
         (s.signal_subtype || '').toLowerCase().includes(q),
       )) return true;
-      // Match objects
       if ((r.objects ?? []).some((o) => {
         const typeStr = typeof o.object_type === 'string' ? o.object_type : o.object_type.Custom;
         return o.id.toLowerCase().includes(q) ||
@@ -274,13 +153,13 @@ export function LayerPanel() {
       })) return true;
       return false;
     });
-  }, [project.roads, searchQuery]);
+  }, [roads, searchQuery]);
 
-  // When searching, auto-expand roads whose match comes from a child (signal/object)
+  // When searching, auto-expand roads whose match comes from a child
   useEffect(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return;
-    project.roads.forEach((r) => {
+    roads.forEach((r) => {
       const roadSelfMatch = r.id.toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q);
       if (roadSelfMatch) return;
       const signalMatch = (r.signals ?? []).some((s) =>
@@ -297,18 +176,65 @@ export function LayerPanel() {
         if (objectMatch) setExpandedRoadObjects((prev) => new Set(prev).add(r.id));
       }
     });
-  }, [searchQuery, project.roads]);
+  }, [searchQuery, roads]);
 
   const filteredJunctions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return project.junctions;
-    return project.junctions.filter(
+    if (!q) return junctions;
+    return junctions.filter(
       (j) => j.id.toLowerCase().includes(q) || (j.name || '').toLowerCase().includes(q),
     );
-  }, [project.junctions, searchQuery]);
+  }, [junctions, searchQuery]);
 
-  const header = project.header;
-  const loaded = hasProjectData(project);
+  // Flatten tree into virtual list items
+  const flatItems = useMemo(
+    () => flattenLayerTree(
+      filteredRoads,
+      filteredJunctions,
+      expandedRoads,
+      expandedLaneSections,
+      expandedRoadSignals,
+      expandedRoadObjects,
+      searchQuery,
+    ),
+    [filteredRoads, filteredJunctions, expandedRoads, expandedLaneSections, expandedRoadSignals, expandedRoadObjects, searchQuery],
+  );
+
+  // Virtual list
+  const virtualizer = useVirtualizer({
+    count: flatItems.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 15,
+  });
+
+  // Resolve pending scroll target after flatItems updates (items become visible after expand)
+  useEffect(() => {
+    const target = pendingScrollRef.current;
+    if (!target) return;
+
+    const index = flatItems.findIndex((item) => {
+      switch (item.type) {
+        case 'road': return `road-${item.roadId}` === target;
+        case 'laneSection': return `lsec-${item.roadId}-${item.sectionIndex}` === target;
+        case 'lane': return `lane-${item.roadId}-${item.sectionIndex}-${item.side}-${item.laneId}` === target;
+        case 'signal': return `signal-${item.roadId}-${item.signalId}` === target;
+        case 'object': return `object-${item.roadId}-${item.objectId}` === target;
+        case 'junction': return `junc-${item.junctionId}` === target;
+        default: return false;
+      }
+    });
+
+    if (index >= 0) {
+      pendingScrollRef.current = null;
+      // Use rAF to ensure the virtualizer has processed the updated count
+      requestAnimationFrame(() => {
+        virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' });
+      });
+    }
+  }, [flatItems, virtualizer]);
+
+  const loaded = roads.length > 0 || junctions.length > 0 || !!header.name;
 
   return (
     <div className="layer-panel">
@@ -332,7 +258,7 @@ export function LayerPanel() {
                 <>
                   <div className="map-info-row">
                     <span className="map-info-label">{t('propertyPanel.name')}</span>
-                    <span className="map-info-value">{header.name || project.name || '—'}</span>
+                    <span className="map-info-value">{header.name || projectName || '—'}</span>
                   </div>
                   <div className="map-info-row">
                     <span className="map-info-label">{t('layerPanel.revision')}</span>
@@ -403,34 +329,7 @@ export function LayerPanel() {
           )}
         </div>
 
-        {/* Card 1: Layer categories — hidden until category filtering is implemented
-        <div className="layer-card">
-          <div
-            className="layer-section-toggle"
-            onClick={() => setCategoriesCollapsed(!categoriesCollapsed)}
-          >
-            {categoriesCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-            <span>{t('layerPanel.layers') || 'Layers'}</span>
-          </div>
-          {!categoriesCollapsed && (
-            <div className="layer-categories">
-              {LAYER_CATEGORIES.map((cat) => (
-                <label key={cat.id} className="display-toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={layerVisibility[cat.id]}
-                    onChange={() => toggleLayerVisibility(cat.id)}
-                  />
-                  {cat.icon}
-                  <span>{t(cat.labelKey)}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        */}
-
-        {/* Card 2: Unified scene list — Roads first, then Junctions (flat, like C# version) */}
+        {/* Card 2: Virtualized scene list */}
         <div className={`layer-card ${!sceneListCollapsed ? 'layer-card-grow' : ''}`}>
           <div
             className="layer-section-toggle"
@@ -440,7 +339,7 @@ export function LayerPanel() {
             <span>
               {t('layerPanel.sceneList')}{' '}
               {searchQuery.trim()
-                ? `(${t('layerPanel.roads')}: ${t('layerPanel.filteredCount', { count: filteredRoads.length, total: project.roads.length })}, ${t('layerPanel.junctions')}: ${t('layerPanel.filteredCount', { count: filteredJunctions.length, total: project.junctions.length })})`
+                ? `(${t('layerPanel.roads')}: ${t('layerPanel.filteredCount', { count: filteredRoads.length, total: roads.length })}, ${t('layerPanel.junctions')}: ${t('layerPanel.filteredCount', { count: filteredJunctions.length, total: junctions.length })})`
                 : `(${t('layerPanel.roads')}: ${filteredRoads.length}, ${t('layerPanel.junctions')}: ${filteredJunctions.length})`}
             </span>
           </div>
@@ -465,62 +364,51 @@ export function LayerPanel() {
                   </button>
                 )}
               </div>
-          <div className="road-list">
-            {filteredRoads.map((road) => (
-              <RoadLayerItem
-                key={`road-${road.id}`}
-                road={road}
-                selectedSceneNode={selectedSceneNode}
-                isSelected={isRoadSelected(road.id)}
-                isVisible={isRoadVisible(road.id)}
-                isExpanded={expandedRoads.has(road.id)}
-                signalsExpanded={expandedRoadSignals.has(road.id)}
-                objectsExpanded={expandedRoadObjects.has(road.id)}
-                laneSectionsExpanded={expandedLaneSections}
-                entryRef={(element) => registerRowRef(`road-${road.id}`, element)}
-                isLaneSectionSelected={(sectionIndex) => isLaneSectionSelected(road.id, sectionIndex)}
-                isLaneSelected={(sectionIndex, side, laneId) => isLaneSelected(road.id, sectionIndex, side, laneId)}
-                isLaneSectionVisible={(sectionIndex) => isLaneSectionVisible(road.id, sectionIndex)}
-                isLaneVisible={(sectionIndex, side, laneId) => isLaneVisible(road.id, sectionIndex, side, laneId)}
-                onSelect={() => handleSelectRoad(road.id)}
-                onToggleExpand={() => toggleRoadExpand(road.id)}
-                onZoom={() => handleZoomToRoad(road.id)}
-                onToggleVisibility={() => toggleRoadVisibility(road.id)}
-                onSelectLaneSection={(sectionIndex) => selectRoadChildSection(road.id, sectionIndex)}
-                onToggleLaneSectionExpand={(sectionIndex) => toggleLaneSectionExpand(makeLaneSectionKey(road.id, sectionIndex))}
-                onToggleLaneSectionVisibility={(sectionIndex) => toggleLaneSectionVisibility(makeLaneSectionKey(road.id, sectionIndex))}
-                onSelectLane={(sectionIndex, side, laneId) => selectRoadChildLane(road.id, sectionIndex, side, laneId)}
-                onToggleLaneVisibility={(sectionIndex, side, laneId) => toggleLaneVisibility(road.id, sectionIndex, side, laneId)}
-                onToggleSignalsExpand={() => toggleRoadSignalsExpand(road.id)}
-                onSelectSignal={(signalId) => handleSelectSignal(road.id, signalId)}
-                onToggleSignalVisibility={(signalId) => toggleSignalVisibilityInStore(road.id, signalId)}
-                isSignalVisible={(signalId) => isSignalVisible(road.id, signalId)}
-                registerLaneSectionRef={(sectionIndex, el) => registerRowRef(`lsec-${road.id}-${sectionIndex}`, el)}
-                registerLaneRef={(sectionIndex, side, laneId, el) => registerRowRef(`lane-${road.id}-${sectionIndex}-${side}-${laneId}`, el)}
-                registerSignalRef={(signalId, el) => registerRowRef(`signal-${road.id}-${signalId}`, el)}
-                onToggleObjectsExpand={() => toggleRoadObjectsExpand(road.id)}
-                onSelectObject={(objectId) => handleSelectObject(road.id, objectId)}
-                onToggleObjectVisibility={(objectId) => toggleObjectVisibilityInStore(road.id, objectId)}
-                isObjectVisible={(objectId) => isObjectVisible(road.id, objectId)}
-                registerObjectRef={(objectId, el) => registerRowRef(`object-${road.id}-${objectId}`, el)}
-              />
-            ))}
-            {filteredJunctions.map((junc) => (
-              <JunctionLayerItem
-                key={`junc-${junc.id}`}
-                junction={junc}
-                isSelected={isJunctionItemSelected(junc.id)}
-                isVisible={isJunctionVisible(junc.id)}
-                entryRef={(element) => registerRowRef(`junc-${junc.id}`, element)}
-                onSelect={() => handleSelectJunction(junc.id)}
-                onZoom={() => handleZoomToJunction(junc.id)}
-                onToggleVisibility={() => toggleJunctionVisibility(junc.id)}
-              />
-            ))}
-          </div>
-          {filteredRoads.length === 0 && filteredJunctions.length === 0 && searchQuery.trim() && (
-            <div className="scene-list-empty">{t('layerPanel.noSearchResults')}</div>
-          )}
+              <div className="road-list" ref={scrollRef}>
+                <div
+                  style={{
+                    height: `${virtualizer.getTotalSize()}px`,
+                    width: '100%',
+                    position: 'relative',
+                  }}
+                >
+                  {virtualizer.getVirtualItems().map((virtualItem) => {
+                    const item = flatItems[virtualItem.index]!;
+                    return (
+                      <div
+                        key={virtualItem.index}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: `${virtualItem.size}px`,
+                          transform: `translateY(${virtualItem.start}px)`,
+                          paddingLeft: item.depth > 0 ? `${item.depth * INDENT_PER_LEVEL}px` : undefined,
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        <VirtualLayerRow
+                          item={item}
+                          expandedRoads={expandedRoads}
+                          expandedLaneSections={expandedLaneSections}
+                          expandedRoadSignals={expandedRoadSignals}
+                          expandedRoadObjects={expandedRoadObjects}
+                          onToggleRoadExpand={toggleRoadExpand}
+                          onToggleLaneSectionExpand={toggleLaneSectionExpand}
+                          onEnsureLaneSectionExpand={ensureLaneSectionExpand}
+                          onToggleRoadSignalsExpand={toggleRoadSignalsExpand}
+                          onToggleRoadObjectsExpand={toggleRoadObjectsExpand}
+                          onSelectionFromPanel={markSelectionFromPanel}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                {flatItems.length === 0 && searchQuery.trim() && (
+                  <div className="scene-list-empty">{t('layerPanel.noSearchResults')}</div>
+                )}
+              </div>
             </>
           )}
         </div>

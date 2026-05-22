@@ -6,6 +6,21 @@ import { DEFAULT_DISPLAY, useViewportStore } from '../../stores/viewportStore';
 import { makeLaneKey, makeLaneSectionKey } from '../../utils/sceneGraph';
 import { LayerPanel } from './LayerPanel';
 
+// Mock @tanstack/react-virtual to render all items (jsdom has no layout)
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: (opts: { count: number; estimateSize: () => number }) => ({
+    getTotalSize: () => opts.count * opts.estimateSize(),
+    getVirtualItems: () =>
+      Array.from({ length: opts.count }, (_, i) => ({
+        index: i,
+        key: i,
+        start: i * opts.estimateSize(),
+        size: opts.estimateSize(),
+      })),
+    scrollToIndex: () => {},
+  }),
+}));
+
 function makeProject(roads: Road[] = []): Project {
   return {
     name: 'Untitled',
