@@ -67,8 +67,8 @@ impl OptimizeJunction {
 
 impl Command for OptimizeJunction {
     fn execute(&self, project: &Project) -> Result<Project, EditorError> {
-        let new_connections = topology::optimize_junction(project, &self.junction_id)
-            .ok_or_else(|| {
+        let new_connections =
+            topology::optimize_junction(project, &self.junction_id).ok_or_else(|| {
                 EditorError::OperationFailed(format!(
                     "Junction '{}' not found or has no linked roads",
                     self.junction_id
@@ -81,10 +81,7 @@ impl Command for OptimizeJunction {
             .iter_mut()
             .find(|j| j.id == self.junction_id)
             .ok_or_else(|| {
-                EditorError::OperationFailed(format!(
-                    "Junction '{}' not found",
-                    self.junction_id
-                ))
+                EditorError::OperationFailed(format!("Junction '{}' not found", self.junction_id))
             })?;
         junction.connections = new_connections;
         Ok(p)
@@ -97,10 +94,7 @@ impl Command for OptimizeJunction {
             .iter_mut()
             .find(|j| j.id == self.junction_id)
             .ok_or_else(|| {
-                EditorError::OperationFailed(format!(
-                    "Junction '{}' not found",
-                    self.junction_id
-                ))
+                EditorError::OperationFailed(format!("Junction '{}' not found", self.junction_id))
             })?;
         junction.connections = self.old_connections.clone();
         Ok(p)

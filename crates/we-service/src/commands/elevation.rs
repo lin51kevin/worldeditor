@@ -220,3 +220,240 @@ impl Command for SmoothElevation {
         "Smooth Elevation"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::to_value;
+
+    use super::*;
+
+    fn assert_projects_equal(actual: &Project, expected: &Project) {
+        assert_eq!(to_value(actual).unwrap(), to_value(expected).unwrap());
+    }
+
+    fn assert_operation_failed(result: Result<Project, EditorError>, expected: &str) {
+        match result {
+            Err(EditorError::OperationFailed(message)) => {
+                assert!(
+                    message.contains(expected),
+                    "expected error containing '{expected}', got '{message}'"
+                );
+            }
+            other => panic!("expected operation failed error, got {other:?}"),
+        }
+    }
+
+    fn elevation(s: f64, a: f64) -> Elevation {
+        Elevation {
+            s,
+            a,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }
+    }
+
+    fn project_with_elevation_profile() -> Project {
+        let mut road = Road::from_centerline(
+            "road-1",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 100.0,
+                geo_type: GeometryType::Line,
+            }],
+        );
+        road.elevation_profile = vec![
+            elevation(0.0, 0.0),
+            elevation(50.0, 5.0),
+            elevation(100.0, 2.0),
+        ];
+        Project {
+            roads: vec![road],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_add_elevation_point_execute_inserts_profile_entry() {
+        let original = project_with_elevation_profile();
+        let command = AddElevationPoint::new(
+            "road-1",
+            25.0,
+            3.0,
+            original.roads[0].elevation_profile.clone(),
+        );
+
+        let result = command.execute(&original).unwrap();
+
+        assert_eq!(result.roads[0].elevation_profile.len(), 4);
+        assert!(
+            result.roads[0]
+                .elevation_profile
+                .iter()
+                .any(|entry| (entry.s - 25.0).abs() < 1e-9 && (entry.a - 3.0).abs() < 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_add_elevation_point_undo_restores_original_project() {
+        let original = project_with_elevation_profile();
+        let command = AddElevationPoint::new(
+            "road-1",
+            25.0,
+            3.0,
+            original.roads[0].elevation_profile.clone(),
+        );
+        let modified = command.execute(&original).unwrap();
+
+        let undone = command.undo(&modified).unwrap();
+
+        assert_projects_equal(&undone, &original);
+    }
+
+    #[test]
+    fn test_add_elevation_point_execute_missing_road_returns_error() {
+        let project = project_with_elevation_profile();
+        let command = AddElevationPoint::new("missing-road", 25.0, 3.0, vec![]);
+
+        assert_operation_failed(command.execute(&project), "not found");
+    }
+
+    #[test]
+    fn test_delete_elevation_point_execute_removes_profile_entry() {
+        let original = project_with_elevation_profile();
+        let command = DeleteElevationPoint::new(
+            "road-1",
+            50.0,
+            1.0,
+            original.roads[0].elevation_profile.clone(),
+        );
+
+        let result = command.execute(&original).unwrap();
+
+        assert_eq!(result.roads[0].elevation_profile.len(), 2);
+        assert!(
+            !result.roads[0]
+                .elevation_profile
+                .iter()
+                .any(|entry| (entry.s - 50.0).abs() < 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_delete_elevation_point_undo_restores_original_project() {
+        let original = project_with_elevation_profile();
+        let command = DeleteElevationPoint::new(
+            "road-1",
+            50.0,
+            1.0,
+            original.roads[0].elevation_profile.clone(),
+        );
+        let modified = command.execute(&original).unwrap();
+
+        let undone = command.undo(&modified).unwrap();
+
+        assert_projects_equal(&undone, &original);
+    }
+
+    #[test]
+    fn test_delete_elevation_point_execute_missing_station_returns_error() {
+        let project = project_with_elevation_profile();
+        let command = DeleteElevationPoint::new(
+            "road-1",
+            999.0,
+            1.0,
+            project.roads[0].elevation_profile.clone(),
+        );
+
+        assert_operation_failed(command.execute(&project), "No elevation point");
+    }
+
+    #[test]
+    fn test_move_elevation_point_execute_updates_station_and_height() {
+        let original = project_with_elevation_profile();
+        let command = MoveElevationPoint::new(
+            "road-1",
+            50.0,
+            60.0,
+            7.0,
+            1.0,
+            original.roads[0].elevation_profile.clone(),
+        );
+
+        let result = command.execute(&original).unwrap();
+
+        assert!(
+            result.roads[0]
+                .elevation_profile
+                .iter()
+                .any(|entry| (entry.s - 60.0).abs() < 1e-9 && (entry.a - 7.0).abs() < 1e-9)
+        );
+    }
+
+    #[test]
+    fn test_move_elevation_point_undo_restores_original_project() {
+        let original = project_with_elevation_profile();
+        let command = MoveElevationPoint::new(
+            "road-1",
+            50.0,
+            60.0,
+            7.0,
+            1.0,
+            original.roads[0].elevation_profile.clone(),
+        );
+        let modified = command.execute(&original).unwrap();
+
+        let undone = command.undo(&modified).unwrap();
+
+        assert_projects_equal(&undone, &original);
+    }
+
+    #[test]
+    fn test_move_elevation_point_execute_missing_station_returns_error() {
+        let project = project_with_elevation_profile();
+        let command = MoveElevationPoint::new(
+            "road-1",
+            999.0,
+            60.0,
+            7.0,
+            1.0,
+            project.roads[0].elevation_profile.clone(),
+        );
+
+        assert_operation_failed(command.execute(&project), "No elevation point");
+    }
+
+    #[test]
+    fn test_smooth_elevation_execute_smooths_profile() {
+        let original = project_with_elevation_profile();
+        let command =
+            SmoothElevation::new("road-1", 1, original.roads[0].elevation_profile.clone());
+
+        let result = command.execute(&original).unwrap();
+
+        assert!(result.roads[0].elevation_profile[1].a < 5.0);
+    }
+
+    #[test]
+    fn test_smooth_elevation_undo_restores_original_project() {
+        let original = project_with_elevation_profile();
+        let command =
+            SmoothElevation::new("road-1", 1, original.roads[0].elevation_profile.clone());
+        let modified = command.execute(&original).unwrap();
+
+        let undone = command.undo(&modified).unwrap();
+
+        assert_projects_equal(&undone, &original);
+    }
+
+    #[test]
+    fn test_smooth_elevation_execute_missing_road_returns_error() {
+        let project = project_with_elevation_profile();
+        let command = SmoothElevation::new("missing-road", 1, vec![]);
+
+        assert_operation_failed(command.execute(&project), "not found");
+    }
+}

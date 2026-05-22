@@ -159,17 +159,11 @@ impl Command for BatchCommand {
                         })?;
                     junction.name = new_name.clone();
                 }
-                BatchEntry::SetRoadSpeed {
-                    road_id,
-                    new_speed,
-                } => {
+                BatchEntry::SetRoadSpeed { road_id, new_speed } => {
                     let road = find_road_mut(&mut p, road_id)?;
                     road.speed = Some(*new_speed);
                 }
-                BatchEntry::SetRoadsVisibility {
-                    road_ids,
-                    visible,
-                } => {
+                BatchEntry::SetRoadsVisibility { road_ids, visible } => {
                     for rid in road_ids {
                         if let Some(road) = p.roads.iter_mut().find(|r| r.id == *rid) {
                             road.render_hidden = !visible;
@@ -224,5 +218,102 @@ impl Command for BatchCommand {
 
     fn description(&self) -> &str {
         &self.label
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_project() -> Project {
+        Project {
+            roads: vec![Road::from_centerline(
+                "road-1",
+                vec![Geometry {
+                    s: 0.0,
+                    x: 0.0,
+                    y: 0.0,
+                    hdg: 0.0,
+                    length: 100.0,
+                    geo_type: GeometryType::Line,
+                }],
+            )],
+            ..Project::default()
+        }
+    }
+
+    #[test]
+    fn test_batch_command_execute_applies_entries() {
+        let project = make_project();
+        let entries = vec![
+            BatchEntry::UpdateRoadName {
+                road_id: "road-1".into(),
+                old_name: String::new(),
+                new_name: "Renamed Road".into(),
+            },
+            BatchEntry::UpdateLaneType {
+                road_id: "road-1".into(),
+                section_s: 0.0,
+                lane_id: 1,
+                old_type: LaneType::Driving,
+                new_type: LaneType::Shoulder,
+            },
+            BatchEntry::SetRoadSpeed {
+                road_id: "road-1".into(),
+                new_speed: 22.5,
+            },
+            BatchEntry::SetLaneSectionsVisibility {
+                road_id: "road-1".into(),
+                section_indices: vec![0],
+                visible: false,
+            },
+            BatchEntry::AlignElevations {
+                road_ids: vec!["road-1".into()],
+                target_elevation: 5.0,
+            },
+        ];
+        let cmd = BatchCommand::new("batch edit", project.clone(), entries);
+
+        let result = cmd.execute(&project).unwrap();
+
+        assert_eq!(result.roads[0].name, "Renamed Road");
+        assert_eq!(
+            result.roads[0].lane_sections[0].left[0].lane_type,
+            LaneType::Shoulder
+        );
+        assert_eq!(result.roads[0].speed, Some(22.5));
+        assert!(result.roads[0].lane_sections[0].render_hidden);
+        assert_eq!(result.roads[0].elevation_profile[0].a, 5.0);
+    }
+
+    #[test]
+    fn test_batch_command_undo_restores_snapshot() {
+        let project = make_project();
+        let entries = vec![BatchEntry::UpdateRoadName {
+            road_id: "road-1".into(),
+            old_name: String::new(),
+            new_name: "Renamed Road".into(),
+        }];
+        let cmd = BatchCommand::new("batch edit", project.clone(), entries);
+
+        let executed = cmd.execute(&project).unwrap();
+        let undone = cmd.undo(&executed).unwrap();
+
+        assert_eq!(undone.roads[0].name, project.roads[0].name);
+        assert_eq!(undone.roads[0].length, project.roads[0].length);
+    }
+
+    #[test]
+    fn test_batch_command_execute_invalid_road_returns_error() {
+        let project = make_project();
+        let entries = vec![BatchEntry::UpdateRoadName {
+            road_id: "missing-road".into(),
+            old_name: String::new(),
+            new_name: "Renamed Road".into(),
+        }];
+        let cmd = BatchCommand::new("batch edit", project.clone(), entries);
+
+        assert!(cmd.execute(&project).is_err());
+        assert!(project.roads[0].name.is_empty());
     }
 }

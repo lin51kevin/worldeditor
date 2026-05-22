@@ -50,8 +50,7 @@ impl Command for ModifyRoadKnots {
         let road = find_road_mut(&mut p, &self.road_id)?;
 
         let spline = we_core::spline::EditableSpline::from_knots(self.new_knots.clone());
-        let new_geos =
-            we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
+        let new_geos = we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
 
         if new_geos.is_empty() {
             return Err(EditorError::OperationFailed(
@@ -167,8 +166,7 @@ impl Command for MoveKnot {
         }
 
         // Convert back to OpenDRIVE
-        let new_geos =
-            we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
+        let new_geos = we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
         if new_geos.is_empty() {
             return Err(EditorError::OperationFailed(
                 "Spline conversion produced no geometry".into(),
@@ -250,8 +248,7 @@ impl Command for InsertKnot {
         spline.recompute_stations();
         spline.compute_tangents();
 
-        let new_geos =
-            we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
+        let new_geos = we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
         if new_geos.is_empty() {
             return Err(EditorError::OperationFailed(
                 "Spline conversion produced no geometry after insert".into(),
@@ -332,8 +329,7 @@ impl Command for DeleteKnot {
         spline.recompute_stations();
         spline.compute_tangents();
 
-        let new_geos =
-            we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
+        let new_geos = we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
         if new_geos.is_empty() {
             return Err(EditorError::OperationFailed(
                 "Spline conversion produced no geometry after delete".into(),
@@ -424,8 +420,7 @@ impl Command for SetKnotTangent {
         spline.knots[self.knot_index].tangent_out = tangent;
         spline.knots[self.knot_index].tangent_mode = we_core::spline::TangentMode::Manual;
 
-        let new_geos =
-            we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
+        let new_geos = we_core::spline::spline_to_geometries_with_mode(&spline, self.output_mode);
         if new_geos.is_empty() {
             return Err(EditorError::OperationFailed(
                 "Spline conversion produced no geometry".into(),
@@ -447,5 +442,325 @@ impl Command for SetKnotTangent {
 
     fn description(&self) -> &str {
         "Set Knot Tangent"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use we_core::spline::{MoveConstraint, SplineKnot};
+
+    fn make_project() -> Project {
+        Project {
+            roads: vec![Road::from_centerline(
+                "road-1",
+                vec![Geometry {
+                    s: 0.0,
+                    x: 0.0,
+                    y: 0.0,
+                    hdg: 0.0,
+                    length: 100.0,
+                    geo_type: GeometryType::Line,
+                }],
+            )],
+            ..Project::default()
+        }
+    }
+
+    fn make_straight_knots() -> Vec<SplineKnot> {
+        vec![
+            SplineKnot::with_tangent(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+            SplineKnot::with_tangent(50.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+            SplineKnot::with_tangent(100.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+        ]
+    }
+
+    fn make_curved_knots() -> Vec<SplineKnot> {
+        vec![
+            SplineKnot::with_tangent(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+            SplineKnot::with_tangent(50.0, 20.0, 0.0, 1.0, 0.0, 0.0),
+            SplineKnot::with_tangent(100.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+        ]
+    }
+
+    fn assert_plan_view_restored(project: &Project, old_plan_view: &[Geometry], old_length: f64) {
+        assert_eq!(project.roads[0].plan_view.len(), old_plan_view.len());
+        assert!((project.roads[0].length - old_length).abs() < 1e-6);
+        assert!((project.roads[0].plan_view[0].x - old_plan_view[0].x).abs() < 1e-6);
+        assert!((project.roads[0].plan_view[0].y - old_plan_view[0].y).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_modify_road_knots_execute_updates_plan_view() {
+        let project = make_project();
+        let old_length = project.roads[0].length;
+        let cmd = ModifyRoadKnots::new(
+            "road-1",
+            project.roads[0].plan_view.clone(),
+            old_length,
+            make_curved_knots(),
+        );
+
+        let result = cmd.execute(&project).unwrap();
+
+        assert!(!result.roads[0].plan_view.is_empty());
+        assert!(result.roads[0].length > old_length);
+    }
+
+    #[test]
+    fn test_modify_road_knots_undo_restores_plan_view() {
+        let project = make_project();
+        let old_plan_view = project.roads[0].plan_view.clone();
+        let old_length = project.roads[0].length;
+        let cmd = ModifyRoadKnots::new(
+            "road-1",
+            old_plan_view.clone(),
+            old_length,
+            make_curved_knots(),
+        );
+
+        let executed = cmd.execute(&project).unwrap();
+        let undone = cmd.undo(&executed).unwrap();
+
+        assert_plan_view_restored(&undone, &old_plan_view, old_length);
+    }
+
+    #[test]
+    fn test_modify_road_knots_execute_missing_road_returns_error() {
+        let project = make_project();
+        let cmd = ModifyRoadKnots::new("missing-road", vec![], 0.0, make_curved_knots());
+
+        assert!(cmd.execute(&project).is_err());
+    }
+
+    #[test]
+    fn test_move_knot_execute_moves_knot_geometry() {
+        let project = make_project();
+        let old_length = project.roads[0].length;
+        let cmd = MoveKnot::new(
+            "road-1",
+            project.roads[0].plan_view.clone(),
+            old_length,
+            MoveKnotParams {
+                original_knots: make_straight_knots(),
+                knot_index: 1,
+                new_position: [50.0, 20.0, 0.0],
+                soft_factors: vec![],
+                constraint: MoveConstraint::Free,
+            },
+        );
+
+        let result = cmd.execute(&project).unwrap();
+
+        assert!(!result.roads[0].plan_view.is_empty());
+        assert!(result.roads[0].length > old_length);
+    }
+
+    #[test]
+    fn test_move_knot_undo_restores_plan_view() {
+        let project = make_project();
+        let old_plan_view = project.roads[0].plan_view.clone();
+        let old_length = project.roads[0].length;
+        let cmd = MoveKnot::new(
+            "road-1",
+            old_plan_view.clone(),
+            old_length,
+            MoveKnotParams {
+                original_knots: make_straight_knots(),
+                knot_index: 1,
+                new_position: [50.0, 20.0, 0.0],
+                soft_factors: vec![],
+                constraint: MoveConstraint::Free,
+            },
+        );
+
+        let executed = cmd.execute(&project).unwrap();
+        let undone = cmd.undo(&executed).unwrap();
+
+        assert_plan_view_restored(&undone, &old_plan_view, old_length);
+    }
+
+    #[test]
+    fn test_move_knot_execute_out_of_range_returns_error() {
+        let project = make_project();
+        let cmd = MoveKnot::new(
+            "road-1",
+            project.roads[0].plan_view.clone(),
+            project.roads[0].length,
+            MoveKnotParams {
+                original_knots: make_straight_knots(),
+                knot_index: 9,
+                new_position: [50.0, 20.0, 0.0],
+                soft_factors: vec![],
+                constraint: MoveConstraint::Free,
+            },
+        );
+
+        assert!(cmd.execute(&project).is_err());
+    }
+
+    #[test]
+    fn test_insert_knot_execute_inserts_knot_geometry() {
+        let project = make_project();
+        let old_length = project.roads[0].length;
+        let cmd = InsertKnot::new(
+            "road-1",
+            project.roads[0].plan_view.clone(),
+            old_length,
+            make_straight_knots(),
+            [25.0, 10.0, 0.0],
+            None,
+        );
+
+        let result = cmd.execute(&project).unwrap();
+
+        assert!(!result.roads[0].plan_view.is_empty());
+        assert!(result.roads[0].length > old_length);
+    }
+
+    #[test]
+    fn test_insert_knot_undo_restores_plan_view() {
+        let project = make_project();
+        let old_plan_view = project.roads[0].plan_view.clone();
+        let old_length = project.roads[0].length;
+        let cmd = InsertKnot::new(
+            "road-1",
+            old_plan_view.clone(),
+            old_length,
+            make_straight_knots(),
+            [25.0, 10.0, 0.0],
+            None,
+        );
+
+        let executed = cmd.execute(&project).unwrap();
+        let undone = cmd.undo(&executed).unwrap();
+
+        assert_plan_view_restored(&undone, &old_plan_view, old_length);
+    }
+
+    #[test]
+    fn test_insert_knot_execute_missing_road_returns_error() {
+        let project = make_project();
+        let cmd = InsertKnot::new(
+            "missing-road",
+            project.roads[0].plan_view.clone(),
+            project.roads[0].length,
+            make_straight_knots(),
+            [25.0, 10.0, 0.0],
+            None,
+        );
+
+        assert!(cmd.execute(&project).is_err());
+    }
+
+    #[test]
+    fn test_delete_knot_execute_removes_knot_geometry() {
+        let project = make_project();
+        let cmd = DeleteKnot::new(
+            "road-1",
+            project.roads[0].plan_view.clone(),
+            project.roads[0].length,
+            make_straight_knots(),
+            1,
+        );
+
+        let result = cmd.execute(&project).unwrap();
+
+        assert!(!result.roads[0].plan_view.is_empty());
+        assert!(matches!(
+            result.roads[0].plan_view[0].geo_type,
+            GeometryType::Line
+        ));
+    }
+
+    #[test]
+    fn test_delete_knot_undo_restores_plan_view() {
+        let project = make_project();
+        let old_plan_view = project.roads[0].plan_view.clone();
+        let old_length = project.roads[0].length;
+        let cmd = DeleteKnot::new(
+            "road-1",
+            old_plan_view.clone(),
+            old_length,
+            make_straight_knots(),
+            1,
+        );
+
+        let executed = cmd.execute(&project).unwrap();
+        let undone = cmd.undo(&executed).unwrap();
+
+        assert_plan_view_restored(&undone, &old_plan_view, old_length);
+    }
+
+    #[test]
+    fn test_delete_knot_execute_out_of_range_returns_error() {
+        let project = make_project();
+        let cmd = DeleteKnot::new(
+            "road-1",
+            project.roads[0].plan_view.clone(),
+            project.roads[0].length,
+            make_straight_knots(),
+            9,
+        );
+
+        assert!(cmd.execute(&project).is_err());
+    }
+
+    #[test]
+    fn test_set_knot_tangent_execute_updates_geometry() {
+        let project = make_project();
+        let cmd = SetKnotTangent::new(
+            "road-1",
+            project.roads[0].plan_view.clone(),
+            project.roads[0].length,
+            make_straight_knots(),
+            1,
+            [0.0, 1.0, 0.0],
+        );
+
+        let result = cmd.execute(&project).unwrap();
+
+        assert!(!result.roads[0].plan_view.is_empty());
+        assert!(
+            result.roads[0]
+                .plan_view
+                .iter()
+                .any(|geometry| !matches!(geometry.geo_type, GeometryType::Line))
+        );
+    }
+
+    #[test]
+    fn test_set_knot_tangent_undo_restores_plan_view() {
+        let project = make_project();
+        let old_plan_view = project.roads[0].plan_view.clone();
+        let old_length = project.roads[0].length;
+        let cmd = SetKnotTangent::new(
+            "road-1",
+            old_plan_view.clone(),
+            old_length,
+            make_straight_knots(),
+            1,
+            [0.0, 1.0, 0.0],
+        );
+
+        let executed = cmd.execute(&project).unwrap();
+        let undone = cmd.undo(&executed).unwrap();
+
+        assert_plan_view_restored(&undone, &old_plan_view, old_length);
+    }
+
+    #[test]
+    fn test_set_knot_tangent_execute_zero_tangent_returns_error() {
+        let project = make_project();
+        let cmd = SetKnotTangent::new(
+            "road-1",
+            project.roads[0].plan_view.clone(),
+            project.roads[0].length,
+            make_straight_knots(),
+            1,
+            [0.0, 0.0, 0.0],
+        );
+
+        assert!(cmd.execute(&project).is_err());
     }
 }
