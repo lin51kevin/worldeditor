@@ -2,6 +2,7 @@ pub mod elevation;
 pub mod geometry;
 pub mod gis;
 pub mod junction_area;
+pub mod junction_ops;
 pub mod junction_polygon;
 pub mod lane_ops;
 pub mod lanelet2;

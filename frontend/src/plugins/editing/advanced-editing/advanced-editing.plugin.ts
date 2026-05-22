@@ -25,6 +25,7 @@ import { useProjectStore } from '../../../stores/projectStore';
 import type { MenuItemContrib, ToolbarButtonContrib, ContextMenuContrib, ContextMenuCtx } from '../../../stores/pluginContribStore';
 import { showAlert } from '../../../utils/dialog';
 import i18next from 'i18next';
+import { getPlatformService } from '../../../services';
 import {
   splitRoadAt,
   weldRoads as weldRoadsUtil,
@@ -221,12 +222,37 @@ function weldRoads(): void {
 
 /** Auto-build connecting roads between junctions. */
 function autoBuildConnectingRoads(): void {
-  const { selectedJunctionId } = getStore();
+  const { selectedJunctionId, project } = getStore();
   if (!selectedJunctionId) {
     void showAlert(t('advancedEditing.noJunctionSelected', 'No junction selected'));
     return;
   }
-  void showAlert(t('advancedEditing.requiresWasm', 'This feature requires WASM backend support and will be available in a future release'));
+  // Check arms exist before calling WASM
+  const arms = project.roads.filter(
+    (r) =>
+      r.link?.successor?.element_id === selectedJunctionId ||
+      r.link?.predecessor?.element_id === selectedJunctionId,
+  );
+  if (arms.length < 2) {
+    void showAlert(t('advancedEditing.junctionNeedsArms', 'Junction needs at least 2 connected roads'));
+    return;
+  }
+  const junctionId = selectedJunctionId;
+  void (async () => {
+    try {
+      const service = await getPlatformService();
+      const updated = await service.autoJunctionConnectors(project, junctionId);
+      useProjectStore.getState().executePluginCommand(
+        t('advancedEditing.autoBuildConnecting', 'Auto-Build Junction Connectors'),
+        () => updated,
+      );
+    } catch (err) {
+      void showAlert(
+        t('advancedEditing.autoBuildFailed', 'Auto-build failed: ') +
+          String(err instanceof Error ? err.message : err),
+      );
+    }
+  })();
 }
 
 /** Build a junction polygon for the selected junction. */

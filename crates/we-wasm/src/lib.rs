@@ -8,6 +8,7 @@ pub mod elevation;
 pub mod gis;
 pub mod gis_ext;
 pub mod io;
+pub mod junction_ops;
 pub mod measure;
 pub mod opendrive;
 pub mod picking;

@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const add_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+export const auto_build_junction_connectors: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const apply_affine_transform: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const compute_junction_area: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const compute_road_width: (a: number, b: number, c: number) => [number, number, number];
@@ -37,6 +38,7 @@ export const generate_single_signal_vertices: (a: number, b: number, c: number, 
 export const geo_to_mgrs: (a: number, b: number, c: number) => [number, number, number, number];
 export const geo_to_utm: (a: number, b: number, c: number) => any;
 export const geodetic_to_ecef: (a: number, b: number, c: number) => [number, number, number];
+export const get_junction_arms: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const get_object_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const get_road_endpoint_tangent: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const get_road_templates: () => [number, number, number];

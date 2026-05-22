@@ -381,3 +381,41 @@ mod tests {
         assert_operation_failed(command.execute(&project), "not found");
     }
 }
+
+// ── AutoBuildJunctionConnectors ───────────────────────────────────────────────
+
+/// Auto-generate connecting roads for all unconnected arm pairs in a junction.
+///
+/// On execute: calls `junction_ops::build_junction_connectors` and snapshots the
+/// pre-execution project for undo.
+#[derive(Debug, Clone)]
+pub struct AutoBuildJunctionConnectors {
+    pub junction_id: String,
+    snapshot: Option<Project>,
+}
+
+impl AutoBuildJunctionConnectors {
+    pub fn new(junction_id: impl Into<String>) -> Self {
+        Self {
+            junction_id: junction_id.into(),
+            snapshot: None,
+        }
+    }
+}
+
+impl Command for AutoBuildJunctionConnectors {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        we_core::junction_ops::build_junction_connectors(project, &self.junction_id)
+            .map_err(|e| EditorError::OperationFailed(e.to_string()))
+    }
+
+    fn undo(&self, _project: &Project) -> Result<Project, EditorError> {
+        self.snapshot
+            .clone()
+            .ok_or_else(|| EditorError::OperationFailed("No snapshot for undo".into()))
+    }
+
+    fn description(&self) -> &str {
+        "Auto-build Junction Connectors"
+    }
+}

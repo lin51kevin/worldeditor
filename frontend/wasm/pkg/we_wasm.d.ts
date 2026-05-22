@@ -13,6 +13,14 @@ export function add_elevation_point(project_json: string, road_id: string, s: nu
  * Returns JSON `{ x, y }`.
  */
 export function apply_affine_transform(transform_json: string, source_x: number, source_y: number): any;
+/**
+ * Auto-generate connector roads for every unconnected arm pair in a junction.
+ *
+ * Returns the updated project as a JSON string.
+ * On error, returns a JS Error.
+ */
+export function auto_build_junction_connectors(project_json: string, junction_id: string): string;
+
 
 /**
  * Compute the boundary area of a junction from its connecting roads.
@@ -284,6 +292,13 @@ export function geo_to_utm(lat: number, lon: number, alt: number): any;
  * Returns JSON `{ x, y, z }` in metres.
  */
 export function geodetic_to_ecef(lat_deg: number, lon_deg: number, alt_m: number): any;
+/**
+ * Return JSON array of junction arms for the given junction.
+ *
+ * Useful for frontend visualization / debugging.
+ */
+export function get_junction_arms(project_json: string, junction_id: string): string;
+
 
 /**
  * Compute the world-space position (x, y) of a road object given its road-local position.
@@ -631,6 +646,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly add_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly apply_affine_transform: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly auto_build_junction_connectors: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly compute_junction_area: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly compute_road_width: (a: number, b: number, c: number) => [number, number, number];
     readonly compute_soft_selection: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
@@ -665,6 +681,7 @@ export interface InitOutput {
     readonly geo_to_mgrs: (a: number, b: number, c: number) => [number, number, number, number];
     readonly geo_to_utm: (a: number, b: number, c: number) => any;
     readonly geodetic_to_ecef: (a: number, b: number, c: number) => [number, number, number];
+    readonly get_junction_arms: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly get_object_world_pos: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly get_road_endpoint_tangent: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly get_road_templates: () => [number, number, number];
