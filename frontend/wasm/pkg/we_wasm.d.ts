@@ -118,6 +118,14 @@ export function fit_affine_from_gcps(gcps_json: string): any;
  * Convert GCJ-02 coordinates to WGS84.
  */
 export function gcj02_to_wgs84(lat: number, lon: number, alt: number): any;
+/**
+ * Generate bridge and tunnel overlay vertices from a project JSON.
+ *
+ * Each vertex is 7 floats: `[x, y, z, r, g, b, a]`.
+ * Returns a flat Float32Array containing bridge deck and tunnel enclosure quads.
+ */
+export function generate_bridge_tunnel_vertices(project_json: string): Float32Array;
+
 
 /**
  * Generate reference line (centerline) visualization vertices from a project JSON.
@@ -640,6 +648,7 @@ export interface InitOutput {
     readonly export_to_shapefile: (a: number, b: number) => [number, number, number, number];
     readonly fit_affine_from_gcps: (a: number, b: number) => [number, number, number];
     readonly gcj02_to_wgs84: (a: number, b: number, c: number) => any;
+    readonly generate_bridge_tunnel_vertices: (a: number, b: number) => [number, number, number, number];
     readonly generate_center_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_default_lane_section: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly generate_junction_vertices: (a: number, b: number) => [number, number, number, number];

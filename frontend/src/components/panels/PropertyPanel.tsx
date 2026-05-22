@@ -338,6 +338,237 @@ export function PropertyPanel() {
                   </button>
                 </div>
               </CardSection>
+
+              {/* Bridges Card */}
+              {((selectedRoad.bridges?.length ?? 0) > 0) && (
+                <CardSection title={`${t('propertyPanel.bridges', 'Bridges')} (${selectedRoad.bridges!.length})`} defaultOpen>
+                  {selectedRoad.bridges!.map((bridge, bi) => (
+                    <div key={bridge.id} className="property-lane-section">
+                      <div className="property-row sub">
+                        <span className="property-label">{bridge.id}</span>
+                        <button
+                          className="property-btn property-btn-delete-lane"
+                          title={t('propertyPanel.deleteBridge', 'Delete Bridge')}
+                          onClick={() =>
+                            useProjectStore.getState().executePluginCommand(
+                              t('propertyPanel.deleteBridge', 'Delete Bridge'),
+                              (p) => ({
+                                ...p,
+                                roads: p.roads.map((r) =>
+                                  r.id !== selectedRoad.id
+                                    ? r
+                                    : { ...r, bridges: (r.bridges ?? []).filter((_, i) => i !== bi) },
+                                ),
+                              }),
+                            )
+                          }
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="property-row sub lane-row">
+                        <span className="property-label">s (m)</span>
+                        <input
+                          className="property-input property-input-narrow"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          value={bridge.s}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val) && val >= 0) {
+                              useProjectStore.getState().executePluginCommand(
+                                t('propertyPanel.updateBridge', 'Update Bridge'),
+                                (p) => ({
+                                  ...p,
+                                  roads: p.roads.map((r) =>
+                                    r.id !== selectedRoad.id ? r : {
+                                      ...r,
+                                      bridges: (r.bridges ?? []).map((b, i) =>
+                                        i !== bi ? b : { ...b, s: val },
+                                      ),
+                                    },
+                                  ),
+                                }),
+                              );
+                            }
+                          }}
+                        />
+                        <span className="property-label">len (m)</span>
+                        <input
+                          className="property-input property-input-narrow"
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          value={bridge.length}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val) && val > 0) {
+                              useProjectStore.getState().executePluginCommand(
+                                t('propertyPanel.updateBridge', 'Update Bridge'),
+                                (p) => ({
+                                  ...p,
+                                  roads: p.roads.map((r) =>
+                                    r.id !== selectedRoad.id ? r : {
+                                      ...r,
+                                      bridges: (r.bridges ?? []).map((b, i) =>
+                                        i !== bi ? b : { ...b, length: val },
+                                      ),
+                                    },
+                                  ),
+                                }),
+                              );
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="property-row sub lane-row">
+                        <span className="property-label">{t('propertyPanel.type', 'Type')}</span>
+                        <select
+                          className="property-select property-select-lane"
+                          value={bridge.bridge_type}
+                          onChange={(e) =>
+                            useProjectStore.getState().executePluginCommand(
+                              t('propertyPanel.updateBridge', 'Update Bridge'),
+                              (p) => ({
+                                ...p,
+                                roads: p.roads.map((r) =>
+                                  r.id !== selectedRoad.id ? r : {
+                                    ...r,
+                                    bridges: (r.bridges ?? []).map((b, i) =>
+                                      i !== bi ? b : { ...b, bridge_type: e.target.value },
+                                    ),
+                                  },
+                                ),
+                              }),
+                            )
+                          }
+                        >
+                          <option value="concrete">concrete</option>
+                          <option value="steel">steel</option>
+                          <option value="wood">wood</option>
+                          <option value="other">other</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </CardSection>
+              )}
+
+              {/* Tunnels Card */}
+              {((selectedRoad.tunnels?.length ?? 0) > 0) && (
+                <CardSection title={`${t('propertyPanel.tunnels', 'Tunnels')} (${selectedRoad.tunnels!.length})`} defaultOpen>
+                  {selectedRoad.tunnels!.map((tunnel, ti) => (
+                    <div key={tunnel.id} className="property-lane-section">
+                      <div className="property-row sub">
+                        <span className="property-label">{tunnel.id}</span>
+                        <button
+                          className="property-btn property-btn-delete-lane"
+                          title={t('propertyPanel.deleteTunnel', 'Delete Tunnel')}
+                          onClick={() =>
+                            useProjectStore.getState().executePluginCommand(
+                              t('propertyPanel.deleteTunnel', 'Delete Tunnel'),
+                              (p) => ({
+                                ...p,
+                                roads: p.roads.map((r) =>
+                                  r.id !== selectedRoad.id
+                                    ? r
+                                    : { ...r, tunnels: (r.tunnels ?? []).filter((_, i) => i !== ti) },
+                                ),
+                              }),
+                            )
+                          }
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="property-row sub lane-row">
+                        <span className="property-label">s (m)</span>
+                        <input
+                          className="property-input property-input-narrow"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          value={tunnel.s}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val) && val >= 0) {
+                              useProjectStore.getState().executePluginCommand(
+                                t('propertyPanel.updateTunnel', 'Update Tunnel'),
+                                (p) => ({
+                                  ...p,
+                                  roads: p.roads.map((r) =>
+                                    r.id !== selectedRoad.id ? r : {
+                                      ...r,
+                                      tunnels: (r.tunnels ?? []).map((tn, i) =>
+                                        i !== ti ? tn : { ...tn, s: val },
+                                      ),
+                                    },
+                                  ),
+                                }),
+                              );
+                            }
+                          }}
+                        />
+                        <span className="property-label">len (m)</span>
+                        <input
+                          className="property-input property-input-narrow"
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          value={tunnel.length}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val) && val > 0) {
+                              useProjectStore.getState().executePluginCommand(
+                                t('propertyPanel.updateTunnel', 'Update Tunnel'),
+                                (p) => ({
+                                  ...p,
+                                  roads: p.roads.map((r) =>
+                                    r.id !== selectedRoad.id ? r : {
+                                      ...r,
+                                      tunnels: (r.tunnels ?? []).map((tn, i) =>
+                                        i !== ti ? tn : { ...tn, length: val },
+                                      ),
+                                    },
+                                  ),
+                                }),
+                              );
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="property-row sub lane-row">
+                        <span className="property-label">{t('propertyPanel.type', 'Type')}</span>
+                        <select
+                          className="property-select property-select-lane"
+                          value={tunnel.tunnel_type}
+                          onChange={(e) =>
+                            useProjectStore.getState().executePluginCommand(
+                              t('propertyPanel.updateTunnel', 'Update Tunnel'),
+                              (p) => ({
+                                ...p,
+                                roads: p.roads.map((r) =>
+                                  r.id !== selectedRoad.id ? r : {
+                                    ...r,
+                                    tunnels: (r.tunnels ?? []).map((tn, i) =>
+                                      i !== ti ? tn : { ...tn, tunnel_type: e.target.value },
+                                    ),
+                                  },
+                                ),
+                              }),
+                            )
+                          }
+                        >
+                          <option value="underpass">underpass</option>
+                          <option value="standard">standard</option>
+                          <option value="other">other</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </CardSection>
+              )}
             </div>
             )
           ) : displayMode === 'signal' ? (

@@ -74,6 +74,20 @@ export interface LaneOffset {
   d: number;
 }
 
+export interface Bridge {
+  id: string;
+  s: number;
+  length: number;
+  bridge_type: string;
+}
+
+export interface Tunnel {
+  id: string;
+  s: number;
+  length: number;
+  tunnel_type: string;
+}
+
 export interface Road {
   id: string;
   name: string;
@@ -86,8 +100,8 @@ export interface Road {
   lane_sections: LaneSection[];
   lane_offsets?: LaneOffset[];
   lateral_profile?: { superelevations: unknown[]; crossfalls: unknown[] };
-  bridges?: unknown[];
-  tunnels?: unknown[];
+  bridges?: Bridge[];
+  tunnels?: Tunnel[];
   signals?: RoadSignal[];
   objects?: RoadObjectItem[];
 }
@@ -372,6 +386,10 @@ export interface PlatformService {
   /** Generate road object vertices (crosswalks, parking spaces, stop lines, guardrails, etc.).
    *  Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateObjectVertices(project: Project): Promise<Float32Array>;
+/** Generate bridge deck and tunnel enclosure overlay vertices.
+ *  Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
+generateBridgeTunnelVertices(project: Project): Promise<Float32Array>;
+
 
   // --- Project cache (avoids per-call JSON serialisation on 60 Hz mousemove) ---
 

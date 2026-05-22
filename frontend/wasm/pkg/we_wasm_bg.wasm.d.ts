@@ -20,6 +20,7 @@ export const export_to_nio: (a: number, b: number) => [number, number, number, n
 export const export_to_shapefile: (a: number, b: number) => [number, number, number, number];
 export const fit_affine_from_gcps: (a: number, b: number) => [number, number, number];
 export const gcj02_to_wgs84: (a: number, b: number, c: number) => any;
+export const generate_bridge_tunnel_vertices: (a: number, b: number) => [number, number, number, number];
 export const generate_center_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
 export const generate_default_lane_section: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const generate_junction_vertices: (a: number, b: number) => [number, number, number, number];

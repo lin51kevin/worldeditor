@@ -31,6 +31,8 @@ interface UseViewportMeshesReturn {
   updateSurfaceMesh: () => Promise<void>;
   /** Regenerate line mesh (lane lines + center/reference lines). */
   updateLineMesh: () => Promise<void>;
+  /** Regenerate bridge/tunnel overlay mesh. */
+  updateOverlayMesh: () => Promise<void>;
 }
 
 export function useViewportMeshes({
@@ -231,9 +233,35 @@ export function useViewportMeshes({
     cachedSurfaceRef.current = new Float32Array(0);
   }, [projectLoadVersion, status]);
 
+  // ── Overlay mesh (bridge/tunnel structures) ────────────────────────────
+  const updateOverlayMesh = useCallback(async () => {
+    const renderer = rendererRef.current;
+    if (!renderer || status !== 'ready' || !project) return;
+
+    try {
+      const service = await getPlatformService();
+      const visibleProject = getVisibleProject();
+      if (!visibleProject) return;
+      const hasBridgeTunnel = visibleProject.roads.some(
+        (r) => (r.bridges?.length ?? 0) > 0 || (r.tunnels?.length ?? 0) > 0,
+      );
+      if (!hasBridgeTunnel) {
+        renderer.uploadOverlayVertices(new Float32Array(0));
+        return;
+      }
+      const verts = await service
+        .generateBridgeTunnelVertices(visibleProject)
+        .catch(() => new Float32Array(0));
+      renderer.uploadOverlayVertices(verts);
+    } catch (err) {
+      console.error('[Viewport] Failed to generate overlay mesh:', err);
+    }
+  }, [project, status, display.hiddenRoadIds]);
+
   // ── Trigger mesh updates when deps change ──────────────────────────────
   useEffect(() => { updateSurfaceMesh(); }, [updateSurfaceMesh]);
   useEffect(() => { updateLineMesh(); }, [updateLineMesh]);
+  useEffect(() => { void updateOverlayMesh(); }, [updateOverlayMesh]);
 
-  return { getVisibleProject, updateSurfaceMesh, updateLineMesh };
+  return { getVisibleProject, updateSurfaceMesh, updateLineMesh, updateOverlayMesh };
 }

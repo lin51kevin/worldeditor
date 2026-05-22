@@ -66,6 +66,8 @@ export class ViewportRenderer {
   private meshes: RenderableMesh[] = [];
   // Lane line meshes
   private laneLineMeshes: RenderableMesh[] = [];
+  // Bridge/tunnel overlay meshes (rendered above road surface)
+  private overlayMeshes: RenderableMesh[] = [];
 
   // Callbacks for tangent handle drag interaction (Phase 1.8)
   private onTangentChanged: ((index: number, tangent: [number, number, number]) => void) | null = null;
@@ -422,6 +424,19 @@ export class ViewportRenderer {
   }
 
 
+  /** Upload bridge/tunnel overlay vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
+  uploadOverlayVertices(vertexData: Float32Array): void {
+    if (vertexData.length === 0) {
+      if (this.overlayMeshes.length === 0) return;
+      for (const m of this.overlayMeshes) { m.vertexBuffer.destroy(); }
+      this.overlayMeshes = [];
+      this.markSceneDirty();
+      return;
+    }
+    this.uploadMeshData(this.overlayMeshes, vertexData);
+    this.markSceneDirty();
+  }
+
   /** Upload lane line vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
   uploadLaneLineVertices(vertexData: Float32Array): void {
     if (vertexData.length === 0) {
@@ -539,6 +554,7 @@ export class ViewportRenderer {
     this.stop();
     this.disposeMeshes(this.meshes);
     this.disposeMeshes(this.laneLineMeshes);
+    this.disposeMeshes(this.overlayMeshes);
     this.markerRenderer.dispose();
     this.disposeMeshes(this.highlightMeshes);
     this.disposeMeshes(this.hoverMeshes);
@@ -656,6 +672,19 @@ export class ViewportRenderer {
       pass.setPipeline(this.highlightPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
       const batches = batchMeshes(this.highlightMeshes, 'highlight');
+      for (const batch of batches) {
+        for (const mesh of batch.meshes) {
+          pass.setVertexBuffer(0, mesh.vertexBuffer);
+          pass.draw(mesh.vertexCount);
+        }
+      }
+    }
+
+    // Draw bridge/tunnel overlays (above road surface, below lane lines)
+    if (this.overlayMeshes.length > 0) {
+      pass.setPipeline(this.basicPipeline);
+      pass.setBindGroup(0, this.basicBindGroup);
+      const batches = batchMeshes(this.overlayMeshes, 'basic');
       for (const batch of batches) {
         for (const mesh of batch.meshes) {
           pass.setVertexBuffer(0, mesh.vertexBuffer);

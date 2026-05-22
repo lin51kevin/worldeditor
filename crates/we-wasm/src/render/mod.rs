@@ -1,5 +1,6 @@
 use wasm_bindgen::prelude::*;
 
+mod bridge_mesh;
 mod colors;
 mod helpers;
 mod junction_mesh;

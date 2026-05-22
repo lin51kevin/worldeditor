@@ -130,6 +130,11 @@ export abstract class BasePlatformService implements PlatformService {
     const wasm = await this.getWasm();
     return wasm.generate_object_vertices(JSON.stringify(project));
   }
+async generateBridgeTunnelVertices(project: Project): Promise<Float32Array> {
+  const wasm = await this.getWasm();
+  return wasm.generate_bridge_tunnel_vertices(JSON.stringify(project));
+}
+
 
   // --- Project cache (avoids per-call JSON serialisation on mousemove) ---
 
