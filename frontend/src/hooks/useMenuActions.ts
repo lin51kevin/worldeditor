@@ -7,6 +7,7 @@ import { getPlatformService } from '../services';
 import { showAlert, showConfirm, showPrompt } from '../utils/dialog';
 import { useRecentFilesStore } from '../stores/recentFilesStore';
 import type { Project } from '../services/platform';
+import { useFileLoader } from './useFileLoader';
 
 function calculateTotalRoadLength(project: Project): number {
   return project.roads.reduce((sum, road) => sum + road.length, 0);
@@ -27,6 +28,7 @@ export function useMenuActions() {
   const { setDimension, toggleGrid, toggleAxis, toggleHoverHighlight, toggleSnap, setMeasureMode } = useViewportStore();
   const { push: pushRecentFile, remove: removeRecentFile } = useRecentFilesStore();
   const { t } = useTranslation();
+  const { loadFile } = useFileLoader();
 
   const handleNew = useCallback(async () => {
     if (isDirty) {
@@ -40,13 +42,11 @@ export function useMenuActions() {
       const platform = await getPlatformService();
       const file = await platform.openFile();
       if (!file) return;
-      const proj = await platform.parseOpenDrive(file.content);
-      if (!proj || !Array.isArray(proj.roads)) {
+      const result = await loadFile(file.content, file.name);
+      if (!result.success) {
         await showAlert(t('dialog.parseError'));
         return;
       }
-      proj.name = file.name;
-      setProject(proj);
       if (file.path) {
         pushRecentFile(file.name, file.path);
       }
@@ -54,7 +54,7 @@ export function useMenuActions() {
       console.error('[MenuBar] Failed to open file:', err);
       await showAlert(t('dialog.openError'));
     }
-  }, [setProject, pushRecentFile, t]);
+  }, [loadFile, pushRecentFile, t]);
 
   const handleSave = useCallback(async () => {
     try {
@@ -90,13 +90,11 @@ export function useMenuActions() {
       const platform = await getPlatformService();
       const file = await platform.openFile();
       if (!file) return;
-      const proj = await platform.parseOpenDrive(file.content);
-      if (!proj || !Array.isArray(proj.roads)) {
+      const result = await loadFile(file.content, file.name);
+      if (!result.success) {
         await showAlert(t('dialog.parseError'));
         return;
       }
-      proj.name = file.name;
-      setProject(proj);
       if (file.path) {
         pushRecentFile(file.name, file.path);
       }
@@ -104,30 +102,28 @@ export function useMenuActions() {
       console.error('[MenuBar] Failed to import OpenDRIVE:', err);
       await showAlert(t('dialog.parseError'));
     }
-  }, [setProject, pushRecentFile, t]);
+  }, [loadFile, pushRecentFile, t]);
 
   const handleOpenRecentFile = useCallback(async (recent: { name: string; path: string }) => {
     try {
       const platform = await getPlatformService();
-      const result = await platform.openFileByPath(recent.path);
-      if (!result) {
+      const fileResult = await platform.openFileByPath(recent.path);
+      if (!fileResult) {
         removeRecentFile(recent.path);
         await showAlert(`${t('dialog.fileNotFound')}: ${recent.name}`);
         return;
       }
-      const proj = await platform.parseOpenDrive(result.content);
-      if (!proj || !Array.isArray(proj.roads)) {
+      const result = await loadFile(fileResult.content, fileResult.name);
+      if (!result.success) {
         await showAlert(t('dialog.parseError'));
         return;
       }
-      proj.name = result.name;
-      setProject(proj);
-      pushRecentFile(result.name, recent.path);
+      pushRecentFile(fileResult.name, recent.path);
     } catch {
       removeRecentFile(recent.path);
       await showAlert(`${t('dialog.fileNotFound')}: ${recent.name}`);
     }
-  }, [setProject, pushRecentFile, removeRecentFile, t]);
+  }, [loadFile, pushRecentFile, removeRecentFile, t]);
 
   const handleExportOpenDrive = useCallback(async () => {
     const platform = await getPlatformService();

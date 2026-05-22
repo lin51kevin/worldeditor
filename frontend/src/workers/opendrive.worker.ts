@@ -42,24 +42,28 @@ ctx.addEventListener('message', async (event: MessageEvent) => {
     return;
   }
 
-  const { xml, fileName } = event.data as { xml: string; fileName: string };
+  const { xml, fileName, requestId } = event.data as {
+    xml: string;
+    fileName: string;
+    requestId: number;
+  };
 
   try {
     // Phase: initializing WASM
-    ctx.postMessage({ type: 'progress', phase: 'parsing', percent: 10 });
+    ctx.postMessage({ type: 'progress', phase: 'parsing', percent: 10, requestId });
 
     const wasm = await getWasm();
 
     // Phase: parsing XML
-    ctx.postMessage({ type: 'progress', phase: 'parsing', percent: 30 });
+    ctx.postMessage({ type: 'progress', phase: 'parsing', percent: 30, requestId });
 
     const project = wasm.parse_opendrive(xml);
 
     // Phase: complete
-    ctx.postMessage({ type: 'progress', phase: 'parsing', percent: 100 });
-    ctx.postMessage({ type: 'result', project, fileName });
+    ctx.postMessage({ type: 'progress', phase: 'parsing', percent: 100, requestId });
+    ctx.postMessage({ type: 'result', project, fileName, requestId });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    ctx.postMessage({ type: 'error', message });
+    ctx.postMessage({ type: 'error', message, requestId });
   }
 });

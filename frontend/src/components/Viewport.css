@@ -50,12 +50,14 @@
   box-shadow: 0 0 4px rgba(173, 255, 47, 0.8);
   background: transparent;
 }
+
 .snap-indicator::before,
 .snap-indicator::after {
   content: '';
   position: absolute;
   background: #adff2f;
 }
+
 .snap-indicator::before {
   left: 50%;
   top: -5px;
@@ -63,6 +65,7 @@
   height: calc(100% + 10px);
   transform: translateX(-50%);
 }
+
 .snap-indicator::after {
   top: 50%;
   left: -5px;
@@ -110,6 +113,7 @@
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
 }
+
 .viewport-context-hints kbd {
   display: inline-block;
   padding: 1px 5px;
@@ -129,7 +133,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-accent-subtle);
+  background: rgba(88, 166, 255, 0.08);
   border: 2px dashed var(--color-accent);
   border-radius: 4px;
   z-index: 90;
@@ -152,6 +156,13 @@
 }
 
 @keyframes vp-drop-pulse {
-  0%, 100% { border-color: var(--color-accent); }
-  50% { border-color: var(--color-accent-light); }
+
+  0%,
+  100% {
+    border-color: var(--color-accent);
+  }
+
+  50% {
+    border-color: var(--color-accent-light);
+  }
 }
