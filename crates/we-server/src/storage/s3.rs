@@ -27,3 +27,33 @@ impl StorageBackend for S3Storage {
         Err("S3 storage is not yet implemented".into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_storage() -> S3Storage {
+        S3Storage { _private: () }
+    }
+
+    #[tokio::test]
+    async fn test_s3_put_returns_not_implemented() {
+        let error = make_storage().put("file.txt", b"data").await.unwrap_err();
+
+        assert_eq!(error.to_string(), "S3 storage is not yet implemented");
+    }
+
+    #[tokio::test]
+    async fn test_s3_get_returns_not_implemented() {
+        let error = make_storage().get("file-key").await.unwrap_err();
+
+        assert_eq!(error.to_string(), "S3 storage is not yet implemented");
+    }
+
+    #[tokio::test]
+    async fn test_s3_delete_returns_not_implemented() {
+        let error = make_storage().delete("file-key").await.unwrap_err();
+
+        assert_eq!(error.to_string(), "S3 storage is not yet implemented");
+    }
+}

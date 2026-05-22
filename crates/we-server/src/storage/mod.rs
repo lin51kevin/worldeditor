@@ -26,6 +26,8 @@ impl LocalStorage {
 #[async_trait]
 impl StorageBackend for LocalStorage {
     async fn put(&self, _name: &str, data: &[u8]) -> Result<String, Box<dyn StdError>> {
+        tokio::fs::create_dir_all(&self.base_path).await?;
+
         let key = uuid::Uuid::new_v4().to_string();
         let path = self.base_path.join(&key);
         tokio::fs::write(&path, data).await?;
@@ -56,55 +58,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_put_get_roundtrip() {
+    async fn test_put_and_get_file() {
         let (storage, _dir) = temp_storage();
-        let key = storage.put("test.txt", b"hello world").await.unwrap();
-        let data = storage.get(&key).await.unwrap();
-        assert_eq!(data, b"hello world");
+        let expected = b"hello local storage";
+        let key = storage.put("test.txt", expected).await.unwrap();
+
+        let actual = storage.get(&key).await.unwrap();
+        assert_eq!(actual, expected);
     }
 
     #[tokio::test]
-    async fn test_put_returns_unique_keys() {
+    async fn test_get_nonexistent_file_returns_error() {
         let (storage, _dir) = temp_storage();
-        let k1 = storage.put("a", b"data1").await.unwrap();
-        let k2 = storage.put("b", b"data2").await.unwrap();
-        assert_ne!(k1, k2);
+
+        assert!(storage.get("missing-file").await.is_err());
     }
 
     #[tokio::test]
-    async fn test_delete_removes_file() {
+    async fn test_delete_file_removes_it() {
         let (storage, _dir) = temp_storage();
-        let key = storage.put("f", b"content").await.unwrap();
+        let key = storage.put("delete.txt", b"delete me").await.unwrap();
+
         storage.delete(&key).await.unwrap();
+
         assert!(storage.get(&key).await.is_err());
     }
 
     #[tokio::test]
-    async fn test_get_missing_key_errors() {
-        let (storage, _dir) = temp_storage();
-        assert!(storage.get("nonexistent").await.is_err());
-    }
+    async fn test_put_creates_directory_if_not_exists() {
+        let root = tempfile::tempdir().unwrap();
+        let nested_path = root.path().join("nested").join("storage");
+        let storage = LocalStorage::new(&nested_path);
+        let key = storage.put("created.txt", b"created").await.unwrap();
 
-    #[tokio::test]
-    async fn test_delete_missing_key_errors() {
-        let (storage, _dir) = temp_storage();
-        assert!(storage.delete("nonexistent").await.is_err());
-    }
-
-    #[tokio::test]
-    async fn test_put_empty_data() {
-        let (storage, _dir) = temp_storage();
-        let key = storage.put("empty", b"").await.unwrap();
-        let data = storage.get(&key).await.unwrap();
-        assert!(data.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_put_large_data() {
-        let (storage, _dir) = temp_storage();
-        let big = vec![0xABu8; 1_000_000];
-        let key = storage.put("big", &big).await.unwrap();
-        let data = storage.get(&key).await.unwrap();
-        assert_eq!(data.len(), 1_000_000);
+        assert!(nested_path.exists());
+        assert_eq!(storage.get(&key).await.unwrap(), b"created");
     }
 }

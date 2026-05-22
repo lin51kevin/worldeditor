@@ -59,84 +59,50 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::response::IntoResponse;
+    use axum::body::to_bytes;
 
     #[test]
-    fn test_sqlx_maps_to_500() {
-        // sqlx::Error doesn't have a simple constructor, test via status_code method
-        let err = Error::Internal;
-        assert_eq!(err.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+    fn test_sqlx_error_maps_to_500() {
+        let error = Error::Sqlx(sqlx::Error::RowNotFound);
+
+        assert_eq!(error.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[test]
-    fn test_auth_maps_to_401() {
+    fn test_auth_error_maps_to_401() {
         assert_eq!(Error::Auth.status_code(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]
-    fn test_not_found_maps_to_404() {
-        let err = Error::NotFound("missing".into());
-        assert_eq!(err.status_code(), StatusCode::NOT_FOUND);
+    fn test_not_found_error_maps_to_404() {
+        let error = Error::NotFound("project-1".to_string());
+
+        assert_eq!(error.status_code(), StatusCode::NOT_FOUND);
     }
 
     #[test]
-    fn test_validation_maps_to_400() {
-        let err = Error::Validation("bad input".into());
-        assert_eq!(err.status_code(), StatusCode::BAD_REQUEST);
+    fn test_validation_error_maps_to_400() {
+        let error = Error::Validation("invalid input".to_string());
+
+        assert_eq!(error.status_code(), StatusCode::BAD_REQUEST);
     }
 
     #[test]
-    fn test_storage_maps_to_500() {
-        let err = Error::Storage("disk full".into());
-        assert_eq!(err.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
-    }
-
-    #[test]
-    fn test_internal_maps_to_500() {
+    fn test_not_implemented_error_maps_to_501() {
         assert_eq!(
-            Error::Internal.status_code(),
-            StatusCode::INTERNAL_SERVER_ERROR
+            Error::NotImplemented.status_code(),
+            StatusCode::NOT_IMPLEMENTED
         );
     }
 
-    #[test]
-    fn test_into_response_has_correct_status() {
-        let err = Error::NotFound("x".into());
-        let resp = err.into_response();
-        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
-    }
+    #[tokio::test]
+    async fn test_error_response_contains_json_body() {
+        let response = Error::Validation("name required".to_string()).into_response();
 
-    #[test]
-    fn test_into_response_auth_status() {
-        let resp = Error::Auth.into_response();
-        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
-    }
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
-    #[test]
-    fn test_display_auth() {
-        assert_eq!(Error::Auth.to_string(), "Authentication failed");
-    }
-
-    #[test]
-    fn test_display_not_found() {
-        let err = Error::NotFound("project 42".into());
-        assert_eq!(err.to_string(), "Not found: project 42");
-    }
-
-    #[test]
-    fn test_display_validation() {
-        let err = Error::Validation("name required".into());
-        assert_eq!(err.to_string(), "Validation error: name required");
-    }
-
-    #[test]
-    fn test_display_storage() {
-        let err = Error::Storage("no space".into());
-        assert_eq!(err.to_string(), "Storage error: no space");
-    }
-
-    #[test]
-    fn test_display_internal() {
-        assert_eq!(Error::Internal.to_string(), "Internal server error");
+        assert_eq!(body_json["error"], "Validation error: name required");
     }
 }

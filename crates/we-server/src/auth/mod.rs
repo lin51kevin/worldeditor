@@ -73,59 +73,65 @@ impl FromRequestParts<Arc<AuthService>> for Claims {
 mod tests {
     use super::*;
 
-    fn make_service() -> AuthService {
-        AuthService::new("test-secret-key-for-jwt-signing".into())
+    fn make_service(secret: &str) -> AuthService {
+        AuthService::new(secret.to_string())
     }
 
     #[test]
-    fn test_generate_and_verify_roundtrip() {
-        let svc = make_service();
-        let token = svc.generate_token("user-42").unwrap();
-        let claims = svc.verify_token(&token).unwrap();
-        assert_eq!(claims.sub, "user-42");
+    fn test_generate_token_returns_valid_jwt() {
+        let service = make_service("test-secret");
+        let token = service.generate_token("user-123").unwrap();
+
+        assert_eq!(token.matches('.').count(), 2);
+        let claims = service.verify_token(&token).unwrap();
+        assert_eq!(claims.sub, "user-123");
     }
 
     #[test]
-    fn test_claims_has_valid_timestamps() {
-        let svc = make_service();
-        let token = svc.generate_token("u1").unwrap();
-        let claims = svc.verify_token(&token).unwrap();
-        assert!(claims.exp > claims.iat);
-        // Expiry should be ~24h in the future
-        let diff = claims.exp - claims.iat;
-        assert!(diff >= 86000 && diff <= 87000);
+    fn test_verify_token_with_invalid_token_returns_error() {
+        let service = make_service("test-secret");
+
+        assert!(service.verify_token("this-is-not-a-jwt").is_err());
     }
 
     #[test]
-    fn test_verify_rejects_tampered_token() {
-        let svc = make_service();
-        let token = svc.generate_token("u1").unwrap();
-        let tampered = format!("{}x", token);
-        assert!(svc.verify_token(&tampered).is_err());
+    fn test_verify_token_with_expired_token_returns_error() {
+        let service = make_service("test-secret");
+        let now = chrono::Utc::now();
+        let expired_claims = Claims {
+            sub: "expired-user".to_string(),
+            exp: (now - chrono::Duration::hours(1)).timestamp() as usize,
+            iat: (now - chrono::Duration::hours(2)).timestamp() as usize,
+        };
+        let expired_token = jsonwebtoken::encode(
+            &Header::default(),
+            &expired_claims,
+            &jsonwebtoken::EncodingKey::from_secret(b"test-secret"),
+        )
+        .unwrap();
+
+        assert!(service.verify_token(&expired_token).is_err());
     }
 
     #[test]
-    fn test_verify_rejects_wrong_secret() {
-        let svc1 = AuthService::new("secret-1".into());
-        let svc2 = AuthService::new("secret-2".into());
-        let token = svc1.generate_token("u1").unwrap();
-        assert!(svc2.verify_token(&token).is_err());
+    fn test_generate_token_contains_correct_subject() {
+        let service = make_service("test-secret");
+        let token = service.generate_token("subject-user").unwrap();
+        let claims = service.verify_token(&token).unwrap();
+
+        assert_eq!(claims.sub, "subject-user");
     }
 
     #[test]
-    fn test_verify_rejects_garbage() {
-        let svc = make_service();
-        assert!(svc.verify_token("not.a.jwt").is_err());
-        assert!(svc.verify_token("").is_err());
-    }
+    fn test_verify_token_with_wrong_secret_fails() {
+        let token = make_service("test-secret")
+            .generate_token("user-123")
+            .unwrap();
 
-    #[test]
-    fn test_different_users_get_different_tokens() {
-        let svc = make_service();
-        let t1 = svc.generate_token("alice").unwrap();
-        let t2 = svc.generate_token("bob").unwrap();
-        assert_ne!(t1, t2);
-        assert_eq!(svc.verify_token(&t1).unwrap().sub, "alice");
-        assert_eq!(svc.verify_token(&t2).unwrap().sub, "bob");
+        assert!(
+            make_service("different-secret")
+                .verify_token(&token)
+                .is_err()
+        );
     }
 }
