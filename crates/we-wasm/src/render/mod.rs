@@ -588,6 +588,102 @@ pub fn generate_single_signal_vertices(
     Ok(floats)
 }
 
+/// Cached version of `generate_single_signal_vertices` — reads from PROJECT_CACHE
+/// to avoid JSON re-serialization (~1.3s savings on large maps).
+#[wasm_bindgen]
+pub fn generate_single_signal_vertices_cached(
+    road_id: &str,
+    signal_id: &str,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point};
+
+    crate::picking::with_project_cache(|cache| {
+        let project = cache.project();
+        let road = project.roads.iter().find(|rd| rd.id == road_id);
+        let signal = road.and_then(|rd| rd.signals.iter().find(|s| s.id == signal_id));
+
+        let (road, signal) = match (road, signal) {
+            (Some(road), Some(signal)) => (road, signal),
+            _ => return Ok(Vec::new()),
+        };
+
+        let Some(ref_pt) = road_point_at_s(&road.plan_view, signal.s) else {
+            return Ok(Vec::new());
+        };
+
+        let (mx, my, _) = offset_point(&ref_pt, signal.t, 0.0);
+        let z_road = evaluate_elevation(&road.elevation_profile, signal.s) as f32;
+        let mx = mx as f32;
+        let my = my as f32;
+        let sz = 0.6f32;
+        let z = z_road + 0.55;
+
+        let top = [mx, my - sz, z + sz];
+        let bot = [mx, my + sz, z - sz];
+        let lft = [mx - sz, my, z];
+        let rgt = [mx + sz, my, z];
+
+        let mut floats = Vec::with_capacity(6 * 7);
+        for p in &[top, lft, bot, top, bot, rgt] {
+            floats.extend_from_slice(&[p[0], p[1], p[2], r, g, b, a]);
+        }
+        Ok(floats)
+    })
+}
+
+/// Cached version of `generate_single_object_vertices` — reads from PROJECT_CACHE
+/// to avoid JSON re-serialization (~1.3s savings on large maps).
+#[wasm_bindgen]
+pub fn generate_single_object_vertices_cached(
+    road_id: &str,
+    object_id: &str,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point};
+
+    crate::picking::with_project_cache(|cache| {
+        let project = cache.project();
+        let road = project.roads.iter().find(|rd| rd.id == road_id);
+        let obj = road.and_then(|rd| rd.objects.iter().find(|o| o.id == object_id));
+
+        let (road, obj) = match (road, obj) {
+            (Some(road), Some(obj)) => (road, obj),
+            _ => return Ok(Vec::new()),
+        };
+
+        let s = obj.position.x;
+        let t = obj.position.y;
+        let Some(ref_pt) = road_point_at_s(&road.plan_view, s) else {
+            return Ok(Vec::new());
+        };
+
+        let (mx, my, _) = offset_point(&ref_pt, t, 0.0);
+        let z_road = evaluate_elevation(&road.elevation_profile, s) as f32;
+        let mx = mx as f32;
+        let my = my as f32;
+        let sz = 0.6f32;
+        let z = z_road + 0.05;
+
+        let tl = [mx - sz, my - sz, z];
+        let tr = [mx + sz, my - sz, z];
+        let bl = [mx - sz, my + sz, z];
+        let br = [mx + sz, my + sz, z];
+
+        let mut floats = Vec::with_capacity(6 * 7);
+        for p in &[tl, tr, br, tl, br, bl] {
+            floats.extend_from_slice(&[p[0], p[1], p[2], r, g, b, a]);
+        }
+        Ok(floats)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

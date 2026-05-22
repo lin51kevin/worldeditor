@@ -233,10 +233,24 @@ export abstract class BasePlatformService implements PlatformService {
     );
   }
 
+  async generateSingleSignalVerticesCached(roadId: string, signalId: string, color: [number, number, number, number]): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_single_signal_vertices_cached(
+      roadId, signalId, color[0], color[1], color[2], color[3],
+    );
+  }
+
   async generateSingleObjectVertices(project: Project, roadId: string, objectId: string, color: [number, number, number, number]): Promise<Float32Array> {
     const wasm = await this.getWasm();
     return wasm.generate_single_object_vertices(
       JSON.stringify(project), roadId, objectId, color[0], color[1], color[2], color[3],
+    );
+  }
+
+  async generateSingleObjectVerticesCached(roadId: string, objectId: string, color: [number, number, number, number]): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_single_object_vertices_cached(
+      roadId, objectId, color[0], color[1], color[2], color[3],
     );
   }
 

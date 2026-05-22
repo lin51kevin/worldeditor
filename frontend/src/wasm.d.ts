@@ -111,7 +111,9 @@ declare module '../../wasm/pkg/we_wasm' {
   export function generate_lane_boundary_vertices(project_json: string, sample_step: number): Float32Array;
   export function generate_bridge_tunnel_vertices(project_json: string): Float32Array;
   export function generate_single_signal_vertices(project_json: string, road_id: string, signal_id: string, r: number, g: number, b: number, a: number): Float32Array;
+  export function generate_single_signal_vertices_cached(road_id: string, signal_id: string, r: number, g: number, b: number, a: number): Float32Array;
   export function generate_single_object_vertices(project_json: string, road_id: string, object_id: string, r: number, g: number, b: number, a: number): Float32Array;
+  export function generate_single_object_vertices_cached(road_id: string, object_id: string, r: number, g: number, b: number, a: number): Float32Array;
 
   // Junction operations
   export function auto_build_junction_connectors(project_json: string, junction_id: string): string;

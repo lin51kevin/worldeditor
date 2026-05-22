@@ -263,6 +263,12 @@ export function generate_single_junction_vertices(project_json: string, junction
 export function generate_single_object_vertices(project_json: string, road_id: string, object_id: string, r: number, g: number, b: number, a: number): Float32Array;
 
 /**
+ * Cached version of `generate_single_object_vertices` — reads from PROJECT_CACHE
+ * to avoid JSON re-serialization (~1.3s savings on large maps).
+ */
+export function generate_single_object_vertices_cached(road_id: string, object_id: string, r: number, g: number, b: number, a: number): Float32Array;
+
+/**
  * Generate road mesh vertices for a single road. Returns Float32Array.
  *
  * Each vertex is 7 floats: [x, y, z, r, g, b, a].
@@ -279,6 +285,12 @@ export function generate_single_road_vertices(road_json: string, sample_step: nu
  * Each vertex is 7 floats: [x, y, z, r, g, b, a].
  */
 export function generate_single_signal_vertices(project_json: string, road_id: string, signal_id: string, r: number, g: number, b: number, a: number): Float32Array;
+
+/**
+ * Cached version of `generate_single_signal_vertices` — reads from PROJECT_CACHE
+ * to avoid JSON re-serialization (~1.3s savings on large maps).
+ */
+export function generate_single_signal_vertices_cached(road_id: string, signal_id: string, r: number, g: number, b: number, a: number): Float32Array;
 
 /**
  * Convert WGS84 geodetic coordinates to an MGRS grid reference string.
@@ -716,11 +728,14 @@ export interface InitOutput {
     readonly generate_object_vertices: (a: number, b: number) => [number, number, number, number];
     readonly generate_road_mesh_from_json: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_road_vertices: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly generate_road_vertices_cached: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_signal_paint_vertices: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_single_junction_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly generate_single_object_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
+    readonly generate_single_object_vertices_cached: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly generate_single_road_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly generate_single_signal_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
+    readonly generate_single_signal_vertices_cached: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly geo_to_mgrs: (a: number, b: number, c: number) => [number, number, number, number];
     readonly geo_to_utm: (a: number, b: number, c: number) => any;
     readonly geodetic_to_ecef: (a: number, b: number, c: number) => [number, number, number];

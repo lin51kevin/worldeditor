@@ -17,6 +17,8 @@ export interface SceneVisibilityState {
   hiddenLaneKeys: string[];
   hiddenSignalKeys: string[];
   hiddenObjectKeys: string[];
+  showSignals?: boolean;
+  showObjects?: boolean;
 }
 
 export function makeSignalKey(roadId: string, signalId: string): string {
@@ -191,13 +193,15 @@ export function isSceneSelectionVisible(
     return true;
   }
 
-  // Signal visibility follows the road's visibility + per-signal key
+  // Signal visibility follows the road's visibility + per-signal key + global toggle
   if (selection.type === 'signal') {
+    if (visibility.showSignals === false) return false;
     return !(visibility.hiddenSignalKeys ?? []).includes(makeSignalKey(selection.roadId, selection.signalId));
   }
 
-  // Object visibility follows the road's visibility + per-object key
+  // Object visibility follows the road's visibility + per-object key + global toggle
   if (selection.type === 'object') {
+    if (visibility.showObjects === false) return false;
     return !(visibility.hiddenObjectKeys ?? []).includes(makeObjectKey(selection.roadId, selection.objectId));
   }
 

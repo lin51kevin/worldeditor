@@ -170,6 +170,7 @@ export function useViewportMeshes({
 
       // Merge visible layers — in non-solid mode, surfaces are hidden (not cleared)
       const tWasm = performance.now();
+      let uploadedVertCount = 0;
       if (viewMode !== 'solid') {
         // Wire/sketch: no surface polygons, just preserve last frame for smooth transition
         renderer.uploadRoadVertices(new Float32Array(0), { preserveLastVertexDataOnEmpty: true });
@@ -181,6 +182,7 @@ export function useViewportMeshes({
         if (display.showObjects && cachedObjectVertsRef.current.length > 0) {
           surfaceVerts = mergeFloat32Arrays(surfaceVerts, cachedObjectVertsRef.current);
         }
+        uploadedVertCount = surfaceVerts.length / 7;
         renderer.uploadRoadVertices(surfaceVerts);
       }
       const tDone = performance.now();
@@ -188,7 +190,7 @@ export function useViewportMeshes({
       console.info(
         `[Viewport:perf] updateSurfaceMesh total=${(tDone - tStart).toFixed(1)}ms | ` +
         `service=${(tService - tStart).toFixed(1)} wasm=${(tWasm - tService).toFixed(1)} ` +
-        `upload=${(tDone - tWasm).toFixed(1)} roads=${visibleProject.roads.length} verts=${surfaceVerts.length / 7}` +
+        `upload=${(tDone - tWasm).toFixed(1)} roads=${visibleProject.roads.length} verts=${uploadedVertCount}` +
         (anyRegenerated ? ` [regen: R=${needRoads ? 1 : 0} J=${needJunctions ? 1 : 0} S=${needSignals ? 1 : 0} O=${needObjects ? 1 : 0}]` : ' [cached-merge]'),
       );
     } catch (err) {

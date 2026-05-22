@@ -4,7 +4,7 @@
  *
  * Extracted from Viewport.tsx for single-responsibility.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import type { ViewportRenderer } from '../viewport/renderer';
 import { useProjectStore } from '../stores/projectStore';
@@ -31,7 +31,22 @@ export function useSelectionHighlight({
   const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
   const selectedRoadIds = useProjectStore((s) => s.selectedRoadIds);
   const selectedJunctionIds = useProjectStore((s) => s.selectedJunctionIds);
-  const { display } = useViewportStore();
+  // Subscribe to individual display properties that affect selection visibility.
+  // Avoid subscribing to the full `display` object since render-only toggles
+  // (showLaneLines, showRoadMarks, colorMode, etc.) should NOT re-trigger
+  // expensive highlight WASM calls.
+  const hiddenRoadIds = useViewportStore((s) => s.display.hiddenRoadIds);
+  const hiddenJunctionIds = useViewportStore((s) => s.display.hiddenJunctionIds);
+  const hiddenSignalKeys = useViewportStore((s) => s.display.hiddenSignalKeys);
+  const hiddenObjectKeys = useViewportStore((s) => s.display.hiddenObjectKeys);
+  const hiddenLaneSectionKeys = useViewportStore((s) => s.display.hiddenLaneSectionKeys);
+  const hiddenLaneKeys = useViewportStore((s) => s.display.hiddenLaneKeys);
+  const showSignals = useViewportStore((s) => s.display.showSignals);
+  const showObjects = useViewportStore((s) => s.display.showObjects);
+
+  // Keep a ref to avoid stale closure issues
+  const displayRef = useRef({ hiddenRoadIds, hiddenJunctionIds, hiddenSignalKeys, hiddenObjectKeys, hiddenLaneSectionKeys, hiddenLaneKeys, showSignals, showObjects });
+  displayRef.current = { hiddenRoadIds, hiddenJunctionIds, hiddenSignalKeys, hiddenObjectKeys, hiddenLaneSectionKeys, hiddenLaneKeys, showSignals, showObjects };
 
   useEffect(() => {
     const renderer = rendererRef.current;
@@ -61,26 +76,49 @@ export function useSelectionHighlight({
           return;
         }
 
-        if (!isSceneSelectionVisible(selectedSceneNode, display)) {
+        const visibility = displayRef.current;
+        if (!isSceneSelectionVisible(selectedSceneNode, visibility)) {
           renderer.clearHighlight();
           return;
         }
 
         if (selectedSceneNode && selectedSceneNode.type !== 'junction') {
           if (selectedSceneNode.type === 'signal') {
-            const verts = await service.generateSingleSignalVertices(
-              project, selectedSceneNode.roadId, selectedSceneNode.signalId,
-              [0.2, 0.9, 0.9, 1.0],
-            );
+            // Use cached version (reads from PROJECT_CACHE) when available
+            const verts = service.generateSingleSignalVerticesCached
+              ? await service.generateSingleSignalVerticesCached(
+                  selectedSceneNode.roadId, selectedSceneNode.signalId,
+                  [0.2, 0.9, 0.9, 1.0],
+                ).catch(() =>
+                  service.generateSingleSignalVertices(
+                    project, selectedSceneNode.roadId, selectedSceneNode.signalId,
+                    [0.2, 0.9, 0.9, 1.0],
+                  ),
+                )
+              : await service.generateSingleSignalVertices(
+                  project, selectedSceneNode.roadId, selectedSceneNode.signalId,
+                  [0.2, 0.9, 0.9, 1.0],
+                );
             if (verts.length > 0) renderer.uploadHighlightVertices(verts);
             else renderer.clearHighlight();
             return;
           }
           if (selectedSceneNode.type === 'object') {
-            const verts = await service.generateSingleObjectVertices(
-              project, selectedSceneNode.roadId, selectedSceneNode.objectId,
-              [0.2, 0.9, 0.9, 1.0],
-            );
+            // Use cached version (reads from PROJECT_CACHE) when available
+            const verts = service.generateSingleObjectVerticesCached
+              ? await service.generateSingleObjectVerticesCached(
+                  selectedSceneNode.roadId, selectedSceneNode.objectId,
+                  [0.2, 0.9, 0.9, 1.0],
+                ).catch(() =>
+                  service.generateSingleObjectVertices(
+                    project, selectedSceneNode.roadId, selectedSceneNode.objectId,
+                    [0.2, 0.9, 0.9, 1.0],
+                  ),
+                )
+              : await service.generateSingleObjectVertices(
+                  project, selectedSceneNode.roadId, selectedSceneNode.objectId,
+                  [0.2, 0.9, 0.9, 1.0],
+                );
             if (verts.length > 0) renderer.uploadHighlightVertices(verts);
             else renderer.clearHighlight();
             return;
@@ -116,5 +154,7 @@ export function useSelectionHighlight({
     })();
 
     return () => { cancelled = true; };
-  }, [display, project, selectedJunctionId, selectedJunctionIds, selectedRoadIds, selectedSceneNode, status]);
+  }, [project, selectedJunctionId, selectedJunctionIds, selectedRoadIds, selectedSceneNode, status,
+    hiddenRoadIds, hiddenJunctionIds, hiddenSignalKeys, hiddenObjectKeys,
+    hiddenLaneSectionKeys, hiddenLaneKeys, showSignals, showObjects]);
 }

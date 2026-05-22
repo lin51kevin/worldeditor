@@ -498,8 +498,14 @@ export interface PlatformService {
   /** Generate highlight vertices for a single signal. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateSingleSignalVertices(project: Project, roadId: string, signalId: string, color: [number, number, number, number]): Promise<Float32Array>;
 
+  /** Generate highlight vertices for a single signal using cached project (no JSON serialization). */
+  generateSingleSignalVerticesCached?(roadId: string, signalId: string, color: [number, number, number, number]): Promise<Float32Array>;
+
   /** Generate highlight vertices for a single road object. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateSingleObjectVertices(project: Project, roadId: string, objectId: string, color: [number, number, number, number]): Promise<Float32Array>;
+
+  /** Generate highlight vertices for a single road object using cached project (no JSON serialization). */
+  generateSingleObjectVerticesCached?(roadId: string, objectId: string, color: [number, number, number, number]): Promise<Float32Array>;
 
   /** Get the world-space XY position of a signal. Returns { x, y } or null. */
   getSignalWorldPos(project: Project, roadId: string, signalId: string): Promise<{ x: number; y: number } | null>;
