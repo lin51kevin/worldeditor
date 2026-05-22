@@ -259,3 +259,6 @@ jobs:
         run: cd frontend && yarn lint
       - name: Frontend typecheck
         run: cd frontend && yarn typecheck
+      - name: NPM security audit
+        run: cd frontend && yarn audit --level high
+        continue-on-error: true  # Advisory: don't block CI on transitive deps

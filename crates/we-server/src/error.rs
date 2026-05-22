@@ -46,8 +46,29 @@ impl Error {
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let status = self.status_code();
+
+        // Log detailed error server-side for debugging
+        match &self {
+            Error::Sqlx(e) => log::error!("Database error: {e}"),
+            Error::Storage(e) => log::error!("Storage error: {e}"),
+            Error::Internal => log::error!("Internal server error"),
+            _ => {}
+        }
+
+        // Return generic message for internal errors to avoid leaking implementation details
+        let user_message = match &self {
+            Error::Sqlx(_) | Error::Storage(_) | Error::Internal => {
+                "An internal error occurred".to_string()
+            }
+            Error::Jwt(_) => "Invalid or expired authentication token".to_string(),
+            Error::Auth => "Authentication failed".to_string(),
+            Error::NotFound(resource) => format!("Resource not found: {resource}"),
+            Error::Validation(msg) => format!("Validation error: {msg}"),
+            Error::NotImplemented => "This feature is not yet available".to_string(),
+        };
+
         let body = json!({
-            "error": self.to_string(),
+            "error": user_message,
         });
 
         (status, axum::Json(body)).into_response()
@@ -104,5 +125,17 @@ mod tests {
         let body_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(body_json["error"], "Validation error: name required");
+    }
+
+    #[tokio::test]
+    async fn test_internal_error_does_not_leak_details() {
+        let response = Error::Sqlx(sqlx::Error::RowNotFound).into_response();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+        // Must NOT contain "Database error" or implementation details
+        assert_eq!(body_json["error"], "An internal error occurred");
     }
 }

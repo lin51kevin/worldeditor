@@ -24,10 +24,54 @@ pub struct CreateProject {
     pub description: Option<String>,
 }
 
+impl CreateProject {
+    pub fn validate(&self) -> Result<()> {
+        if self.name.trim().is_empty() {
+            return Err(Error::Validation("Project name cannot be empty".to_string()));
+        }
+        if self.name.len() > 255 {
+            return Err(Error::Validation(
+                "Project name cannot exceed 255 characters".to_string(),
+            ));
+        }
+        if let Some(desc) = &self.description {
+            if desc.len() > 4096 {
+                return Err(Error::Validation(
+                    "Project description cannot exceed 4096 characters".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct UpdateProject {
     pub name: Option<String>,
     pub description: Option<String>,
+}
+
+impl UpdateProject {
+    pub fn validate(&self) -> Result<()> {
+        if let Some(name) = &self.name {
+            if name.trim().is_empty() {
+                return Err(Error::Validation("Project name cannot be empty".to_string()));
+            }
+            if name.len() > 255 {
+                return Err(Error::Validation(
+                    "Project name cannot exceed 255 characters".to_string(),
+                ));
+            }
+        }
+        if let Some(desc) = &self.description {
+            if desc.len() > 4096 {
+                return Err(Error::Validation(
+                    "Project description cannot exceed 4096 characters".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 pub struct ProjectService {
@@ -40,6 +84,7 @@ impl ProjectService {
     }
 
     pub async fn create(&self, input: CreateProject) -> Result<Project> {
+        input.validate()?;
         let project = sqlx::query_as::<_, Project>(
             r#"
             INSERT INTO projects (name, description)
@@ -74,6 +119,7 @@ impl ProjectService {
     }
 
     pub async fn update(&self, id: Uuid, input: UpdateProject) -> Result<Project> {
+        input.validate()?;
         let project = sqlx::query_as::<_, Project>(
             r#"
             UPDATE projects

@@ -24,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Database connection
     let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/worldeditor".to_string());
+        .expect("DATABASE_URL environment variable must be set");
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
@@ -37,7 +37,11 @@ async fn main() -> anyhow::Result<()> {
     let storage_backend = storage::LocalStorage::new("./uploads");
 
     // Auth service
-    let auth_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
+    let auth_secret =
+        std::env::var("JWT_SECRET").expect("JWT_SECRET environment variable must be set");
+    if auth_secret.len() < 32 {
+        anyhow::bail!("JWT_SECRET must be at least 32 characters long");
+    }
     let auth_service = Arc::new(auth::AuthService::new(auth_secret));
 
     // App state
@@ -109,13 +113,39 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct LoginRequest {
+    username: String,
+    password: String,
+}
+
 async fn login_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
+    axum::Json(payload): axum::Json<LoginRequest>,
 ) -> axum::response::Result<axum::Json<serde_json::Value>> {
-    // TODO: implement actual login logic with user validation
+    // Validate input
+    if payload.username.is_empty() || payload.password.is_empty() {
+        return Err(axum::http::StatusCode::BAD_REQUEST.into());
+    }
+    if payload.username.len() > 256 || payload.password.len() > 256 {
+        return Err(axum::http::StatusCode::BAD_REQUEST.into());
+    }
+
+    // TODO: Replace with real credential validation against database
+    // For now, validate against environment variables for development
+    let expected_user = std::env::var("ADMIN_USER").unwrap_or_default();
+    let expected_pass = std::env::var("ADMIN_PASS").unwrap_or_default();
+    if expected_user.is_empty() || expected_pass.is_empty() {
+        log::error!("ADMIN_USER/ADMIN_PASS not configured — login disabled");
+        return Err(axum::http::StatusCode::SERVICE_UNAVAILABLE.into());
+    }
+    if payload.username != expected_user || payload.password != expected_pass {
+        return Err(axum::http::StatusCode::UNAUTHORIZED.into());
+    }
+
     let token = state
         .auth_service
-        .generate_token("user_id")
+        .generate_token(&payload.username)
         .map_err(|_e| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(axum::Json(serde_json::json!({
         "token": token
