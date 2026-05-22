@@ -221,11 +221,9 @@ export function MenuBar({
         );
         if (roadClone && !(roadClone.isDisabled?.() ?? false)) roadClone.onClick();
       } else if (isCtrl && event.key === 'z') {
-        event.preventDefault();
-        if (canUndo()) undo();
+        // Handled by useKeyboardShortcuts — skip to avoid double undo
       } else if (isCtrl && event.key === 'y') {
-        event.preventDefault();
-        if (canRedo()) redo();
+        // Handled by useKeyboardShortcuts — skip to avoid double redo
       } else if (event.key === 'Delete') {
         handleDelete();
       } else if (event.key === 'Home') {
@@ -243,8 +241,6 @@ export function MenuBar({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    canRedo,
-    canUndo,
     handleDelete,
     handleNew,
     handleOpen,
@@ -252,9 +248,7 @@ export function MenuBar({
     handleSaveAs,
     handleZoomToFit,
     handleZoomToSelected,
-    redo,
     toggleCopilotPanel,
-    undo,
   ]);
 
   return (
