@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProjectStore } from '../projectStore';
+import { initialProject } from './types';
 import type { Junction, Road } from '../../services/platform';
 
 vi.mock('../viewportStore', () => ({
@@ -8,121 +9,154 @@ vi.mock('../viewportStore', () => ({
   },
 }));
 
-const baseRoad: Road = {
-  id: 'r1', name: 'Road 1', length: 100, junction_id: null,
-  link: { predecessor: null, successor: null },
-  plan_view: [{ s: 0, x: 0, y: 0, hdg: 0, length: 100, geo_type: 'Line' }],
-  lane_sections: [],
-  elevation_profile: [],
-};
+function resetStore() {
+  useProjectStore.setState({
+    project: initialProject,
+    savedProject: null,
+    isDirty: false,
+    selectedRoadId: null,
+    selectedJunctionId: null,
+    selectedObjectType: null,
+    selectedSceneNode: null,
+    selectedRoadIds: [],
+    selectedJunctionIds: [],
+    clipboardRoadId: null,
+    cursorWorldPos: { x: 0, y: 0 },
+    gridSpacing: 10.0,
+    viewportMpp: 0.1,
+    undoStack: [],
+    redoStack: [],
+    projectLoadVersion: 0,
+  });
+}
+
+function makeRoad(id = 'r1', overrides: Partial<Road> = {}): Road {
+  return {
+    id,
+    name: `Road ${id}`,
+    length: 100,
+    junction_id: null,
+    link: { predecessor: null, successor: null },
+    plan_view: [{ s: 0, x: 0, y: 0, hdg: 0, length: 100, geo_type: 'Line' }],
+    lane_sections: [],
+    elevation_profile: [],
+    ...overrides,
+  };
+}
 
 const baseJunction: Junction = {
   id: 'j1',
-  name: 'J',
+  name: 'Junction 1',
   connections: [],
 };
 
 describe('roadSlice', () => {
   beforeEach(() => {
-    useProjectStore.getState().reset();
+    resetStore();
   });
 
-  describe('addRoad', () => {
-    it('should add road to project', () => {
-      useProjectStore.getState().addRoad(baseRoad);
-      expect(useProjectStore.getState().project.roads).toHaveLength(1);
-    });
+  it('addRoad appends a road, pushes undo, and marks the project dirty', () => {
+    useProjectStore.getState().addRoad(makeRoad());
 
-    it('should push undo on add', () => {
-      useProjectStore.getState().addRoad(baseRoad);
-      expect(useProjectStore.getState().canUndo()).toBe(true);
-    });
-
-    it('should mark isDirty', () => {
-      useProjectStore.getState().addRoad(baseRoad);
-      expect(useProjectStore.getState().isDirty).toBe(true);
-    });
+    const state = useProjectStore.getState();
+    expect(state.project.roads).toHaveLength(1);
+    expect(state.canUndo()).toBe(true);
+    expect(state.isDirty).toBe(true);
   });
 
-  describe('removeRoad', () => {
-    it('should remove road by id', () => {
-      useProjectStore.getState().addRoad(baseRoad);
-      useProjectStore.getState().removeRoad('r1');
-      expect(useProjectStore.getState().project.roads).toHaveLength(0);
+  it('removeRoad removes the matching road and clears focused road selection state', () => {
+    useProjectStore.setState({
+      project: { ...initialProject, roads: [makeRoad('r1')] },
+      selectedRoadId: 'r1',
+      selectedSceneNode: { type: 'road', roadId: 'r1' },
     });
 
-    it('should clear selectedRoadId if removed', () => {
-      useProjectStore.getState().addRoad(baseRoad);
-      useProjectStore.getState().selectRoad('r1');
-      useProjectStore.getState().removeRoad('r1');
-      expect(useProjectStore.getState().selectedRoadId).toBeNull();
-    });
+    useProjectStore.getState().removeRoad('r1');
 
-    it('should keep selectedRoadId if different road removed', () => {
-      useProjectStore.getState().addRoad(baseRoad);
-      useProjectStore.getState().addRoad({ ...baseRoad, id: 'r2' });
-      useProjectStore.getState().selectRoad('r1');
-      useProjectStore.getState().removeRoad('r2');
-      expect(useProjectStore.getState().selectedRoadId).toBe('r1');
-    });
+    const state = useProjectStore.getState();
+    expect(state.project.roads).toEqual([]);
+    expect(state.selectedRoadId).toBeNull();
+    expect(state.selectedSceneNode).toBeNull();
+    expect(state.isDirty).toBe(true);
   });
 
-  describe('updateRoad', () => {
-    it('should update road name', () => {
-      useProjectStore.getState().addRoad(baseRoad);
-      useProjectStore.getState().updateRoad('r1', { name: 'Updated' });
-      expect(useProjectStore.getState().project.roads[0]!.name).toBe('Updated');
+  it('removeRoad keeps unrelated road selection intact', () => {
+    useProjectStore.setState({
+      project: { ...initialProject, roads: [makeRoad('r1'), makeRoad('r2')] },
+      selectedRoadId: 'r1',
+      selectedSceneNode: { type: 'road', roadId: 'r1' },
     });
 
-    it('should be immutable — original not mutated', () => {
-      useProjectStore.getState().addRoad(baseRoad);
-      const original = useProjectStore.getState().project.roads[0]!;
-      useProjectStore.getState().updateRoad('r1', { name: 'Updated' });
-      expect(baseRoad.name).toBe('Road 1'); // external object unchanged
-      expect(original.name).toBe('Road 1'); // prior snapshot unchanged
-    });
+    useProjectStore.getState().removeRoad('r2');
+
+    const state = useProjectStore.getState();
+    expect(state.project.roads.map((road) => road.id)).toEqual(['r1']);
+    expect(state.selectedRoadId).toBe('r1');
+    expect(state.selectedSceneNode).toEqual({ type: 'road', roadId: 'r1' });
   });
 
-  describe('cloneRoad', () => {
-    it('should create a new road with offset', () => {
-      useProjectStore.getState().addRoad(baseRoad);
-      useProjectStore.getState().cloneRoad('r1', 'r2', [10, 0]);
-      const roads = useProjectStore.getState().project.roads;
-      expect(roads).toHaveLength(2);
-      expect(roads.find((r) => r.id === 'r2')).toBeDefined();
+  it('updateRoad changes only the targeted road fields without mutating the original object', () => {
+    const originalRoad = makeRoad('r1');
+    useProjectStore.setState({
+      project: { ...initialProject, roads: [originalRoad, makeRoad('r2')] },
     });
+
+    useProjectStore.getState().updateRoad('r1', {
+      name: 'Updated',
+      length: 150,
+      junction_id: 'j1',
+    });
+
+    const roads = useProjectStore.getState().project.roads;
+    expect(roads[0]).toMatchObject({ id: 'r1', name: 'Updated', length: 150, junction_id: 'j1' });
+    expect(roads[1]).toMatchObject({ id: 'r2', name: 'Road r2', length: 100, junction_id: null });
+    expect(originalRoad.name).toBe('Road r1');
+    expect(originalRoad.length).toBe(100);
+    expect(originalRoad.junction_id).toBeNull();
   });
 
-  describe('moveRoad', () => {
-    it('should push undo and mark dirty', () => {
-      useProjectStore.getState().addRoad(baseRoad);
-      useProjectStore.getState().markClean();
-      const stackSize = useProjectStore.getState().undoStack.length;
-      useProjectStore.getState().moveRoad('r1', 5, 5);
-      expect(useProjectStore.getState().undoStack.length).toBeGreaterThan(stackSize);
-      expect(useProjectStore.getState().isDirty).toBe(true);
+  it('cloneRoad deep copies the source road and offsets its plan view', () => {
+    useProjectStore.setState({
+      project: { ...initialProject, roads: [makeRoad('r1')] },
     });
+
+    useProjectStore.getState().cloneRoad('r1', 'r2', [10, 5]);
+
+    const clonedRoad = useProjectStore.getState().project.roads.find((road) => road.id === 'r2');
+    expect(clonedRoad).toBeDefined();
+    expect(clonedRoad?.plan_view[0]).toMatchObject({ x: 10, y: 5 });
+    expect(clonedRoad?.link).toEqual({ predecessor: null, successor: null });
   });
 
-  describe('removeJunction', () => {
-    it('should remove junction', () => {
-      useProjectStore.setState((s) => ({
-        project: {
-          ...s.project,
-          junctions: [baseJunction],
-        },
-      }));
-      useProjectStore.getState().removeJunction('j1');
-      expect(useProjectStore.getState().project.junctions).toHaveLength(0);
+  it('moveRoad records undo history and shifts the road geometry', () => {
+    useProjectStore.setState({
+      project: { ...initialProject, roads: [makeRoad('r1')] },
     });
+    useProjectStore.getState().markClean();
+
+    useProjectStore.getState().moveRoad('r1', 5, -3);
+
+    const state = useProjectStore.getState();
+    expect(state.undoStack).toHaveLength(1);
+    expect(state.project.roads[0]?.plan_view[0]).toMatchObject({ x: 5, y: -3 });
+    expect(state.isDirty).toBe(true);
   });
 
-  describe('addJunctionWithRoads', () => {
-    it('should add junction and associated roads', () => {
-      useProjectStore.getState().addJunctionWithRoads(baseJunction, [baseRoad]);
-      const state = useProjectStore.getState();
-      expect(state.project.junctions).toHaveLength(1);
-      expect(state.project.roads).toHaveLength(1);
+  it('removeJunction removes the matching junction', () => {
+    useProjectStore.setState({
+      project: { ...initialProject, junctions: [baseJunction] },
     });
+
+    useProjectStore.getState().removeJunction('j1');
+
+    expect(useProjectStore.getState().project.junctions).toEqual([]);
+  });
+
+  it('addJunctionWithRoads adds the junction and all associated roads', () => {
+    useProjectStore.getState().addJunctionWithRoads(baseJunction, [makeRoad('r1'), makeRoad('r2')]);
+
+    const state = useProjectStore.getState();
+    expect(state.project.junctions).toEqual([baseJunction]);
+    expect(state.project.roads.map((road) => road.id)).toEqual(['r1', 'r2']);
   });
 });

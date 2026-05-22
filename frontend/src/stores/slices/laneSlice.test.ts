@@ -84,6 +84,13 @@ describe('laneSlice', () => {
       useProjectStore.getState().updateLaneType('r1', 0, 'right', 1, 'shoulder');
       expect(useProjectStore.getState().canUndo()).toBe(true);
     });
+
+    it('should leave the project unchanged when the section does not exist', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      const snapshot = useProjectStore.getState().project;
+      useProjectStore.getState().updateLaneType('r1', 99, 'right', 1, 'shoulder');
+      expect(useProjectStore.getState().project).toEqual(snapshot);
+    });
   });
 
   describe('updateLaneWidth', () => {
@@ -92,7 +99,8 @@ describe('laneSlice', () => {
       const newWidth = { s_offset: 0, a: 4.0, b: 0, c: 0, d: 0 };
       useProjectStore.getState().updateLaneWidth('r1', 0, 'right', 1, newWidth);
       const lane = useProjectStore.getState().project.roads[0]!.lane_sections[0]!.right[0]!;
-      expect(lane.width[0]!.a).toBe(4.0);
+      expect(lane.width).toEqual([newWidth]);
+      expect(useProjectStore.getState().isDirty).toBe(true);
     });
   });
 

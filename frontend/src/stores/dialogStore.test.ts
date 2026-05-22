@@ -79,6 +79,19 @@ describe('dialogStore', () => {
     expect(useDialogStore.getState().dialogs).toHaveLength(0);
   });
 
+  it('dismissDialog only removes the matched dialog', () => {
+    const firstResolve = vi.fn();
+    const secondResolve = vi.fn();
+    useDialogStore.getState().pushDialog({ id: '1', type: 'alert', message: 'First', resolve: firstResolve });
+    useDialogStore.getState().pushDialog({ id: '2', type: 'confirm', message: 'Second', resolve: secondResolve });
+
+    useDialogStore.getState().dismissDialog('1');
+
+    expect(firstResolve).toHaveBeenCalledWith(null);
+    expect(secondResolve).not.toHaveBeenCalled();
+    expect(useDialogStore.getState().dialogs.map((dialog) => dialog.id)).toEqual(['2']);
+  });
+
   it('dismissDialog does nothing for an unknown id', () => {
     useDialogStore.getState().dismissDialog('nonexistent');
     expect(useDialogStore.getState().dialogs).toHaveLength(0);
