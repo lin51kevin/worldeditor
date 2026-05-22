@@ -148,7 +148,7 @@ export function useViewportHoverPick({
           return;
         }
 
-        const signalHit = await service.pickSignalAtPoint(visibleProject, position.x, position.y, 4.0);
+        const signalHit = await service.pickSignalAtPointCached(position.x, position.y, 4.0);
         if (signalHit !== null) {
           hoveredSignalRef.current = signalHit;
           if (!renderer.pointerDragging) {
@@ -158,7 +158,7 @@ export function useViewportHoverPick({
         }
 
         hoveredSignalRef.current = null;
-        const objectHit = await service.pickObjectAtPoint(visibleProject, position.x, position.y, 4.0);
+        const objectHit = await service.pickObjectAtPointCached(position.x, position.y, 4.0);
         if (objectHit !== null) {
           hoveredObjectRef.current = objectHit;
           if (!renderer.pointerDragging) {

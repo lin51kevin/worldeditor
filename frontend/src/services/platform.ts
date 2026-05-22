@@ -463,6 +463,12 @@ export interface PlatformService {
   /** Snap point using cached project. Call setProjectCache() first. */
   snapPointCached(x: number, y: number, config: SnapConfig, excludeRoadId?: string): Promise<SnapResult>;
 
+  /** Pick signal using cached project. Call setProjectCache() first. */
+  pickSignalAtPointCached(x: number, y: number, threshold: number): Promise<{ roadId: string; signalId: string } | null>;
+
+  /** Pick road object using cached project. Call setProjectCache() first. */
+  pickObjectAtPointCached(x: number, y: number, threshold: number): Promise<{ roadId: string; objectId: string } | null>;
+
   // --- Uncached picking (legacy, for one-off calls) ---
 
   /** Find the closest road to a world-space point. Returns road ID or null. */

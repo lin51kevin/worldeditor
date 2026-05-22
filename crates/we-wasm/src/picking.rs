@@ -771,6 +771,52 @@ struct LanePickResult {
     lane_id: i32,
 }
 
+/// Pick the nearest signal using the cached project + spatial index.
+///
+/// Returns `{ roadId, signalId }` or null. No JSON serialisation per call.
+#[wasm_bindgen]
+pub fn pick_signal_at_point_cached(x: f64, y: f64, threshold: f64) -> Result<JsValue, JsError> {
+    PROJECT_CACHE.with(|cell| {
+        let mut borrow = cell.borrow_mut();
+        let cache = borrow.as_mut().ok_or_else(|| {
+            JsError::new("Project cache not initialised — call set_project_cache() first")
+        })?;
+        match we_core::picking::pick_signal_cached(cache, x, y, threshold) {
+            Some(result) => {
+                let hit = SignalHit {
+                    road_id: result.road_id,
+                    signal_id: result.signal_id,
+                };
+                serde_wasm_bindgen::to_value(&hit).map_err(|e| JsError::new(&e.to_string()))
+            }
+            None => Ok(JsValue::NULL),
+        }
+    })
+}
+
+/// Pick the nearest road object using the cached project + spatial index.
+///
+/// Returns `{ roadId, objectId }` or null. No JSON serialisation per call.
+#[wasm_bindgen]
+pub fn pick_object_at_point_cached(x: f64, y: f64, threshold: f64) -> Result<JsValue, JsError> {
+    PROJECT_CACHE.with(|cell| {
+        let mut borrow = cell.borrow_mut();
+        let cache = borrow.as_mut().ok_or_else(|| {
+            JsError::new("Project cache not initialised — call set_project_cache() first")
+        })?;
+        match we_core::picking::pick_object_cached(cache, x, y, threshold) {
+            Some(result) => {
+                let hit = ObjectHit {
+                    road_id: result.road_id,
+                    object_id: result.object_id,
+                };
+                serde_wasm_bindgen::to_value(&hit).map_err(|e| JsError::new(&e.to_string()))
+            }
+            None => Ok(JsValue::NULL),
+        }
+    })
+}
+
 /// Project a world-space point onto a road's reference line, returning road-local
 /// coordinates `{ s, t, hdg }` at the closest point.
 ///

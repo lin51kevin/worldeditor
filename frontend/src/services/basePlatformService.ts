@@ -184,6 +184,16 @@ export abstract class BasePlatformService implements PlatformService {
     return wasm.snap_point_cached(x, y, JSON.stringify(config), excludeRoadId);
   }
 
+  async pickSignalAtPointCached(x: number, y: number, threshold: number): Promise<{ roadId: string; signalId: string } | null> {
+    const wasm = await this.getWasm();
+    return wasm.pick_signal_at_point_cached(x, y, threshold);
+  }
+
+  async pickObjectAtPointCached(x: number, y: number, threshold: number): Promise<{ roadId: string; objectId: string } | null> {
+    const wasm = await this.getWasm();
+    return wasm.pick_object_at_point_cached(x, y, threshold);
+  }
+
   // --- Picking (uncached — legacy, for one-off calls) ---
 
   async pickRoadAtPoint(project: Project, x: number, y: number, threshold: number): Promise<string | null> {

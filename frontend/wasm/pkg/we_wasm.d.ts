@@ -469,6 +469,13 @@ export function pick_lane_at_point_cached(x: number, y: number, threshold: numbe
 export function pick_object_at_point(project_json: string, x: number, y: number, threshold: number): any;
 
 /**
+ * Pick the nearest road object using the cached project + spatial index.
+ *
+ * Returns `{ roadId, objectId }` or null. No JSON serialisation per call.
+ */
+export function pick_object_at_point_cached(x: number, y: number, threshold: number): any;
+
+/**
  * Find the closest road to a world-space point.
  *
  * Returns the road ID as a string, or null if no road is within the threshold.
@@ -490,6 +497,13 @@ export function pick_road_at_point_cached(x: number, y: number, threshold: numbe
  * Returns JSON `{ "roadId": string, "signalId": string }` or null.
  */
 export function pick_signal_at_point(project_json: string, x: number, y: number, threshold: number): any;
+
+/**
+ * Pick the nearest signal using the cached project + spatial index.
+ *
+ * Returns `{ roadId, signalId }` or null. No JSON serialisation per call.
+ */
+export function pick_signal_at_point_cached(x: number, y: number, threshold: number): any;
 
 /**
  * Pick the closest knot to a point.

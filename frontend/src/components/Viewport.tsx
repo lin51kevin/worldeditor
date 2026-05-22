@@ -678,7 +678,7 @@ export function Viewport() {
         const visibleProject = getVisibleProject();
         if (visibleProject) {
           if (viewState.editMode === 'lanesection') {
-            const roadId = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
+            const roadId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 5.0);
             if (roadId) {
               const road = visibleProject.roads.find(r => r.id === roadId);
               if (road) {
@@ -703,7 +703,7 @@ export function Viewport() {
               const side = laneId > 0 ? 'left' as const : 'right' as const;
               useProjectStore.getState().selectLane(roadId, sectionIndex, side, laneId);
             } else {
-              const roadId = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
+              const roadId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 5.0);
               if (roadId) {
                 useProjectStore.getState().selectRoad(roadId);
               }
@@ -736,7 +736,7 @@ export function Viewport() {
         const service = await getPlatformService();
         const visibleProject = getVisibleProject();
         if (visibleProject) {
-          const roadId = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 10.0);
+          const roadId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 10.0);
           if (roadId) {
             const allItems = usePluginContribStore.getState().templateSections.flatMap((s) => s.items);
             const item = allItems.find((i) => i.id === templateId);
@@ -781,7 +781,7 @@ export function Viewport() {
       // moderate threshold (4 m) before road picking (5 m) would always win.
       // Skip during shift-click which is reserved for multi-road/junction selection.
       if (!e.shiftKey) {
-        const signalHit = await service.pickSignalAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
+        const signalHit = await service.pickSignalAtPointCached(worldPos.x, worldPos.y, 4.0);
         if (signalHit !== null) {
           useProjectStore.getState().selectSignal(signalHit.roadId, signalHit.signalId);
           const rendererInst = rendererRef.current;
@@ -791,7 +791,7 @@ export function Viewport() {
           lastHoverMeshIdRef.current = null;
           return;
         }
-        const objectHit = await service.pickObjectAtPoint(visibleProject, worldPos.x, worldPos.y, 4.0);
+        const objectHit = await service.pickObjectAtPointCached(worldPos.x, worldPos.y, 4.0);
         if (objectHit !== null) {
           useProjectStore.getState().selectObject(objectHit.roadId, objectHit.objectId);
           const rendererInst = rendererRef.current;
@@ -805,7 +805,7 @@ export function Viewport() {
         }
       }
 
-      const roadId = await service.pickRoadAtPoint(visibleProject, worldPos.x, worldPos.y, 5.0);
+      const roadId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 5.0);
 
       if (e.shiftKey) {
         if (roadId) {
@@ -815,7 +815,7 @@ export function Viewport() {
             : [...selectedRoadIds, roadId];
           useProjectStore.getState().selectMultiple(newRoadIds, selectedJunctionIds);
         } else {
-          const junctionId = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
+          const junctionId = await service.pickJunctionAtPointCached(worldPos.x, worldPos.y, 8.0);
           if (junctionId) {
             const { selectedRoadIds, selectedJunctionIds } = useProjectStore.getState();
             const newJunctionIds = selectedJunctionIds.includes(junctionId)
@@ -840,7 +840,7 @@ export function Viewport() {
         lastHoverMeshIdRef.current = null;
         return;
       }
-      const junctionId = await service.pickJunctionAtPoint(visibleProject, worldPos.x, worldPos.y, 8.0);
+      const junctionId = await service.pickJunctionAtPointCached(worldPos.x, worldPos.y, 8.0);
       if (junctionId !== null) {
         useProjectStore.getState().selectJunction(junctionId);
         const rendererInst = rendererRef.current;

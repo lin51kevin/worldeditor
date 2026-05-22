@@ -200,6 +200,8 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     generateObjectVertices: vi.fn().mockResolvedValue(new Float32Array()),
     pickSignalAtPoint: vi.fn().mockResolvedValue(null),
     pickObjectAtPoint: vi.fn().mockResolvedValue(null),
+    pickSignalAtPointCached: vi.fn().mockResolvedValue(null),
+    pickObjectAtPointCached: vi.fn().mockResolvedValue(null),
     generateSingleSignalVertices: vi.fn().mockResolvedValue(new Float32Array()),
     generateSingleObjectVertices: vi.fn().mockResolvedValue(new Float32Array()),
     getSignalWorldPos: vi.fn().mockResolvedValue(null),
@@ -345,7 +347,7 @@ describe('Viewport', () => {
 
   it('selects a road on plain left click', async () => {
     const platform = createPlatformMock();
-    (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+    (platform.pickRoadAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
     rendererMocks.isSupported.mockReturnValue(true);
     rendererMocks.init.mockResolvedValue(true);
     rendererMocks.unprojectToGround.mockReturnValue({ x: 10, y: 20 });
@@ -359,7 +361,7 @@ describe('Viewport', () => {
     fireEvent.mouseDown(canvas, { button: 0, clientX: 24, clientY: 32 });
     fireEvent.click(canvas, { button: 0, clientX: 24, clientY: 32 });
 
-    await waitFor(() => expect(platform.pickRoadAtPoint).toHaveBeenCalledWith(makeProject(), 10, 20, 5.0));
+    await waitFor(() => expect(platform.pickRoadAtPointCached).toHaveBeenCalledWith(10, 20, 5.0));
     expect(useProjectStore.getState().selectedRoadId).toBe('road-1');
   });
 
@@ -379,7 +381,7 @@ describe('Viewport', () => {
     fireEvent.mouseMove(canvas, { buttons: 1, clientX: 40, clientY: 52, ctrlKey: true });
     fireEvent.click(canvas, { button: 0, clientX: 40, clientY: 52, ctrlKey: true });
 
-    expect(platform.pickRoadAtPoint).not.toHaveBeenCalled();
+    expect(platform.pickRoadAtPointCached).not.toHaveBeenCalled();
     expect(useProjectStore.getState().selectedRoadId).toBeNull();
   });
 
@@ -584,7 +586,7 @@ describe('Viewport', () => {
 
   it('shift+click adds a road to multi-selection', async () => {
     const platform = createPlatformMock();
-    (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+    (platform.pickRoadAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
     rendererMocks.isSupported.mockReturnValue(true);
     rendererMocks.init.mockResolvedValue(true);
     rendererMocks.unprojectToGround.mockReturnValue({ x: 10, y: 20 });
@@ -609,7 +611,7 @@ describe('Viewport', () => {
 
   it('shift+click on already-selected road removes it from multi-selection', async () => {
     const platform = createPlatformMock();
-    (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+    (platform.pickRoadAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
     rendererMocks.isSupported.mockReturnValue(true);
     rendererMocks.init.mockResolvedValue(true);
     rendererMocks.unprojectToGround.mockReturnValue({ x: 10, y: 20 });
@@ -876,7 +878,7 @@ describe('Viewport', () => {
 
     it('lanesection mode selects lane section at clicked position', async () => {
       await setupLaneTest('lanesection', (platform) => {
-        (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+        (platform.pickRoadAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
         (platform.snapPointOnRoad as ReturnType<typeof vi.fn>).mockResolvedValue({ s: 15, t: 0, hdg: 0 });
       });
 
@@ -911,7 +913,7 @@ describe('Viewport', () => {
     it('lane mode falls back to selectRoad when pickLane returns null', async () => {
       await setupLaneTest('lane', (platform) => {
         (platform.pickLaneAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-        (platform.pickRoadAtPoint as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+        (platform.pickRoadAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
       });
 
       await waitFor(() => {

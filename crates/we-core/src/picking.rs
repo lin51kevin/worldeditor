@@ -66,6 +66,133 @@ pub fn pick_lane_cached(
     pick_lane_with_index(project, index, x, y, threshold)
 }
 
+/// Result of a signal pick operation.
+#[derive(Debug, Clone)]
+pub struct SignalPickResult {
+    pub road_id: String,
+    pub signal_id: String,
+    pub distance: f64,
+}
+
+/// Result of an object pick operation.
+#[derive(Debug, Clone)]
+pub struct ObjectPickResult {
+    pub road_id: String,
+    pub object_id: String,
+    pub distance: f64,
+}
+
+/// Pick the nearest signal to a world-space point (cached version).
+///
+/// Uses the spatial index to narrow candidates to nearby roads, then checks
+/// each signal on those roads. Avoids JSON re-parsing on every call.
+pub fn pick_signal_cached(
+    cache: &mut ProjectCache,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Option<SignalPickResult> {
+    use crate::geometry::eval::{evaluate_road_at_s, offset_point};
+
+    cache.get_index()?;
+    let project = &cache.project;
+    let index = cache.spatial_index.as_ref().unwrap();
+
+    // Use spatial index to find nearby roads, then check their signals
+    let candidates = index.query_point(x, y, threshold);
+
+    let mut best: Option<SignalPickResult> = None;
+    let mut best_dist = threshold;
+
+    for candidate in &candidates {
+        if candidate.kind != ElementKind::Road {
+            continue;
+        }
+        let road = match project.roads.iter().find(|r| r.id == candidate.id) {
+            Some(r) => r,
+            None => continue,
+        };
+        if road.render_hidden {
+            continue;
+        }
+        for signal in &road.signals {
+            let Some(ref_pt) = evaluate_road_at_s(road, signal.s) else {
+                continue;
+            };
+            let (wx, wy, _) = offset_point(&ref_pt, signal.t, 0.0);
+            let dx = wx - x;
+            let dy = wy - y;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < best_dist {
+                best_dist = dist;
+                best = Some(SignalPickResult {
+                    road_id: road.id.clone(),
+                    signal_id: signal.id.clone(),
+                    distance: dist,
+                });
+            }
+        }
+    }
+
+    best
+}
+
+/// Pick the nearest road object to a world-space point (cached version).
+///
+/// Uses the spatial index to narrow candidates to nearby roads, then checks
+/// each object on those roads. Avoids JSON re-parsing on every call.
+pub fn pick_object_cached(
+    cache: &mut ProjectCache,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Option<ObjectPickResult> {
+    use crate::geometry::eval::{evaluate_road_at_s, offset_point};
+
+    cache.get_index()?;
+    let project = &cache.project;
+    let index = cache.spatial_index.as_ref().unwrap();
+
+    let candidates = index.query_point(x, y, threshold);
+
+    let mut best: Option<ObjectPickResult> = None;
+    let mut best_dist = threshold;
+
+    for candidate in &candidates {
+        if candidate.kind != ElementKind::Road {
+            continue;
+        }
+        let road = match project.roads.iter().find(|r| r.id == candidate.id) {
+            Some(r) => r,
+            None => continue,
+        };
+        if road.render_hidden {
+            continue;
+        }
+        for obj in &road.objects {
+            let s = obj.position.x;
+            let t = obj.position.y;
+            let Some(ref_pt) = evaluate_road_at_s(road, s) else {
+                continue;
+            };
+            let (wx, wy, _) = offset_point(&ref_pt, t, 0.0);
+            let dx = wx - x;
+            let dy = wy - y;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < best_dist {
+                best_dist = dist;
+                best = Some(ObjectPickResult {
+                    road_id: road.id.clone(),
+                    object_id: obj.id.clone(),
+                    distance: dist,
+                });
+            }
+        }
+    }
+
+    best
+}
+
 /// Internal implementation that works with a pre-built spatial index.
 fn pick_road_with_index(
     project: &Project,
@@ -498,5 +625,125 @@ mod tests {
         let road = make_straight_road("1", 100.0);
         let hw = road_half_width_at(&road, 50.0);
         assert!((hw - 3.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_pick_signal_cached_finds_signal() {
+        let mut project = Project::default();
+        let mut road = make_straight_road("1", 100.0);
+        road.signals.push(Signal {
+            id: "sig1".into(),
+            name: String::new(),
+            s: 50.0,
+            t: 3.0, // 3m left of reference line
+            z_offset: 0.0,
+            h_offset: 0.0,
+            width: 0.6,
+            height: 2.0,
+            signal_type: String::new(),
+            signal_subtype: String::new(),
+            value: None,
+            orientation: "+".into(),
+            is_dynamic: false,
+            country: String::new(),
+            unit: String::new(),
+            validities: vec![],
+        });
+        project.roads.push(road);
+        let mut cache = ProjectCache::new(project);
+        // Road at y=0, hdg=0 → signal world pos is (50, 3)
+        let result = pick_signal_cached(&mut cache, 50.0, 3.0, 5.0);
+        assert!(result.is_some());
+        let hit = result.unwrap();
+        assert_eq!(hit.road_id, "1");
+        assert_eq!(hit.signal_id, "sig1");
+    }
+
+    #[test]
+    fn test_pick_signal_cached_too_far() {
+        let mut project = Project::default();
+        let mut road = make_straight_road("1", 100.0);
+        road.signals.push(Signal {
+            id: "sig1".into(),
+            name: String::new(),
+            s: 50.0,
+            t: 3.0,
+            z_offset: 0.0,
+            h_offset: 0.0,
+            width: 0.6,
+            height: 2.0,
+            signal_type: String::new(),
+            signal_subtype: String::new(),
+            value: None,
+            orientation: "+".into(),
+            is_dynamic: false,
+            country: String::new(),
+            unit: String::new(),
+            validities: vec![],
+        });
+        project.roads.push(road);
+        let mut cache = ProjectCache::new(project);
+        let result = pick_signal_cached(&mut cache, 200.0, 200.0, 5.0);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_pick_object_cached_finds_object() {
+        let mut project = Project::default();
+        let mut road = make_straight_road("1", 100.0);
+        road.objects.push(RoadObject {
+            id: "obj1".into(),
+            object_type: ObjectType::Barrier,
+            name: String::new(),
+            position: Point3D { x: 30.0, y: -2.0, z: 0.0, id: None }, // s=30, t=-2
+            orientation: 0.0,
+            hdg: 0.0,
+            pitch: 0.0,
+            roll: 0.0,
+            width: 1.0,
+            height: 1.0,
+            length: 0.0,
+            corners: vec![],
+            corner_type: CornerType::default(),
+            validity: None,
+            from_object_ref: false,
+            user_data: vec![],
+        });
+        project.roads.push(road);
+        let mut cache = ProjectCache::new(project);
+        // Road at y=0, hdg=0 → object world pos is (30, -2)
+        let result = pick_object_cached(&mut cache, 30.0, -2.0, 5.0);
+        assert!(result.is_some());
+        let hit = result.unwrap();
+        assert_eq!(hit.road_id, "1");
+        assert_eq!(hit.object_id, "obj1");
+    }
+
+    #[test]
+    fn test_pick_object_cached_too_far() {
+        let mut project = Project::default();
+        let mut road = make_straight_road("1", 100.0);
+        road.objects.push(RoadObject {
+            id: "obj1".into(),
+            object_type: ObjectType::Barrier,
+            name: String::new(),
+            position: Point3D { x: 30.0, y: -2.0, z: 0.0, id: None },
+            orientation: 0.0,
+            hdg: 0.0,
+            pitch: 0.0,
+            roll: 0.0,
+            width: 1.0,
+            height: 1.0,
+            length: 0.0,
+            corners: vec![],
+            corner_type: CornerType::default(),
+            validity: None,
+            from_object_ref: false,
+            user_data: vec![],
+        });
+        project.roads.push(road);
+        let mut cache = ProjectCache::new(project);
+        let result = pick_object_cached(&mut cache, 200.0, 200.0, 5.0);
+        assert!(result.is_none());
     }
 }

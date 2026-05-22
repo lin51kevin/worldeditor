@@ -112,6 +112,8 @@ function createPlatformMock() {
     generateObjectVertices: vi.fn<PlatformService['generateObjectVertices']>().mockResolvedValue(new Float32Array()),
     pickSignalAtPoint: vi.fn<PlatformService['pickSignalAtPoint']>().mockResolvedValue(null),
     pickObjectAtPoint: vi.fn<PlatformService['pickObjectAtPoint']>().mockResolvedValue(null),
+    pickSignalAtPointCached: vi.fn<PlatformService['pickSignalAtPointCached']>().mockResolvedValue(null),
+    pickObjectAtPointCached: vi.fn<PlatformService['pickObjectAtPointCached']>().mockResolvedValue(null),
     generateSingleSignalVertices: vi.fn<PlatformService['generateSingleSignalVertices']>().mockResolvedValue(new Float32Array()),
     generateSingleObjectVertices: vi.fn<PlatformService['generateSingleObjectVertices']>().mockResolvedValue(new Float32Array()),
     getSignalWorldPos: vi.fn<PlatformService['getSignalWorldPos']>().mockResolvedValue(null),
