@@ -100,6 +100,7 @@ export function useViewportMeshes({
   const cachedSignalVertsRef = useRef<Float32Array>(new Float32Array(0));
   const cachedObjectVertsRef = useRef<Float32Array>(new Float32Array(0));
   const surfaceViewModeRef = useRef(viewMode);
+  const surfaceColorModeRef = useRef(display.colorMode);
 
   const updateSurfaceMesh = useCallback(async () => {
     const renderer = rendererRef.current;
@@ -124,10 +125,12 @@ export function useViewportMeshes({
         newJunctionRefs.size !== prev.junctionRefs.size ||
         [...newJunctionRefs].some(([id, ref]) => prev.junctionRefs.get(id) !== ref);
       const modeChanged = surfaceViewModeRef.current !== viewMode;
-      const dataChanged = roadsChanged || junctionsChanged || modeChanged;
+      const colorModeChanged = surfaceColorModeRef.current !== display.colorMode;
+      const dataChanged = roadsChanged || junctionsChanged || modeChanged || colorModeChanged;
 
       surfaceDepsRef.current = { roadRefs: newRoadRefs, junctionRefs: newJunctionRefs };
       surfaceViewModeRef.current = viewMode;
+      surfaceColorModeRef.current = display.colorMode;
 
       // If data hasn't changed, we can skip WASM calls and just re-merge cached layers
       if (dataChanged || cachedRoadJunctionVertsRef.current.length === 0) {
