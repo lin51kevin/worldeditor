@@ -13,6 +13,7 @@ export type ViewportEvent =
   | { type: 'pan-to-junction'; junctionId: string }
   | { type: 'pan-to-signal'; roadId: string; signalId: string }
   | { type: 'pan-to-object'; roadId: string; objectId: string }
+  | { type: 'pan-to-lane'; roadId: string; sectionIndex: number; laneId: number }
   | { type: 'set-dimension'; dimension: '3d' | '2d' }
   | { type: 'set-show-grid'; show: boolean }
   | { type: 'set-show-axis'; show: boolean }

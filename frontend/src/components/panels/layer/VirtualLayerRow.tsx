@@ -209,6 +209,7 @@ const LaneRow = memo(function LaneRow({
   const handleSelect = useCallback(() => {
     onSelectionFromPanel();
     useProjectStore.getState().selectLane(roadId, sectionIndex, side, laneId);
+    emitViewportEvent({ type: 'pan-to-lane', roadId, sectionIndex, laneId });
   }, [roadId, sectionIndex, side, laneId, onSelectionFromPanel]);
 
   const handleToggleVisibility = useCallback(() => {

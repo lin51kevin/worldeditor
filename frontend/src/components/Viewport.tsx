@@ -259,12 +259,11 @@ export function Viewport() {
           })();
           break;
         case 'pan-to-signal': {
-          // Pan to the actual world position of the signal
-          const { project: currentProject } = useProjectStore.getState();
+          // Pan to the actual world position of the signal (using cached project)
           (async () => {
             try {
               const service = await getPlatformService();
-              const pos = await service.getSignalWorldPos(currentProject, event.roadId, event.signalId);
+              const pos = await service.getSignalWorldPosCached(event.roadId, event.signalId);
               if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
                 // Build a tiny synthetic quad centred on the signal position
                 const sz = 1.0;
@@ -282,12 +281,11 @@ export function Viewport() {
           break;
         }
         case 'pan-to-object': {
-          // Pan to the actual world position of the object
-          const { project: currentProject } = useProjectStore.getState();
+          // Pan to the actual world position of the object (using cached project)
           (async () => {
             try {
               const service = await getPlatformService();
-              const pos = await service.getObjectWorldPos(currentProject, event.roadId, event.objectId);
+              const pos = await service.getObjectWorldPosCached(event.roadId, event.objectId);
               if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
                 const sz = 1.0;
                 const synth = new Float32Array([
@@ -299,6 +297,27 @@ export function Viewport() {
               }
             } catch (err) {
               console.error('[Viewport] pan-to-object failed:', err);
+            }
+          })();
+          break;
+        }
+        case 'pan-to-lane': {
+          // Pan to the center of the lane
+          (async () => {
+            try {
+              const service = await getPlatformService();
+              const pos = await service.getLaneWorldPosCached(event.roadId, event.sectionIndex, event.laneId);
+              if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+                const sz = 1.0;
+                const synth = new Float32Array([
+                  pos.x - sz, pos.y - sz, 0, 1, 1, 1, 1,
+                  pos.x + sz, pos.y - sz, 0, 1, 1, 1, 1,
+                  pos.x,      pos.y + sz, 0, 1, 1, 1, 1,
+                ]);
+                renderer.panToCenter(synth);
+              }
+            } catch (err) {
+              console.error('[Viewport] pan-to-lane failed:', err);
             }
           })();
           break;

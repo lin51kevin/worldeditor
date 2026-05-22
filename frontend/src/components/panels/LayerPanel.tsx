@@ -45,7 +45,7 @@ export function LayerPanel() {
 
   // Refs for auto-scroll
   const selectionSourceRef = useRef<'panel' | 'viewport'>('viewport');
-  const pendingScrollRef = useRef<string | null>(null);
+  const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Track selection source from panel clicks
@@ -92,7 +92,7 @@ export function LayerPanel() {
     }
 
     // Store the target for the scroll effect (resolved after flatItems updates)
-    pendingScrollRef.current = id;
+    setPendingScrollTarget(id);
   }, [selectedRoadId, selectedJunctionId, selectedSceneNode]);
 
   const toggleRoadExpand = useCallback((roadId: string) => {
@@ -210,29 +210,28 @@ export function LayerPanel() {
 
   // Resolve pending scroll target after flatItems updates (items become visible after expand)
   useEffect(() => {
-    const target = pendingScrollRef.current;
-    if (!target) return;
+    if (!pendingScrollTarget) return;
 
     const index = flatItems.findIndex((item) => {
       switch (item.type) {
-        case 'road': return `road-${item.roadId}` === target;
-        case 'laneSection': return `lsec-${item.roadId}-${item.sectionIndex}` === target;
-        case 'lane': return `lane-${item.roadId}-${item.sectionIndex}-${item.side}-${item.laneId}` === target;
-        case 'signal': return `signal-${item.roadId}-${item.signalId}` === target;
-        case 'object': return `object-${item.roadId}-${item.objectId}` === target;
-        case 'junction': return `junc-${item.junctionId}` === target;
+        case 'road': return `road-${item.roadId}` === pendingScrollTarget;
+        case 'laneSection': return `lsec-${item.roadId}-${item.sectionIndex}` === pendingScrollTarget;
+        case 'lane': return `lane-${item.roadId}-${item.sectionIndex}-${item.side}-${item.laneId}` === pendingScrollTarget;
+        case 'signal': return `signal-${item.roadId}-${item.signalId}` === pendingScrollTarget;
+        case 'object': return `object-${item.roadId}-${item.objectId}` === pendingScrollTarget;
+        case 'junction': return `junc-${item.junctionId}` === pendingScrollTarget;
         default: return false;
       }
     });
 
     if (index >= 0) {
-      pendingScrollRef.current = null;
+      setPendingScrollTarget(null);
       // Use rAF to ensure the virtualizer has processed the updated count
       requestAnimationFrame(() => {
         virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' });
       });
     }
-  }, [flatItems, virtualizer]);
+  }, [flatItems, pendingScrollTarget, virtualizer]);
 
   const loaded = roads.length > 0 || junctions.length > 0 || !!header.name;
 

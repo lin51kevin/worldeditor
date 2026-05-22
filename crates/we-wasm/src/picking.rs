@@ -817,6 +817,136 @@ pub fn pick_object_at_point_cached(x: f64, y: f64, threshold: f64) -> Result<JsV
     })
 }
 
+/// Compute the world position of a signal using the cached project (no JSON serialization per call).
+///
+/// Returns `{ x, y }` or null.
+#[wasm_bindgen]
+pub fn get_signal_world_pos_cached(
+    road_id: &str,
+    signal_id: &str,
+) -> Result<JsValue, JsError> {
+    use we_core::geometry::eval::offset_point;
+
+    PROJECT_CACHE.with(|cell| {
+        let borrow = cell.borrow();
+        let cache = borrow.as_ref().ok_or_else(|| {
+            JsError::new("Project cache not initialised — call set_project_cache() first")
+        })?;
+        let project = &cache.project;
+
+        let road = project.roads.iter().find(|r| r.id == road_id);
+        let signal = road.and_then(|r| r.signals.iter().find(|s| s.id == signal_id));
+
+        match (road, signal) {
+            (Some(road), Some(signal)) => {
+                if let Some(ref_pt) = road_point_at_s(&road.plan_view, signal.s) {
+                    let (wx, wy, _) = offset_point(&ref_pt, signal.t, 0.0);
+                    let result = WorldPos { x: wx, y: wy };
+                    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+                } else {
+                    Ok(JsValue::NULL)
+                }
+            }
+            _ => Ok(JsValue::NULL),
+        }
+    })
+}
+
+/// Compute the world position of a road object using the cached project (no JSON serialization per call).
+///
+/// Returns `{ x, y }` or null.
+#[wasm_bindgen]
+pub fn get_object_world_pos_cached(
+    road_id: &str,
+    object_id: &str,
+) -> Result<JsValue, JsError> {
+    use we_core::geometry::eval::offset_point;
+
+    PROJECT_CACHE.with(|cell| {
+        let borrow = cell.borrow();
+        let cache = borrow.as_ref().ok_or_else(|| {
+            JsError::new("Project cache not initialised — call set_project_cache() first")
+        })?;
+        let project = &cache.project;
+
+        let road = project.roads.iter().find(|r| r.id == road_id);
+        let object = road.and_then(|r| r.objects.iter().find(|o| o.id == object_id));
+
+        match (road, object) {
+            (Some(road), Some(obj)) => {
+                let s = obj.position.x;
+                let t = obj.position.y;
+                if let Some(ref_pt) = road_point_at_s(&road.plan_view, s) {
+                    let (wx, wy, _) = offset_point(&ref_pt, t, 0.0);
+                    let result = WorldPos { x: wx, y: wy };
+                    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+                } else {
+                    Ok(JsValue::NULL)
+                }
+            }
+            _ => Ok(JsValue::NULL),
+        }
+    })
+}
+
+/// Compute the world position of a lane center at a specific s-coordinate using the cached project.
+///
+/// Returns `{ x, y }` or null.
+#[wasm_bindgen]
+pub fn get_lane_world_pos_cached(
+    road_id: &str,
+    section_index: usize,
+    lane_id: i32,
+) -> Result<JsValue, JsError> {
+    use we_core::geometry::eval::offset_point;
+
+    PROJECT_CACHE.with(|cell| {
+        let borrow = cell.borrow();
+        let cache = borrow.as_ref().ok_or_else(|| {
+            JsError::new("Project cache not initialised — call set_project_cache() first")
+        })?;
+        let project = &cache.project;
+
+        let road = project.roads.iter().find(|r| r.id == road_id);
+        if let Some(road) = road {
+            if let Some(section) = road.lane_sections.get(section_index) {
+                // Find the lane's center offset: sum widths of inner lanes + half this lane's width
+                let s_mid = section.s + (road.lane_sections.get(section_index + 1)
+                    .map(|ns| ns.s)
+                    .unwrap_or(road.length)
+                    - section.s) / 2.0;
+
+                // Compute lateral offset to the lane center
+                let lanes = if lane_id > 0 { &section.left } else { &section.right };
+                let abs_id = lane_id.unsigned_abs() as usize;
+                let mut t_offset = 0.0;
+                for lane in lanes.iter() {
+                    let lane_abs_id = lane.id.unsigned_abs() as usize;
+                    let w = lane.width.first().map(|wp| wp.a).unwrap_or(3.5);
+                    if lane_abs_id == abs_id {
+                        t_offset += w / 2.0;
+                        break;
+                    }
+                    t_offset += w;
+                }
+                let t = if lane_id > 0 { t_offset } else { -t_offset };
+
+                if let Some(ref_pt) = road_point_at_s(&road.plan_view, s_mid) {
+                    let (wx, wy, _) = offset_point(&ref_pt, t, 0.0);
+                    let result = WorldPos { x: wx, y: wy };
+                    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+                } else {
+                    Ok(JsValue::NULL)
+                }
+            } else {
+                Ok(JsValue::NULL)
+            }
+        } else {
+            Ok(JsValue::NULL)
+        }
+    })
+}
+
 /// Project a world-space point onto a road's reference line, returning road-local
 /// coordinates `{ s, t, hdg }` at the closest point.
 ///

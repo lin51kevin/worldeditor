@@ -504,6 +504,15 @@ export interface PlatformService {
   /** Get the world-space XY position of a road object. Returns { x, y } or null. */
   getObjectWorldPos(project: Project, roadId: string, objectId: string): Promise<{ x: number; y: number } | null>;
 
+  /** Get the world-space XY position of a signal using the cached project (no per-call serialization). */
+  getSignalWorldPosCached(roadId: string, signalId: string): Promise<{ x: number; y: number } | null>;
+
+  /** Get the world-space XY position of a road object using the cached project (no per-call serialization). */
+  getObjectWorldPosCached(roadId: string, objectId: string): Promise<{ x: number; y: number } | null>;
+
+  /** Get the world-space XY position of a lane center using the cached project. */
+  getLaneWorldPosCached(roadId: string, sectionIndex: number, laneId: number): Promise<{ x: number; y: number } | null>;
+
   /** Query elevation and grade at a station on a road. */
   queryElevation(road: Road, s: number): Promise<ElevationQueryResult>;
 

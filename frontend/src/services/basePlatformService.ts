@@ -245,6 +245,21 @@ export abstract class BasePlatformService implements PlatformService {
     return wasm.get_object_world_pos(JSON.stringify(project), roadId, objectId) as { x: number; y: number } | null;
   }
 
+  async getSignalWorldPosCached(roadId: string, signalId: string): Promise<{ x: number; y: number } | null> {
+    const wasm = await this.getWasm();
+    return wasm.get_signal_world_pos_cached(roadId, signalId) as { x: number; y: number } | null;
+  }
+
+  async getObjectWorldPosCached(roadId: string, objectId: string): Promise<{ x: number; y: number } | null> {
+    const wasm = await this.getWasm();
+    return wasm.get_object_world_pos_cached(roadId, objectId) as { x: number; y: number } | null;
+  }
+
+  async getLaneWorldPosCached(roadId: string, sectionIndex: number, laneId: number): Promise<{ x: number; y: number } | null> {
+    const wasm = await this.getWasm();
+    return wasm.get_lane_world_pos_cached(roadId, sectionIndex, laneId) as { x: number; y: number } | null;
+  }
+
   async queryElevation(road: Road, s: number): Promise<ElevationQueryResult> {
     const wasm = await this.getWasm();
     return wasm.query_elevation(JSON.stringify(road), s);

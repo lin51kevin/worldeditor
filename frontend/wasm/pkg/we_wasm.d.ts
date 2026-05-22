@@ -328,6 +328,27 @@ export function get_road_templates(): any;
 export function get_signal_world_pos(project_json: string, road_id: string, signal_id: string): any;
 
 /**
+ * Compute the world position of a signal using the cached project (no JSON serialization per call).
+ *
+ * Returns `{ x, y }` or null.
+ */
+export function get_signal_world_pos_cached(road_id: string, signal_id: string): any;
+
+/**
+ * Compute the world position of a road object using the cached project (no JSON serialization per call).
+ *
+ * Returns `{ x, y }` or null.
+ */
+export function get_object_world_pos_cached(road_id: string, object_id: string): any;
+
+/**
+ * Compute the world position of a lane center using the cached project.
+ *
+ * Returns `{ x, y }` or null.
+ */
+export function get_lane_world_pos_cached(road_id: string, section_index: number, lane_id: number): any;
+
+/**
  * Returns `true` if a project cache has been initialised.
  */
 export function has_project_cache(): boolean;
@@ -723,9 +744,11 @@ export interface InitOutput {
     readonly pick_junction_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
     readonly pick_lane_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
     readonly pick_object_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pick_object_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
     readonly pick_road_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pick_road_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
     readonly pick_signal_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pick_signal_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
     readonly pick_spline_knot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly point_in_junction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly project_is_valid: (a: number, b: number) => [number, number, number];
