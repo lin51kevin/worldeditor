@@ -27,8 +27,11 @@ pub struct Lane {
     #[serde(default)]
     pub render_hidden: bool,
     pub link: Option<LaneLink>,
+    #[serde(default)]
     pub width: Vec<LaneWidth>,
+    #[serde(default)]
     pub borders: Vec<LaneBorder>,
+    #[serde(default)]
     pub road_marks: Vec<RoadMark>,
 }
 
