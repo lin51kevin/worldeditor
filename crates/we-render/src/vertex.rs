@@ -190,4 +190,67 @@ mod tests {
     fn test_line_vertex_size() {
         assert_eq!(std::mem::size_of::<LineVertex>(), 48); // 12 + 8 + 16 + 8 + 4
     }
+
+    #[test]
+    fn test_color_vertex_layout_offsets_match_memory_layout() {
+        assert_eq!(
+            ColorVertex::LAYOUT.array_stride,
+            std::mem::size_of::<ColorVertex>() as wgpu::BufferAddress
+        );
+        assert_eq!(ColorVertex::LAYOUT.attributes.len(), 2);
+        assert_eq!(ColorVertex::LAYOUT.attributes[0].offset, 0);
+        assert_eq!(
+            ColorVertex::LAYOUT.attributes[1].offset,
+            std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress
+        );
+    }
+
+    #[test]
+    fn test_surface_vertex_layout_offsets_match_memory_layout() {
+        assert_eq!(
+            SurfaceVertex::LAYOUT.array_stride,
+            std::mem::size_of::<SurfaceVertex>() as wgpu::BufferAddress
+        );
+        assert_eq!(SurfaceVertex::LAYOUT.attributes.len(), 3);
+        assert_eq!(SurfaceVertex::LAYOUT.attributes[0].offset, 0);
+        assert_eq!(
+            SurfaceVertex::LAYOUT.attributes[1].offset,
+            std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress
+        );
+        assert_eq!(
+            SurfaceVertex::LAYOUT.attributes[2].offset,
+            (std::mem::size_of::<[f32; 3]>() + std::mem::size_of::<[f32; 2]>())
+                as wgpu::BufferAddress
+        );
+    }
+
+    #[test]
+    fn test_line_vertex_new_preserves_fields_and_layout_offsets() {
+        let vertex = LineVertex::new(
+            [1.0, 2.0, 3.0],
+            [0.5, 1.5],
+            [0.1, 0.2, 0.3, 0.4],
+            [4.0, 5.0],
+            2.5,
+        );
+
+        assert_eq!(vertex.position, [1.0, 2.0, 3.0]);
+        assert_eq!(vertex.offset, [0.5, 1.5]);
+        assert_eq!(vertex.color, [0.1, 0.2, 0.3, 0.4]);
+        assert_eq!(vertex.dash_info, [4.0, 5.0]);
+        assert_eq!(vertex.dash_scale, 2.5);
+        assert_eq!(
+            LineVertex::LAYOUT.attributes[3].offset,
+            (std::mem::size_of::<[f32; 3]>()
+                + std::mem::size_of::<[f32; 2]>()
+                + std::mem::size_of::<[f32; 4]>()) as wgpu::BufferAddress
+        );
+        assert_eq!(
+            LineVertex::LAYOUT.attributes[4].offset,
+            (std::mem::size_of::<[f32; 3]>()
+                + std::mem::size_of::<[f32; 2]>()
+                + std::mem::size_of::<[f32; 4]>()
+                + std::mem::size_of::<[f32; 2]>()) as wgpu::BufferAddress
+        );
+    }
 }

@@ -98,12 +98,16 @@ fn compute_arm_edges(road: &we_core::model::Road) -> Option<([f32; 3], [f32; 3])
     let first_ls = &road.lane_sections[0];
 
     // Compute full left-side width (sum of all left lane widths at s=0)
-    let left_total: f64 = first_ls.left.iter()
+    let left_total: f64 = first_ls
+        .left
+        .iter()
         .map(|lane| evaluate_lane_width(&lane.width, 0.0))
         .sum();
 
     // Compute full right-side width (sum of all right lane widths at s=0)
-    let right_total: f64 = first_ls.right.iter()
+    let right_total: f64 = first_ls
+        .right
+        .iter()
         .map(|lane| evaluate_lane_width(&lane.width, 0.0))
         .sum();
 
@@ -129,7 +133,10 @@ mod tests {
     fn make_road(id: &str, x: f64, y: f64, hdg: f64) -> Road {
         let mut road = Road::new(id, 50.0);
         road.plan_view = vec![Geometry {
-            s: 0.0, x, y, hdg,
+            s: 0.0,
+            x,
+            y,
+            hdg,
             length: 50.0,
             geo_type: GeometryType::Line,
         }];
@@ -143,7 +150,13 @@ mod tests {
                 level: 0,
                 render_hidden: false,
                 link: None,
-                width: vec![LaneWidth { s_offset: 0.0, a: 3.5, b: 0.0, c: 0.0, d: 0.0 }],
+                width: vec![LaneWidth {
+                    s_offset: 0.0,
+                    a: 3.5,
+                    b: 0.0,
+                    c: 0.0,
+                    d: 0.0,
+                }],
                 borders: vec![],
                 road_marks: vec![],
             }],
@@ -163,7 +176,13 @@ mod tests {
                 level: 0,
                 render_hidden: false,
                 link: None,
-                width: vec![LaneWidth { s_offset: 0.0, a: 3.5, b: 0.0, c: 0.0, d: 0.0 }],
+                width: vec![LaneWidth {
+                    s_offset: 0.0,
+                    a: 3.5,
+                    b: 0.0,
+                    c: 0.0,
+                    d: 0.0,
+                }],
                 borders: vec![],
                 road_marks: vec![],
             }],
@@ -181,7 +200,9 @@ mod tests {
         let mut road = Road::new(id, length);
         road.junction_id = Some(jid.to_string());
         road.plan_view = vec![Geometry {
-            s: 0.0, x: gf.x, y: gf.y,
+            s: 0.0,
+            x: gf.x,
+            y: gf.y,
             hdg: dy.atan2(dx),
             length,
             geo_type: GeometryType::Line,
@@ -229,7 +250,9 @@ mod tests {
         let mut conn_id = 0;
         for i in 0..4 {
             for j in 0..4 {
-                if i == j { continue; }
+                if i == j {
+                    continue;
+                }
                 let c = make_connector(&format!("c{conn_id}"), jid, arms[i], arms[j]);
                 connections.push(JunctionConnection {
                     id: format!("conn{conn_id}"),
@@ -248,7 +271,9 @@ mod tests {
         project.roads.push(arm_w);
         project.roads.push(arm_n);
         project.roads.push(arm_s);
-        for c in connectors { project.roads.push(c); }
+        for c in connectors {
+            project.roads.push(c);
+        }
         project.junctions.push(Junction {
             id: jid.to_string(),
             name: "4way".to_string(),

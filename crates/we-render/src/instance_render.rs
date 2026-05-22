@@ -70,7 +70,14 @@ impl InstanceData {
     };
 
     /// Create an instance at `(x, y, z)` with heading rotation and uniform scale.
-    pub fn from_transform(x: f32, y: f32, z: f32, heading: f32, scale: f32, color: [f32; 4]) -> Self {
+    pub fn from_transform(
+        x: f32,
+        y: f32,
+        z: f32,
+        heading: f32,
+        scale: f32,
+        color: [f32; 4],
+    ) -> Self {
         let cos_h = heading.cos() * scale;
         let sin_h = heading.sin() * scale;
         Self {

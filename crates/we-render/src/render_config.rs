@@ -456,4 +456,36 @@ mod tests {
             LaneLineColor::White.to_rgba()
         );
     }
+
+    #[test]
+    fn test_road_render_config_default_surface_palette_uses_surface_alpha() {
+        let config = RoadRenderConfig::default();
+
+        for color in [
+            config.color_surface_drivable,
+            config.color_surface_sidewalk,
+            config.color_surface_shoulder,
+            config.color_surface_median,
+            config.color_surface_border,
+            config.color_surface_other,
+        ] {
+            assert!((color.w - config.surface_alpha).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_road_render_config_default_line_dimensions_are_positive() {
+        let config = RoadRenderConfig::default();
+
+        assert!(config.lane_line_width > 0.0);
+        assert!(config.selected_line_width_multiplier > 1.0);
+        assert!(config.dashed_pattern_px.iter().all(|value| *value > 0.0));
+        assert!(
+            config
+                .short_dashed_pattern_px
+                .iter()
+                .all(|value| *value > 0.0)
+        );
+        assert!(config.line_z_offset > config.surface_z_offset);
+    }
 }

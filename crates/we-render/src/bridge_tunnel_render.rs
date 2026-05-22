@@ -275,6 +275,84 @@ mod tests {
             .collect()
     }
 
+    fn assert_position_close(actual: [f32; 3], expected: [f32; 3]) {
+        for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (actual - expected).abs() < 1e-4,
+                "position[{index}] expected {expected}, got {actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_generate_bridge_deck_straight_segment_matches_expected_quad() {
+        let color = [0.2, 0.3, 0.4, 0.5];
+        let vertices =
+            generate_bridge_deck(&make_samples(2, 10.0), 0.0, 10.0, 10.0, 2.0, 1.5, color);
+
+        assert_eq!(vertices.len(), 6);
+        assert_position_close(vertices[0].position, [0.0, -2.0, 1.5]);
+        assert_position_close(vertices[1].position, [0.0, 2.0, 1.5]);
+        assert_position_close(vertices[2].position, [10.0, -2.0, 1.5]);
+        assert_position_close(vertices[4].position, [10.0, 2.0, 1.5]);
+        for vertex in &vertices {
+            assert_eq!(vertex.color, color);
+        }
+    }
+
+    #[test]
+    fn test_generate_tunnel_enclosure_straight_segment_matches_expected_faces() {
+        let color = [0.4, 0.3, 0.2, 0.6];
+        let vertices =
+            generate_tunnel_enclosure(&make_samples(2, 10.0), 0.0, 10.0, 10.0, 2.0, 3.0, color);
+
+        assert_eq!(vertices.len(), 18);
+        assert_position_close(vertices[0].position, [0.0, -2.0, 0.0]);
+        assert_position_close(vertices[1].position, [0.0, -2.0, 3.0]);
+        assert_position_close(vertices[6].position, [0.0, 2.0, 0.0]);
+        assert_position_close(vertices[7].position, [0.0, 2.0, 3.0]);
+        assert_position_close(vertices[12].position, [0.0, -2.0, 3.0]);
+        assert_position_close(vertices[13].position, [0.0, 2.0, 3.0]);
+        for vertex in &vertices {
+            assert_eq!(vertex.color, color);
+        }
+    }
+
+    #[test]
+    fn test_generate_bridge_tunnel_render_data_combines_feature_vertices() {
+        let bridge = Bridge {
+            id: "b1".to_string(),
+            s: 0.0,
+            length: 10.0,
+            bridge_type: "concrete".to_string(),
+        };
+        let tunnel = Tunnel {
+            id: "t1".to_string(),
+            s: 0.0,
+            length: 10.0,
+            tunnel_type: "underpass".to_string(),
+        };
+        let vertices = generate_bridge_tunnel_render_data(
+            &[bridge],
+            &[tunnel],
+            &make_samples(2, 10.0),
+            10.0,
+            &BridgeTunnelConfig::default(),
+        );
+
+        assert_eq!(vertices.len(), 24);
+        assert!(
+            vertices[..6]
+                .iter()
+                .all(|vertex| vertex.color == BRIDGE_COLOR)
+        );
+        assert!(
+            vertices[6..]
+                .iter()
+                .all(|vertex| vertex.color == TUNNEL_COLOR)
+        );
+    }
+
     #[test]
     fn test_bridge_deck_generates_vertices() {
         let samples = make_samples(21, 100.0);

@@ -93,4 +93,51 @@ mod tests {
         let dist = (cam.position - cam.target).norm();
         assert!(dist >= 0.1);
     }
+
+    #[test]
+    fn test_new_perspective_uses_expected_projection_defaults() {
+        let cam = Camera::new_perspective(16.0 / 9.0);
+
+        match cam.projection {
+            ProjectionMode::Perspective { fov_y, near, far } => {
+                assert!((fov_y - 45.0_f64.to_radians()).abs() < 1e-12);
+                assert!((near - 0.1).abs() < 1e-12);
+                assert!((far - 10_000.0).abs() < 1e-12);
+            }
+            ProjectionMode::Orthographic { .. } => panic!("expected perspective projection"),
+        }
+        assert!((cam.aspect_ratio - 16.0 / 9.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_view_matrix_transforms_camera_position_to_origin() {
+        let cam = Camera::new_perspective(1.0);
+        let transformed = cam.view_matrix() * cam.position.to_homogeneous();
+
+        assert!(transformed.x.abs() < 1e-10);
+        assert!(transformed.y.abs() < 1e-10);
+        assert!(transformed.z.abs() < 1e-10);
+        assert!((transformed.w - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_orbit_preserves_distance_to_target() {
+        let mut cam = Camera::new_perspective(1.0);
+        let distance_before = (cam.position - cam.target).norm();
+
+        cam.orbit(0.35, -0.2);
+
+        let distance_after = (cam.position - cam.target).norm();
+        assert!((distance_after - distance_before).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_zoom_factor_one_preserves_position() {
+        let mut cam = Camera::new_perspective(1.0);
+        let original_position = cam.position;
+
+        cam.zoom(1.0);
+
+        assert!((cam.position - original_position).norm() < 1e-12);
+    }
 }

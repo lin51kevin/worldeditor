@@ -497,6 +497,73 @@ mod tests {
         road
     }
 
+    fn assert_position_close(actual: [f32; 3], expected: [f32; 3]) {
+        for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (actual - expected).abs() < 1e-4,
+                "position[{index}] expected {expected}, got {actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_generate_lane_strip_straight_left_lane_matches_expected_offsets() {
+        let ref_pts = sample_road_reference_line(&simple_road(), 100.0);
+        let section_pts: Vec<_> = ref_pts.iter().collect();
+        let widths = vec![LaneWidth {
+            s_offset: 0.0,
+            a: 3.5,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }];
+
+        let verts = generate_lane_strip(&section_pts, &widths, 0.0, &[], 0.0, true, [1.0; 4]);
+
+        assert_eq!(verts.len(), 6);
+        assert_position_close(verts[0].position, [0.0, 0.0, 0.0]);
+        assert_position_close(verts[1].position, [0.0, 3.5, 0.0]);
+        assert_position_close(verts[2].position, [100.0, 0.0, 0.0]);
+        assert_position_close(verts[4].position, [100.0, 3.5, 0.0]);
+    }
+
+    #[test]
+    fn test_generate_lane_strip_straight_right_lane_respects_inner_offset() {
+        let ref_pts = sample_road_reference_line(&simple_road(), 100.0);
+        let section_pts: Vec<_> = ref_pts.iter().collect();
+        let widths = vec![LaneWidth {
+            s_offset: 0.0,
+            a: 3.5,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }];
+
+        let verts = generate_lane_strip(&section_pts, &widths, 0.0, &[], 1.0, false, [1.0; 4]);
+
+        assert_eq!(verts.len(), 6);
+        assert_position_close(verts[0].position, [0.0, -1.0, 0.0]);
+        assert_position_close(verts[1].position, [0.0, -4.5, 0.0]);
+        assert_position_close(verts[2].position, [100.0, -1.0, 0.0]);
+        assert_position_close(verts[4].position, [100.0, -4.5, 0.0]);
+    }
+
+    #[test]
+    fn test_generate_default_ribbon_straight_segment_matches_expected_quad() {
+        let ref_pts = sample_road_reference_line(&simple_road(), 100.0);
+
+        let verts = generate_default_ribbon(&ref_pts, &[], 3.5, 0.25, 0.0);
+
+        assert_eq!(verts.len(), 6);
+        assert_position_close(verts[0].position, [0.0, 3.5, 0.0]);
+        assert_position_close(verts[1].position, [0.0, -3.5, 0.0]);
+        assert_position_close(verts[2].position, [100.0, 3.5, 0.0]);
+        assert_position_close(verts[4].position, [100.0, -3.5, 0.0]);
+        for vertex in &verts {
+            assert_eq!(vertex.color, [0.35, 0.35, 0.38, 0.25]);
+        }
+    }
+
     #[test]
     fn test_generate_road_mesh_no_lanes_uses_default_ribbon() {
         let road = simple_road();
@@ -603,7 +670,11 @@ mod tests {
         let road = simple_road();
         let verts = generate_road_mesh(&road, 50.0, &default_config());
         // 3 points → 2 segments → 12 vertices
-        assert_eq!(verts.len(), 12, "default ribbon: expected 12 vertices for 50m step");
+        assert_eq!(
+            verts.len(),
+            12,
+            "default ribbon: expected 12 vertices for 50m step"
+        );
     }
 
     /// For a straight road along the +X axis, ribbon left edge (positive Y
@@ -629,8 +700,14 @@ mod tests {
     fn test_golden_default_ribbon_x_extent() {
         let road = simple_road();
         let verts = generate_road_mesh(&road, 10.0, &default_config());
-        let min_x = verts.iter().map(|v| v.position[0]).fold(f32::INFINITY, f32::min);
-        let max_x = verts.iter().map(|v| v.position[0]).fold(f32::NEG_INFINITY, f32::max);
+        let min_x = verts
+            .iter()
+            .map(|v| v.position[0])
+            .fold(f32::INFINITY, f32::min);
+        let max_x = verts
+            .iter()
+            .map(|v| v.position[0])
+            .fold(f32::NEG_INFINITY, f32::max);
         assert!(min_x < 0.5, "ribbon should start near x=0, got {min_x}");
         assert!(max_x > 99.0, "ribbon should reach x=100, got {max_x}");
     }
@@ -646,7 +723,8 @@ mod tests {
         // All vertices of a single-type road should share that color.
         for v in &verts {
             assert_eq!(
-                v.color, expected,
+                v.color,
+                expected,
                 "vertex color {c:?} != expected driving color {expected:?}",
                 c = v.color
             );
@@ -659,7 +737,10 @@ mod tests {
     fn test_golden_lane_lines_finite_positions() {
         let road = road_with_lanes();
         let verts = generate_road_lane_lines(&road, 5.0);
-        assert!(!verts.is_empty(), "lane lines should not be empty for road_with_lanes");
+        assert!(
+            !verts.is_empty(),
+            "lane lines should not be empty for road_with_lanes"
+        );
         for v in &verts {
             assert!(v.position[0].is_finite(), "lane line x must be finite");
             assert!(v.position[1].is_finite(), "lane line y must be finite");
@@ -688,8 +769,14 @@ mod tests {
         let road = road_with_lanes();
         let surface = generate_road_mesh(&road, 10.0, &default_config());
         let lines = generate_road_lane_lines(&road, 10.0);
-        let max_surface_z = surface.iter().map(|v| v.position[2]).fold(f32::NEG_INFINITY, f32::max);
-        let min_line_z = lines.iter().map(|v| v.position[2]).fold(f32::INFINITY, f32::min);
+        let max_surface_z = surface
+            .iter()
+            .map(|v| v.position[2])
+            .fold(f32::NEG_INFINITY, f32::max);
+        let min_line_z = lines
+            .iter()
+            .map(|v| v.position[2])
+            .fold(f32::INFINITY, f32::min);
         assert!(
             min_line_z >= max_surface_z - 1e-4,
             "lane lines (min z={min_line_z}) should be at or above surface (max z={max_surface_z})"
