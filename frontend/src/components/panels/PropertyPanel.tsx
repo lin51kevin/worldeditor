@@ -1,4 +1,4 @@
-import { useState, memo } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
@@ -7,6 +7,11 @@ import { getPlatformService } from '../../services';
 import type { RoadSignal, RoadObjectItem } from '../../services/platform';
 import { RoadMarkingPanel } from './RoadMarkingPanel';
 import './PropertyPanel.css';
+
+/** Valid bridge structure types (mirrors OpenDRIVE spec values). */
+const BRIDGE_TYPES = ['concrete', 'steel', 'wood', 'other'] as const;
+/** Valid tunnel structure types (mirrors OpenDRIVE spec values). */
+const TUNNEL_TYPES = ['underpass', 'standard', 'other'] as const;
 
 interface CardSectionProps {
   title: string;
@@ -41,6 +46,34 @@ export function PropertyPanel() {
   const { t } = useTranslation();
   const [newElevationS, setNewElevationS] = useState(0);
   const [newElevationH, setNewElevationH] = useState(0);
+
+  // Local draft state for bridge/tunnel numeric inputs.
+  // Committed to the store (and undo stack) only on blur — one snapshot per edit.
+  const [bridgeDraft, setBridgeDraft] = useState<Array<{ s: string; length: string }>>([]);
+  const [tunnelDraft, setTunnelDraft] = useState<Array<{ s: string; length: string }>>([]);
+
+  // Local draft state for name inputs — committed on blur/Enter for single undo entry.
+  const [roadNameDraft, setRoadNameDraft] = useState('');
+  const [junctionNameDraft, setJunctionNameDraft] = useState('');
+
+  useEffect(() => {
+    setRoadNameDraft(selectedRoad?.name || '');
+  }, [selectedRoad?.id, selectedRoad?.name]);
+
+  useEffect(() => {
+    setJunctionNameDraft(selectedJunction?.name || '');
+  }, [selectedJunction?.id, selectedJunction?.name]);
+
+  useEffect(() => {
+    setBridgeDraft((selectedRoad?.bridges ?? []).map((b) => ({
+      s: String(b.s),
+      length: String(b.length),
+    })));
+    setTunnelDraft((selectedRoad?.tunnels ?? []).map((t) => ({
+      s: String(t.s),
+      length: String(t.length),
+    })));
+  }, [selectedRoad]);
 
   // Resolve selected signal when a signal node is selected
   const selectedSignal: RoadSignal | null = (() => {
@@ -119,9 +152,19 @@ export function PropertyPanel() {
                   <span className="property-label">{t('propertyPanel.name')}</span>
                   <input
                     className="property-input"
-                    value={selectedRoad.name || ''}
+                    value={roadNameDraft}
                     placeholder="—"
-                    onChange={(e) => useProjectStore.getState().updateRoad(selectedRoad.id, { name: e.target.value })}
+                    onChange={(e) => setRoadNameDraft(e.target.value)}
+                    onBlur={() => {
+                      if (roadNameDraft !== (selectedRoad.name || '')) {
+                        useProjectStore.getState().updateRoad(selectedRoad.id, { name: roadNameDraft });
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
                   />
                 </div>
                 <div className="property-row">
@@ -373,8 +416,13 @@ export function PropertyPanel() {
                           type="number"
                           step="0.1"
                           min="0"
-                          value={bridge.s}
-                          onChange={(e) => {
+                          value={bridgeDraft[bi]?.s ?? String(bridge.s)}
+                          onChange={(e) =>
+                            setBridgeDraft((prev) =>
+                              prev.map((item, i) => i !== bi ? item : { ...item, s: e.target.value }),
+                            )
+                          }
+                          onBlur={(e) => {
                             const val = parseFloat(e.target.value);
                             if (!isNaN(val) && val >= 0) {
                               useProjectStore.getState().executePluginCommand(
@@ -400,8 +448,13 @@ export function PropertyPanel() {
                           type="number"
                           step="0.1"
                           min="0.1"
-                          value={bridge.length}
-                          onChange={(e) => {
+                          value={bridgeDraft[bi]?.length ?? String(bridge.length)}
+                          onChange={(e) =>
+                            setBridgeDraft((prev) =>
+                              prev.map((item, i) => i !== bi ? item : { ...item, length: e.target.value }),
+                            )
+                          }
+                          onBlur={(e) => {
                             const val = parseFloat(e.target.value);
                             if (!isNaN(val) && val > 0) {
                               useProjectStore.getState().executePluginCommand(
@@ -444,10 +497,9 @@ export function PropertyPanel() {
                             )
                           }
                         >
-                          <option value="concrete">concrete</option>
-                          <option value="steel">steel</option>
-                          <option value="wood">wood</option>
-                          <option value="other">other</option>
+                          {BRIDGE_TYPES.map((bt) => (
+                            <option key={bt} value={bt}>{bt}</option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -489,8 +541,13 @@ export function PropertyPanel() {
                           type="number"
                           step="0.1"
                           min="0"
-                          value={tunnel.s}
-                          onChange={(e) => {
+                          value={tunnelDraft[ti]?.s ?? String(tunnel.s)}
+                          onChange={(e) =>
+                            setTunnelDraft((prev) =>
+                              prev.map((item, i) => i !== ti ? item : { ...item, s: e.target.value }),
+                            )
+                          }
+                          onBlur={(e) => {
                             const val = parseFloat(e.target.value);
                             if (!isNaN(val) && val >= 0) {
                               useProjectStore.getState().executePluginCommand(
@@ -516,8 +573,13 @@ export function PropertyPanel() {
                           type="number"
                           step="0.1"
                           min="0.1"
-                          value={tunnel.length}
-                          onChange={(e) => {
+                          value={tunnelDraft[ti]?.length ?? String(tunnel.length)}
+                          onChange={(e) =>
+                            setTunnelDraft((prev) =>
+                              prev.map((item, i) => i !== ti ? item : { ...item, length: e.target.value }),
+                            )
+                          }
+                          onBlur={(e) => {
                             const val = parseFloat(e.target.value);
                             if (!isNaN(val) && val > 0) {
                               useProjectStore.getState().executePluginCommand(
@@ -560,9 +622,9 @@ export function PropertyPanel() {
                             )
                           }
                         >
-                          <option value="underpass">underpass</option>
-                          <option value="standard">standard</option>
-                          <option value="other">other</option>
+                          {TUNNEL_TYPES.map((tt) => (
+                            <option key={tt} value={tt}>{tt}</option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -726,9 +788,19 @@ export function PropertyPanel() {
                   <span className="property-label">{t('propertyPanel.name')}</span>
                   <input
                     className="property-input"
-                    value={selectedJunction.name || ''}
+                    value={junctionNameDraft}
                     placeholder="—"
-                    onChange={(e) => useProjectStore.getState().updateJunction(selectedJunction.id, { name: e.target.value })}
+                    onChange={(e) => setJunctionNameDraft(e.target.value)}
+                    onBlur={() => {
+                      if (junctionNameDraft !== (selectedJunction.name || '')) {
+                        useProjectStore.getState().updateJunction(selectedJunction.id, { name: junctionNameDraft });
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
                   />
                 </div>
               </CardSection>
