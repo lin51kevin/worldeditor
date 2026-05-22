@@ -68,7 +68,12 @@ mod tests {
 
     #[test]
     fn test_uniform_spacing_straight_line() {
-        let pts = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0]];
+        let pts = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [3.0, 0.0, 0.0],
+        ];
         for i in 0..pts.len() {
             let t = compute_catmull_rom_tangent(&pts, i);
             let ok = (t[0] - 1.0).abs() < 1e-10;
@@ -107,7 +112,7 @@ mod tests {
         ];
         for i in 0..pts.len() {
             let t = compute_catmull_rom_tangent(&pts, i);
-            let mag = (t[0]*t[0] + t[1]*t[1] + t[2]*t[2]).sqrt();
+            let mag = (t[0] * t[0] + t[1] * t[1] + t[2] * t[2]).sqrt();
             let ok = (mag - 1.0).abs() < 1e-10;
             assert!(ok, "i={} not unit length, mag={}", i, mag);
         }

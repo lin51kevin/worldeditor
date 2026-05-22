@@ -54,9 +54,7 @@ pub fn export_to_shapefile(project: &Project) -> Result<Vec<u8>, ShapefileError>
         roads: project.roads.iter().map(export_road).collect(),
     };
     let mut bytes = MAGIC.to_vec();
-    bytes.extend(
-        serde_json::to_vec(&bundle).map_err(|e| ShapefileError::Invalid(e.to_string()))?,
-    );
+    bytes.extend(serde_json::to_vec(&bundle).map_err(|e| ShapefileError::Invalid(e.to_string()))?);
     Ok(bytes)
 }
 
@@ -128,7 +126,10 @@ mod tests {
 
     #[test]
     fn test_import_requires_magic_header() {
-        assert!(matches!(import_from_shapefile(&[]), Err(ShapefileError::InvalidHeader)));
+        assert!(matches!(
+            import_from_shapefile(&[]),
+            Err(ShapefileError::InvalidHeader)
+        ));
     }
 
     #[test]

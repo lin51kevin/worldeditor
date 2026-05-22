@@ -26,7 +26,12 @@ pub struct PickResult {
 ///
 /// Uses [`ProjectCache`] to avoid rebuilding the spatial index on every call.
 /// Call [`ProjectCache::invalidate()`] after mutating the project.
-pub fn pick_road_cached(cache: &mut ProjectCache, x: f64, y: f64, threshold: f64) -> Option<PickResult> {
+pub fn pick_road_cached(
+    cache: &mut ProjectCache,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Option<PickResult> {
     // Ensure index is built
     cache.get_index()?;
     // Now we can get references separately
@@ -36,7 +41,12 @@ pub fn pick_road_cached(cache: &mut ProjectCache, x: f64, y: f64, threshold: f64
 }
 
 /// Pick the nearest junction to a world-space point (cached version).
-pub fn pick_junction_cached(cache: &mut ProjectCache, x: f64, y: f64, threshold: f64) -> Option<PickResult> {
+pub fn pick_junction_cached(
+    cache: &mut ProjectCache,
+    x: f64,
+    y: f64,
+    threshold: f64,
+) -> Option<PickResult> {
     cache.get_index()?;
     let project = &cache.project;
     let index = cache.spatial_index.as_ref().unwrap();

@@ -3,11 +3,15 @@ use quick_xml::events::Event;
 
 use super::super::OpenDriveError;
 
-pub(super) fn attr_str(attr: &quick_xml::events::attributes::Attribute) -> Result<String, OpenDriveError> {
+pub(super) fn attr_str(
+    attr: &quick_xml::events::attributes::Attribute,
+) -> Result<String, OpenDriveError> {
     Ok(String::from_utf8_lossy(&attr.value).into_owned())
 }
 
-pub(super) fn parse_f64(attr: &quick_xml::events::attributes::Attribute) -> Result<f64, OpenDriveError> {
+pub(super) fn parse_f64(
+    attr: &quick_xml::events::attributes::Attribute,
+) -> Result<f64, OpenDriveError> {
     let s = String::from_utf8_lossy(&attr.value);
     // Fast path: well-formed float
     if let Ok(v) = s.parse::<f64>() {

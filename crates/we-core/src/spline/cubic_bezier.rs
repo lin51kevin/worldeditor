@@ -228,7 +228,10 @@ mod tests {
         let kappa_left = param_poly3_curvature(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
         let kappa_right = param_poly3_curvature(1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0);
         assert!(kappa_left > 0.0, "left turn should have positive curvature");
-        assert!(kappa_right < 0.0, "right turn should have negative curvature");
+        assert!(
+            kappa_right < 0.0,
+            "right turn should have negative curvature"
+        );
     }
 
     // ── classify_param_poly3 ──────────────────────────────────────────────────
@@ -265,8 +268,7 @@ mod tests {
         // k0 at origin pointing east, k1 at (1, 0) pointing east → straight
         let k0 = make_knot(0.0, 0.0, 1.0, 0.0);
         let k1 = make_knot(1.0, 0.0, 1.0, 0.0);
-        let (a_u, b_u, _c_u, _d_u, a_v, b_v, c_v, d_v) =
-            fit_hermite_param_poly3(&k0, &k1, 1.0);
+        let (a_u, b_u, _c_u, _d_u, a_v, b_v, c_v, d_v) = fit_hermite_param_poly3(&k0, &k1, 1.0);
         assert_eq!(a_u, 0.0);
         assert!((b_u - 1.0).abs() < 1e-10, "b_u={b_u}");
         assert_eq!(a_v, 0.0);
@@ -296,8 +298,7 @@ mod tests {
         let k0 = make_knot(0.0, 0.0, 1.0, 0.0);
         let k1 = make_knot(2.0, 1.0, 1.0, 0.0);
         let chord_len = ((2.0_f64).powi(2) + 1.0_f64.powi(2)).sqrt();
-        let (a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v) =
-            fit_hermite_param_poly3(&k0, &k1, chord_len);
+        let (a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v) = fit_hermite_param_poly3(&k0, &k1, chord_len);
         // At p=1, u(1) = a_u + b_u + c_u + d_u should equal end_u in local frame
         let u_at_1 = a_u + b_u + c_u + d_u;
         let v_at_1 = a_v + b_v + c_v + d_v;

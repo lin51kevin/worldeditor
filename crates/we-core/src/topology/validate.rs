@@ -2,7 +2,7 @@
 
 use crate::model::{LinkElement, LinkElementType, Project, Road};
 
-use super::{IssueSeverity, IssueKind, TopologyIssue, TopologyReport};
+use super::{IssueKind, IssueSeverity, TopologyIssue, TopologyReport};
 
 /// Run a full topology validation on the project.
 ///
@@ -152,9 +152,10 @@ fn check_isolated_roads(project: &Project, report: &mut TopologyReport) {
             continue;
         }
 
-        let has_link = road.link.as_ref().is_some_and(|l| {
-            l.predecessor.is_some() || l.successor.is_some()
-        });
+        let has_link = road
+            .link
+            .as_ref()
+            .is_some_and(|l| l.predecessor.is_some() || l.successor.is_some());
 
         let referenced_by_junction = project.junctions.iter().any(|j| {
             j.connections
@@ -196,10 +197,7 @@ fn check_road_lengths(project: &Project, report: &mut TopologyReport) {
             report.issues.push(TopologyIssue {
                 severity: IssueSeverity::Error,
                 kind: IssueKind::InvalidRoadLength,
-                message: format!(
-                    "Road '{}' has invalid length {}",
-                    road.id, road.length
-                ),
+                message: format!("Road '{}' has invalid length {}", road.id, road.length),
                 element_id: road.id.clone(),
             });
         }

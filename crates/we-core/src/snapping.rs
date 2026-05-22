@@ -77,39 +77,24 @@ pub fn snap_point_cached(
 ) -> SnapResult {
     // 1. Try endpoint snap
     if config.endpoint_enabled
-        && let Some(result) = snap_to_endpoint_cached(
-            x,
-            y,
-            config.endpoint_threshold,
-            cache,
-            exclude_road_id,
-        )
+        && let Some(result) =
+            snap_to_endpoint_cached(x, y, config.endpoint_threshold, cache, exclude_road_id)
     {
         return result;
     }
 
     // 2. Try midpoint snap
     if config.midpoint_enabled
-        && let Some(result) = snap_to_midpoint_cached(
-            x,
-            y,
-            config.endpoint_threshold,
-            cache,
-            exclude_road_id,
-        )
+        && let Some(result) =
+            snap_to_midpoint_cached(x, y, config.endpoint_threshold, cache, exclude_road_id)
     {
         return result;
     }
 
     // 3. Try perpendicular snap
     if config.perpendicular_enabled
-        && let Some(result) = snap_to_perpendicular_cached(
-            x,
-            y,
-            config.endpoint_threshold,
-            cache,
-            exclude_road_id,
-        )
+        && let Some(result) =
+            snap_to_perpendicular_cached(x, y, config.endpoint_threshold, cache, exclude_road_id)
     {
         return result;
     }
@@ -208,7 +193,11 @@ fn snap_to_endpoint(
 }
 
 fn snap_to_endpoint_cached(
-    x: f64, y: f64, threshold: f64, cache: &mut ProjectCache, exclude_road_id: Option<&str>,
+    x: f64,
+    y: f64,
+    threshold: f64,
+    cache: &mut ProjectCache,
+    exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
     cache.get_index()?;
     let index = cache.spatial_index.as_ref().unwrap();
@@ -216,7 +205,12 @@ fn snap_to_endpoint_cached(
 }
 
 fn snap_to_endpoint_with_index(
-    x: f64, y: f64, threshold: f64, project: &Project, index: &SpatialIndex, exclude_road_id: Option<&str>,
+    x: f64,
+    y: f64,
+    threshold: f64,
+    project: &Project,
+    index: &SpatialIndex,
+    exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
     let candidates = index.query_point(x, y, threshold);
 
@@ -256,14 +250,22 @@ fn snap_to_endpoint_with_index(
 
 /// Snap to the midpoint of the nearest road.
 fn snap_to_midpoint(
-    x: f64, y: f64, threshold: f64, project: &Project, exclude_road_id: Option<&str>,
+    x: f64,
+    y: f64,
+    threshold: f64,
+    project: &Project,
+    exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
     let index = SpatialIndex::build(project, 100.0);
     snap_to_midpoint_with_index(x, y, threshold, project, &index, exclude_road_id)
 }
 
 fn snap_to_midpoint_cached(
-    x: f64, y: f64, threshold: f64, cache: &mut ProjectCache, exclude_road_id: Option<&str>,
+    x: f64,
+    y: f64,
+    threshold: f64,
+    cache: &mut ProjectCache,
+    exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
     cache.get_index()?;
     let index = cache.spatial_index.as_ref().unwrap();
@@ -271,7 +273,12 @@ fn snap_to_midpoint_cached(
 }
 
 fn snap_to_midpoint_with_index(
-    x: f64, y: f64, threshold: f64, project: &Project, index: &SpatialIndex, exclude_road_id: Option<&str>,
+    x: f64,
+    y: f64,
+    threshold: f64,
+    project: &Project,
+    index: &SpatialIndex,
+    exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
     let candidates = index.query_point(x, y, threshold);
 
@@ -309,14 +316,22 @@ fn snap_to_midpoint_with_index(
 
 /// Snap to the nearest perpendicular projection onto a road's reference line.
 fn snap_to_perpendicular(
-    x: f64, y: f64, threshold: f64, project: &Project, exclude_road_id: Option<&str>,
+    x: f64,
+    y: f64,
+    threshold: f64,
+    project: &Project,
+    exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
     let index = SpatialIndex::build(project, 100.0);
     snap_to_perpendicular_with_index(x, y, threshold, project, &index, exclude_road_id)
 }
 
 fn snap_to_perpendicular_cached(
-    x: f64, y: f64, threshold: f64, cache: &mut ProjectCache, exclude_road_id: Option<&str>,
+    x: f64,
+    y: f64,
+    threshold: f64,
+    cache: &mut ProjectCache,
+    exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
     cache.get_index()?;
     let index = cache.spatial_index.as_ref().unwrap();
@@ -324,7 +339,12 @@ fn snap_to_perpendicular_cached(
 }
 
 fn snap_to_perpendicular_with_index(
-    x: f64, y: f64, threshold: f64, project: &Project, index: &SpatialIndex, exclude_road_id: Option<&str>,
+    x: f64,
+    y: f64,
+    threshold: f64,
+    project: &Project,
+    index: &SpatialIndex,
+    exclude_road_id: Option<&str>,
 ) -> Option<SnapResult> {
     let candidates = index.query_point(x, y, threshold);
 
@@ -410,7 +430,11 @@ pub fn get_road_endpoint_tangent(road: &Road, contact_point: &str) -> Option<End
             // Flip by π so the tangent points *into* the road for a predecessor connection.
             pt.hdg + std::f64::consts::PI
         };
-        EndpointTangent { x: pt.x, y: pt.y, hdg }
+        EndpointTangent {
+            x: pt.x,
+            y: pt.y,
+            hdg,
+        }
     })
 }
 

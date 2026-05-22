@@ -3,12 +3,12 @@
 use crate::context::PluginContext;
 use crate::error::{PluginError, PluginResult};
 use crate::manifest::{PluginManifest, ResolvedManifest};
+use parking_lot::RwLock;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
-use parking_lot::RwLock;
 
 /// Loaded plugin instance
 struct LoadedPlugin {
@@ -324,9 +324,15 @@ mod tests {
     /// A minimal CoreApi implementation for tests
     struct DummyCoreApi;
     impl CoreApi for DummyCoreApi {
-        fn version(&self) -> &str { "0.0.0-test" }
-        fn project_path(&self) -> Option<&str> { None }
-        fn execute_command(&self, _: &str) -> Result<(), String> { Ok(()) }
+        fn version(&self) -> &str {
+            "0.0.0-test"
+        }
+        fn project_path(&self) -> Option<&str> {
+            None
+        }
+        fn execute_command(&self, _: &str) -> Result<(), String> {
+            Ok(())
+        }
     }
     static DUMMY_CORE_API: DummyCoreApi = DummyCoreApi;
 
@@ -487,7 +493,10 @@ mod tests {
 
         let result = registry.load("dependent-plugin", &ctx);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), PluginError::MissingDependency(_, _)));
+        assert!(matches!(
+            result.unwrap_err(),
+            PluginError::MissingDependency(_, _)
+        ));
     }
 
     #[test]

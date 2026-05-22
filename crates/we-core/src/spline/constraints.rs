@@ -50,37 +50,58 @@ mod tests {
 
     #[test]
     fn test_constrain_free_preserves_all() {
-        assert_eq!(constrain_displacement(d(), MoveConstraint::Free), [3.0, 5.0, 7.0]);
+        assert_eq!(
+            constrain_displacement(d(), MoveConstraint::Free),
+            [3.0, 5.0, 7.0]
+        );
     }
 
     #[test]
     fn test_constrain_x_axis() {
-        assert_eq!(constrain_displacement(d(), MoveConstraint::XAxis), [3.0, 0.0, 0.0]);
+        assert_eq!(
+            constrain_displacement(d(), MoveConstraint::XAxis),
+            [3.0, 0.0, 0.0]
+        );
     }
 
     #[test]
     fn test_constrain_y_axis() {
-        assert_eq!(constrain_displacement(d(), MoveConstraint::YAxis), [0.0, 5.0, 0.0]);
+        assert_eq!(
+            constrain_displacement(d(), MoveConstraint::YAxis),
+            [0.0, 5.0, 0.0]
+        );
     }
 
     #[test]
     fn test_constrain_z_axis() {
-        assert_eq!(constrain_displacement(d(), MoveConstraint::ZAxis), [0.0, 0.0, 7.0]);
+        assert_eq!(
+            constrain_displacement(d(), MoveConstraint::ZAxis),
+            [0.0, 0.0, 7.0]
+        );
     }
 
     #[test]
     fn test_constrain_xy_plane() {
-        assert_eq!(constrain_displacement(d(), MoveConstraint::XyPlane), [3.0, 5.0, 0.0]);
+        assert_eq!(
+            constrain_displacement(d(), MoveConstraint::XyPlane),
+            [3.0, 5.0, 0.0]
+        );
     }
 
     #[test]
     fn test_constrain_xz_plane() {
-        assert_eq!(constrain_displacement(d(), MoveConstraint::XzPlane), [3.0, 0.0, 7.0]);
+        assert_eq!(
+            constrain_displacement(d(), MoveConstraint::XzPlane),
+            [3.0, 0.0, 7.0]
+        );
     }
 
     #[test]
     fn test_constrain_yz_plane() {
-        assert_eq!(constrain_displacement(d(), MoveConstraint::YzPlane), [0.0, 5.0, 7.0]);
+        assert_eq!(
+            constrain_displacement(d(), MoveConstraint::YzPlane),
+            [0.0, 5.0, 7.0]
+        );
     }
 
     #[test]

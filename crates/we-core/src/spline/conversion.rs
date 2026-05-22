@@ -4,7 +4,7 @@
 //! - `spline_to_geometries`: EditableSpline → Vec<Geometry>
 
 use super::arc_length::param_poly3_arc_length;
-use super::cubic_bezier::{classify_param_poly3, fit_hermite_param_poly3, CurveClassification};
+use super::cubic_bezier::{CurveClassification, classify_param_poly3, fit_hermite_param_poly3};
 use super::{EditableSpline, KnotType, SplineKnot, SplineOutputMode, TangentMode};
 
 /// Convert a Road's plan_view (OpenDRIVE geometry segments) to an EditableSpline.
@@ -170,9 +170,7 @@ pub fn spline_to_geometries_with_mode(
                     match classification {
                         CurveClassification::Line => GeometryType::Line,
 
-                        CurveClassification::Arc { curvature } => {
-                            GeometryType::Arc { curvature }
-                        }
+                        CurveClassification::Arc { curvature } => GeometryType::Arc { curvature },
 
                         CurveClassification::Spiral {
                             curv_start,
@@ -261,7 +259,11 @@ mod tests {
     fn test_road_to_spline_single_line_produces_two_anchors() {
         let road = straight_road(10.0);
         let spline = road_to_spline(&road, 20.0); // sample_step > length → no intermediates
-        assert!(spline.knots.len() >= 2, "expected ≥2 knots, got {}", spline.knots.len());
+        assert!(
+            spline.knots.len() >= 2,
+            "expected ≥2 knots, got {}",
+            spline.knots.len()
+        );
     }
 
     #[test]
@@ -269,8 +271,16 @@ mod tests {
         let road = straight_road(10.0);
         let spline = road_to_spline(&road, 5.0);
         let first = &spline.knots[0];
-        assert!(first.position[0].abs() < 1e-6, "start x = {}", first.position[0]);
-        assert!(first.position[1].abs() < 1e-6, "start y = {}", first.position[1]);
+        assert!(
+            first.position[0].abs() < 1e-6,
+            "start x = {}",
+            first.position[0]
+        );
+        assert!(
+            first.position[1].abs() < 1e-6,
+            "start y = {}",
+            first.position[1]
+        );
     }
 
     #[test]
@@ -278,7 +288,11 @@ mod tests {
         let road = straight_road(10.0);
         let spline = road_to_spline(&road, 5.0);
         let last = spline.knots.last().unwrap();
-        assert!((last.position[0] - 10.0).abs() < 1e-3, "end x = {}", last.position[0]);
+        assert!(
+            (last.position[0] - 10.0).abs() < 1e-3,
+            "end x = {}",
+            last.position[0]
+        );
     }
 
     #[test]
@@ -286,7 +300,9 @@ mod tests {
         // length=100, sample_step=5 → n = 20 intermediate points
         let road = straight_road(100.0);
         let spline = road_to_spline(&road, 5.0);
-        let n_intermediate = spline.knots.iter()
+        let n_intermediate = spline
+            .knots
+            .iter()
             .filter(|k| k.knot_type == KnotType::Intermediate)
             .count();
         assert!(n_intermediate > 0, "long segment should have intermediates");
@@ -297,7 +313,9 @@ mod tests {
         // length=10, sample_step=15 → length < 2*step → no intermediates
         let road = straight_road(10.0);
         let spline = road_to_spline(&road, 15.0);
-        let n_intermediate = spline.knots.iter()
+        let n_intermediate = spline
+            .knots
+            .iter()
             .filter(|k| k.knot_type == KnotType::Intermediate)
             .count();
         assert_eq!(n_intermediate, 0);
@@ -325,8 +343,14 @@ mod tests {
         let spline = road_to_spline(&road, 20.0); // no intermediates
         let geos = spline_to_geometries(&spline);
         assert!(!geos.is_empty(), "expected at least one geometry");
-        let has_line = geos.iter().any(|g| matches!(g.geo_type, GeometryType::Line));
-        assert!(has_line, "aligned tangents should produce Line, got {:?}", geos);
+        let has_line = geos
+            .iter()
+            .any(|g| matches!(g.geo_type, GeometryType::Line));
+        assert!(
+            has_line,
+            "aligned tangents should produce Line, got {:?}",
+            geos
+        );
     }
 
     #[test]
@@ -335,7 +359,11 @@ mod tests {
         let spline = road_to_spline(&road, 8.0);
         let geos = spline_to_geometries(&spline);
         for g in &geos {
-            assert!(g.length > 0.0, "geometry length must be positive, got {}", g.length);
+            assert!(
+                g.length > 0.0,
+                "geometry length must be positive, got {}",
+                g.length
+            );
         }
     }
 
@@ -345,6 +373,9 @@ mod tests {
         let road = straight_road(10.0);
         let spline = road_to_spline(&road, 20.0);
         let geos = spline_to_geometries_with_mode(&spline, SplineOutputMode::ParamPoly3Only);
-        assert!(!geos.is_empty(), "ParamPoly3Only should produce geometries for 2-knot spline");
+        assert!(
+            !geos.is_empty(),
+            "ParamPoly3Only should produce geometries for 2-knot spline"
+        );
     }
 }

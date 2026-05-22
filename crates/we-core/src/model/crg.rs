@@ -103,7 +103,9 @@ impl CrgProfile {
         if u_idx >= self.u_count || v_idx >= self.v_count {
             return None;
         }
-        self.data.get((u_idx * self.v_count + v_idx) as usize).copied()
+        self.data
+            .get((u_idx * self.v_count + v_idx) as usize)
+            .copied()
     }
 
     /// Bilinearly interpolate height at continuous (u, v) coordinates (in metres).

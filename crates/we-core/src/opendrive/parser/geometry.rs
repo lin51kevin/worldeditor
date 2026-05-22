@@ -157,7 +157,9 @@ fn parse_geometry_type(e: &BytesStart) -> Result<GeometryType, OpenDriveError> {
 
 // ── Elevation ────────────────────────────────────────
 
-pub(super) fn parse_elevation_profile(reader: &mut Reader<&[u8]>) -> Result<Vec<Elevation>, OpenDriveError> {
+pub(super) fn parse_elevation_profile(
+    reader: &mut Reader<&[u8]>,
+) -> Result<Vec<Elevation>, OpenDriveError> {
     let mut elevations = Vec::new();
 
     loop {

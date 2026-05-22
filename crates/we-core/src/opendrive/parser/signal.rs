@@ -45,16 +45,12 @@ fn parse_signal_elem(
     // parse child elements (validity, etc.) until </signal>
     loop {
         match reader.read_event() {
-            Ok(Event::Start(ref e) | Event::Empty(ref e))
-                if e.name().as_ref() == b"validity" =>
-            {
+            Ok(Event::Start(ref e) | Event::Empty(ref e)) if e.name().as_ref() == b"validity" => {
                 let mut from_lane = i32::MIN;
                 let mut to_lane = i32::MAX;
                 for attr in e.attributes().flatten() {
                     match attr.key.as_ref() {
-                        b"fromLane" => {
-                            from_lane = attr_str(&attr)?.parse().unwrap_or(i32::MIN)
-                        }
+                        b"fromLane" => from_lane = attr_str(&attr)?.parse().unwrap_or(i32::MIN),
                         b"toLane" => to_lane = attr_str(&attr)?.parse().unwrap_or(i32::MAX),
                         _ => {}
                     }
@@ -222,9 +218,7 @@ fn parse_road_object_elem(
     let mut obj = parse_road_object_attrs(start)?;
     loop {
         match reader.read_event() {
-            Ok(Event::Start(ref e) | Event::Empty(ref e))
-                if e.name().as_ref() == b"validity" =>
-            {
+            Ok(Event::Start(ref e) | Event::Empty(ref e)) if e.name().as_ref() == b"validity" => {
                 let mut from_lane = i32::MIN;
                 let mut to_lane = i32::MAX;
                 for attr in e.attributes().flatten() {
@@ -268,9 +262,7 @@ fn parse_road_object_elem(
                     obj.corner_type = CornerType::Road;
                 }
             }
-            Ok(Event::Start(ref e) | Event::Empty(ref e))
-                if e.name().as_ref() == b"userData" =>
-            {
+            Ok(Event::Start(ref e) | Event::Empty(ref e)) if e.name().as_ref() == b"userData" => {
                 let mut code = String::new();
                 let mut value = String::new();
                 for attr in e.attributes().flatten() {

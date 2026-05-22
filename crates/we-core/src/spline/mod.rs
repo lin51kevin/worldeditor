@@ -26,11 +26,11 @@ pub use catmull_rom::compute_catmull_rom_tangent;
 #[cfg(test)]
 use cubic_bezier::param_poly3_curvature;
 
-pub use constraints::{constrain_displacement, MoveConstraint};
+pub use constraints::{MoveConstraint, constrain_displacement};
 pub use conversion::{road_to_spline, spline_to_geometries, spline_to_geometries_with_mode};
 pub use soft_selection::{
-    apply_soft_selection_move, collect_soft_selection, compute_falloff, FalloffType,
-    SoftSelectionConfig,
+    FalloffType, SoftSelectionConfig, apply_soft_selection_move, collect_soft_selection,
+    compute_falloff,
 };
 
 /// Controls how `spline_to_geometries` emits geometry types.
@@ -347,9 +347,9 @@ pub fn find_insertion_index(spline: &EditableSpline, x: f64, y: f64) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::arc_length::param_poly3_arc_length;
-    use super::cubic_bezier::{classify_param_poly3, CurveClassification, fit_hermite_param_poly3};
+    use super::cubic_bezier::{CurveClassification, classify_param_poly3, fit_hermite_param_poly3};
+    use super::*;
 
     // ── SplineKnot tests ────────────────────────────
 
@@ -1032,10 +1032,7 @@ mod tests {
                 crate::model::GeometryType::Line => { /* lines are always allowed */ }
                 crate::model::GeometryType::ParamPoly3 { .. } => { /* expected */ }
                 other => {
-                    panic!(
-                        "ParamPoly3Only mode should not produce {:?}",
-                        other
-                    );
+                    panic!("ParamPoly3Only mode should not produce {:?}", other);
                 }
             }
         }

@@ -42,7 +42,11 @@ pub struct SignalGroup {
 
 impl SignalGroup {
     pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
-        Self { id: id.into(), name: name.into(), signal_ids: Vec::new() }
+        Self {
+            id: id.into(),
+            name: name.into(),
+            signal_ids: Vec::new(),
+        }
     }
 }
 
@@ -59,7 +63,13 @@ pub struct SignalController {
 
 impl SignalController {
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into(), junction_id: None, phases: Vec::new(), groups: Vec::new(), cycle_length: 0.0 }
+        Self {
+            id: id.into(),
+            junction_id: None,
+            phases: Vec::new(),
+            groups: Vec::new(),
+            cycle_length: 0.0,
+        }
     }
 
     /// Recompute cycle_length from phase durations.

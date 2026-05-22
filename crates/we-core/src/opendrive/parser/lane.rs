@@ -5,7 +5,9 @@ use super::super::OpenDriveError;
 use super::utils::{attr_str, parse_f64, skip_element};
 use crate::model::*;
 
-pub(super) fn parse_lanes(reader: &mut Reader<&[u8]>) -> Result<(Vec<LaneSection>, Vec<LaneOffset>), OpenDriveError> {
+pub(super) fn parse_lanes(
+    reader: &mut Reader<&[u8]>,
+) -> Result<(Vec<LaneSection>, Vec<LaneOffset>), OpenDriveError> {
     let mut sections = Vec::new();
     let mut offsets = Vec::new();
 
@@ -241,7 +243,13 @@ fn parse_lane_border(e: &BytesStart) -> Result<LaneBorder, OpenDriveError> {
             _ => {}
         }
     }
-    Ok(LaneBorder { s_offset, a, b, c, d })
+    Ok(LaneBorder {
+        s_offset,
+        a,
+        b,
+        c,
+        d,
+    })
 }
 
 fn parse_road_mark(e: &BytesStart) -> Result<RoadMark, OpenDriveError> {

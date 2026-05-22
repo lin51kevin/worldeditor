@@ -139,10 +139,7 @@ pub fn plugin_get_script(
 /// Enable a previously-disabled plugin (makes it available again).
 #[tauri::command]
 pub fn plugin_enable(id: String, registry: State<'_, SharedPluginRegistry>) -> Result<(), String> {
-    registry
-        .write()
-        .enable(&id)
-        .map_err(|e| e.to_string())
+    registry.write().enable(&id).map_err(|e| e.to_string())
 }
 
 /// Disable a plugin (will be skipped on next load).
@@ -205,12 +202,11 @@ pub fn plugin_install(
         std::fs::remove_dir_all(&temp_dest)
             .map_err(|e| format!("Cannot clean up temp install dir: {}", e))?;
     }
-    copy_dir_all(&canonical, &temp_dest)
-        .map_err(|e| {
-            // Clean up partial temp on failure
-            let _ = std::fs::remove_dir_all(&temp_dest);
-            format!("Cannot copy plugin files: {}", e)
-        })?;
+    copy_dir_all(&canonical, &temp_dest).map_err(|e| {
+        // Clean up partial temp on failure
+        let _ = std::fs::remove_dir_all(&temp_dest);
+        format!("Cannot copy plugin files: {}", e)
+    })?;
 
     // Now atomically replace the old directory
     if dest.exists() {
@@ -227,8 +223,7 @@ pub fn plugin_install(
         }
         let _ = std::fs::remove_dir_all(&backup);
     } else {
-        std::fs::rename(&temp_dest, &dest)
-            .map_err(|e| format!("Cannot install plugin: {}", e))?;
+        std::fs::rename(&temp_dest, &dest).map_err(|e| format!("Cannot install plugin: {}", e))?;
     }
 
     registry.write().discover();

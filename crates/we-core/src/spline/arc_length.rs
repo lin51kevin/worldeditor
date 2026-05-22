@@ -79,6 +79,9 @@ mod tests {
         // since sqrt is symmetric
         let len_uv = param_poly3_arc_length(1.0, 0.2, -0.1, 0.5, 0.3, 0.1);
         let len_vu = param_poly3_arc_length(0.5, 0.3, 0.1, 1.0, 0.2, -0.1);
-        assert!((len_uv - len_vu).abs() < 1e-10, "len_uv={len_uv}, len_vu={len_vu}");
+        assert!(
+            (len_uv - len_vu).abs() < 1e-10,
+            "len_uv={len_uv}, len_vu={len_vu}"
+        );
     }
 }

@@ -238,4 +238,3 @@ mod tests {
         assert!(deserialized.header.geo_reference.is_some());
     }
 }
-

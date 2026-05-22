@@ -115,7 +115,11 @@ mod tests {
         let lane = &section.right[0];
 
         // The roadMark with child elements must be parsed (not skipped)
-        assert_eq!(lane.road_marks.len(), 1, "roadMark with child <type> element must be parsed");
+        assert_eq!(
+            lane.road_marks.len(),
+            1,
+            "roadMark with child <type> element must be parsed"
+        );
         assert_eq!(lane.road_marks[0].mark_type, RoadMarkType::Solid);
         assert!((lane.road_marks[0].width - 0.13).abs() < 1e-6);
 
@@ -389,7 +393,10 @@ mod tests {
         let project = parse(xml).expect("parse should succeed");
         let obj = &project.roads[0].objects[0];
         assert_eq!(obj.object_type, ObjectType::Crosswalk);
-        assert!((obj.hdg - std::f64::consts::FRAC_PI_2).abs() < 1e-9, "hdg must be π/2");
+        assert!(
+            (obj.hdg - std::f64::consts::FRAC_PI_2).abs() < 1e-9,
+            "hdg must be π/2"
+        );
         assert_eq!(obj.corners.len(), 4);
     }
 
@@ -446,12 +453,16 @@ mod tests {
         assert_eq!(project.roads[0].objects.len(), 1);
         let original = &project.roads[0].objects[0];
         assert_eq!(original.id, "42");
-        assert!((original.position.x - 50.0).abs() < 1e-6, "s must be preserved as-is");
+        assert!(
+            (original.position.x - 50.0).abs() < 1e-6,
+            "s must be preserved as-is"
+        );
         assert!(!original.from_object_ref);
 
         // Road 2: objectReference does NOT create a copy
         assert_eq!(
-            project.roads[1].objects.len(), 0,
+            project.roads[1].objects.len(),
+            0,
             "objectReference must not create copies — objects render on their defining road"
         );
     }

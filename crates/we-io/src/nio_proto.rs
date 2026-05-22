@@ -7,7 +7,9 @@
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use we_core::model::{Geometry, GeometryType, Lane, LaneSection, LaneType, LaneWidth, Project, Road};
+use we_core::model::{
+    Geometry, GeometryType, Lane, LaneSection, LaneType, LaneWidth, Project, Road,
+};
 
 #[derive(Error, Debug)]
 pub enum NioProtoError {
@@ -242,7 +244,8 @@ mod tests {
 
     #[test]
     fn test_import_minimal_project_succeeds() {
-        let project = import_from_nio(br#"{"version":"1.0","map_name":"test","roads":[]}"#).unwrap();
+        let project =
+            import_from_nio(br#"{"version":"1.0","map_name":"test","roads":[]}"#).unwrap();
         assert_eq!(project.name, "test");
         assert!(project.roads.is_empty());
     }

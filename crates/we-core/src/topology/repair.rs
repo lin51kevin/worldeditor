@@ -1,8 +1,6 @@
 //! Topology repair and junction optimization.
 
-use crate::model::{
-    ContactPoint, JunctionConnection, LinkElementType, Project, Road,
-};
+use crate::model::{ContactPoint, JunctionConnection, LinkElementType, Project, Road};
 
 use super::validate::road_has_lane;
 
@@ -80,8 +78,7 @@ pub fn repair_topology(project: &Project) -> (Project, Vec<String>) {
     for junction in &mut p.junctions {
         let before = junction.connections.len();
         junction.connections.retain(|conn| {
-            road_ids.contains(&conn.connecting_road)
-                && road_ids.contains(&conn.incoming_road)
+            road_ids.contains(&conn.connecting_road) && road_ids.contains(&conn.incoming_road)
         });
         let removed = before - junction.connections.len();
         if removed > 0 {
@@ -310,7 +307,8 @@ fn road_junction_contact(road: &Road, junction_id: &str) -> Option<ContactPoint>
             .is_some_and(|p| p.element_id == junction_id)
         {
             Some(ContactPoint::Start)
-        } else if l.successor
+        } else if l
+            .successor
             .as_ref()
             .is_some_and(|s| s.element_id == junction_id)
         {

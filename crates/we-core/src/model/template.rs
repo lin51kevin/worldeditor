@@ -243,10 +243,18 @@ mod tests {
         ] {
             let ls = preset.to_lane_section();
             for lane in &ls.left {
-                assert!(lane.id > 0, "left lane id must be positive, got {}", lane.id);
+                assert!(
+                    lane.id > 0,
+                    "left lane id must be positive, got {}",
+                    lane.id
+                );
             }
             for lane in &ls.right {
-                assert!(lane.id < 0, "right lane id must be negative, got {}", lane.id);
+                assert!(
+                    lane.id < 0,
+                    "right lane id must be negative, got {}",
+                    lane.id
+                );
             }
             assert_eq!(ls.center[0].id, 0, "center lane id must be 0");
         }
@@ -275,11 +283,17 @@ mod tests {
             let ls = preset.to_lane_section();
             for lane in ls.left.iter().chain(ls.right.iter()) {
                 assert_eq!(
-                    lane.lane_type, LaneType::Driving,
-                    "template lane {} should be Driving", lane.id
+                    lane.lane_type,
+                    LaneType::Driving,
+                    "template lane {} should be Driving",
+                    lane.id
                 );
             }
-            assert_eq!(ls.center[0].lane_type, LaneType::None, "center lane should be None");
+            assert_eq!(
+                ls.center[0].lane_type,
+                LaneType::None,
+                "center lane should be None"
+            );
         }
     }
 
@@ -294,7 +308,10 @@ mod tests {
         ];
         for (preset, expected_width) in cases {
             let ls = preset.to_lane_section();
-            let total: f64 = ls.left.iter().chain(ls.right.iter())
+            let total: f64 = ls
+                .left
+                .iter()
+                .chain(ls.right.iter())
                 .map(|l| l.width.first().map(|w| w.a).unwrap_or(0.0))
                 .sum();
             assert!(
@@ -324,4 +341,3 @@ mod tests {
         }
     }
 }
-

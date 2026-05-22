@@ -5,7 +5,10 @@ use super::super::OpenDriveError;
 use super::utils::{attr_str, parse_f64};
 use crate::model::*;
 
-pub(super) fn parse_header(start: &BytesStart, reader: &mut Reader<&[u8]>) -> Result<Header, OpenDriveError> {
+pub(super) fn parse_header(
+    start: &BytesStart,
+    reader: &mut Reader<&[u8]>,
+) -> Result<Header, OpenDriveError> {
     let mut header = parse_header_attrs(start)?;
 
     loop {

@@ -54,7 +54,9 @@ impl ValidationReport {
         self.issues.iter().filter(|i| i.severity == Severity::Error)
     }
     pub fn warnings(&self) -> impl Iterator<Item = &ValidationIssue> {
-        self.issues.iter().filter(|i| i.severity == Severity::Warning)
+        self.issues
+            .iter()
+            .filter(|i| i.severity == Severity::Warning)
     }
     pub fn is_valid(&self) -> bool {
         self.errors().next().is_none()
@@ -76,7 +78,10 @@ fn check_zero_length_roads(roads: &[Road], issues: &mut Vec<ValidationIssue>) {
         if road.length <= 0.0 {
             issues.push(ValidationIssue::error(
                 "E001",
-                format!("Road '{}' has zero or negative length: {}", road.id, road.length),
+                format!(
+                    "Road '{}' has zero or negative length: {}",
+                    road.id, road.length
+                ),
                 Some(&road.id),
             ));
         }
@@ -170,13 +175,22 @@ mod tests {
     fn test_valid_road() {
         let mut p = empty_project();
         let geom = vec![crate::model::road::Geometry {
-            s: 0.0, x: 0.0, y: 0.0, hdg: 0.0, length: 10.0,
+            s: 0.0,
+            x: 0.0,
+            y: 0.0,
+            hdg: 0.0,
+            length: 10.0,
             geo_type: crate::model::road::GeometryType::Line,
         }];
-        p.roads.push(crate::model::road::Road::from_centerline("r1", geom));
+        p.roads
+            .push(crate::model::road::Road::from_centerline("r1", geom));
         let report = validate_project(&p);
         // Should have no errors, but may have W002 (no lane_sections on top — actually from_centerline adds them)
-        assert!(report.is_valid(), "errors: {:?}", report.errors().collect::<Vec<_>>());
+        assert!(
+            report.is_valid(),
+            "errors: {:?}",
+            report.errors().collect::<Vec<_>>()
+        );
     }
 
     #[test]

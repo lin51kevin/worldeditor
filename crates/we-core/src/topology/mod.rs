@@ -100,10 +100,7 @@ mod tests {
 
     fn make_simple_project() -> Project {
         Project {
-            roads: vec![
-                Road::new("1", 100.0),
-                Road::new("2", 200.0),
-            ],
+            roads: vec![Road::new("1", 100.0), Road::new("2", 200.0)],
             junctions: vec![],
             ..Project::default()
         }
@@ -131,7 +128,12 @@ mod tests {
 
         let report = validate_topology(&project);
         assert!(report.error_count() >= 1);
-        assert!(report.issues.iter().any(|i| i.kind == IssueKind::DanglingLink));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.kind == IssueKind::DanglingLink)
+        );
     }
 
     #[test]
@@ -140,7 +142,12 @@ mod tests {
         project.roads[0].junction_id = Some("missing-junction".to_string());
 
         let report = validate_topology(&project);
-        assert!(report.issues.iter().any(|i| i.kind == IssueKind::OrphanJunctionRef));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.kind == IssueKind::OrphanJunctionRef)
+        );
     }
 
     #[test]
@@ -159,7 +166,12 @@ mod tests {
         });
 
         let report = validate_topology(&project);
-        assert!(report.issues.iter().any(|i| i.kind == IssueKind::JunctionDanglingRoad));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.kind == IssueKind::JunctionDanglingRoad)
+        );
     }
 
     #[test]
@@ -178,7 +190,12 @@ mod tests {
         });
 
         let report = validate_topology(&project);
-        assert!(report.issues.iter().any(|i| i.kind == IssueKind::DegenerateJunction));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.kind == IssueKind::DegenerateJunction)
+        );
     }
 
     #[test]
@@ -187,7 +204,12 @@ mod tests {
         project.roads.push(Road::new("1", 50.0)); // duplicate
 
         let report = validate_topology(&project);
-        assert!(report.issues.iter().any(|i| i.kind == IssueKind::DuplicateRoadId));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.kind == IssueKind::DuplicateRoadId)
+        );
     }
 
     #[test]
@@ -196,7 +218,12 @@ mod tests {
         project.roads[0].length = 0.0;
 
         let report = validate_topology(&project);
-        assert!(report.issues.iter().any(|i| i.kind == IssueKind::InvalidRoadLength));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.kind == IssueKind::InvalidRoadLength)
+        );
     }
 
     #[test]

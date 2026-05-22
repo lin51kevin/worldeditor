@@ -191,8 +191,7 @@ pub fn find_reachable_roads(
 
     // Use predecessor-based path reconstruction to avoid cloning paths per expansion.
     let mut visited: HashMap<&RouteNode, (f64, Option<&RouteNode>, usize)> = HashMap::new();
-    let mut queue: Vec<(&RouteNode, f64, Option<&RouteNode>, usize)> =
-        vec![(source, 0.0, None, 0)];
+    let mut queue: Vec<(&RouteNode, f64, Option<&RouteNode>, usize)> = vec![(source, 0.0, None, 0)];
 
     while let Some((node, cost, prev, depth)) = queue.pop() {
         if depth > max_hops {

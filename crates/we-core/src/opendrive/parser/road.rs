@@ -4,7 +4,7 @@ use quick_xml::events::{BytesStart, Event};
 use super::super::OpenDriveError;
 use super::geometry::{parse_elevation_profile, parse_plan_view};
 use super::lane::parse_lanes;
-use super::signal::{parse_objects, parse_signals, ObjectRef};
+use super::signal::{ObjectRef, parse_objects, parse_signals};
 use super::structure::{
     parse_bridge, parse_bridge_empty, parse_lateral_profile, parse_tunnel, parse_tunnel_empty,
 };

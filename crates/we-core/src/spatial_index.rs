@@ -488,7 +488,10 @@ mod tests {
         assert_eq!(cache.get_index().unwrap().len(), 1);
 
         // Add a road
-        cache.project_mut().roads.push(make_road_at("r2", 500.0, 500.0, 100.0));
+        cache
+            .project_mut()
+            .roads
+            .push(make_road_at("r2", 500.0, 500.0, 100.0));
         cache.invalidate();
         assert!(cache.is_dirty());
         assert_eq!(cache.get_index().unwrap().len(), 2);

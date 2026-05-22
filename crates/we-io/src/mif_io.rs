@@ -265,8 +265,8 @@ LINE 1 2 4 6
 
     #[test]
     fn test_export_project_to_mif() {
-        let road = build_road_from_points("r0".into(), &[(0.0, 0.0), (5.0, 0.0), (5.0, 5.0)])
-            .unwrap();
+        let road =
+            build_road_from_points("r0".into(), &[(0.0, 0.0), (5.0, 0.0), (5.0, 5.0)]).unwrap();
         let project = Project {
             roads: vec![road],
             ..Default::default()

@@ -613,10 +613,7 @@ fn write_lateral_profile(
 
 // ── Bridges ─────────────────────────────────────────
 
-fn write_bridges(
-    writer: &mut Writer<W>,
-    bridges: &[Bridge],
-) -> Result<(), OpenDriveError> {
+fn write_bridges(writer: &mut Writer<W>, bridges: &[Bridge]) -> Result<(), OpenDriveError> {
     writer
         .write_event(Event::Start(BytesStart::new("bridges".to_string())))
         .map_err(w_err)?;
@@ -641,10 +638,7 @@ fn write_bridges(
 
 // ── Tunnels ─────────────────────────────────────────
 
-fn write_tunnels(
-    writer: &mut Writer<W>,
-    tunnels: &[Tunnel],
-) -> Result<(), OpenDriveError> {
+fn write_tunnels(writer: &mut Writer<W>, tunnels: &[Tunnel]) -> Result<(), OpenDriveError> {
     writer
         .write_event(Event::Start(BytesStart::new("tunnels".to_string())))
         .map_err(w_err)?;
@@ -669,10 +663,7 @@ fn write_tunnels(
 
 // ── Signals ─────────────────────────────────────────
 
-fn write_signals(
-    writer: &mut Writer<W>,
-    signals: &[Signal],
-) -> Result<(), OpenDriveError> {
+fn write_signals(writer: &mut Writer<W>, signals: &[Signal]) -> Result<(), OpenDriveError> {
     writer
         .write_event(Event::Start(BytesStart::new("signals".to_string())))
         .map_err(w_err)?;
@@ -683,7 +674,10 @@ fn write_signals(
             ("t", f(sig.t)),
             ("id", sig.id.clone()),
             ("name", sig.name.clone()),
-            ("dynamic", if sig.is_dynamic { "true" } else { "false" }.to_string()),
+            (
+                "dynamic",
+                if sig.is_dynamic { "true" } else { "false" }.to_string(),
+            ),
             ("orientation", sig.orientation.clone()),
             ("zOffset", f(sig.z_offset)),
             ("hOffset", f(sig.h_offset)),
@@ -732,10 +726,7 @@ fn write_signals(
 
 // ── Objects ─────────────────────────────────────────
 
-fn write_objects(
-    writer: &mut Writer<W>,
-    objects: &[RoadObject],
-) -> Result<(), OpenDriveError> {
+fn write_objects(writer: &mut Writer<W>, objects: &[RoadObject]) -> Result<(), OpenDriveError> {
     writer
         .write_event(Event::Start(BytesStart::new("objects".to_string())))
         .map_err(w_err)?;
@@ -772,7 +763,15 @@ fn write_objects(
             ("id", obj.id.clone()),
             ("name", obj.name.clone()),
             ("type", type_str),
-            ("orientation", if obj.orientation >= 180.0 { "-" } else { "none" }.to_string()),
+            (
+                "orientation",
+                if obj.orientation >= 180.0 {
+                    "-"
+                } else {
+                    "none"
+                }
+                .to_string(),
+            ),
             ("hdg", f(obj.hdg)),
             ("pitch", f(obj.pitch)),
             ("roll", f(obj.roll)),

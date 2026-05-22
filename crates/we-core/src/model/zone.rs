@@ -122,8 +122,7 @@ impl Zone {
         for i in 0..n {
             let vi = &self.vertices[i];
             let vj = &self.vertices[j];
-            if ((vi.y > y) != (vj.y > y))
-                && (x < (vj.x - vi.x) * (y - vi.y) / (vj.y - vi.y) + vi.x)
+            if ((vi.y > y) != (vj.y > y)) && (x < (vj.x - vi.x) * (y - vi.y) / (vj.y - vi.y) + vi.x)
             {
                 inside = !inside;
             }
@@ -185,7 +184,10 @@ mod tests {
     fn test_zone_area_square() {
         let z = square_zone();
         let area = z.area();
-        assert!((area - 100.0).abs() < 1e-9, "Area should be 100m², got {area}");
+        assert!(
+            (area - 100.0).abs() < 1e-9,
+            "Area should be 100m², got {area}"
+        );
     }
 
     #[test]

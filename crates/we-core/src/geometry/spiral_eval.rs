@@ -220,7 +220,10 @@ mod tests {
         // Use loose tolerance since the rational approx has limited accuracy here
         let (c, s) = fresnel_cs(2.0);
         assert!((c - 0.5).abs() < 0.15, "C(2.0) should be near 0.5, got {c}");
-        assert!((s - 0.35).abs() < 0.15, "S(2.0) should be near 0.35, got {s}");
+        assert!(
+            (s - 0.35).abs() < 0.15,
+            "S(2.0) should be near 0.35, got {s}"
+        );
     }
 
     #[test]
@@ -324,6 +327,9 @@ mod tests {
         let c_dot = (curv_end - curv_start) / length;
         let expected_theta = curv_start * ds + 0.5 * c_dot * ds * ds;
         let (_, _, hdg) = evaluate_spiral(curv_start, curv_end, length, ds);
-        assert!((hdg - expected_theta).abs() < 1e-12, "hdg={hdg}, expected={expected_theta}");
+        assert!(
+            (hdg - expected_theta).abs() < 1e-12,
+            "hdg={hdg}, expected={expected_theta}"
+        );
     }
 }

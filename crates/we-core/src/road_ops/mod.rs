@@ -9,24 +9,24 @@ pub mod swap_centerline;
 pub mod transform;
 pub mod weld;
 
+pub use optimize::{OptimizeConfig, optimize_road_knots};
 #[allow(unused_imports)]
 pub use split::*;
-#[allow(unused_imports)]
-pub use weld::*;
-pub use optimize::{OptimizeConfig, optimize_road_knots};
 pub use swap_centerline::swap_centerline_with_edge;
 pub use transform::{clone_road, mirror_road, reverse_road};
+#[allow(unused_imports)]
+pub use weld::*;
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::f64::consts::PI;
     use crate::model::{
         Geometry, GeometryType, Lane, LaneSection, LaneType, LaneWidth, LinkElement,
         LinkElementType, Road, RoadLink, Signal,
     };
+    use std::f64::consts::PI;
 
     fn make_link(pred: Option<&str>, succ: Option<&str>) -> Option<RoadLink> {
         let make_el = |id: &str| LinkElement {
@@ -442,8 +442,20 @@ mod tests {
         use crate::model::Elevation;
         let mut road = make_road_with_line("r1");
         road.elevation_profile = vec![
-            Elevation { s: 0.0, a: 0.0, b: 0.1, c: 0.0, d: 0.0 },
-            Elevation { s: 50.0, a: 5.0, b: -0.05, c: 0.0, d: 0.0 },
+            Elevation {
+                s: 0.0,
+                a: 0.0,
+                b: 0.1,
+                c: 0.0,
+                d: 0.0,
+            },
+            Elevation {
+                s: 50.0,
+                a: 5.0,
+                b: -0.05,
+                c: 0.0,
+                d: 0.0,
+            },
         ];
         let rev = reverse_road(&road);
         // After reversing: s values should be 100-original_s, sorted
@@ -475,7 +487,13 @@ mod tests {
             level: 0,
             render_hidden: false,
             link: None,
-            width: vec![LaneWidth { s_offset: 0.0, a: 3.5, b: 0.0, c: 0.0, d: 0.0 }],
+            width: vec![LaneWidth {
+                s_offset: 0.0,
+                a: 3.5,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            }],
             borders: vec![],
             road_marks: vec![],
         };

@@ -81,4 +81,3 @@ mod tests {
         assert_eq!(successor.contact_point, Some(ContactPoint::End));
     }
 }
-

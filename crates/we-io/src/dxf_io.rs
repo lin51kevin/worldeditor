@@ -29,7 +29,11 @@ pub fn import_from_dxf(dxf: &str) -> Result<Project, DxfError> {
         }
 
         if code == "0" && value == "LWPOLYLINE" {
-            roads.push(parse_lwpolyline_entity(&pairs, &mut index, road_counter + 1)?);
+            roads.push(parse_lwpolyline_entity(
+                &pairs,
+                &mut index,
+                road_counter + 1,
+            )?);
             road_counter += 1;
             continue;
         }
@@ -73,7 +77,11 @@ pub fn export_to_dxf(project: &Project) -> Result<String, DxfError> {
             out.push_str("0\nLWPOLYLINE\n8\nROADS\n");
             out.push_str(&format!("90\n{}\n", points.len()));
             for (x, y) in points {
-                out.push_str(&format!("10\n{}\n20\n{}\n", format_coord(x), format_coord(y)));
+                out.push_str(&format!(
+                    "10\n{}\n20\n{}\n",
+                    format_coord(x),
+                    format_coord(y)
+                ));
             }
         }
     }
@@ -85,7 +93,9 @@ pub fn export_to_dxf(project: &Project) -> Result<String, DxfError> {
 fn parse_pairs(dxf: &str) -> Result<Vec<(String, String)>, DxfError> {
     let lines = dxf.lines().map(str::trim).collect::<Vec<_>>();
     if lines.len() % 2 != 0 {
-        return Err(DxfError::Invalid("group code/value pairs are incomplete".into()));
+        return Err(DxfError::Invalid(
+            "group code/value pairs are incomplete".into(),
+        ));
     }
 
     Ok(lines
@@ -123,8 +133,16 @@ fn parse_line_entity(
 
     build_road_from_points(
         format!("dxf_{road_index}"),
-        &[(x0.ok_or_else(|| DxfError::Invalid("LINE missing start x".into()))?, y0.ok_or_else(|| DxfError::Invalid("LINE missing start y".into()))?),
-          (x1.ok_or_else(|| DxfError::Invalid("LINE missing end x".into()))?, y1.ok_or_else(|| DxfError::Invalid("LINE missing end y".into()))?)],
+        &[
+            (
+                x0.ok_or_else(|| DxfError::Invalid("LINE missing start x".into()))?,
+                y0.ok_or_else(|| DxfError::Invalid("LINE missing start y".into()))?,
+            ),
+            (
+                x1.ok_or_else(|| DxfError::Invalid("LINE missing end x".into()))?,
+                y1.ok_or_else(|| DxfError::Invalid("LINE missing end y".into()))?,
+            ),
+        ],
     )
 }
 
@@ -172,7 +190,9 @@ fn parse_num(value: &str) -> Result<f64, DxfError> {
 
 fn build_road_from_points(id: String, points: &[(f64, f64)]) -> Result<Road, DxfError> {
     if points.len() < 2 {
-        return Err(DxfError::Invalid("entity requires at least 2 points".into()));
+        return Err(DxfError::Invalid(
+            "entity requires at least 2 points".into(),
+        ));
     }
 
     let mut s = 0.0;
@@ -198,7 +218,9 @@ fn build_road_from_points(id: String, points: &[(f64, f64)]) -> Result<Road, Dxf
     }
 
     if geometries.is_empty() {
-        return Err(DxfError::Invalid("entity collapsed to zero-length geometry".into()));
+        return Err(DxfError::Invalid(
+            "entity collapsed to zero-length geometry".into(),
+        ));
     }
 
     Ok(Road::from_centerline(id, geometries))
@@ -232,7 +254,8 @@ mod tests {
 
     #[test]
     fn test_import_line_entity() {
-        let dxf = "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n1\n20\n2\n11\n4\n21\n6\n0\nENDSEC\n0\nEOF\n";
+        let dxf =
+            "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n1\n20\n2\n11\n4\n21\n6\n0\nENDSEC\n0\nEOF\n";
         let project = import_from_dxf(dxf).unwrap();
         assert_eq!(project.roads.len(), 1);
         assert_eq!(project.roads[0].plan_view.len(), 1);
@@ -279,7 +302,8 @@ mod tests {
 
     #[test]
     fn test_import_rejects_non_finite_values() {
-        let dxf = "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\nNaN\n20\n0\n11\n5\n21\n0\n0\nENDSEC\n0\nEOF\n";
+        let dxf =
+            "0\nSECTION\n2\nENTITIES\n0\nLINE\n10\nNaN\n20\n0\n11\n5\n21\n0\n0\nENDSEC\n0\nEOF\n";
         assert!(matches!(
             import_from_dxf(dxf),
             Err(DxfError::Invalid(message)) if message.contains("finite")

@@ -7,7 +7,9 @@ use crate::model::*;
 
 // ── Lateral Profile ─────────────────────────────────
 
-pub(super) fn parse_lateral_profile(reader: &mut Reader<&[u8]>) -> Result<LateralProfile, OpenDriveError> {
+pub(super) fn parse_lateral_profile(
+    reader: &mut Reader<&[u8]>,
+) -> Result<LateralProfile, OpenDriveError> {
     let mut profile = LateralProfile::default();
 
     loop {
@@ -66,7 +68,14 @@ fn parse_crossfall(e: &BytesStart) -> Result<Crossfall, OpenDriveError> {
             _ => {}
         }
     }
-    Ok(Crossfall { s, a, b, c, d, side })
+    Ok(Crossfall {
+        s,
+        a,
+        b,
+        c,
+        d,
+        side,
+    })
 }
 
 // ── Bridge / Tunnel ─────────────────────────────────
@@ -90,13 +99,18 @@ pub(super) fn parse_bridge_empty(e: &BytesStart) -> Result<Bridge, OpenDriveErro
     Ok(bridge)
 }
 
-pub(super) fn parse_bridge(start: &BytesStart, reader: &mut Reader<&[u8]>) -> Result<Bridge, OpenDriveError> {
+pub(super) fn parse_bridge(
+    start: &BytesStart,
+    reader: &mut Reader<&[u8]>,
+) -> Result<Bridge, OpenDriveError> {
     let bridge = parse_bridge_empty(start)?;
     loop {
         match reader.read_event() {
             Ok(Event::End(ref e)) if e.name().as_ref() == b"bridge" => break,
             Ok(Event::Eof) => {
-                return Err(OpenDriveError::InvalidStructure("Unexpected EOF in bridge".into()));
+                return Err(OpenDriveError::InvalidStructure(
+                    "Unexpected EOF in bridge".into(),
+                ));
             }
             Err(e) => return Err(OpenDriveError::XmlError(e)),
             _ => {}
@@ -124,13 +138,18 @@ pub(super) fn parse_tunnel_empty(e: &BytesStart) -> Result<Tunnel, OpenDriveErro
     Ok(tunnel)
 }
 
-pub(super) fn parse_tunnel(start: &BytesStart, reader: &mut Reader<&[u8]>) -> Result<Tunnel, OpenDriveError> {
+pub(super) fn parse_tunnel(
+    start: &BytesStart,
+    reader: &mut Reader<&[u8]>,
+) -> Result<Tunnel, OpenDriveError> {
     let tunnel = parse_tunnel_empty(start)?;
     loop {
         match reader.read_event() {
             Ok(Event::End(ref e)) if e.name().as_ref() == b"tunnel" => break,
             Ok(Event::Eof) => {
-                return Err(OpenDriveError::InvalidStructure("Unexpected EOF in tunnel".into()));
+                return Err(OpenDriveError::InvalidStructure(
+                    "Unexpected EOF in tunnel".into(),
+                ));
             }
             Err(e) => return Err(OpenDriveError::XmlError(e)),
             _ => {}

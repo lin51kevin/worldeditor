@@ -463,11 +463,7 @@ fn compare_objects(
     }
 }
 
-fn compare_junctions(
-    ctx: &mut ComparisonContext,
-    project: &Project,
-    baseline: &BaselineNetwork,
-) {
+fn compare_junctions(ctx: &mut ComparisonContext, project: &Project, baseline: &BaselineNetwork) {
     ctx.assert_count(
         "junction_count",
         project.junctions.len(),
@@ -513,9 +509,10 @@ fn compare_junctions(
             let base_connecting = base_conn.connecting_road_id_str();
 
             // Find matching connection in our data
-            let our_conn = our_j.connections.iter().find(|c| {
-                c.incoming_road == base_incoming && c.connecting_road == base_connecting
-            });
+            let our_conn = our_j
+                .connections
+                .iter()
+                .find(|c| c.incoming_road == base_incoming && c.connecting_road == base_connecting);
 
             match our_conn {
                 Some(c) => {
@@ -562,9 +559,7 @@ fn compare_junctions(
                 None => {
                     ctx.diffs.push(FieldDiff {
                         field: conn_prefix,
-                        baseline: format!(
-                            "incoming={base_incoming}, connecting={base_connecting}"
-                        ),
+                        baseline: format!("incoming={base_incoming}, connecting={base_connecting}"),
                         ours: "(missing)".to_string(),
                         note: "Connection not found in our parse result".to_string(),
                     });
@@ -595,8 +590,9 @@ fn run_comparison(xodr_xml: &str, baseline_json: &str, file_name: &str) -> Compa
 #[test]
 fn compare_junction_crosswalk_signal() {
     let xodr = include_str!("../../../tests/fixtures/xodr/junction_crosswalk_signal.xodr");
-    let baseline =
-        include_str!("../../../tests/fixtures/xodr/baseline/junction_crosswalk_signal.baseline.json");
+    let baseline = include_str!(
+        "../../../tests/fixtures/xodr/baseline/junction_crosswalk_signal.baseline.json"
+    );
 
     let ctx = run_comparison(xodr, baseline, "junction_crosswalk_signal");
 
@@ -620,8 +616,7 @@ fn compare_junction_crosswalk_signal() {
 #[test]
 fn compare_highway() {
     let xodr = include_str!("../../../tests/fixtures/xodr/highway.xodr");
-    let baseline =
-        include_str!("../../../tests/fixtures/xodr/baseline/highway.baseline.json");
+    let baseline = include_str!("../../../tests/fixtures/xodr/baseline/highway.baseline.json");
 
     let ctx = run_comparison(xodr, baseline, "highway");
 
@@ -643,8 +638,7 @@ fn compare_highway() {
 #[test]
 fn compare_parkinglot() {
     let xodr = include_str!("../../../tests/fixtures/xodr/parkinglot.xodr");
-    let baseline =
-        include_str!("../../../tests/fixtures/xodr/baseline/parkinglot.baseline.json");
+    let baseline = include_str!("../../../tests/fixtures/xodr/baseline/parkinglot.baseline.json");
 
     let project = parse_xodr(xodr).expect("Failed to parse XODR");
     let baseline_data: BaselineNetwork =

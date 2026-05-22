@@ -140,13 +140,19 @@ mod tests {
 
     #[test]
     fn test_falloff_at_exact_radius_is_zero() {
-        let config = SoftSelectionConfig { radius: 10.0, ..Default::default() };
+        let config = SoftSelectionConfig {
+            radius: 10.0,
+            ..Default::default()
+        };
         assert_eq!(compute_falloff(&config, 10.0), 0.0);
     }
 
     #[test]
     fn test_falloff_beyond_radius_is_zero() {
-        let config = SoftSelectionConfig { radius: 10.0, ..Default::default() };
+        let config = SoftSelectionConfig {
+            radius: 10.0,
+            ..Default::default()
+        };
         assert_eq!(compute_falloff(&config, 20.0), 0.0);
     }
 
@@ -205,7 +211,10 @@ mod tests {
     #[test]
     fn test_collect_selected_knot_always_factor_one() {
         let spline = make_spline(&[[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]]);
-        let config = SoftSelectionConfig { radius: 100.0, ..Default::default() };
+        let config = SoftSelectionConfig {
+            radius: 100.0,
+            ..Default::default()
+        };
         let result = collect_soft_selection(&spline, 0, &config);
         let (_, factor) = result.iter().find(|(i, _)| *i == 0).copied().unwrap();
         assert!((factor - 1.0).abs() < 1e-12);
@@ -214,10 +223,18 @@ mod tests {
     #[test]
     fn test_collect_knot_beyond_radius_excluded() {
         let spline = make_spline(&[[0.0, 0.0, 0.0], [200.0, 0.0, 0.0]]);
-        let config = SoftSelectionConfig { radius: 50.0, ..Default::default() };
+        let config = SoftSelectionConfig {
+            radius: 50.0,
+            ..Default::default()
+        };
         let result = collect_soft_selection(&spline, 0, &config);
         // Only the selected knot should be present
-        assert_eq!(result.len(), 1, "expected only selected knot, got {:?}", result);
+        assert_eq!(
+            result.len(),
+            1,
+            "expected only selected knot, got {:?}",
+            result
+        );
     }
 
     #[test]
@@ -228,7 +245,10 @@ mod tests {
             [2.0, 0.0, 0.0],
             [3.0, 0.0, 0.0],
         ]);
-        let config = SoftSelectionConfig { radius: 100.0, ..Default::default() };
+        let config = SoftSelectionConfig {
+            radius: 100.0,
+            ..Default::default()
+        };
         let result = collect_soft_selection(&spline, 1, &config);
         let indices: Vec<usize> = result.iter().map(|(i, _)| *i).collect();
         let mut sorted = indices.clone();
