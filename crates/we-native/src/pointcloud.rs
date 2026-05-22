@@ -17,3 +17,28 @@ impl PointCloudLoader {
         Self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::PointCloudLoader;
+    use std::mem::{size_of, size_of_val};
+
+    #[test]
+    fn test_point_cloud_loader_is_zero_sized_placeholder() {
+        assert_eq!(size_of::<PointCloudLoader>(), 0);
+    }
+
+    #[test]
+    fn test_point_cloud_loader_new_returns_constructible_loader() {
+        let loader = PointCloudLoader::new();
+
+        assert_eq!(size_of_val(&loader), 0);
+    }
+
+    #[test]
+    fn test_point_cloud_loader_default_returns_constructible_loader() {
+        let loader = PointCloudLoader::default();
+
+        assert_eq!(size_of_val(&loader), 0);
+    }
+}
