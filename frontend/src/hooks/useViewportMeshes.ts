@@ -43,24 +43,37 @@ export function useViewportMeshes({
   const projectLoadVersion = useProjectStore((s) => s.projectLoadVersion);
   const { display, viewMode } = useViewportStore();
 
+  // ── Split display into data-affecting vs render-only ───────────────────
+  // Data-affecting properties change WHICH roads/lanes/signals are in the visible project.
+  // Render-only properties control which mesh layers are SHOWN (no data rebuild needed).
+  const dataDisplayKey = JSON.stringify({
+    hiddenRoadIds: display.hiddenRoadIds,
+    hiddenJunctionIds: display.hiddenJunctionIds,
+    hiddenLaneSectionKeys: display.hiddenLaneSectionKeys,
+    hiddenLaneKeys: display.hiddenLaneKeys,
+    hiddenSignalKeys: display.hiddenSignalKeys,
+    hiddenObjectKeys: display.hiddenObjectKeys,
+  });
+
   // ── Shared renderable project cache ────────────────────────────────────
   const visibleProjectRef = useRef<ReturnType<typeof buildRenderableProject> | null>(null);
   const visibleProjectKeyRef = useRef<string>('');
   const projectRef = useRef(project);
 
+  // getVisibleProject only rebuilds when DATA changes (hidden items), not render toggles
   const getVisibleProject = useCallback((): Project | null => {
-    const key = JSON.stringify({ d: display, v: projectLoadVersion });
+    const key = dataDisplayKey + ':' + projectLoadVersion;
     if (key !== visibleProjectKeyRef.current || project !== projectRef.current || !visibleProjectRef.current) {
       visibleProjectKeyRef.current = key;
       projectRef.current = project;
       visibleProjectRef.current = project ? buildRenderableProject(project, display) : null;
     }
     return visibleProjectRef.current;
-  }, [project, display, projectLoadVersion]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, dataDisplayKey, projectLoadVersion]);
 
   // ── WASM project cache lifecycle ───────────────────────────────────────
-  // Pushes the visible project into the WASM-side cache once per change,
-  // so that 60 Hz pick/snap calls avoid per-call JSON serialisation.
+  // Only re-pushes when the visible project DATA changes (not on render toggles).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -77,11 +90,15 @@ export function useViewportMeshes({
   }, [getVisibleProject]);
 
   // ── Surface mesh (roads + junctions + signals + objects) ───────────────
+  // Layered caching: each layer is cached independently so that toggling
+  // show/hide flags only requires a re-merge + GPU upload, not WASM regeneration.
   const surfaceDepsRef = useRef<{
     roadRefs: Map<string, unknown>;
     junctionRefs: Map<string, unknown>;
   }>({ roadRefs: new Map(), junctionRefs: new Map() });
-  const cachedSurfaceRef = useRef<Float32Array>(new Float32Array(0));
+  const cachedRoadJunctionVertsRef = useRef<Float32Array>(new Float32Array(0));
+  const cachedSignalVertsRef = useRef<Float32Array>(new Float32Array(0));
+  const cachedObjectVertsRef = useRef<Float32Array>(new Float32Array(0));
   const surfaceViewModeRef = useRef(viewMode);
 
   const updateSurfaceMesh = useCallback(async () => {
@@ -107,41 +124,48 @@ export function useViewportMeshes({
         newJunctionRefs.size !== prev.junctionRefs.size ||
         [...newJunctionRefs].some(([id, ref]) => prev.junctionRefs.get(id) !== ref);
       const modeChanged = surfaceViewModeRef.current !== viewMode;
+      const dataChanged = roadsChanged || junctionsChanged || modeChanged;
 
       surfaceDepsRef.current = { roadRefs: newRoadRefs, junctionRefs: newJunctionRefs };
       surfaceViewModeRef.current = viewMode;
 
-      if (!roadsChanged && !junctionsChanged && !modeChanged && cachedSurfaceRef.current.length > 0) {
-        console.info(`[Viewport:perf] updateSurfaceMesh skipped (no change) ${(performance.now() - tStart).toFixed(1)}ms`);
-        return;
+      // If data hasn't changed, we can skip WASM calls and just re-merge cached layers
+      if (dataChanged || cachedRoadJunctionVertsRef.current.length === 0) {
+        // Data changed — regenerate all layers
+        const empty = Promise.resolve(new Float32Array(0));
+        const roadProm = viewMode === 'solid'
+          ? service.generateRoadVertices(visibleProject, 2.0, display.colorMode).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); })
+          : empty;
+        const junctionProm = viewMode === 'solid'
+          ? service.generateJunctionVertices(visibleProject).catch((e) => { console.warn('[Viewport] generateJunctionVertices failed:', e); return new Float32Array(0); })
+          : empty;
+        const signalProm = viewMode === 'solid'
+          ? service.generateSignalPaintVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
+          : empty;
+        const objectProm = viewMode === 'solid'
+          ? service.generateObjectVertices(visibleProject).catch(() => new Float32Array(0))
+          : empty;
+
+        const [roadVerts, junctionVerts, signalVerts, objectVerts] = await Promise.all([
+          roadProm, junctionProm, signalProm, objectProm,
+        ]);
+
+        // Cache each layer separately
+        cachedRoadJunctionVertsRef.current = mergeFloat32Arrays(roadVerts, junctionVerts);
+        cachedSignalVertsRef.current = signalVerts;
+        cachedObjectVertsRef.current = objectVerts;
       }
 
-      const empty = Promise.resolve(new Float32Array(0));
-      // Connector roads render their road surfaces but NOT lane lines.
-      // Road surface rendering uses full visibleProject (includes connectors).
-      const roadProm = viewMode === 'solid'
-        ? service.generateRoadVertices(visibleProject, 2.0, display.colorMode).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); })
-        : empty;
-      const junctionProm = viewMode === 'solid'
-        ? service.generateJunctionVertices(visibleProject).catch((e) => { console.warn('[Viewport] generateJunctionVertices failed:', e); return new Float32Array(0); })
-        : empty;
-      const signalProm = viewMode === 'solid' && display.showSignals
-        ? service.generateSignalPaintVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
-        : empty;
-      const objectProm = viewMode === 'solid' && display.showObjects
-        ? service.generateObjectVertices(visibleProject).catch(() => new Float32Array(0))
-        : empty;
-
-      const [roadVerts, junctionVerts, signalVerts, objectVerts] = await Promise.all([
-        roadProm, junctionProm, signalProm, objectProm,
-      ]);
+      // Merge visible layers (skipping WASM if only toggle changed)
       const tWasm = performance.now();
+      let surfaceVerts = cachedRoadJunctionVertsRef.current;
+      if (display.showSignals && cachedSignalVertsRef.current.length > 0) {
+        surfaceVerts = mergeFloat32Arrays(surfaceVerts, cachedSignalVertsRef.current);
+      }
+      if (display.showObjects && cachedObjectVertsRef.current.length > 0) {
+        surfaceVerts = mergeFloat32Arrays(surfaceVerts, cachedObjectVertsRef.current);
+      }
 
-      const surfaceVerts = mergeFloat32Arrays(
-        mergeFloat32Arrays(mergeFloat32Arrays(roadVerts, junctionVerts), signalVerts),
-        objectVerts,
-      );
-      cachedSurfaceRef.current = surfaceVerts;
       if (viewMode === 'solid') {
         renderer.uploadRoadVertices(surfaceVerts);
       } else {
@@ -151,7 +175,8 @@ export function useViewportMeshes({
       console.info(
         `[Viewport:perf] updateSurfaceMesh total=${(tDone - tStart).toFixed(1)}ms | ` +
         `service=${(tService - tStart).toFixed(1)} wasm=${(tWasm - tService).toFixed(1)} ` +
-        `upload=${(tDone - tWasm).toFixed(1)} roads=${visibleProject.roads.length} verts=${surfaceVerts.length / 7}`,
+        `upload=${(tDone - tWasm).toFixed(1)} roads=${visibleProject.roads.length} verts=${surfaceVerts.length / 7}` +
+        (dataChanged ? '' : ' [cached-merge]'),
       );
     } catch (err) {
       console.error('[Viewport] Failed to generate surface mesh:', err);
@@ -172,6 +197,12 @@ export function useViewportMeshes({
   ]);
 
   // ── Line mesh (lane lines + center/reference lines) ────────────────────
+  // Layered caching: each line type is cached independently.
+  const cachedCenterLineVertsRef = useRef<Float32Array>(new Float32Array(0));
+  const cachedLaneBoundaryVertsRef = useRef<Float32Array>(new Float32Array(0));
+  const cachedRoadMarkVertsRef = useRef<Float32Array>(new Float32Array(0));
+  const lineDepsKeyRef = useRef<string>('');
+
   const updateLineMesh = useCallback(async () => {
     const renderer = rendererRef.current;
     if (!renderer || status !== 'ready' || !project) return;
@@ -181,30 +212,42 @@ export function useViewportMeshes({
       const visibleProject = getVisibleProject();
       if (!visibleProject) return;
 
-      const empty = Promise.resolve(new Float32Array(0));
-      // Exclude connector roads from line rendering — their surfaces are shown
-      // but lane lines/marks inside the junction area are hidden (C# reference behavior).
-      const nonConnectorProject = {
-        ...visibleProject,
-        roads: visibleProject.roads.filter((r) => !r.junction_id),
-      };
-      const centerLineProm = (display.showReferenceLine || viewMode !== 'solid')
-        ? service.generateCenterLineVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0))
-        : empty;
-      const laneBoundaryProm = viewMode !== 'solid'
-        ? service.generateLaneBoundaryVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0))
-        : empty;
-      const roadMarkProm = (viewMode === 'wire' || (viewMode === 'solid' && display.showLaneLines))
-        ? service.generateLaneLineVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0))
-        : empty;
+      // Check if underlying data changed (road references)
+      const lineKey = dataDisplayKey + ':' + projectLoadVersion + ':' + viewMode;
+      const dataChanged = lineKey !== lineDepsKeyRef.current;
 
-      const [laneBoundaryVerts, roadMarkVerts, centerLineVerts] = await Promise.all([
-        laneBoundaryProm, roadMarkProm, centerLineProm,
-      ]);
-      const lineVerts = mergeFloat32Arrays(
-        mergeFloat32Arrays(laneBoundaryVerts, roadMarkVerts),
-        centerLineVerts,
-      );
+      if (dataChanged) {
+        lineDepsKeyRef.current = lineKey;
+
+        // Exclude connector roads from line rendering
+        const nonConnectorProject = {
+          ...visibleProject,
+          roads: visibleProject.roads.filter((r) => !r.junction_id),
+        };
+        const empty = Promise.resolve(new Float32Array(0));
+        const centerLineProm = service.generateCenterLineVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0));
+        const laneBoundaryProm = viewMode !== 'solid'
+          ? service.generateLaneBoundaryVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0))
+          : empty;
+        const roadMarkProm = service.generateLaneLineVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0));
+
+        const [centerLineVerts, laneBoundaryVerts, roadMarkVerts] = await Promise.all([
+          centerLineProm, laneBoundaryProm, roadMarkProm,
+        ]);
+
+        cachedCenterLineVertsRef.current = centerLineVerts;
+        cachedLaneBoundaryVertsRef.current = laneBoundaryVerts;
+        cachedRoadMarkVertsRef.current = roadMarkVerts;
+      }
+
+      // Merge only visible layers (no WASM calls when only toggle changed)
+      let lineVerts = cachedLaneBoundaryVertsRef.current;
+      if (viewMode === 'wire' || (viewMode === 'solid' && display.showLaneLines)) {
+        lineVerts = mergeFloat32Arrays(lineVerts, cachedRoadMarkVertsRef.current);
+      }
+      if (display.showReferenceLine || viewMode !== 'solid') {
+        lineVerts = mergeFloat32Arrays(lineVerts, cachedCenterLineVertsRef.current);
+      }
       renderer.uploadLaneLineVertices(lineVerts);
     } catch (err) {
       console.error('[Viewport] Failed to generate line mesh:', err);
@@ -213,6 +256,8 @@ export function useViewportMeshes({
     project,
     status,
     viewMode,
+    dataDisplayKey,
+    projectLoadVersion,
     display.showLaneLines,
     display.showRoadMarks,
     display.showReferenceLine,
@@ -230,7 +275,13 @@ export function useViewportMeshes({
     visibleProjectRef.current = null;
     visibleProjectKeyRef.current = '';
     surfaceDepsRef.current = { roadRefs: new Map(), junctionRefs: new Map() };
-    cachedSurfaceRef.current = new Float32Array(0);
+    cachedRoadJunctionVertsRef.current = new Float32Array(0);
+    cachedSignalVertsRef.current = new Float32Array(0);
+    cachedObjectVertsRef.current = new Float32Array(0);
+    cachedCenterLineVertsRef.current = new Float32Array(0);
+    cachedLaneBoundaryVertsRef.current = new Float32Array(0);
+    cachedRoadMarkVertsRef.current = new Float32Array(0);
+    lineDepsKeyRef.current = '';
   }, [projectLoadVersion, status]);
 
   // ── Overlay mesh (bridge/tunnel structures) ────────────────────────────
