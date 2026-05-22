@@ -254,6 +254,19 @@ describe('Viewport', () => {
     });
   });
 
+  it('renders a canvas and loading overlay while WebGPU initialization is pending', () => {
+    const platform = createPlatformMock();
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockImplementation(() => new Promise<boolean>(() => {}));
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    render(<Viewport />);
+
+    expect(document.querySelector('.viewport-canvas')).toBeInTheDocument();
+    expect(screen.getByText('3D 视口 — 正在初始化 WebGPU...')).toBeInTheDocument();
+    expect(rendererMocks.start).not.toHaveBeenCalled();
+  });
+
   it('shows the unsupported overlay when WebGPU is unavailable', () => {
     rendererMocks.isSupported.mockReturnValue(false);
 
