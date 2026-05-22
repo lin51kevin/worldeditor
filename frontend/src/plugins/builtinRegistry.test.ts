@@ -100,7 +100,7 @@ describe('builtinRegistry', () => {
   });
 
   it('exposes all built-in plugins with loaded builtin metadata', () => {
-    expect(BUILTIN_PLUGINS).toHaveLength(25);
+    expect(BUILTIN_PLUGINS).toHaveLength(26);
     expect(BUILTIN_PLUGINS.every((plugin) => plugin.isBuiltin)).toBe(true);
     expect(BUILTIN_PLUGINS.every((plugin) => plugin.status === 'loaded')).toBe(true);
     expect(BUILTIN_PLUGINS.every((plugin) => typeof plugin.mount === 'function')).toBe(true);

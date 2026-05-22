@@ -2,8 +2,8 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const add_elevation_point: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
-export const auto_build_junction_connectors: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const apply_affine_transform: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const auto_build_junction_connectors: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const compute_junction_area: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const compute_road_width: (a: number, b: number, c: number) => [number, number, number];
 export const compute_soft_selection: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];

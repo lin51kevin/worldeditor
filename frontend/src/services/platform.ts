@@ -29,6 +29,7 @@ export interface Project {
   junctions: Junction[];
   signals: RoadSignal[];
   objects: RoadObject[];
+  shape_layers?: ShapeLayer[];
 }
 
 export interface LinkElement {
@@ -86,6 +87,48 @@ export interface Tunnel {
   s: number;
   length: number;
   tunnel_type: string;
+}
+
+// ── Shape vector layer types ──────────────────────────────────────────────────
+
+export interface ShapeTag {
+  key: string;
+  value: string;
+}
+
+export interface ShapeNode {
+  id: string;
+  x: number;
+  y: number;
+  z?: number;
+  tags?: ShapeTag[];
+}
+
+export interface ShapeWay {
+  id: string;
+  node_ids: string[];
+  tags?: ShapeTag[];
+}
+
+export interface ShapeRelationMember {
+  member_id: string;
+  member_type: string;
+  role?: string;
+}
+
+export interface ShapeRelation {
+  id: string;
+  members?: ShapeRelationMember[];
+  tags?: ShapeTag[];
+}
+
+export interface ShapeLayer {
+  id: string;
+  name: string;
+  visible?: boolean;
+  nodes: ShapeNode[];
+  ways: ShapeWay[];
+  relations?: ShapeRelation[];
 }
 
 export interface Road {
@@ -386,10 +429,14 @@ export interface PlatformService {
   /** Generate road object vertices (crosswalks, parking spaces, stop lines, guardrails, etc.).
    *  Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateObjectVertices(project: Project): Promise<Float32Array>;
-/** Generate bridge deck and tunnel enclosure overlay vertices.
- *  Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
-generateBridgeTunnelVertices(project: Project): Promise<Float32Array>;
 
+  /** Generate bridge deck and tunnel enclosure overlay vertices.
+   *  Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
+  generateBridgeTunnelVertices(project: Project): Promise<Float32Array>;
+
+  /** Auto-generate connector roads for all unconnected arm pairs in a junction.
+   *  Returns the updated Project. */
+  autoJunctionConnectors(project: Project, junctionId: string): Promise<Project>;
 
   // --- Project cache (avoids per-call JSON serialisation on 60 Hz mousemove) ---
 

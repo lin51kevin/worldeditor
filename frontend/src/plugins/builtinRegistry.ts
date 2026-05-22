@@ -9,6 +9,7 @@ import type { PluginInfo } from '../hooks/usePlugins';
 import { mountRoadToolsPlugin } from './editing/road-tools/road-tools.plugin';
 import { mountTemplatesPlugin } from './editing/templates/templates.plugin';
 import { mountAdvancedEditingPlugin } from './editing/advanced-editing/advanced-editing.plugin';
+import { mountShapeEditorPlugin } from './editing/shape-editor/shape-editor.plugin';
 import { mountConverterPlugin } from './editing/converter/converter.plugin';
 import { mountAiCopilotPlugin } from './editing/ai-copilot/ai-copilot.plugin';
 import { mountIoCsvPlugin } from './io/csv/io-csv.plugin';
@@ -43,6 +44,7 @@ const MOUNT_MAP: Record<string, () => () => void> = {
   'road-tools': mountRoadToolsPlugin,
   'builtin-templates': mountTemplatesPlugin,
   'advanced-editing': mountAdvancedEditingPlugin,
+  'shape-editor': mountShapeEditorPlugin,
   'io-csv-import': mountIoCsvPlugin,
   'io-obj3d-export': mountIoObj3dPlugin,
   'io-lanelet2': mountIoLanelet2Plugin,
@@ -127,6 +129,7 @@ const BUILTIN_META: PluginInfo[] = [
   { id: 'lane-detect', name: 'Lane Detection', nameKey: 'pluginManager.builtinLaneDetectName', version: '1.0.0', description: 'Automated lane detection (Phase 3)', descriptionKey: 'pluginManager.builtinLaneDetectDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'converter', name: 'Batch Converter', nameKey: 'pluginManager.builtinConverterName', version: '1.0.0', description: 'Batch format conversion panel', descriptionKey: 'pluginManager.builtinConverterDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'ai-copilot', name: 'AI Copilot', nameKey: 'pluginManager.builtinAiCopilotName', version: '1.0.0', description: 'AI assistant panel for road editing', descriptionKey: 'pluginManager.builtinAiCopilotDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'shape-editor', name: 'Shape Editor', nameKey: 'pluginManager.builtinShapeEditorName', version: '1.0.0', description: 'Vector shape layer editor for pre-road geometry construction', descriptionKey: 'pluginManager.builtinShapeEditorDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
 ];
 
 /** Builtin plugins with mount functions attached. */

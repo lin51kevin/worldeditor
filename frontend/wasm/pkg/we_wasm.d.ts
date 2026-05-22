@@ -13,6 +13,7 @@ export function add_elevation_point(project_json: string, road_id: string, s: nu
  * Returns JSON `{ x, y }`.
  */
 export function apply_affine_transform(transform_json: string, source_x: number, source_y: number): any;
+
 /**
  * Auto-generate connector roads for every unconnected arm pair in a junction.
  *
@@ -20,7 +21,6 @@ export function apply_affine_transform(transform_json: string, source_x: number,
  * On error, returns a JS Error.
  */
 export function auto_build_junction_connectors(project_json: string, junction_id: string): string;
-
 
 /**
  * Compute the boundary area of a junction from its connecting roads.
@@ -126,6 +126,7 @@ export function fit_affine_from_gcps(gcps_json: string): any;
  * Convert GCJ-02 coordinates to WGS84.
  */
 export function gcj02_to_wgs84(lat: number, lon: number, alt: number): any;
+
 /**
  * Generate bridge and tunnel overlay vertices from a project JSON.
  *
@@ -133,7 +134,6 @@ export function gcj02_to_wgs84(lat: number, lon: number, alt: number): any;
  * Returns a flat Float32Array containing bridge deck and tunnel enclosure quads.
  */
 export function generate_bridge_tunnel_vertices(project_json: string): Float32Array;
-
 
 /**
  * Generate reference line (centerline) visualization vertices from a project JSON.
@@ -292,13 +292,13 @@ export function geo_to_utm(lat: number, lon: number, alt: number): any;
  * Returns JSON `{ x, y, z }` in metres.
  */
 export function geodetic_to_ecef(lat_deg: number, lon_deg: number, alt_m: number): any;
+
 /**
  * Return JSON array of junction arms for the given junction.
  *
  * Useful for frontend visualization / debugging.
  */
 export function get_junction_arms(project_json: string, junction_id: string): string;
-
 
 /**
  * Compute the world-space position (x, y) of a road object given its road-local position.

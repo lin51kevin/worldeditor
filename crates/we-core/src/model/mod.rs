@@ -7,6 +7,7 @@ pub(crate) mod crg;
 pub mod lane;
 pub(crate) mod road;
 pub mod road_link;
+pub(crate) mod shape;
 pub(crate) mod template;
 pub(crate) mod traffic;
 pub(crate) mod zone;
@@ -22,6 +23,7 @@ pub use road::{
     Tunnel, Validity,
 };
 pub use road_link::{ContactPoint, LinkElement, LinkElementType, RoadLink};
+pub use shape::{ShapeLayer, ShapeNode, ShapeRelation, ShapeRelationMember, ShapeTag, ShapeWay};
 pub use template::RoadTemplate;
 pub use traffic::{SignalController, SignalGroup, SignalPhase};
 pub use zone::{Zone, ZoneStatus, ZoneType, ZoneVertex};
@@ -64,6 +66,9 @@ pub struct Project {
     /// Project-level road objects.
     #[serde(default)]
     pub objects: Vec<RoadObject>,
+    /// Shape vector layers (nodes, ways, relations for pre-road geometry).
+    #[serde(default)]
+    pub shape_layers: Vec<ShapeLayer>,
 }
 
 /// A junction connecting multiple roads.
