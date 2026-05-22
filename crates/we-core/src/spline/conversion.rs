@@ -229,7 +229,7 @@ pub fn spline_to_geometries_with_mode(
 mod tests {
     use super::*;
     use crate::model::{Geometry, GeometryType};
-    use crate::spline::{EditableSpline, KnotType, SplineKnot, TangentMode};
+    use crate::spline::{EditableSpline, KnotType, SplineKnot};
 
     fn line_geometry(x: f64, y: f64, hdg: f64, length: f64) -> Geometry {
         Geometry {

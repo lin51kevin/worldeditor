@@ -20,11 +20,7 @@ use signal_mesh::{arrow_triangles, sign_marker_color};
 
 // Re-export submodule wasm_bindgen functions for tests
 #[cfg(test)]
-use line_gen::{
-    generate_center_line_vertices, generate_lane_boundary_vertices, generate_lane_line_vertices,
-};
-#[cfg(test)]
-use object_gen::{generate_object_vertices, generate_single_object_vertices};
+use object_gen::generate_object_vertices;
 // ── Public wasm_bindgen functions ─────────────────────────────────────────────
 
 /// Generate road mesh vertices from a project JSON. Returns vertex data as Float32Array.

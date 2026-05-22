@@ -159,7 +159,7 @@ impl Command for OptimizeAllJunctions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use we_core::model::*;
+    use we_core::model::{LinkElement, LinkElementType, Project, Road, RoadLink};
 
     fn make_linked_project() -> Project {
         let mut road1 = Road::new("r1", 100.0);

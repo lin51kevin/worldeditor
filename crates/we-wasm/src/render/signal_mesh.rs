@@ -1125,7 +1125,7 @@ mod tests {
             .chunks(7)
             .map(|v| v[0])
             .fold(f32::NEG_INFINITY, f32::max);
-        let x_min_50 = out50.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
+        let _x_min_50 = out50.chunks(7).map(|v| v[0]).fold(f32::INFINITY, f32::min);
 
         // Without rotation: x_max ≈ 0.81 + 1.15 + hw(0.05) ≈ 2.01
         // With rotation (wrong): x_max ≈ 0.81 + 2.77 + hw ≈ 3.63

@@ -369,12 +369,12 @@ fn sample_arc_length(
 mod tests {
     use super::*;
     use crate::model::{
-        ContactPoint, Geometry, GeometryType, Junction, JunctionConnection, JunctionLaneLink,
+        ContactPoint, Geometry, GeometryType, Junction,
         LinkElement, LinkElementType, Project, Road, RoadLink,
     };
 
     fn make_straight_road(id: &str, x: f64, y: f64, length: f64, hdg: f64) -> Road {
-        let mut road = Road::from_centerline(
+        let road = Road::from_centerline(
             id,
             vec![Geometry {
                 s: 0.0,

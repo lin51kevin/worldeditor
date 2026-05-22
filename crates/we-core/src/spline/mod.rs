@@ -348,7 +348,7 @@ pub fn find_insertion_index(spline: &EditableSpline, x: f64, y: f64) -> usize {
 #[cfg(test)]
 mod tests {
     use super::arc_length::param_poly3_arc_length;
-    use super::cubic_bezier::{CurveClassification, classify_param_poly3, fit_hermite_param_poly3};
+    use super::cubic_bezier::{CurveClassification, classify_param_poly3};
     use super::*;
 
     // ── SplineKnot tests ────────────────────────────

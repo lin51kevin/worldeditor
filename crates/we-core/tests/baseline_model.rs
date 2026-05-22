@@ -4,6 +4,8 @@
 //! `RoadNetwork.toJson()`. They are test-only and intentionally use
 //! `serde_json::Value` for loosely-typed fields we don't yet compare.
 
+#![allow(dead_code)]
+
 use serde::Deserialize;
 
 // ── Top-level ────────────────────────────────────────

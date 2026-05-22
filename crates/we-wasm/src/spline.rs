@@ -233,7 +233,7 @@ mod tests {
     fn test_create_road_from_spline_command() {
         let road = simple_road(10.0);
         let spline = we_core::spline::road_to_spline(&road, 20.0);
-        let mut project = we_core::model::Project::default();
+        let project = we_core::model::Project::default();
         let template = we_core::model::RoadTemplate::single_lane();
         let cmd = we_service::commands::CreateRoadFromSpline::new(
             "new_road",

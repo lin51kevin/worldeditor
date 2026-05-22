@@ -506,7 +506,7 @@ impl Command for ShapeWayToRoad {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use we_core::model::{Project, ShapeLayer, ShapeNode, ShapeWay, ShapeTag};
+    use we_core::model::{Project, ShapeLayer, ShapeNode, ShapeWay};
 
     fn project_with_layer() -> Project {
         let mut layer = ShapeLayer::new("layer-1", "Test Layer");
