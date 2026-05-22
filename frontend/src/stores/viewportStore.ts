@@ -44,7 +44,7 @@ interface PanelLayout {
 }
 
 const DEFAULT_LAYOUT: PanelLayout = {
-  leftWidth: 260,
+  leftWidth: 300,
   rightWidth: 300,
   outputHeight: 150,
   leftCollapsed: false,

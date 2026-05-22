@@ -113,7 +113,7 @@
   --menubar-height: 32px;
   --toolbar-height: 36px;
   --statusbar-height: 24px;
-  --floating-panel-width: 260px;
+  --floating-panel-width: 300px;
   --floating-right-width: 300px;
   --floating-radius: 10px;
   --output-panel-height: 150px;
@@ -411,10 +411,9 @@ body,
 
 .floating-left {
   /* Initial position — read by FloatingPanel useLayoutEffect on first mount */
-  top: calc(var(--menubar-height) + 12px);
+  top: calc(var(--menubar-height) + var(--toolbar-height) + 12px);
   left: 12px;
   width: var(--floating-panel-width);
-  height: calc(100% - var(--menubar-height) - 12px - 320px);
   min-height: 200px;
   display: flex;
   flex-direction: column;
@@ -422,11 +421,9 @@ body,
 
 .floating-right {
   /* Initial position — read by FloatingPanel useLayoutEffect on first mount */
-  top: calc(var(--menubar-height) + 12px);
+  top: calc(var(--menubar-height) + var(--toolbar-height) + 12px);
   right: 12px;
   width: var(--floating-right-width);
-  bottom: 36px;
-  max-height: calc(100vh - var(--menubar-height) - 56px);
   display: flex;
   flex-direction: column;
 }
@@ -448,15 +445,14 @@ body,
   flex-shrink: 0;
 }
 
-/* Template panel — standalone floating */
+/* Template panel — standalone floating, positioned below the left navigator panel */
 .floating-template {
   /* Initial position — read by FloatingPanel useLayoutEffect on first mount */
-  top: calc(100% - 260px);
+  top: calc(var(--menubar-height) + var(--toolbar-height) + 12px + 420px + 8px);
   left: 12px;
   width: var(--floating-panel-width);
   display: flex;
   flex-direction: column;
-  /* animation-name: panel-slide-left; */
 }
 
 /* Measurement panel — centered floating */

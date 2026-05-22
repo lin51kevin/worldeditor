@@ -27,7 +27,7 @@ describe('viewportStore', () => {
       viewMode: 'solid',
       display: { ...DEFAULT_DISPLAY },
       layout: {
-        leftWidth: 260,
+        leftWidth: 300,
         rightWidth: 300,
         outputHeight: 150,
         leftCollapsed: false,
@@ -54,7 +54,7 @@ describe('viewportStore', () => {
     expect(state.showAxis).toBe(true);
     expect(state.editMode).toBe('default');
     expect(state.viewMode).toBe('solid');
-    expect(state.layout.leftWidth).toBe(260);
+    expect(state.layout.leftWidth).toBe(300);
     expect(state.layout.rightWidth).toBe(300);
     expect(state.layout.leftCollapsed).toBe(false);
     expect(state.layout.rightCollapsed).toBe(false);
