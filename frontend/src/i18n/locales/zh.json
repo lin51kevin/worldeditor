@@ -452,7 +452,14 @@
   },
   "viewport": {
     "initializing": "3D 视口 — 正在初始化 WebGPU...",
-    "unsupported": "3D 视口 — 不支持 WebGPU"
+    "unsupported": "3D 视口 — 不支持 WebGPU",
+    "dropToOpen": "拖放文件以打开"
+  },
+  "loading": {
+    "readingFile": "正在读取文件...",
+    "parsingMap": "正在解析地图数据...",
+    "generatingMesh": "正在生成道路网格...",
+    "complete": "加载完成"
   },
   "status": {
     "ready": "就绪"

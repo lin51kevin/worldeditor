@@ -452,7 +452,14 @@
   },
   "viewport": {
     "initializing": "3D Viewport — Initializing WebGPU...",
-    "unsupported": "3D Viewport — WebGPU not supported"
+    "unsupported": "3D Viewport — WebGPU not supported",
+    "dropToOpen": "Drop file to open"
+  },
+  "loading": {
+    "readingFile": "Reading file...",
+    "parsingMap": "Parsing map data...",
+    "generatingMesh": "Generating road mesh...",
+    "complete": "Loading complete"
   },
   "status": {
     "ready": "Ready"

@@ -121,3 +121,38 @@
   color: var(--color-text-primary);
   margin: 0 2px;
 }
+
+/* File drag-and-drop zone overlay */
+.viewport-file-drop-zone {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(88, 166, 255, 0.08);
+  border: 2px dashed var(--color-primary, #58a6ff);
+  border-radius: 4px;
+  z-index: 90;
+  pointer-events: none;
+  animation: vp-drop-pulse 1.5s ease-in-out infinite;
+}
+
+.viewport-file-drop-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-primary, #58a6ff);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.viewport-file-drop-icon {
+  font-size: 32px;
+}
+
+@keyframes vp-drop-pulse {
+  0%, 100% { border-color: var(--color-primary, #58a6ff); }
+  50% { border-color: rgba(88, 166, 255, 0.4); }
+}

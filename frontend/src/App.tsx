@@ -34,6 +34,7 @@ import { getPlatformService } from './services';
 import { showAlert } from './utils/dialog';
 import { emitViewportEvent } from './viewport/viewportEvents';
 import { STORAGE_KEYS } from './constants/storage';
+import { useFileLoader } from './hooks/useFileLoader';
 
 const STARTUP_WELCOME_KEY = STORAGE_KEYS.SHOW_WELCOME_ON_STARTUP;
 
@@ -174,22 +175,24 @@ export function App() {
 
   // ── File operations ─────────────────────────────────────────────────────
 
+  const { loadFile } = useFileLoader();
+
   const handleOpenFile = useCallback(async () => {
     try {
       const ps = await getPlatformService();
       const result = await ps.openFile();
       if (!result) return;
-      const project = await ps.parseOpenDrive(result.content);
-      project.name = result.name;
-      useProjectStore.getState().setProject(project);
-      if (result.path) {
-        pushRecentFile(result.name, result.path);
+      const loadResult = await loadFile(result.content, result.name);
+      if (loadResult.success) {
+        if (result.path) {
+          pushRecentFile(result.name, result.path);
+        }
+        setIsEditorOpen(true);
       }
-      setIsEditorOpen(true);
     } catch (err) {
       console.error('Failed to open file:', err);
     }
-  }, [pushRecentFile]);
+  }, [pushRecentFile, loadFile]);
 
   /** Create a new empty project and enter the editor. */
   const handleNew = useCallback(() => {
@@ -207,16 +210,16 @@ export function App() {
         await showAlert(`${t('dialog.fileNotFound')}: ${recentFile.name}`);
         return;
       }
-      const project = await ps.parseOpenDrive(result.content);
-      project.name = result.name;
-      useProjectStore.getState().setProject(project);
-      pushRecentFile(result.name, recentFile.path);
-      setIsEditorOpen(true);
+      const loadResult = await loadFile(result.content, result.name);
+      if (loadResult.success) {
+        pushRecentFile(result.name, recentFile.path);
+        setIsEditorOpen(true);
+      }
     } catch {
       removeRecentFile(recentFile.path);
       await showAlert(`${t('dialog.fileNotFound')}: ${recentFile.name}`);
     }
-  }, [pushRecentFile, removeRecentFile, t]);
+  }, [pushRecentFile, removeRecentFile, t, loadFile]);
 
   const handleRemoveRecent = useCallback((path: string) => {
     removeRecentFile(path);

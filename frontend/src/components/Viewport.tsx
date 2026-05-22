@@ -10,6 +10,7 @@ import { getPlatformService } from '../services';
 import { showContextMenu } from '../services/contextMenu';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import { useViewportDrop } from '../hooks/useViewportDrop';
+import { ViewportLoadingOverlay } from './ViewportLoadingOverlay';
 import { useRubberBandSelect } from '../hooks/useRubberBandSelect';
 import { useMoveRotateMode } from '../hooks/useMoveRotateMode';
 import { useAdjustEdgeMode } from '../hooks/useAdjustEdgeMode';
@@ -35,7 +36,7 @@ export function Viewport() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ViewportRenderer | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
-  const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useViewportDrop(rendererRef, canvasRef);
+  const { isDragOver, isFileDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useViewportDrop(rendererRef, canvasRef);
   const showGrid = useViewportStore((s) => s.showGrid);
   const showAxis = useViewportStore((s) => s.showAxis);
   const dimension = useViewportStore((s) => s.dimension);
@@ -931,6 +932,17 @@ export function Viewport() {
           <span className="viewport-label">
             {status === 'loading' ? t('viewport.initializing') : t('viewport.unsupported')}
           </span>
+        </div>
+      )}
+      {/* File loading progress overlay */}
+      <ViewportLoadingOverlay />
+      {/* File drop zone hint */}
+      {isFileDragOver && (
+        <div className="viewport-file-drop-zone">
+          <div className="viewport-file-drop-hint">
+            <span className="viewport-file-drop-icon">📂</span>
+            <span>{t('viewport.dropToOpen')}</span>
+          </div>
         </div>
       )}
     </div>
