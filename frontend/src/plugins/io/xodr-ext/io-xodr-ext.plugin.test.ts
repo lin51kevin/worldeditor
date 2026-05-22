@@ -91,4 +91,28 @@ describe('io-xodr-ext.plugin', () => {
     const blob = downloadBlob.mock.calls[0]?.[0] as Blob;
     expect(blob.type).toBe('application/xml');
   });
+
+  it('uses the export fallback filename when the project is unnamed', async () => {
+    wasm.write_opendrive.mockReturnValueOnce('<OpenDRIVE version="1.6" />');
+    const project = makeProject('', 6);
+    mountIoXodrExtPlugin();
+    const exporter = registerExporter.mock.calls[0]?.[0];
+    await exporter.onExport(project);
+    expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'export_v1.6.xodr');
+  });
+
+  it('keeps projects without headers unchanged during import migration', async () => {
+    wasm.parse_opendrive.mockReturnValueOnce({
+      name: 'no-header',
+      roads: [],
+      signals: [],
+      objects: [],
+      junctions: [],
+    });
+    mountIoXodrExtPlugin();
+    const importer = registerImporter.mock.calls[0]?.[0];
+    const result = await importer.onImport('<OpenDRIVE />', 'no-header.xodr');
+    expect(result).toMatchObject({ name: 'no-header', roads: [] });
+    expect(result.header).toBeUndefined();
+  });
 });

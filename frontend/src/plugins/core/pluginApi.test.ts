@@ -19,6 +19,7 @@ beforeEach(() => {
     toolbarButtons: [], menuItems: [], templateSections: [],
     importers: [], exporters: [], panels: [], contextMenuItems: [],
     viewportOverlays: [], settingsContribs: [],
+    panelTabVisibility: {}, activeTabId: null,
   });
   useProjectStore.getState().reset();
   // Re-install API (idempotent)
@@ -45,6 +46,17 @@ describe('installPluginApi', () => {
     expect((window as unknown as Record<string, unknown>)['__WE_PLUGIN_API__']).toBe(first);
   });
 
+  it('ctx.registerToolbarButton adds to pluginContribStore', () => {
+    getApi().registerPlugin('p1', (ctx: unknown) => {
+      const c = ctx as { registerToolbarButton: (x: unknown) => void };
+      c.registerToolbarButton({
+        id: 'tb1', pluginId: 'p1', icon: 'I', labelKey: 'toolbar.action', group: 'action', onClick: () => {},
+      });
+    });
+    expect(usePluginContribStore.getState().toolbarButtons).toHaveLength(1);
+    expect(usePluginContribStore.getState().toolbarButtons[0]!.id).toBe('tb1');
+  });
+
   it('ctx.registerImporter adds to pluginContribStore', () => {
     getApi().registerPlugin('p1', (ctx: unknown) => {
       const c = ctx as { registerImporter: (x: unknown) => void };
@@ -55,6 +67,18 @@ describe('installPluginApi', () => {
     });
     expect(usePluginContribStore.getState().importers).toHaveLength(1);
     expect(usePluginContribStore.getState().importers[0]!.id).toBe('i1');
+  });
+
+  it('ctx.registerTemplateSection adds to pluginContribStore', () => {
+    getApi().registerPlugin('p1', (ctx: unknown) => {
+      const c = ctx as { registerTemplateSection: (x: unknown) => void };
+      c.registerTemplateSection({
+        id: 'section1', pluginId: 'p1', categoryKey: 'templates.category', order: 1,
+        items: [{ id: 'item1', labelKey: 'templates.item', icon: '🛣️', onApply: () => {} }],
+      });
+    });
+    expect(usePluginContribStore.getState().templateSections).toHaveLength(1);
+    expect(usePluginContribStore.getState().templateSections[0]!.id).toBe('section1');
   });
 
   it('ctx.registerExporter adds to pluginContribStore', () => {
@@ -127,32 +151,94 @@ describe('installPluginApi', () => {
 
   it('ctx.onSelectionChanged fires callback and returns unsubscribe', () => {
     const cb = vi.fn();
+    let unsubscribe = () => {};
+
     getApi().registerPlugin('p1', (ctx: unknown) => {
       const c = ctx as { onSelectionChanged: (cb: (sel: unknown) => void) => () => void };
-      const unsub = c.onSelectionChanged(cb);
-      expect(typeof unsub).toBe('function');
+      unsubscribe = c.onSelectionChanged(cb);
+      expect(typeof unsubscribe).toBe('function');
     });
+
+    useProjectStore.setState({
+      selectedRoadId: 'road-1',
+      selectedJunctionId: 'junction-1',
+      selectedRoadIds: ['road-1'],
+      selectedJunctionIds: ['junction-1'],
+    });
+    expect(cb).toHaveBeenCalledWith({
+      roadId: 'road-1',
+      junctionId: 'junction-1',
+      roadIds: ['road-1'],
+      junctionIds: ['junction-1'],
+    });
+
+    unsubscribe();
+    useProjectStore.setState({ selectedRoadId: 'road-2' });
+    expect(cb).toHaveBeenCalledTimes(1);
   });
 
   it('ctx.onProjectChanged fires callback and returns unsubscribe', () => {
     const cb = vi.fn();
+    let unsubscribe = () => {};
+
     getApi().registerPlugin('p1', (ctx: unknown) => {
       const c = ctx as { onProjectChanged: (cb: (proj: unknown) => void) => () => void };
-      const unsub = c.onProjectChanged(cb);
-      expect(typeof unsub).toBe('function');
+      unsubscribe = c.onProjectChanged(cb);
+      expect(typeof unsubscribe).toBe('function');
     });
+
+    useProjectStore.setState({ project: { ...emptyProject, name: 'Observed' } });
+    expect(cb).toHaveBeenCalledWith(expect.objectContaining({ name: 'Observed' }));
+
+    unsubscribe();
+    useProjectStore.setState({ project: { ...emptyProject, name: 'Ignored' } });
+    expect(cb).toHaveBeenCalledTimes(1);
   });
 
-  it('unloadPlugin removes all contributions', () => {
+  it('replaces duplicate contribution ids instead of duplicating them', () => {
+    getApi().registerPlugin('p1', (ctx: unknown) => {
+      const c = ctx as { registerMenuItem: (x: unknown) => void };
+      c.registerMenuItem({ id: 'menu:shared', pluginId: 'p1', menu: 'tools', labelKey: 'first', onClick: () => {} });
+      c.registerMenuItem({ id: 'menu:shared', pluginId: 'p1', menu: 'tools', labelKey: 'second', onClick: () => {} });
+    });
+
+    expect(usePluginContribStore.getState().menuItems).toHaveLength(1);
+    expect(usePluginContribStore.getState().menuItems[0]!.labelKey).toBe('second');
+  });
+
+  it('togglePanel and isPanelVisible proxy panel visibility state', () => {
+    const observed: boolean[] = [];
+
+    getApi().registerPlugin('p1', (ctx: unknown) => {
+      const c = ctx as {
+        togglePanel: (panelId: string) => void;
+        isPanelVisible: (panelId: string) => boolean;
+      };
+      observed.push(c.isPanelVisible('panel-1'));
+      c.togglePanel('panel-1');
+      observed.push(c.isPanelVisible('panel-1'));
+      c.togglePanel('panel-1');
+      observed.push(c.isPanelVisible('panel-1'));
+    });
+
+    expect(observed).toEqual([true, false, true]);
+  });
+
+  it('unloadPlugin runs custom cleanup and removes all contributions', () => {
+    const cleanup = vi.fn();
+
     getApi().registerPlugin('p1', (ctx: unknown) => {
       const c = ctx as { registerImporter: (x: unknown) => void };
       c.registerImporter({
         id: 'i1', pluginId: 'p1', formatName: 'F', extensions: ['.f'],
         onImport: async () => emptyProject,
       });
+      return cleanup;
     });
+
     expect(usePluginContribStore.getState().importers).toHaveLength(1);
     getApi().unloadPlugin('p1');
+    expect(cleanup).toHaveBeenCalledOnce();
     expect(usePluginContribStore.getState().importers).toHaveLength(0);
   });
 });
@@ -165,6 +251,7 @@ describe('pluginApi security', () => {
       toolbarButtons: [], menuItems: [], templateSections: [],
       importers: [], exporters: [], panels: [], contextMenuItems: [],
       viewportOverlays: [], settingsContribs: [],
+      panelTabVisibility: {}, activeTabId: null,
     });
     useProjectStore.getState().reset();
     delete (window as unknown as Record<string, unknown>)['__WE_PLUGIN_API__'];

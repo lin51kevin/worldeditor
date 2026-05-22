@@ -168,4 +168,39 @@ describe('exportProjectToCsv (via exporter)', () => {
     expect(blob).toBeInstanceOf(Blob);
     expect(mockDownloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'Multi.csv');
   });
+
+  it('should serialize CSV rows and skip roads without geometry', async () => {
+    mountIoCsvPlugin();
+    const call = mockRegisterExporter.mock.calls[0]?.[0];
+    const project = {
+      name: 'Network',
+      roads: [
+        {
+          id: 'r1',
+          length: 22,
+          plan_view: [
+            { x: 1, y: 2, hdg: 0.5, length: 10 },
+            { x: 3, y: 4, hdg: 1, length: 12 },
+          ],
+        },
+        {
+          id: 'empty',
+          length: 0,
+          plan_view: [],
+        },
+      ],
+    } as any;
+
+    await call.onExport(project);
+
+    const blob = mockDownloadBlob.mock.calls[0]![0] as Blob;
+    const csvText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
+    });
+
+    expect(csvText).toBe('id,segment,x,y,hdg,length\nr1,0,1,2,0.5,10\nr1,1,3,4,1,12');
+  });
 });

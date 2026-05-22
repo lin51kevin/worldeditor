@@ -18,6 +18,7 @@ import { buildGeoZProtoRoot, mountIoGeoZPlugin } from './io-geoz.plugin';
 describe('io-geoz.plugin', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('registers importer with correct format name', () => {
@@ -153,6 +154,82 @@ describe('io-geoz.plugin', () => {
       id: -1,
       lane_type: 'Driving',
     });
+
+    cleanup();
+  });
+
+  it('uses a worker for large GeoZ archives and terminates it after parsing', async () => {
+    const cleanup = mountIoGeoZPlugin();
+    const importer = mockRegisterImporter.mock.calls[0]?.[0];
+    const terminate = vi.fn();
+    const worker = {
+      onmessage: null as ((event: MessageEvent<{ type: string; data?: unknown; message?: string }>) => void) | null,
+      onerror: null as ((event: ErrorEvent) => void) | null,
+      postMessage: vi.fn((message: unknown, transfer?: Transferable[]) => {
+        expect(message).toEqual({
+          type: 'parse-geoz',
+          buffer: largeBuffer,
+          fileName: 'worker.geoz',
+        });
+        expect(transfer).toEqual([largeBuffer]);
+
+        queueMicrotask(() => {
+          worker.onmessage?.({
+            data: {
+              type: 'result',
+              data: {
+                protoTopoFiles: [
+                  {
+                    header: { name: 'Worker GeoZ' },
+                    roads: [
+                      {
+                        header: { id: 'road-1', length: 10, name: 'Road 1', junction_id: '' },
+                        road_sections: [],
+                        road_predecessors: [],
+                        road_successors: [],
+                        road_signal: [],
+                        road_objects: [],
+                      },
+                    ],
+                    junctions: [],
+                  },
+                ],
+                protoGeoFiles: [
+                  {
+                    stem: 'road-1',
+                    data: {
+                      road_geometry: {
+                        id: 'road-1',
+                        reference_line: {
+                          point: [
+                            { x: 0, y: 0, z: 0 },
+                            { x: 10, y: 0, z: 0 },
+                          ],
+                        },
+                        lane_geometrys: [],
+                      },
+                    },
+                  },
+                ],
+                fileName: 'worker.geoz',
+              },
+            },
+          } as MessageEvent<{ type: string; data?: unknown; message?: string }>);
+        });
+      }),
+      terminate,
+    };
+    const largeBuffer = new ArrayBuffer(5 * 1024 * 1024 + 1);
+    const WorkerMock = vi.fn(() => worker);
+    vi.stubGlobal('Worker', WorkerMock);
+
+    const project = await importer.onImport(largeBuffer, 'worker.geoz');
+
+    expect(WorkerMock).toHaveBeenCalledOnce();
+    expect(project.name).toBe('Worker GeoZ');
+    expect(project.roads).toHaveLength(1);
+    expect(project.roads[0]?.plan_view).toHaveLength(1);
+    expect(terminate).toHaveBeenCalledOnce();
 
     cleanup();
   });
