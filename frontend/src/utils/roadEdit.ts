@@ -15,6 +15,8 @@ import type {
   Project,
   Junction,
   Geometry,
+  GeometryType,
+  LaneWidth,
 } from '../services/platform';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -107,8 +109,174 @@ function evalGeometryAtS(geo: Geometry, ds: number): { x: number; y: number; hdg
     };
   }
 
-  // ParamPoly3 or unknown: fall back to line approximation
+  if ('ParamPoly3' in geo_type) {
+    const { a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v, p_range } = geo_type.ParamPoly3;
+    const p = p_range === 'Normalized' ? (geo.length > 0 ? ds / geo.length : 0) : ds;
+    const u = a_u + b_u * p + c_u * p * p + d_u * p * p * p;
+    const v = a_v + b_v * p + c_v * p * p + d_v * p * p * p;
+    const du = b_u + 2 * c_u * p + 3 * d_u * p * p;
+    const dv = b_v + 2 * c_v * p + 3 * d_v * p * p;
+    return {
+      x: x0 + u * Math.cos(hdg0) - v * Math.sin(hdg0),
+      y: y0 + u * Math.sin(hdg0) + v * Math.cos(hdg0),
+      hdg: hdg0 + Math.atan2(dv, du),
+    };
+  }
+
+  // Unknown: fall back to line approximation
   return { x: x0 + ds * Math.cos(hdg0), y: y0 + ds * Math.sin(hdg0), hdg: hdg0 };
+}
+
+// ─── splitGeometryType ───────────────────────────────────────────────────────
+
+/**
+ * Given a geometry type and the split position (local offset `before` within
+ * the segment of total `length`), return corrected geometry types for each half.
+ *
+ * - Line / Arc: parameters unchanged in both halves.
+ * - Spiral: `curv_end` of first half and `curv_start` of second half are set
+ *   to the curvature at the split point.
+ * - Poly3: second half gets a Taylor-shifted polynomial (re-based to ds'=0 at
+ *   the split point); first half is unchanged.
+ * - ParamPoly3: both halves get re-parametrized polynomials. The second half's
+ *   coefficients are additionally rotated by β = hdg0 - splitHdg so that the
+ *   polynomial offsets are expressed in the split-point's local frame (which
+ *   the renderer uses) rather than the original start frame.
+ */
+function splitGeometryType(
+  geo_type: GeometryType,
+  length: number,
+  before: number,
+  hdg0: number,
+  splitHdg: number,
+): { type1: GeometryType; type2: GeometryType } {
+  // Line and Arc: nothing to recompute
+  if (geo_type === 'Line' || !('Spiral' in geo_type || 'Poly3' in geo_type || 'ParamPoly3' in geo_type)) {
+    return { type1: geo_type, type2: geo_type };
+  }
+
+  if ('Spiral' in geo_type) {
+    const { curv_start: c0, curv_end: c1 } = geo_type.Spiral;
+    const cMid = c0 + (c1 - c0) * before / length;
+    return {
+      type1: { Spiral: { curv_start: c0, curv_end: cMid } },
+      type2: { Spiral: { curv_start: cMid, curv_end: c1 } },
+    };
+  }
+
+  if ('Poly3' in geo_type) {
+    const { b, c, d } = geo_type.Poly3;
+    const ds0 = before;
+    // Taylor shift: y_new(ds') = y(ds0 + ds') - y(ds0), so a' = 0
+    const b2 = b + 2 * c * ds0 + 3 * d * ds0 * ds0;
+    const c2 = c + 3 * d * ds0;
+    const d2 = d;
+    return {
+      type1: geo_type, // first half: polynomial still valid from ds=0
+      type2: { Poly3: { a: 0, b: b2, c: c2, d: d2 } },
+    };
+  }
+
+  if ('ParamPoly3' in geo_type) {
+    const { a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v, p_range } = geo_type.ParamPoly3;
+    // p at the split point
+    const p0 = p_range === 'Normalized' ? (length > 0 ? before / length : 0) : before;
+
+    // ── First half: p ∈ [0, p0] → normalized p' ∈ [0, 1] via p = p0 * p'
+    const beta1 = p0;
+    // Polynomial substitution p = beta1 * p' gives new coefficients;
+    // a' remains the same as a (= 0 for well-formed OpenDRIVE) but we subtract
+    // the offset at p=0 which is a itself.
+    const a_u1 = a_u; // = 0 for well-formed geometry
+    const b_u1 = b_u * beta1;
+    const c_u1 = c_u * beta1 * beta1;
+    const d_u1 = d_u * beta1 * beta1 * beta1;
+    const a_v1 = a_v;
+    const b_v1 = b_v * beta1;
+    const c_v1 = c_v * beta1 * beta1;
+    const d_v1 = d_v * beta1 * beta1 * beta1;
+
+    // ── Second half: p ∈ [p0, p_end] → normalized p' ∈ [0, 1]
+    //    via p = p0 + (p_end - p0) * p'
+    //    For Normalized: p_end = 1; for ArcLength: p_end = length
+    const pEnd = p_range === 'Normalized' ? 1 : length;
+    const beta2 = pEnd - p0;
+    // Polynomial substitution p = p0 + beta2 * p':
+    // dU(p') = u(p0+beta2*p') - u(p0)  (displacement in original hdg0 frame)
+    // dV(p') = v(p0+beta2*p') - v(p0)
+    const u_p0 = a_u + b_u * p0 + c_u * p0 * p0 + d_u * p0 * p0 * p0;
+    const v_p0 = a_v + b_v * p0 + c_v * p0 * p0 + d_v * p0 * p0 * p0;
+    void u_p0; void v_p0; // absorbed into split2X/Y
+
+    // Delta coefficients in original hdg0 frame (a=0 since dU(0)=dV(0)=0)
+    const B_u = (b_u + 2 * c_u * p0 + 3 * d_u * p0 * p0) * beta2;
+    const C_u = (c_u + 3 * d_u * p0) * beta2 * beta2;
+    const D_u = d_u * beta2 * beta2 * beta2;
+    const B_v = (b_v + 2 * c_v * p0 + 3 * d_v * p0 * p0) * beta2;
+    const C_v = (c_v + 3 * d_v * p0) * beta2 * beta2;
+    const D_v = d_v * beta2 * beta2 * beta2;
+
+    // Rotate from hdg0 frame into split2Hdg frame so the renderer applies the
+    // polynomial correctly.  β = hdg0 - splitHdg
+    // [U']   =  R(β) · [dU]  where R(β) = [[cosβ -sinβ],[sinβ cosβ]]
+    // [V']            [dV]
+    const beta = hdg0 - splitHdg;
+    const cosB = Math.cos(beta);
+    const sinB = Math.sin(beta);
+
+    const a_u2 = 0;
+    const b_u2 = cosB * B_u - sinB * B_v;
+    const c_u2 = cosB * C_u - sinB * C_v;
+    const d_u2 = cosB * D_u - sinB * D_v;
+    const a_v2 = 0;
+    const b_v2 = sinB * B_u + cosB * B_v;
+    const c_v2 = sinB * C_u + cosB * C_v;
+    const d_v2 = sinB * D_u + cosB * D_v;
+
+    return {
+      type1: { ParamPoly3: { a_u: a_u1, b_u: b_u1, c_u: c_u1, d_u: d_u1, a_v: a_v1, b_v: b_v1, c_v: c_v1, d_v: d_v1, p_range: 'Normalized' } },
+      type2: { ParamPoly3: { a_u: a_u2, b_u: b_u2, c_u: c_u2, d_u: d_u2, a_v: a_v2, b_v: b_v2, c_v: c_v2, d_v: d_v2, p_range: 'Normalized' } },
+    };
+  }
+
+  return { type1: geo_type, type2: geo_type };
+}
+
+// ─── evalWidthPolyAt / evalLaneSectionAtOffset ────────────────────────────────
+
+/** Evaluate a lane-width cubic polynomial at arclength offset `sOff`. */
+function evalWidthPolyAt(widths: LaneWidth[], sOff: number): number {
+  // Find the active width entry (last one whose s_offset <= sOff)
+  let active: LaneWidth | undefined;
+  for (const w of widths) {
+    if (w.s_offset <= sOff) active = w;
+  }
+  if (!active) return widths[0]?.a ?? 3.5;
+  const ds = sOff - active.s_offset;
+  return active.a + active.b * ds + active.c * ds * ds + active.d * ds * ds * ds;
+}
+
+/**
+ * Create a copy of `section` with all lane widths evaluated at `sOff`
+ * (arclength offset within the section) as the new constant start width.
+ *
+ * Inspired by LaneEditor.tsx `cloneLanes`: bakes the evaluated width into `a`
+ * and resets the polynomial to zero so road2's lanes start at the correct width.
+ */
+function evalLaneSectionAtOffset(section: LaneSection, sOff: number): LaneSection {
+  const bakeLanes = (lanes: Lane[]): Lane[] =>
+    lanes.map((l) => ({
+      ...l,
+      width: l.width.length === 0
+        ? l.width
+        : [{ s_offset: 0, a: evalWidthPolyAt(l.width, sOff), b: 0, c: 0, d: 0 }],
+    }));
+  return {
+    ...section,
+    left: bakeLanes(section.left),
+    right: bakeLanes(section.right),
+    center: section.center.map((l) => ({ ...l })),
+  };
 }
 
 // ─── splitRoadAt ─────────────────────────────────────────────────────────────
@@ -117,9 +285,13 @@ function evalGeometryAtS(geo: Geometry, ds: number): { x: number; y: number; hdg
  * Split a road at the given s-station, returning two half-roads and a
  * junction that connects them.
  *
- * - For Line segments the split is exact.
- * - Non-Line segments that straddle the split are approximated as Line.
- * - Both halves inherit the lane section closest to the split point.
+ * - For Line/Arc segments the split is exact.
+ * - Spiral segments get corrected curv_start/curv_end for each half.
+ * - Poly3 segments get a Taylor-shifted polynomial for the second half.
+ * - ParamPoly3 segments (spline-drawn roads) get re-parametrized polynomials
+ *   so each half maps the normalised parameter to its sub-range of the original.
+ * - Lane sections: road2 always starts with a boundary section at s=0 with
+ *   widths evaluated at the split point (Bug 1 fix; inspired by LaneEditor.splitSection).
  *
  * @throws {Error} if splitS is not strictly inside (0, road.length)
  */
@@ -164,14 +336,15 @@ export function splitRoadAt(
       split2Y = splitPt.y;
       split2Hdg = splitPt.hdg;
 
-      pv1.push({ ...geo, length: before });
+      const { type1, type2 } = splitGeometryType(geo.geo_type, geo.length, before, geo.hdg, split2Hdg);
+      pv1.push({ ...geo, length: before, geo_type: type1 });
       pv2.push({
         s: 0,
         x: split2X,
         y: split2Y,
         hdg: split2Hdg,
         length: after,
-        geo_type: geo.geo_type,
+        geo_type: type2,
       });
     }
   }
@@ -194,20 +367,43 @@ export function splitRoadAt(
   }
 
   // ── Distribute lane sections ───────────────────────────────────────────────
+  //
+  // road1 gets all sections with s ≤ splitS (unchanged).
+  // road2 always starts with a boundary section at s=0 whose lane widths are
+  // evaluated at the split offset — inspired by LaneEditor.splitSection's
+  // `cloneLanes` — then appends any sections that originally started after splitS.
+  //
+  // This fixes a coverage gap bug where, if sections existed both before and
+  // after splitS, road2 would miss coverage for s = 0 .. (firstSectionAfter - splitS).
+
   const ls1: LaneSection[] = road.lane_sections
     .filter((ls) => ls.s <= splitS)
     .map((ls): LaneSection => ({ ...ls }));
-  const ls2: LaneSection[] = road.lane_sections
+
+  const sectionsAfterSplit: LaneSection[] = road.lane_sections
     .filter((ls) => ls.s > splitS)
     .map((ls): LaneSection => ({ ...ls, s: ls.s - splitS }));
 
+  // Boundary section: the last section active at splitS, widths baked at offset
+  const filtered = road.lane_sections.filter((ls) => ls.s <= splitS);
+  const boundarySrc: LaneSection | undefined =
+    filtered[filtered.length - 1] ?? road.lane_sections[0];
+  const boundarySection: LaneSection | undefined = boundarySrc
+    ? { ...evalLaneSectionAtOffset(boundarySrc, splitS - boundarySrc.s), s: 0 }
+    : undefined;
+
+  const ls2: LaneSection[] = boundarySection
+    ? [boundarySection, ...sectionsAfterSplit]
+    : sectionsAfterSplit;
+
+  // Fallbacks for completely empty arrays (degenerate road)
   const firstSection = road.lane_sections[0];
   const lastSection = road.lane_sections[road.lane_sections.length - 1];
   if (ls1.length === 0 && firstSection !== undefined) {
     ls1.push({ ...firstSection, s: 0 });
   }
   if (ls2.length === 0 && lastSection !== undefined) {
-    ls2.push({ ...lastSection, s: 0 });
+    ls2.push({ ...evalLaneSectionAtOffset(lastSection, splitS - lastSection.s), s: 0 });
   }
 
   // Auto-generate lane links from the first lane section's right lanes
