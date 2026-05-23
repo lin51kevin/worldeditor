@@ -46,9 +46,26 @@ export default defineConfig({
         'src/hooks/useMoveRotateMode.ts',
         'src/hooks/useRubberBandSelect.ts',
         'src/hooks/useSplineOperations.ts',
+        'src/hooks/useMeasureOverlay.ts',
+        'src/hooks/useViewportHoverPick.ts',
+        'src/hooks/useViewportDrop.ts',
+        'src/hooks/useViewportKeyboard.ts',
+        'src/hooks/useAdjustEdgeMode.ts',
         // Component helpers dependent on WebGPU context — covered by E2E
         'src/components/viewportUtils.ts',
         'src/components/shell/definitions.ts',
+        // Viewport event dispatch — DOM event routing + WebGPU pick/snap, covered by E2E
+        'src/components/viewportEventDispatch.ts',
+        // GPU device prewarm — requires navigator.gpu, covered by E2E
+        'src/viewport/gpuDeviceCache.ts',
+        // Mouse controls — DOM events + WebGPU marker renderer, covered by E2E
+        'src/viewport/mouseControls.ts',
+        // Snap service — WASM-dependent pick/snap queries
+        'src/services/snapService.ts',
+        // Browser download API — trivial DOM utility, no logic to test
+        'src/utils/download.ts',
+        // Lazy plugin loader — dynamic imports require real module system
+        'src/plugins/lazyPluginLoader.ts',
       ],
       thresholds: {
         statements: 80,
