@@ -51,7 +51,6 @@ const RoadRow = memo(function RoadRow({
   const handleSelect = useCallback(() => {
     onSelectionFromPanel();
     useProjectStore.getState().selectRoad(roadId);
-    emitViewportEvent({ type: 'pan-to-road', roadId });
   }, [roadId, onSelectionFromPanel]);
 
   const handleZoom = useCallback(() => {
@@ -209,7 +208,6 @@ const LaneRow = memo(function LaneRow({
   const handleSelect = useCallback(() => {
     onSelectionFromPanel();
     useProjectStore.getState().selectLane(roadId, sectionIndex, side, laneId);
-    emitViewportEvent({ type: 'pan-to-lane', roadId, sectionIndex, laneId });
   }, [roadId, sectionIndex, side, laneId, onSelectionFromPanel]);
 
   const handleToggleVisibility = useCallback(() => {
@@ -301,7 +299,6 @@ const SignalRow = memo(function SignalRow({
   const handleSelect = useCallback(() => {
     onSelectionFromPanel();
     useProjectStore.getState().selectSignal(roadId, signalId);
-    emitViewportEvent({ type: 'pan-to-signal', roadId, signalId });
   }, [roadId, signalId, onSelectionFromPanel]);
 
   const handleToggleVisibility = useCallback(() => {
@@ -393,7 +390,6 @@ const ObjectRow = memo(function ObjectRow({
   const handleSelect = useCallback(() => {
     onSelectionFromPanel();
     useProjectStore.getState().selectObject(roadId, objectId);
-    emitViewportEvent({ type: 'pan-to-object', roadId, objectId });
   }, [roadId, objectId, onSelectionFromPanel]);
 
   const handleToggleVisibility = useCallback(() => {
@@ -449,7 +445,6 @@ const JunctionRow = memo(function JunctionRow({
   const handleSelect = useCallback(() => {
     onSelectionFromPanel();
     useProjectStore.getState().selectJunction(junctionId);
-    emitViewportEvent({ type: 'pan-to-junction', junctionId });
   }, [junctionId, onSelectionFromPanel]);
 
   const handleZoom = useCallback(() => {
