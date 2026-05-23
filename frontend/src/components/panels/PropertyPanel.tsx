@@ -6,6 +6,7 @@ import { useViewportStore } from '../../stores/viewportStore';
 import { getPlatformService } from '../../services';
 import type { RoadSignal, RoadObjectItem } from '../../services/platform';
 import { RoadMarkingPanel } from './RoadMarkingPanel';
+import { LaneEditor } from './LaneEditor';
 import './PropertyPanel.css';
 
 /** Valid bridge structure types (mirrors OpenDRIVE spec values). */
@@ -216,88 +217,11 @@ export function PropertyPanel() {
 
               {/* Lanes Card */}
               <CardSection title={`${t('propertyPanel.lanes')} (${selectedRoad.lane_sections.length})`}>
-                {selectedRoad.lane_sections.map((ls, si) => (
-                  <div key={si} className="property-lane-section">
-                    <div className="property-row sub">
-                      <span className="property-label">{t('propertyPanel.laneSection')} #{si + 1} (s={ls.s})</span>
-                    </div>
-                    {(['left', 'right'] as const).map((side) =>
-                      ls[side].map((lane) => {
-                        const laneWidth = lane.width[0]?.a ?? 3.5;
-                        return (
-                          <div key={`${side}-${lane.id}`} className="property-row sub lane-row">
-                            <span className="property-label">
-                              {side === 'left' ? 'L' : 'R'}{Math.abs(lane.id)}
-                            </span>
-                            <div className="property-lane-controls">
-                              <select
-                                className="property-select property-select-lane"
-                                value={lane.lane_type}
-                                onChange={(e) =>
-                                  useProjectStore.getState().updateLaneType(
-                                    selectedRoad.id, si, side, lane.id, e.target.value,
-                                  )
-                                }
-                              >
-                                <option value="Driving">Driving</option>
-                                <option value="Shoulder">Shoulder</option>
-                                <option value="Sidewalk">Sidewalk</option>
-                                <option value="Parking">Parking</option>
-                                <option value="Biking">Biking</option>
-                                <option value="Border">Border</option>
-                                <option value="Stop">Stop</option>
-                                <option value="None">None</option>
-                              </select>
-                              <input
-                                className="property-input property-input-narrow property-input-lane-width"
-                                type="number"
-                                step="0.01"
-                                min="0.5"
-                                max="20"
-                                value={laneWidth.toFixed(2)}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value);
-                                  if (!isNaN(val) && val >= 0.5 && val <= 20) {
-                                    useProjectStore.getState().updateLaneWidth(
-                                      selectedRoad.id, si, side, lane.id,
-                                      { s_offset: 0, a: val, b: 0, c: 0, d: 0 },
-                                    );
-                                  }
-                                }}
-                              />
-                              <span className="property-unit">m</span>
-                              <button
-                                className="property-btn property-btn-delete-lane"
-                                title={t('propertyPanel.deleteLane')}
-                                onClick={() =>
-                                  useProjectStore.getState().removeLane(selectedRoad.id, si, side, lane.id)
-                                }
-                              >
-                                ×
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      }),
-                    )}
-                    <div className="property-row sub lane-add-row">
-                      <button
-                        className="property-btn property-btn-add-lane"
-                        title={t('propertyPanel.addLane')}
-                        onClick={() => useProjectStore.getState().addLane(selectedRoad.id, si, 'left')}
-                      >
-                        +L
-                      </button>
-                      <button
-                        className="property-btn property-btn-add-lane"
-                        title={t('propertyPanel.addLane')}
-                        onClick={() => useProjectStore.getState().addLane(selectedRoad.id, si, 'right')}
-                      >
-                        +R
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                <LaneEditor
+                  roadId={selectedRoad.id}
+                  laneSections={selectedRoad.lane_sections}
+                  roadLength={selectedRoad.length}
+                />
               </CardSection>
 
               {/* Elevation Card */}
@@ -631,6 +555,13 @@ export function PropertyPanel() {
                   ))}
                 </CardSection>
               )}
+
+              {/* Road Markings Card — visible when a lane is selected */}
+              {selectedSceneNode?.type === 'lane' && (
+                <CardSection title={t('roadMarkings.title')} defaultOpen>
+                  <RoadMarkingPanel />
+                </CardSection>
+              )}
             </div>
             )
           ) : displayMode === 'signal' ? (
@@ -846,7 +777,6 @@ export function PropertyPanel() {
           ) : (
             <div className="property-empty">{t('propertyPanel.noSelection')}</div>
           )}
-          <RoadMarkingPanel />
         </div>
     </div>
   );

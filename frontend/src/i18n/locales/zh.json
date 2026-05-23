@@ -187,6 +187,29 @@
     "isDynamic": "是否动态",
     "radius": "半径"
   },
+  "laneEditor": {
+    "group": {
+      "common": "常用",
+      "transit": "公共交通",
+      "ramp": "匝道",
+      "special": "特殊"
+    },
+    "constantWidth": "恒定宽度 (m)",
+    "variableWidth": "变宽度 (多项式)",
+    "polynomial": "width(ds) = a + b·ds + c·ds² + d·ds³",
+    "predecessor": "前驱",
+    "successor": "后继",
+    "leftSide": "左侧",
+    "rightSide": "右侧",
+    "left": "左",
+    "right": "右",
+    "addLeftLane": "添加左车道",
+    "addRightLane": "添加右车道",
+    "split": "拆分",
+    "splitSection": "拆分车道段",
+    "mergeNext": "合并",
+    "mergeSections": "合并车道段"
+  },
   "layerPanel": {
     "header": "导航器",
     "vector": "矢量",

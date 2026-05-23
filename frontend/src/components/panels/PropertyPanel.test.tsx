@@ -182,7 +182,7 @@ describe('PropertyPanel', () => {
 
     render(<PropertyPanel />);
 
-    const addLaneButtons = screen.getAllByTitle('添加车道');
+    const addLaneButtons = screen.getAllByTitle('添加左车道');
     expect(addLaneButtons.length).toBeGreaterThan(0);
 
     const leftBefore = useProjectStore.getState().project.roads[0]!.lane_sections[0]!.left.length;
@@ -207,7 +207,7 @@ describe('PropertyPanel', () => {
         });
       });
       render(<PropertyPanel />);
-      expect(screen.getByRole('region')).toBeInTheDocument();
+      expect(screen.getByText('道路标线')).toBeInTheDocument();
     });
 
     it('does not render RoadMarkingPanel when no lane is selected', () => {
@@ -220,7 +220,7 @@ describe('PropertyPanel', () => {
         });
       });
       render(<PropertyPanel />);
-      expect(screen.queryByRole('region')).not.toBeInTheDocument();
+      expect(screen.queryByText('道路标线')).not.toBeInTheDocument();
     });
   });
 });

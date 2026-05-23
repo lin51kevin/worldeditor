@@ -187,6 +187,29 @@
     "isDynamic": "IsDynamic",
     "radius": "Radius"
   },
+  "laneEditor": {
+    "group": {
+      "common": "Common",
+      "transit": "Transit",
+      "ramp": "Ramp",
+      "special": "Special"
+    },
+    "constantWidth": "Constant width (m)",
+    "variableWidth": "Variable width (polynomial)",
+    "polynomial": "width(ds) = a + b·ds + c·ds² + d·ds³",
+    "predecessor": "Pred",
+    "successor": "Succ",
+    "leftSide": "Left",
+    "rightSide": "Right",
+    "left": "Left",
+    "right": "Right",
+    "addLeftLane": "Add left lane",
+    "addRightLane": "Add right lane",
+    "split": "Split",
+    "splitSection": "Split Lane Section",
+    "mergeNext": "Merge",
+    "mergeSections": "Merge Lane Sections"
+  },
   "layerPanel": {
     "header": "Navigator",
     "vector": "Vector",
