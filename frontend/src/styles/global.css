@@ -263,6 +263,31 @@ body,
   background: var(--color-bg-primary);
 }
 
+/* ── Number input spin-button theming ── */
+input[type="number"] {
+  padding-right: 4px;
+  color-scheme: dark;
+}
+
+[data-theme="light"] input[type="number"] {
+  color-scheme: light;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 0;
+  margin-left: 4px;
+  transition: opacity var(--transition-fast);
+  cursor: pointer;
+}
+
+input[type="number"]:hover::-webkit-inner-spin-button,
+input[type="number"]:hover::-webkit-outer-spin-button,
+input[type="number"]:focus::-webkit-inner-spin-button,
+input[type="number"]:focus::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
 .app-container {
   position: relative;
   height: 100%;
