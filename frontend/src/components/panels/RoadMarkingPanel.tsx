@@ -72,17 +72,11 @@ export function RoadMarkingPanel() {
   const sideLabel = side === 'left' ? 'L' : 'R';
 
   return (
-    <div className="road-marking-panel" role="region" aria-label={t('roadMarkings.title')}>
-      <div className="rm-header">
-        <span className="rm-title">🎨 {t('roadMarkings.title')}</span>
-      </div>
+    <div className="road-marking-panel">
       <div className="rm-info">
-        <div>{t('roadMarkings.road')}: {road.id}</div>
-        <div>{t('roadMarkings.section')}: #{sectionIndex + 1}</div>
-        <div>{t('roadMarkings.lane')}: {sideLabel}{Math.abs(laneId)} ({lane.lane_type})</div>
-      </div>
-
-      <div className="rm-actions">
+        <span>{t('roadMarkings.road')}: {road.id}</span>
+        <span>{t('roadMarkings.section')}: #{sectionIndex + 1}</span>
+        <span>{t('roadMarkings.lane')}: {sideLabel}{Math.abs(laneId)} ({lane.lane_type})</span>
         <button className="rm-btn rm-btn-add" onClick={handleAdd}>+ {t('roadMarkings.addMarking')}</button>
       </div>
 
