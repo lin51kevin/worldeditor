@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildSplineCurveVertices,
   buildSplineMarkerVertices,
+  findNearestSplinePoint,
 } from './splineVertexBuilder';
 
 // Floats per vertex: x, y, z, r, g, b, a
@@ -165,5 +166,65 @@ describe('buildSplineMarkerVertices', () => {
       return Math.max(...xs) - Math.min(...xs);
     };
     expect(xExtent(large)).toBeGreaterThan(xExtent(small));
+  });
+});
+
+// ── findNearestSplinePoint ───────────────────────────────────────────────────
+
+describe('findNearestSplinePoint', () => {
+  it('returns null for fewer than 2 knots', () => {
+    expect(findNearestSplinePoint(0, 0, [])).toBeNull();
+    expect(findNearestSplinePoint(0, 0, [[0, 0, 0]])).toBeNull();
+  });
+
+  it('finds a point on a straight horizontal spline', () => {
+    const knots = [[0, 0, 0], [100, 0, 0]] as Array<[number, number, number]>;
+    const result = findNearestSplinePoint(50, 0, knots);
+    expect(result).not.toBeNull();
+    expect(result!.dist).toBeLessThan(1.0);
+    expect(Math.abs(result!.pos[0] - 50)).toBeLessThan(2.0);
+    expect(Math.abs(result!.pos[1])).toBeLessThan(1.0);
+  });
+
+  it('returns segIndex 0 for a query in the first segment', () => {
+    const knots = [[0, 0, 0], [50, 0, 0], [100, 0, 0]] as Array<[number, number, number]>;
+    const result = findNearestSplinePoint(10, 0, knots);
+    expect(result).not.toBeNull();
+    expect(result!.segIndex).toBe(0);
+  });
+
+  it('returns segIndex 1 for a query in the second segment', () => {
+    const knots = [[0, 0, 0], [50, 0, 0], [100, 0, 0]] as Array<[number, number, number]>;
+    const result = findNearestSplinePoint(80, 0, knots);
+    expect(result).not.toBeNull();
+    expect(result!.segIndex).toBe(1);
+  });
+
+  it('nearest point distance is less than distance to knot midpoints for off-curve query', () => {
+    const knots = [[0, 0, 0], [100, 0, 0]] as Array<[number, number, number]>;
+    // Query off-curve (perpendicular)
+    const result = findNearestSplinePoint(50, 10, knots);
+    expect(result).not.toBeNull();
+    // Nearest point should be close to (50, 0), dist ≈ 10
+    expect(result!.dist).toBeGreaterThan(5);
+    expect(result!.dist).toBeLessThan(15);
+  });
+
+  it('pos components are finite', () => {
+    const knots = [[0, 0, 0], [10, 5, 0], [20, 0, 0]] as Array<[number, number, number]>;
+    const result = findNearestSplinePoint(10, 5, knots);
+    expect(result).not.toBeNull();
+    expect(Number.isFinite(result!.pos[0])).toBe(true);
+    expect(Number.isFinite(result!.pos[1])).toBe(true);
+    expect(Number.isFinite(result!.dist)).toBe(true);
+  });
+
+  it('t is in [0, 1]', () => {
+    const knots = [[0, 0, 0], [50, 20, 0], [100, 0, 0]] as Array<[number, number, number]>;
+    for (let x = 0; x <= 100; x += 10) {
+      const result = findNearestSplinePoint(x, 5, knots);
+      expect(result!.t).toBeGreaterThanOrEqual(0);
+      expect(result!.t).toBeLessThanOrEqual(1);
+    }
   });
 });

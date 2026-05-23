@@ -60,6 +60,9 @@ export function useSplineOperations() {
         if (tplConfig) {
           newRoad.lane_sections = [buildLaneSection(tplConfig.left, tplConfig.right)];
         }
+        // Preserve original user-placed control point positions for edit-mode restoration.
+        // This avoids re-sampling the geometry (which would produce many intermediate knots).
+        newRoad.spline_edit_data = knots.map((k) => [k[0], k[1], k[2]] as [number, number, number]);
         // Apply road links from snapped endpoints
         const snappedEndpoints = viewState.snappedEndpoints.filter(Boolean) as Array<{ knotIndex: number; roadId: string; contactPoint: string }>;
         if (snappedEndpoints.length > 0) {
@@ -100,8 +103,15 @@ export function useSplineOperations() {
     const road = editorState.project.roads.find((r) => r.id === roadId);
     if (!road || road.plan_view.length === 0) return;
     try {
-      const service = await getPlatformService();
-      const spline = await service.roadToSpline(road, 2.0);
+      let spline;
+      if (road.spline_edit_data && road.spline_edit_data.length >= 2) {
+        // Restore exact user-placed control points — no re-sampling needed.
+        spline = buildEditableSpline(road.spline_edit_data);
+      } else {
+        // Fallback: sample only at geometry-segment boundaries (large step = no intermediates).
+        const service = await getPlatformService();
+        spline = await service.roadToSpline(road, 1e9);
+      }
       useViewportStore.getState().enterGeometryEdit(roadId, spline);
     } catch (err) {
       console.error('[Viewport] Failed to enter geometry edit:', err);
@@ -116,7 +126,11 @@ export function useSplineOperations() {
       const service = await getPlatformService();
       const geometries = await service.splineToGeometries(spline);
       const totalLength = geometries.reduce((sum, g) => sum + g.length, 0);
-      useProjectStore.getState().updateRoadGeometry(roadId, geometries, totalLength);
+      // Persist the current key knot positions for future edit sessions.
+      const editData = spline.knots
+        .filter((k) => k.knot_type !== 'Intermediate')
+        .map((k) => k.position);
+      useProjectStore.getState().updateRoadGeometry(roadId, geometries, totalLength, editData);
       viewState.exitGeometryEdit();
     } catch (err) {
       console.error('[Viewport] Failed to finalize geometry edit:', err);

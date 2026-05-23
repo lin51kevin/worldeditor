@@ -38,6 +38,12 @@ pub struct Road {
     /// Maximum speed in m/s (optional).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speed: Option<f64>,
+    /// Original user-placed spline control point positions used to create/edit this road.
+    /// Preserved so that geometry-edit mode can restore the exact control points without
+    /// re-sampling the geometry (which would produce many intermediate knots).
+    /// Each entry is `[x, y, z]` in road-network local coordinates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spline_edit_data: Option<Vec<[f64; 3]>>,
 }
 
 impl Road {
@@ -59,6 +65,7 @@ impl Road {
             signals: Vec::new(),
             objects: Vec::new(),
             speed: None,
+            spline_edit_data: None,
         }
     }
 

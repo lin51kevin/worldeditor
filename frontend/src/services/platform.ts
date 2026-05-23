@@ -147,6 +147,10 @@ export interface Road {
   tunnels?: Tunnel[];
   signals?: RoadSignal[];
   objects?: RoadObjectItem[];
+  speed?: number;
+  /** Original user-placed spline control point positions [x, y, z].
+   * Used to restore exact control points in geometry-edit mode without re-sampling. */
+  spline_edit_data?: [number, number, number][];
 }
 
 /** Project-level signal reference (simplified, for project.signals array). */

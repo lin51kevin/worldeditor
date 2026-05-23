@@ -209,3 +209,91 @@ export function buildSplineMarkerVertices(
 
   return markerVerts;
 }
+
+export interface NearestSplinePoint {
+  /** Index of the segment start knot (the new knot would be inserted after this index). */
+  segIndex: number;
+  /** Hermite interpolation parameter t ∈ [0, 1] within the segment. */
+  t: number;
+  /** World-space position of the nearest point on the curve. */
+  pos: [number, number, number];
+  /** Distance from the query point to the nearest curve point (world units). */
+  dist: number;
+}
+
+/**
+ * Find the nearest point on the Hermite spline to a given world-space query point.
+ *
+ * Samples each segment at `SAMPLES` points and refines around the closest one.
+ * Returns null if there are fewer than 2 knots.
+ *
+ * @param wx  Query X in world space.
+ * @param wy  Query Y in world space.
+ * @param knots  Spline control points.
+ * @param tangentOverrides  Optional tangent overrides (same as used for rendering).
+ */
+export function findNearestSplinePoint(
+  wx: number,
+  wy: number,
+  knots: ReadonlyArray<readonly [number, number, number]>,
+  tangentOverrides?: Readonly<Record<number, readonly [number, number, number]>>,
+): NearestSplinePoint | null {
+  if (knots.length < 2) return null;
+
+  const COARSE_SAMPLES = 32;
+  const REFINE_ITERS = 6;
+
+  let bestSegIndex = 0;
+  let bestT = 0;
+  let bestDist = Infinity;
+  let bestPos: [number, number, number] = [0, 0, 0];
+
+  for (let i = 0; i < knots.length - 1; i++) {
+    const p1 = knots[i]!;
+    const p2 = knots[i + 1]!;
+    const m1 = tangentAt(knots, i, tangentOverrides);
+    const m2 = tangentAt(knots, i + 1, tangentOverrides);
+
+    for (let s = 0; s <= COARSE_SAMPLES; s++) {
+      const t = s / COARSE_SAMPLES;
+      const pt = hermiteInterp(p1, m1, p2, m2, t);
+      const d = Math.hypot(pt[0] - wx, pt[1] - wy);
+      if (d < bestDist) {
+        bestDist = d;
+        bestSegIndex = i;
+        bestT = t;
+        bestPos = pt;
+      }
+    }
+  }
+
+  // Refine using golden-section-like interval shrinking around the best coarse t
+  {
+    const i = bestSegIndex;
+    const p1 = knots[i]!;
+    const p2 = knots[i + 1]!;
+    const m1 = tangentAt(knots, i, tangentOverrides);
+    const m2 = tangentAt(knots, i + 1, tangentOverrides);
+    const step = 1 / COARSE_SAMPLES;
+    let lo = Math.max(0, bestT - step);
+    let hi = Math.min(1, bestT + step);
+
+    for (let iter = 0; iter < REFINE_ITERS; iter++) {
+      const tLo = lo + (hi - lo) / 3;
+      const tHi = lo + 2 * (hi - lo) / 3;
+      const ptLo = hermiteInterp(p1, m1, p2, m2, tLo);
+      const ptHi = hermiteInterp(p1, m1, p2, m2, tHi);
+      const dLo = Math.hypot(ptLo[0] - wx, ptLo[1] - wy);
+      const dHi = Math.hypot(ptHi[0] - wx, ptHi[1] - wy);
+      if (dLo < dHi) {
+        hi = tHi;
+        if (dLo < bestDist) { bestDist = dLo; bestT = tLo; bestPos = ptLo; }
+      } else {
+        lo = tLo;
+        if (dHi < bestDist) { bestDist = dHi; bestT = tHi; bestPos = ptHi; }
+      }
+    }
+  }
+
+  return { segIndex: bestSegIndex, t: bestT, pos: bestPos, dist: bestDist };
+}

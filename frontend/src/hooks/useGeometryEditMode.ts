@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type MutableRefObject, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, type MutableRefObject, type RefObject } from 'react';
 import { ViewportRenderer } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
 import { getPlatformService } from '../services';
@@ -10,11 +10,16 @@ import {
   tangentFromHandlePosition,
   type SplineControlPoint,
 } from '../components/viewportUtils';
+import { findNearestSplinePoint } from '../viewport/splineVertexBuilder';
 import { useSplineOperations } from './useSplineOperations';
+import type { SplineKnot } from '../services/platform';
 
 type ViewportStatus = 'loading' | 'ready' | 'unsupported';
 
 type WorldPosition = { x: number; y: number };
+
+/** Screen-space pixel threshold for inserting a knot by clicking on the curve. */
+const INSERT_KNOT_THRESHOLD_PX = 20;
 
 interface UseGeometryEditModeOptions {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -43,6 +48,9 @@ export function useGeometryEditMode({
   const geometryEditSpline = useViewportStore((state) => state.geometryEditSpline);
   const { enterGeometryEditMode, finalizeGeometryEdit } = useSplineOperations();
 
+  /** The knot last clicked/inserted in edit mode. Persists after mouse-up for Delete key. */
+  const selectedEditKnotRef = useRef<SplineControlPoint | null>(null);
+
   const syncCursor = useCallback((worldPos: WorldPosition) => {
     emitCursorMove(worldPos.x, worldPos.y);
     pendingCursorRef.current = worldPos;
@@ -63,7 +71,7 @@ export function useGeometryEditMode({
       return;
     }
     hoveredControlPointRef.current = nextHover;
-    renderer.refreshSplineMarkers(nextHover, undefined);
+    renderer.refreshSplineMarkers(nextHover, selectedEditKnotRef.current);
   }, [hoveredControlPointRef]);
 
   const previewEditedRoad = useCallback((roadId: string, splineJson: ReturnType<typeof useViewportStore.getState>['geometryEditSpline'], resolution = 2.0) => {
@@ -100,6 +108,7 @@ export function useGeometryEditMode({
   useEffect(() => {
     if (!geometryEditSpline) {
       clearGeometryEditHover();
+      selectedEditKnotRef.current = null;
       return;
     }
     const renderer = rendererRef.current;
@@ -113,11 +122,14 @@ export function useGeometryEditMode({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const viewState = useViewportStore.getState();
+
+      // ── Escape: finalize edit ────────────────────────────────────────────
       if (event.key === 'Escape' && viewState.geometryEditRoadId) {
         void finalizeGeometryEdit();
         return;
       }
 
+      // ── E: enter geometry edit mode ──────────────────────────────────────
       if ((event.key === 'e' || event.key === 'E') && !event.ctrlKey && !event.metaKey && !event.altKey) {
         if (viewState.geometryEditRoadId || isDrawMode(viewState.editMode) || viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
           return;
@@ -126,12 +138,33 @@ export function useGeometryEditMode({
         if (selectedRoadId) {
           void enterGeometryEditMode(selectedRoadId);
         }
+        return;
+      }
+
+      // ── Delete/Backspace: remove selected knot ───────────────────────────
+      if ((event.key === 'Delete' || event.key === 'Backspace') && viewState.geometryEditRoadId) {
+        const sel = selectedEditKnotRef.current;
+        const spline = viewState.geometryEditSpline;
+        if (!sel || sel.type !== 'knot' || !spline) return;
+        // Cannot delete first or last knot, and must keep at least 2 knots.
+        if (sel.index === 0 || sel.index === spline.knots.length - 1) return;
+        if (spline.knots.length <= 2) return;
+
+        const newKnots = spline.knots.filter((_, i) => i !== sel.index);
+        const updatedSpline = { ...spline, knots: newKnots };
+        viewState.setGeometryEditSpline(updatedSpline);
+        selectedEditKnotRef.current = null;
+        rendererRef.current?.refreshSplineMarkers(null, null);
+        if (viewState.geometryEditRoadId) {
+          previewEditedRoad(viewState.geometryEditRoadId, updatedSpline, 8.0);
+        }
+        event.preventDefault();
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [enterGeometryEditMode, finalizeGeometryEdit]);
+  }, [enterGeometryEditMode, finalizeGeometryEdit, previewEditedRoad]);
 
   const handleGeometryEditMouseMove = useCallback(async (worldPos: WorldPosition, canvas: HTMLCanvasElement, renderer: ViewportRenderer): Promise<boolean> => {
     const viewState = useViewportStore.getState();
@@ -171,7 +204,7 @@ export function useGeometryEditMode({
               index === drag.index
                 ? {
                     ...knot,
-                    tangent_in: [-tangentOut[0], -tangentOut[1], 0],
+                    tangent_in: [-tangentOut[0], -tangentOut[1], 0] as [number, number, number],
                     tangent_out: tangentOut,
                   }
                 : knot
@@ -203,7 +236,8 @@ export function useGeometryEditMode({
   }, [isPreviewingRoadRef, previewEditedRoad, syncCursor, updateHoveredControlPoint]);
 
   const handleGeometryEditMouseDown = useCallback((e: React.MouseEvent, canvas: HTMLCanvasElement, renderer: ViewportRenderer): boolean => {
-    const spline = useViewportStore.getState().geometryEditSpline;
+    const viewState = useViewportStore.getState();
+    const spline = viewState.geometryEditSpline;
     if (!spline) {
       return false;
     }
@@ -224,16 +258,55 @@ export function useGeometryEditMode({
       tangentOverrides,
       true,
     );
-    if (!bestHit) {
-      return false;
+
+    if (bestHit) {
+      // Clicked on an existing knot or tangent handle
+      selectedEditKnotRef.current = bestHit.type === 'knot' ? bestHit : selectedEditKnotRef.current;
+      viewState.setDraggingKnot(bestHit);
+      renderer.lockCamera();
+      canvas.style.cursor = 'grabbing';
+      hoveredControlPointRef.current = null;
+      renderer.refreshSplineMarkers(null, bestHit);
+      return true;
     }
 
-    useViewportStore.getState().setDraggingKnot(bestHit);
-    renderer.lockCamera();
-    canvas.style.cursor = 'grabbing';
-    hoveredControlPointRef.current = null;
-    renderer.refreshSplineMarkers(null, bestHit);
-    return true;
+    // No knot hit — try inserting a new knot by clicking near the curve
+    const mpp = renderer.getMetersPerPixel();
+    const insertThreshold = INSERT_KNOT_THRESHOLD_PX * mpp;
+    const nearest = findNearestSplinePoint(worldPos.x, worldPos.y, knots, tangentOverrides);
+    if (nearest && nearest.dist <= insertThreshold) {
+      // Insert a new Key knot at the nearest curve point
+      const newKnot: SplineKnot = {
+        position: nearest.pos,
+        tangent_in: [0, 0, 0],
+        tangent_out: [0, 0, 0],
+        tangent_mode: 'Auto',
+        knot_type: 'Key',
+        s: 0,
+      };
+      const newKnots = [
+        ...spline.knots.slice(0, nearest.segIndex + 1),
+        newKnot,
+        ...spline.knots.slice(nearest.segIndex + 1),
+      ];
+      const updatedSpline = { ...spline, knots: newKnots };
+      viewState.setGeometryEditSpline(updatedSpline);
+
+      const newKnotIndex = nearest.segIndex + 1;
+      const dragRef: SplineControlPoint = { index: newKnotIndex, type: 'knot' };
+      selectedEditKnotRef.current = dragRef;
+      viewState.setDraggingKnot(dragRef);
+      renderer.lockCamera();
+      canvas.style.cursor = 'grabbing';
+      hoveredControlPointRef.current = null;
+      renderer.refreshSplineMarkers(null, dragRef);
+      return true;
+    }
+
+    // Clicked on empty space — clear selection
+    selectedEditKnotRef.current = null;
+    renderer.refreshSplineMarkers(hoveredControlPointRef.current, null);
+    return false;
   }, [hoveredControlPointRef]);
 
   const handleGeometryEditMouseUp = useCallback(async (): Promise<boolean> => {
@@ -242,16 +315,20 @@ export function useGeometryEditMode({
       return false;
     }
 
+    const draggedKnot = viewState.draggingKnot;
     viewState.setDraggingKnot(null);
     const renderer = rendererRef.current;
     if (renderer) {
       renderer.unlockCamera();
-      renderer.refreshSplineMarkers(null, null);
+      // Keep the selection visible after releasing the mouse
+      const sel = selectedEditKnotRef.current;
+      renderer.refreshSplineMarkers(null, sel);
     }
     hoveredControlPointRef.current = null;
     const canvas = canvasRef.current;
     if (canvas) {
-      canvas.style.cursor = '';
+      // Restore appropriate cursor: crosshair if selected knot, else default
+      canvas.style.cursor = draggedKnot ? 'grab' : '';
     }
 
     const { geometryEditRoadId: roadId, geometryEditSpline: spline } = viewState;
@@ -260,7 +337,10 @@ export function useGeometryEditMode({
         const service = await getPlatformService();
         const geometries = await service.splineToGeometries(spline);
         const totalLength = geometries.reduce((sum, geometry) => sum + geometry.length, 0);
-        useProjectStore.getState().updateRoadGeometry(roadId, geometries, totalLength);
+        const editData = spline.knots
+          .filter((k) => k.knot_type !== 'Intermediate')
+          .map((k) => k.position);
+        useProjectStore.getState().updateRoadGeometry(roadId, geometries, totalLength, editData);
       } catch (err) {
         console.error('[Viewport] Failed to update road geometry:', err);
       }
