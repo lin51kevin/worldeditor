@@ -51,7 +51,7 @@ describe('mouseControls', () => {
       getMetersPerPixel: vi.fn(() => 1.0),
       refreshSplineMarkers: vi.fn(),
       markSceneDirty: vi.fn(),
-      clearColor: [0.1, 0.1, 0.12] as [number, number, number],
+      clearColor: { r: 0.1, g: 0.1, b: 0.12, a: 1.0 },
     };
   }
 

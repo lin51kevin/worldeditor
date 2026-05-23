@@ -30,7 +30,7 @@ export interface MouseControlsDeps {
   getMetersPerPixel: () => number;
   refreshSplineMarkers: (hovered?: ControlPointRef | null, selected?: ControlPointRef | null) => void;
   markSceneDirty: () => void;
-  clearColor: [number, number, number];
+  clearColor: { r: number; g: number; b: number; a: number };
 }
 
 /**

@@ -129,7 +129,7 @@ export async function mountAllPlugins(): Promise<() => void> {
 
   // Return master cleanup
   return () => {
-    for (const [id, cleanup] of loadedPlugins) {
+    for (const [_id, cleanup] of loadedPlugins) {
       cleanup();
     }
     loadedPlugins.clear();

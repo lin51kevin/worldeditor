@@ -252,7 +252,7 @@ export function useViewportMeshes({
       }
 
       // Merge only visible layers based on current viewMode (no WASM calls)
-      let lineVerts = new Float32Array(0);
+      let lineVerts: Float32Array = new Float32Array(0);
       if (viewMode !== 'solid') {
         // Wire/sketch: show boundaries + center + road marks
         lineVerts = cachedLaneBoundaryVertsRef.current;
