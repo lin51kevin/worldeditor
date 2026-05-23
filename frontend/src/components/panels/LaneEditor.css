@@ -1,0 +1,326 @@
+/* LaneEditor — Enhanced lane editing panel */
+
+.lane-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* Section block — no extra border, sits flush inside parent card */
+.lane-section-block {
+    border-bottom: 1px solid var(--color-border);
+}
+
+.lane-section-block:last-child {
+    border-bottom: none;
+}
+
+.lane-section-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: var(--color-bg-tertiary);
+    border-bottom: 1px solid var(--color-border);
+    user-select: none;
+}
+
+.lane-section-header:hover {
+    background: var(--color-bg-hover);
+}
+
+.lane-section-header-actions {
+    display: flex;
+    gap: 2px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+.lane-section-header-btn {
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    color: var(--color-text-secondary);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 5px;
+    cursor: pointer;
+    line-height: 1.4;
+}
+
+.lane-section-header-btn:hover {
+    background: var(--color-accent, #0078d4);
+    color: #fff;
+    border-color: var(--color-accent, #0078d4);
+}
+
+.lane-section-toggle {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.lane-section-title {
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.lane-section-meta {
+    margin-left: auto;
+    font-weight: 400;
+    color: var(--color-text-muted, #888);
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.lane-section-body {
+    padding: 0;
+}
+
+/* Side group */
+.lane-side-group {
+    padding: 0;
+    margin-bottom: 0;
+}
+
+.lane-side-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-text-muted, #888);
+    padding: 4px 10px 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+/* Lane row — matches property-row style */
+.lane-editor-row {
+    border-bottom: 1px solid var(--color-border);
+    padding: 3px 10px;
+}
+
+.lane-editor-row:last-child {
+    border-bottom: none;
+}
+
+.lane-editor-row-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 26px;
+}
+
+.lane-editor-id {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    min-width: 20px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.lane-editor-type-select {
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    color: var(--color-text-primary);
+    font-size: 11px;
+    padding: 2px 4px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.lane-editor-type-select:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+}
+
+.lane-editor-width-input {
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    color: var(--color-text-primary);
+    font-size: 11px;
+    padding: 2px 6px;
+    width: 56px;
+    min-width: 56px;
+    text-align: right;
+}
+
+.lane-editor-width-input:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+}
+
+.lane-editor-unit {
+    font-size: 10px;
+    color: var(--color-text-muted, #888);
+    flex-shrink: 0;
+}
+
+.lane-editor-btn-adv {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    color: var(--color-text-muted, #888);
+    flex-shrink: 0;
+}
+
+.lane-editor-btn-adv:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+}
+
+.lane-editor-btn-adv.active {
+    color: var(--color-accent, #0078d4);
+}
+
+.lane-editor-btn-delete {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 1px 4px;
+    font-size: 13px;
+    line-height: 1;
+    color: var(--color-text-muted, #888);
+    flex-shrink: 0;
+}
+
+.lane-editor-btn-delete:hover {
+    color: #e05050;
+    background: rgba(224, 80, 80, 0.12);
+    border-color: #e05050;
+}
+
+/* Advanced polynomial row */
+.lane-editor-advanced {
+    padding: 4px 10px 4px 38px;
+    background: var(--color-bg-tertiary);
+    border-top: 1px solid var(--color-border);
+    margin-top: 2px;
+}
+
+.lane-editor-poly-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+}
+
+.lane-editor-poly-label {
+    font-size: 10px;
+    color: var(--color-text-muted, #888);
+    cursor: help;
+}
+
+.lane-editor-poly-coeff {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    min-width: 8px;
+    text-align: right;
+}
+
+.lane-editor-poly-input {
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    color: var(--color-text-primary);
+    font-size: 10px;
+    padding: 1px 3px;
+    width: 56px;
+    text-align: right;
+}
+
+.lane-editor-poly-input:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+}
+
+/* Lane link row */
+.lane-editor-link-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 10px;
+    color: var(--color-text-muted, #888);
+}
+
+.lane-editor-link-label {
+    font-size: 10px;
+}
+
+.lane-editor-btn {
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    color: var(--color-text-primary);
+    font-size: 10px;
+    padding: 3px 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+}
+
+.lane-editor-btn:hover {
+    background: var(--color-bg-hover);
+}
+
+.lane-editor-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Split / Merge ops */
+.lane-section-ops {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-top: 1px solid var(--color-border);
+}
+
+.lane-section-split {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-muted, #888);
+}
+
+.lane-editor-split-input {
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    color: var(--color-text-primary);
+    font-size: 11px;
+    padding: 2px 6px;
+    width: 80px;
+    height: 22px;
+    text-align: right;
+}
+
+.lane-editor-split-input:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+}
+
+.lane-editor-btn-split {
+    font-size: 10px;
+}
+
+.lane-editor-btn-merge {
+    margin-left: auto;
+    font-size: 10px;
+}
