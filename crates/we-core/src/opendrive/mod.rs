@@ -345,6 +345,7 @@ mod tests {
                 signals: vec![],
                 objects: vec![],
                 speed: None,
+                spline_edit_data: None,
             }],
             junctions: vec![],
             ..Default::default()
@@ -398,6 +399,7 @@ mod tests {
             signals: vec![],
             objects: vec![],
             speed: None,
+            spline_edit_data: None,
         }
     }
 

@@ -160,8 +160,8 @@ describe('viewportUtils', () => {
       [0, 0, 0],
       [3, 4, 0],
     ]);
-    spline.knots[0] = { ...spline.knots[0]!, tangent_out: [10, 20, 0] };
-    spline.knots[1] = { ...spline.knots[1]!, tangent_out: [-5, -6, 0] };
+    spline.knots[0] = { ...spline.knots[0]!, tangent_out: [10, 20, 0], tangent_mode: 'Manual' };
+    spline.knots[1] = { ...spline.knots[1]!, tangent_out: [-5, -6, 0], tangent_mode: 'Manual' };
 
     expect(splineToRendererFormat(spline)).toEqual({
       knots: [[0, 0, 0], [3, 4, 0]],
@@ -170,16 +170,79 @@ describe('viewportUtils', () => {
         1: [-5, -6, 0],
       },
     });
-    expect(tangentFromHandlePosition([1, 1, 0], { x: 4, y: 7 }, 'out')).toEqual([10, 20, 0]);
-    expect(tangentFromHandlePosition([1, 1, 0], { x: 4, y: 7 }, 'in')).toEqual([-10, -20, 0]);
+    expect(tangentFromHandlePosition([0, 0, 0], { x: 8, y: 0 }, 'out')).toEqual([1, 0, 0]);
+    const tangentIn = tangentFromHandlePosition([0, 0, 0], { x: -8, y: 0.8 }, 'in');
+    expect(tangentIn[0]).toBeCloseTo(0.9950371902099892);
+    expect(tangentIn[1]).toBeCloseTo(-0.09950371902099892);
+    expect(tangentIn[2]).toBe(0);
+  });
+
+  it('keeps tangent direction stable when dragging along the same ray', () => {
+    expect(tangentFromHandlePosition([0, 0, 0], { x: 8.8, y: 0 }, 'out')).toEqual([1, 0, 0]);
+    expect(tangentFromHandlePosition([0, 0, 0], { x: 7.2, y: 0 }, 'out')).toEqual([1, 0, 0]);
+    expect(tangentFromHandlePosition([0, 0, 0], { x: -8.8, y: 0 }, 'in')).toEqual([1, -0, 0]);
+  });
+
+  it('returns zero tangent when the dragged handle collapses onto the knot', () => {
+    expect(tangentFromHandlePosition([0, 0, 0], { x: 0, y: 0 }, 'out')).toEqual([0, 0, 0]);
+  });
+
+  it('excludes Auto-mode knot tangents from renderer tangentOverrides', () => {
+    const spline = buildEditableSpline([[0, 0, 0], [3, 4, 0]]);
+    // Default tangent_mode is 'Auto' — neither knot should appear in overrides
+    const result = splineToRendererFormat(spline);
+    expect(result.tangentOverrides).toEqual({});
+  });
+
+  it('includes only Manual knots in tangentOverrides for a mixed spline', () => {
+    const spline = buildEditableSpline([[0, 0, 0], [3, 4, 0], [6, 0, 0]]);
+    // knot 0: Auto (default), knot 1: Manual, knot 2: Auto
+    spline.knots[1] = { ...spline.knots[1]!, tangent_out: [1, 2, 0], tangent_mode: 'Manual' };
+
+    const result = splineToRendererFormat(spline);
+    expect(Object.keys(result.tangentOverrides)).toEqual(['1']);
+    expect(result.tangentOverrides[1]).toEqual([1, 2, 0]);
   });
 
   it('finds knot and handle hits with optional handle suppression', () => {
     const knots: Array<[number, number, number]> = [[0, 0, 0], [10, 0, 0]];
-
+    // With mpp=0.1, handle scale = clamp(80*0.1, 0.5, 60)/tangentLen = 8/10 = 0.8
+    // So knot 0 'out' handle is at (0 + 10*0.8, 0) = (8, 0)
     expect(findSplineControlPointHit({ x: 0.2, y: 0.2 }, knots, 0.1)).toEqual({ index: 0, type: 'knot' });
-    expect(findSplineControlPointHit({ x: 3.05, y: 0 }, knots, 0.1)).toEqual({ index: 0, type: 'out' });
-    expect(findSplineControlPointHit({ x: 3.05, y: 0 }, knots, 0.1, undefined, false)).toBeNull();
+    expect(findSplineControlPointHit({ x: 8.05, y: 0 }, knots, 0.1)).toEqual({ index: 0, type: 'out' });
+    expect(findSplineControlPointHit({ x: 8.05, y: 0 }, knots, 0.1, undefined, false)).toBeNull();
     expect(findSplineControlPointHit({ x: 50, y: 50 }, knots, 0.1)).toBeNull();
+  });
+
+  it('detects in/out tangent handles at camera-adaptive positions', () => {
+    const knots: Array<[number, number, number]> = [[0, 0, 0], [20, 0, 0], [40, 0, 0]];
+    const mpp = 0.05;
+    // Middle knot tangent (Catmull-Rom): 0.5 * (knots[2] - knots[0]) = [20, 0, 0], len=20
+    // computeHandleScale(20, 0.05): targetDist = max(80*0.05, 0.5) = 4; scale = 4/20 = 0.2
+    // 'out' handle at (20 + 20*0.2, 0) = (24, 0)
+    // 'in' handle at (20 - 20*0.2, 0) = (16, 0)
+    expect(findSplineControlPointHit({ x: 24.0, y: 0 }, knots, mpp)).toEqual({ index: 1, type: 'out' });
+    expect(findSplineControlPointHit({ x: 16.0, y: 0 }, knots, mpp)).toEqual({ index: 1, type: 'in' });
+    // Old position (fixed formula) should NOT hit — verifies camera-adaptive formula is used
+    // Old: scale = min(4/20, 0.3) = 0.2 → same in this case, try different mpp
+    const mpp2 = 0.5;
+    // computeHandleScale(20, 0.5): targetDist = max(80*0.5, 0.5) = 40; scale = 40/20 = 2
+    // 'out' handle at (20 + 20*2, 0) = (60, 0) — clamped: min(40,60)=40 → scale = 40/20=2 → (60,0)
+    // Wait, let me recalculate: clamped = min(targetDist, 60) = min(40, 60) = 40; scale=40/20=2
+    // 'out' at (20 + 20*2, 0) = (60, 0)
+    expect(findSplineControlPointHit({ x: 60.0, y: 0 }, knots, mpp2)).toEqual({ index: 1, type: 'out' });
+    // With old formula (fixed), handle would be at (20 + 20*0.2, 0)=(24,0) — a miss at (60,0)
+  });
+
+  it('detects tangent handles with overrides', () => {
+    const knots: Array<[number, number, number]> = [[0, 0, 0], [10, 0, 0]];
+    const mpp = 0.1;
+    // Override tangent for knot 0: [0, 5, 0] (pointing up), len=5
+    // computeHandleScale(5, 0.1): targetDist=max(8,0.5)=8; scale=8/5=1.6
+    // 'out' handle at (0 + 0*1.6, 0 + 5*1.6) = (0, 8)
+    const overrides: Record<number, [number, number, number]> = { 0: [0, 5, 0] };
+    expect(findSplineControlPointHit({ x: 0, y: 8.0 }, knots, mpp, overrides)).toEqual({ index: 0, type: 'out' });
+    // 'in' handle at (0 - 0*1.6, 0 - 5*1.6) = (0, -8)
+    expect(findSplineControlPointHit({ x: 0, y: -8.0 }, knots, mpp, overrides)).toEqual({ index: 0, type: 'in' });
   });
 });

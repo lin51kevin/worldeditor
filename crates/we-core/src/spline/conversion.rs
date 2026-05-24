@@ -137,11 +137,24 @@ pub fn spline_to_geometries_with_mode(
         // Heading at start point (from tangent, not chord, for accuracy)
         let hdg = k0.tangent_out[1].atan2(k0.tangent_out[0]);
 
-        // Check if this segment can be approximated as a line
-        let tangent_alignment_start =
-            k0.tangent_out[0] * dx / chord_len + k0.tangent_out[1] * dy / chord_len;
-        let tangent_alignment_end =
-            k1.tangent_in[0] * dx / chord_len + k1.tangent_in[1] * dy / chord_len;
+        // Check if this segment can be approximated as a line.
+        // Normalize tangents so the dot product is bounded in [-1, 1] — manual
+        // tangents from the editor can have arbitrary magnitudes.
+        let t_out_len = (k0.tangent_out[0] * k0.tangent_out[0]
+            + k0.tangent_out[1] * k0.tangent_out[1])
+            .sqrt();
+        let t_in_len =
+            (k1.tangent_in[0] * k1.tangent_in[0] + k1.tangent_in[1] * k1.tangent_in[1]).sqrt();
+        let tangent_alignment_start = if t_out_len > 1e-9 {
+            (k0.tangent_out[0] * dx + k0.tangent_out[1] * dy) / (chord_len * t_out_len)
+        } else {
+            0.0
+        };
+        let tangent_alignment_end = if t_in_len > 1e-9 {
+            (k1.tangent_in[0] * dx + k1.tangent_in[1] * dy) / (chord_len * t_in_len)
+        } else {
+            0.0
+        };
 
         if tangent_alignment_start.abs() > 0.9999 && tangent_alignment_end.abs() > 0.9999 {
             // Nearly straight — use Line geometry
@@ -376,6 +389,40 @@ mod tests {
         assert!(
             !geos.is_empty(),
             "ParamPoly3Only should produce geometries for 2-knot spline"
+        );
+    }
+
+    #[test]
+    fn test_spline_to_geometries_unnormalized_tangent_produces_curve_not_line() {
+        // Regression: when manual tangents have large magnitudes (e.g. from JS
+        // tangentFromHandlePosition which divides by 0.3), the line-detection check
+        // must normalize before comparing. A 90° turn with scale-33 tangents should
+        // produce a ParamPoly3 / curved geometry, not a Line.
+        let mut spline = EditableSpline::new();
+
+        // k0 at (0, 0) pointing east with large magnitude tangent
+        let mut k0 = SplineKnot::new(0.0, 0.0, 0.0);
+        k0.tangent_out = [33.0, 0.0, 0.0]; // same direction as chord, so aligned
+        k0.tangent_in = [-33.0, 0.0, 0.0];
+        k0.tangent_mode = crate::spline::TangentMode::Manual;
+        k0.knot_type = KnotType::Anchor;
+
+        // k1 at (10, 0) pointing north — 90° turn with large magnitude tangent
+        let mut k1 = SplineKnot::new(10.0, 0.0, 0.0);
+        k1.tangent_in = [0.0, 33.0, 0.0]; // perpendicular to chord → curved
+        k1.tangent_out = [0.0, 33.0, 0.0];
+        k1.tangent_mode = crate::spline::TangentMode::Manual;
+        k1.knot_type = KnotType::Anchor;
+
+        spline.knots = vec![k0, k1];
+
+        let geos = spline_to_geometries(&spline);
+        assert!(!geos.is_empty(), "should produce at least one geometry");
+        let all_lines = geos.iter().all(|g| matches!(g.geo_type, GeometryType::Line));
+        assert!(
+            !all_lines,
+            "90-degree turn with large tangents must not be classified as all-Line geometry, got {:?}",
+            geos
         );
     }
 }

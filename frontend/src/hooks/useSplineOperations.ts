@@ -108,9 +108,12 @@ export function useSplineOperations() {
         // Restore exact user-placed control points — no re-sampling needed.
         spline = buildEditableSpline(road.spline_edit_data);
       } else {
-        // Fallback: sample only at geometry-segment boundaries (large step = no intermediates).
+        // Fallback: sample only at geometry-segment boundaries.
+        // Use a very large step so roadToSpline returns one point per segment
+        // boundary with no intermediate samples.
+        const STEP_SEGMENT_BOUNDARIES_ONLY = 1e9;
         const service = await getPlatformService();
-        spline = await service.roadToSpline(road, 1e9);
+        spline = await service.roadToSpline(road, STEP_SEGMENT_BOUNDARIES_ONLY);
       }
       useViewportStore.getState().enterGeometryEdit(roadId, spline);
     } catch (err) {

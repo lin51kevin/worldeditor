@@ -12,7 +12,8 @@
       "Bash(yarn test *)",
       "Bash(git *)",
       "Bash(yarn typecheck *)",
-      "Bash(cargo check *)"
+      "Bash(cargo check *)",
+      "Bash(cargo build *)"
     ]
   }
 }

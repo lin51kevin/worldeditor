@@ -10,7 +10,8 @@
     ],
     "types": [
       "@webgpu/types",
-      "vite/client"
+      "vite/client",
+      "vitest/globals"
     ],
     "module": "ESNext",
     "skipLibCheck": true,

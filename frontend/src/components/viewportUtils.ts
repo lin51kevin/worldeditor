@@ -5,7 +5,7 @@
  * Viewport component and related viewport modules.
  */
 
-import { getSplineHandlePoints } from '../viewport/splineUtils';
+import { computeControlPointPositions } from '../viewport/tangentHandleController';
 import type { EditableSpline, Junction, Project, Road, SplineKnot } from '../services/platform';
 import { genId } from '../plugins/editing/templates/engine';
 
@@ -145,7 +145,12 @@ export function nextSplineRoadId(existingRoadIds: string[]): string {
   return genId(existingRoadIds);
 }
 
-/** Extract renderer-compatible knot positions and tangent overrides from an EditableSpline. */
+/** Extract renderer-compatible knot positions and tangent overrides from an EditableSpline.
+ *
+ * Only knots with `tangent_mode === 'Manual'` contribute to `tangentOverrides`.
+ * Auto knots are omitted so the frontend Catmull-Rom formula computes their
+ * tangents from positions — matching what the Rust side produces.
+ */
 export function splineToRendererFormat(spline: EditableSpline): {
   knots: Array<[number, number, number]>;
   tangentOverrides: Record<number, [number, number, number]>;
@@ -154,7 +159,9 @@ export function splineToRendererFormat(spline: EditableSpline): {
   const tangentOverrides: Record<number, [number, number, number]> = {};
   for (let i = 0; i < spline.knots.length; i++) {
     const k = spline.knots[i]!;
-    tangentOverrides[i] = k.tangent_out;
+    if (k.tangent_mode === 'Manual') {
+      tangentOverrides[i] = k.tangent_out;
+    }
   }
   return { knots, tangentOverrides };
 }
@@ -166,10 +173,13 @@ export function tangentFromHandlePosition(
 ): [number, number, number] {
   const dx = worldPos.x - knot[0];
   const dy = worldPos.y - knot[1];
-  const displayScale = 0.3;
+  const length = Math.hypot(dx, dy);
+  if (length <= 1e-6) {
+    return [0, 0, 0];
+  }
   return type === 'out'
-    ? [dx / displayScale, dy / displayScale, 0]
-    : [-dx / displayScale, -dy / displayScale, 0];
+    ? [dx / length, dy / length, 0]
+    : [-dx / length, -dy / length, 0];
 }
 
 export function findSplineControlPointHit(
@@ -199,13 +209,16 @@ export function findSplineControlPointHit(
     return bestHit;
   }
 
-  for (const handle of getSplineHandlePoints(knots, tangentOverrides)) {
-    const dx = worldPos.x - handle.x;
-    const dy = worldPos.y - handle.y;
+  // Use camera-adaptive handle positions matching what's actually rendered.
+  const positions = computeControlPointPositions(knots, tangentOverrides ?? {}, undefined, metersPerPixel);
+  for (const pos of positions) {
+    if (pos.ref.type === 'knot') continue;
+    const dx = worldPos.x - pos.wx;
+    const dy = worldPos.y - pos.wy;
     const distSq = dx * dx + dy * dy;
     if (distSq < handleHitSq && distSq < bestDistSq) {
       bestDistSq = distSq;
-      bestHit = { index: handle.knotIndex, type: handle.type };
+      bestHit = { index: pos.ref.index, type: pos.ref.type };
     }
   }
 

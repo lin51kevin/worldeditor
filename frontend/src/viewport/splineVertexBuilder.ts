@@ -151,9 +151,13 @@ export function buildSplineMarkerVertices(
   const knotZ = zOffset + 0.04;
   const handleZ = zOffset + 0.06;
 
-  // Tangent handle lines and endpoint X-squares
+  // Tangent handle lines and endpoint X-squares — only shown for hovered/selected knot
   if (knots.length >= 2) {
     for (let i = 0; i < knots.length; i++) {
+      // In edit mode (showHandleEndpoints=true), only show tangent handles for the
+      // hovered or selected knot (matching C# behavior).
+      if (showHandleEndpoints && hovered?.index !== i && selected?.index !== i) continue;
+
       const [kx, ky] = knots[i]!;
       const outTangent = tangentAt(knots, i, tangentOverrides);
       const [tvx, tvy] = outTangent;
@@ -176,12 +180,12 @@ export function buildSplineMarkerVertices(
         hy2 = ky - tvy * scale;
       }
 
-      // Yellow tangent reference line — only in geometry-edit mode (not draw mode)
+      // Yellow tangent reference line
       if (showHandleEndpoints) {
         emitSegment(markerVerts, hx2, hy2, hx1, hy1, handleZ - 0.01, lineHW, ...colYellow);
       }
 
-      // In draw mode, skip handle endpoint X-squares (only show in geometry-edit mode)
+      // Handle endpoint X-squares
       if (showHandleEndpoints) {
         // 'out' handle X-square
         const outColor = (hovered?.index === i && hovered?.type === 'out') ? colGreen
@@ -279,6 +283,7 @@ export function findNearestSplinePoint(
     let hi = Math.min(1, bestT + step);
 
     for (let iter = 0; iter < REFINE_ITERS; iter++) {
+      if (hi - lo < 1e-6) break;
       const tLo = lo + (hi - lo) / 3;
       const tHi = lo + 2 * (hi - lo) / 3;
       const ptLo = hermiteInterp(p1, m1, p2, m2, tLo);

@@ -23,6 +23,7 @@ import type {
 
 const DEFAULT_SIDEWALK_WIDTH = 2.0;
 const DEFAULT_MARK_WIDTH = 0.15;
+const DEFAULT_LANE_WIDTH = 3.5;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -151,7 +152,7 @@ function splitGeometryType(
   splitHdg: number,
 ): { type1: GeometryType; type2: GeometryType } {
   // Line and Arc: nothing to recompute
-  if (geo_type === 'Line' || !('Spiral' in geo_type || 'Poly3' in geo_type || 'ParamPoly3' in geo_type)) {
+  if (geo_type === 'Line' || 'Arc' in geo_type) {
     return { type1: geo_type, type2: geo_type };
   }
 
@@ -220,6 +221,9 @@ function splitGeometryType(
     // polynomial correctly.  β = hdg0 - splitHdg
     // [U']   =  R(β) · [dU]  where R(β) = [[cosβ -sinβ],[sinβ cosβ]]
     // [V']            [dV]
+    // NOTE: This rotation is exact only when p' ≈ arc-length (linear
+    // parameterization). For extreme-curvature roads the split second-half
+    // endpoint may deviate slightly.
     const beta = hdg0 - splitHdg;
     const cosB = Math.cos(beta);
     const sinB = Math.sin(beta);
@@ -251,7 +255,7 @@ function evalWidthPolyAt(widths: LaneWidth[], sOff: number): number {
   for (const w of widths) {
     if (w.s_offset <= sOff) active = w;
   }
-  if (!active) return widths[0]?.a ?? 3.5;
+  if (!active) return widths[0]?.a ?? DEFAULT_LANE_WIDTH;
   const ds = sOff - active.s_offset;
   return active.a + active.b * ds + active.c * ds * ds + active.d * ds * ds * ds;
 }

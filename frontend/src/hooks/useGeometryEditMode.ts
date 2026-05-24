@@ -5,6 +5,7 @@ import { getPlatformService } from '../services';
 import { useProjectStore } from '../stores/projectStore';
 import { useViewportStore } from '../stores/viewportStore';
 import {
+  buildEditableSpline,
   findSplineControlPointHit,
   splineToRendererFormat,
   tangentFromHandlePosition,
@@ -20,6 +21,18 @@ type WorldPosition = { x: number; y: number };
 
 /** Screen-space pixel threshold for inserting a knot by clicking on the curve. */
 const INSERT_KNOT_THRESHOLD_PX = 20;
+
+/** Recolor all vertices in a Float32Array (7 floats per vertex) to the given RGBA. */
+function recolorVertices(data: Float32Array, r: number, g: number, b: number, a: number): Float32Array {
+  const result = new Float32Array(data);
+  for (let i = 0; i < result.length; i += 7) {
+    result[i + 3] = r;
+    result[i + 4] = g;
+    result[i + 5] = b;
+    result[i + 6] = a;
+  }
+  return result;
+}
 
 interface UseGeometryEditModeOptions {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -46,10 +59,14 @@ export function useGeometryEditMode({
   status,
 }: UseGeometryEditModeOptions) {
   const geometryEditSpline = useViewportStore((state) => state.geometryEditSpline);
+  const geometryEditRoadId = useViewportStore((state) => state.geometryEditRoadId);
+  const project = useProjectStore((state) => state.project);
   const { enterGeometryEditMode, finalizeGeometryEdit } = useSplineOperations();
 
   /** The knot last clicked/inserted in edit mode. Persists after mouse-up for Delete key. */
   const selectedEditKnotRef = useRef<SplineControlPoint | null>(null);
+  /** Flag to suppress the undo-sync effect right after our own commit. */
+  const selfCommitRef = useRef(false);
 
   const syncCursor = useCallback((worldPos: WorldPosition) => {
     emitCursorMove(worldPos.x, worldPos.y);
@@ -74,6 +91,9 @@ export function useGeometryEditMode({
     renderer.refreshSplineMarkers(nextHover, selectedEditKnotRef.current);
   }, [hoveredControlPointRef]);
 
+  /** Tracks the spline snapshot that was last sent to previewEditedRoad. */
+  const previewedSplineRef = useRef<ReturnType<typeof useViewportStore.getState>['geometryEditSpline']>(null);
+
   const previewEditedRoad = useCallback((roadId: string, splineJson: ReturnType<typeof useViewportStore.getState>['geometryEditSpline'], resolution = 2.0) => {
     const renderer = rendererRef.current;
     if (!renderer || !splineJson) {
@@ -81,6 +101,7 @@ export function useGeometryEditMode({
     }
 
     isPreviewingRoadRef.current = true;
+    previewedSplineRef.current = splineJson;
     void (async () => {
       try {
         const service = await getPlatformService();
@@ -92,15 +113,33 @@ export function useGeometryEditMode({
           return;
         }
         const previewRoad = { ...baseRoad, plan_view: geometries, length: totalLength };
-        const singleRoadVerts = await service.generateSingleRoadVertices(previewRoad, resolution, [0.35, 0.35, 0.35, 1.0]);
         const singleProject = { ...currentProject, roads: [previewRoad] };
-        const singleLaneLineVerts = await service.generateLaneLineVertices(singleProject, resolution);
+        const [singleRoadVerts, singleLaneLineVerts, centerLineVerts, highlightVerts] = await Promise.all([
+          service.generateSingleRoadVertices(previewRoad, resolution, [0.35, 0.35, 0.35, 1.0]),
+          service.generateLaneLineVertices(singleProject, resolution),
+          service.generateCenterLineVertices(singleProject, 2.0),
+          service.generateSingleRoadVertices(previewRoad, resolution, [0.95, 0.18, 0.18, 0.82]),
+        ]);
         rendererRef.current?.uploadRoadVertices(singleRoadVerts);
         rendererRef.current?.uploadLaneLineVertices(singleLaneLineVerts);
+        if (highlightVerts.length > 0) {
+          rendererRef.current?.uploadHighlightVertices(highlightVerts);
+        }
+        // Upload center line as the spline curve (recolored to yellow/orange #F5A623)
+        if (centerLineVerts.length > 0) {
+          const recolored = recolorVertices(centerLineVerts, 0.961, 0.651, 0.137, 1.0);
+          rendererRef.current?.setCurveFromVertexData(recolored);
+        }
       } catch {
         // Ignore preview errors during drag.
       } finally {
         isPreviewingRoadRef.current = false;
+        // If the spline has changed since we started this preview, trigger another
+        // preview to catch up with the latest state.
+        const latestSpline = useViewportStore.getState().geometryEditSpline;
+        if (latestSpline && latestSpline !== previewedSplineRef.current) {
+          previewEditedRoad(roadId, latestSpline, resolution);
+        }
       }
     })();
   }, [isPreviewingRoadRef, rendererRef]);
@@ -116,8 +155,80 @@ export function useGeometryEditMode({
       return;
     }
     const { knots, tangentOverrides } = splineToRendererFormat(geometryEditSpline);
-    renderer.setSplinePreviewKnots(knots, tangentOverrides);
-  }, [clearGeometryEditHover, geometryEditSpline, rendererRef, status]);
+    // In geometry-edit mode (road exists), skip the Hermite curve — the actual road
+    // center line is uploaded separately via setCurveFromVertexData.
+    const skipCurve = !!geometryEditRoadId;
+    renderer.setSplinePreviewKnots(knots, tangentOverrides, false, skipCurve);
+    renderer.refreshSplineMarkers(hoveredControlPointRef.current, selectedEditKnotRef.current);
+  }, [clearGeometryEditHover, geometryEditSpline, geometryEditRoadId, rendererRef, status]);
+
+  // ── Sync geometry edit spline on undo/redo ──────────────────────────────
+  // When the project changes externally (undo/redo), re-derive the editing
+  // spline from the road's persisted spline_edit_data so control points stay
+  // in sync with the actual road geometry.
+  const lastSyncedRoadRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (!geometryEditRoadId) return;
+    const road = project.roads.find((r) => r.id === geometryEditRoadId);
+    if (!road) {
+      // Road was deleted (e.g., undo of an addRoad) — exit edit mode.
+      useViewportStore.getState().exitGeometryEdit();
+      return;
+    }
+    // Skip if the road reference hasn't changed (the edit was done by us).
+    if (road === lastSyncedRoadRef.current) return;
+    lastSyncedRoadRef.current = road;
+
+    // Skip if this change was triggered by our own mouseup commit.
+    if (selfCommitRef.current) {
+      selfCommitRef.current = false;
+      return;
+    }
+
+    // Only sync if we're not currently dragging (to avoid overwriting mid-drag state).
+    const { draggingKnot } = useViewportStore.getState();
+    if (draggingKnot) return;
+
+    if (road.spline_edit_data && road.spline_edit_data.length >= 2) {
+      const restoredSpline = buildEditableSpline(road.spline_edit_data);
+      useViewportStore.getState().setGeometryEditSpline(restoredSpline);
+    }
+  }, [geometryEditRoadId, project]);
+
+  // ── Compute initial center line when entering geometry edit mode ──────────
+  // On first entry (geometryEditRoadId becomes set), compute the road's center
+  // line from its existing plan_view and upload as the curve mesh.
+  const initialCurveComputedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!geometryEditRoadId) {
+      initialCurveComputedRef.current = null;
+      return;
+    }
+    // Only compute once per road edit session.
+    if (initialCurveComputedRef.current === geometryEditRoadId) return;
+    initialCurveComputedRef.current = geometryEditRoadId;
+
+    const renderer = rendererRef.current;
+    if (!renderer || status !== 'ready') return;
+
+    const road = project.roads.find((r) => r.id === geometryEditRoadId);
+    if (!road || !road.plan_view || road.plan_view.length === 0) return;
+
+    void (async () => {
+      try {
+        const service = await getPlatformService();
+        const currentProject = useProjectStore.getState().project;
+        const singleProject = { ...currentProject, roads: [road] };
+        const centerLineVerts = await service.generateCenterLineVertices(singleProject, 2.0);
+        if (centerLineVerts.length > 0) {
+          const recolored = recolorVertices(centerLineVerts, 0.961, 0.651, 0.137, 1.0);
+          rendererRef.current?.setCurveFromVertexData(recolored);
+        }
+      } catch {
+        // Ignore — the curve will be computed on first drag preview.
+      }
+    })();
+  }, [geometryEditRoadId, project, rendererRef, status]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -175,11 +286,6 @@ export function useGeometryEditMode({
 
     const drag = viewState.draggingKnot;
     if (drag) {
-      if (isPreviewingRoadRef.current) {
-        syncCursor(worldPos);
-        return true;
-      }
-
       let updatedSpline = spline;
       if (drag.index >= 0 && drag.index < spline.knots.length) {
         if (drag.type === 'knot') {
@@ -197,23 +303,33 @@ export function useGeometryEditMode({
             return true;
           }
         } else {
-          const tangentOut = tangentFromHandlePosition(spline.knots[drag.index]!.position, worldPos, drag.type);
+          const tangentOut = tangentFromHandlePosition(
+            spline.knots[drag.index]!.position,
+            worldPos,
+            drag.type,
+          );
           updatedSpline = {
             ...spline,
             knots: spline.knots.map((knot, index) => (
               index === drag.index
                 ? {
                     ...knot,
-                    tangent_in: [-tangentOut[0], -tangentOut[1], 0] as [number, number, number],
+                    // Rust spline fitting expects manual in/out tangents to be
+                    // stored with the same direction at a knot.
+                    tangent_in: tangentOut,
                     tangent_out: tangentOut,
+                    tangent_mode: 'Manual' as const,
                   }
                 : knot
             )),
           };
         }
 
+        // Always update the spline state so control point markers track the mouse.
         viewState.setGeometryEditSpline(updatedSpline);
-        if (viewState.geometryEditRoadId) {
+        // Only trigger road mesh preview if no preview is currently in-flight.
+        // When the in-flight preview finishes, it will catch up with the latest spline.
+        if (viewState.geometryEditRoadId && !isPreviewingRoadRef.current) {
           previewEditedRoad(viewState.geometryEditRoadId, updatedSpline, 8.0);
         }
       }
@@ -261,7 +377,7 @@ export function useGeometryEditMode({
 
     if (bestHit) {
       // Clicked on an existing knot or tangent handle
-      selectedEditKnotRef.current = bestHit.type === 'knot' ? bestHit : selectedEditKnotRef.current;
+      selectedEditKnotRef.current = bestHit;
       viewState.setDraggingKnot(bestHit);
       renderer.lockCamera();
       canvas.style.cursor = 'grabbing';
@@ -275,14 +391,18 @@ export function useGeometryEditMode({
     const insertThreshold = INSERT_KNOT_THRESHOLD_PX * mpp;
     const nearest = findNearestSplinePoint(worldPos.x, worldPos.y, knots, tangentOverrides);
     if (nearest && nearest.dist <= insertThreshold) {
-      // Insert a new Key knot at the nearest curve point
+      // Insert a new Key knot at the nearest curve point.
+      // Interpolate s between adjacent knots based on segment-local t.
+      const prevS = spline.knots[nearest.segIndex]?.s ?? 0;
+      const nextS = spline.knots[nearest.segIndex + 1]?.s ?? prevS;
+      const interpS = prevS + (nextS - prevS) * nearest.t;
       const newKnot: SplineKnot = {
         position: nearest.pos,
         tangent_in: [0, 0, 0],
         tangent_out: [0, 0, 0],
         tangent_mode: 'Auto',
         knot_type: 'Key',
-        s: 0,
+        s: interpS,
       };
       const newKnots = [
         ...spline.knots.slice(0, nearest.segIndex + 1),
@@ -340,6 +460,20 @@ export function useGeometryEditMode({
         const editData = spline.knots
           .filter((k) => k.knot_type !== 'Intermediate')
           .map((k) => k.position);
+        // Mark that the upcoming project change is from our own commit (not undo/redo).
+        selfCommitRef.current = true;
+        const currentProject = useProjectStore.getState().project;
+        const baseRoad = currentProject.roads.find((r) => r.id === roadId);
+        if (baseRoad) {
+          const commitRoad = { ...baseRoad, plan_view: geometries, length: totalLength };
+          const singleProject = { ...currentProject, roads: [commitRoad] };
+          // Update center line to reflect the final committed geometry.
+          const centerLineVerts = await service.generateCenterLineVertices(singleProject, 2.0);
+          if (centerLineVerts.length > 0) {
+            const recolored = recolorVertices(centerLineVerts, 0.961, 0.651, 0.137, 1.0);
+            rendererRef.current?.setCurveFromVertexData(recolored);
+          }
+        }
         useProjectStore.getState().updateRoadGeometry(roadId, geometries, totalLength, editData);
       } catch (err) {
         console.error('[Viewport] Failed to update road geometry:', err);

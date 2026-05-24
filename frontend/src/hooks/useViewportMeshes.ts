@@ -217,6 +217,7 @@ export function useViewportMeshes({
   const cachedLaneBoundaryVertsRef = useRef<Float32Array>(new Float32Array(0));
   const cachedRoadMarkVertsRef = useRef<Float32Array>(new Float32Array(0));
   const lineDepsKeyRef = useRef<string>('');
+  const lineProjectRef = useRef<Project | null>(null);
 
   const updateLineMesh = useCallback(async () => {
     const renderer = rendererRef.current;
@@ -229,10 +230,11 @@ export function useViewportMeshes({
 
       // Check if underlying data changed — viewMode NOT included (all layers cached regardless)
       const lineKey = dataDisplayKey + ':' + projectLoadVersion;
-      const dataChanged = lineKey !== lineDepsKeyRef.current;
+      const dataChanged = lineKey !== lineDepsKeyRef.current || visibleProject !== lineProjectRef.current;
 
       if (dataChanged) {
         lineDepsKeyRef.current = lineKey;
+        lineProjectRef.current = visibleProject;
 
         // Exclude connector roads from line rendering
         const nonConnectorProject = {
@@ -302,6 +304,7 @@ export function useViewportMeshes({
     cachedLaneBoundaryVertsRef.current = new Float32Array(0);
     cachedRoadMarkVertsRef.current = new Float32Array(0);
     lineDepsKeyRef.current = '';
+    lineProjectRef.current = null;
   }, [projectLoadVersion, status]);
 
   // ── Overlay mesh (bridge/tunnel structures) ────────────────────────────

@@ -71,19 +71,34 @@ export class MarkerRenderer {
     mpp: number,
     clearColor: { r: number; g: number; b: number; a: number },
     isDrawMode = false,
+    skipCurve = false,
   ): void {
     this.drawMode = isDrawMode;
-    this.disposeMeshes(this.splineCurveMeshes);
+    // When skipCurve=true, preserve existing curve meshes (center line uploaded
+    // separately via setCurveFromVertexData). Only dispose when we'll rebuild.
+    if (!skipCurve) {
+      this.disposeMeshes(this.splineCurveMeshes);
+    }
     this.disposeMeshes(this.splineMarkerMeshes);
     this.splineKnotsCache = knots;
     this.splineTangentCache = tangentOverrides;
     this.hoveredControlPoint = null;
     this.selectedControlPoint = null;
 
-    if (knots.length === 0) return;
+    if (knots.length === 0) {
+      // Clear everything when no knots
+      if (skipCurve) {
+        this.disposeMeshes(this.splineCurveMeshes);
+      }
+      return;
+    }
 
     // In draw mode, skip the yellow Hermite curve — the road shape is already
     // visualised as lane-boundary + center-line by useSplineDrawPreview.
+    // In geometry-edit mode (skipCurve=true), always rebuild the synchronous
+    // Hermite curve from the current tangent overrides so tangent handle drags
+    // give immediate visual feedback. setCurveFromVertexData() will replace it
+    // with the exact WASM center-line once the async preview completes.
     if (!isDrawMode) {
       this.refreshSplineCurve(mpp);
     }
@@ -128,6 +143,24 @@ export class MarkerRenderer {
     const thresholdMeters = 10.0 * mpp;
     const positions = computeControlPointPositions(this.splineKnotsCache, this.splineTangentCache ?? {}, this.splineTangentInCache, mpp);
     return pickControlPointFn(wx, wy, positions, thresholdMeters);
+  }
+
+  /**
+   * Upload pre-computed curve vertex data (e.g. road center line) as the spline
+   * curve mesh. Replaces any existing Hermite curve. Vertex format: 7 floats per
+   * vertex (x, y, z, r, g, b, a), triangle-list.
+   */
+  setCurveFromVertexData(data: Float32Array): void {
+    this.disposeMeshes(this.splineCurveMeshes);
+    if (!this.device || data.length === 0) return;
+    const buffer = this.device.createBuffer({
+      size: data.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      mappedAtCreation: true,
+    });
+    new Float32Array(buffer.getMappedRange()).set(data);
+    buffer.unmap();
+    this.splineCurveMeshes.push({ vertexBuffer: buffer, vertexCount: data.length / 7 });
   }
 
   dispose(): void {

@@ -29,7 +29,6 @@ const GPU_BUFFER_HEADROOM = 2.0;
  *  is reallocated to `requiredBytes × GPU_BUFFER_HEADROOM`. */
 const GPU_BUFFER_SHRINK_THRESHOLD = 0.25;
 
-import { applyHandleDrag } from './tangentHandleController';
 import type { ControlPointRef } from './tangentHandleController';
 import {
   createGridPipeline as createGridPipelineFn,
@@ -69,12 +68,8 @@ export class ViewportRenderer {
   // Bridge/tunnel overlay meshes (rendered above road surface)
   private overlayMeshes: RenderableMesh[] = [];
 
-  // Callbacks for tangent handle drag interaction (Phase 1.8)
-  private onTangentChanged: ((index: number, tangent: [number, number, number]) => void) | null = null;
+  // Callback for hover detection on spline control points
   private onControlPointHovered: ((ref: ControlPointRef | null) => void) | null = null;
-  private onControlPointSelected: ((ref: ControlPointRef | null) => void) | null = null;
-  // Active handle drag state
-  private activeDragHandle: ControlPointRef | null = null;
   private width = 0;
   private height = 0;
   private renderLoop: RenderLoop | null = null;
@@ -137,17 +132,12 @@ export class ViewportRenderer {
   }
 
   /**
-   * Register callbacks for tangent handle / knot drag interaction (Phase 1.8).
-   * Pass null to remove a callback.
+   * Register hover callback for spline control points.
    */
   setControlPointCallbacks(callbacks: {
-    onTangentChanged?: ((index: number, tangent: [number, number, number]) => void) | null;
     onControlPointHovered?: ((ref: ControlPointRef | null) => void) | null;
-    onControlPointSelected?: ((ref: ControlPointRef | null) => void) | null;
   }): void {
-    if ('onTangentChanged' in callbacks) this.onTangentChanged = callbacks.onTangentChanged ?? null;
     if ('onControlPointHovered' in callbacks) this.onControlPointHovered = callbacks.onControlPointHovered ?? null;
-    if ('onControlPointSelected' in callbacks) this.onControlPointSelected = callbacks.onControlPointSelected ?? null;
   }
 
   /**
@@ -467,8 +457,19 @@ export class ViewportRenderer {
     knots: Array<[number, number, number]>,
     tangentOverrides?: Record<number, [number, number, number]>,
     isDrawMode = false,
+    skipCurve = false,
   ): void {
-    this.markerRenderer.setSplinePreviewKnots(knots, tangentOverrides, this.getMetersPerPixel(), this.clearColor, isDrawMode);
+    this.markerRenderer.setSplinePreviewKnots(knots, tangentOverrides, this.getMetersPerPixel(), this.clearColor, isDrawMode, skipCurve);
+    this.markSceneDirty();
+  }
+
+  /**
+   * Upload pre-computed curve vertex data (e.g. road center line from WASM)
+   * as the spline curve mesh. Used in geometry-edit mode where the connecting
+   * line should be the actual road reference line, not a Hermite approximation.
+   */
+  setCurveFromVertexData(data: Float32Array): void {
+    this.markerRenderer.setCurveFromVertexData(data);
     this.markSceneDirty();
   }
 
@@ -820,7 +821,7 @@ export class ViewportRenderer {
     };
 
     canvas.addEventListener('mousemove', (e) => {
-      if (this.cameraController.pointerDragging || this.activeDragHandle) return;
+      if (this.cameraController.pointerDragging) return;
       if (this.markerRenderer.knotCount === 0) return;
       const rect = canvas.getBoundingClientRect();
       const sx = e.clientX - rect.left;
@@ -833,54 +834,15 @@ export class ViewportRenderer {
     });
 
     canvas.addEventListener('mousedown', (e) => {
+      // If clicking on a spline control point (knot or tangent handle), skip camera
+      // drag so the React geometry-edit layer can handle the interaction and
+      // regenerate road mesh during drag.
       if (e.button === 0 && this.markerRenderer.knotCount >= 2) {
         const rect = canvas.getBoundingClientRect();
         const sx = e.clientX - rect.left;
         const sy = e.clientY - rect.top;
         const hit = this.pickControlPointAtScreen(sx, sy);
-        if (hit && (hit.type === 'in' || hit.type === 'out')) {
-          this.activeDragHandle = hit;
-          this.onControlPointSelected?.(hit);
-          this.refreshSplineMarkers(undefined, hit);
-          canvas.style.cursor = 'crosshair';
-          e.stopPropagation();
-
-          detachDocListeners();
-          onDocMove = (me: MouseEvent) => {
-            if (!this.activeDragHandle) return;
-            const rect2 = canvas.getBoundingClientRect();
-            const sx2 = me.clientX - rect2.left;
-            const sy2 = me.clientY - rect2.top;
-            const world = this.unprojectToGround(sx2, sy2);
-            if (!world) return;
-            const newOverrides = applyHandleDrag(
-              this.activeDragHandle,
-              world.x,
-              world.y,
-              this.markerRenderer.knots,
-              this.markerRenderer.tangentOverrides,
-              {},
-            );
-            this.markerRenderer.setTangentOverrides(newOverrides.out);
-            const idx = this.activeDragHandle.index;
-            const tangent = newOverrides.out[idx];
-            if (tangent) this.onTangentChanged?.(idx, tangent);
-            const mpp = this.getMetersPerPixel();
-            this.markerRenderer.refreshSplineCurve(mpp);
-            this.markerRenderer.refreshSplineMarkers(mpp, this.clearColor);
-            this.markSceneDirty();
-          };
-
-          onDocUp = () => {
-            canvas.style.cursor = '';
-            this.activeDragHandle = null;
-            detachDocListeners();
-          };
-
-          document.addEventListener('mousemove', onDocMove);
-          document.addEventListener('mouseup', onDocUp);
-          return;
-        }
+        if (hit) return;
       }
 
       if (!this.cameraController.beginPointerDrag(e.button, e)) return;
