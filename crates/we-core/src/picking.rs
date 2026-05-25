@@ -400,8 +400,13 @@ pub fn pick_lane(
     pick_lane_with_index(project, &index, x, y, threshold)
 }
 
-/// Compute the minimum distance from a point to a road's reference line,
-/// considering the road's full width.
+/// Compute the minimum distance from a point to a road's surface.
+///
+/// Uses point-to-segment projection between consecutive reference line samples
+/// for precise closest-point computation. When the point is within the road
+/// surface, returns a small fractional value (`|t| / half_width * 0.001`) to
+/// discriminate between overlapping roads (preferring the road whose reference
+/// line is closer to the query point).
 fn distance_to_road(road: &Road, x: f64, y: f64) -> Option<PickResult> {
     let ref_pts = sample_road_reference_line(road, 2.0);
     if ref_pts.is_empty() {
@@ -412,52 +417,122 @@ fn distance_to_road(road: &Road, x: f64, y: f64) -> Option<PickResult> {
     let mut best_s = 0.0;
     let mut best_t = 0.0;
 
-    for pt in &ref_pts {
-        // Compute perpendicular distance to reference line
-        let dx = x - pt.x;
-        let dy = y - pt.y;
-        // Project onto normal/tangent frame
-        let cos_h = pt.hdg.cos();
-        let sin_h = pt.hdg.sin();
-        // tangent component (along road)
-        let along = dx * cos_h + dy * sin_h;
-        // normal component (perpendicular, positive = left)
-        let perp = -dx * sin_h + dy * cos_h;
+    // Project query point onto each segment between consecutive reference line samples
+    for i in 0..ref_pts.len().saturating_sub(1) {
+        let p0 = &ref_pts[i];
+        let p1 = &ref_pts[i + 1];
 
-        // Use perpendicular distance as base, add penalty for out-of-segment
-        let dist = (along * along + perp * perp).sqrt();
+        let seg_dx = p1.x - p0.x;
+        let seg_dy = p1.y - p0.y;
+        let seg_len_sq = seg_dx * seg_dx + seg_dy * seg_dy;
+
+        if seg_len_sq < 1e-12 {
+            continue;
+        }
+
+        // Parameter t along segment [0, 1]
+        let qx = x - p0.x;
+        let qy = y - p0.y;
+        let param = ((qx * seg_dx + qy * seg_dy) / seg_len_sq).clamp(0.0, 1.0);
+
+        // Closest point on segment
+        let cx = p0.x + param * seg_dx;
+        let cy = p0.y + param * seg_dy;
+
+        let dx = x - cx;
+        let dy = y - cy;
+        let dist = (dx * dx + dy * dy).sqrt();
 
         if dist < best_dist {
             best_dist = dist;
-            best_s = pt.s;
-            best_t = perp;
+            // Interpolate s
+            best_s = p0.s + param * (p1.s - p0.s);
+            // Compute signed perpendicular offset (t) using segment normal
+            // positive = left of travel direction, negative = right
+            let seg_len = seg_len_sq.sqrt();
+            let nx = -seg_dy / seg_len; // left normal
+            let ny = seg_dx / seg_len;
+            best_t = (x - cx) * nx + (y - cy) * ny;
         }
     }
 
-    if best_dist < f64::MAX {
-        // Adjust distance by road width — if point is within road surface,
-        // effective distance is reduced
-        let half_width = road_half_width_at(road, best_s);
-        let effective_dist = (best_t.abs() - half_width).max(0.0);
-        // Also consider along-road distance for endpoints
-        let clamped_dist = if best_dist < half_width * 2.0 {
-            effective_dist
-        } else {
-            best_dist
-        };
+    // Also check distance to the last sample point (for single-point roads or endpoints)
+    if ref_pts.len() == 1 {
+        let pt = &ref_pts[0];
+        let dx = x - pt.x;
+        let dy = y - pt.y;
+        let dist = (dx * dx + dy * dy).sqrt();
+        if dist < best_dist {
+            best_dist = dist;
+            best_s = pt.s;
+            let cos_h = pt.hdg.cos();
+            let sin_h = pt.hdg.sin();
+            best_t = -dx * sin_h + dy * cos_h;
+        }
+    }
 
+    if best_dist >= f64::MAX {
+        return None;
+    }
+
+    // Get the road half-width on the relevant side
+    let half_width = road_half_width_at_side(road, best_s, best_t);
+
+    if best_t.abs() <= half_width {
+        // Point is ON the road surface — use a small fractional distance
+        // proportional to how far from the reference line it is, so that
+        // overlapping roads are disambiguated (closer to center = smaller distance).
+        let normalized = best_t.abs() / half_width.max(0.01);
         Some(PickResult {
             id: road.id.clone(),
-            distance: clamped_dist,
+            distance: normalized * 0.001,
             s: best_s,
             t: best_t,
         })
     } else {
-        None
+        // Point is outside road surface — return perpendicular distance beyond edge
+        let edge_dist = best_t.abs() - half_width;
+        Some(PickResult {
+            id: road.id.clone(),
+            distance: edge_dist,
+            s: best_s,
+            t: best_t,
+        })
     }
 }
 
-/// Estimate the half-width of a road at a given station s.
+/// Estimate the half-width of a road at a given station s, on the side where
+/// the query point falls (left if t > 0, right if t < 0).
+fn road_half_width_at_side(road: &Road, s: f64, t: f64) -> f64 {
+    let section = road.lane_sections.iter().rev().find(|ls| ls.s <= s + 1e-9);
+
+    match section {
+        Some(sec) => {
+            let ds = s - sec.s;
+            if t >= 0.0 {
+                // Point is on the left side
+                let left_width: f64 = sec
+                    .left
+                    .iter()
+                    .map(|l| evaluate_lane_width(&l.width, ds))
+                    .sum();
+                if left_width > 0.0 { left_width } else { 3.5 }
+            } else {
+                // Point is on the right side
+                let right_width: f64 = sec
+                    .right
+                    .iter()
+                    .map(|l| evaluate_lane_width(&l.width, ds))
+                    .sum();
+                if right_width > 0.0 { right_width } else { 3.5 }
+            }
+        }
+        None => 3.5, // default single lane width
+    }
+}
+
+/// Estimate the half-width of a road at a given station s (max of both sides).
+#[cfg(test)]
 fn road_half_width_at(road: &Road, s: f64) -> f64 {
     // Find applicable lane section
     let section = road.lane_sections.iter().rev().find(|ls| ls.s <= s + 1e-9);
@@ -755,5 +830,109 @@ mod tests {
         let mut cache = ProjectCache::new(project);
         let result = pick_object_cached(&mut cache, 200.0, 200.0, 5.0);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_pick_road_overlapping_prefers_closer_centerline() {
+        // Two parallel roads at y=0 and y=5, both with 3.5m half-width.
+        // Point at (50, 4) is within road2's surface (5-3.5=1.5 < 4 < 5+3.5=8.5)
+        // and within road1's surface if half-width extends to it (0+3.5=3.5 < 4).
+        // Actually point at y=4 is outside road1 (half_width=3.5, so edge at y=3.5)
+        // and inside road2 (edge from y=1.5 to y=8.5). Should pick road2.
+        let mut project = Project::default();
+        project.roads.push(make_straight_road("1", 100.0));
+        let road2 = Road::from_centerline(
+            "2",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 5.0,
+                hdg: 0.0,
+                length: 100.0,
+                geo_type: GeometryType::Line,
+            }],
+        );
+        project.roads.push(road2);
+        // Point at y=4, closer to road2's centerline (dist=1) vs road1's (dist=4)
+        let result = pick_road(&project, 50.0, 4.0, 10.0);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, "2");
+    }
+
+    #[test]
+    fn test_pick_road_crossing_prefers_closer_centerline() {
+        // Road 1 goes horizontal (hdg=0) through (0,0)→(100,0)
+        // Road 2 goes at 45° through (50,0) crossing road 1
+        let mut project = Project::default();
+        project.roads.push(make_straight_road("1", 100.0));
+        let road2 = Road::from_centerline(
+            "2",
+            vec![Geometry {
+                s: 0.0,
+                x: 50.0,
+                y: -20.0,
+                hdg: std::f64::consts::FRAC_PI_2, // heading up (north)
+                length: 40.0,
+                geo_type: GeometryType::Line,
+            }],
+        );
+        project.roads.push(road2);
+        // Point at (50, 1): on road1's surface (t=1, within 3.5)
+        //                    and on road2's surface (perpendicular dist ~0, within 3.5)
+        // Road2's reference line passes through (50, -20) → (50, 20) at x=50
+        // At (50, 1), road2's centerline is exactly at x=50, so t≈0 for road2
+        // road1's centerline is at y=0, so t=1 for road1
+        // Should prefer road2 (t=0) over road1 (t=1)
+        let result = pick_road(&project, 50.0, 1.0, 10.0);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, "2");
+    }
+
+    #[test]
+    fn test_pick_road_on_centerline_has_minimum_distance() {
+        // A point directly on the reference line should have distance ≈ 0
+        let mut project = Project::default();
+        project.roads.push(make_straight_road("1", 100.0));
+        let result = pick_road(&project, 50.0, 0.0, 10.0);
+        assert!(result.is_some());
+        let r = result.unwrap();
+        assert!(r.distance < 0.001, "Distance on centerline should be near-zero, got {}", r.distance);
+    }
+
+    #[test]
+    fn test_pick_road_between_samples_accurate() {
+        // Pick a point between two sample points (samples at every 2m)
+        // at s=51 (between s=50 and s=52 samples), y=0 (on centerline)
+        let mut project = Project::default();
+        project.roads.push(make_straight_road("1", 100.0));
+        let result = pick_road(&project, 51.0, 0.0, 5.0);
+        assert!(result.is_some());
+        let r = result.unwrap();
+        assert!(r.distance < 0.001, "Distance between samples should be near-zero, got {}", r.distance);
+        assert!((r.s - 51.0).abs() < 0.1, "Station should be ~51, got {}", r.s);
+    }
+
+    #[test]
+    fn test_pick_road_curved_road_precision() {
+        // Arc road: center at (0,0), curvature 0.02 (radius=50m), length=50m (about 57°)
+        let mut project = Project::default();
+        let road = Road::from_centerline(
+            "1",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 50.0,
+                geo_type: GeometryType::Arc { curvature: 0.02 },
+            }],
+        );
+        project.roads.push(road);
+        // The arc curves left (positive curvature). At s=25, the road has turned ~28.6°.
+        // The point at the center of the arc should be outside the road.
+        // A point just offset from the reference line by 1m inward (toward center) should pick.
+        let result = pick_road(&project, 10.0, 1.0, 5.0);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, "1");
     }
 }
