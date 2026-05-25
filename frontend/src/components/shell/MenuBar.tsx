@@ -16,7 +16,11 @@ import {
   Bot,
   ChevronDown,
   MousePointer,
-  Eye,
+  SplitSquareHorizontal,
+  Route,
+  PenLine,
+  Box,
+  Square,
 } from 'lucide-react';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
 import { useBuiltinPluginStore } from '../../stores/builtinPluginStore';
@@ -93,6 +97,8 @@ export function MenuBar({
     dimension,
     snapEnabled,
     measureMode,
+    selectionMode,
+    viewMode,
     layout,
     toggleLeftPanel,
     toggleRightPanel,
@@ -499,7 +505,7 @@ export function MenuBar({
               aria-haspopup="dialog"
               aria-expanded={selectionModeOpen}
             >
-              <MousePointer size={14} />
+              {selectionMode === 'lane' ? <Route size={14} /> : selectionMode === 'laneSection' ? <SplitSquareHorizontal size={14} /> : <MousePointer size={14} />}
             </button>
             <button
               className="menubar-action-btn menubar-snap-settings-trigger"
@@ -521,7 +527,7 @@ export function MenuBar({
               aria-haspopup="dialog"
               aria-expanded={viewModeOpen}
             >
-              <Eye size={14} />
+              {viewMode === 'sketch' ? <PenLine size={14} /> : viewMode === 'wire' ? <Square size={14} /> : <Box size={14} />}
             </button>
             <button
               className="menubar-action-btn menubar-snap-settings-trigger"

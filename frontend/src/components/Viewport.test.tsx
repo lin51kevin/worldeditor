@@ -43,6 +43,8 @@ const rendererMocks = vi.hoisted(() => ({
   getMetersPerPixel: vi.fn().mockReturnValue(0.1),
   applyPan: vi.fn(),
   applyZoomFactor: vi.fn(),
+  clearLinkHighlight: vi.fn(),
+  uploadLinkHighlightVertices: vi.fn(),
 }));
 
 vi.mock('../services', () => ({
@@ -94,6 +96,8 @@ vi.mock('../viewport/renderer', () => ({
       getMetersPerPixel: rendererMocks.getMetersPerPixel,
       applyPan: rendererMocks.applyPan,
       applyZoomFactor: rendererMocks.applyZoomFactor,
+      clearLinkHighlight: rendererMocks.clearLinkHighlight,
+      uploadLinkHighlightVertices: rendererMocks.uploadLinkHighlightVertices,
     })),
     { isSupported: rendererMocks.isSupported },
   ),

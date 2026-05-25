@@ -1,8 +1,7 @@
 import { useEffect, useRef, useMemo } from 'react';
-import { MapPin, Pencil } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../stores/projectStore';
-import { useViewportStore } from '../../stores/viewportStore';
 import { onCursorMove } from '../../viewport/cursorEvents';
 import './StatusBar.css';
 
@@ -21,8 +20,6 @@ export function StatusBar() {
   const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
   const selectedLaneSectionIndex = useProjectStore((s) => s.selectedLaneSectionIndex);
   const selectedLaneId = useProjectStore((s) => s.selectedLaneId);
-  const editMode = useViewportStore((s) => s.editMode);
-  const selectionMode = useViewportStore((s) => s.selectionMode);
   const { t } = useTranslation();
   const coordRef = useRef<HTMLSpanElement>(null);
 
@@ -37,8 +34,6 @@ export function StatusBar() {
 
   const scaleDist = useMemo(() => SCALE_BAR_PX * viewportMpp, [viewportMpp]);
 
-  const modeLabel = t(`statusBar.modes.${editMode}`, editMode);
-  const selectionModeLabel = t(`statusBar.selectionModes.${selectionMode}`, selectionMode);
   const selectionLabel = !selectedRoadId
     ? t('statusBar.selectionLevels.none')
     : selectedLaneId !== null
@@ -52,13 +47,6 @@ export function StatusBar() {
       <span className="statusbar-item">
         <MapPin size={11} />
         <span ref={coordRef}>{t('statusBar.worldCoord')}: 0.000, 0.000</span>
-      </span>
-      <span className="statusbar-item">
-        <Pencil size={11} />
-        <span className="statusbar-mode">{t('statusBar.mode')}: {modeLabel}</span>
-      </span>
-      <span className="statusbar-item">
-        <span>{t('statusBar.selectionMode')}: {selectionModeLabel}</span>
       </span>
       <span className="statusbar-item">
         <span>{t('statusBar.selection')}: {selectionLabel}</span>
