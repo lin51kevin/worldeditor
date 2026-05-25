@@ -249,6 +249,13 @@ export function useGeometryEditMode({
       // ── Escape: finalize edit ────────────────────────────────────────────
       if (event.key === 'Escape' && viewState.geometryEditRoadId) {
         void finalizeGeometryEdit();
+        // Ensure geometry edit is exited even if finalizeGeometryEdit returns
+        // early (e.g., spline not yet loaded). exitGeometryEdit is idempotent.
+        if (useViewportStore.getState().geometryEditRoadId) {
+          useViewportStore.getState().exitGeometryEdit();
+        }
+        // Clear selection highlight so the road is no longer highlighted
+        useProjectStore.getState().selectRoad(null);
         return;
       }
 

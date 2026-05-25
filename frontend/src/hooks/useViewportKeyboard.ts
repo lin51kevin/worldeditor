@@ -73,6 +73,7 @@ export function useViewportKeyboard(): void {
         }
         if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road' || viewState.editMode === 'editLaneLine') {
           viewState.setEditMode('default');
+          useProjectStore.getState().selectRoad(null);
           return;
         }
         const editorState = useProjectStore.getState();

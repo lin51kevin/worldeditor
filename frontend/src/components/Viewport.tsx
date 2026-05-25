@@ -62,7 +62,7 @@ export function Viewport() {
   const splitIndicatorDomRef = useRef<HTMLDivElement | null>(null);
 
   // ── Mesh lifecycle (surface + lines + visible project + WASM cache) ──
-  const { getVisibleProject, updateSurfaceMesh, updateLineMesh } = useViewportMeshes({
+  const { getVisibleProject, updateSurfaceMesh, updateLineMesh, getCachedLineVertices } = useViewportMeshes({
     rendererRef,
     status,
   });
@@ -191,6 +191,7 @@ export function Viewport() {
       void updateSurfaceMesh();
       void updateLineMesh();
     }, [updateSurfaceMesh, updateLineMesh]),
+    getCachedLineVertices,
   });
 
   // ── Selection highlight ──

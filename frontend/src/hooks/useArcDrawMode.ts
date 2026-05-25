@@ -224,7 +224,14 @@ export function useArcDrawMode({
       }
 
       if (event.key === 'Escape') {
-        viewState.clearSplineKnots();
+        if (viewState.splineKnots.length > 0) {
+          viewState.clearSplineKnots();
+        } else {
+          // No knots — exit draw mode entirely
+          viewState.setEditMode('default');
+          viewState.clearSplineKnots();
+          useProjectStore.getState().selectRoad(null);
+        }
         return;
       }
 

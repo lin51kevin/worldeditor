@@ -1,9 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { useViewportStore } from '../stores/viewportStore';
-import { useProjectStore } from '../stores/projectStore';
 import { getPlatformService } from '../services';
 import { buildEditableSpline } from '../components/viewportUtils';
-import { buildRenderableProject } from '../utils/sceneGraph';
 import { resolveWasmTemplateId } from './useSplineOperations';
 import { loadCatalog, buildLaneSection } from '../plugins/editing/templates/index';
 import type { ViewportRenderer } from '../viewport/renderer';
@@ -48,19 +46,19 @@ export function useSplineDrawPreview({
   rendererRef,
   status,
   onPreviewEnd,
+  getCachedLineVertices,
 }: {
   rendererRef: RefObject<ViewportRenderer | null>;
   status: ViewportStatus;
   /** Called when the preview has been removed and the real scene should be restored. */
   onPreviewEnd: () => void;
+  /** Returns the cached line vertices for existing roads (from useViewportMeshes). */
+  getCachedLineVertices: () => Float32Array;
 }) {
   const editMode = useViewportStore((s) => s.editMode);
   const splineKnots = useViewportStore((s) => s.splineKnots);
   const splineTemplateId = useViewportStore((s) => s.splineTemplateId);
   const cursorPreviewPos = useViewportStore((s) => s.cursorPreviewPos);
-  const project = useProjectStore((s) => s.project);
-  const display = useViewportStore((s) => s.display);
-  const viewMode = useViewportStore((s) => s.viewMode);
 
   // Generate and upload preview lane lines whenever draw-mode knots or cursor position changes.
   useEffect(() => {
@@ -110,32 +108,20 @@ export function useSplineDrawPreview({
 
         const singleRoadProject = { ...previewProject, roads: [previewRoadWithLanes] };
 
-        // Generate BOTH the existing project's lane lines AND the preview road's.
-        // This ensures existing roads stay visible while drawing.
-        const visibleProject = project ? buildRenderableProject(project, display) : null;
+        // Generate ONLY the preview road's line vertices.
+        // Reuse the cached existing-road lines to avoid regeneration artifacts.
         const empty = new Float32Array(0);
 
-        const [previewLaneVerts, previewCenterVerts, existingLaneVerts, existingCenterVerts, existingMarkVerts] = await Promise.all([
+        const [previewLaneVerts, previewCenterVerts] = await Promise.all([
           service.generateLaneBoundaryVertices(singleRoadProject, 2.0).catch(() => empty),
           service.generateCenterLineVertices(singleRoadProject, 2.0).catch(() => empty),
-          visibleProject && viewMode !== 'solid'
-            ? service.generateLaneBoundaryVertices(visibleProject, 2.0).catch(() => empty)
-            : empty,
-          visibleProject && (display.showReferenceLine || viewMode !== 'solid')
-            ? service.generateCenterLineVertices(visibleProject, 2.0).catch(() => empty)
-            : empty,
-          visibleProject && (viewMode === 'wire' || display.showLaneLines)
-            ? service.generateLaneLineVertices(visibleProject, 2.0).catch(() => empty)
-            : empty,
         ]);
         if (cancelled) return;
 
-        // Merge existing project lines with preview road lines.
+        // Merge cached existing road lines with preview road lines.
+        const existingLineVerts = getCachedLineVertices();
         const combined = mergeFloat32Arrays(
-          mergeFloat32Arrays(
-            mergeFloat32Arrays(existingLaneVerts, existingMarkVerts),
-            existingCenterVerts,
-          ),
+          existingLineVerts,
           mergeFloat32Arrays(previewLaneVerts, previewCenterVerts),
         );
         renderer.uploadLaneLineVertices(combined);
@@ -145,7 +131,7 @@ export function useSplineDrawPreview({
     })();
 
     return () => { cancelled = true; };
-  }, [editMode, splineKnots, cursorPreviewPos, splineTemplateId, rendererRef, status, project, display, viewMode]);
+  }, [editMode, splineKnots, cursorPreviewPos, splineTemplateId, rendererRef, status, getCachedLineVertices]);
 
   // Restore real project vertices when the preview is discarded (knots cleared,
   // e.g., after Escape or finalization).

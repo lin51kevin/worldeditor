@@ -160,14 +160,15 @@ export function App() {
     },
     onEscape: () => {
       // In draw modes: 1st Escape clears in-progress knots (stays in mode),
-      //               2nd Escape (no knots left) returns to default.
-      // In all other modes: immediately return to default.
+      //               2nd Escape (no knots left) returns to default + clears selection.
+      // In all other modes: immediately return to default + clear selection.
       const { editMode: current, splineKnots } = useViewportStore.getState();
       if (isDrawMode(current) && splineKnots.length > 0) {
         clearSplineKnots();
       } else {
         setEditMode('default');
         clearSplineKnots();
+        useProjectStore.getState().selectRoad(null);
       }
     },
     onDeleteSelected: () => useProjectStore.getState().deleteSelected(),

@@ -33,6 +33,8 @@ interface UseViewportMeshesReturn {
   updateLineMesh: () => Promise<void>;
   /** Regenerate bridge/tunnel overlay mesh. */
   updateOverlayMesh: () => Promise<void>;
+  /** Get the last-uploaded merged line vertices for existing roads (used by draw preview). */
+  getCachedLineVertices: () => Float32Array;
 }
 
 export function useViewportMeshes({
@@ -216,6 +218,7 @@ export function useViewportMeshes({
   const cachedCenterLineVertsRef = useRef<Float32Array>(new Float32Array(0));
   const cachedLaneBoundaryVertsRef = useRef<Float32Array>(new Float32Array(0));
   const cachedRoadMarkVertsRef = useRef<Float32Array>(new Float32Array(0));
+  const lastUploadedLineVertsRef = useRef<Float32Array>(new Float32Array(0));
   const lineDepsKeyRef = useRef<string>('');
   const lineProjectRef = useRef<Project | null>(null);
 
@@ -270,6 +273,7 @@ export function useViewportMeshes({
         }
       }
       renderer.uploadLaneLineVertices(lineVerts);
+      lastUploadedLineVertsRef.current = lineVerts;
     } catch (err) {
       console.error('[Viewport] Failed to generate line mesh:', err);
     }
@@ -332,10 +336,15 @@ export function useViewportMeshes({
     }
   }, [project, status, display.hiddenRoadIds]);
 
+  // ── Expose cached line vertices for draw preview ────────────────────────
+  const getCachedLineVertices = useCallback((): Float32Array => {
+    return lastUploadedLineVertsRef.current;
+  }, []);
+
   // ── Trigger mesh updates when deps change ──────────────────────────────
   useEffect(() => { updateSurfaceMesh(); }, [updateSurfaceMesh]);
   useEffect(() => { updateLineMesh(); }, [updateLineMesh]);
   useEffect(() => { void updateOverlayMesh(); }, [updateOverlayMesh]);
 
-  return { getVisibleProject, updateSurfaceMesh, updateLineMesh, updateOverlayMesh };
+  return { getVisibleProject, updateSurfaceMesh, updateLineMesh, updateOverlayMesh, getCachedLineVertices };
 }
