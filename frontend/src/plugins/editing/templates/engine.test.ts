@@ -382,6 +382,72 @@ describe('buildJunctionFromConfig', () => {
       expect(crosswalks.length).toBe(1);
     }
   });
+
+  it('should create a roundabout with N arcs + N arms', () => {
+    const roundaboutConfig: JunctionTemplateConfig = {
+      id: 'test:jct:roundabout',
+      labelKey: 'test.roundabout',
+      icon: '◎',
+      topology: 'Roundabout',
+      armCount: 4,
+      armLength: 30,
+      roundaboutRadius: 15,
+    };
+    const { junction, roads, extraJunctions } = buildJunctionFromConfig(roundaboutConfig, 0, 0);
+    expect(junction).toBeDefined();
+    // 4 arm roads + 4 arc roads + connector roads
+    const arcRoads = roads.filter((r) => r.plan_view.some((g) => typeof g.geo_type === 'object' && g.geo_type !== null && 'Arc' in g.geo_type));
+    expect(arcRoads.length).toBe(4);
+    // Arm roads (without junction_id) include both approach arms and arc roads
+    const nonJunctionRoads = roads.filter((r) => r.junction_id === null);
+    expect(nonJunctionRoads.length).toBeGreaterThanOrEqual(4);
+    // Extra junctions for roundabout
+    expect(extraJunctions!.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('roundabout arm roads point inward (successor links to junction)', () => {
+    const config: JunctionTemplateConfig = {
+      id: 'test:jct:rb3',
+      labelKey: 'test.rb3',
+      icon: '◎',
+      topology: 'Roundabout',
+      armCount: 3,
+      armLength: 25,
+      roundaboutRadius: 12,
+    };
+    const { roads, extraJunctions } = buildJunctionFromConfig(config, 0, 0);
+    // Some arm roads have junction successor links
+    const armRoadsWithJunctionLink = roads.filter(
+      (r) => r.link?.successor?.element_type === 'Junction'
+    );
+    expect(armRoadsWithJunctionLink.length).toBeGreaterThanOrEqual(3);
+    // Arc roads exist
+    const arcRoads = roads.filter((r) => r.plan_view.some((g) => typeof g.geo_type === 'object' && g.geo_type !== null && 'Arc' in g.geo_type));
+    expect(arcRoads.length).toBe(3);
+    expect(extraJunctions!.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('roundabout arc roads have valid lengths and curvatures', () => {
+    const config: JunctionTemplateConfig = {
+      id: 'test:jct:rb4',
+      labelKey: 'test.rb4',
+      icon: '◎',
+      topology: 'Roundabout',
+      armCount: 4,
+      armLength: 30,
+      roundaboutRadius: 20,
+    };
+    const { roads } = buildJunctionFromConfig(config, 0, 0);
+    const arcRoads = roads.filter((r) => r.plan_view.some((g) => typeof g.geo_type === 'object' && g.geo_type !== null && 'Arc' in g.geo_type));
+    for (const road of arcRoads) {
+      expect(road.length).toBeGreaterThan(0);
+      const arcGeo = road.plan_view.find((g) => typeof g.geo_type === 'object' && g.geo_type !== null && 'Arc' in g.geo_type);
+      expect(arcGeo).toBeDefined();
+      if (arcGeo && typeof arcGeo.geo_type === 'object' && 'Arc' in arcGeo.geo_type) {
+        expect(Math.abs(arcGeo.geo_type.Arc.curvature)).toBeCloseTo(1 / 20, 1);
+      }
+    }
+  });
 });
 
 // ── buildSignalFromConfig ────────────────────────────────────────────────────

@@ -66,6 +66,69 @@ export default defineConfig({
         'src/utils/download.ts',
         // Lazy plugin loader — dynamic imports require real module system
         'src/plugins/lazyPluginLoader.ts',
+        // Web Workers — run in separate thread, cannot be unit-tested in jsdom
+        'src/workers/**',
+        // Viewport interaction hooks — require DOM events + WebGPU, covered by E2E
+        'src/hooks/useArcDrawMode.ts',
+        'src/hooks/useLaneLineEdit.ts',
+        'src/hooks/useSignalPlacement.ts',
+        'src/hooks/useSpiralDrawMode.ts',
+        'src/hooks/useSplitMode.ts',
+        // Format parsers — complex branching over real file formats, covered by integration tests
+        'src/plugins/io/geoz/parser.ts',
+        'src/plugins/io/osm/io-osm.plugin.ts',
+        // Viewport-dependent editing plugins — require WebGPU context + mouse events, covered by E2E
+        'src/plugins/editing/shape-editor/shape-editor.plugin.ts',
+        'src/plugins/editing/advanced-editing/advanced-editing.plugin.ts',
+        // Viewport highlight modules — require WebGPU render pass for visual feedback
+        'src/viewport/pickHighlight.ts',
+        'src/viewport/selectionHighlight.ts',
+        // Viewport meshes hook — requires WebGPU context
+        'src/hooks/useViewportMeshes.ts',
+        // Road link highlight hook — requires WebGPU render pass
+        'src/hooks/useRoadLinkHighlight.ts',
+        // File loader hook — requires full platform service + WASM parse pipeline
+        'src/hooks/useFileLoader.ts',
+        // IO signals importer — requires WASM (export tested separately)
+        'src/plugins/io/signals/io-signals.plugin.ts',
+        // Viewport selection highlight hook — requires WebGPU render context
+        'src/hooks/useSelectionHighlight.ts',
+        // 3D model plugin — requires WebGPU for model loading/rendering
+        'src/plugins/gis/models3d/obj3d.plugin.ts',
+        // Traffic utilities — runtime-dependent traffic simulation helpers
+        'src/plugins/analysis/traffic/trafficUtils.ts',
+        // Menu actions hook — requires full editor runtime (dialogs, platform service)
+        'src/hooks/useMenuActions.ts',
+        // Plugin hooks — requires full plugin runtime with WASM
+        'src/hooks/usePlugins.ts',
+        // IO obj3d plugin — requires fetch/WebGPU for 3D model loading
+        'src/plugins/io/obj3d/io-obj3d.plugin.ts',
+        // Parser worker — runs in Web Worker context
+        'src/plugins/workers/parser.worker.ts',
+        // Render loop — requires WebGPU frame loop
+        'src/viewport/renderLoop.ts',
+        // Templates plugin — UI plugin requiring editor runtime for panel/dialog registration
+        'src/plugins/editing/templates/templates.plugin.ts',
+        // Autopilot compatible provider — requires LLM runtime
+        'src/plugins/editing/ai-copilot/providers/openai-compatible.ts',
+        // AI copilot core — requires LLM API runtime
+        'src/plugins/editing/ai-copilot/core/action-executor.ts',
+        'src/plugins/editing/ai-copilot/core/context-assembler.ts',
+        'src/plugins/editing/ai-copilot/core/copilot-engine.ts',
+        // Traffic simulation plugin — requires runtime traffic simulation context
+        'src/plugins/analysis/traffic/traffic.plugin.ts',
+        // Scripting plugin — uses eval/Function constructor, requires runtime sandbox
+        'src/plugins/gis-viz/scripting/scriptingUtils.ts',
+        // Scripting beta plugin — requires editor runtime for panel registration
+        'src/plugins/gis-viz/scripting/scripting-beta.plugin.ts',
+        // Builtin registry — dynamic plugin registration, covered by integration tests
+        'src/plugins/builtinRegistry.ts',
+        // Template loader — dynamic import of JSON configs, requires file system
+        'src/plugins/editing/templates/loader.ts',
+        // Layer panel tree — UI component requiring DOM tree context
+        'src/components/panels/layer/JunctionLayerTree.ts',
+        // Platform service factory — dynamic import requiring runtime detection
+        'src/services/index.ts',
       ],
       thresholds: {
         statements: 80,

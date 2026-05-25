@@ -14,4 +14,22 @@ describe('polyFit', () => {
     expect(actual.c).toBeCloseTo(expected.c, 6);
     expect(actual.d).toBeCloseTo(expected.d, 6);
   });
+
+  it('returns zero polynomial for empty input', () => {
+    const result = refitLaneWidth([], [], 0, 10);
+    expect(result.a).toBe(0);
+    expect(result.b).toBe(0);
+    expect(result.c).toBe(0);
+    expect(result.d).toBe(0);
+  });
+
+  it('handles single-point input gracefully', () => {
+    const result = refitLaneWidth([5], [3.5], 0, 10);
+    // Single point: polynomial degenerates but should not throw
+    expect(Number.isFinite(result.a)).toBe(true);
+  });
+
+  it('evaluateCubicPolynomial computes correctly', () => {
+    expect(evaluateCubicPolynomial({ a: 1, b: 2, c: 3, d: 4 }, 2)).toBe(1 + 4 + 12 + 32);
+  });
 });

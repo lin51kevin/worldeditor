@@ -333,4 +333,43 @@ describe('laneSlice', () => {
       expect(profile).toHaveLength(0);
     });
   });
+
+  describe('multi-road isolation', () => {
+    it('operations on one road do not affect another road', () => {
+      const store = useProjectStore.getState();
+      store.addRoad(makeRoadWithLane());
+      store.addRoad({ ...makeRoadWithLane(), id: 'r2', name: 'Road 2' });
+
+      // Update lane type on r1 — r2 should remain unchanged
+      store.updateLaneType('r1', 0, 'right', 1, 'shoulder');
+      const roads = useProjectStore.getState().project.roads;
+      expect(roads.find((r) => r.id === 'r1')!.lane_sections[0].right[0].lane_type).toBe('shoulder');
+      expect(roads.find((r) => r.id === 'r2')!.lane_sections[0].right[0].lane_type).toBe('driving');
+
+      // Update lane width on r2
+      store.updateLaneWidth('r2', 0, 'right', 1, { s_offset: 0, a: 5.0, b: 0, c: 0, d: 0 });
+      const roads2 = useProjectStore.getState().project.roads;
+      expect(roads2.find((r) => r.id === 'r2')!.lane_sections[0].right[0].width[0].a).toBe(5.0);
+      expect(roads2.find((r) => r.id === 'r1')!.lane_sections[0].right[0].width[0].a).toBe(3.5);
+
+      // Add lane on r1
+      store.addLane('r1', 0, 'left');
+      expect(useProjectStore.getState().project.roads.find((r) => r.id === 'r1')!.lane_sections[0].left.length).toBe(2);
+      expect(useProjectStore.getState().project.roads.find((r) => r.id === 'r2')!.lane_sections[0].left.length).toBe(1);
+    });
+
+    it('superelevation/crossfall operations are isolated per road', () => {
+      const store = useProjectStore.getState();
+      store.addRoad(makeRoadWithLane());
+      store.addRoad({ ...makeRoadWithLane(), id: 'r2', name: 'Road 2' });
+
+      store.addSuperelevation('r1', { s: 0, a: 0.02, b: 0, c: 0, d: 0 });
+      store.addCrossfall('r2', { s: 0, a: 0.01, b: 0, c: 0, d: 0, side: 'left' });
+
+      const r1 = useProjectStore.getState().project.roads.find((r) => r.id === 'r1')!;
+      const r2 = useProjectStore.getState().project.roads.find((r) => r.id === 'r2')!;
+      expect(r1.lateral_profile!.superelevation!.length).toBe(1);
+      expect(r2.lateral_profile!.crossfall!.length).toBe(1);
+    });
+  });
 });

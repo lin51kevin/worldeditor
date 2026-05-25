@@ -26,4 +26,24 @@ describe('spiralMath', () => {
     expect(curvatureFromOffset(10, offsetAbove)).toBeGreaterThan(0);
     expect(curvatureFromOffset(10, offsetBelow)).toBeLessThan(0);
   });
+
+  it('signedPerpendicularOffset returns 0 for zero-length baseline', () => {
+    const offset = signedPerpendicularOffset({ x: 5, y: 5 }, { x: 5, y: 5 }, { x: 10, y: 10 });
+    expect(offset).toBe(0);
+  });
+
+  it('curvatureFromOffset returns curvStart when length is near zero', () => {
+    const curv = curvatureFromOffset(0, 5, 0.1);
+    expect(curv).toBe(0.1);
+  });
+
+  it('computeSpiralGeometry handles zero-length chord (same start/end)', () => {
+    const geometry = computeSpiralGeometry({ x: 0, y: 0 }, { x: 0, y: 0 }, 0, 0.01);
+    expect(geometry.length).toBeGreaterThan(0);
+  });
+
+  it('computeSpiralGeometry handles very short chord', () => {
+    const geometry = computeSpiralGeometry({ x: 0, y: 0 }, { x: 0.0001, y: 0 }, 0, 0);
+    expect(geometry.length).toBeGreaterThan(0);
+  });
 });

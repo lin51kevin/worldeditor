@@ -1,5 +1,5 @@
-import { findClosestSOnRoad, resampleRoad, splitRoadAt, weldRoads } from './roadEdit';
-import type { Road, Geometry, GeometryType, LaneSection } from '../services/platform';
+import { deployCrosswalks, deployStopLines, deploySidewalks, applyStandardMarkings, evalRoadAtS, findClosestSOnRoad, resampleRoad, splitRoadAt, weldRoads } from './roadEdit';
+import type { Road, Geometry, GeometryType, LaneSection, Project } from '../services/platform';
 
 function makeRoad(
   geo: Geometry[],
@@ -536,6 +536,50 @@ describe('splitRoadAt — ParamPoly3 frame rotation', () => {
   });
 });
 
+describe('splitRoadAt — rich properties (lateral, objects, signals, bridges)', () => {
+  it('distributes objects, signals, bridges, tunnels, and lateral_profile across split', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 100, geo_type: 'Line' }],
+      100,
+      undefined,
+      {
+        objects: [
+          { id: 'o1', object_type: 'Pole', position: { x: 30, y: 0 }, hdg: 0, orientation: 0, height: 3, length: 0, width: 0, radius: 0, zOffset: 0, corners: [{ x: 30, y: 0 }], validity: null, repeat: null },
+          { id: 'o2', object_type: 'Barrier', position: { x: 70, y: 1 }, hdg: 0, orientation: 0, height: 1, length: 5, width: 0.5, radius: 0, zOffset: 0, corners: [{ x: 70, y: 1 }], validity: { from_lane: -1, to_lane: -1 }, repeat: null },
+        ],
+        signals: [
+          { id: 's1', s: 20, t: 0, dynamic: false, orientation: '+', country: '', type: '1000001', subtype: '-1', value: 0, text: '', width: 0.5, height: 2, zOffset: 3, name: '' },
+          { id: 's2', s: 80, t: 2, dynamic: true, orientation: '-', country: '', type: '206', subtype: '-1', value: 0, text: '', width: 0.4, height: 1.5, zOffset: 2.5, name: '' },
+        ],
+        bridges: [{ s: 10, length: 30, id: 'b1', type: 'concrete', name: 'Bridge 1' }],
+        tunnels: [{ s: 60, length: 20, id: 't1', type: 'standard', name: 'Tunnel 1' }],
+        lateral_profile: {
+          superelevation: [{ s: 0, a: 0, b: 0.01, c: 0, d: 0 }],
+          crossfall: [{ s: 0, a: 0, b: 0, c: 0, d: 0 }],
+          superelevations: [{ s: 0, a: 0, b: 0.01, c: 0, d: 0 }],
+          crossfalls: [{ s: 0, a: 0, b: 0, c: 0, d: 0 }],
+        },
+      },
+    );
+    const { road1, road2 } = splitRoadAt(road, 50);
+    expect(road1.length).toBeCloseTo(50);
+    expect(road2.length).toBeCloseTo(50);
+    // Object o1 at s=30 goes to road1, o2 at s=70 goes to road2
+    expect(road1.objects!.some((o) => o.id === 'o1')).toBe(true);
+    expect(road2.objects!.some((o) => o.id === 'o2')).toBe(true);
+    // Signal s1 at s=20 goes to road1, s2 at s=80 goes to road2
+    expect(road1.signals!.some((s) => s.id === 's1')).toBe(true);
+    expect(road2.signals!.some((s) => s.id === 's2')).toBe(true);
+    // Bridge at s=10,len=30 should be in road1
+    expect(road1.bridges!.length).toBeGreaterThan(0);
+    // Tunnel at s=60,len=20 should be in road2
+    expect(road2.tunnels!.length).toBeGreaterThan(0);
+    // Lateral profile should exist in both
+    expect(road1.lateral_profile).toBeDefined();
+    expect(road2.lateral_profile).toBeDefined();
+  });
+});
+
 describe('findClosestSOnRoad', () => {
   it('returns the nearest station on a straight road', () => {
     const road = makeRoad(
@@ -607,5 +651,364 @@ describe('resampleRoad', () => {
       [20, 0, 0],
       [30, 0, 0],
     ]);
+  });
+});
+
+// ─── deploySidewalks ──────────────────────────────────────────────────────────
+
+describe('deploySidewalks', () => {
+  it('adds sidewalk lanes on both sides', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 20, geo_type: 'Line' }],
+      20,
+      [{
+        s: 0,
+        single_side: false,
+        left: [{ id: 1, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
+        center: [],
+        right: [{ id: -1, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
+      }],
+    );
+    const result = deploySidewalks(road);
+    const section = result.lane_sections[0]!;
+    expect(section.left.some((l) => l.lane_type === 'Sidewalk')).toBe(true);
+    expect(section.right.some((l) => l.lane_type === 'Sidewalk')).toBe(true);
+  });
+
+  it('does not add duplicate sidewalk if already present', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }],
+      10,
+      [{
+        s: 0,
+        single_side: false,
+        left: [
+          { id: 1, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] },
+          { id: 2, lane_type: 'Sidewalk', level: 0, link: null, width: [{ s_offset: 0, a: 2.0, b: 0, c: 0, d: 0 }], road_marks: [] },
+        ],
+        center: [],
+        right: [
+          { id: -1, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] },
+          { id: -2, lane_type: 'Sidewalk', level: 0, link: null, width: [{ s_offset: 0, a: 2.0, b: 0, c: 0, d: 0 }], road_marks: [] },
+        ],
+      }],
+    );
+    const result = deploySidewalks(road);
+    const section = result.lane_sections[0]!;
+    expect(section.left.filter((l) => l.lane_type === 'Sidewalk')).toHaveLength(1);
+    expect(section.right.filter((l) => l.lane_type === 'Sidewalk')).toHaveLength(1);
+  });
+
+  it('uses custom width', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }],
+      10,
+    );
+    const result = deploySidewalks(road, 3.0);
+    const section = result.lane_sections[0]!;
+    const rightSidewalk = section.right.find((l) => l.lane_type === 'Sidewalk');
+    expect(rightSidewalk?.width[0]?.a).toBe(3.0);
+  });
+
+  it('does not mutate original road', () => {
+    const road = makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], 10);
+    const originalLen = road.lane_sections[0]!.right.length;
+    deploySidewalks(road);
+    expect(road.lane_sections[0]!.right.length).toBe(originalLen);
+  });
+});
+
+// ─── applyStandardMarkings ────────────────────────────────────────────────────
+
+describe('applyStandardMarkings', () => {
+  it('applies solid mark to outermost lanes, broken to inner', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }],
+      10,
+      [{
+        s: 0,
+        single_side: false,
+        left: [
+          { id: 1, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] },
+          { id: 2, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] },
+        ],
+        center: [],
+        right: [
+          { id: -1, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] },
+          { id: -2, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] },
+        ],
+      }],
+    );
+    const result = applyStandardMarkings(road);
+    const section = result.lane_sections[0]!;
+    // Left: id=2 is outermost (max), id=1 is inner
+    expect(section.left.find((l) => l.id === 2)?.road_marks[0]?.mark_type).toBe('Solid');
+    expect(section.left.find((l) => l.id === 1)?.road_marks[0]?.mark_type).toBe('Broken');
+    // Right: id=-2 is outermost (min), id=-1 is inner
+    expect(section.right.find((l) => l.id === -2)?.road_marks[0]?.mark_type).toBe('Solid');
+    expect(section.right.find((l) => l.id === -1)?.road_marks[0]?.mark_type).toBe('Broken');
+  });
+
+  it('does not mutate original road', () => {
+    const road = makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], 10);
+    applyStandardMarkings(road);
+    expect(road.lane_sections[0]!.right[0]?.road_marks).toHaveLength(0);
+  });
+});
+
+// ─── deployCrosswalks ─────────────────────────────────────────────────────────
+
+describe('deployCrosswalks', () => {
+  function makeProject(roads: Road[], junctions: Project['junctions'] = []): Project {
+    return {
+      name: 'test',
+      header: { rev_major: 1, rev_minor: 0, name: 'test', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null },
+      roads,
+      junctions,
+      signals: [],
+      objects: [],
+    };
+  }
+
+  it('returns unchanged project if junction not found', () => {
+    const project = makeProject([makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], 10)]);
+    const result = deployCrosswalks(project, 'nonexistent');
+    expect(result).toBe(project);
+  });
+
+  it('adds crosswalk objects at midpoint of each connecting road', () => {
+    const conn1 = makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 20, geo_type: 'Line' }], 20, undefined, { id: 'conn1' });
+    const conn2 = makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 30, geo_type: 'Line' }], 30, undefined, { id: 'conn2' });
+    const project = makeProject(
+      [makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], 10), conn1, conn2],
+      [{ id: 'j1', name: 'j1', connections: [
+        { id: 'c1', incoming_road: 'r1', connecting_road: 'conn1', contact_point: 'Start' as const, lane_links: [] },
+        { id: 'c2', incoming_road: 'r1', connecting_road: 'conn2', contact_point: 'Start' as const, lane_links: [] },
+      ] }],
+    );
+    const result = deployCrosswalks(project, 'j1');
+    const newObjects = result.objects.filter((o) => o.type === 'crosswalk');
+    expect(newObjects).toHaveLength(2);
+    expect(newObjects[0]?.sPosition).toBe(10); // midpoint of 20
+    expect(newObjects[1]?.sPosition).toBe(15); // midpoint of 30
+  });
+
+  it('does not mutate original project', () => {
+    const conn = makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 20, geo_type: 'Line' }], 20, undefined, { id: 'conn' });
+    const project = makeProject(
+      [makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], 10), conn],
+      [{ id: 'j1', name: 'j1', connections: [{ id: 'c1', incoming_road: 'r1', connecting_road: 'conn', contact_point: 'Start' as const, lane_links: [] }] }],
+    );
+    deployCrosswalks(project, 'j1');
+    expect(project.objects).toHaveLength(0);
+  });
+});
+
+// ─── deployStopLines ──────────────────────────────────────────────────────────
+
+describe('deployStopLines', () => {
+  function makeProject(roads: Road[], junctions: Project['junctions'] = []): Project {
+    return {
+      name: 'test',
+      header: { rev_major: 1, rev_minor: 0, name: 'test', date: '', north: 0, south: 0, east: 0, west: 0, geo_reference: null },
+      roads,
+      junctions,
+      signals: [],
+      objects: [],
+    };
+  }
+
+  it('returns unchanged project if junction not found', () => {
+    const project = makeProject([makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], 10)]);
+    const result = deployStopLines(project, 'nonexistent');
+    expect(result).toBe(project);
+  });
+
+  it('adds stop line 1m before end of each unique incoming road', () => {
+    const r1 = makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 15, geo_type: 'Line' }], 15, undefined, { id: 'r1' });
+    const r2 = makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 20, geo_type: 'Line' }], 20, undefined, { id: 'r2' });
+    const project = makeProject(
+      [r1, r2, makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], 10, undefined, { id: 'conn' })],
+      [{ id: 'j1', name: 'j1', connections: [
+        { id: 'c1', incoming_road: 'r1', connecting_road: 'conn', contact_point: 'Start' as const, lane_links: [] },
+        { id: 'c2', incoming_road: 'r2', connecting_road: 'conn', contact_point: 'Start' as const, lane_links: [] },
+      ] }],
+    );
+    const result = deployStopLines(project, 'j1');
+    const stopLines = result.objects.filter((o) => o.type === 'stopline');
+    expect(stopLines).toHaveLength(2);
+    expect(stopLines.find((o) => o.roadId === 'r1')?.sPosition).toBe(14); // 15 - 1
+    expect(stopLines.find((o) => o.roadId === 'r2')?.sPosition).toBe(19); // 20 - 1
+  });
+
+  it('deduplicates incoming roads', () => {
+    const r1 = makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], 10, undefined, { id: 'r1' });
+    const project = makeProject(
+      [r1, makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], 10, undefined, { id: 'conn1' }),
+        makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }], 10, undefined, { id: 'conn2' })],
+      [{ id: 'j1', name: 'j1', connections: [
+        { id: 'c1', incoming_road: 'r1', connecting_road: 'conn1', contact_point: 'Start' as const, lane_links: [] },
+        { id: 'c2', incoming_road: 'r1', connecting_road: 'conn2', contact_point: 'Start' as const, lane_links: [] },
+      ] }],
+    );
+    const result = deployStopLines(project, 'j1');
+    const stopLines = result.objects.filter((o) => o.type === 'stopline');
+    expect(stopLines).toHaveLength(1);
+  });
+});
+
+// ─── evalRoadAtS geometry branch coverage ────────────────────────────────────
+
+describe('evalRoadAtS geometry types', () => {
+  it('evaluates Spiral geometry', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 50, geo_type: { Spiral: { curv_start: 0, curv_end: 0.02 } } }],
+      50,
+    );
+    const pt = evalRoadAtS(road, 25);
+    // Spiral should produce non-trivial curvature (not a straight line)
+    expect(pt.x).toBeGreaterThan(0);
+    expect(pt.hdg).toBeGreaterThan(0);
+  });
+
+  it('evaluates Poly3 geometry', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 20, geo_type: { Poly3: { a: 0, b: 0, c: 0.01, d: 0 } } }],
+      20,
+    );
+    const pt = evalRoadAtS(road, 10);
+    // y_local = 0 + 0 + 0.01*100 + 0 = 1 → rotated by hdg=0 → y=1
+    expect(pt.y).toBeCloseTo(1, 4);
+    expect(pt.x).toBeCloseTo(10, 4);
+  });
+
+  it('evaluates ParamPoly3 geometry (Normalized)', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 100, geo_type: { ParamPoly3: {
+        a_u: 0, b_u: 100, c_u: 0, d_u: 0,
+        a_v: 0, b_v: 0, c_v: 50, d_v: 0,
+        p_range: 'Normalized',
+      } } }],
+      100,
+    );
+    const pt = evalRoadAtS(road, 50);
+    // p = 50/100 = 0.5; u = 100*0.5 = 50; v = 50*0.25 = 12.5
+    expect(pt.x).toBeCloseTo(50, 0);
+    expect(pt.y).toBeCloseTo(12.5, 0);
+  });
+
+  it('evaluates ParamPoly3 geometry (ArcLength)', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 100, geo_type: { ParamPoly3: {
+        a_u: 0, b_u: 1, c_u: 0, d_u: 0,
+        a_v: 0, b_v: 0, c_v: 0.001, d_v: 0,
+        p_range: 'ArcLength',
+      } } }],
+      100,
+    );
+    const pt = evalRoadAtS(road, 50);
+    // p = 50 (ArcLength); u = 50; v = 0.001*2500 = 2.5
+    expect(pt.x).toBeCloseTo(50, 0);
+    expect(pt.y).toBeCloseTo(2.5, 0);
+  });
+
+  it('evaluates road with empty plan_view', () => {
+    const road = makeRoad([], 0);
+    const pt = evalRoadAtS(road, 5);
+    expect(pt.x).toBe(0);
+    expect(pt.y).toBe(0);
+    expect(pt.hdg).toBe(0);
+  });
+
+  it('evaluates Arc with near-zero curvature (degenerates to line)', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 10, y: 5, hdg: Math.PI / 4, length: 50, geo_type: { Arc: { curvature: 1e-15 } } }],
+      50,
+    );
+    const pt = evalRoadAtS(road, 25);
+    // Should behave like a line
+    expect(pt.x).toBeCloseTo(10 + 25 * Math.cos(Math.PI / 4), 2);
+    expect(pt.y).toBeCloseTo(5 + 25 * Math.sin(Math.PI / 4), 2);
+  });
+});
+
+// ─── weldRoads with reverse (triggers reverseRoad internal branch) ───────────
+
+describe('weldRoads reverse branch', () => {
+  it('welds two roads requiring reversal of road2', () => {
+    // road1 ends at (100, 0), road2 starts at (100, 0) but points backward
+    const road1 = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 100, geo_type: 'Line' }],
+      100,
+    );
+    const road2 = makeRoad(
+      [{ s: 0, x: 200, y: 0, hdg: Math.PI, length: 100, geo_type: 'Line' }],
+      100,
+    );
+    const welded = weldRoads(road1, road2);
+    expect(welded.length).toBeCloseTo(200, 0);
+  });
+
+  it('throws when roads have incompatible headings at weld point', () => {
+    const road1 = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 100, geo_type: 'Line' }],
+      100,
+    );
+    // road2 starts at (100, 0) but pointing perpendicular — heading mismatch
+    const road2 = makeRoad(
+      [{ s: 0, x: 100, y: 0, hdg: Math.PI / 2, length: 50, geo_type: 'Line' }],
+      50,
+    );
+    expect(() => weldRoads(road1, road2)).toThrow('incompatible');
+  });
+
+  it('welds roads with Spiral geometry triggering reverseGeometryType(Spiral)', () => {
+    const road1 = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 50, geo_type: 'Line' }],
+      50,
+    );
+    // road2 end is at approximately (50, 0) — road2 starts far and points back
+    const road2 = makeRoad(
+      [{ s: 0, x: 100, y: 0, hdg: Math.PI, length: 50, geo_type: { Spiral: { curv_start: 0, curv_end: 0 } } }],
+      50,
+    );
+    // road2 end ≈ (50, 0); road1 end = (50, 0) → endDistance ≈ 0, triggers reverse
+    const welded = weldRoads(road1, road2, { positionTolerance: 5, headingTolerance: 0.5 });
+    expect(welded.length).toBeCloseTo(100, 0);
+    // Reversed spiral should flip curvatures
+    const spiralGeo = welded.plan_view.find((g) => typeof g.geo_type === 'object' && 'Spiral' in g.geo_type);
+    expect(spiralGeo).toBeDefined();
+  });
+
+  it('welds roads with objects and signals (exercises reverseRoadObjects)', () => {
+    const road1 = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 100, geo_type: 'Line' }],
+      100,
+      undefined,
+      {
+        objects: [{ id: 'o1', object_type: 'Pole', position: { x: 50, y: 0 }, hdg: 0, orientation: 0, height: 3, length: 0, width: 0, radius: 0, zOffset: 0, corners: [], validity: null, repeat: null }],
+        signals: [{ id: 's1', s: 50, t: 0, dynamic: false, orientation: '+', country: '', type: '1000001', subtype: '-1', value: 0, text: '', width: 0.5, height: 2, zOffset: 3, name: '' }],
+      },
+    );
+    const road2 = makeRoad(
+      [{ s: 0, x: 200, y: 0, hdg: Math.PI, length: 100, geo_type: 'Line' }],
+      100,
+      undefined,
+      {
+        id: 'r2',
+        objects: [{ id: 'o2', object_type: 'Barrier', position: { x: 30, y: 0 }, hdg: 0, orientation: 90, height: 1, length: 10, width: 0.5, radius: 0, zOffset: 0, corners: [{ x: 30, y: 1 }], validity: { from_lane: -1, to_lane: -2 } , repeat: null }],
+        signals: [{ id: 's2', s: 80, t: 2, dynamic: true, orientation: '-', country: '', type: '206', subtype: '-1', value: 0, text: '', width: 0.4, height: 1.5, zOffset: 2.5, name: '' }],
+      },
+    );
+    const welded = weldRoads(road1, road2);
+    expect(welded.length).toBeCloseTo(200);
+    expect(welded.objects!.length).toBe(2);
+    expect(welded.signals!.length).toBe(2);
+    // road2 was reversed, so its object at s=30 should now be at totalLength - 30 = 70 + offset
+    const reversedObj = welded.objects!.find((o) => o.id === 'o2');
+    expect(reversedObj).toBeDefined();
+    // Validity should be swapped
+    expect(reversedObj!.validity!.from_lane).toBe(2);
+    expect(reversedObj!.validity!.to_lane).toBe(1);
   });
 });

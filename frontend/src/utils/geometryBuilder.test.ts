@@ -207,6 +207,36 @@ describe('buildArcGeometry', () => {
     const geo = buildArcGeometry([0, 0, 0], [5, 0, 0], [10, 0, 0]);
     expect(geo.geo_type).toBe('Line');
   });
+
+  it('produces CW arc for clockwise point arrangement', () => {
+    // Cross product: (bx-ax)*(cy-ay) - (by-ay)*(cx-ax)
+    // (5-0)*(0-0) - (5-0)*(10-0) = 0 - 50 = -50 → CW → negative curvature
+    const geo = buildArcGeometry([0, 0, 0], [5, 5, 0], [10, 0, 0]);
+    // This is actually CCW, so curvature is positive. Let's do reversed:
+    // (10,0)→(5,5)→(0,0): cross = (5-10)*(0-0) - (5-0)*(0-10) = 0+50 = 50 → still CCW
+    // True CW: (0,0)→(5,-5)→(10,0): cross = 5*0 - (-5)*10 = 50 → still CCW!
+    // Actually cross = (bx-ax)*(cy-ay) - (by-ay)*(cx-ax) = (5)*(0) - (-5)*(10) = 50 → CCW
+    // Need cross < 0: try (0,0)→(-5,-5)→(0,-10)
+    // cross = (-5)(-10) - (-5)(0) = 50 → still positive
+    // (0,0)→(5,5)→(0,10): cross = 5*10 - 5*0 = 50 → still pos
+    // Use known CW: p0=(1,0), p1=(0,-1), p2=(-1,0) (unit circle going CW)
+    const geoCW = buildArcGeometry([1, 0, 0], [0, -1, 0], [-1, 0, 0]);
+    expect(typeof geoCW.geo_type).toBe('object');
+    if (typeof geoCW.geo_type === 'object' && 'Arc' in geoCW.geo_type) {
+      expect(geoCW.geo_type.Arc.curvature).toBeLessThan(0);
+    }
+    expect(geoCW.length).toBeGreaterThan(0);
+  });
+
+  it('handles arc where sweep angle wraps past PI', () => {
+    // Large arc: start → midpoint across more than 180°
+    const geo = buildArcGeometry([10, 0, 0], [0, 10, 0], [-10, 0, 0]);
+    expect(typeof geo.geo_type).toBe('object');
+    if (typeof geo.geo_type === 'object' && 'Arc' in geo.geo_type) {
+      expect(Math.abs(geo.geo_type.Arc.curvature)).toBeGreaterThan(0);
+    }
+    expect(geo.length).toBeGreaterThan(10);
+  });
 });
 
 // ─── buildSpiralGeometry (direct) ────────────────────────────────────────
