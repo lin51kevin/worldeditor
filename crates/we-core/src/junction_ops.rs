@@ -9,9 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::geometry::eval::evaluate_road_at_s;
 use crate::model::{
-    ContactPoint, Geometry, GeometryType, JunctionConnection, JunctionLaneLink,
-    LaneType, LinkElement, LinkElementType, ParamPoly3Range, Project, Road,
-    RoadLink,
+    ContactPoint, Geometry, GeometryType, JunctionConnection, JunctionLaneLink, LaneType,
+    LinkElement, LinkElementType, ParamPoly3Range, Project, Road, RoadLink,
 };
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -162,8 +161,12 @@ pub fn build_junction_connectors(
             }
 
             // Generate the connector road.
-            let lane_count = from_arm.right_lane_count.min(to_arm.right_lane_count).max(1);
-            let connector = make_connector_road(from_arm, to_arm, &connector_id, junction_id, lane_count);
+            let lane_count = from_arm
+                .right_lane_count
+                .min(to_arm.right_lane_count)
+                .max(1);
+            let connector =
+                make_connector_road(from_arm, to_arm, &connector_id, junction_id, lane_count);
 
             // Build JunctionConnection (contactPoint = Start means the connector
             // road's start touches the incoming road's end).
@@ -172,7 +175,10 @@ pub fn build_junction_connectors(
                 .collect();
 
             let connection = JunctionConnection {
-                id: format!("conn_{}", new_connections.len() + junction.connections.len()),
+                id: format!(
+                    "conn_{}",
+                    new_connections.len() + junction.connections.len()
+                ),
                 incoming_road: from_arm.road_id.clone(),
                 connecting_road: connector_id.clone(),
                 contact_point: ContactPoint::Start,
@@ -303,8 +309,12 @@ fn make_connector_road(
 ///
 /// Returns `(a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v)` for normalised p ∈ [0,1].
 fn hermite_param_poly3(
-    x0: f64, y0: f64, hdg0: f64,
-    x1: f64, y1: f64, hdg1: f64,
+    x0: f64,
+    y0: f64,
+    hdg0: f64,
+    x1: f64,
+    y1: f64,
+    hdg1: f64,
     scale: f64,
     chord: f64,
 ) -> (f64, f64, f64, f64, f64, f64, f64, f64) {
@@ -318,8 +328,8 @@ fn hermite_param_poly3(
     let end_v = -dx * sin_h + dy * cos_h;
 
     // Scale tangents by chord so the Hermite basis operates at chord-length scale.
-    let t0_u = cos_h * cos_h * scale + sin_h * sin_h * scale;  // = scale (in local frame: t0 is along X)
-    let t0_v = 0.0_f64;  // start tangent has no lateral component in local frame
+    let t0_u = cos_h * cos_h * scale + sin_h * sin_h * scale; // = scale (in local frame: t0 is along X)
+    let t0_v = 0.0_f64; // start tangent has no lateral component in local frame
 
     // Incoming tangent at endpoint (transformed to local frame, scaled).
     let t1_u = (hdg1.cos() * cos_h + hdg1.sin() * sin_h) * chord;
@@ -341,8 +351,14 @@ fn hermite_param_poly3(
 
 /// Approximate the arc length of a normalised ParamPoly3 curve by sampling.
 fn sample_arc_length(
-    a_u: f64, b_u: f64, c_u: f64, d_u: f64,
-    a_v: f64, b_v: f64, c_v: f64, d_v: f64,
+    a_u: f64,
+    b_u: f64,
+    c_u: f64,
+    d_u: f64,
+    a_v: f64,
+    b_v: f64,
+    c_v: f64,
+    d_v: f64,
     n: usize,
 ) -> f64 {
     let mut length = 0.0;
@@ -369,8 +385,8 @@ fn sample_arc_length(
 mod tests {
     use super::*;
     use crate::model::{
-        ContactPoint, Geometry, GeometryType, Junction,
-        LinkElement, LinkElementType, Project, Road, RoadLink,
+        ContactPoint, Geometry, GeometryType, Junction, LinkElement, LinkElementType, Project,
+        Road, RoadLink,
     };
 
     fn make_straight_road(id: &str, x: f64, y: f64, length: f64, hdg: f64) -> Road {
@@ -429,8 +445,14 @@ mod tests {
         let project = project_two_arm_junction();
         let arms = detect_junction_arms(&project, "j1");
         assert_eq!(arms.len(), 2);
-        let end_arms: Vec<_> = arms.iter().filter(|a| a.contact_point == ContactPoint::End).collect();
-        let start_arms: Vec<_> = arms.iter().filter(|a| a.contact_point == ContactPoint::Start).collect();
+        let end_arms: Vec<_> = arms
+            .iter()
+            .filter(|a| a.contact_point == ContactPoint::End)
+            .collect();
+        let start_arms: Vec<_> = arms
+            .iter()
+            .filter(|a| a.contact_point == ContactPoint::Start)
+            .collect();
         assert_eq!(end_arms.len(), 1, "one End arm");
         assert_eq!(start_arms.len(), 1, "one Start arm");
     }

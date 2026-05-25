@@ -15,9 +15,8 @@ pub fn auto_build_junction_connectors(
     let project: Project =
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
 
-    let updated =
-        we_core::junction_ops::build_junction_connectors(&project, junction_id)
-            .map_err(|e| JsError::new(&e.to_string()))?;
+    let updated = we_core::junction_ops::build_junction_connectors(&project, junction_id)
+        .map_err(|e| JsError::new(&e.to_string()))?;
 
     serde_json::to_string(&updated).map_err(|e| JsError::new(&e.to_string()))
 }

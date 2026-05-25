@@ -1,17 +1,14 @@
 import { useCallback, useRef, useState, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  MousePointer,
   Route,
-  MoveHorizontal,
   Square,
   Grid3x3,
   Box,
   Circle,
 } from 'lucide-react';
 import { resolveIcon } from '../shared/IconRenderer';
-import { isDrawMode, useViewportStore } from '../../stores/viewportStore';
-import { useProjectStore } from '../../stores/projectStore';
+import { useViewportStore } from '../../stores/viewportStore';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
 import { STORAGE_KEYS } from '../../constants/storage';
 import './Toolbar.css';
@@ -29,20 +26,11 @@ function loadPos(): { tx: number; ty: number } {
 export const Toolbar = memo(function Toolbar() {
   const {
     editMode,
-    selectionMode,
     setEditMode,
-    setSelectionMode,
     clearSplineKnots,
     viewMode,
     setViewMode,
   } = useViewportStore();
-
-  // Subscribe so toolbar re-renders when selection changes (plugin buttons react to road/junction state)
-  const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
-  const selectedJunctionId = useProjectStore((s) => s.selectedJunctionId);
-  // Intentionally consumed to ensure re-render on selection changes; values used implicitly by plugin buttons
-  void selectedRoadId;
-  void selectedJunctionId;
 
   const { toolbarButtons } = usePluginContribStore();
 
@@ -90,26 +78,7 @@ export const Toolbar = memo(function Toolbar() {
   }, []);
 
   const visibleToolbarButtons = toolbarButtons.filter((button) => button.isVisible?.() ?? true);
-  const pluginModeButtons = visibleToolbarButtons.filter((b) => b.group === 'mode');
   const pluginActionButtons = visibleToolbarButtons.filter((b) => b.group === 'action');
-
-  const handleSelectionModeChange = useCallback((mode: 'road' | 'laneSection' | 'lane') => {
-    if (isDrawMode(editMode)) {
-      clearSplineKnots();
-    }
-    if (editMode !== 'default') {
-      setEditMode('default');
-    }
-
-    const projectState = useProjectStore.getState();
-    if (mode === 'road') {
-      projectState.clearLaneSelection();
-    } else if (mode === 'laneSection' && projectState.selectedRoadId && projectState.selectedLaneSectionIndex !== null) {
-      projectState.setSelectedLaneSection(projectState.selectedRoadId, projectState.selectedLaneSectionIndex);
-    }
-
-    setSelectionMode(mode);
-  }, [clearSplineKnots, editMode, setEditMode, setSelectionMode]);
 
   return (
     <div
@@ -118,62 +87,7 @@ export const Toolbar = memo(function Toolbar() {
       onMouseDownCapture={handleButtonMouseDownCapture}
       onMouseDown={handleMouseDown}
     >
-      {/* SelectMode group */}
-      <div className="toolbar-group">
-        <button
-          className={`toolbar-btn toolbar-toggle ${selectionMode === 'road' ? 'active' : ''}`}
-          onClick={() => handleSelectionModeChange('road')}
-          title={`${t('toolbar.roadEditTitle')} [1]`}
-          aria-label={t('toolbar.roadEdit')}
-          aria-pressed={selectionMode === 'road'}
-        >
-          <MousePointer size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.roadEdit')}</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${selectionMode === 'laneSection' ? 'active' : ''}`}
-          onClick={() => handleSelectionModeChange('laneSection')}
-          title={`${t('toolbar.laneSectionEditTitle')} [2]`}
-          aria-label={t('toolbar.laneSectionEdit')}
-          aria-pressed={selectionMode === 'laneSection'}
-        >
-          <Grid3x3 size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.laneSectionEdit')}</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${selectionMode === 'lane' ? 'active' : ''}`}
-          onClick={() => handleSelectionModeChange('lane')}
-          title={`${t('toolbar.laneEditTitle')} [3]`}
-          aria-label={t('toolbar.laneEdit')}
-          aria-pressed={selectionMode === 'lane'}
-        >
-          <MoveHorizontal size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.laneEdit')}</span>
-        </button>
-      </div>
-
-      {/* Plugin mode buttons (EditMode: move-road, rotate-road, adjust-edge, road-markings) */}
-      {pluginModeButtons.length > 0 && (
-        <>
-          <div className="toolbar-separator" />
-          <div className="toolbar-group">
-            {pluginModeButtons.map((btn) => (
-              <button
-                key={btn.id}
-                className={`toolbar-btn toolbar-toggle ${btn.isActive?.() ? 'active' : ''}`}
-                disabled={btn.isDisabled?.() ?? false}
-                onClick={btn.onClick}
-                title={t(btn.tooltipKey ?? btn.labelKey)}
-              >
-                <span className="tb-icon tb-plugin-icon">{resolveIcon(btn.icon)}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
       {/* DrawMode group: spline / arc / spiral */}
-      <div className="toolbar-separator" />
       <div className="toolbar-group">
         <button
           className={`toolbar-btn toolbar-toggle ${editMode === 'spline' ? 'active' : ''}`}
@@ -207,7 +121,7 @@ export const Toolbar = memo(function Toolbar() {
         </button>
       </div>
 
-      {/* Plugin action buttons (instant operations: clone, reverse, mirror…) */}
+      {/* Plugin action buttons (split, weld, resample — contextual tools) */}
       {pluginActionButtons.length > 0 && (
         <>
           <div className="toolbar-separator" />
@@ -215,7 +129,7 @@ export const Toolbar = memo(function Toolbar() {
             {pluginActionButtons.map((btn) => (
               <button
                 key={btn.id}
-                className="toolbar-btn"
+                className={`toolbar-btn ${btn.isActive?.() ? 'active' : ''}`}
                 disabled={btn.isDisabled?.() ?? false}
                 onClick={btn.onClick}
                 title={t(btn.tooltipKey ?? btn.labelKey)}

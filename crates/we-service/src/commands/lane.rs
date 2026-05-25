@@ -944,7 +944,11 @@ mod tests {
     fn find_lane(project: &Project, section_s: f64, lane_id: i32) -> &Lane {
         let section = find_section(project, section_s);
         if lane_id > 0 {
-            section.left.iter().find(|lane| lane.id == lane_id).expect("lane with matching id must exist in test fixture")
+            section
+                .left
+                .iter()
+                .find(|lane| lane.id == lane_id)
+                .expect("lane with matching id must exist in test fixture")
         } else if lane_id < 0 {
             section
                 .right
@@ -978,7 +982,9 @@ mod tests {
         let project = make_project(&[0.0], 100.0);
         let cmd = AddLaneSection::new("road-1", make_lane_section(50.0));
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         let section_starts: Vec<f64> = result.roads[0]
             .lane_sections
@@ -993,8 +999,12 @@ mod tests {
         let project = make_project(&[0.0], 100.0);
         let cmd = AddLaneSection::new("road-1", make_lane_section(50.0));
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         assert_eq!(undone.roads[0].lane_sections.len(), 1);
         assert!((undone.roads[0].lane_sections[0].s - 0.0).abs() < 1e-9);
@@ -1018,7 +1028,9 @@ mod tests {
             make_lane(2, LaneType::Shoulder),
         );
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         let section = find_section(&result, 0.0);
         assert_eq!(section.left.len(), 2);
@@ -1035,8 +1047,12 @@ mod tests {
             make_lane(2, LaneType::Shoulder),
         );
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         let section = find_section(&undone, 0.0);
         assert_eq!(section.left.len(), 1);
@@ -1062,7 +1078,9 @@ mod tests {
         let snapshot = find_lane(&project, 0.0, 1).clone();
         let cmd = DeleteLane::with_snapshot("road-1", 0.0, 1, snapshot);
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         assert!(find_section(&result, 0.0).left.is_empty());
     }
@@ -1073,8 +1091,12 @@ mod tests {
         let snapshot = find_lane(&project, 0.0, 1).clone();
         let cmd = DeleteLane::with_snapshot("road-1", 0.0, 1, snapshot);
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         assert_eq!(find_section(&undone, 0.0).left.len(), 1);
         assert_eq!(find_lane(&undone, 0.0, 1).lane_type, LaneType::Driving);
@@ -1093,7 +1115,9 @@ mod tests {
         let project = make_project(&[0.0], 100.0);
         let cmd = UpdateLaneType::new("road-1", 0.0, 1, LaneType::Driving, LaneType::Sidewalk);
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         assert_eq!(find_lane(&result, 0.0, 1).lane_type, LaneType::Sidewalk);
     }
@@ -1103,8 +1127,12 @@ mod tests {
         let project = make_project(&[0.0], 100.0);
         let cmd = UpdateLaneType::new("road-1", 0.0, 1, LaneType::Driving, LaneType::Sidewalk);
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         assert_eq!(find_lane(&undone, 0.0, 1).lane_type, LaneType::Driving);
     }
@@ -1124,7 +1152,9 @@ mod tests {
         let new_widths = vec![make_lane_width(4.25)];
         let cmd = UpdateLaneWidth::new("road-1", 0.0, 1, old_widths, new_widths.clone());
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         assert!((find_lane(&result, 0.0, 1).width[0].a - new_widths[0].a).abs() < 1e-9);
     }
@@ -1141,8 +1171,12 @@ mod tests {
             vec![make_lane_width(4.25)],
         );
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         assert!((find_lane(&undone, 0.0, 1).width[0].a - old_widths[0].a).abs() < 1e-9);
     }
@@ -1174,7 +1208,9 @@ mod tests {
         let old_sections = project.roads[0].lane_sections.clone();
         let cmd = SplitLaneSection::new("road-1", 0.0, 50.0, old_sections);
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         let section_starts: Vec<f64> = result.roads[0]
             .lane_sections
@@ -1191,8 +1227,12 @@ mod tests {
         let old_sections = project.roads[0].lane_sections.clone();
         let cmd = SplitLaneSection::new("road-1", 0.0, 50.0, old_sections.clone());
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         let section_starts: Vec<f64> = undone.roads[0]
             .lane_sections
@@ -1218,7 +1258,9 @@ mod tests {
         let old_sections = project.roads[0].lane_sections.clone();
         let cmd = MergeLaneSections::new("road-1", 0.0, old_sections);
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         assert_eq!(result.roads[0].lane_sections.len(), 1);
         assert!((result.roads[0].lane_sections[0].s - 0.0).abs() < 1e-9);
@@ -1230,8 +1272,12 @@ mod tests {
         let old_sections = project.roads[0].lane_sections.clone();
         let cmd = MergeLaneSections::new("road-1", 0.0, old_sections.clone());
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         let section_starts: Vec<f64> = undone.roads[0]
             .lane_sections
@@ -1257,7 +1303,9 @@ mod tests {
         let snapshot = find_section(&project, 50.0).clone();
         let cmd = DeleteLaneSection::with_snapshot("road-1", 50.0, snapshot);
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         assert_eq!(result.roads[0].lane_sections.len(), 1);
         assert!((result.roads[0].lane_sections[0].s - 0.0).abs() < 1e-9);
@@ -1269,8 +1317,12 @@ mod tests {
         let snapshot = find_section(&project, 50.0).clone();
         let cmd = DeleteLaneSection::with_snapshot("road-1", 50.0, snapshot);
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         let section_starts: Vec<f64> = undone.roads[0]
             .lane_sections
@@ -1297,9 +1349,14 @@ mod tests {
         });
         let cmd = SetLaneLink::new("road-1", 0.0, 1, None, new_link);
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
-        let link = find_lane(&result, 0.0, 1).link.as_ref().expect("lane link must be set after execute");
+        let link = find_lane(&result, 0.0, 1)
+            .link
+            .as_ref()
+            .expect("lane link must be set after execute");
         assert_eq!(link.predecessor, Some(0));
         assert_eq!(link.successor, Some(2));
     }
@@ -1313,8 +1370,12 @@ mod tests {
         });
         let cmd = SetLaneLink::new("road-1", 0.0, 1, None, new_link);
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         assert!(find_lane(&undone, 0.0, 1).link.is_none());
     }
@@ -1342,7 +1403,9 @@ mod tests {
         let new_marks = vec![make_road_mark(RoadMarkType::Solid)];
         let cmd = SetLaneRoadMark::new("road-1", 0.0, 1, vec![], new_marks);
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         let lane = find_lane(&result, 0.0, 1);
         assert_eq!(lane.road_marks.len(), 1);
@@ -1360,8 +1423,12 @@ mod tests {
             vec![make_road_mark(RoadMarkType::Solid)],
         );
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         assert!(find_lane(&undone, 0.0, 1).road_marks.is_empty());
     }
@@ -1392,7 +1459,9 @@ mod tests {
         }];
         let cmd = SetLaneOffset::new("road-1", vec![], new_offsets.clone());
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         assert_eq!(result.roads[0].lane_offsets.len(), 1);
         assert!((result.roads[0].lane_offsets[0].a - new_offsets[0].a).abs() < 1e-9);
@@ -1413,8 +1482,12 @@ mod tests {
             }],
         );
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         assert!(undone.roads[0].lane_offsets.is_empty());
     }
@@ -1449,7 +1522,9 @@ mod tests {
         }];
         let cmd = SetSuperelevation::new("road-1", vec![], new_profile.clone());
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         assert_eq!(result.roads[0].lateral_profile.superelevations.len(), 1);
         assert!(
@@ -1472,8 +1547,12 @@ mod tests {
             }],
         );
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         assert!(undone.roads[0].lateral_profile.superelevations.is_empty());
     }
@@ -1509,7 +1588,9 @@ mod tests {
         }];
         let cmd = SetCrossfall::new("road-1", vec![], new_profile.clone());
 
-        let result = cmd.execute(&project).expect("execute should succeed on valid project");
+        let result = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
 
         assert_eq!(result.roads[0].lateral_profile.crossfalls.len(), 1);
         assert_eq!(
@@ -1534,8 +1615,12 @@ mod tests {
             }],
         );
 
-        let executed = cmd.execute(&project).expect("execute should succeed on valid project");
-        let undone = cmd.undo(&executed).expect("undo should succeed on previously executed command");
+        let executed = cmd
+            .execute(&project)
+            .expect("execute should succeed on valid project");
+        let undone = cmd
+            .undo(&executed)
+            .expect("undo should succeed on previously executed command");
 
         assert!(undone.roads[0].lateral_profile.crossfalls.is_empty());
     }

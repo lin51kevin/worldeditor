@@ -66,7 +66,10 @@ pub struct DeleteShapeLayer {
 
 impl DeleteShapeLayer {
     pub fn with_snapshot(layer_id: impl Into<String>, layer: ShapeLayer) -> Self {
-        Self { layer_id: layer_id.into(), snapshot: Some(layer) }
+        Self {
+            layer_id: layer_id.into(),
+            snapshot: Some(layer),
+        }
     }
 }
 
@@ -84,9 +87,10 @@ impl Command for DeleteShapeLayer {
     }
 
     fn undo(&self, project: &Project) -> Result<Project, EditorError> {
-        let layer = self.snapshot.as_ref().ok_or_else(|| {
-            EditorError::OperationFailed("No snapshot for undo".into())
-        })?;
+        let layer = self
+            .snapshot
+            .as_ref()
+            .ok_or_else(|| EditorError::OperationFailed("No snapshot for undo".into()))?;
         let mut p = project.clone();
         p.shape_layers.push(layer.clone());
         Ok(p)
@@ -108,7 +112,10 @@ pub struct AddShapeNode {
 
 impl AddShapeNode {
     pub fn new(layer_id: impl Into<String>, node: ShapeNode) -> Self {
-        Self { layer_id: layer_id.into(), node }
+        Self {
+            layer_id: layer_id.into(),
+            node,
+        }
     }
 }
 
@@ -181,9 +188,10 @@ impl Command for DeleteShapeNode {
     }
 
     fn undo(&self, project: &Project) -> Result<Project, EditorError> {
-        let node = self.snapshot.as_ref().ok_or_else(|| {
-            EditorError::OperationFailed("No snapshot for undo".into())
-        })?;
+        let node = self
+            .snapshot
+            .as_ref()
+            .ok_or_else(|| EditorError::OperationFailed("No snapshot for undo".into()))?;
         let mut p = project.clone();
         let layer = find_layer_mut(&mut p, &self.layer_id)?;
         layer.nodes.push(node.clone());
@@ -214,14 +222,22 @@ impl MoveShapeNode {
     pub fn new(
         layer_id: impl Into<String>,
         node_id: impl Into<String>,
-        old_x: f64, old_y: f64, old_z: f64,
-        new_x: f64, new_y: f64, new_z: f64,
+        old_x: f64,
+        old_y: f64,
+        old_z: f64,
+        new_x: f64,
+        new_y: f64,
+        new_z: f64,
     ) -> Self {
         Self {
             layer_id: layer_id.into(),
             node_id: node_id.into(),
-            new_x, new_y, new_z,
-            old_x, old_y, old_z,
+            new_x,
+            new_y,
+            new_z,
+            old_x,
+            old_y,
+            old_z,
         }
     }
 }
@@ -230,9 +246,13 @@ impl Command for MoveShapeNode {
     fn execute(&self, project: &Project) -> Result<Project, EditorError> {
         let mut p = project.clone();
         let layer = find_layer_mut(&mut p, &self.layer_id)?;
-        let node = layer.nodes.iter_mut().find(|n| n.id == self.node_id).ok_or_else(|| {
-            EditorError::OperationFailed(format!("Node '{}' not found", self.node_id))
-        })?;
+        let node = layer
+            .nodes
+            .iter_mut()
+            .find(|n| n.id == self.node_id)
+            .ok_or_else(|| {
+                EditorError::OperationFailed(format!("Node '{}' not found", self.node_id))
+            })?;
         node.x = self.new_x;
         node.y = self.new_y;
         node.z = self.new_z;
@@ -242,9 +262,13 @@ impl Command for MoveShapeNode {
     fn undo(&self, project: &Project) -> Result<Project, EditorError> {
         let mut p = project.clone();
         let layer = find_layer_mut(&mut p, &self.layer_id)?;
-        let node = layer.nodes.iter_mut().find(|n| n.id == self.node_id).ok_or_else(|| {
-            EditorError::OperationFailed(format!("Node '{}' not found", self.node_id))
-        })?;
+        let node = layer
+            .nodes
+            .iter_mut()
+            .find(|n| n.id == self.node_id)
+            .ok_or_else(|| {
+                EditorError::OperationFailed(format!("Node '{}' not found", self.node_id))
+            })?;
         node.x = self.old_x;
         node.y = self.old_y;
         node.z = self.old_z;
@@ -267,7 +291,10 @@ pub struct AddShapeWay {
 
 impl AddShapeWay {
     pub fn new(layer_id: impl Into<String>, way: ShapeWay) -> Self {
-        Self { layer_id: layer_id.into(), way }
+        Self {
+            layer_id: layer_id.into(),
+            way,
+        }
     }
 }
 
@@ -313,7 +340,11 @@ impl DeleteShapeWay {
         way_id: impl Into<String>,
         way: ShapeWay,
     ) -> Self {
-        Self { layer_id: layer_id.into(), way_id: way_id.into(), snapshot: Some(way) }
+        Self {
+            layer_id: layer_id.into(),
+            way_id: way_id.into(),
+            snapshot: Some(way),
+        }
     }
 }
 
@@ -332,9 +363,10 @@ impl Command for DeleteShapeWay {
     }
 
     fn undo(&self, project: &Project) -> Result<Project, EditorError> {
-        let way = self.snapshot.as_ref().ok_or_else(|| {
-            EditorError::OperationFailed("No snapshot for undo".into())
-        })?;
+        let way = self
+            .snapshot
+            .as_ref()
+            .ok_or_else(|| EditorError::OperationFailed("No snapshot for undo".into()))?;
         let mut p = project.clone();
         let layer = find_layer_mut(&mut p, &self.layer_id)?;
         layer.ways.push(way.clone());
@@ -361,9 +393,13 @@ impl Command for UpdateShapeWayNodes {
     fn execute(&self, project: &Project) -> Result<Project, EditorError> {
         let mut p = project.clone();
         let layer = find_layer_mut(&mut p, &self.layer_id)?;
-        let way = layer.ways.iter_mut().find(|w| w.id == self.way_id).ok_or_else(|| {
-            EditorError::OperationFailed(format!("Way '{}' not found", self.way_id))
-        })?;
+        let way = layer
+            .ways
+            .iter_mut()
+            .find(|w| w.id == self.way_id)
+            .ok_or_else(|| {
+                EditorError::OperationFailed(format!("Way '{}' not found", self.way_id))
+            })?;
         way.node_ids = self.new_node_ids.clone();
         Ok(p)
     }
@@ -371,9 +407,13 @@ impl Command for UpdateShapeWayNodes {
     fn undo(&self, project: &Project) -> Result<Project, EditorError> {
         let mut p = project.clone();
         let layer = find_layer_mut(&mut p, &self.layer_id)?;
-        let way = layer.ways.iter_mut().find(|w| w.id == self.way_id).ok_or_else(|| {
-            EditorError::OperationFailed(format!("Way '{}' not found", self.way_id))
-        })?;
+        let way = layer
+            .ways
+            .iter_mut()
+            .find(|w| w.id == self.way_id)
+            .ok_or_else(|| {
+                EditorError::OperationFailed(format!("Way '{}' not found", self.way_id))
+            })?;
         way.node_ids = self.old_node_ids.clone();
         Ok(p)
     }
@@ -425,14 +465,15 @@ impl Command for ShapeWayToRoad {
             .iter()
             .find(|l| l.id == self.layer_id)
             .ok_or_else(|| {
-                EditorError::OperationFailed(format!(
-                    "Shape layer '{}' not found",
-                    self.layer_id
-                ))
+                EditorError::OperationFailed(format!("Shape layer '{}' not found", self.layer_id))
             })?;
-        let way = layer.ways.iter().find(|w| w.id == self.way_id).ok_or_else(|| {
-            EditorError::OperationFailed(format!("Way '{}' not found", self.way_id))
-        })?;
+        let way = layer
+            .ways
+            .iter()
+            .find(|w| w.id == self.way_id)
+            .ok_or_else(|| {
+                EditorError::OperationFailed(format!("Way '{}' not found", self.way_id))
+            })?;
 
         let points = layer.way_points(way);
         if points.len() < 2 {
@@ -513,7 +554,10 @@ mod tests {
         layer.nodes.push(ShapeNode::new("n1", 0.0, 0.0));
         layer.nodes.push(ShapeNode::new("n2", 10.0, 0.0));
         layer.nodes.push(ShapeNode::new("n3", 20.0, 5.0));
-        layer.ways.push(ShapeWay::new("w1", vec!["n1".into(), "n2".into(), "n3".into()]));
+        layer.ways.push(ShapeWay::new(
+            "w1",
+            vec!["n1".into(), "n2".into(), "n3".into()],
+        ));
         Project {
             shape_layers: vec![layer],
             ..Default::default()
@@ -585,7 +629,11 @@ mod tests {
         let project = project_with_layer();
         let cmd = MoveShapeNode::new("layer-1", "n1", 0.0, 0.0, 0.0, 99.0, 88.0, 0.0);
         let result = cmd.execute(&project).unwrap();
-        let node = result.shape_layers[0].nodes.iter().find(|n| n.id == "n1").unwrap();
+        let node = result.shape_layers[0]
+            .nodes
+            .iter()
+            .find(|n| n.id == "n1")
+            .unwrap();
         assert!((node.x - 99.0).abs() < 1e-9);
         assert!((node.y - 88.0).abs() < 1e-9);
     }
@@ -596,7 +644,11 @@ mod tests {
         let cmd = MoveShapeNode::new("layer-1", "n1", 0.0, 0.0, 0.0, 99.0, 88.0, 0.0);
         let modified = cmd.execute(&project).unwrap();
         let undone = cmd.undo(&modified).unwrap();
-        let node = undone.shape_layers[0].nodes.iter().find(|n| n.id == "n1").unwrap();
+        let node = undone.shape_layers[0]
+            .nodes
+            .iter()
+            .find(|n| n.id == "n1")
+            .unwrap();
         assert!((node.x - 0.0).abs() < 1e-9);
     }
 
@@ -647,12 +699,17 @@ mod tests {
     #[test]
     fn test_shape_way_to_road_duplicate_road_returns_error() {
         let mut project = project_with_layer();
-        project.roads.push(Road::from_centerline("road-from-way", vec![
-            we_core::model::Geometry {
-                s: 0.0, x: 0.0, y: 0.0, hdg: 0.0, length: 10.0,
+        project.roads.push(Road::from_centerline(
+            "road-from-way",
+            vec![we_core::model::Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 10.0,
                 geo_type: we_core::model::GeometryType::Line,
-            },
-        ]));
+            }],
+        ));
         let cmd = ShapeWayToRoad::new("layer-1", "w1", "road-from-way");
         assert_operation_failed(cmd.execute(&project), "already exists");
     }

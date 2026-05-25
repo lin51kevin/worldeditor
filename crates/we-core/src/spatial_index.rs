@@ -5,6 +5,7 @@
 
 use crate::geometry::eval::sample_road_reference_line;
 use crate::model::Project;
+use crate::snapping::SnapCache;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -218,10 +219,11 @@ impl SpatialIndex {
     }
 }
 
-/// A wrapper around [`Project`] that caches the [`SpatialIndex`].
+/// A wrapper around [`Project`] that caches the [`SpatialIndex`] and [`SnapCache`].
 ///
 /// Call [`Self::invalidate()`] after mutating `project.roads` or `project.junctions`.
-/// Subsequent calls to [`Self::get_index()`] will rebuild only when dirty.
+/// Subsequent calls to [`Self::get_index()`] and [`Self::get_snap_cache()`] will rebuild
+/// only when dirty.
 ///
 /// # WASM compatibility
 /// The cache fields are **not** serialized (`#[serde(skip)]`), so this type
@@ -233,6 +235,10 @@ pub struct ProjectCache {
     pub(crate) spatial_index: Option<SpatialIndex>,
     #[serde(skip)]
     spatial_index_dirty: bool,
+    #[serde(skip)]
+    snap_cache: Option<SnapCache>,
+    #[serde(skip)]
+    snap_cache_dirty: bool,
 }
 
 impl ProjectCache {
@@ -243,13 +249,16 @@ impl ProjectCache {
             project,
             spatial_index: None,
             spatial_index_dirty: true,
+            snap_cache: None,
+            snap_cache_dirty: true,
         }
     }
 
-    /// Mark the spatial index as needing a rebuild.
+    /// Mark the cached spatial and snap indices as needing a rebuild.
     /// Call this after any mutation to `project.roads` or `project.junctions`.
     pub fn invalidate(&mut self) {
         self.spatial_index_dirty = true;
+        self.snap_cache_dirty = true;
     }
 
     /// Get a reference to the spatial index, rebuilding it only when dirty.
@@ -260,6 +269,18 @@ impl ProjectCache {
             self.spatial_index_dirty = false;
         }
         self.spatial_index.as_ref()
+    }
+
+    /// Get a reference to the cached snap candidate grid, rebuilding it when dirty.
+    pub fn get_snap_cache(&mut self) -> &SnapCache {
+        if self.snap_cache_dirty || self.snap_cache.is_none() {
+            self.snap_cache = Some(SnapCache::build(&self.project.roads));
+            self.snap_cache_dirty = false;
+        }
+        match self.snap_cache.as_ref() {
+            Some(cache) => cache,
+            None => unreachable!("snap cache should exist after rebuild"),
+        }
     }
 
     /// Get a reference to the underlying project.
@@ -281,6 +302,11 @@ impl ProjectCache {
     /// Whether a cached spatial index exists.
     pub fn has_index(&self) -> bool {
         self.spatial_index.is_some() && !self.spatial_index_dirty
+    }
+
+    /// Whether a cached snap grid exists.
+    pub fn has_snap_cache(&self) -> bool {
+        self.snap_cache.is_some() && !self.snap_cache_dirty
     }
 }
 
@@ -469,6 +495,17 @@ mod tests {
     }
 
     #[test]
+    fn test_snap_cache_builds_on_first_access() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        let mut cache = ProjectCache::new(project);
+        assert!(!cache.has_snap_cache());
+        let snap_cache = cache.get_snap_cache();
+        assert_eq!(snap_cache.endpoints.len(), 2);
+        assert!(cache.has_snap_cache());
+    }
+
+    #[test]
     fn test_cache_skips_rebuild_when_clean() {
         let mut project = Project::default();
         project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
@@ -486,6 +523,7 @@ mod tests {
         project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
         let mut cache = ProjectCache::new(project);
         assert_eq!(cache.get_index().unwrap().len(), 1);
+        assert_eq!(cache.get_snap_cache().endpoints.len(), 2);
 
         // Add a road
         cache
@@ -494,7 +532,9 @@ mod tests {
             .push(make_road_at("r2", 500.0, 500.0, 100.0));
         cache.invalidate();
         assert!(cache.is_dirty());
+        assert!(!cache.has_snap_cache());
         assert_eq!(cache.get_index().unwrap().len(), 2);
+        assert_eq!(cache.get_snap_cache().endpoints.len(), 4);
     }
 
     #[test]
@@ -502,14 +542,18 @@ mod tests {
         let mut project = Project::default();
         project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
         let mut cache = ProjectCache::new(project);
-        cache.get_index(); // build cache
+        cache.get_index();
+        cache.get_snap_cache();
         assert!(cache.has_index());
+        assert!(cache.has_snap_cache());
 
-        // Serialize and deserialize — cache should be skipped
+        // Serialize and deserialize — caches should be skipped
         let json = serde_json::to_string(&cache).unwrap();
         let mut restored: ProjectCache = serde_json::from_str(&json).unwrap();
-        assert!(!restored.has_index()); // cache not serialized
-        // But the index is still rebuildable
+        assert!(!restored.has_index());
+        assert!(!restored.has_snap_cache());
+        // But the caches are still rebuildable
         assert_eq!(restored.get_index().unwrap().len(), 1);
+        assert_eq!(restored.get_snap_cache().endpoints.len(), 2);
     }
 }

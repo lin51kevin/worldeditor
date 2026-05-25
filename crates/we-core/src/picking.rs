@@ -695,7 +695,12 @@ mod tests {
             id: "obj1".into(),
             object_type: ObjectType::Barrier,
             name: String::new(),
-            position: Point3D { x: 30.0, y: -2.0, z: 0.0, id: None }, // s=30, t=-2
+            position: Point3D {
+                x: 30.0,
+                y: -2.0,
+                z: 0.0,
+                id: None,
+            }, // s=30, t=-2
             orientation: 0.0,
             hdg: 0.0,
             pitch: 0.0,
@@ -727,7 +732,12 @@ mod tests {
             id: "obj1".into(),
             object_type: ObjectType::Barrier,
             name: String::new(),
-            position: Point3D { x: 30.0, y: -2.0, z: 0.0, id: None },
+            position: Point3D {
+                x: 30.0,
+                y: -2.0,
+                z: 0.0,
+                id: None,
+            },
             orientation: 0.0,
             hdg: 0.0,
             pitch: 0.0,

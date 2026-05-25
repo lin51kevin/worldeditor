@@ -26,53 +26,26 @@ describe('Toolbar', () => {
     vi.clearAllMocks();
   });
 
-  it('renders road, lane section, and lane select mode buttons', () => {
+  it('renders draw mode buttons (spline, arc, spiral)', () => {
     render(<Toolbar />);
 
-    expect(screen.getByRole('button', { name: '道路' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '车道段' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '车道' })).toBeInTheDocument();
-  });
-
-  it('clicking lane button sets selectionMode to lane', () => {
-    render(<Toolbar />);
-    fireEvent.click(screen.getByRole('button', { name: '车道' }));
-    expect(useViewportStore.getState().selectionMode).toBe('lane');
-    expect(useViewportStore.getState().editMode).toBe('default');
-  });
-
-  it('clicking road button sets selectionMode to road', () => {
-    render(<Toolbar />);
-    fireEvent.click(screen.getByRole('button', { name: '道路' }));
-    expect(useViewportStore.getState().selectionMode).toBe('road');
-    expect(useViewportStore.getState().editMode).toBe('default');
-  });
-
-  it('active button follows selectionMode', () => {
-    act(() => {
-      useViewportStore.setState({ selectionMode: 'lane' });
-    });
-    render(<Toolbar />);
-    const btn = screen.getByRole('button', { name: '车道' });
-    expect(btn.classList.contains('active')).toBe(true);
-    expect(screen.getByRole('button', { name: '道路' }).classList.contains('active')).toBe(false);
-  });
-
-  it('renders edit mode buttons', () => {
-    render(<Toolbar />);
-
-    expect(screen.getByRole('button', { name: '道路' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '样条' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '圆弧' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '回旋线' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '直线' })).not.toBeInTheDocument();
+  });
+
+  it('selection mode buttons are not in the floating toolbar (moved to RoadEditToolbar)', () => {
+    render(<Toolbar />);
+
+    expect(screen.queryByRole('button', { name: '道路' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '车道段' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '车道' })).not.toBeInTheDocument();
   });
 
   it('renders view mode buttons', () => {
     render(<Toolbar />);
 
-    // The Toolbar no longer has dedicated view mode buttons (草图/线图/实装 removed).
-    // Verify the toolbar renders without crashing.
+    // The toolbar renders without crashing and contains the toolbar element
     expect(document.querySelector('.toolbar')).toBeInTheDocument();
   });
 
@@ -103,8 +76,5 @@ describe('Toolbar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '回旋线' }));
     expect(useViewportStore.getState().editMode).toBe('drawSpiral');
-
-    fireEvent.click(screen.getByRole('button', { name: '道路' }));
-    expect(useViewportStore.getState().editMode).toBe('default');
   });
 });

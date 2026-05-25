@@ -9,6 +9,7 @@ use we_core::spatial_index::ProjectCache;
 // WASM is single-threaded, so a thread_local RefCell is safe and zero-overhead.
 // The frontend calls `set_project_cache()` once per project mutation instead of
 // serializing the entire project on every pick/snap call (60 Hz mousemove).
+// Picking and snapping then rebuild their spatial/snap caches lazily on demand.
 
 thread_local! {
     static PROJECT_CACHE: RefCell<Option<ProjectCache>> = const { RefCell::new(None) };
@@ -28,10 +29,10 @@ pub fn set_project_cache(project_json: &str) -> Result<(), JsError> {
     Ok(())
 }
 
-/// Mark the spatial index as dirty so it is rebuilt on the next query.
+/// Mark the cached spatial index and snap grid as dirty so they rebuild on the next query.
 ///
-/// Lighter than `set_project_cache` when only the spatial structure changed
-/// but the project reference is the same.
+/// Lighter than `set_project_cache` when the project reference is unchanged
+/// but its road/junction data has been mutated in place.
 #[wasm_bindgen]
 pub fn invalidate_project_cache() {
     PROJECT_CACHE.with(|cell| {
@@ -132,10 +133,14 @@ mod tests {
 
     #[test]
     fn test_snap_config_serde_roundtrip() {
-        let config = we_core::snapping::SnapConfig::default();
+        let config = we_core::snapping::SnapConfig {
+            snap_to_lane_endpoints: true,
+            ..we_core::snapping::SnapConfig::default()
+        };
         let json = serde_json::to_string(&config).unwrap();
         let back: we_core::snapping::SnapConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(config.grid_size, back.grid_size);
+        assert_eq!(config.snap_to_lane_endpoints, back.snap_to_lane_endpoints);
     }
 }
 
@@ -674,7 +679,7 @@ pub fn pick_object_at_point(
 // ── Cached pick / snap functions ──────────────────────────────────────────────
 //
 // These operate on the thread-local `ProjectCache` set by `set_project_cache()`.
-// The spatial index is built lazily on the first query after invalidation.
+// Spatial and snap caches are built lazily on the first query after invalidation.
 
 /// Pick the nearest road using the cached project + spatial index.
 ///
@@ -837,10 +842,7 @@ pub fn pick_object_at_point_cached(x: f64, y: f64, threshold: f64) -> Result<JsV
 ///
 /// Returns `{ x, y }` or null.
 #[wasm_bindgen]
-pub fn get_signal_world_pos_cached(
-    road_id: &str,
-    signal_id: &str,
-) -> Result<JsValue, JsError> {
+pub fn get_signal_world_pos_cached(road_id: &str, signal_id: &str) -> Result<JsValue, JsError> {
     use we_core::geometry::eval::offset_point;
 
     PROJECT_CACHE.with(|cell| {
@@ -872,10 +874,7 @@ pub fn get_signal_world_pos_cached(
 ///
 /// Returns `{ x, y }` or null.
 #[wasm_bindgen]
-pub fn get_object_world_pos_cached(
-    road_id: &str,
-    object_id: &str,
-) -> Result<JsValue, JsError> {
+pub fn get_object_world_pos_cached(road_id: &str, object_id: &str) -> Result<JsValue, JsError> {
     use we_core::geometry::eval::offset_point;
 
     PROJECT_CACHE.with(|cell| {
@@ -927,13 +926,21 @@ pub fn get_lane_world_pos_cached(
         if let Some(road) = road {
             if let Some(section) = road.lane_sections.get(section_index) {
                 // Find the lane's center offset: sum widths of inner lanes + half this lane's width
-                let s_mid = section.s + (road.lane_sections.get(section_index + 1)
-                    .map(|ns| ns.s)
-                    .unwrap_or(road.length)
-                    - section.s) / 2.0;
+                let s_mid = section.s
+                    + (road
+                        .lane_sections
+                        .get(section_index + 1)
+                        .map(|ns| ns.s)
+                        .unwrap_or(road.length)
+                        - section.s)
+                        / 2.0;
 
                 // Compute lateral offset to the lane center
-                let lanes = if lane_id > 0 { &section.left } else { &section.right };
+                let lanes = if lane_id > 0 {
+                    &section.left
+                } else {
+                    &section.right
+                };
                 let abs_id = lane_id.unsigned_abs() as usize;
                 let mut t_offset = 0.0;
                 for lane in lanes.iter() {

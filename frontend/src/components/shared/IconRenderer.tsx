@@ -9,6 +9,10 @@ import {
   PanelTop,
   ArrowLeftRight,
   TrafficCone,
+  Plus,
+  Minus,
+  RefreshCcw,
+  MoveHorizontal,
 } from 'lucide-react';
 
 const iconMap: Record<string, React.FC<{ size?: number; className?: string }>> = {
@@ -21,6 +25,10 @@ const iconMap: Record<string, React.FC<{ size?: number; className?: string }>> =
   PanelTop,
   ArrowLeftRight,
   TrafficCone,
+  Plus,
+  Minus,
+  RefreshCcw,
+  MoveHorizontal,
 };
 
 /**

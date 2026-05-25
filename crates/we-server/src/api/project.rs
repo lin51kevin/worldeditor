@@ -27,7 +27,9 @@ pub struct CreateProject {
 impl CreateProject {
     pub fn validate(&self) -> Result<()> {
         if self.name.trim().is_empty() {
-            return Err(Error::Validation("Project name cannot be empty".to_string()));
+            return Err(Error::Validation(
+                "Project name cannot be empty".to_string(),
+            ));
         }
         if self.name.len() > 255 {
             return Err(Error::Validation(
@@ -55,7 +57,9 @@ impl UpdateProject {
     pub fn validate(&self) -> Result<()> {
         if let Some(name) = &self.name {
             if name.trim().is_empty() {
-                return Err(Error::Validation("Project name cannot be empty".to_string()));
+                return Err(Error::Validation(
+                    "Project name cannot be empty".to_string(),
+                ));
             }
             if name.len() > 255 {
                 return Err(Error::Validation(

@@ -17,7 +17,10 @@ pub struct ShapeTag {
 
 impl ShapeTag {
     pub fn new(key: impl Into<String>, value: impl Into<String>) -> Self {
-        Self { key: key.into(), value: value.into() }
+        Self {
+            key: key.into(),
+            value: value.into(),
+        }
     }
 }
 
@@ -37,7 +40,13 @@ pub struct ShapeNode {
 
 impl ShapeNode {
     pub fn new(id: impl Into<String>, x: f64, y: f64) -> Self {
-        Self { id: id.into(), x, y, z: 0.0, tags: vec![] }
+        Self {
+            id: id.into(),
+            x,
+            y,
+            z: 0.0,
+            tags: vec![],
+        }
     }
 
     pub fn with_z(mut self, z: f64) -> Self {
@@ -60,13 +69,16 @@ pub struct ShapeWay {
 
 impl ShapeWay {
     pub fn new(id: impl Into<String>, node_ids: Vec<String>) -> Self {
-        Self { id: id.into(), node_ids, tags: vec![] }
+        Self {
+            id: id.into(),
+            node_ids,
+            tags: vec![],
+        }
     }
 
     /// Return `true` if the way forms a closed loop (first == last node ID).
     pub fn is_closed(&self) -> bool {
-        self.node_ids.len() >= 3
-            && self.node_ids.first() == self.node_ids.last()
+        self.node_ids.len() >= 3 && self.node_ids.first() == self.node_ids.last()
     }
 }
 
@@ -151,7 +163,10 @@ mod tests {
 
     #[test]
     fn test_shape_way_is_closed() {
-        let way = ShapeWay::new("w1", vec!["n1".into(), "n2".into(), "n3".into(), "n1".into()]);
+        let way = ShapeWay::new(
+            "w1",
+            vec!["n1".into(), "n2".into(), "n3".into(), "n1".into()],
+        );
         assert!(way.is_closed());
     }
 

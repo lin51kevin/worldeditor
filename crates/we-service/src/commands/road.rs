@@ -1325,7 +1325,9 @@ mod tests {
     #[test]
     fn test_update_bridge_execute_changes_fields() {
         let project = project_with_bridge();
-        let command = UpdateBridge::new("road-1", "bridge-1", 1.0, 5.0, "concrete", 3.0, 10.0, "steel");
+        let command = UpdateBridge::new(
+            "road-1", "bridge-1", 1.0, 5.0, "concrete", 3.0, 10.0, "steel",
+        );
 
         let result = command.execute(&project).unwrap();
 
@@ -1338,7 +1340,9 @@ mod tests {
     #[test]
     fn test_update_bridge_undo_restores_original_fields() {
         let project = project_with_bridge();
-        let command = UpdateBridge::new("road-1", "bridge-1", 1.0, 5.0, "concrete", 3.0, 10.0, "steel");
+        let command = UpdateBridge::new(
+            "road-1", "bridge-1", 1.0, 5.0, "concrete", 3.0, 10.0, "steel",
+        );
         let modified = command.execute(&project).unwrap();
 
         let undone = command.undo(&modified).unwrap();
@@ -1352,7 +1356,9 @@ mod tests {
     #[test]
     fn test_update_bridge_execute_missing_road_returns_error() {
         let project = project_with_bridge();
-        let command = UpdateBridge::new("missing", "bridge-1", 1.0, 5.0, "concrete", 3.0, 10.0, "steel");
+        let command = UpdateBridge::new(
+            "missing", "bridge-1", 1.0, 5.0, "concrete", 3.0, 10.0, "steel",
+        );
 
         assert_operation_failed(command.execute(&project), "not found");
     }
@@ -1360,7 +1366,16 @@ mod tests {
     #[test]
     fn test_update_bridge_execute_missing_bridge_returns_error() {
         let project = project_with_bridge();
-        let command = UpdateBridge::new("road-1", "no-such-bridge", 1.0, 5.0, "concrete", 3.0, 10.0, "steel");
+        let command = UpdateBridge::new(
+            "road-1",
+            "no-such-bridge",
+            1.0,
+            5.0,
+            "concrete",
+            3.0,
+            10.0,
+            "steel",
+        );
 
         assert_operation_failed(command.execute(&project), "not found");
     }
@@ -1370,7 +1385,8 @@ mod tests {
         let project = project_with_bridge();
         assert_eq!(project.roads[0].bridges.len(), 1);
 
-        let command = DeleteBridge::with_snapshot("road-1", "bridge-1", project.roads[0].bridges[0].clone());
+        let command =
+            DeleteBridge::with_snapshot("road-1", "bridge-1", project.roads[0].bridges[0].clone());
         let result = command.execute(&project).unwrap();
 
         assert_eq!(result.roads[0].bridges.len(), 0);
@@ -1379,7 +1395,8 @@ mod tests {
     #[test]
     fn test_delete_bridge_undo_restores_bridge() {
         let project = project_with_bridge();
-        let command = DeleteBridge::with_snapshot("road-1", "bridge-1", project.roads[0].bridges[0].clone());
+        let command =
+            DeleteBridge::with_snapshot("road-1", "bridge-1", project.roads[0].bridges[0].clone());
         let modified = command.execute(&project).unwrap();
         assert_eq!(modified.roads[0].bridges.len(), 0);
 
@@ -1392,7 +1409,16 @@ mod tests {
     #[test]
     fn test_update_tunnel_execute_changes_fields() {
         let project = project_with_tunnel();
-        let command = UpdateTunnel::new("road-1", "tunnel-1", 2.0, 8.0, "standard", 4.0, 12.0, "underpass");
+        let command = UpdateTunnel::new(
+            "road-1",
+            "tunnel-1",
+            2.0,
+            8.0,
+            "standard",
+            4.0,
+            12.0,
+            "underpass",
+        );
 
         let result = command.execute(&project).unwrap();
 
@@ -1405,7 +1431,16 @@ mod tests {
     #[test]
     fn test_update_tunnel_undo_restores_original_fields() {
         let project = project_with_tunnel();
-        let command = UpdateTunnel::new("road-1", "tunnel-1", 2.0, 8.0, "standard", 4.0, 12.0, "underpass");
+        let command = UpdateTunnel::new(
+            "road-1",
+            "tunnel-1",
+            2.0,
+            8.0,
+            "standard",
+            4.0,
+            12.0,
+            "underpass",
+        );
         let modified = command.execute(&project).unwrap();
 
         let undone = command.undo(&modified).unwrap();
@@ -1419,7 +1454,16 @@ mod tests {
     #[test]
     fn test_update_tunnel_execute_missing_road_returns_error() {
         let project = project_with_tunnel();
-        let command = UpdateTunnel::new("missing", "tunnel-1", 2.0, 8.0, "standard", 4.0, 12.0, "underpass");
+        let command = UpdateTunnel::new(
+            "missing",
+            "tunnel-1",
+            2.0,
+            8.0,
+            "standard",
+            4.0,
+            12.0,
+            "underpass",
+        );
 
         assert_operation_failed(command.execute(&project), "not found");
     }
@@ -1429,7 +1473,8 @@ mod tests {
         let project = project_with_tunnel();
         assert_eq!(project.roads[0].tunnels.len(), 1);
 
-        let command = DeleteTunnel::with_snapshot("road-1", "tunnel-1", project.roads[0].tunnels[0].clone());
+        let command =
+            DeleteTunnel::with_snapshot("road-1", "tunnel-1", project.roads[0].tunnels[0].clone());
         let result = command.execute(&project).unwrap();
 
         assert_eq!(result.roads[0].tunnels.len(), 0);
@@ -1438,7 +1483,8 @@ mod tests {
     #[test]
     fn test_delete_tunnel_undo_restores_tunnel() {
         let project = project_with_tunnel();
-        let command = DeleteTunnel::with_snapshot("road-1", "tunnel-1", project.roads[0].tunnels[0].clone());
+        let command =
+            DeleteTunnel::with_snapshot("road-1", "tunnel-1", project.roads[0].tunnels[0].clone());
         let modified = command.execute(&project).unwrap();
         assert_eq!(modified.roads[0].tunnels.len(), 0);
 

@@ -850,7 +850,10 @@ mod tests {
 
         let vertices = build_single_road_preview_vertices(&road, 2.0, [0.2, 0.5, 1.0, 0.8]);
 
-        assert!(!vertices.is_empty(), "Expected preview vertices for single-lane road");
+        assert!(
+            !vertices.is_empty(),
+            "Expected preview vertices for single-lane road"
+        );
         assert!(
             (mesh_width(&vertices) - 3.5).abs() < 0.05,
             "Single-lane preview should stay 3.5m wide, got {}",

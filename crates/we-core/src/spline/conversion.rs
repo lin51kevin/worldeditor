@@ -140,9 +140,8 @@ pub fn spline_to_geometries_with_mode(
         // Check if this segment can be approximated as a line.
         // Normalize tangents so the dot product is bounded in [-1, 1] — manual
         // tangents from the editor can have arbitrary magnitudes.
-        let t_out_len = (k0.tangent_out[0] * k0.tangent_out[0]
-            + k0.tangent_out[1] * k0.tangent_out[1])
-            .sqrt();
+        let t_out_len =
+            (k0.tangent_out[0] * k0.tangent_out[0] + k0.tangent_out[1] * k0.tangent_out[1]).sqrt();
         let t_in_len =
             (k1.tangent_in[0] * k1.tangent_in[0] + k1.tangent_in[1] * k1.tangent_in[1]).sqrt();
         let tangent_alignment_start = if t_out_len > 1e-9 {
@@ -418,7 +417,9 @@ mod tests {
 
         let geos = spline_to_geometries(&spline);
         assert!(!geos.is_empty(), "should produce at least one geometry");
-        let all_lines = geos.iter().all(|g| matches!(g.geo_type, GeometryType::Line));
+        let all_lines = geos
+            .iter()
+            .all(|g| matches!(g.geo_type, GeometryType::Line));
         assert!(
             !all_lines,
             "90-degree turn with large tangents must not be classified as all-Line geometry, got {:?}",

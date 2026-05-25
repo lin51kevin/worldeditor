@@ -77,10 +77,6 @@ function makeProject(leftLaneIds: number[] = [2, 4], rightLaneIds: number[] = [-
   };
 }
 
-function getToolbarButton(id: string) {
-  return registerToolbarButton.mock.calls.map(([button]) => button).find((button) => button.id === id);
-}
-
 function getMenuItem(id: string) {
   return registerMenuItem.mock.calls.map(([item]) => item).find((item) => item.id === id);
 }
@@ -102,23 +98,12 @@ describe('road-tools.plugin', () => {
     });
   });
 
-  it('mounts toolbar and menu contributions and unregisters on cleanup', () => {
+  it('mounts menu contributions (no toolbar buttons) and unregisters on cleanup', () => {
     const cleanup = mountRoadToolsPlugin();
 
-    expect(registerToolbarButton).toHaveBeenCalledTimes(8);
+    // Toolbar buttons are no longer registered (moved to RoadEditToolbar panel)
+    expect(registerToolbarButton).not.toHaveBeenCalled();
     expect(registerMenuItem).toHaveBeenCalledTimes(8);
-    expect(registerToolbarButton.mock.calls.map(([button]) => button.id)).toEqual(
-      expect.arrayContaining([
-        'road-tools:move-road',
-        'road-tools:rotate-road',
-        'road-tools:adjust-edge',
-        'road-tools:clone',
-        'road-tools:reverse',
-        'road-tools:mirror',
-        'road-tools:optimize',
-        'road-tools:swap-centerline',
-      ]),
-    );
     expect(registerMenuItem.mock.calls.map(([item]) => item.id)).toEqual(
       expect.arrayContaining([
         'road-tools:menu-draw-arc',
@@ -136,45 +121,23 @@ describe('road-tools.plugin', () => {
     expect(unregisterPlugin).toHaveBeenCalledWith('road-tools');
   });
 
-  it('toggles move-road mode and reflects disabled/active state from the stores', () => {
-    mountRoadToolsPlugin();
-    const moveButton = getToolbarButton('road-tools:move-road');
-
-    expect(moveButton?.isDisabled?.()).toBe(false);
-    expect(moveButton?.isActive?.()).toBe(false);
-
-    moveButton?.onClick();
-    expect(viewportState.setEditMode).toHaveBeenCalledWith('move-road');
-    expect(moveButton?.isActive?.()).toBe(true);
-
-    moveButton?.onClick();
-    expect(viewportState.setEditMode).toHaveBeenLastCalledWith('default');
-
-    projectState.selectedRoadId = null;
-    expect(moveButton?.isDisabled?.()).toBe(true);
-  });
-
-  it('runs clone actions with the selected road id and deterministic generated id', () => {
+  it('runs clone action via menu item', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(4242);
     mountRoadToolsPlugin();
 
-    getToolbarButton('road-tools:clone')?.onClick();
     getMenuItem('road-tools:menu-clone')?.onClick();
 
-    expect(projectState.cloneRoad).toHaveBeenNthCalledWith(1, 'road-1', 'road-1-clone-4242', [20, 20]);
-    expect(projectState.cloneRoad).toHaveBeenNthCalledWith(2, 'road-1', 'road-1-clone-4242', [20, 20]);
+    expect(projectState.cloneRoad).toHaveBeenCalledWith('road-1', 'road-1-clone-4242', [20, 20]);
 
     nowSpy.mockRestore();
   });
 
-  it('swaps the centerline with the outermost left lane from toolbar and menu actions', () => {
+  it('swaps the centerline with the outermost left lane via menu action', () => {
     mountRoadToolsPlugin();
 
-    getToolbarButton('road-tools:swap-centerline')?.onClick();
     getMenuItem('road-tools:menu-swap')?.onClick();
 
-    expect(projectState.swapCenterline).toHaveBeenNthCalledWith(1, 'road-1', 4);
-    expect(projectState.swapCenterline).toHaveBeenNthCalledWith(2, 'road-1', 4);
+    expect(projectState.swapCenterline).toHaveBeenCalledWith('road-1', 4);
   });
 
   it('falls back to the right-side lane when no left lanes are available', () => {
