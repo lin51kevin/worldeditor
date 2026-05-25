@@ -8,15 +8,13 @@
  */
 import type {
   Road, Lane, LaneSection, LaneWidth, Geometry, RoadLink,
-  RoadMark, RoadSignal, Junction, JunctionConnection, LinkElement,
-  RoadObjectItem,
+  RoadMark, Junction, JunctionConnection, LinkElement,
 } from '../../../services/platform';
 import type {
   LaneConfig, MarkConfig, SectionConfig,
   RoadTemplateConfig, JunctionTemplateConfig, JunctionTopology,
-  SignalTemplateConfig, MarkingTemplateConfig,
-  RoadObjectTemplateConfig, SignTemplateConfig,
 } from './schema';
+import { addTurnArrows, addCrosswalks, solidateBrokenLinesNearJunction } from './decorators';
 
 const DEFAULT_ROAD_LENGTH = 100;
 const DEFAULT_LANE_WIDTH = 3.5;
@@ -50,7 +48,7 @@ export function resetIdCounter(val = 0): void {
 
 // ── Mark helpers ─────────────────────────────────────────────────────────────
 
-function markConfigToRoadMark(cfg: MarkConfig): RoadMark {
+export function markConfigToRoadMark(cfg: MarkConfig): RoadMark {
   const defaultWidth = cfg.type === 'Broken' ? 0.12 : 0.15;
   return {
     s_offset: 0,
@@ -954,222 +952,6 @@ export interface JunctionBuildResult {
   extraJunctions?: Junction[];
 }
 
-// ── Turn arrow helpers ───────────────────────────────────────────────────────
-
-/**
- * Determine arrow signal subtype for outgoing (left) lane based on driving lane count
- * and lane position index (1-based from innermost).
- * For outgoing direction: mirrors C# placement at s≈4 on left-side lanes.
- */
-function getOutgoingArrowSubtype(drivingLaneCount: number, laneIndex: number): { subType: string; name: string } {
-  if (drivingLaneCount === 1) {
-    return { subType: 'StraightOrLeftOrRightTurnArrow', name: 'Straight Left or Right Turn Arrow Paint' };
-  } else if (drivingLaneCount === 2) {
-    if (laneIndex === 1) {
-      return { subType: 'StraightOrLeftTurnArrow', name: 'Straight Left Turn Arrow Paint' };
-    } else {
-      return { subType: 'StraightOrRightTurnArrow', name: 'Straight Right Turn Arrow Paint' };
-    }
-  } else {
-    if (laneIndex === 1) {
-      return { subType: 'StraightOrLeftTurnArrow', name: 'Straight Left Turn Arrow Paint' };
-    } else if (laneIndex === drivingLaneCount) {
-      return { subType: 'StraightOrRightTurnArrow', name: 'Straight Right Turn Arrow Paint' };
-    } else {
-      return { subType: 'StraightAheadArrow', name: 'Straight Arrow Paint' };
-    }
-  }
-}
-
-/**
- * Determine arrow signal subtype for incoming (right) lane based on driving lane count
- * and lane position index (1-based from innermost).
- * Matches C# GetPaintSubTye logic for right-hand driving, incoming direction.
- */
-function getIncomingArrowSubtype(drivingLaneCount: number, laneIndex: number, armCount?: number): { subType: string; name: string } {
-  if (drivingLaneCount === 1) {
-    return { subType: 'StraightOrLeftOrRightTurnArrow', name: 'Straight Left or Right Turn Arrow Paint' };
-  } else if (drivingLaneCount === 2) {
-    if (laneIndex === 1) {
-      return { subType: 'LeftOrRightTurnArrow', name: 'Left or Right Turn Arrow Paint' };
-    } else {
-      // For T-junction (3 arms), outer lane can also go straight
-      if (armCount === 3) {
-        return { subType: 'StraightOrRightTurnArrow', name: 'Straight Right Turn Arrow Paint' };
-      }
-      return { subType: 'RightTurnArrow', name: 'Right Turn Arrow Paint' };
-    }
-  } else {
-    if (laneIndex === 1) {
-      return { subType: 'LeftTurnArrow', name: 'Left Turn Arrow Paint' };
-    } else if (laneIndex === drivingLaneCount) {
-      return { subType: 'RightTurnArrow', name: 'Right Turn Arrow Paint' };
-    } else {
-      return { subType: 'StraightAheadArrow', name: 'Straight Arrow Paint' };
-    }
-  }
-}
-
-/**
- * Add turn arrow signals to arm roads on both sides (matching C# reference):
- * - Right-side (incoming traffic): placed at s ≈ length - 4m, t < 0
- * - Left-side (outgoing traffic): placed at s ≈ 4m, t > 0
- */
-function addTurnArrows(armRoads: Road[], armCount?: number): void {
-  const SIGNAL_S_DELTA = 4.0;
-  for (const road of armRoads) {
-    if (!road.signals) road.signals = [];
-
-    // Right-side (incoming) arrows near junction entry (s ≈ length - 4)
-    const rightDrivingLanes = road.lane_sections[0]!.right.filter(l => l.lane_type === 'Driving');
-    const rightLaneCount = rightDrivingLanes.length;
-    if (rightLaneCount >= 1) {
-      const signalS = Math.max(road.length - SIGNAL_S_DELTA, 0.5);
-      for (let i = 0; i < rightLaneCount; i++) {
-        const laneIndex = i + 1;
-        const { subType, name } = getIncomingArrowSubtype(rightLaneCount, laneIndex, armCount);
-        const lane = rightDrivingLanes[i]!;
-        const laneWidth = lane.width[0]?.a ?? DEFAULT_LANE_WIDTH;
-        const tOffset = -(i * laneWidth + laneWidth / 2);
-
-        road.signals!.push({
-          id: genId(),
-          name,
-          s: signalS,
-          t: tOffset,
-          z_offset: 0.01,
-          h_offset: 0,
-          width: 3.0,
-          height: 0.01,
-          signal_type: 'Graphics',
-          signal_subtype: subType,
-          value: null,
-          orientation: 'none',
-          is_dynamic: false,
-        });
-      }
-    }
-
-    // Left-side (outgoing) arrows near road start (s ≈ 4)
-    const leftDrivingLanes = road.lane_sections[0]!.left.filter(l => l.lane_type === 'Driving');
-    const leftLaneCount = leftDrivingLanes.length;
-    if (leftLaneCount >= 1) {
-      const signalS = SIGNAL_S_DELTA;
-      for (let i = 0; i < leftLaneCount; i++) {
-        const laneIndex = i + 1;
-        const { subType, name } = getOutgoingArrowSubtype(leftLaneCount, laneIndex);
-        const lane = leftDrivingLanes[i]!;
-        const laneWidth = lane.width[0]?.a ?? DEFAULT_LANE_WIDTH;
-        const tOffset = i * laneWidth + laneWidth / 2;
-
-        road.signals!.push({
-          id: genId(),
-          name,
-          s: signalS,
-          t: tOffset,
-          z_offset: 0.01,
-          h_offset: Math.PI,
-          width: 3.0,
-          height: 0.01,
-          signal_type: 'Graphics',
-          signal_subtype: subType,
-          value: null,
-          orientation: 'none',
-          is_dynamic: false,
-        });
-      }
-    }
-  }
-}
-
-/**
- * Add crosswalk objects at the junction-adjacent end of each arm road.
- * For inward-pointing arm roads, junction edge is at s=length (successor=junction).
- * Includes cornerLocal outline matching C# reference format.
- */
-function addCrosswalks(armRoads: Road[]): void {
-  const CROSSWALK_WIDTH = 4.0;
-  // Crosswalk sits between the stop line and junction edge (junction side of stop line)
-  // Layout: ... → stop_line (s=length-6) → crosswalk (s=length-2) → junction edge (s=length)
-  const CROSSWALK_OFFSET = 0.0;
-  for (const road of armRoads) {
-    const leftLanes = road.lane_sections[0]!.left;
-    const rightLanes = road.lane_sections[0]!.right;
-    const leftWidth = leftLanes.reduce((sum, l) => sum + (l.width[0]?.a ?? DEFAULT_LANE_WIDTH), 0);
-    const rightWidth = rightLanes.reduce((sum, l) => sum + (l.width[0]?.a ?? DEFAULT_LANE_WIDTH), 0);
-    const totalRoadWidth = leftWidth + rightWidth;
-    const halfWidth = totalRoadWidth / 2 + 0.1;
-
-    // Crosswalk position: close to junction edge (past the stop line)
-    const crosswalkS = road.length - CROSSWALK_OFFSET;
-
-    // Corner outline (matching C# reference: u→x, v→y, z→z)
-    const corners = [
-      { x: 1, y: -halfWidth, z: 0, id: null },
-      { x: 1, y: halfWidth, z: 0, id: null },
-      { x: 1 + CROSSWALK_WIDTH, y: halfWidth, z: 0, id: null },
-      { x: 1 + CROSSWALK_WIDTH, y: -halfWidth, z: 0, id: null },
-      { x: 1, y: -halfWidth, z: 0, id: null },
-    ];
-
-    if (!road.objects) road.objects = [];
-    road.objects.push({
-      id: genId(),
-      object_type: 'Crosswalk',
-      name: 'Zebra Strips Area',
-      position: { x: crosswalkS, y: 0, z: 0.01, id: null },
-      orientation: 0,
-      hdg: 0,
-      width: totalRoadWidth + 0.2,
-      height: 0.01,
-      length: CROSSWALK_WIDTH,
-      corners,
-      validity: null,
-    });
-  }
-}
-
-/**
- * Convert broken lane marks to solid near the junction entry.
- * For inward-pointing arm roads, junction edge is at s=length.
- * Split broken marks: solid for last SOLIDATE_LENGTH, broken for the rest.
- */
-function solidateBrokenLinesNearJunction(armRoads: Road[]): void {
-  const SOLIDATE_LENGTH = 10.0;
-  for (const road of armRoads) {
-    const section = road.lane_sections[0];
-    if (!section) continue;
-
-    // Process right-side lanes (incoming traffic)
-    for (const lane of section.right) {
-      if (lane.road_marks.length === 0) continue;
-      const mark = lane.road_marks[0]!;
-      if (mark.mark_type === 'Broken' && road.length > SOLIDATE_LENGTH) {
-        // Replace with two marks: broken for most of the road, solid near junction
-        const solidStart = road.length - SOLIDATE_LENGTH;
-        lane.road_marks = [
-          { ...mark, s_offset: 0 }, // broken from start
-          { ...mark, s_offset: solidStart, mark_type: 'Solid', lane_change: 'None' }, // solid near junction
-        ];
-      }
-    }
-
-    // Process left-side lanes (outgoing traffic)
-    for (const lane of section.left) {
-      if (lane.road_marks.length === 0) continue;
-      const mark = lane.road_marks[0]!;
-      if (mark.mark_type === 'Broken' && road.length > SOLIDATE_LENGTH) {
-        // For left lanes (outgoing), solid near junction entry (s=length end)
-        const solidStart = road.length - SOLIDATE_LENGTH;
-        lane.road_marks = [
-          { ...mark, s_offset: 0 },
-          { ...mark, s_offset: solidStart, mark_type: 'Solid', lane_change: 'None' },
-        ];
-      }
-    }
-  }
-}
-
 export function buildJunctionFromConfig(
   config: JunctionTemplateConfig,
   cx: number,
@@ -1313,74 +1095,12 @@ export function buildJunctionFromConfig(
   return { junction, roads: [...armRoads, ...connectorRoads] };
 }
 
-// ── Signal template → RoadSignal ─────────────────────────────────────────────
+// ── Re-export converters from separate module ────────────────────────────────
 
-export function buildSignalFromConfig(config: SignalTemplateConfig): RoadSignal {
-  return {
-    id: genId(),
-    name: '',
-    s: 0,
-    t: 0,
-    z_offset: 0,
-    h_offset: 0,
-    width: config.width ?? 1.0,
-    height: config.height ?? 2.0,
-    signal_type: config.signalType,
-    signal_subtype: config.signalSubtype ?? '-1',
-    value: null,
-    orientation: '+',
-    is_dynamic: false,
-  };
-}
+export {
+  buildSignalFromConfig,
+  buildMarkFromConfig,
+  buildRoadObjectFromConfig,
+  buildSignFromConfig,
+} from './converters';
 
-// ── Marking template → RoadMark ──────────────────────────────────────────────
-
-export function buildMarkFromConfig(config: MarkingTemplateConfig): RoadMark {
-  return markConfigToRoadMark(config.mark);
-}
-
-// ── Road-object template → RoadObjectItem ────────────────────────────────────
-
-export function buildRoadObjectFromConfig(
-  config: RoadObjectTemplateConfig,
-  s: number,
-  t: number,
-  hdg = 0,
-): RoadObjectItem {
-  return {
-    id: genId(),
-    object_type: config.objectType,
-    name: '',
-    position: { x: s, y: t, z: 0.1, id: null },
-    orientation: hdg,
-    hdg,
-    width: config.defaultWidth ?? 1.0,
-    height: config.defaultHeight ?? 0.5,
-    length: config.defaultLength ?? 1.0,
-    corners: [],
-    validity: null,
-  };
-}
-
-// ── Sign template → RoadObjectItem ───────────────────────────────────────────
-
-export function buildSignFromConfig(
-  config: SignTemplateConfig,
-  s: number,
-  t: number,
-  hdg = 0,
-): RoadObjectItem {
-  return {
-    id: genId(),
-    object_type: config.objectType,
-    name: '',
-    position: { x: s, y: t, z: 0.1, id: null },
-    orientation: hdg,
-    hdg,
-    width: config.defaultWidth ?? 1.0,
-    height: config.defaultHeight ?? 3.0,
-    length: config.defaultWidth ?? 1.0,
-    corners: [],
-    validity: null,
-  };
-}
