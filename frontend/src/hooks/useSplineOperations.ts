@@ -24,6 +24,34 @@ export function resolveWasmTemplateId(templateId: string): string {
 }
 
 /**
+ * Standalone finalizeGeometryEdit callable from non-hook contexts (e.g., plugin
+ * onClick handlers). Exits geometry edit synchronously so nodes disappear
+ * immediately, then persists spline → road geometry asynchronously via WASM.
+ */
+export async function finalizeGeometryEditStandalone(): Promise<void> {
+  const viewState = useViewportStore.getState();
+  const { geometryEditRoadId: roadId, geometryEditSpline: spline } = viewState;
+  if (!roadId || !spline) return;
+
+  // Exit synchronously FIRST so nodes disappear immediately and subsequent
+  // keypresses see geometryEditRoadId=null (prevents the double-press toggle bug).
+  viewState.exitGeometryEdit();
+
+  try {
+    const service = await getPlatformService();
+    const geometries = await service.splineToGeometries(spline);
+    const totalLength = geometries.reduce((sum, g) => sum + g.length, 0);
+    // Persist the current key knot positions for future edit sessions.
+    const editData = spline.knots
+      .filter((k) => k.knot_type !== 'Intermediate')
+      .map((k) => k.position);
+    useProjectStore.getState().updateRoadGeometry(roadId, geometries, totalLength, editData);
+  } catch (err) {
+    console.error('[Viewport] Failed to finalize geometry edit:', err);
+  }
+}
+
+/**
  * Encapsulates spline/geometry creation and geometry-edit mode callbacks.
  */
 export function useSplineOperations() {
@@ -121,24 +149,7 @@ export function useSplineOperations() {
     }
   }, []);
 
-  const finalizeGeometryEdit = useCallback(async () => {
-    const viewState = useViewportStore.getState();
-    const { geometryEditRoadId: roadId, geometryEditSpline: spline } = viewState;
-    if (!roadId || !spline) return;
-    try {
-      const service = await getPlatformService();
-      const geometries = await service.splineToGeometries(spline);
-      const totalLength = geometries.reduce((sum, g) => sum + g.length, 0);
-      // Persist the current key knot positions for future edit sessions.
-      const editData = spline.knots
-        .filter((k) => k.knot_type !== 'Intermediate')
-        .map((k) => k.position);
-      useProjectStore.getState().updateRoadGeometry(roadId, geometries, totalLength, editData);
-      viewState.exitGeometryEdit();
-    } catch (err) {
-      console.error('[Viewport] Failed to finalize geometry edit:', err);
-    }
-  }, []);
+  const finalizeGeometryEdit = useCallback(finalizeGeometryEditStandalone, []);
 
   return {
     finalizeSplineCreation,

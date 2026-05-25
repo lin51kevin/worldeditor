@@ -9,6 +9,7 @@ import { useProjectStore } from '../../../stores/projectStore';
 import { useViewportStore } from '../../../stores/viewportStore';
 import { usePluginContribStore } from '../../../stores/pluginContribStore';
 import type { ToolbarButtonContrib, MenuItemContrib } from '../../../stores/pluginContribStore';
+import { finalizeGeometryEditStandalone } from '../../../hooks/useSplineOperations';
 import { FlipHorizontal2, Sparkles, ArrowUpDown } from 'lucide-react';
 
 const PLUGIN_ID = 'road-tools';
@@ -29,6 +30,9 @@ export function mountRoadToolsPlugin(): () => void {
       isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
         const vs = useViewportStore.getState();
+        if (vs.geometryEditRoadId) {
+          void finalizeGeometryEditStandalone();
+        }
         const entering = vs.editMode !== 'move-road';
         vs.setEditMode(entering ? 'move-road' : 'default');
       },
@@ -43,6 +47,9 @@ export function mountRoadToolsPlugin(): () => void {
       isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
         const vs = useViewportStore.getState();
+        if (vs.geometryEditRoadId) {
+          void finalizeGeometryEditStandalone();
+        }
         const entering = vs.editMode !== 'rotate-road';
         vs.setEditMode(entering ? 'rotate-road' : 'default');
       },
@@ -57,6 +64,9 @@ export function mountRoadToolsPlugin(): () => void {
       isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: () => {
         const vs = useViewportStore.getState();
+        if (vs.geometryEditRoadId) {
+          void finalizeGeometryEditStandalone();
+        }
         const entering = vs.editMode !== 'adjust-edge';
         vs.setEditMode(entering ? 'adjust-edge' : 'default');
       },
