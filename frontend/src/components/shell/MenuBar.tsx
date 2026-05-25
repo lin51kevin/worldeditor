@@ -15,6 +15,8 @@ import {
   RotateCcw,
   Bot,
   ChevronDown,
+  MousePointer,
+  Eye,
 } from 'lucide-react';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
 import { useBuiltinPluginStore } from '../../stores/builtinPluginStore';
@@ -35,6 +37,8 @@ import { MenuSection } from './menus/MenuSection';
 import { ToolsMenu } from './menus/ToolsMenu';
 import { ViewMenu } from './menus/ViewMenu';
 import { SnapSettingsPanel } from '../panels/SnapSettingsPanel';
+import { SelectionModePanel } from '../panels/SelectionModePanel';
+import { ViewModePanel } from '../panels/ViewModePanel';
 import './MenuBar.css';
 
 export { showVersion } from './menuDefinitions';
@@ -134,6 +138,8 @@ export function MenuBar({
   const [hoveredMenu, setHoveredMenu] = useState<number | null>(null);
   const [hoveredSubItem, setHoveredSubItem] = useState<number | null>(null);
   const [snapSettingsOpen, setSnapSettingsOpen] = useState(false);
+  const [selectionModeOpen, setSelectionModeOpen] = useState(false);
+  const [viewModeOpen, setViewModeOpen] = useState(false);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
   const closeMenus = useCallback(() => {
@@ -141,13 +147,35 @@ export function MenuBar({
     setHoveredMenu(null);
     setHoveredSubItem(null);
     setSnapSettingsOpen(false);
+    setSelectionModeOpen(false);
+    setViewModeOpen(false);
   }, []);
 
   const toggleSnapSettings = useCallback(() => {
     setOpenMenu(null);
     setHoveredMenu(null);
     setHoveredSubItem(null);
+    setSelectionModeOpen(false);
+    setViewModeOpen(false);
     setSnapSettingsOpen((current) => !current);
+  }, []);
+
+  const toggleSelectionMode = useCallback(() => {
+    setOpenMenu(null);
+    setHoveredMenu(null);
+    setHoveredSubItem(null);
+    setSnapSettingsOpen(false);
+    setViewModeOpen(false);
+    setSelectionModeOpen((current) => !current);
+  }, []);
+
+  const toggleViewMode = useCallback(() => {
+    setOpenMenu(null);
+    setHoveredMenu(null);
+    setHoveredSubItem(null);
+    setSnapSettingsOpen(false);
+    setSelectionModeOpen(false);
+    setViewModeOpen((current) => !current);
   }, []);
 
   const handleButtonMouseDownCapture = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -237,6 +265,8 @@ export function MenuBar({
         // Handled by useKeyboardShortcuts — skip to avoid double redo
       } else if (event.key === 'Escape') {
         setSnapSettingsOpen(false);
+        setSelectionModeOpen(false);
+        setViewModeOpen(false);
       } else if (event.key === 'Delete') {
         handleDelete();
       } else if (event.key === 'Home') {
@@ -275,6 +305,8 @@ export function MenuBar({
                 closeMenus();
               } else {
                 setSnapSettingsOpen(false);
+                setSelectionModeOpen(false);
+                setViewModeOpen(false);
                 setOpenMenu(0);
               }
             }}
@@ -455,6 +487,52 @@ export function MenuBar({
           >
             <Ruler size={14} />
           </button>
+
+          <div className="menubar-action-separator" />
+
+          <div className="menubar-snap-control">
+            <button
+              className={`menubar-action-btn ${selectionModeOpen ? 'active' : ''}`}
+              onClick={toggleSelectionMode}
+              title={t('toolbar.selectionModeTitle', 'Selection Mode')}
+              aria-label={t('toolbar.selectionModeTitle', 'Selection Mode')}
+              aria-haspopup="dialog"
+              aria-expanded={selectionModeOpen}
+            >
+              <MousePointer size={14} />
+            </button>
+            <button
+              className="menubar-action-btn menubar-snap-settings-trigger"
+              onClick={toggleSelectionMode}
+              aria-hidden="true"
+              tabIndex={-1}
+            >
+              <ChevronDown size={12} />
+            </button>
+            {selectionModeOpen && <SelectionModePanel />}
+          </div>
+
+          <div className="menubar-snap-control">
+            <button
+              className={`menubar-action-btn ${viewModeOpen ? 'active' : ''}`}
+              onClick={toggleViewMode}
+              title={t('toolbar.viewModeTitle', 'View Mode')}
+              aria-label={t('toolbar.viewModeTitle', 'View Mode')}
+              aria-haspopup="dialog"
+              aria-expanded={viewModeOpen}
+            >
+              <Eye size={14} />
+            </button>
+            <button
+              className="menubar-action-btn menubar-snap-settings-trigger"
+              onClick={toggleViewMode}
+              aria-hidden="true"
+              tabIndex={-1}
+            >
+              <ChevronDown size={12} />
+            </button>
+            {viewModeOpen && <ViewModePanel />}
+          </div>
         </div>
       </div>
 

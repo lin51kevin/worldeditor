@@ -2,14 +2,15 @@ import { useCallback, useRef, useState, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Route,
-  Square,
-  Grid3x3,
-  Box,
   Circle,
+  Move,
+  RotateCw,
 } from 'lucide-react';
 import { resolveIcon } from '../shared/IconRenderer';
 import { useViewportStore } from '../../stores/viewportStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
+import { finalizeGeometryEditStandalone } from '../../hooks/useSplineOperations';
 import { STORAGE_KEYS } from '../../constants/storage';
 import './Toolbar.css';
 
@@ -28,9 +29,9 @@ export const Toolbar = memo(function Toolbar() {
     editMode,
     setEditMode,
     clearSplineKnots,
-    viewMode,
-    setViewMode,
   } = useViewportStore();
+
+  const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
 
   const { toolbarButtons } = usePluginContribStore();
 
@@ -80,6 +81,24 @@ export const Toolbar = memo(function Toolbar() {
   const visibleToolbarButtons = toolbarButtons.filter((button) => button.isVisible?.() ?? true);
   const pluginActionButtons = visibleToolbarButtons.filter((b) => b.group === 'action');
 
+  const handleMoveRoad = useCallback(() => {
+    const vs = useViewportStore.getState();
+    if (vs.geometryEditRoadId) {
+      void finalizeGeometryEditStandalone();
+    }
+    const entering = vs.editMode !== 'move-road';
+    vs.setEditMode(entering ? 'move-road' : 'default');
+  }, []);
+
+  const handleRotateRoad = useCallback(() => {
+    const vs = useViewportStore.getState();
+    if (vs.geometryEditRoadId) {
+      void finalizeGeometryEditStandalone();
+    }
+    const entering = vs.editMode !== 'rotate-road';
+    vs.setEditMode(entering ? 'rotate-road' : 'default');
+  }, []);
+
   return (
     <div
       className="toolbar"
@@ -121,6 +140,31 @@ export const Toolbar = memo(function Toolbar() {
         </button>
       </div>
 
+      {/* Edit mode group: move / rotate */}
+      <div className="toolbar-separator" />
+      <div className="toolbar-group">
+        <button
+          className={`toolbar-btn toolbar-toggle ${editMode === 'move-road' ? 'active' : ''}`}
+          onClick={handleMoveRoad}
+          disabled={!selectedRoadId}
+          title={t('toolPanel.moveRoad', 'Move Road')}
+          aria-label={t('toolPanel.moveRoad', 'Move Road')}
+          aria-pressed={editMode === 'move-road'}
+        >
+          <Move size={16} className="tb-icon" />
+        </button>
+        <button
+          className={`toolbar-btn toolbar-toggle ${editMode === 'rotate-road' ? 'active' : ''}`}
+          onClick={handleRotateRoad}
+          disabled={!selectedRoadId}
+          title={t('toolPanel.rotateRoad', 'Rotate Road')}
+          aria-label={t('toolPanel.rotateRoad', 'Rotate Road')}
+          aria-pressed={editMode === 'rotate-road'}
+        >
+          <RotateCw size={16} className="tb-icon" />
+        </button>
+      </div>
+
       {/* Plugin action buttons (split, weld, resample — contextual tools) */}
       {pluginActionButtons.length > 0 && (
         <>
@@ -140,38 +184,6 @@ export const Toolbar = memo(function Toolbar() {
           </div>
         </>
       )}
-
-      {/* View mode group: sketch / wire / solid */}
-      <div className="toolbar-separator" />
-      <div className="toolbar-group">
-        <button
-          className={`toolbar-btn toolbar-toggle ${viewMode === 'sketch' ? 'active' : ''}`}
-          onClick={() => setViewMode('sketch')}
-          title={t('toolbar.sketchTitle', 'Sketch (outline only)')}
-          aria-label={t('toolbar.sketch', 'Sketch')}
-          aria-pressed={viewMode === 'sketch'}
-        >
-          <Square size={16} className="tb-icon" />
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${viewMode === 'wire' ? 'active' : ''}`}
-          onClick={() => setViewMode('wire')}
-          title={t('toolbar.wireframeTitle', 'Wireframe (lane lines only)')}
-          aria-label={t('toolbar.wireframe', 'Wireframe')}
-          aria-pressed={viewMode === 'wire'}
-        >
-          <Grid3x3 size={16} className="tb-icon" />
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${viewMode === 'solid' ? 'active' : ''}`}
-          onClick={() => setViewMode('solid')}
-          title={t('toolbar.solidTitle', 'Solid (filled mesh)')}
-          aria-label={t('toolbar.solid', 'Solid')}
-          aria-pressed={viewMode === 'solid'}
-        >
-          <Box size={16} className="tb-icon" />
-        </button>
-      </div>
 
     </div>
   );

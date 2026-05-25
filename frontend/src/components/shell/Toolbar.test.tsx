@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useViewportStore } from '../../stores/viewportStore';
 import { useThemeStore } from '../../stores/themeStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { Toolbar } from './Toolbar';
 
 describe('Toolbar', () => {
@@ -21,6 +22,7 @@ describe('Toolbar', () => {
         viewMode: 'solid',
       });
       useThemeStore.setState({ theme: 'dark' });
+      useProjectStore.setState({ selectedRoadId: 'road-1' });
     });
 
     vi.clearAllMocks();
@@ -34,35 +36,47 @@ describe('Toolbar', () => {
     expect(screen.getByRole('button', { name: '回旋线' })).toBeInTheDocument();
   });
 
-  it('selection mode buttons are not in the floating toolbar (moved to RoadEditToolbar)', () => {
+  it('renders move and rotate buttons', () => {
+    render(<Toolbar />);
+
+    expect(screen.getByTitle('移动道路')).toBeInTheDocument();
+    expect(screen.getByTitle('旋转道路')).toBeInTheDocument();
+  });
+
+  it('move/rotate buttons are disabled when no road is selected', () => {
+    act(() => { useProjectStore.setState({ selectedRoadId: null }); });
+    render(<Toolbar />);
+
+    expect(screen.getByTitle('移动道路')).toBeDisabled();
+    expect(screen.getByTitle('旋转道路')).toBeDisabled();
+  });
+
+  it('clicking move button sets editMode to move-road', () => {
+    render(<Toolbar />);
+    fireEvent.click(screen.getByTitle('移动道路'));
+    expect(useViewportStore.getState().editMode).toBe('move-road');
+  });
+
+  it('clicking rotate button sets editMode to rotate-road', () => {
+    render(<Toolbar />);
+    fireEvent.click(screen.getByTitle('旋转道路'));
+    expect(useViewportStore.getState().editMode).toBe('rotate-road');
+  });
+
+  it('view mode buttons are not in the floating toolbar (moved to MenuBar)', () => {
+    render(<Toolbar />);
+
+    expect(screen.queryByTitle('Sketch (outline only)')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Wireframe (lane lines only)')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Solid (filled mesh)')).not.toBeInTheDocument();
+  });
+
+  it('selection mode buttons are not in the floating toolbar (moved to MenuBar)', () => {
     render(<Toolbar />);
 
     expect(screen.queryByRole('button', { name: '道路' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '车道段' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '车道' })).not.toBeInTheDocument();
-  });
-
-  it('renders view mode buttons', () => {
-    render(<Toolbar />);
-
-    // The toolbar renders without crashing and contains the toolbar element
-    expect(document.querySelector('.toolbar')).toBeInTheDocument();
-  });
-
-  it('snap and measure buttons are not in the toolbar (moved to MenuBar)', () => {
-    render(<Toolbar />);
-
-    expect(screen.queryByTitle('开关吸附')).not.toBeInTheDocument();
-    expect(screen.queryByTitle('测量工具')).not.toBeInTheDocument();
-  });
-
-  it('3D/2D and Grid/Axis buttons are not in the toolbar (moved to MenuBar)', () => {
-    render(<Toolbar />);
-
-    expect(screen.queryByTitle('3D视图')).not.toBeInTheDocument();
-    expect(screen.queryByTitle('2D视图')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '网格' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '坐标轴' })).not.toBeInTheDocument();
   });
 
   it('updates edit mode via draw mode toolbar buttons', () => {

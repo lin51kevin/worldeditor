@@ -530,22 +530,12 @@ export function mountAdvancedEditingPlugin(): () => void {
       id: `${PLUGIN_ID}:split-road-point`,
       pluginId: PLUGIN_ID,
       icon: 'Scissors',
-      labelKey: 'advancedEditing.splitRoadAtPoint',
+      labelKey: 'advancedEditing.splitRoad',
       tooltipKey: 'advancedEditing.splitRoadAtPointTooltip',
-      group: 'mode',
+      group: 'action',
       isActive: () => useViewportStore.getState().editMode === 'split',
       isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: enterSplitMode,
-    },
-    {
-      id: `${PLUGIN_ID}:split-road`,
-      pluginId: PLUGIN_ID,
-      icon: 'Scissors',
-      labelKey: 'advancedEditing.splitRoad',
-      group: 'action',
-      isActive: () => false,
-      isDisabled: () => !useProjectStore.getState().selectedRoadId,
-      onClick: splitRoadAtJunction,
     },
     {
       id: `${PLUGIN_ID}:weld-roads`,
@@ -568,9 +558,6 @@ export function mountAdvancedEditingPlugin(): () => void {
       isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: resampleSelectedRoad,
     },
-    // Junction and signal/object buttons removed from floating toolbar:
-    // - Junction actions are accessible via JunctionEditor panel + menus
-    // - Signal/Object placement is accessible via ToolPanel + context menu
   ];
 
   toolbarButtons.forEach((btn) => registerToolbarButton(btn));
