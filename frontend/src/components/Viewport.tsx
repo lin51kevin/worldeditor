@@ -783,6 +783,76 @@ export function Viewport() {
       return;
     }
 
+    // Click-to-place mode: instantiate the pending template at the clicked world position.
+    // Handled before selection mode so templates work in any selection mode.
+    if (viewState.pendingTemplateId) {
+      const templateId = viewState.pendingTemplateId;
+      viewState.clearPendingTemplate();
+      const allItems = usePluginContribStore.getState().templateSections.flatMap((s) => s.items);
+      const item = allItems.find((i) => i.id === templateId);
+      if (item) {
+        item.onApply({ x: worldPos.x, y: worldPos.y, hdg: 0 });
+      }
+      return;
+    }
+
+    // Click-to-place road object / sign: pick nearest road, then place at road-local s/t.
+    // Handled before selection mode so object placement works in any selection mode.
+    if (viewState.pendingObjectTemplateId) {
+      const templateId = viewState.pendingObjectTemplateId;
+      viewState.clearPendingObjectTemplate();
+      try {
+        const service = await getPlatformService();
+        const visibleProject = getVisibleProject();
+        if (visibleProject) {
+          const roadId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 10.0);
+          if (roadId) {
+            const allItems = usePluginContribStore.getState().templateSections.flatMap((s) => s.items);
+            const item = allItems.find((i) => i.id === templateId);
+            if (item) {
+              const road = visibleProject.roads.find((r) => r.id === roadId);
+              let s = worldPos.x;
+              let t = worldPos.y;
+              let hdg = 0;
+              if (road) {
+                try {
+                  const snap = await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
+                  s = snap.s;
+                  t = snap.t;
+                  hdg = snap.hdg;
+                } catch {
+                  // snap failed — fall back to world coords approximation
+                }
+              }
+              item.onApply({ roadId, x: s, y: t, hdg });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[Viewport] Failed to place road object:', err);
+      }
+      return;
+    }
+
+    if (await commitPlacement(worldPos)) {
+      return;
+    }
+
+    // Draw mode clicks are handled before selection mode so drawing works
+    // regardless of whether selection mode is road, lane, or laneSection.
+    if (await handleArcDrawClick(e, worldPos)) {
+      return;
+    }
+    if (handleSpiralDrawClick(e, worldPos)) {
+      return;
+    }
+    if (await handleSplineDrawClick(e, worldPos)) {
+      return;
+    }
+    if (viewState.geometryEditRoadId) {
+      return;
+    }
+
     // Mode-aware road sub-selection (road-markings reuses lane picking to choose a target lane)
     const activeSelectionMode = viewState.editMode === 'road-markings' ? 'lane' : viewState.selectionMode;
     if (activeSelectionMode !== 'road') {
@@ -826,72 +896,6 @@ export function Viewport() {
       } catch (err) {
         console.error('[Viewport] Lane pick failed:', err);
       }
-      return;
-    }
-
-    // Click-to-place mode: instantiate the pending template at the clicked world position
-    if (viewState.pendingTemplateId) {
-      const templateId = viewState.pendingTemplateId;
-      viewState.clearPendingTemplate();
-      const allItems = usePluginContribStore.getState().templateSections.flatMap((s) => s.items);
-      const item = allItems.find((i) => i.id === templateId);
-      if (item) {
-        item.onApply({ x: worldPos.x, y: worldPos.y, hdg: 0 });
-      }
-      return;
-    }
-
-    // Click-to-place road object / sign: pick nearest road, then place at road-local s/t
-    if (viewState.pendingObjectTemplateId) {
-      const templateId = viewState.pendingObjectTemplateId;
-      viewState.clearPendingObjectTemplate();
-      try {
-        const service = await getPlatformService();
-        const visibleProject = getVisibleProject();
-        if (visibleProject) {
-          const roadId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 10.0);
-          if (roadId) {
-            const allItems = usePluginContribStore.getState().templateSections.flatMap((s) => s.items);
-            const item = allItems.find((i) => i.id === templateId);
-            if (item) {
-              const road = visibleProject.roads.find((r) => r.id === roadId);
-              let s = worldPos.x;
-              let t = worldPos.y;
-              let hdg = 0;
-              if (road) {
-                try {
-                  const snap = await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
-                  s = snap.s;
-                  t = snap.t;
-                  hdg = snap.hdg;
-                } catch {
-                  // snap failed — fall back to world coords approximation
-                }
-              }
-              item.onApply({ roadId, x: s, y: t, hdg });
-            }
-          }
-        }
-      } catch (err) {
-        console.error('[Viewport] Failed to place road object:', err);
-      }
-      return;
-    }
-
-    if (await commitPlacement(worldPos)) {
-      return;
-    }
-
-    if (await handleArcDrawClick(e, worldPos)) {
-      return;
-    }
-    if (handleSpiralDrawClick(e, worldPos)) {
-      return;
-    }
-    if (await handleSplineDrawClick(e, worldPos)) {
-      return;
-    }
-    if (viewState.geometryEditRoadId) {
       return;
     }
 
