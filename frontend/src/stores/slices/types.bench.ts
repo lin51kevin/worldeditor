@@ -134,6 +134,12 @@ function makeState(roadCount: number): EditorState {
     addElevationPoint: () => {},
     updateElevationPoint: () => {},
     removeElevationPoint: () => {},
+    addSuperelevation: () => {},
+    updateSuperelevation: () => {},
+    removeSuperelevation: () => {},
+    addCrossfall: () => {},
+    updateCrossfall: () => {},
+    removeCrossfall: () => {},
     smoothElevation: () => {},
   } as unknown as EditorState;
 }

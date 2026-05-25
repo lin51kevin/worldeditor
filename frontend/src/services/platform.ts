@@ -67,6 +67,19 @@ export interface Elevation {
   d: number;
 }
 
+export interface Superelevation extends Elevation {}
+
+export interface Crossfall extends Elevation {
+  side?: 'left' | 'right' | 'both';
+}
+
+export interface LateralProfile {
+  superelevation?: Superelevation[];
+  crossfall?: Crossfall[];
+  superelevations?: Superelevation[];
+  crossfalls?: Crossfall[];
+}
+
 export interface LaneOffset {
   s: number;
   a: number;
@@ -142,7 +155,7 @@ export interface Road {
   elevation_profile: Elevation[];
   lane_sections: LaneSection[];
   lane_offsets?: LaneOffset[];
-  lateral_profile?: { superelevations: unknown[]; crossfalls: unknown[] };
+  lateral_profile?: LateralProfile;
   bridges?: Bridge[];
   tunnels?: Tunnel[];
   signals?: RoadSignal[];
@@ -273,6 +286,14 @@ export interface LaneWidth {
   d: number;
 }
 
+export interface LaneBoundaryPoint {
+  x: number;
+  y: number;
+  z: number;
+  s: number;
+  t: number;
+}
+
 export interface JunctionLaneLink {
   from: number;
   to: number;
@@ -317,11 +338,12 @@ export interface SnapConfig {
   grid_size: number;
   endpoint_enabled: boolean;
   endpoint_threshold: number;
+  snap_to_lane_endpoints: boolean;
   midpoint_enabled: boolean;
   perpendicular_enabled: boolean;
 }
 
-export type SnapType = 'None' | 'Grid' | 'Endpoint' | 'Midpoint' | 'Perpendicular';
+export type SnapType = 'None' | 'Grid' | 'Endpoint' | 'LaneEndpoint' | 'Midpoint' | 'Perpendicular';
 
 export interface SnapResult {
   x: number;
@@ -569,6 +591,9 @@ export interface PlatformService {
 
   /** Measure road arc length between two stations. */
   measureRoadLength(road: Road, sStart: number, sEnd: number): Promise<number>;
+
+  /** Sample a selected lane's outer boundary at regular s intervals. */
+  sampleLaneBoundary(road: Road, sectionStart: number, laneId: number, step: number): Promise<LaneBoundaryPoint[]>;
 
   /** List built-in road templates for spline-based road generation. */
   getRoadTemplates(): Promise<RoadTemplate[]>;

@@ -4,18 +4,23 @@ import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import type { ShortcutsConfig } from './useKeyboardShortcuts';
 import type { ActiveMode } from '../stores/viewportStore';
 
+const mockedProjectState = vi.hoisted(() => ({
+  state: {
+    canUndo: () => false,
+    undo: vi.fn(),
+    canRedo: () => false,
+    redo: vi.fn(),
+    selectAll: vi.fn(),
+    copySelected: vi.fn(),
+    pasteFromClipboard: vi.fn(),
+    selectedRoadId: null as string | null,
+  },
+}));
+
 // Stub the projectStore so selectAll / copySelected / etc. don't throw
 vi.mock('../stores/projectStore', () => ({
   useProjectStore: {
-    getState: () => ({
-      canUndo: () => false,
-      undo: vi.fn(),
-      canRedo: () => false,
-      redo: vi.fn(),
-      selectAll: vi.fn(),
-      copySelected: vi.fn(),
-      pasteFromClipboard: vi.fn(),
-    }),
+    getState: () => mockedProjectState.state,
   },
 }));
 
@@ -53,12 +58,21 @@ function press(key: string, extra?: KeyboardEventInit) {
   return event;
 }
 
+beforeEach(() => {
+  mockedProjectState.state.selectedRoadId = null;
+});
+
 describe('useKeyboardShortcuts — mode shortcuts', () => {
   let config: ShortcutsConfig;
 
   beforeEach(() => {
     config = makeConfig();
     renderHook(() => useKeyboardShortcuts(config));
+  });
+
+  it('P → spiral draw mode', () => {
+    press('p');
+    expect(config.onSetEditMode).toHaveBeenCalledWith('drawSpiral');
   });
 
   it('S → spline draw mode', () => {
@@ -76,14 +90,25 @@ describe('useKeyboardShortcuts — mode shortcuts', () => {
     expect(config.onSetEditMode).toHaveBeenCalledWith('rotate-road');
   });
 
-  it('uppercase variants work (S, M, R)', () => {
-    (['S', 'M', 'R'] as const).forEach((key) => {
+  it('uppercase variants work (A, P, S, M, R)', () => {
+    (['A', 'P', 'S', 'M', 'R'] as const).forEach((key) => {
       press(key);
     });
-    const modes: ActiveMode[] = ['spline', 'move-road', 'rotate-road'];
+    const modes: ActiveMode[] = ['drawArc', 'drawSpiral', 'spline', 'move-road', 'rotate-road'];
     modes.forEach((mode) => {
       expect(config.onSetEditMode).toHaveBeenCalledWith(mode);
     });
+  });
+
+  it('X → split mode when a road is selected', () => {
+    mockedProjectState.state.selectedRoadId = 'road-1';
+    press('x');
+    expect(config.onSetEditMode).toHaveBeenCalledWith('split');
+  });
+
+  it('X does nothing when no road is selected', () => {
+    press('x');
+    expect(config.onSetEditMode).not.toHaveBeenCalledWith('split');
   });
 });
 
@@ -149,12 +174,19 @@ describe('useKeyboardShortcuts — suppressed inside editable targets', () => {
   });
 });
 
-describe('useKeyboardShortcuts — L/A/P no longer set draw modes', () => {
+describe('useKeyboardShortcuts — other draw shortcuts', () => {
   it('pressing L does not call onSetEditMode', () => {
     const config = makeConfig();
     renderHook(() => useKeyboardShortcuts(config));
     press('l');
     expect(config.onSetEditMode).not.toHaveBeenCalled();
+  });
+
+  it('pressing A activates arc draw mode', () => {
+    const config = makeConfig();
+    renderHook(() => useKeyboardShortcuts(config));
+    press('a');
+    expect(config.onSetEditMode).toHaveBeenCalledWith('drawArc');
   });
 });
 

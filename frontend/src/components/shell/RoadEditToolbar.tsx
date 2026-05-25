@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { Grid3x3, MousePointer, MoveHorizontal } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useViewportStore } from '../../stores/viewportStore';
 import { useSplineOperations } from '../../hooks/useSplineOperations';
@@ -8,16 +9,21 @@ import { useSplineOperations } from '../../hooks/useSplineOperations';
 export function RoadEditToolbar() {
   const { t } = useTranslation();
   const editMode = useViewportStore((s) => s.editMode);
+  const selectionMode = useViewportStore((s) => s.selectionMode);
   const softSelectionRadius = useViewportStore((s) => s.softSelectionRadius);
   const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
+  const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
   const setEditMode = useViewportStore((s) => s.setEditMode);
+  const setSelectionMode = useViewportStore((s) => s.setSelectionMode);
   const clearSplineKnots = useViewportStore((s) => s.clearSplineKnots);
   const setSoftSelectionRadius = useViewportStore((s) => s.setSoftSelectionRadius);
   const geometryEditRoadId = useViewportStore((s) => s.geometryEditRoadId);
   const { finalizeGeometryEdit } = useSplineOperations();
 
   const isAdjustNodeActive = editMode === 'spline';
+  const isLaneLineEditActive = editMode === 'editLaneLine';
   const hasRoad = !!selectedRoadId;
+  const hasSelectedLane = selectedSceneNode?.type === 'lane';
 
   // ── Mode toggles ────────────────────────────────────────────────────────
   const handleAdjustNode = () => {
@@ -41,6 +47,39 @@ export function RoadEditToolbar() {
     const next = editMode === 'rotate-road' ? 'default' : 'rotate-road';
     if (geometryEditRoadId) void finalizeGeometryEdit();
     setEditMode(next);
+  };
+
+  const handleEditLaneLine = () => {
+    if (isLaneLineEditActive) {
+      setEditMode('default');
+      return;
+    }
+    if (!hasSelectedLane) {
+      return;
+    }
+    if (geometryEditRoadId) void finalizeGeometryEdit();
+    if (editMode === 'spline' || editMode === 'drawArc' || editMode === 'drawSpiral') {
+      clearSplineKnots();
+    }
+    setEditMode('editLaneLine');
+  };
+
+  const handleSelectionModeChange = (mode: 'road' | 'laneSection' | 'lane') => {
+    if (editMode === 'spline' || editMode === 'drawArc' || editMode === 'drawSpiral') {
+      clearSplineKnots();
+    }
+    if (editMode !== 'default') {
+      setEditMode('default');
+    }
+
+    const projectState = useProjectStore.getState();
+    if (mode === 'road') {
+      projectState.clearLaneSelection();
+    } else if (mode === 'laneSection' && projectState.selectedRoadId && projectState.selectedLaneSectionIndex !== null) {
+      projectState.setSelectedLaneSection(projectState.selectedRoadId, projectState.selectedLaneSectionIndex);
+    }
+
+    setSelectionMode(mode);
   };
 
   // ── Instant road actions ─────────────────────────────────────────────────
@@ -105,6 +144,42 @@ export function RoadEditToolbar() {
         <div className="road-edit-toolbar__road-name">{selectedRoad.name}</div>
       )}
 
+      <div className="road-edit-toolbar__group road-edit-toolbar__group--border">
+        <button
+          className={`road-edit-toolbar__btn ${selectionMode === 'road' ? 'road-edit-toolbar__btn--active' : ''}`}
+          title={`${t('toolPanel.selectionModes.road')} [1]`}
+          onClick={() => handleSelectionModeChange('road')}
+          disabled={!hasRoad}
+          aria-pressed={selectionMode === 'road'}
+        >
+          <MousePointer size={14} className="road-edit-toolbar__icon" />
+          <span className="road-edit-toolbar__label">{t('toolPanel.selectionModes.road')}</span>
+          <span className="road-edit-toolbar__badge">1</span>
+        </button>
+        <button
+          className={`road-edit-toolbar__btn ${selectionMode === 'laneSection' ? 'road-edit-toolbar__btn--active' : ''}`}
+          title={`${t('toolPanel.selectionModes.laneSection')} [2]`}
+          onClick={() => handleSelectionModeChange('laneSection')}
+          disabled={!hasRoad}
+          aria-pressed={selectionMode === 'laneSection'}
+        >
+          <Grid3x3 size={14} className="road-edit-toolbar__icon" />
+          <span className="road-edit-toolbar__label">{t('toolPanel.selectionModes.laneSection')}</span>
+          <span className="road-edit-toolbar__badge">2</span>
+        </button>
+        <button
+          className={`road-edit-toolbar__btn ${selectionMode === 'lane' ? 'road-edit-toolbar__btn--active' : ''}`}
+          title={`${t('toolPanel.selectionModes.lane')} [3]`}
+          onClick={() => handleSelectionModeChange('lane')}
+          disabled={!hasRoad}
+          aria-pressed={selectionMode === 'lane'}
+        >
+          <MoveHorizontal size={14} className="road-edit-toolbar__icon" />
+          <span className="road-edit-toolbar__label">{t('toolPanel.selectionModes.lane')}</span>
+          <span className="road-edit-toolbar__badge">3</span>
+        </button>
+      </div>
+
       {!hasRoad && (
         <div className="road-edit-toolbar__hint">
           {t('toolPanel.noRoadSelected')}
@@ -128,6 +203,16 @@ export function RoadEditToolbar() {
         >
           {t('toolPanel.adjustEdge')}
         </button>
+        {selectionMode === 'lane' && (
+          <button
+            className={`toolbar-btn ${isLaneLineEditActive ? 'active' : ''}`}
+            title={t('toolPanel.editLaneLine')}
+            onClick={handleEditLaneLine}
+            disabled={!hasSelectedLane}
+          >
+            {t('toolPanel.editLaneLine')}
+          </button>
+        )}
         <button
           className={`toolbar-btn ${editMode === 'move-road' ? 'active' : ''}`}
           title={`${t('toolPanel.moveRoad')} [M]`}
@@ -173,9 +258,9 @@ export function RoadEditToolbar() {
       )}
 
       {/* Soft selection radius — visible only when adjust-node (spline) mode is active */}
-      {isAdjustNodeActive && (
+      {(isAdjustNodeActive || isLaneLineEditActive) && (
         <div className="road-edit-toolbar__soft-sel">
-          <label>
+          <label className="road-edit-toolbar__soft-sel-label">
             {t('toolPanel.softSelectionRadius', { radius: softSelectionRadius.toFixed(0) })}
           </label>
           <input

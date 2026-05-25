@@ -11,6 +11,7 @@ vi.mock('react-i18next', () => ({
         'toolPanel.noRoadSelected': 'No road selected',
         'toolPanel.adjustNode': 'Adjust Node',
         'toolPanel.adjustEdge': 'Adjust Edge Line',
+        'toolPanel.editLaneLine': 'Edit Lane Line',
         'toolPanel.moveRoad': 'Move Road',
         'toolPanel.rotateRoad': 'Rotate Road',
         'toolPanel.optimizeNode': 'Optimize Nodes',
@@ -25,35 +26,73 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+const projectStoreState = {
+  selectedRoadId: null,
+  selectedJunctionId: null,
+  selectedSceneNode: null,
+  selectedLaneSectionIndex: null,
+  project: { roads: [], junctions: [], signals: [], objects: [], name: 'Untitled', header: {} },
+  cloneRoad: vi.fn(),
+  selectRoad: vi.fn(),
+  setSelectedLaneSection: vi.fn(),
+  clearLaneSelection: vi.fn(),
+  reverseRoad: vi.fn(),
+  mirrorRoad: vi.fn(),
+  swapCenterline: vi.fn(),
+};
+
+const viewportStoreState = {
+  editMode: 'default',
+  selectionMode: 'road',
+  softSelectionRadius: 50,
+  setEditMode: vi.fn(),
+  setSelectionMode: vi.fn(),
+  clearSplineKnots: vi.fn(),
+  setSoftSelectionRadius: vi.fn(),
+  geometryEditRoadId: null,
+};
+
 // Mock the stores
 vi.mock('../../stores/projectStore', () => ({
-  useProjectStore: vi.fn(() => ({
-    selectedRoadId: null,
-    selectedJunctionId: null,
-    selectedSceneNode: null,
-    project: { roads: [], junctions: [], signals: [], objects: [], name: 'Untitled', header: {} },
-  })),
+  useProjectStore: Object.assign(
+    vi.fn((selector?: (state: typeof projectStoreState) => unknown) =>
+      selector ? selector(projectStoreState) : projectStoreState,
+    ),
+    { getState: () => projectStoreState },
+  ),
 }));
 
 vi.mock('../../stores/viewportStore', () => ({
-  useViewportStore: vi.fn(() => ({
-    editMode: null,
-    setEditMode: vi.fn(),
-  })),
+  useViewportStore: vi.fn((selector?: (state: typeof viewportStoreState) => unknown) =>
+    selector ? selector(viewportStoreState) : viewportStoreState,
+  ),
 }));
 
 describe('RoadEditToolbar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    projectStoreState.selectedRoadId = null;
+    projectStoreState.selectedSceneNode = null;
+    viewportStoreState.selectionMode = 'road';
+    viewportStoreState.editMode = 'default';
   });
 
-  it('renders all tool buttons', () => {
+  it('renders all base tool buttons', () => {
     render(<RoadEditToolbar />);
     expect(screen.getByTitle('Adjust Node')).toBeInTheDocument();
     expect(screen.getByTitle('Adjust Edge Line')).toBeInTheDocument();
     expect(screen.getByTitle('Move Road [M]')).toBeInTheDocument();
     expect(screen.getByTitle('Rotate Road [R]')).toBeInTheDocument();
     expect(screen.getByTitle('Optimize Nodes')).toBeInTheDocument();
-    expect(screen.queryByTitle('Road Markings')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Edit Lane Line')).not.toBeInTheDocument();
+  });
+
+  it('shows lane line editing button in lane selection mode', () => {
+    projectStoreState.selectedRoadId = 'road-1';
+    projectStoreState.selectedSceneNode = { type: 'lane', roadId: 'road-1', sectionIndex: 0, side: 'left', laneId: 1 };
+    viewportStoreState.selectionMode = 'lane';
+
+    render(<RoadEditToolbar />);
+    expect(screen.getByTitle('Edit Lane Line')).toBeInTheDocument();
   });
 });

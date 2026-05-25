@@ -1,4 +1,4 @@
-import type { Elevation, Lane, LaneLink, LaneWidth } from '../../services/platform';
+import type { Crossfall, Elevation, Lane, LaneLink, LaneWidth, Road, Superelevation } from '../../services/platform';
 import type { EditorState, SliceCreator } from './types';
 import { pushUndo } from './types';
 
@@ -16,8 +16,51 @@ export interface LaneSlice {
   addElevationPoint: (roadId: string, s: number, height: number) => void;
   updateElevationPoint: (roadId: string, index: number, updates: Partial<Elevation>) => void;
   removeElevationPoint: (roadId: string, index: number) => void;
+  addSuperelevation: (roadId: string, record: Superelevation) => void;
+  updateSuperelevation: (roadId: string, index: number, updates: Partial<Superelevation>) => void;
+  removeSuperelevation: (roadId: string, index: number) => void;
+  addCrossfall: (roadId: string, record: Crossfall) => void;
+  updateCrossfall: (roadId: string, index: number, record: Partial<Crossfall>) => void;
+  removeCrossfall: (roadId: string, index: number) => void;
   smoothElevation: (roadId: string, iterations?: number) => void;
 }
+
+const sortByS = <T extends { s: number }>(records: T[]): T[] =>
+  [...records].sort((a, b) => a.s - b.s);
+
+const getRoadSuperelevations = (road: Road): Superelevation[] =>
+  road.lateral_profile?.superelevation ?? road.lateral_profile?.superelevations ?? [];
+
+const getRoadCrossfalls = (road: Road): Crossfall[] =>
+  road.lateral_profile?.crossfall ?? road.lateral_profile?.crossfalls ?? [];
+
+const withSuperelevations = (road: Road, superelevation: Superelevation[]): Road => {
+  const crossfall = getRoadCrossfalls(road);
+  return {
+    ...road,
+    lateral_profile: {
+      ...road.lateral_profile,
+      superelevation,
+      superelevations: superelevation,
+      crossfall,
+      crossfalls: crossfall,
+    },
+  };
+};
+
+const withCrossfalls = (road: Road, crossfall: Crossfall[]): Road => {
+  const superelevation = getRoadSuperelevations(road);
+  return {
+    ...road,
+    lateral_profile: {
+      ...road.lateral_profile,
+      superelevation,
+      superelevations: superelevation,
+      crossfall,
+      crossfalls: crossfall,
+    },
+  };
+};
 
 export const createLaneSlice: SliceCreator<LaneSlice> = (set, _get) => ({
   updateLaneType: (roadId, sectionIndex, side, laneId, laneType) =>
@@ -306,6 +349,98 @@ export const createLaneSlice: SliceCreator<LaneSlice> = (set, _get) => ({
             ...r,
             elevation_profile: r.elevation_profile.filter((_, i) => i !== index),
           };
+        }),
+      },
+      isDirty: true,
+    })),
+
+  addSuperelevation: (roadId, record) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          return withSuperelevations(r, sortByS([...getRoadSuperelevations(r), record]));
+        }),
+      },
+      isDirty: true,
+    })),
+
+  updateSuperelevation: (roadId, index, updates) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          const profile = getRoadSuperelevations(r);
+          if (index < 0 || index >= profile.length) return r;
+          return withSuperelevations(
+            r,
+            sortByS(profile.map((entry, i) => (i === index ? { ...entry, ...updates } : entry))),
+          );
+        }),
+      },
+      isDirty: true,
+    })),
+
+  removeSuperelevation: (roadId, index) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          const profile = getRoadSuperelevations(r);
+          if (index < 0 || index >= profile.length) return r;
+          return withSuperelevations(r, profile.filter((_, i) => i !== index));
+        }),
+      },
+      isDirty: true,
+    })),
+
+  addCrossfall: (roadId, record) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          return withCrossfalls(r, sortByS([...getRoadCrossfalls(r), record]));
+        }),
+      },
+      isDirty: true,
+    })),
+
+  updateCrossfall: (roadId, index, record) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          const profile = getRoadCrossfalls(r);
+          if (index < 0 || index >= profile.length) return r;
+          return withCrossfalls(
+            r,
+            sortByS(profile.map((entry, i) => (i === index ? { ...entry, ...record } : entry))),
+          );
+        }),
+      },
+      isDirty: true,
+    })),
+
+  removeCrossfall: (roadId, index) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: {
+        ...state.project,
+        roads: state.project.roads.map((r) => {
+          if (r.id !== roadId) return r;
+          const profile = getRoadCrossfalls(r);
+          if (index < 0 || index >= profile.length) return r;
+          return withCrossfalls(r, profile.filter((_, i) => i !== index));
         }),
       },
       isDirty: true,

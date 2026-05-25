@@ -13,7 +13,7 @@ import type {
   PlatformService, Project, Road, RoadTemplate,
   ElevationQueryResult, SnapConfig, SnapResult, EndpointTangent,
   DistanceMeasurement, AngleMeasurement, AreaMeasurement, EditableSpline,
-  Geometry,
+  Geometry, LaneBoundaryPoint,
 } from './platform';
 
 type WasmModule = typeof import('../../wasm/pkg/we_wasm');
@@ -336,6 +336,12 @@ export abstract class BasePlatformService implements PlatformService {
   async measureRoadLength(road: Road, sStart: number, sEnd: number): Promise<number> {
     const wasm = await this.getWasm();
     return wasm.measure_road_length(JSON.stringify(road), sStart, sEnd);
+  }
+
+  async sampleLaneBoundary(road: Road, sectionStart: number, laneId: number, step: number): Promise<LaneBoundaryPoint[]> {
+    const wasm = await this.getWasm();
+    const json = wasm.sample_lane_boundary(JSON.stringify(road), sectionStart, laneId, step);
+    return JSON.parse(json) as LaneBoundaryPoint[];
   }
 
   // --- Road templates ---

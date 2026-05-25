@@ -73,7 +73,40 @@
   width: calc(100% + 10px);
   transform: translateY(-50%);
 }
-
+ 
+.split-indicator {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  z-index: 3;
+}
+ 
+.split-indicator::before,
+.split-indicator::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+ 
+.split-indicator::before {
+  width: 30px;
+  height: 2px;
+  background: #ff9f1c;
+  border-radius: 999px;
+  box-shadow: 0 0 6px rgba(255, 159, 28, 0.7);
+}
+ 
+.split-indicator::after {
+  width: 8px;
+  height: 8px;
+  border: 2px solid #ffd089;
+  border-radius: 999px;
+  background: rgba(255, 159, 28, 0.18);
+}
+ 
 /* Coordinate overlay: world-space cursor position at bottom-left of viewport */
 .viewport-coords {
   position: absolute;

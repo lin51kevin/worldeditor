@@ -5,6 +5,18 @@ import type { SnapType, DistanceMeasurement, AngleMeasurement, AreaMeasurement, 
 import { STORAGE_KEYS } from '../constants/storage';
 
 export type MeasureMode = 'none' | 'distance' | 'angle' | 'area';
+export type SelectionMode = 'road' | 'laneSection' | 'lane';
+export type SignalOrientation = '+' | '-' | 'none';
+
+export interface SignalPlacementDraft {
+  type: string;
+  value: string;
+  orientation: SignalOrientation;
+}
+
+export interface ObjectPlacementDraft {
+  objectType: string;
+}
 
 /** Controls whether in/out tangent handles are mirrored or independent. */
 export type TangentCoupling = 'mirror' | 'broken';
@@ -25,11 +37,15 @@ type ViewDimension = '3d' | '2d';
 /** Selection-based interaction modes. */
 export type SelectMode = 'default' | 'road' | 'lane' | 'lanesection';
 /** Geometry manipulation modes (transform existing roads). */
-export type EditMode = 'move-road' | 'rotate-road' | 'adjust-edge' | 'road-markings';
+export type EditMode = 'move-road' | 'rotate-road' | 'split' | 'adjust-edge' | 'road-markings' | 'editLaneLine' | 'placeSignal' | 'placeObject';
 /** Road drawing / creation modes. */
-export type DrawMode = 'spline';
+export type DrawMode = 'spline' | 'drawArc' | 'drawSpiral';
 /** Union of all active-mode categories. */
 export type ActiveMode = SelectMode | EditMode | DrawMode;
+
+export function isDrawMode(mode: string | null): mode is DrawMode {
+  return mode === 'spline' || mode === 'drawArc' || mode === 'drawSpiral';
+}
 
 const STORAGE_KEY = STORAGE_KEYS.EDITOR_VIEW;
 
@@ -105,6 +121,7 @@ interface EditorViewState {
 
   // Edit mode
   editMode: ActiveMode;
+  selectionMode: SelectionMode;
 
   // Spline drawing
   splineTemplateId: string;
@@ -120,6 +137,9 @@ interface EditorViewState {
    * at the corresponding s/t coordinates on that road.
    */
   pendingObjectTemplateId: string | null;
+  signalPlacementDraft: SignalPlacementDraft;
+  objectPlacementDraft: ObjectPlacementDraft;
+  contextMenuWorldPos: { x: number; y: number } | null;
   splineKnots: Array<[number, number, number]>;
   splineTangentOverrides: Record<number, [number, number, number]>;
   /** Independent in-tangent overrides (broken tangent mode only). */
@@ -147,6 +167,11 @@ interface EditorViewState {
   snapMode: SnapType;
   snapThreshold: number;
   gridSnapSize: number;
+  snapToEndpoints: boolean;
+  snapToMidpoints: boolean;
+  snapToPerpendicular: boolean;
+  snapToGrid: boolean;
+  snapToLaneEndpoints: boolean;
 
   // Draw-mode endpoint snap (real-time snap feedback while drawing)
   drawSnapResult: { x: number; y: number; snapped: boolean; snapType: SnapType; targetId: string | null; contactPoint: string | null } | null;
@@ -174,11 +199,15 @@ interface EditorViewState {
   toggleAxis: () => void;
   toggleHoverHighlight: () => void;
   setEditMode: (m: ActiveMode) => void;
+  setSelectionMode: (mode: SelectionMode) => void;
   setSplineTemplateId: (templateId: string) => void;
   setPendingTemplate: (id: string | null) => void;
   clearPendingTemplate: () => void;
   setPendingObjectTemplate: (id: string | null) => void;
   clearPendingObjectTemplate: () => void;
+  setSignalPlacementDraft: (draft: SignalPlacementDraft) => void;
+  setObjectPlacementDraft: (draft: ObjectPlacementDraft) => void;
+  setContextMenuWorldPos: (pos: { x: number; y: number } | null) => void;
   setSplineKnots: (knots: Array<[number, number, number]>) => void;
   appendSplineKnot: (knot: [number, number, number]) => void;
   popSplineKnot: () => void;
@@ -198,6 +227,11 @@ interface EditorViewState {
   setSnapMode: (mode: SnapType) => void;
   setSnapThreshold: (threshold: number) => void;
   setGridSnapSize: (size: number) => void;
+  setSnapToEndpoints: (enabled: boolean) => void;
+  setSnapToMidpoints: (enabled: boolean) => void;
+  setSnapToPerpendicular: (enabled: boolean) => void;
+  setSnapToGrid: (enabled: boolean) => void;
+  setSnapToLaneEndpoints: (enabled: boolean) => void;
 
   // Draw-mode endpoint snap actions
   setDrawSnapResult: (result: { x: number; y: number; snapped: boolean; snapType: SnapType; targetId: string | null; contactPoint: string | null } | null) => void;
@@ -305,8 +339,14 @@ interface UserPreferences {
   snapMode?: SnapType;
   snapThreshold?: number;
   gridSnapSize?: number;
+  snapToEndpoints?: boolean;
+  snapToMidpoints?: boolean;
+  snapToPerpendicular?: boolean;
+  snapToGrid?: boolean;
+  snapToLaneEndpoints?: boolean;
   dimension?: ViewDimension;
   viewMode?: 'sketch' | 'wire' | 'solid';
+  selectionMode?: SelectionMode;
 }
 
 const PREFS_STORAGE_KEY = STORAGE_KEYS.USER_PREFERENCES;
@@ -343,9 +383,13 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   showAxis: storedPrefs.showAxis ?? true,
   showHoverHighlight: false,
   editMode: 'default',
+  selectionMode: storedPrefs.selectionMode ?? 'road',
   splineTemplateId: 'tpl:road:single',
   pendingTemplateId: null,
   pendingObjectTemplateId: null,
+  signalPlacementDraft: { type: 'traffic_light', value: '', orientation: '+' },
+  objectPlacementDraft: { objectType: 'TrafficCone' },
+  contextMenuWorldPos: null,
   splineKnots: [],
   splineTangentOverrides: {},
   splineTangentInOverrides: {},
@@ -357,8 +401,13 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   layout: DEFAULT_LAYOUT,
   snapEnabled: storedPrefs.snapEnabled ?? false,
   snapMode: storedPrefs.snapMode ?? 'Grid' as SnapType,
-  snapThreshold: storedPrefs.snapThreshold ?? 5.0,
+  snapThreshold: storedPrefs.snapThreshold ?? 15.0,
   gridSnapSize: storedPrefs.gridSnapSize ?? 1.0,
+  snapToEndpoints: storedPrefs.snapToEndpoints ?? true,
+  snapToMidpoints: storedPrefs.snapToMidpoints ?? true,
+  snapToPerpendicular: storedPrefs.snapToPerpendicular ?? true,
+  snapToGrid: storedPrefs.snapToGrid ?? true,
+  snapToLaneEndpoints: storedPrefs.snapToLaneEndpoints ?? false,
   drawSnapResult: null,
   snappedEndpoints: [],
   measureMode: 'none' as MeasureMode,
@@ -373,11 +422,15 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   toggleAxis: () => set((state) => { const showAxis = !state.showAxis; savePrefs({ showAxis }); return { showAxis }; }),
   toggleHoverHighlight: () => set((state) => ({ showHoverHighlight: !state.showHoverHighlight })),
   setEditMode: (editMode) => set({ editMode }),
+  setSelectionMode: (selectionMode) => { set({ selectionMode }); savePrefs({ selectionMode }); },
   setSplineTemplateId: (splineTemplateId) => set({ splineTemplateId }),
   setPendingTemplate: (pendingTemplateId) => set({ pendingTemplateId }),
   clearPendingTemplate: () => set({ pendingTemplateId: null }),
   setPendingObjectTemplate: (pendingObjectTemplateId) => set({ pendingObjectTemplateId }),
   clearPendingObjectTemplate: () => set({ pendingObjectTemplateId: null }),
+  setSignalPlacementDraft: (signalPlacementDraft) => set({ signalPlacementDraft }),
+  setObjectPlacementDraft: (objectPlacementDraft) => set({ objectPlacementDraft }),
+  setContextMenuWorldPos: (contextMenuWorldPos) => set({ contextMenuWorldPos }),
   setSplineKnots: (splineKnots) => set({ splineKnots }),
   appendSplineKnot: (knot) =>
     set((state) => ({ splineKnots: [...state.splineKnots, knot] })),
@@ -399,8 +452,23 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   // Snapping actions
   toggleSnap: () => set((state) => { const snapEnabled = !state.snapEnabled; savePrefs({ snapEnabled }); return { snapEnabled }; }),
   setSnapMode: (snapMode) => { set({ snapMode }); savePrefs({ snapMode }); },
-  setSnapThreshold: (snapThreshold) => { const val = Math.max(0.1, snapThreshold); set({ snapThreshold: val }); savePrefs({ snapThreshold: val }); },
-  setGridSnapSize: (gridSnapSize) => { const val = Math.max(0.01, gridSnapSize); set({ gridSnapSize: val }); savePrefs({ gridSnapSize: val }); },
+  setSnapThreshold: (snapThreshold) => {
+    const next = Number.isFinite(snapThreshold) ? snapThreshold : 15;
+    const val = Math.min(50, Math.max(1, next));
+    set({ snapThreshold: val });
+    savePrefs({ snapThreshold: val });
+  },
+  setGridSnapSize: (gridSnapSize) => {
+    const next = Number.isFinite(gridSnapSize) ? gridSnapSize : 1;
+    const val = Math.min(100, Math.max(0.5, next));
+    set({ gridSnapSize: val });
+    savePrefs({ gridSnapSize: val });
+  },
+  setSnapToEndpoints: (snapToEndpoints) => { set({ snapToEndpoints }); savePrefs({ snapToEndpoints }); },
+  setSnapToMidpoints: (snapToMidpoints) => { set({ snapToMidpoints }); savePrefs({ snapToMidpoints }); },
+  setSnapToPerpendicular: (snapToPerpendicular) => { set({ snapToPerpendicular }); savePrefs({ snapToPerpendicular }); },
+  setSnapToGrid: (snapToGrid) => { set({ snapToGrid }); savePrefs({ snapToGrid }); },
+  setSnapToLaneEndpoints: (snapToLaneEndpoints) => { set({ snapToLaneEndpoints }); savePrefs({ snapToLaneEndpoints }); },
 
   // Draw-mode endpoint snap actions
   setDrawSnapResult: (drawSnapResult) => set({ drawSnapResult }),

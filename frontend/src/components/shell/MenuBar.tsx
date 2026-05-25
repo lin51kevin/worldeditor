@@ -14,6 +14,7 @@ import {
   Ruler,
   RotateCcw,
   Bot,
+  ChevronDown,
 } from 'lucide-react';
 import { usePluginContribStore } from '../../stores/pluginContribStore';
 import { useBuiltinPluginStore } from '../../stores/builtinPluginStore';
@@ -33,6 +34,7 @@ import { FileMenu } from './menus/FileMenu';
 import { MenuSection } from './menus/MenuSection';
 import { ToolsMenu } from './menus/ToolsMenu';
 import { ViewMenu } from './menus/ViewMenu';
+import { SnapSettingsPanel } from '../panels/SnapSettingsPanel';
 import './MenuBar.css';
 
 export { showVersion } from './menuDefinitions';
@@ -131,12 +133,21 @@ export function MenuBar({
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const [hoveredMenu, setHoveredMenu] = useState<number | null>(null);
   const [hoveredSubItem, setHoveredSubItem] = useState<number | null>(null);
+  const [snapSettingsOpen, setSnapSettingsOpen] = useState(false);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
   const closeMenus = useCallback(() => {
     setOpenMenu(null);
     setHoveredMenu(null);
     setHoveredSubItem(null);
+    setSnapSettingsOpen(false);
+  }, []);
+
+  const toggleSnapSettings = useCallback(() => {
+    setOpenMenu(null);
+    setHoveredMenu(null);
+    setHoveredSubItem(null);
+    setSnapSettingsOpen((current) => !current);
   }, []);
 
   const handleButtonMouseDownCapture = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -224,6 +235,8 @@ export function MenuBar({
         // Handled by useKeyboardShortcuts — skip to avoid double undo
       } else if (isCtrl && event.key === 'y') {
         // Handled by useKeyboardShortcuts — skip to avoid double redo
+      } else if (event.key === 'Escape') {
+        setSnapSettingsOpen(false);
       } else if (event.key === 'Delete') {
         handleDelete();
       } else if (event.key === 'Home') {
@@ -261,6 +274,7 @@ export function MenuBar({
               if (openMenu !== null) {
                 closeMenus();
               } else {
+                setSnapSettingsOpen(false);
                 setOpenMenu(0);
               }
             }}
@@ -414,13 +428,26 @@ export function MenuBar({
 
           <div className="menubar-action-separator" />
 
-          <button
-            className={`menubar-action-btn ${snapEnabled ? 'active' : ''}`}
-            onClick={toggleSnap}
-            title={t('toolbar.snapTitle')}
-          >
-            <Magnet size={14} />
-          </button>
+          <div className="menubar-snap-control">
+            <button
+              className={`menubar-action-btn ${snapEnabled ? 'active' : ''}`}
+              onClick={toggleSnap}
+              title={t('toolbar.snapTitle')}
+            >
+              <Magnet size={14} />
+            </button>
+            <button
+              className={`menubar-action-btn menubar-snap-settings-trigger ${snapSettingsOpen ? 'active' : ''}`}
+              onClick={toggleSnapSettings}
+              title={t('toolbar.snapSettingsTitle')}
+              aria-label={t('toolbar.snapSettingsTitle')}
+              aria-haspopup="dialog"
+              aria-expanded={snapSettingsOpen}
+            >
+              <ChevronDown size={12} />
+            </button>
+            {snapSettingsOpen && <SnapSettingsPanel />}
+          </div>
           <button
             className={`menubar-action-btn ${measureMode !== 'none' ? 'active' : ''}`}
             onClick={() => setMeasureMode(measureMode !== 'none' ? 'none' : 'distance')}

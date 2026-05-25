@@ -274,6 +274,8 @@ describe('projectStore', () => {
 
       expect(state.selectedRoadId).toBe('r1');
       expect(state.selectedSceneNode).toEqual({ type: 'laneSection', roadId: 'r1', sectionIndex: 2 });
+      expect(state.selectedLaneSectionIndex).toBe(2);
+      expect(state.selectedLaneId).toBeNull();
       expect(state.selectedObjectType).toBe('road');
     });
 
@@ -289,6 +291,8 @@ describe('projectStore', () => {
         side: 'right',
         laneId: -2,
       });
+      expect(state.selectedLaneSectionIndex).toBe(1);
+      expect(state.selectedLaneId).toBe(-2);
       expect(state.selectedObjectType).toBe('road');
     });
   });

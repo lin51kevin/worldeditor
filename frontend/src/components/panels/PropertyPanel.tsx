@@ -4,15 +4,33 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
 import { useViewportStore } from '../../stores/viewportStore';
 import { getPlatformService } from '../../services';
-import type { RoadSignal, RoadObjectItem } from '../../services/platform';
+import type { Road, RoadSignal, RoadObjectItem } from '../../services/platform';
+import { COMMON_SIGNAL_TYPES } from '../../hooks/useSignalPlacement';
 import { RoadMarkingPanel } from './RoadMarkingPanel';
 import { LaneEditor } from './LaneEditor';
+import { SuperelevationEditor } from './SuperelevationEditor';
+import { CrossfallEditor } from './CrossfallEditor';
+import { JunctionEditor } from './JunctionEditor';
 import './PropertyPanel.css';
 
 /** Valid bridge structure types (mirrors OpenDRIVE spec values). */
 const BRIDGE_TYPES = ['concrete', 'steel', 'wood', 'other'] as const;
 /** Valid tunnel structure types (mirrors OpenDRIVE spec values). */
 const TUNNEL_TYPES = ['underpass', 'standard', 'other'] as const;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getRoadLateralRange(road: Road): number {
+  let maxWidth = 8;
+  for (const section of road.lane_sections) {
+    const leftWidth = section.left.reduce((sum, lane) => sum + (lane.width[0]?.a ?? 3.5), 0);
+    const rightWidth = section.right.reduce((sum, lane) => sum + (lane.width[0]?.a ?? 3.5), 0);
+    maxWidth = Math.max(maxWidth, leftWidth, rightWidth);
+  }
+  return Math.max(8, Math.ceil(maxWidth + 4));
+}
 
 interface CardSectionProps {
   title: string;
@@ -55,15 +73,10 @@ export function PropertyPanel() {
 
   // Local draft state for name inputs — committed on blur/Enter for single undo entry.
   const [roadNameDraft, setRoadNameDraft] = useState('');
-  const [junctionNameDraft, setJunctionNameDraft] = useState('');
 
   useEffect(() => {
     setRoadNameDraft(selectedRoad?.name || '');
   }, [selectedRoad?.id, selectedRoad?.name]);
-
-  useEffect(() => {
-    setJunctionNameDraft(selectedJunction?.name || '');
-  }, [selectedJunction?.id, selectedJunction?.name]);
 
   useEffect(() => {
     setBridgeDraft((selectedRoad?.bridges ?? []).map((b) => ({
@@ -82,6 +95,10 @@ export function PropertyPanel() {
     const road = project.roads.find((r) => r.id === selectedSceneNode.roadId);
     return (road?.signals ?? []).find((s) => s.id === selectedSceneNode.signalId) ?? null;
   })();
+  const selectedSignalRoad: Road | null = (() => {
+    if (selectedSceneNode?.type !== 'signal') return null;
+    return project.roads.find((r) => r.id === selectedSceneNode.roadId) ?? null;
+  })();
 
   // Resolve selected object when an object node is selected
   const selectedObject: RoadObjectItem | null = (() => {
@@ -91,6 +108,25 @@ export function PropertyPanel() {
   })();
 
   const isEditingGeometry = geometryEditRoadId === selectedRoadId;
+  const signalTypeOptions = (() => {
+    const currentType = selectedSignal?.signal_type;
+    const options = COMMON_SIGNAL_TYPES.map((option) => ({
+      value: option.type,
+      label: t(option.labelKey, option.type),
+    }));
+    if (currentType && !options.some((option) => option.value === currentType)) {
+      options.unshift({ value: currentType, label: currentType });
+    }
+    return options;
+  })();
+  const signalRoadLength = selectedSignalRoad?.length ?? 0;
+  const signalTRange = selectedSignalRoad ? getRoadLateralRange(selectedSignalRoad) : 8;
+  const superelevationProfile = selectedRoad?.lateral_profile?.superelevation
+    ?? selectedRoad?.lateral_profile?.superelevations
+    ?? [];
+  const crossfallProfile = selectedRoad?.lateral_profile?.crossfall
+    ?? selectedRoad?.lateral_profile?.crossfalls
+    ?? [];
 
   // Determine what to display — signal/object take priority even though selectedRoadId is also set
   type DisplayMode = 'road' | 'signal' | 'object' | 'junction' | 'none';
@@ -304,6 +340,20 @@ export function PropertyPanel() {
                     {t('propertyPanel.smoothElevation')}
                   </button>
                 </div>
+              </CardSection>
+
+              <CardSection title={`${t('propertyPanel.superelevation')} (${superelevationProfile.length})`} defaultOpen={false}>
+                <SuperelevationEditor
+                  roadId={selectedRoad.id}
+                  profile={superelevationProfile}
+                />
+              </CardSection>
+
+              <CardSection title={`${t('propertyPanel.crossfall')} (${crossfallProfile.length})`} defaultOpen={false}>
+                <CrossfallEditor
+                  roadId={selectedRoad.id}
+                  profile={crossfallProfile}
+                />
               </CardSection>
 
               {/* Bridges Card */}
@@ -565,7 +615,7 @@ export function PropertyPanel() {
             </div>
             )
           ) : displayMode === 'signal' ? (
-            !selectedSignal ? null : (
+            !selectedSignal || !selectedSignalRoad ? null : (
             <div className="inspector-cards">
               <CardSection title={t('propertyPanel.signalProperties', 'Signal Properties')}>
                 <div className="property-row">
@@ -573,64 +623,91 @@ export function PropertyPanel() {
                   <span className="property-value">{selectedSignal.id}</span>
                 </div>
                 <div className="property-row">
-                  <span className="property-label">{t('propertyPanel.name')}</span>
-                  <span className="property-value">{selectedSignal.name || '—'}</span>
-                </div>
-                <div className="property-row">
                   <span className="property-label">RoadId</span>
-                  <span className="property-value">{selectedSceneNode?.type === 'signal' ? selectedSceneNode.roadId : '—'}</span>
+                  <span className="property-value">{selectedSignalRoad.id}</span>
                 </div>
-                <div className="property-row">
-                  <span className="property-label">Type</span>
-                  <span className="property-value">{selectedSignal.signal_type}</span>
-                </div>
-                <div className="property-row">
-                  <span className="property-label">SubType</span>
-                  <span className="property-value">{selectedSignal.signal_subtype || '—'}</span>
-                </div>
-                {selectedSignal.value !== null && (
-                  <div className="property-row">
-                    <span className="property-label">Value</span>
-                    <span className="property-value">{selectedSignal.value}</span>
+                <div className="property-row property-row--stacked">
+                  <span className="property-label">{t('propertyPanel.station')}</span>
+                  <div className="property-control-stack">
+                    <input
+                      type="range"
+                      className="property-range"
+                      min={0}
+                      max={Math.max(signalRoadLength, 0.1)}
+                      step={0.1}
+                      value={clamp(selectedSignal.s, 0, Math.max(signalRoadLength, 0.1))}
+                      onChange={(event) => useProjectStore.getState().updateSignal(selectedSignal.id, {
+                        s: clamp(Number(event.target.value), 0, selectedSignalRoad.length),
+                      })}
+                    />
+                    <span className="property-range-value">{selectedSignal.s.toFixed(2)} m</span>
                   </div>
-                )}
-                <div className="property-row">
-                  <span className="property-label">s (m)</span>
-                  <span className="property-value">{selectedSignal.s.toFixed(5)}</span>
+                </div>
+                <div className="property-row property-row--stacked">
+                  <span className="property-label">{t('propertyPanel.lateralOffset')}</span>
+                  <div className="property-control-stack">
+                    <input
+                      type="range"
+                      className="property-range"
+                      min={-signalTRange}
+                      max={signalTRange}
+                      step={0.1}
+                      value={clamp(selectedSignal.t, -signalTRange, signalTRange)}
+                      onChange={(event) => useProjectStore.getState().updateSignal(selectedSignal.id, {
+                        t: Number(event.target.value),
+                      })}
+                    />
+                    <span className="property-range-value">{selectedSignal.t.toFixed(2)} m</span>
+                  </div>
                 </div>
                 <div className="property-row">
-                  <span className="property-label">t (m)</span>
-                  <span className="property-value">{selectedSignal.t.toFixed(5)}</span>
+                  <span className="property-label">{t('propertyPanel.signalType')}</span>
+                  <select
+                    className="property-select"
+                    value={selectedSignal.signal_type}
+                    onChange={(event) => useProjectStore.getState().updateSignal(selectedSignal.id, {
+                      signal_type: event.target.value,
+                      is_dynamic: event.target.value === 'traffic_light',
+                    })}
+                  >
+                    {signalTypeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.signalValue')}</span>
+                  <input
+                    className="property-input"
+                    value={selectedSignal.value ?? ''}
+                    onChange={(event) => useProjectStore.getState().updateSignal(selectedSignal.id, {
+                      value: event.target.value.trim() === '' ? null : event.target.value,
+                    })}
+                  />
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.signalOrientation')}</span>
+                  <select
+                    className="property-select"
+                    value={selectedSignal.orientation}
+                    onChange={(event) => useProjectStore.getState().updateSignal(selectedSignal.id, {
+                      orientation: event.target.value,
+                    })}
+                  >
+                    <option value="+">+</option>
+                    <option value="-">-</option>
+                    <option value="none">none</option>
+                  </select>
                 </div>
                 <div className="property-row">
                   <span className="property-label">{t('propertyPanel.headingOffset', 'HeadingLocal')}</span>
-                  <span className="property-value">
-                    {selectedSignal.h_offset.toFixed(5)}&nbsp;&nbsp;{Number(Math.cos(selectedSignal.h_offset)).toFixed(5)}&nbsp;&nbsp;{Number(0).toFixed(5)}
-                  </span>
+                  <span className="property-value">{selectedSignal.h_offset.toFixed(5)}</span>
                 </div>
                 <div className="property-row">
                   <span className="property-label">{t('propertyPanel.positionLocal', 'PositionLocal')}</span>
                   <span className="property-value">
                     {selectedSignal.s.toFixed(5)}&nbsp;&nbsp;{selectedSignal.t.toFixed(5)}&nbsp;&nbsp;{selectedSignal.z_offset.toFixed(5)}
                   </span>
-                </div>
-                <div className="property-row">
-                  <span className="property-label">Width (m)</span>
-                  <span className="property-value">{selectedSignal.width.toFixed(5)}</span>
-                </div>
-                <div className="property-row">
-                  <span className="property-label">Height (m)</span>
-                  <span className="property-value">{selectedSignal.height.toFixed(5)}</span>
-                </div>
-                <div className="property-row">
-                  <span className="property-label">{t('propertyPanel.isDynamic', 'IsDynamic')}</span>
-                  <span className="property-value">
-                    <input type="checkbox" readOnly checked={selectedSignal.is_dynamic} style={{ pointerEvents: 'none' }} />
-                  </span>
-                </div>
-                <div className="property-row">
-                  <span className="property-label">Orientation</span>
-                  <span className="property-value">{selectedSignal.orientation}</span>
                 </div>
               </CardSection>
             </div>
@@ -708,71 +785,7 @@ export function PropertyPanel() {
             )
           ) : displayMode === 'junction' ? (
             !selectedJunction ? null : (
-            <div className="inspector-cards">
-              {/* Junction Properties Card */}
-              <CardSection title={t('propertyPanel.junctionProperties')}>
-                <div className="property-row">
-                  <span className="property-label">{t('propertyPanel.id')}</span>
-                  <span className="property-value">{selectedJunction.id}</span>
-                </div>
-                <div className="property-row">
-                  <span className="property-label">{t('propertyPanel.name')}</span>
-                  <input
-                    className="property-input"
-                    value={junctionNameDraft}
-                    placeholder="—"
-                    onChange={(e) => setJunctionNameDraft(e.target.value)}
-                    onBlur={() => {
-                      if (junctionNameDraft !== (selectedJunction.name || '')) {
-                        useProjectStore.getState().updateJunction(selectedJunction.id, { name: junctionNameDraft });
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        (e.target as HTMLInputElement).blur();
-                      }
-                    }}
-                  />
-                </div>
-              </CardSection>
-
-              {/* Connections Card */}
-              <CardSection title={`${t('propertyPanel.connections')} (${selectedJunction.connections.length})`}>
-                {selectedJunction.connections.map((conn) => (
-                  <div key={conn.id} className="property-junction-connection">
-                    <div className="property-row sub">
-                      <span className="property-label">{t('propertyPanel.connectionId')}</span>
-                      <span className="property-value">{conn.id}</span>
-                    </div>
-                    <div className="property-row sub">
-                      <span className="property-label">{t('propertyPanel.incomingRoad')}</span>
-                      <span className="property-value">{conn.incoming_road}</span>
-                    </div>
-                    <div className="property-row sub">
-                      <span className="property-label">{t('propertyPanel.connectingRoad')}</span>
-                      <span className="property-value">{conn.connecting_road}</span>
-                    </div>
-                    <div className="property-row sub">
-                      <span className="property-label">{t('propertyPanel.contactPoint')}</span>
-                      <span className="property-value">{conn.contact_point}</span>
-                    </div>
-                    {conn.lane_links.length > 0 && (
-                      <div className="property-row sub">
-                        <span className="property-label">{t('propertyPanel.laneLinks')}</span>
-                        <span className="property-value">
-                          {conn.lane_links.map((ll) => `${ll.from}→${ll.to}`).join(', ')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {selectedJunction.connections.length === 0 && (
-                  <div className="property-row sub">
-                    <span className="property-label">—</span>
-                  </div>
-                )}
-              </CardSection>
-            </div>
+            <JunctionEditor junction={selectedJunction} />
             )
           ) : (
             <div className="property-empty">{t('propertyPanel.noSelection')}</div>

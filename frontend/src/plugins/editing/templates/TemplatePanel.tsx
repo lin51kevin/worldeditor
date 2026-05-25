@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, memo } from 'react';
 import { Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { usePluginContribStore } from '../../../stores/pluginContribStore';
-import { useViewportStore } from '../../../stores/viewportStore';
+import { isDrawMode, useViewportStore } from '../../../stores/viewportStore';
 import type { TemplateItemDef } from '../../../stores/pluginContribStore';
 import './TemplatePanel.css';
 
@@ -101,9 +101,7 @@ export const TemplatePanel = memo(function TemplatePanel() {
       // default to 'spline' (Hermite cubic spline) if none is active.
       viewStore.clearPendingTemplate();
       const current = viewStore.editMode;
-      const inDrawMode =
-        current === 'spline';
-      if (!inDrawMode) {
+      if (!isDrawMode(current)) {
         viewStore.setEditMode('spline');
       } else {
         // Already in a draw mode — start fresh with new template, keep same mode
@@ -176,7 +174,7 @@ export const TemplatePanel = memo(function TemplatePanel() {
           displayedItems.map((item) => {
             const isSelected = selectedTemplateId === item.id &&
               (!item.id.startsWith('tpl:jct:') || pendingTemplateId === item.id) &&
-              (!item.id.startsWith('tpl:road:') || editMode === 'spline');
+              (!item.id.startsWith('tpl:road:') || isDrawMode(editMode));
             const isObjPending = pendingObjectTemplateId === item.id;
             const isPending = pendingTemplateId === item.id || isObjPending;
             return (

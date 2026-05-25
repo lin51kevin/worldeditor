@@ -4,6 +4,8 @@ const mockRegisterToolbarButton = vi.fn();
 const mockRegisterMenuItem = vi.fn();
 const mockRegisterContextMenuItem = vi.fn();
 const mockUnregisterPlugin = vi.fn();
+const mockSetEditMode = vi.fn();
+const mockClearSplineKnots = vi.fn();
 
 vi.mock('../../../stores/pluginContribStore', () => ({
   usePluginContribStore: {
@@ -30,6 +32,16 @@ vi.mock('../../../stores/projectStore', () => ({
 
 vi.mock('../../../utils/dialog', () => ({
   showAlert: vi.fn(),
+}));
+
+vi.mock('../../../stores/viewportStore', () => ({
+  useViewportStore: {
+    getState: vi.fn(() => ({
+      editMode: 'default',
+      setEditMode: mockSetEditMode,
+      clearSplineKnots: mockClearSplineKnots,
+    })),
+  },
 }));
 
 import { mountAdvancedEditingPlugin } from './advanced-editing.plugin';

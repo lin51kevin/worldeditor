@@ -1,8 +1,9 @@
-import type { Elevation, Geometry, Project, Road, RoadObject, RoadObjectItem, RoadSignal, Junction, Lane, LaneLink, LaneWidth } from '../../services/platform';
+import type { Crossfall, Elevation, Geometry, Project, Road, RoadObject, RoadObjectItem, RoadSignal, Junction, Lane, LaneLink, LaneWidth, Superelevation } from '../../services/platform';
+import type { JunctionConnectionDraft } from '../../utils/junctionEditing';
 import type { LaneSide, SceneNodeSelection } from '../../utils/sceneGraph';
 
 // Re-export types used by the store's public API
-export type { Elevation, Geometry, Project, Road, RoadObject, RoadObjectItem, RoadSignal, Junction, Lane, LaneLink, LaneWidth };
+export type { Crossfall, Elevation, Geometry, Project, Road, RoadObject, RoadObjectItem, RoadSignal, Junction, Lane, LaneLink, LaneWidth, Superelevation };
 export type { LaneSide, SceneNodeSelection };
 
 export interface EditorState {
@@ -15,7 +16,9 @@ export interface EditorState {
   selectedJunctionId: string | null;
   selectedObjectType: 'road' | 'junction' | null;
   selectedSceneNode: SceneNodeSelection | null;
-
+  selectedLaneSectionIndex: number | null;
+  selectedLaneId: number | null;
+ 
   // Multi-selection (rubber-band box select)
   selectedRoadIds: string[];
   selectedJunctionIds: string[];
@@ -49,6 +52,9 @@ export interface EditorState {
   selectRoad: (id: string | null) => void;
   selectJunction: (id: string | null) => void;
   selectMultiple: (roadIds: string[], junctionIds: string[]) => void;
+  setSelectedLaneSection: (roadId: string, sectionIndex: number | null) => void;
+  setSelectedLane: (roadId: string, sectionIndex: number, laneId: number | null) => void;
+  clearLaneSelection: () => void;
   selectLaneSection: (roadId: string, sectionIndex: number) => void;
   selectLane: (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => void;
   selectSignal: (roadId: string, signalId: string) => void;
@@ -83,6 +89,9 @@ export interface EditorState {
   rotateRoad: (id: string, angle: number, cx: number, cy: number) => void;
   removeJunction: (id: string) => void;
   updateJunction: (id: string, updates: Partial<Pick<Junction, 'name'>>) => void;
+  addJunctionConnection: (junctionId: string, connection: JunctionConnectionDraft) => void;
+  removeJunctionConnection: (junctionId: string, connectionIndex: number) => void;
+  rebuildJunctionConnections: (junctionId: string) => Promise<void>;
   addJunctionWithRoads: (junction: Junction, roads: Road[]) => void;
 
   // Actions — signals & objects
@@ -113,6 +122,12 @@ export interface EditorState {
   addElevationPoint: (roadId: string, s: number, height: number) => void;
   updateElevationPoint: (roadId: string, index: number, updates: Partial<Elevation>) => void;
   removeElevationPoint: (roadId: string, index: number) => void;
+  addSuperelevation: (roadId: string, record: Superelevation) => void;
+  updateSuperelevation: (roadId: string, index: number, updates: Partial<Superelevation>) => void;
+  removeSuperelevation: (roadId: string, index: number) => void;
+  addCrossfall: (roadId: string, record: Crossfall) => void;
+  updateCrossfall: (roadId: string, index: number, record: Partial<Crossfall>) => void;
+  removeCrossfall: (roadId: string, index: number) => void;
   smoothElevation: (roadId: string, iterations?: number) => void;
 }
 

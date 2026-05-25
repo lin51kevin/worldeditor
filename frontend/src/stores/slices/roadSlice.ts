@@ -1,4 +1,7 @@
+import { getPlatformService } from '../../services';
 import type { Geometry, Junction, Road, RoadSignal, RoadObject, RoadObjectItem } from '../../services/platform';
+import type { JunctionConnectionDraft } from '../../utils/junctionEditing';
+import { addJunctionConnectionToProject, removeJunctionConnectionFromProject } from '../../utils/junctionEditing';
 import type { EditorState, SliceCreator } from './types';
 import { pushUndo } from './types';
 
@@ -16,6 +19,9 @@ export interface RoadSlice {
   rotateRoad: (id: string, angle: number, cx: number, cy: number) => void;
   removeJunction: (id: string) => void;
   updateJunction: (id: string, updates: Partial<Pick<Junction, 'name'>>) => void;
+  addJunctionConnection: (junctionId: string, connection: JunctionConnectionDraft) => void;
+  removeJunctionConnection: (junctionId: string, connectionIndex: number) => void;
+  rebuildJunctionConnections: (junctionId: string) => Promise<void>;
   addJunctionWithRoads: (junction: Junction, roads: Road[]) => void;
   addSignal: (signal: RoadSignal) => void;
   removeSignal: (id: string) => void;
@@ -29,7 +35,7 @@ export interface RoadSlice {
   addRoadSignalItem: (roadId: string, signal: RoadSignal) => void;
 }
 
-export const createRoadSlice: SliceCreator<RoadSlice> = (set) => ({
+export const createRoadSlice: SliceCreator<RoadSlice> = (set, get) => ({
   addRoad: (road) =>
     set((state) => ({
       ...pushUndo(state),
@@ -46,6 +52,15 @@ export const createRoadSlice: SliceCreator<RoadSlice> = (set) => ({
       },
       isDirty: true,
       selectedRoadId: state.selectedRoadId === id ? null : state.selectedRoadId,
+      selectedObjectType: state.selectedRoadId === id ? null : state.selectedObjectType,
+      selectedLaneSectionIndex:
+        state.selectedSceneNode && 'roadId' in state.selectedSceneNode && state.selectedSceneNode.roadId === id
+          ? null
+          : state.selectedLaneSectionIndex,
+      selectedLaneId:
+        state.selectedSceneNode && 'roadId' in state.selectedSceneNode && state.selectedSceneNode.roadId === id
+          ? null
+          : state.selectedLaneId,
       selectedSceneNode: state.selectedSceneNode && 'roadId' in state.selectedSceneNode && state.selectedSceneNode.roadId === id
         ? null
         : state.selectedSceneNode,
@@ -421,6 +436,48 @@ export const createRoadSlice: SliceCreator<RoadSlice> = (set) => ({
       isDirty: true,
     })),
 
+  addJunctionConnection: (junctionId, connection) =>
+    set((state) => ({
+      ...pushUndo(state),
+      project: addJunctionConnectionToProject(state.project, junctionId, connection),
+      isDirty: true,
+    })),
+
+  removeJunctionConnection: (junctionId, connectionIndex) =>
+    set((state) => {
+      const currentJunction = state.project.junctions.find((junction) => junction.id === junctionId);
+      const removedConnection = currentJunction?.connections[connectionIndex];
+      const nextProject = removeJunctionConnectionFromProject(state.project, junctionId, connectionIndex);
+      const removedRoadId = removedConnection?.connecting_road;
+      const clearSelectedRoad = removedRoadId !== undefined && state.selectedRoadId === removedRoadId;
+      const clearSelectedNode = removedRoadId !== undefined
+        && state.selectedSceneNode
+        && 'roadId' in state.selectedSceneNode
+        && state.selectedSceneNode.roadId === removedRoadId;
+
+      return {
+        ...pushUndo(state),
+        project: nextProject,
+        isDirty: true,
+        selectedRoadId: clearSelectedRoad ? null : state.selectedRoadId,
+        selectedObjectType: clearSelectedRoad ? (state.selectedJunctionId ? 'junction' : null) : state.selectedObjectType,
+        selectedLaneSectionIndex: clearSelectedRoad ? null : state.selectedLaneSectionIndex,
+        selectedLaneId: clearSelectedRoad ? null : state.selectedLaneId,
+        selectedSceneNode: clearSelectedNode ? null : state.selectedSceneNode,
+      };
+    }),
+
+  rebuildJunctionConnections: async (junctionId) => {
+    const project = get().project;
+    const service = await getPlatformService();
+    const updatedProject = await service.autoJunctionConnectors(project, junctionId);
+    set((state) => ({
+      ...pushUndo(state),
+      project: updatedProject,
+      isDirty: true,
+    }));
+  },
+ 
   addJunctionWithRoads: (junction, roads) =>
     set((state) => ({
       ...pushUndo(state),
@@ -448,8 +505,15 @@ export const createRoadSlice: SliceCreator<RoadSlice> = (set) => ({
       project: {
         ...state.project,
         signals: (state.project.signals || []).filter((s) => s.id !== id),
+        roads: state.project.roads.map((road) => ({
+          ...road,
+          signals: (road.signals ?? []).filter((signal) => signal.id !== id),
+        })),
       },
       isDirty: true,
+      selectedSceneNode: state.selectedSceneNode?.type === 'signal' && state.selectedSceneNode.signalId === id
+        ? (state.selectedRoadId ? { type: 'road', roadId: state.selectedRoadId } : null)
+        : state.selectedSceneNode,
     })),
 
   updateSignal: (id, updates) =>
@@ -460,6 +524,12 @@ export const createRoadSlice: SliceCreator<RoadSlice> = (set) => ({
         signals: (state.project.signals || []).map((s) =>
           s.id === id ? { ...s, ...updates } : s,
         ),
+        roads: state.project.roads.map((road) => ({
+          ...road,
+          signals: (road.signals ?? []).map((signal) =>
+            signal.id === id ? { ...signal, ...updates } : signal,
+          ),
+        })),
       },
       isDirty: true,
     })),
@@ -480,8 +550,15 @@ export const createRoadSlice: SliceCreator<RoadSlice> = (set) => ({
       project: {
         ...state.project,
         objects: (state.project.objects || []).filter((o) => o.id !== id),
+        roads: state.project.roads.map((road) => ({
+          ...road,
+          objects: (road.objects ?? []).filter((obj) => obj.id !== id),
+        })),
       },
       isDirty: true,
+      selectedSceneNode: state.selectedSceneNode?.type === 'object' && state.selectedSceneNode.objectId === id
+        ? (state.selectedRoadId ? { type: 'road', roadId: state.selectedRoadId } : null)
+        : state.selectedSceneNode,
     })),
 
   updateObject: (id, updates) =>
@@ -492,6 +569,12 @@ export const createRoadSlice: SliceCreator<RoadSlice> = (set) => ({
         objects: (state.project.objects || []).map((o) =>
           o.id === id ? { ...o, ...updates } : o,
         ),
+        roads: state.project.roads.map((road) => ({
+          ...road,
+          objects: (road.objects ?? []).map((obj) =>
+            obj.id === id ? { ...obj, ...updates } as RoadObjectItem : obj,
+          ),
+        })),
       },
       isDirty: true,
     })),

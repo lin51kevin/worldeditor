@@ -2,8 +2,8 @@
  * useKeyboardShortcuts — centralised keyboard shortcut handler.
  *
  * Tool shortcuts:
- *   Drawing modes  — S (spline)
- *   Transform      — M (move-road, toggle) · R (rotate-road, toggle)
+ *   Drawing modes  — P (spiral) · S (spline)
+ *   Transform      — M (move-road, toggle) · R (rotate-road, toggle) · X (split, toggle)
  *   Universal      — Escape (smart cancel) · Delete/Backspace (delete) · F (zoom-to-fit)
  *   Panels         — I (inspector) · Ctrl+B (left panel) · ? (help)
  *
@@ -13,7 +13,7 @@
  */
 import { useEffect } from 'react';
 import { useProjectStore } from '../stores/projectStore';
-import { useViewportStore } from '../stores/viewportStore';
+import { isDrawMode, useViewportStore } from '../stores/viewportStore';
 import type { ActiveMode } from '../stores/viewportStore';
 
 function isEditableTarget(e: KeyboardEvent): boolean {
@@ -179,7 +179,7 @@ export function useKeyboardShortcuts({
         e.preventDefault();
         const { editMode, setEditMode, clearSplineKnots } = useViewportStore.getState();
         if (editMode !== null && editMode !== 'default') {
-          if (editMode === 'spline') clearSplineKnots();
+          if (isDrawMode(editMode)) clearSplineKnots();
           setEditMode('default');
         }
         return;
@@ -195,6 +195,18 @@ export function useKeyboardShortcuts({
       }
 
       // ── DrawMode shortcuts ────────────────────────────────────────────────
+
+      if (e.key === 'a' || e.key === 'A') {
+        e.preventDefault();
+        onSetEditMode('drawArc');
+        return;
+      }
+
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        onSetEditMode('drawSpiral');
+        return;
+      }
 
       if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
@@ -212,6 +224,14 @@ export function useKeyboardShortcuts({
       if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         onSetEditMode('rotate-road');
+        return;
+      }
+      if (e.key === 'x' || e.key === 'X') {
+        const { selectedRoadId } = useProjectStore.getState();
+        if (selectedRoadId) {
+          e.preventDefault();
+          onSetEditMode('split');
+        }
         return;
       }
     };

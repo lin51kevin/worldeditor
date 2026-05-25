@@ -22,6 +22,7 @@ describe('viewportStore', () => {
       showGrid: true,
       showAxis: true,
       editMode: 'default',
+      selectionMode: 'road',
       splineTemplateId: 'single',
       splineKnots: [],
       viewMode: 'solid',
@@ -37,8 +38,13 @@ describe('viewportStore', () => {
       },
       snapEnabled: false,
       snapMode: 'Grid',
-      snapThreshold: 5.0,
+      snapThreshold: 15.0,
       gridSnapSize: 1.0,
+      snapToEndpoints: true,
+      snapToMidpoints: true,
+      snapToPerpendicular: true,
+      snapToGrid: true,
+      snapToLaneEndpoints: false,
       measureMode: 'none',
       measurePoints: [],
       lastMeasurement: null,
@@ -53,6 +59,7 @@ describe('viewportStore', () => {
     expect(state.showGrid).toBe(true);
     expect(state.showAxis).toBe(true);
     expect(state.editMode).toBe('default');
+    expect(state.selectionMode).toBe('road');
     expect(state.viewMode).toBe('solid');
     expect(state.layout.leftWidth).toBe(300);
     expect(state.layout.rightWidth).toBe(300);
@@ -111,7 +118,7 @@ describe('viewportStore', () => {
     expect(useViewportStore.getState().showHoverHighlight).toBe(false);
   });
 
-  it.each(['default', 'road', 'lane', 'lanesection', 'spline', 'move-road', 'rotate-road'] as const)(
+  it.each(['default', 'road', 'lane', 'lanesection', 'spline', 'drawArc', 'drawSpiral', 'move-road', 'rotate-road', 'split', 'editLaneLine'] as const)(
     'setEditMode changes editMode to %s',
     (editMode) => {
       act(() => {
@@ -122,6 +129,16 @@ describe('viewportStore', () => {
     }
   );
 
+  it.each(['road', 'laneSection', 'lane'] as const)(
+    'setSelectionMode changes selectionMode to %s',
+    (selectionMode) => {
+      act(() => {
+        useViewportStore.getState().setSelectionMode(selectionMode);
+      });
+
+      expect(useViewportStore.getState().selectionMode).toBe(selectionMode);
+    }
+  );
   it('spline knot actions mutate knot list immutably', () => {
     act(() => {
       useViewportStore.getState().appendSplineKnot([1, 2, 0]);
@@ -243,28 +260,56 @@ describe('viewportStore', () => {
       expect(useViewportStore.getState().snapMode).toBe('Endpoint');
     });
 
-    it('setSnapThreshold clamps to minimum 0.1', () => {
+    it('setSnapThreshold clamps within the supported slider range', () => {
       act(() => { useViewportStore.getState().setSnapThreshold(10); });
       expect(useViewportStore.getState().snapThreshold).toBe(10);
 
       act(() => { useViewportStore.getState().setSnapThreshold(0.05); });
-      expect(useViewportStore.getState().snapThreshold).toBe(0.1);
+      expect(useViewportStore.getState().snapThreshold).toBe(1);
+
+      act(() => { useViewportStore.getState().setSnapThreshold(80); });
+      expect(useViewportStore.getState().snapThreshold).toBe(50);
     });
 
-    it('setGridSnapSize clamps to minimum 0.01', () => {
+    it('setGridSnapSize clamps within the supported numeric range', () => {
       act(() => { useViewportStore.getState().setGridSnapSize(2.0); });
       expect(useViewportStore.getState().gridSnapSize).toBe(2.0);
 
-      act(() => { useViewportStore.getState().setGridSnapSize(0.001); });
-      expect(useViewportStore.getState().gridSnapSize).toBe(0.01);
+      act(() => { useViewportStore.getState().setGridSnapSize(0.1); });
+      expect(useViewportStore.getState().gridSnapSize).toBe(0.5);
+
+      act(() => { useViewportStore.getState().setGridSnapSize(120); });
+      expect(useViewportStore.getState().gridSnapSize).toBe(100);
+    });
+
+    it('stores per-type snap toggles independently', () => {
+      act(() => {
+        useViewportStore.getState().setSnapToEndpoints(false);
+        useViewportStore.getState().setSnapToMidpoints(false);
+        useViewportStore.getState().setSnapToPerpendicular(false);
+        useViewportStore.getState().setSnapToGrid(false);
+        useViewportStore.getState().setSnapToLaneEndpoints(true);
+      });
+
+      const state = useViewportStore.getState();
+      expect(state.snapToEndpoints).toBe(false);
+      expect(state.snapToMidpoints).toBe(false);
+      expect(state.snapToPerpendicular).toBe(false);
+      expect(state.snapToGrid).toBe(false);
+      expect(state.snapToLaneEndpoints).toBe(true);
     });
 
     it('has correct default snapping state', () => {
       const state = useViewportStore.getState();
       expect(state.snapEnabled).toBe(false);
       expect(state.snapMode).toBe('Grid');
-      expect(state.snapThreshold).toBe(5.0);
+      expect(state.snapThreshold).toBe(15.0);
       expect(state.gridSnapSize).toBe(1.0);
+      expect(state.snapToEndpoints).toBe(true);
+      expect(state.snapToMidpoints).toBe(true);
+      expect(state.snapToPerpendicular).toBe(true);
+      expect(state.snapToGrid).toBe(true);
+      expect(state.snapToLaneEndpoints).toBe(false);
     });
   });
 

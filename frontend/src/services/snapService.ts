@@ -7,10 +7,11 @@
  * and error-handling strategy.
  */
 
-import type { SnapConfig, SnapResult, Road } from './platform';
+import type { PlatformService, Project, SnapConfig, SnapResult, Road } from './platform';
 import { getPlatformService } from './index';
 import { useViewportStore } from '../stores/viewportStore';
 import { useProjectStore } from '../stores/projectStore';
+import { buildRenderableProject } from '../utils/sceneGraph';
 
 /** Result from a hover-pick query (cascading road → junction → signal → object). */
 export interface HoverPickResult {
@@ -28,16 +29,22 @@ export interface LanePickResult {
   laneId: number;
 }
 
+let cachedProjectRef: Project | null = null;
+let cachedVisibilityKey = '';
+let cachedRenderableProject: Project | null = null;
+let snapCacheReady = false;
+
 /** Build a SnapConfig from the current viewport store state. */
 export function buildSnapConfig(): SnapConfig {
   const state = useViewportStore.getState();
   return {
-    grid_enabled: state.snapMode === 'Grid',
+    grid_enabled: state.snapToGrid,
     grid_size: state.gridSnapSize,
-    endpoint_enabled: state.snapMode === 'Endpoint',
+    endpoint_enabled: state.snapToEndpoints,
     endpoint_threshold: state.snapThreshold,
-    midpoint_enabled: state.snapMode === 'Midpoint',
-    perpendicular_enabled: state.snapMode === 'Perpendicular',
+    snap_to_lane_endpoints: state.snapToLaneEndpoints,
+    midpoint_enabled: state.snapToMidpoints,
+    perpendicular_enabled: state.snapToPerpendicular,
   };
 }
 
@@ -48,9 +55,43 @@ export function buildDrawSnapConfig(): SnapConfig {
     grid_size: 1.0,
     endpoint_enabled: true,
     endpoint_threshold: 5.0,
+    snap_to_lane_endpoints: false,
     midpoint_enabled: false,
     perpendicular_enabled: false,
   };
+}
+
+function buildVisibilityKey(): string {
+  const { display } = useViewportStore.getState();
+  return JSON.stringify({
+    hiddenRoadIds: display.hiddenRoadIds,
+    hiddenJunctionIds: display.hiddenJunctionIds,
+    hiddenLaneSectionKeys: display.hiddenLaneSectionKeys,
+    hiddenLaneKeys: display.hiddenLaneKeys,
+    hiddenSignalKeys: display.hiddenSignalKeys,
+    hiddenObjectKeys: display.hiddenObjectKeys,
+  });
+}
+
+function getRenderableSnapProject(project: Project): Project {
+  const visibilityKey = buildVisibilityKey();
+  if (cachedProjectRef !== project || cachedVisibilityKey !== visibilityKey || !cachedRenderableProject) {
+    cachedProjectRef = project;
+    cachedVisibilityKey = visibilityKey;
+    cachedRenderableProject = buildRenderableProject(project, useViewportStore.getState().display);
+    snapCacheReady = false;
+  }
+
+  return cachedRenderableProject;
+}
+
+async function ensureSnapCache(service: PlatformService): Promise<void> {
+  const { project } = useProjectStore.getState();
+  const renderableProject = getRenderableSnapProject(project);
+  if (snapCacheReady) return;
+
+  await service.setProjectCache(renderableProject);
+  snapCacheReady = true;
 }
 
 /**
@@ -67,8 +108,8 @@ export async function querySnap(
 
   try {
     const service = await getPlatformService();
-    const config = buildSnapConfig();
-    const result = await service.snapPointCached(worldX, worldY, config, excludeRoadId);
+    await ensureSnapCache(service);
+    const result = await service.snapPointCached(worldX, worldY, buildSnapConfig(), excludeRoadId);
     return result.snapped ? result : null;
   } catch {
     return null;
@@ -85,9 +126,8 @@ export async function queryDrawSnap(
 ): Promise<SnapResult | null> {
   try {
     const service = await getPlatformService();
-    const { project } = useProjectStore.getState();
-    const config = buildDrawSnapConfig();
-    const result = await service.snapPoint(project, worldX, worldY, config);
+    await ensureSnapCache(service);
+    const result = await service.snapPointCached(worldX, worldY, buildDrawSnapConfig());
     return result.snapped ? result : null;
   } catch {
     return null;

@@ -415,10 +415,10 @@ export function import_signals_from_json(json: string): string;
 export function init(): void;
 
 /**
- * Mark the spatial index as dirty so it is rebuilt on the next query.
+ * Mark the cached spatial index and snap grid as dirty so they rebuild on the next query.
  *
- * Lighter than `set_project_cache` when only the spatial structure changed
- * but the project reference is the same.
+ * Lighter than `set_project_cache` when the project reference is unchanged
+ * but its road/junction data has been mutated in place.
  */
 export function invalidate_project_cache(): void;
 

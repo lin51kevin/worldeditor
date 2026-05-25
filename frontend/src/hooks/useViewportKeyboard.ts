@@ -6,7 +6,7 @@
  */
 import { useEffect } from 'react';
 import { useProjectStore } from '../stores/projectStore';
-import { useViewportStore } from '../stores/viewportStore';
+import { isDrawMode, useViewportStore } from '../stores/viewportStore';
 
 /**
  * Registers global keydown handlers for viewport-level shortcuts:
@@ -18,7 +18,36 @@ export function useViewportKeyboard(): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const viewState = useViewportStore.getState();
-      const isDrawMode = viewState.editMode === 'spline';
+      const inDrawMode = isDrawMode(viewState.editMode);
+      const target = event.target;
+      const isTypingTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+
+      if (!event.ctrlKey && !event.altKey && !event.metaKey && !isTypingTarget) {
+        const editorState = useProjectStore.getState();
+        if (editorState.selectedRoadId && (event.key === '1' || event.key === '2' || event.key === '3')) {
+          if (inDrawMode) {
+            viewState.clearSplineKnots();
+          }
+          if (viewState.editMode !== 'default') {
+            viewState.setEditMode('default');
+          }
+
+          const nextSelectionMode = event.key === '1' ? 'road' : event.key === '2' ? 'laneSection' : 'lane';
+          if (nextSelectionMode === 'road') {
+            editorState.clearLaneSelection();
+          } else if (nextSelectionMode === 'laneSection' && editorState.selectedLaneSectionIndex !== null) {
+            editorState.setSelectedLaneSection(editorState.selectedRoadId, editorState.selectedLaneSectionIndex);
+          }
+
+          viewState.setSelectionMode(nextSelectionMode);
+          event.preventDefault();
+          return;
+        }
+      }
 
       if (event.key === 'Escape') {
         // Pending click-to-place mode takes priority — cancel it first
@@ -30,15 +59,19 @@ export function useViewportKeyboard(): void {
           viewState.clearPendingObjectTemplate();
           return;
         }
+        if (viewState.editMode === 'placeSignal' || viewState.editMode === 'placeObject') {
+          viewState.setEditMode('default');
+          return;
+        }
         // Clear measurement points when in measure mode
         if (viewState.measureMode !== 'none') {
           viewState.clearMeasurePoints();
           return;
         }
-        if (viewState.geometryEditRoadId || isDrawMode) {
+        if (viewState.geometryEditRoadId || inDrawMode) {
           return;
         }
-        if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
+        if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road' || viewState.editMode === 'editLaneLine') {
           viewState.setEditMode('default');
           return;
         }
@@ -57,9 +90,12 @@ export function useViewportKeyboard(): void {
       if (
         event.key === 'Delete' &&
         !viewState.geometryEditRoadId &&
-        !isDrawMode &&
+        !inDrawMode &&
+        viewState.editMode !== 'editLaneLine' &&
         !viewState.pendingTemplateId &&
-        !viewState.pendingObjectTemplateId
+        !viewState.pendingObjectTemplateId &&
+        viewState.editMode !== 'placeSignal' &&
+        viewState.editMode !== 'placeObject'
       ) {
         useProjectStore.getState().deleteSelected();
       }

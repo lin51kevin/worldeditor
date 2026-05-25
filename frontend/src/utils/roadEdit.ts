@@ -128,6 +128,242 @@ function evalGeometryAtS(geo: Geometry, ds: number): { x: number; y: number; hdg
   return { x: x0 + ds * Math.cos(hdg0), y: y0 + ds * Math.sin(hdg0), hdg: hdg0 };
 }
 
+function distanceSquared(x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x1 - x2;
+  const dy = y1 - y2;
+  return dx * dx + dy * dy;
+}
+
+function refineClosestDs(geo: Geometry, worldPos: { x: number; y: number }, bestDs: number, sampleStep: number): number {
+  let left = Math.max(0, bestDs - sampleStep);
+  let right = Math.min(geo.length, bestDs + sampleStep);
+
+  for (let i = 0; i < 8; i++) {
+    const mid1 = left + (right - left) / 3;
+    const mid2 = right - (right - left) / 3;
+    const pose1 = evalGeometryAtS(geo, mid1);
+    const pose2 = evalGeometryAtS(geo, mid2);
+    const dist1 = distanceSquared(pose1.x, pose1.y, worldPos.x, worldPos.y);
+    const dist2 = distanceSquared(pose2.x, pose2.y, worldPos.x, worldPos.y);
+
+    if (dist1 <= dist2) {
+      right = mid2;
+    } else {
+      left = mid1;
+    }
+  }
+
+  return (left + right) / 2;
+}
+
+/** Evaluate a road centerline pose at station `s`. */
+export function evalRoadAtS(road: Road, s: number): { x: number; y: number; hdg: number } {
+  if (road.plan_view.length === 0) {
+    return { x: 0, y: 0, hdg: 0 };
+  }
+
+  const clampedS = Math.max(0, Math.min(road.length, s));
+  for (let i = 0; i < road.plan_view.length; i++) {
+    const geo = road.plan_view[i]!;
+    const geoEnd = geo.s + geo.length;
+    if (clampedS <= geoEnd || i === road.plan_view.length - 1) {
+      const ds = Math.max(0, Math.min(geo.length, clampedS - geo.s));
+      return evalGeometryAtS(geo, ds);
+    }
+  }
+
+  const lastGeo = road.plan_view[road.plan_view.length - 1]!;
+  return evalGeometryAtS(lastGeo, lastGeo.length);
+}
+
+const STATION_EPSILON = 1e-9;
+
+function clampStation(s: number, maxLength: number): number {
+  return Math.max(0, Math.min(maxLength, s));
+}
+
+function dedupeStationRecords<T extends { s: number }>(records: T[]): T[] {
+  const deduped: T[] = [];
+
+  for (const record of records) {
+    const last = deduped[deduped.length - 1];
+    if (last && Math.abs(last.s - record.s) <= STATION_EPSILON) {
+      deduped[deduped.length - 1] = record;
+    } else {
+      deduped.push(record);
+    }
+  }
+
+  return deduped;
+}
+
+function capStationRecords<T extends { s: number }>(records: T[] | undefined, maxLength: number): T[] | undefined {
+  if (!records) {
+    return records;
+  }
+
+  return dedupeStationRecords(
+    records.map((record) => ({ ...record, s: clampStation(record.s, maxLength) }) as T),
+  );
+}
+
+function capStationRangeRecords<T extends { s: number; length: number }>(records: T[] | undefined, maxLength: number): T[] | undefined {
+  if (!records) {
+    return records;
+  }
+
+  return records.map((record) => {
+    const s = clampStation(record.s, maxLength);
+    return {
+      ...record,
+      s,
+      length: Math.max(0, Math.min(record.length, maxLength - s)),
+    } as T;
+  });
+}
+
+function capLateralProfile(profile: Road['lateral_profile'], maxLength: number): Road['lateral_profile'] {
+  if (!profile) {
+    return profile;
+  }
+
+  return {
+    ...profile,
+    superelevation: capStationRecords(profile.superelevation, maxLength),
+    crossfall: capStationRecords(profile.crossfall, maxLength),
+    superelevations: capStationRecords(profile.superelevations, maxLength),
+    crossfalls: capStationRecords(profile.crossfalls, maxLength),
+  };
+}
+
+function capRoadObjects(objects: Road['objects'], maxLength: number): Road['objects'] {
+  return objects?.map((object) => ({
+    ...object,
+    position: {
+      ...object.position,
+      x: clampStation(object.position.x, maxLength),
+    },
+  }));
+}
+
+function buildSampleStations(roadLength: number, segmentLength: number): number[] {
+  if (roadLength <= 0) {
+    return [0];
+  }
+
+  const stations = [0];
+  for (let s = segmentLength; s < roadLength; s += segmentLength) {
+    stations.push(s);
+  }
+
+  if (roadLength - stations[stations.length - 1]! > STATION_EPSILON) {
+    stations.push(roadLength);
+  }
+
+  return stations;
+}
+
+/**
+ * Re-sample a road centerline at uniform station intervals and rebuild it as
+ * piecewise line geometry. All station-based child records are clamped to the
+ * new length so the returned road stays self-consistent.
+ */
+export function resampleRoad(road: Road, segmentLength: number): Road {
+  if (!Number.isFinite(segmentLength) || segmentLength <= 0) {
+    throw new Error(`segmentLength (${segmentLength}) must be a finite number greater than 0`);
+  }
+
+  const sampleStations = buildSampleStations(road.length, segmentLength);
+  const sampledPoses = sampleStations.map((s) => ({ s, ...evalRoadAtS(road, s) }));
+
+  const plan_view: Geometry[] = [];
+  let accumulatedLength = 0;
+
+  for (let i = 0; i < sampledPoses.length - 1; i++) {
+    const start = sampledPoses[i]!;
+    const end = sampledPoses[i + 1]!;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy);
+
+    if (length <= STATION_EPSILON) {
+      continue;
+    }
+
+    plan_view.push({
+      s: accumulatedLength,
+      x: start.x,
+      y: start.y,
+      hdg: Math.atan2(dy, dx),
+      length,
+      geo_type: 'Line',
+    });
+    accumulatedLength += length;
+  }
+
+  const fallbackPose = sampledPoses[0] ?? { x: 0, y: 0, hdg: 0 };
+  const nextPlanView = plan_view.length > 0
+    ? plan_view
+    : [{ s: 0, x: fallbackPose.x, y: fallbackPose.y, hdg: fallbackPose.hdg, length: 0, geo_type: 'Line' as const }];
+  const nextLength = plan_view.length > 0 ? accumulatedLength : 0;
+
+  return {
+    ...road,
+    length: nextLength,
+    plan_view: nextPlanView,
+    elevation_profile: capStationRecords(road.elevation_profile, nextLength) ?? [],
+    lane_sections: capStationRecords(road.lane_sections, nextLength) ?? [],
+    lane_offsets: capStationRecords(road.lane_offsets, nextLength),
+    lateral_profile: capLateralProfile(road.lateral_profile, nextLength),
+    bridges: capStationRangeRecords(road.bridges, nextLength),
+    tunnels: capStationRangeRecords(road.tunnels, nextLength),
+    signals: capStationRecords(road.signals, nextLength),
+    objects: capRoadObjects(road.objects, nextLength),
+    spline_edit_data: sampledPoses.map((pose) => [pose.x, pose.y, 0] as [number, number, number]),
+  };
+}
+
+/** Find the closest centerline station on a road to the given world position. */
+export function findClosestSOnRoad(road: Road, worldPos: { x: number; y: number }): number {
+  if (road.plan_view.length === 0) {
+    return 0;
+  }
+
+  let bestS = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const geo of road.plan_view) {
+    const sampleCount = Math.max(8, Math.ceil(geo.length / 2));
+    const sampleStep = geo.length > 0 ? geo.length / sampleCount : 0;
+
+    let localBestDs = 0;
+    let localBestDistance = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i <= sampleCount; i++) {
+      const ds = sampleStep * i;
+      const pose = evalGeometryAtS(geo, ds);
+      const distance = distanceSquared(pose.x, pose.y, worldPos.x, worldPos.y);
+      if (distance < localBestDistance) {
+        localBestDistance = distance;
+        localBestDs = ds;
+      }
+    }
+
+    const refinedDs = sampleStep > 0
+      ? refineClosestDs(geo, worldPos, localBestDs, sampleStep)
+      : 0;
+    const refinedPose = evalGeometryAtS(geo, refinedDs);
+    const refinedDistance = distanceSquared(refinedPose.x, refinedPose.y, worldPos.x, worldPos.y);
+
+    if (refinedDistance < bestDistance) {
+      bestDistance = refinedDistance;
+      bestS = geo.s + refinedDs;
+    }
+  }
+
+  return Math.max(0, Math.min(road.length, bestS));
+}
+
 // ─── splitGeometryType ───────────────────────────────────────────────────────
 
 /**

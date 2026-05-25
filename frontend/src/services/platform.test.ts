@@ -41,6 +41,7 @@ describe('platform services', () => {
         generateSingleRoadVertices: expect.any(Function),
         pickRoadAtPoint: expect.any(Function),
         pickLaneAtPointCached: expect.any(Function),
+        sampleLaneBoundary: expect.any(Function),
       })
     );
   });

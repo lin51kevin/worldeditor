@@ -25,7 +25,7 @@ import { WelcomePage } from './components/shell/WelcomePage';
 import { ShortcutHelpOverlay } from './components/dialogs/ShortcutHelpOverlay';
 import { useProjectStore } from './stores/projectStore';
 import { useThemeStore } from './stores/themeStore';
-import { useViewportStore } from './stores/viewportStore';
+import { isDrawMode, useViewportStore } from './stores/viewportStore';
 import { useBuiltinPluginStore } from './stores/builtinPluginStore';
 import { useRecentFilesStore } from './stores/recentFilesStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -141,19 +141,19 @@ export function App() {
     },
     onShowShortcutHelp: setShowShortcutHelp,
     onSetEditMode: (mode) => {
-      // EditModes (move-road, rotate-road): toggle back to default if already active.
+      // EditModes (move-road, rotate-road, split): toggle back to default if already active.
       // DrawModes: always enter the mode and reset in-progress knots.
-      const isEditMode = mode === 'move-road' || mode === 'rotate-road';
+      const isEditMode = mode === 'move-road' || mode === 'rotate-road' || mode === 'split' || mode === 'placeSignal' || mode === 'placeObject';
       const current = useViewportStore.getState().editMode;
       if (isEditMode && current === mode) {
         setEditMode('default');
       } else {
-        // Leaving spline draw mode: discard any in-progress knots
-        if (current === 'spline' && mode !== 'spline') {
+        // Leaving one draw mode for another tool: discard any in-progress points.
+        if (isDrawMode(current) && current !== mode) {
           clearSplineKnots();
         }
         setEditMode(mode);
-        if (mode === 'spline') {
+        if (isDrawMode(mode)) {
           clearSplineKnots();
         }
       }
@@ -162,9 +162,8 @@ export function App() {
       // In draw modes: 1st Escape clears in-progress knots (stays in mode),
       //               2nd Escape (no knots left) returns to default.
       // In all other modes: immediately return to default.
-      const drawModes = new Set(['spline']);
       const { editMode: current, splineKnots } = useViewportStore.getState();
-      if (drawModes.has(current) && splineKnots.length > 0) {
+      if (isDrawMode(current) && splineKnots.length > 0) {
         clearSplineKnots();
       } else {
         setEditMode('default');

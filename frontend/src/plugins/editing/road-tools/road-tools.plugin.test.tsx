@@ -16,6 +16,7 @@ const projectState = {
 
 const viewportState = {
   editMode: 'default',
+  clearSplineKnots: vi.fn(),
   setEditMode: vi.fn((mode: string) => {
     viewportState.editMode = mode;
   }),
@@ -95,6 +96,7 @@ describe('road-tools.plugin', () => {
     projectState.optimizeRoad = vi.fn();
     projectState.swapCenterline = vi.fn();
     viewportState.editMode = 'default';
+    viewportState.clearSplineKnots = vi.fn();
     viewportState.setEditMode = vi.fn((mode: string) => {
       viewportState.editMode = mode;
     });
@@ -104,7 +106,7 @@ describe('road-tools.plugin', () => {
     const cleanup = mountRoadToolsPlugin();
 
     expect(registerToolbarButton).toHaveBeenCalledTimes(8);
-    expect(registerMenuItem).toHaveBeenCalledTimes(6);
+    expect(registerMenuItem).toHaveBeenCalledTimes(8);
     expect(registerToolbarButton.mock.calls.map(([button]) => button.id)).toEqual(
       expect.arrayContaining([
         'road-tools:move-road',
@@ -119,11 +121,13 @@ describe('road-tools.plugin', () => {
     );
     expect(registerMenuItem.mock.calls.map(([item]) => item.id)).toEqual(
       expect.arrayContaining([
+        'road-tools:menu-draw-arc',
         'road-tools:menu-clone',
         'road-tools:menu-reverse',
         'road-tools:menu-mirror',
         'road-tools:menu-optimize',
         'road-tools:menu-swap',
+        'road-tools:menu-draw-spiral',
         'road-tools:menu-sep',
       ]),
     );
@@ -181,5 +185,23 @@ describe('road-tools.plugin', () => {
 
     expect(projectState.swapCenterline).toHaveBeenCalledWith('road-1', -3);
     expect(getMenuItem('road-tools:menu-sep')).toMatchObject({ separator: true, menu: 'road' });
+  });
+
+  it('registers an arc draw road menu command', () => {
+    mountRoadToolsPlugin();
+
+    getMenuItem('road-tools:menu-draw-arc')?.onClick();
+
+    expect(viewportState.clearSplineKnots).toHaveBeenCalledTimes(1);
+    expect(viewportState.setEditMode).toHaveBeenCalledWith('drawArc');
+  });
+
+  it('registers a spiral draw road menu command', () => {
+    mountRoadToolsPlugin();
+
+    getMenuItem('road-tools:menu-draw-spiral')?.onClick();
+
+    expect(viewportState.clearSplineKnots).toHaveBeenCalledTimes(1);
+    expect(viewportState.setEditMode).toHaveBeenCalledWith('drawSpiral');
   });
 });

@@ -23,7 +23,7 @@ export function CommandPalette() {
   const { t } = useTranslation();
 
   const commands = useMemo<Command[]>(() => {
-    const { toggleGrid, toggleAxis, setEditMode, toggleLeftPanel, toggleRightPanel, toggleOutputPanel, toggleSnap, setMeasureMode } =
+    const { toggleGrid, toggleAxis, setEditMode, clearSplineKnots, toggleLeftPanel, toggleRightPanel, toggleOutputPanel, toggleSnap, setMeasureMode } =
       useViewportStore.getState();
     const { toggleTheme } = useThemeStore.getState();
 
@@ -38,7 +38,8 @@ export function CommandPalette() {
 
       // Edit mode
       { id: 'mode-select', label: t('toolbar.select'), shortcut: 'V', category: t('commandPalette.categoryEdit'), description: t('commandPalette.descModeSelect', 'Switch to selection mode'), action: () => setEditMode('default') },
-      { id: 'mode-spline', label: t('toolbar.splineEdit'), shortcut: 'S', category: t('commandPalette.categoryEdit'), description: t('commandPalette.descModeSpline', 'Switch to spline editing mode'), action: () => setEditMode('spline') },
+      { id: 'mode-arc', label: t('toolbar.arcEdit'), shortcut: 'A', category: t('commandPalette.categoryEdit'), description: t('commandPalette.descModeArc', 'Switch to arc road drawing mode'), action: () => { clearSplineKnots(); setEditMode('drawArc'); } },
+      { id: 'mode-spline', label: t('toolbar.splineEdit'), shortcut: 'S', category: t('commandPalette.categoryEdit'), description: t('commandPalette.descModeSpline', 'Switch to spline editing mode'), action: () => { clearSplineKnots(); setEditMode('spline'); } },
       
       // Tools
       { id: 'toggle-snap', label: t('toolbar.snap'), category: t('commandPalette.categoryTools'), description: t('commandPalette.descToggleSnap', 'Toggle snapping'), action: toggleSnap },

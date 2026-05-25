@@ -65,6 +65,8 @@ export const createProjectSlice: SliceCreator<ProjectSlice> = (set) => ({
         selectedJunctionId: null,
         selectedObjectType: null,
         selectedSceneNode: null,
+        selectedLaneSectionIndex: null,
+        selectedLaneId: null,
         selectedRoadIds: [],
         selectedJunctionIds: [],
       }
@@ -78,6 +80,8 @@ export const createProjectSlice: SliceCreator<ProjectSlice> = (set) => ({
       selectedJunctionId: null,
       selectedObjectType: null,
       selectedSceneNode: null,
+      selectedLaneSectionIndex: null,
+      selectedLaneId: null,
       selectedRoadIds: [],
       selectedJunctionIds: [],
       clipboardRoadId: null,

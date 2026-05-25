@@ -278,4 +278,59 @@ describe('laneSlice', () => {
       expect(profile[1]!.a).toBeCloseTo(10, 5);
     });
   });
+
+  describe('superelevation operations', () => {
+    it('addSuperelevation should add a point and keep s sorted', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addSuperelevation('r1', { s: 20.0, a: 2.0, b: 0, c: 0, d: 0 });
+      useProjectStore.getState().addSuperelevation('r1', { s: 10.0, a: 1.0, b: 0, c: 0, d: 0 });
+      const profile = useProjectStore.getState().project.roads[0]!.lateral_profile!.superelevation!;
+      expect(profile.map((entry) => entry.s)).toEqual([10, 20]);
+      expect(useProjectStore.getState().project.roads[0]!.lateral_profile!.superelevations).toEqual(profile);
+    });
+
+    it('updateSuperelevation should update coefficients', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addSuperelevation('r1', { s: 0.0, a: 1.0, b: 0, c: 0, d: 0 });
+      useProjectStore.getState().updateSuperelevation('r1', 0, { c: 0.5 });
+      const entry = useProjectStore.getState().project.roads[0]!.lateral_profile!.superelevation![0]!;
+      expect(entry.c).toBe(0.5);
+    });
+
+    it('removeSuperelevation should remove a point', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addSuperelevation('r1', { s: 0.0, a: 1.0, b: 0, c: 0, d: 0 });
+      useProjectStore.getState().removeSuperelevation('r1', 0);
+      const profile = useProjectStore.getState().project.roads[0]!.lateral_profile!.superelevation!;
+      expect(profile).toHaveLength(0);
+    });
+  });
+
+  describe('crossfall operations', () => {
+    it('addCrossfall should add a point and keep s sorted', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addCrossfall('r1', { s: 20.0, a: 2.0, b: 0, c: 0, d: 0, side: 'right' });
+      useProjectStore.getState().addCrossfall('r1', { s: 10.0, a: 1.0, b: 0, c: 0, d: 0, side: 'left' });
+      const profile = useProjectStore.getState().project.roads[0]!.lateral_profile!.crossfall!;
+      expect(profile.map((entry) => entry.s)).toEqual([10, 20]);
+      expect(useProjectStore.getState().project.roads[0]!.lateral_profile!.crossfalls).toEqual(profile);
+    });
+
+    it('updateCrossfall should update coefficients and side', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addCrossfall('r1', { s: 0.0, a: 1.0, b: 0, c: 0, d: 0, side: 'both' });
+      useProjectStore.getState().updateCrossfall('r1', 0, { c: 0.5, side: 'left' });
+      const entry = useProjectStore.getState().project.roads[0]!.lateral_profile!.crossfall![0]!;
+      expect(entry.c).toBe(0.5);
+      expect(entry.side).toBe('left');
+    });
+
+    it('removeCrossfall should remove a point', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addCrossfall('r1', { s: 0.0, a: 1.0, b: 0, c: 0, d: 0, side: 'both' });
+      useProjectStore.getState().removeCrossfall('r1', 0);
+      const profile = useProjectStore.getState().project.roads[0]!.lateral_profile!.crossfall!;
+      expect(profile).toHaveLength(0);
+    });
+  });
 });

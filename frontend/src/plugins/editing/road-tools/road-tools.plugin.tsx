@@ -167,6 +167,21 @@ export function mountRoadToolsPlugin(): () => void {
   // ── Road menu contributions ────────────────────────────────────────────────
   const menuItems: MenuItemContrib[] = [
     {
+      id: `${PLUGIN_ID}:menu-draw-arc`,
+      pluginId: PLUGIN_ID,
+      menu: 'tools',
+      labelKey: 'toolPanel.drawArcRoad',
+      shortcut: 'A',
+      onClick: () => {
+        const vs = useViewportStore.getState();
+        if (vs.geometryEditRoadId) {
+          void finalizeGeometryEditStandalone();
+        }
+        vs.clearSplineKnots();
+        vs.setEditMode('drawArc');
+      },
+    },
+    {
       id: `${PLUGIN_ID}:menu-clone`,
       pluginId: PLUGIN_ID,
       menu: 'road',
@@ -232,6 +247,18 @@ export function mountRoadToolsPlugin(): () => void {
               ? Math.min(...sec.right.map((l) => l.id))
               : 0;
         if (targetId !== 0) swapCenterline(selectedRoadId, targetId);
+      },
+    },
+    {
+      id: `${PLUGIN_ID}:menu-draw-spiral`,
+      pluginId: PLUGIN_ID,
+      menu: 'road',
+      labelKey: 'toolbar.spiralEdit',
+      shortcut: 'P',
+      onClick: () => {
+        const vs = useViewportStore.getState();
+        vs.clearSplineKnots();
+        vs.setEditMode('drawSpiral');
       },
     },
     {

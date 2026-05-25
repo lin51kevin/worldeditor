@@ -1,4 +1,4 @@
-import { splitRoadAt, weldRoads } from './roadEdit';
+import { findClosestSOnRoad, resampleRoad, splitRoadAt, weldRoads } from './roadEdit';
 import type { Road, Geometry, GeometryType, LaneSection } from '../services/platform';
 
 function makeRoad(geo: Geometry[], length: number, lane_sections?: LaneSection[]): Road {
@@ -377,5 +377,79 @@ describe('splitRoadAt — ParamPoly3 frame rotation', () => {
     expect(pp3['b_v']).toBeCloseTo(0, 4);
     // b_u must be positive (curve continues forward)
     expect(pp3['b_u']).toBeGreaterThan(0);
+  });
+});
+
+describe('findClosestSOnRoad', () => {
+  it('returns the nearest station on a straight road', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 100, geo_type: 'Line' }],
+      100,
+    );
+
+    expect(findClosestSOnRoad(road, { x: 37, y: 5 })).toBeCloseTo(37, 1);
+  });
+
+  it('handles multi-segment roads', () => {
+    const road = makeRoad(
+      [
+        { s: 0, x: 0, y: 0, hdg: 0, length: 40, geo_type: 'Line' },
+        { s: 40, x: 40, y: 0, hdg: Math.PI / 2, length: 60, geo_type: 'Line' },
+      ],
+      100,
+    );
+
+    expect(findClosestSOnRoad(road, { x: 43, y: 18 })).toBeCloseTo(58, 1);
+  });
+});
+
+describe('resampleRoad', () => {
+  it('rebuilds a road as piecewise line segments with recomputed length', () => {
+    const road = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 100, geo_type: { Arc: { curvature: 0.01 } } }],
+      100,
+      [
+        {
+          s: 0,
+          single_side: false,
+          left: [],
+          right: [{ id: -1, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
+          center: [],
+        },
+        {
+          s: 120,
+          single_side: false,
+          left: [],
+          right: [{ id: -1, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] }],
+          center: [],
+        },
+      ],
+    );
+
+    const resampled = resampleRoad(road, 25);
+    const totalSegmentLength = resampled.plan_view.reduce((sum, geometry) => sum + geometry.length, 0);
+
+    expect(resampled).not.toBe(road);
+    expect(resampled.plan_view).toHaveLength(4);
+    expect(resampled.plan_view.every((geometry) => geometry.geo_type === 'Line')).toBe(true);
+    expect(resampled.length).toBeCloseTo(totalSegmentLength, 8);
+    expect(resampled.length).toBeLessThan(road.length);
+    expect(resampled.lane_sections[1]?.s).toBeCloseTo(resampled.length, 8);
+  });
+
+  it('updates spline edit data to match sampled points', () => {
+    const road = {
+      ...makeRoad([{ s: 0, x: 0, y: 0, hdg: 0, length: 30, geo_type: 'Line' }], 30),
+      spline_edit_data: [[0, 0, 1], [30, 0, 2]] as [number, number, number][],
+    };
+
+    const resampled = resampleRoad(road, 10);
+
+    expect(resampled.spline_edit_data).toEqual([
+      [0, 0, 0],
+      [10, 0, 0],
+      [20, 0, 0],
+      [30, 0, 0],
+    ]);
   });
 });

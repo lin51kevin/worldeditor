@@ -121,48 +121,43 @@ export async function handleMeasurementClick(
   return true;
 }
 
-/** Handle lane/lanesection selection click. Returns true if in lane mode. */
+/** Handle mode-aware road sub-selection clicks. */
 export async function handleLaneSelectionClick(
   worldX: number,
   worldY: number,
   visibleProject: { roads: Array<{ id: string; lane_sections: Array<{ s: number; left: Array<{ width: Array<{ a: number }> }>; right: Array<{ width: Array<{ a: number }> }> }> }> } | null,
 ): Promise<boolean> {
   const viewState = useViewportStore.getState();
-  if (
-    viewState.editMode !== 'lanesection' &&
-    viewState.editMode !== 'lane' &&
-    viewState.editMode !== 'road-markings'
-  ) {
+  const activeSelectionMode = viewState.editMode === 'road-markings' ? 'lane' : viewState.selectionMode;
+  if (activeSelectionMode === 'road') {
     return false;
   }
   if (!visibleProject) return true;
 
   try {
     const service = await getPlatformService();
-    if (viewState.editMode === 'lanesection') {
+    if (activeSelectionMode === 'laneSection') {
       const roadId = await service.pickRoadAtPointCached(worldX, worldY, 5.0);
       if (roadId) {
-        const road = visibleProject.roads.find((r) => r.id === roadId);
+        const road = visibleProject.roads.find((candidate) => candidate.id === roadId);
         if (road) {
           const snap = await service.snapPointOnRoad(road as never, worldX, worldY);
-          let sectionIndex = -1;
+          let sectionIndex: number | null = null;
           for (let i = road.lane_sections.length - 1; i >= 0; i--) {
-            const sec = road.lane_sections[i];
-            if (sec && sec.s <= snap.s + 1e-9) { sectionIndex = i; break; }
+            const section = road.lane_sections[i];
+            if (section && section.s <= snap.s + 1e-9) {
+              sectionIndex = i;
+              break;
+            }
           }
-          if (sectionIndex >= 0) {
-            useProjectStore.getState().selectLaneSection(roadId, sectionIndex);
-          } else {
-            useProjectStore.getState().selectRoad(roadId);
-          }
+          useProjectStore.getState().setSelectedLaneSection(roadId, sectionIndex);
         }
       }
     } else {
       const laneResult = await pickLane(worldX, worldY);
       if (laneResult) {
         const { roadId, sectionIndex, laneId } = laneResult;
-        const side = laneId > 0 ? 'left' as const : 'right' as const;
-        useProjectStore.getState().selectLane(roadId, sectionIndex, side, laneId);
+        useProjectStore.getState().setSelectedLane(roadId, sectionIndex, laneId);
       } else {
         const roadId = await pickRoad(worldX, worldY);
         if (roadId) {

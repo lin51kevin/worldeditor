@@ -14,6 +14,7 @@ const rendererMocks = vi.hoisted(() => ({
   start: vi.fn(),
   uploadRoadVertices: vi.fn(),
   uploadLaneLineVertices: vi.fn(),
+  uploadOverlayVertices: vi.fn(),
   resize: vi.fn(),
   dispose: vi.fn(),
   setShowGrid: vi.fn(),
@@ -31,6 +32,7 @@ const rendererMocks = vi.hoisted(() => ({
   unlockCamera: vi.fn(),
   getCameraDistance: vi.fn().mockReturnValue(100),
   refreshSplineMarkers: vi.fn(),
+  setCurveFromVertexData: vi.fn(),
   unprojectToGround: vi.fn(),
   projectWorldToScreen: vi.fn().mockReturnValue({ x: 50, y: 50 }),
   setSplinePreviewKnots: vi.fn(),
@@ -63,6 +65,7 @@ vi.mock('../viewport/renderer', () => ({
       start: rendererMocks.start,
       uploadRoadVertices: rendererMocks.uploadRoadVertices,
       uploadLaneLineVertices: rendererMocks.uploadLaneLineVertices,
+      uploadOverlayVertices: rendererMocks.uploadOverlayVertices,
       resize: rendererMocks.resize,
       dispose: rendererMocks.dispose,
       setShowGrid: rendererMocks.setShowGrid,
@@ -80,6 +83,7 @@ vi.mock('../viewport/renderer', () => ({
       unlockCamera: rendererMocks.unlockCamera,
       getCameraDistance: rendererMocks.getCameraDistance,
       refreshSplineMarkers: rendererMocks.refreshSplineMarkers,
+      setCurveFromVertexData: rendererMocks.setCurveFromVertexData,
       unprojectToGround: rendererMocks.unprojectToGround,
       projectWorldToScreen: rendererMocks.projectWorldToScreen,
       setSplinePreviewKnots: rendererMocks.setSplinePreviewKnots,
@@ -190,6 +194,7 @@ function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformSer
     measureAngle: vi.fn().mockResolvedValue({ radians: 0, degrees: 0 }),
     measureArea: vi.fn().mockResolvedValue({ area: 0, perimeter: 0 }),
     measureRoadLength: vi.fn().mockResolvedValue(0),
+    sampleLaneBoundary: vi.fn().mockResolvedValue([]),
     getRoadTemplates: vi.fn().mockResolvedValue([
       { id: 'single', name: 'Single Lane', left_lanes: 1, right_lanes: 1, lane_width: 3.5 },
     ]),
@@ -857,7 +862,7 @@ describe('Viewport', () => {
       };
     }
 
-    async function setupLaneTest(editMode: string, mockFn?: (platform: ReturnType<typeof createPlatformMock>) => void) {
+    async function setupLaneTest(selectionMode: 'laneSection' | 'lane', mockFn?: (platform: ReturnType<typeof createPlatformMock>) => void) {
       const platform = createPlatformMock();
       rendererMocks.isSupported.mockReturnValue(true);
       rendererMocks.init.mockResolvedValue(true);
@@ -868,7 +873,7 @@ describe('Viewport', () => {
 
       act(() => {
         useProjectStore.setState({ project: makeProjectWithRoadSections() });
-        useViewportStore.setState({ editMode: editMode as any });
+        useViewportStore.setState({ editMode: 'default', selectionMode });
       });
 
       render(<Viewport />);
@@ -879,8 +884,8 @@ describe('Viewport', () => {
       return platform;
     }
 
-    it('lanesection mode selects lane section at clicked position', async () => {
-      await setupLaneTest('lanesection', (platform) => {
+    it('laneSection mode selects lane section at clicked position', async () => {
+      await setupLaneTest('laneSection', (platform) => {
         (platform.pickRoadAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
         (platform.snapPointOnRoad as ReturnType<typeof vi.fn>).mockResolvedValue({ s: 15, t: 0, hdg: 0 });
       });

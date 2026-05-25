@@ -4,9 +4,10 @@ import { ViewportRenderer } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
 import { onViewportEvent } from '../viewport/viewportEvents';
 import { useProjectStore } from '../stores/projectStore';
-import { useViewportStore } from '../stores/viewportStore';
+import { isDrawMode, useViewportStore } from '../stores/viewportStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getPlatformService } from '../services';
+import { buildSnapConfig } from '../services/snapService';
 import { showContextMenu } from '../services/contextMenu';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import { useViewportDrop } from '../hooks/useViewportDrop';
@@ -14,15 +15,20 @@ import { ViewportLoadingOverlay } from './ViewportLoadingOverlay';
 import { useRubberBandSelect } from '../hooks/useRubberBandSelect';
 import { useMoveRotateMode } from '../hooks/useMoveRotateMode';
 import { useAdjustEdgeMode } from '../hooks/useAdjustEdgeMode';
+import { useSplitMode } from '../hooks/useSplitMode';
+import { useArcDrawMode } from '../hooks/useArcDrawMode';
+import { useSpiralDrawMode } from '../hooks/useSpiralDrawMode';
 import { useSplineDrawMode } from '../hooks/useSplineDrawMode';
 import { useSplineDrawPreview } from '../hooks/useSplineDrawPreview';
 import { useGeometryEditMode } from '../hooks/useGeometryEditMode';
+import { useLaneLineEdit } from '../hooks/useLaneLineEdit';
 import { useViewportKeyboard } from '../hooks/useViewportKeyboard';
 import { useViewportMeshes } from '../hooks/useViewportMeshes';
 import { useSelectionHighlight } from '../hooks/useSelectionHighlight';
 import { useMeasureOverlay } from '../hooks/useMeasureOverlay';
 import { useViewportTouch } from '../hooks/useViewportTouch';
 import { useViewportHoverPick } from '../hooks/useViewportHoverPick';
+import { useSignalPlacement } from '../hooks/useSignalPlacement';
 import './Viewport.css';
 
 import {
@@ -52,7 +58,43 @@ export function Viewport() {
   const { startAdjustEdgeDrag, updateAdjustEdgeDrag, commitAdjustEdgeDrag } = useAdjustEdgeMode(rendererRef, canvasRef, isPreviewingRoadRef, pendingCursorRef);
   useMeasureOverlay({ rendererRef, canvasRef, status });
   const snapIndicatorDomRef = useRef<HTMLDivElement | null>(null);
+  const splitIndicatorDomRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Mesh lifecycle (surface + lines + visible project + WASM cache) ──
+  const { getVisibleProject, updateSurfaceMesh, updateLineMesh } = useViewportMeshes({
+    rendererRef,
+    status,
+  });
+
+  const {
+    clearArcDrawHover,
+    handleArcDrawMouseMove,
+    handleArcDrawMouseDown,
+    handleArcDrawClick,
+    handleArcDrawMouseUp,
+    handleArcDrawRightClick,
+  } = useArcDrawMode({
+    canvasRef,
+    rendererRef,
+    pendingCursorRef,
+    status,
+  });
+  const {
+    clearSpiralDrawHover,
+    handleSpiralDrawMouseMove,
+    handleSpiralDrawMouseDown,
+    handleSpiralDrawClick,
+    handleSpiralDrawMouseUp,
+    handleSpiralDrawRightClick,
+  } = useSpiralDrawMode({
+    canvasRef,
+    rendererRef,
+    pendingCursorRef,
+    status,
+    onPreviewEnd: useCallback(() => {
+      void updateLineMesh();
+    }, [updateLineMesh]),
+  });
   const {
     clearSplineDrawHover,
     handleSplineDrawMouseMove,
@@ -82,13 +124,31 @@ export function Viewport() {
     status,
   });
 
-  useViewportKeyboard();
-
-  // ── Mesh lifecycle (surface + lines + visible project + WASM cache) ──
-  const { getVisibleProject, updateSurfaceMesh, updateLineMesh } = useViewportMeshes({
+  const {
+    handleLaneLineMouseDown,
+    handleLaneLineMouseMove,
+    handleLaneLineMouseUp,
+    handleLaneLineDoubleClick,
+    clearLaneLineHover,
+  } = useLaneLineEdit({
+    canvasRef,
     rendererRef,
     status,
   });
+
+  const {
+    clearSplitPreview,
+    handleSplitModeMouseMove,
+    handleSplitModeClick,
+  } = useSplitMode({
+    canvasRef,
+    rendererRef,
+    pendingCursorRef,
+    splitIndicatorDomRef,
+  });
+
+  useViewportKeyboard();
+
   const {
     executeHoverPick,
     clearHoverPick,
@@ -108,6 +168,18 @@ export function Viewport() {
   const { handleTouchStart, handleTouchMove, handleTouchEnd } = useViewportTouch({
     rendererRef,
     canvasRef,
+  });
+  const {
+    clearPlacementPreview,
+    updatePlacementPreview,
+    commitPlacement,
+    startSignalDrag,
+    updateSignalDrag,
+    commitSignalDrag,
+  } = useSignalPlacement({
+    rendererRef,
+    canvasRef,
+    pendingCursorRef,
   });
 
   // Real-time road mesh preview while adding knots in draw mode
@@ -447,17 +519,26 @@ export function Viewport() {
     if (!worldPos) return;
 
     if (updateMoveRotateDrag(worldPos)) return;
+    if (await updateSignalDrag(worldPos)) return;
     if (await updateAdjustEdgeDrag(worldPos)) return;
+    if (handleLaneLineMouseMove(worldPos, canvas, e)) return;
+    if (handleSplitModeMouseMove(worldPos)) {
+      const snapEl = snapIndicatorDomRef.current;
+      if (snapEl) snapEl.style.display = 'none';
+      return;
+    }
 
     const viewState = useViewportStore.getState();
     if (await handleGeometryEditMouseMove(worldPos, canvas, renderer)) return;
+    if (handleArcDrawMouseMove(worldPos, canvas)) return;
+    if (handleSpiralDrawMouseMove(worldPos, canvas)) return;
     if (handleSplineDrawMouseMove(worldPos, canvas, renderer, e)) return;
 
     // Show snap indicator for draw-mode endpoint snapping
     {
       const drawSnap = useViewportStore.getState().drawSnapResult;
       const snapEl = snapIndicatorDomRef.current;
-      const inDrawMode = viewState.editMode === 'spline';
+      const inDrawMode = isDrawMode(viewState.editMode);
       if (drawSnap?.snapped && snapEl) {
         const screenPos = renderer.projectWorldToScreen(drawSnap.x, drawSnap.y);
         if (screenPos) {
@@ -468,6 +549,11 @@ export function Viewport() {
       } else if (snapEl && inDrawMode) {
         snapEl.style.display = 'none';
       }
+    }
+
+    if (await updatePlacementPreview(worldPos)) {
+      canvas.style.cursor = 'crosshair';
+      return;
     }
 
     // In click-to-place mode show crosshair and skip normal hover picking
@@ -483,14 +569,7 @@ export function Viewport() {
         const snapResult = await service.snapPointCached(
           worldPos.x,
           worldPos.y,
-          {
-            grid_enabled: viewState.snapMode === 'Grid',
-            grid_size: viewState.gridSnapSize,
-            endpoint_enabled: viewState.snapMode === 'Endpoint',
-            endpoint_threshold: viewState.snapThreshold,
-            midpoint_enabled: viewState.snapMode === 'Midpoint',
-            perpendicular_enabled: viewState.snapMode === 'Perpendicular',
-          },
+          buildSnapConfig(),
           excludeId ?? undefined,
         );
         if (snapResult.snapped) {
@@ -513,10 +592,11 @@ export function Viewport() {
     }
 
     const isInSelectMode =
-      viewState.editMode !== 'spline' &&
+      !isDrawMode(viewState.editMode) &&
       viewState.editMode !== 'move-road' &&
       viewState.editMode !== 'rotate-road' &&
       viewState.editMode !== 'adjust-edge' &&
+      viewState.editMode !== 'editLaneLine' &&
       !viewState.geometryEditSpline &&
       !viewState.draggingKnot &&
       !rubberBandRef.current;
@@ -583,7 +663,7 @@ export function Viewport() {
 
     emitCursorMove(worldPos.x, worldPos.y);
     pendingCursorRef.current = worldPos;
-  }, [handleGeometryEditMouseMove, handleSplineDrawMouseMove, getVisibleProject]);
+  }, [getVisibleProject, handleArcDrawMouseMove, handleGeometryEditMouseMove, handleLaneLineMouseMove, handleSpiralDrawMouseMove, handleSplitModeMouseMove, handleSplineDrawMouseMove, updatePlacementPreview, updateSignalDrag]);
 
   const handleMouseDown = useCallback(async (e: React.MouseEvent) => {
     mouseGestureRef.current = {
@@ -601,14 +681,21 @@ export function Viewport() {
       if (!canvas || !renderer) return;
 
       const viewState = useViewportStore.getState();
-      if (handleGeometryEditMouseDown(e, canvas, renderer) || handleSplineDrawMouseDown(e, canvas, renderer)) {
+      if (
+        handleGeometryEditMouseDown(e, canvas, renderer) ||
+        handleArcDrawMouseDown() ||
+        handleSpiralDrawMouseDown() ||
+        handleSplineDrawMouseDown(e, canvas, renderer)
+      ) {
         return;
       }
+      if (await startSignalDrag(e, renderer, canvas)) return;
+      if (handleLaneLineMouseDown(e, canvas, renderer)) return;
       if (startMoveRotateDrag(e, renderer, canvas)) return;
       if (await startAdjustEdgeDrag(e)) return;
       if (
         e.shiftKey &&
-        viewState.editMode !== 'spline' &&
+        !isDrawMode(viewState.editMode) &&
         !viewState.geometryEditSpline
       ) {
         startRubberBand(e, renderer);
@@ -616,7 +703,7 @@ export function Viewport() {
     } catch (err) {
       console.error('[Viewport] handleMouseDown error:', err);
     }
-  }, [handleGeometryEditMouseDown, handleSplineDrawMouseDown, startMoveRotateDrag, startAdjustEdgeDrag, startRubberBand]);
+  }, [handleArcDrawMouseDown, handleGeometryEditMouseDown, handleLaneLineMouseDown, handleSpiralDrawMouseDown, handleSplineDrawMouseDown, startMoveRotateDrag, startAdjustEdgeDrag, startRubberBand, startSignalDrag]);
 
   const handleClick = useCallback(async (e: React.MouseEvent) => {
     const gesture = mouseGestureRef.current;
@@ -626,7 +713,10 @@ export function Viewport() {
     // so that slight hand tremor doesn't swallow the click event.
     const viewState0 = useViewportStore.getState();
     const isClickToPlace =
-      viewState0.editMode === 'spline' ||
+      isDrawMode(viewState0.editMode) ||
+      viewState0.editMode === 'split' ||
+      viewState0.editMode === 'placeSignal' ||
+      viewState0.editMode === 'placeObject' ||
       !!viewState0.pendingTemplateId ||
       !!viewState0.pendingObjectTemplateId ||
       viewState0.measureMode !== 'none';
@@ -686,41 +776,45 @@ export function Viewport() {
     }
 
     const viewState = useViewportStore.getState();
-    if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road' || viewState.editMode === 'adjust-edge') {
+    if (await handleSplitModeClick(worldPos)) {
+      return;
+    }
+    if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road' || viewState.editMode === 'adjust-edge' || viewState.editMode === 'editLaneLine') {
       return;
     }
 
-    // Lane selection modes (road-markings reuses lane picking to let user select a target lane)
-    if (viewState.editMode === 'lanesection' || viewState.editMode === 'lane' || viewState.editMode === 'road-markings') {
+    // Mode-aware road sub-selection (road-markings reuses lane picking to choose a target lane)
+    const activeSelectionMode = viewState.editMode === 'road-markings' ? 'lane' : viewState.selectionMode;
+    if (activeSelectionMode !== 'road') {
       try {
         const service = await getPlatformService();
         const visibleProject = getVisibleProject();
         if (visibleProject) {
-          if (viewState.editMode === 'lanesection') {
+          if (activeSelectionMode === 'laneSection') {
             const roadId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 5.0);
             if (roadId) {
-              const road = visibleProject.roads.find(r => r.id === roadId);
+              const road = visibleProject.roads.find((candidate) => candidate.id === roadId);
               if (road) {
                 const snap = await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
-                let sectionIndex = -1;
+                let sectionIndex: number | null = null;
                 for (let i = road.lane_sections.length - 1; i >= 0; i--) {
-                  const sec = road.lane_sections[i];
-                  if (sec && sec.s <= snap.s + 1e-9) { sectionIndex = i; break; }
+                  const section = road.lane_sections[i];
+                  if (section && section.s <= snap.s + 1e-9) {
+                    sectionIndex = i;
+                    break;
+                  }
                 }
-                if (sectionIndex >= 0) {
-                  useProjectStore.getState().selectLaneSection(roadId, sectionIndex);
-                } else {
-                  useProjectStore.getState().selectRoad(roadId);
-                }
+                useProjectStore.getState().setSelectedLaneSection(roadId, sectionIndex);
               }
             }
           } else {
-            // lane or road-markings mode: pick individual lane
             const laneResult = await service.pickLaneAtPointCached(worldPos.x, worldPos.y, 5.0);
             if (laneResult) {
               const { roadId, sectionIndex, laneId } = laneResult;
-              const side = laneId > 0 ? 'left' as const : 'right' as const;
-              useProjectStore.getState().selectLane(roadId, sectionIndex, side, laneId);
+              useProjectStore.getState().setSelectedLane(roadId, sectionIndex, laneId);
+              if (await handleLaneLineDoubleClick(laneResult, worldPos, e.detail)) {
+                return;
+              }
             } else {
               const roadId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 5.0);
               if (roadId) {
@@ -784,6 +878,16 @@ export function Viewport() {
       return;
     }
 
+    if (await commitPlacement(worldPos)) {
+      return;
+    }
+
+    if (await handleArcDrawClick(e, worldPos)) {
+      return;
+    }
+    if (handleSpiralDrawClick(e, worldPos)) {
+      return;
+    }
     if (await handleSplineDrawClick(e, worldPos)) {
       return;
     }
@@ -871,15 +975,19 @@ export function Viewport() {
     } catch (err) {
       console.error('[Viewport] Pick failed:', err);
     }
-  }, [handleRoadDoubleClick, handleSplineDrawClick, getVisibleProject]);
+  }, [commitPlacement, getVisibleProject, handleArcDrawClick, handleLaneLineDoubleClick, handleRoadDoubleClick, handleSplitModeClick, handleSpiralDrawClick, handleSplineDrawClick]);
 
   const handleMouseUp = useCallback(async (e: React.MouseEvent) => {
     if (commitRubberBand(e)) return;
+    if (commitSignalDrag()) return;
     if (commitMoveRotateDrag()) return;
     if (commitAdjustEdgeDrag()) return;
+    if (handleLaneLineMouseUp()) return;
     if (await handleGeometryEditMouseUp()) return;
+    if (handleArcDrawMouseUp()) return;
+    if (handleSpiralDrawMouseUp()) return;
     handleSplineDrawMouseUp();
-  }, [commitMoveRotateDrag, commitAdjustEdgeDrag, commitRubberBand, handleGeometryEditMouseUp, handleSplineDrawMouseUp]);
+  }, [commitMoveRotateDrag, commitAdjustEdgeDrag, commitRubberBand, handleArcDrawMouseUp, handleGeometryEditMouseUp, handleLaneLineMouseUp, handleSpiralDrawMouseUp, handleSplineDrawMouseUp, commitSignalDrag]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -902,25 +1010,55 @@ export function Viewport() {
       viewState.clearPendingObjectTemplate();
       return;
     }
+    if (viewState.editMode === 'placeSignal' || viewState.editMode === 'placeObject') {
+      viewState.setEditMode('default');
+      clearPlacementPreview();
+      return;
+    }
     // Right-click in draw mode finalizes (or cancels) the road being drawn
+    if (handleArcDrawRightClick()) return;
+    if (handleSpiralDrawRightClick()) return;
     if (handleSplineDrawRightClick()) return;
     // Clear measurement points on right-click when in measure mode
     if (viewState.measureMode !== 'none') {
       viewState.clearMeasurePoints();
       return;
     }
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const renderer = rendererRef.current;
+    if (rect && renderer) {
+      const contextWorldPos = renderer.unprojectToGround(
+        (e.clientX - rect.left) * devicePixelRatio,
+        (e.clientY - rect.top) * devicePixelRatio,
+      );
+      useViewportStore.getState().setContextMenuWorldPos(contextWorldPos);
+    }
+    const { selectedRoadId, selectedJunctionId } = useProjectStore.getState();
+    if (selectedRoadId) {
+      showContextMenu(e.clientX, e.clientY, 'road');
+      return;
+    }
+    if (selectedJunctionId) {
+      showContextMenu(e.clientX, e.clientY, 'junction');
+      return;
+    }
     showContextMenu(e.clientX, e.clientY, 'viewport');
-  }, [handleSplineDrawRightClick]);
+  }, [clearPlacementPreview, handleArcDrawRightClick, handleSpiralDrawRightClick, handleSplineDrawRightClick]);
 
   const handleMouseLeave = useCallback(() => {
     clearHoverPick();
     clearGeometryEditHover();
+    clearLaneLineHover();
+    clearArcDrawHover();
+    clearSpiralDrawHover();
     clearSplineDrawHover();
+    clearSplitPreview();
+    clearPlacementPreview();
     const canvas = canvasRef.current;
     if (canvas) canvas.style.cursor = '';
     const snapEl = snapIndicatorDomRef.current;
     if (snapEl) snapEl.style.display = 'none';
-  }, [canvasRef, clearGeometryEditHover, clearHoverPick, clearSplineDrawHover]);
+  }, [canvasRef, clearArcDrawHover, clearGeometryEditHover, clearHoverPick, clearLaneLineHover, clearPlacementPreview, clearSpiralDrawHover, clearSplineDrawHover, clearSplitPreview]);
 
   return (
     <div
@@ -947,6 +1085,7 @@ export function Viewport() {
       <div ref={rubberBandOverlayRef} className="selection-rect" />
       {/* Snap indicator: shown when cursor snaps to a nearby point */}
       <div ref={snapIndicatorDomRef} className="snap-indicator" style={{ display: 'none' }} />
+      <div ref={splitIndicatorDomRef} className="split-indicator" style={{ display: 'none' }} />
       {status !== 'ready' && (
         <div className="viewport-overlay">
           <span className="viewport-label">

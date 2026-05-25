@@ -18,6 +18,8 @@ function resetStore() {
     selectedJunctionId: null,
     selectedObjectType: null,
     selectedSceneNode: null,
+    selectedLaneSectionIndex: null,
+    selectedLaneId: null,
     selectedRoadIds: [],
     selectedJunctionIds: [],
     clipboardRoadId: null,
@@ -72,6 +74,8 @@ describe('selectionSlice', () => {
     expect(state.selectedJunctionId).toBeNull();
     expect(state.selectedObjectType).toBe('road');
     expect(state.selectedSceneNode).toEqual({ type: 'road', roadId: 'r1' });
+    expect(state.selectedLaneSectionIndex).toBeNull();
+    expect(state.selectedLaneId).toBeNull();
     expect(state.selectedRoadIds).toEqual([]);
     expect(state.selectedJunctionIds).toEqual([]);
   });
@@ -113,17 +117,19 @@ describe('selectionSlice', () => {
     expect(state.selectedSceneNode).toBeNull();
   });
 
-  it('stores selectedSceneNode for lane sections, lanes, signals, and objects', () => {
+  it('stores lane selection details for lane sections and lanes', () => {
     const store = useProjectStore.getState();
 
-    store.selectLaneSection('r1', 2);
+    store.setSelectedLaneSection('r1', 2);
     expect(useProjectStore.getState().selectedSceneNode).toEqual({
       type: 'laneSection',
       roadId: 'r1',
       sectionIndex: 2,
     });
+    expect(useProjectStore.getState().selectedLaneSectionIndex).toBe(2);
+    expect(useProjectStore.getState().selectedLaneId).toBeNull();
 
-    store.selectLane('r1', 1, 'left', 3);
+    store.setSelectedLane('r1', 1, 3);
     expect(useProjectStore.getState().selectedSceneNode).toEqual({
       type: 'lane',
       roadId: 'r1',
@@ -131,6 +137,15 @@ describe('selectionSlice', () => {
       side: 'left',
       laneId: 3,
     });
+    expect(useProjectStore.getState().selectedLaneSectionIndex).toBe(1);
+    expect(useProjectStore.getState().selectedLaneId).toBe(3);
+
+    store.clearLaneSelection();
+    expect(useProjectStore.getState().selectedSceneNode).toEqual({ type: 'road', roadId: 'r1' });
+    expect(useProjectStore.getState().selectedLaneSectionIndex).toBeNull();
+    expect(useProjectStore.getState().selectedLaneId).toBeNull();
+
+    store.selectLane('r1', 1, 'left', 3);
 
     store.selectSignal('r1', 'sig-1');
     expect(useProjectStore.getState().selectedSceneNode).toEqual({

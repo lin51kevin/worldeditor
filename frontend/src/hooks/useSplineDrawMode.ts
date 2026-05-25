@@ -1,7 +1,7 @@
 import { useCallback, useEffect, type MutableRefObject, type RefObject } from 'react';
 import { ViewportRenderer } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
-import { useViewportStore } from '../stores/viewportStore';
+import { isDrawMode as isAnyDrawMode, useViewportStore } from '../stores/viewportStore';
 import { useProjectStore } from '../stores/projectStore';
 import {
   findSplineControlPointHit,
@@ -23,7 +23,7 @@ interface UseSplineDrawModeOptions {
   status: ViewportStatus;
 }
 
-function isDrawMode(mode: string): mode is 'spline' {
+function isSplineDrawMode(mode: string): mode is 'spline' {
   return mode === 'spline';
 }
 
@@ -70,13 +70,13 @@ export function useSplineDrawMode({
   }, [hoveredControlPointRef]);
 
   useEffect(() => {
-    if (!isDrawMode(editMode)) {
+    if (!isAnyDrawMode(editMode)) {
       useViewportStore.getState().clearSplineKnots();
     }
   }, [editMode]);
 
   useEffect(() => {
-    if (isDrawMode(editMode) || geometryEditSpline) {
+    if (isAnyDrawMode(editMode) || geometryEditSpline) {
       return;
     }
     clearSplineDrawHover();
@@ -86,7 +86,7 @@ export function useSplineDrawMode({
     const canvas = canvasRef.current;
     if (!canvas || geometryEditSpline) return;
 
-    if (pendingTemplateId || isDrawMode(editMode)) {
+    if (pendingTemplateId || isAnyDrawMode(editMode)) {
       canvas.style.cursor = 'crosshair';
       return;
     }
@@ -99,7 +99,7 @@ export function useSplineDrawMode({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const viewState = useViewportStore.getState();
-      if (!isDrawMode(viewState.editMode)) {
+      if (!isSplineDrawMode(viewState.editMode)) {
         return;
       }
 
@@ -131,7 +131,13 @@ export function useSplineDrawMode({
       return;
     }
     const overrides = Object.keys(splineTangentOverrides).length > 0 ? splineTangentOverrides : undefined;
-    renderer.setSplinePreviewKnots(isDrawMode(editMode) ? splineKnots : [], overrides, true);
+    if (isSplineDrawMode(editMode)) {
+      renderer.setSplinePreviewKnots(splineKnots, overrides, true);
+      return;
+    }
+    if (!isAnyDrawMode(editMode)) {
+      renderer.setSplinePreviewKnots([], overrides, true);
+    }
   }, [editMode, geometryEditSpline, rendererRef, splineKnots, splineTangentOverrides, splineTangentInOverrides, status]);
 
   /** Fire-and-forget endpoint snap query during draw mode mouse move. */
@@ -144,6 +150,7 @@ export function useSplineDrawMode({
         grid_size: 1.0,
         endpoint_enabled: true,
         endpoint_threshold: useViewportStore.getState().snapThreshold,
+        snap_to_lane_endpoints: false,
         midpoint_enabled: false,
         perpendicular_enabled: false,
       });
@@ -183,7 +190,7 @@ export function useSplineDrawMode({
 
   const handleSplineDrawMouseMove = useCallback((worldPos: WorldPosition, canvas: HTMLCanvasElement, renderer: ViewportRenderer, mouseEvent?: MouseEvent | React.MouseEvent): boolean => {
     const viewState = useViewportStore.getState();
-    if (viewState.geometryEditSpline || !isDrawMode(viewState.editMode)) {
+    if (viewState.geometryEditSpline || !isSplineDrawMode(viewState.editMode)) {
       return false;
     }
 
@@ -264,7 +271,7 @@ export function useSplineDrawMode({
 
   const handleSplineDrawMouseDown = useCallback((e: React.MouseEvent, canvas: HTMLCanvasElement, renderer: ViewportRenderer): boolean => {
     const viewState = useViewportStore.getState();
-    if (viewState.geometryEditSpline || !isDrawMode(viewState.editMode) || viewState.splineKnots.length === 0) {
+    if (viewState.geometryEditSpline || !isSplineDrawMode(viewState.editMode) || viewState.splineKnots.length === 0) {
       return false;
     }
 
@@ -297,7 +304,7 @@ export function useSplineDrawMode({
 
   const handleSplineDrawClick = useCallback(async (e: React.MouseEvent, worldPos: WorldPosition): Promise<boolean> => {
     const viewState = useViewportStore.getState();
-    if (viewState.geometryEditRoadId || !isDrawMode(viewState.editMode)) {
+    if (viewState.geometryEditRoadId || !isSplineDrawMode(viewState.editMode)) {
       return false;
     }
 
@@ -343,7 +350,7 @@ export function useSplineDrawMode({
 
   const handleSplineDrawMouseUp = useCallback((): boolean => {
     const viewState = useViewportStore.getState();
-    if (viewState.geometryEditSpline || !viewState.draggingKnot || !isDrawMode(viewState.editMode)) {
+    if (viewState.geometryEditSpline || !viewState.draggingKnot || !isSplineDrawMode(viewState.editMode)) {
       return false;
     }
 
@@ -368,7 +375,7 @@ export function useSplineDrawMode({
    */
   const handleSplineDrawRightClick = useCallback((): boolean => {
     const viewState = useViewportStore.getState();
-    if (!isDrawMode(viewState.editMode)) {
+    if (!isSplineDrawMode(viewState.editMode)) {
       return false;
     }
     if (viewState.splineKnots.length >= 2) {

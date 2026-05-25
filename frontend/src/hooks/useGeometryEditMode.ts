@@ -262,6 +262,7 @@ export function useGeometryEditMode({
         const modeForKey: Record<string, ActiveMode> = {
           'v': 'default', 'V': 'default',
           'm': 'move-road', 'M': 'move-road',
+          'p': 'drawSpiral', 'P': 'drawSpiral',
           'r': 'rotate-road', 'R': 'rotate-road',
           's': 'spline', 'S': 'spline',
         };
@@ -270,7 +271,7 @@ export function useGeometryEditMode({
           void finalizeGeometryEdit();
           // Apply the target mode atomically
           const vs = useViewportStore.getState();
-          if (targetMode === 'spline') {
+          if (targetMode === 'spline' || targetMode === 'drawArc' || targetMode === 'drawSpiral') {
             vs.clearSplineKnots();
           }
           if (targetMode !== 'default') {
@@ -287,7 +288,7 @@ export function useGeometryEditMode({
         const { selectedRoadId } = useProjectStore.getState();
         if (selectedRoadId) {
           // Clean up current mode before entering geometry edit
-          if (viewState.editMode === 'spline') {
+          if (viewState.editMode === 'spline' || viewState.editMode === 'drawArc' || viewState.editMode === 'drawSpiral') {
             viewState.clearSplineKnots();
           }
           if (viewState.editMode !== 'default') {
@@ -546,7 +547,7 @@ export function useGeometryEditMode({
       return false;
     }
     // Clean up current mode before entering geometry edit
-    if (viewState.editMode === 'spline') {
+    if (viewState.editMode === 'spline' || viewState.editMode === 'drawArc' || viewState.editMode === 'drawSpiral') {
       viewState.clearSplineKnots();
     }
     if (viewState.editMode !== 'default') {

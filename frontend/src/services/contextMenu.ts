@@ -42,7 +42,7 @@ export function getMenuWithPlugins(context: string, x: number, y: number): MenuI
   const pluginItems = usePluginContribStore
     .getState()
     .contextMenuItems
-    .filter((c) => c.menu === context && (c.isVisible?.() ?? true))
+    .filter((c) => c.menu === context && (c.isVisible?.({ type: context }) ?? true))
     .map((c): MenuItem => ({
       label: c.label,
       shortcut: c.shortcut,

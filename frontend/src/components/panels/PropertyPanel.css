@@ -127,6 +127,10 @@
   font-size: 11px;
 }
 
+.property-row--stacked {
+  align-items: flex-start;
+}
+
 .property-label {
   color: var(--color-text-secondary);
   min-width: 0;
@@ -156,6 +160,26 @@
   width: 120px;
   max-width: 100%;
   text-align: right;
+}
+
+.property-control-stack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.property-range {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.property-range-value {
+  min-width: 64px;
+  text-align: right;
+  color: var(--color-text-primary);
 }
 
 .property-input:focus {
@@ -271,6 +295,46 @@
   border-bottom: none;
   margin-bottom: 0;
   padding-bottom: 0;
+}
+
+.junction-editor-controls {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.junction-editor-selects {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.junction-editor-selects .property-btn {
+  width: 100%;
+}
+
+.junction-editor-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.junction-editor-table th,
+.junction-editor-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.junction-editor-table th {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold, 600);
+  background: var(--color-bg-tertiary);
+}
+
+.junction-editor-table td:last-child {
+  width: 1%;
+  white-space: nowrap;
 }
 
 .geometry-edit-btn {

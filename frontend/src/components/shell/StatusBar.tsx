@@ -18,7 +18,11 @@ const SCALE_BAR_PX = 100;
 
 export function StatusBar() {
   const viewportMpp = useProjectStore((s) => s.viewportMpp);
+  const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
+  const selectedLaneSectionIndex = useProjectStore((s) => s.selectedLaneSectionIndex);
+  const selectedLaneId = useProjectStore((s) => s.selectedLaneId);
   const editMode = useViewportStore((s) => s.editMode);
+  const selectionMode = useViewportStore((s) => s.selectionMode);
   const { t } = useTranslation();
   const coordRef = useRef<HTMLSpanElement>(null);
 
@@ -34,6 +38,14 @@ export function StatusBar() {
   const scaleDist = useMemo(() => SCALE_BAR_PX * viewportMpp, [viewportMpp]);
 
   const modeLabel = t(`statusBar.modes.${editMode}`, editMode);
+  const selectionModeLabel = t(`statusBar.selectionModes.${selectionMode}`, selectionMode);
+  const selectionLabel = !selectedRoadId
+    ? t('statusBar.selectionLevels.none')
+    : selectedLaneId !== null
+      ? t('statusBar.selectionLevels.lane', { laneId: selectedLaneId })
+      : selectedLaneSectionIndex !== null
+        ? t('statusBar.selectionLevels.laneSection', { sectionIndex: selectedLaneSectionIndex + 1 })
+        : t('statusBar.selectionLevels.road', { roadId: selectedRoadId });
 
   return (
     <div className="statusbar">
@@ -44,6 +56,12 @@ export function StatusBar() {
       <span className="statusbar-item">
         <Pencil size={11} />
         <span className="statusbar-mode">{t('statusBar.mode')}: {modeLabel}</span>
+      </span>
+      <span className="statusbar-item">
+        <span>{t('statusBar.selectionMode')}: {selectionModeLabel}</span>
+      </span>
+      <span className="statusbar-item">
+        <span>{t('statusBar.selection')}: {selectionLabel}</span>
       </span>
       <span className="statusbar-item statusbar-scale">
         <span className="scale-bar-track" style={{ width: `${SCALE_BAR_PX}px` }} />

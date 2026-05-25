@@ -31,6 +31,8 @@ export interface ToolbarButtonContrib {
   group: 'mode' | 'action';
   /** Returns true when the button should appear pressed/active */
   isActive?: () => boolean;
+  /** Returns false to hide the button entirely */
+  isVisible?: () => boolean;
   /** Returns true when the button should be disabled */
   isDisabled?: () => boolean;
   onClick: () => void;

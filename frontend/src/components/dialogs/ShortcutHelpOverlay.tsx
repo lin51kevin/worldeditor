@@ -27,6 +27,7 @@ const SECTIONS: Array<{ titleKey: string; rows: ShortcutRow[] }> = [
     rows: [
       { key: 'M', descKey: 'shortcutHelp.keys.moveRoad' },
       { key: 'R', descKey: 'shortcutHelp.keys.rotateRoad' },
+      { key: 'X', descKey: 'shortcutHelp.keys.splitRoadAtPoint' },
     ],
   },
   {

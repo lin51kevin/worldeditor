@@ -102,6 +102,7 @@ function createPlatformMock() {
     measureAngle: vi.fn<PlatformService['measureAngle']>().mockResolvedValue({ radians: 0, degrees: 0 }),
     measureArea: vi.fn<PlatformService['measureArea']>().mockResolvedValue({ area: 0, perimeter: 0 }),
     measureRoadLength: vi.fn<PlatformService['measureRoadLength']>().mockResolvedValue(0),
+    sampleLaneBoundary: vi.fn<PlatformService['sampleLaneBoundary']>().mockResolvedValue([]),
     getRoadTemplates: vi.fn<PlatformService['getRoadTemplates']>().mockResolvedValue([
       { id: 'single', name: 'Single Lane', left_lanes: 1, right_lanes: 1, lane_width: 3.5 },
     ]),

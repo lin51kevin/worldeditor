@@ -6,6 +6,8 @@ export interface SelectionSlice {
   selectedJunctionId: string | null;
   selectedObjectType: 'road' | 'junction' | null;
   selectedSceneNode: SceneNodeSelection | null;
+  selectedLaneSectionIndex: number | null;
+  selectedLaneId: number | null;
   selectedRoadIds: string[];
   selectedJunctionIds: string[];
   clipboardRoadId: string | null;
@@ -13,6 +15,9 @@ export interface SelectionSlice {
   selectRoad: (id: string | null) => void;
   selectJunction: (id: string | null) => void;
   selectMultiple: (roadIds: string[], junctionIds: string[]) => void;
+  setSelectedLaneSection: (roadId: string, sectionIndex: number | null) => void;
+  setSelectedLane: (roadId: string, sectionIndex: number, laneId: number | null) => void;
+  clearLaneSelection: () => void;
   selectLaneSection: (roadId: string, sectionIndex: number) => void;
   selectLane: (roadId: string, sectionIndex: number, side: LaneSide, laneId: number) => void;
   selectSignal: (roadId: string, signalId: string) => void;
@@ -24,11 +29,39 @@ export interface SelectionSlice {
   pasteFromClipboard: () => void;
 }
 
+function createLaneSectionSelection(roadId: string, sectionIndex: number): Partial<SelectionSlice> {
+  return {
+    selectedRoadId: roadId,
+    selectedJunctionId: null,
+    selectedObjectType: 'road',
+    selectedSceneNode: { type: 'laneSection', roadId, sectionIndex },
+    selectedLaneSectionIndex: sectionIndex,
+    selectedLaneId: null,
+    selectedRoadIds: [],
+    selectedJunctionIds: [],
+  };
+}
+
+function createLaneSelection(roadId: string, sectionIndex: number, side: LaneSide, laneId: number): Partial<SelectionSlice> {
+  return {
+    selectedRoadId: roadId,
+    selectedJunctionId: null,
+    selectedObjectType: 'road',
+    selectedSceneNode: { type: 'lane', roadId, sectionIndex, side, laneId },
+    selectedLaneSectionIndex: sectionIndex,
+    selectedLaneId: laneId,
+    selectedRoadIds: [],
+    selectedJunctionIds: [],
+  };
+}
+
 export const createSelectionSlice: SliceCreator<SelectionSlice> = (set, get) => ({
   selectedRoadId: null,
   selectedJunctionId: null,
   selectedObjectType: null,
   selectedSceneNode: null,
+  selectedLaneSectionIndex: null,
+  selectedLaneId: null,
   selectedRoadIds: [],
   selectedJunctionIds: [],
   clipboardRoadId: null,
@@ -39,6 +72,8 @@ export const createSelectionSlice: SliceCreator<SelectionSlice> = (set, get) => 
       selectedJunctionId: null,
       selectedObjectType: id ? 'road' : null,
       selectedSceneNode: id ? { type: 'road', roadId: id } : null,
+      selectedLaneSectionIndex: null,
+      selectedLaneId: null,
       selectedRoadIds: [],
       selectedJunctionIds: [],
     }),
@@ -49,6 +84,8 @@ export const createSelectionSlice: SliceCreator<SelectionSlice> = (set, get) => 
       selectedRoadId: null,
       selectedObjectType: id ? 'junction' : null,
       selectedSceneNode: id ? { type: 'junction', junctionId: id } : null,
+      selectedLaneSectionIndex: null,
+      selectedLaneId: null,
       selectedRoadIds: [],
       selectedJunctionIds: [],
     }),
@@ -61,23 +98,48 @@ export const createSelectionSlice: SliceCreator<SelectionSlice> = (set, get) => 
       selectedJunctionId: null,
       selectedObjectType: null,
       selectedSceneNode: null,
+      selectedLaneSectionIndex: null,
+      selectedLaneId: null,
     }),
+
+  setSelectedLaneSection: (roadId, sectionIndex) =>
+    set(
+      sectionIndex === null
+        ? {
+            selectedRoadId: roadId,
+            selectedJunctionId: null,
+            selectedObjectType: 'road',
+            selectedSceneNode: { type: 'road', roadId },
+            selectedLaneSectionIndex: null,
+            selectedLaneId: null,
+            selectedRoadIds: [],
+            selectedJunctionIds: [],
+          }
+        : createLaneSectionSelection(roadId, sectionIndex),
+    ),
+
+  setSelectedLane: (roadId, sectionIndex, laneId) =>
+    set(
+      laneId === null
+        ? createLaneSectionSelection(roadId, sectionIndex)
+        : createLaneSelection(roadId, sectionIndex, laneId > 0 ? 'left' : 'right', laneId),
+    ),
+
+  clearLaneSelection: () =>
+    set((state) => ({
+      selectedLaneSectionIndex: null,
+      selectedLaneId: null,
+      selectedSceneNode:
+        state.selectedSceneNode?.type === 'lane' || state.selectedSceneNode?.type === 'laneSection'
+          ? (state.selectedRoadId ? { type: 'road', roadId: state.selectedRoadId } : null)
+          : state.selectedSceneNode,
+    })),
 
   selectLaneSection: (roadId, sectionIndex) =>
-    set({
-      selectedRoadId: roadId,
-      selectedJunctionId: null,
-      selectedObjectType: 'road',
-      selectedSceneNode: { type: 'laneSection', roadId, sectionIndex },
-    }),
+    set(createLaneSectionSelection(roadId, sectionIndex)),
 
   selectLane: (roadId, sectionIndex, side, laneId) =>
-    set({
-      selectedRoadId: roadId,
-      selectedJunctionId: null,
-      selectedObjectType: 'road',
-      selectedSceneNode: { type: 'lane', roadId, sectionIndex, side, laneId },
-    }),
+    set(createLaneSelection(roadId, sectionIndex, side, laneId)),
 
   selectSignal: (roadId, signalId) =>
     set({
@@ -85,6 +147,10 @@ export const createSelectionSlice: SliceCreator<SelectionSlice> = (set, get) => 
       selectedJunctionId: null,
       selectedObjectType: 'road',
       selectedSceneNode: { type: 'signal', roadId, signalId },
+      selectedLaneSectionIndex: null,
+      selectedLaneId: null,
+      selectedRoadIds: [],
+      selectedJunctionIds: [],
     }),
 
   selectObject: (roadId, objectId) =>
@@ -93,6 +159,10 @@ export const createSelectionSlice: SliceCreator<SelectionSlice> = (set, get) => 
       selectedJunctionId: null,
       selectedObjectType: 'road',
       selectedSceneNode: { type: 'object', roadId, objectId },
+      selectedLaneSectionIndex: null,
+      selectedLaneId: null,
+      selectedRoadIds: [],
+      selectedJunctionIds: [],
     }),
 
   selectAll: () => {
@@ -118,6 +188,14 @@ export const createSelectionSlice: SliceCreator<SelectionSlice> = (set, get) => 
         selectedRoadIds: [],
         selectedJunctionIds: [],
       }));
+      return;
+    }
+    if (state.selectedSceneNode?.type === 'signal') {
+      get().removeSignal(state.selectedSceneNode.signalId);
+      return;
+    }
+    if (state.selectedSceneNode?.type === 'object') {
+      get().removeObject(state.selectedSceneNode.objectId);
       return;
     }
     if (state.selectedRoadId) {
