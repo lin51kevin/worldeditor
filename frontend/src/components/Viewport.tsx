@@ -2,10 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ViewportRenderer } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
-import { onViewportEvent } from '../viewport/viewportEvents';
 import { useProjectStore } from '../stores/projectStore';
 import { isDrawMode, useViewportStore } from '../stores/viewportStore';
-import { useThemeStore } from '../stores/themeStore';
 import { getPlatformService } from '../services';
 import { buildSnapConfig } from '../services/snapService';
 import { showContextMenu } from '../services/contextMenu';
@@ -30,6 +28,9 @@ import { useMeasureOverlay } from '../hooks/useMeasureOverlay';
 import { useViewportTouch } from '../hooks/useViewportTouch';
 import { useViewportHoverPick } from '../hooks/useViewportHoverPick';
 import { useSignalPlacement } from '../hooks/useSignalPlacement';
+import { useViewportEvents } from '../hooks/useViewportEvents';
+import { useViewportInit } from '../hooks/useViewportInit';
+import { useViewportSync } from '../hooks/useViewportSync';
 import './Viewport.css';
 
 import {
@@ -44,11 +45,6 @@ export function Viewport() {
   const rendererRef = useRef<ViewportRenderer | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
   const { isDragOver, isFileDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useViewportDrop(rendererRef, canvasRef);
-  const showGrid = useViewportStore((s) => s.showGrid);
-  const showAxis = useViewportStore((s) => s.showAxis);
-  const dimension = useViewportStore((s) => s.dimension);
-  const viewMode = useViewportStore((s) => s.viewMode);
-  const theme = useThemeStore((s) => s.theme);
   const { t } = useTranslation();
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
   const isPreviewingRoadRef = useRef(false);
@@ -60,6 +56,11 @@ export function Viewport() {
   useMeasureOverlay({ rendererRef, canvasRef, status });
   const snapIndicatorDomRef = useRef<HTMLDivElement | null>(null);
   const splitIndicatorDomRef = useRef<HTMLDivElement | null>(null);
+
+  // ── Extracted hooks ──
+  useViewportInit(canvasRef, rendererRef, setStatus);
+  useViewportSync(rendererRef, status);
+  useViewportEvents(rendererRef, canvasRef);
 
   // ── Mesh lifecycle (surface + lines + visible project + WASM cache) ──
   const { getVisibleProject, updateSurfaceMesh, updateLineMesh, getCachedLineVertices } = useViewportMeshes({
@@ -212,284 +213,6 @@ export function Viewport() {
     };
     frameId = requestAnimationFrame(flush);
     return () => cancelAnimationFrame(frameId);
-  }, []);
-
-  // Sync grid/axis/dimension to renderer
-  useEffect(() => {
-    const renderer = rendererRef.current;
-    if (!renderer || status !== 'ready') return;
-    renderer.setShowGrid(showGrid);
-    renderer.setShowAxis(showAxis);
-  }, [showGrid, showAxis, status]);
-
-  useEffect(() => {
-    const renderer = rendererRef.current;
-    if (!renderer || status !== 'ready') return;
-    renderer.setDimension(dimension);
-  }, [dimension, status]);
-
-  // Sync view mode (solid/wire/sketch) to renderer
-  useEffect(() => {
-    const renderer = rendererRef.current;
-    if (!renderer || status !== 'ready') return;
-    renderer.setViewMode(viewMode);
-  }, [viewMode, status]);
-
-  // Handle viewport camera reset event (from resetDisplay / context menu)
-  useEffect(() => {
-    const handler = () => {
-      const renderer = rendererRef.current;
-      if (!renderer || status !== 'ready') return;
-      const dim = useViewportStore.getState().dimension;
-      renderer.resetCamera(dim);
-    };
-    window.addEventListener('viewport:resetCamera', handler);
-    return () => window.removeEventListener('viewport:resetCamera', handler);
-  }, [status]);
-
-  // Sync theme colors to WebGPU renderer
-  useEffect(() => {
-    const renderer = rendererRef.current;
-    if (!renderer || status !== 'ready') return;
-    try {
-      const style = getComputedStyle(document.documentElement);
-      const r = parseFloat(style.getPropertyValue('--color-viewport-clear-r')) || 0.10;
-      const g = parseFloat(style.getPropertyValue('--color-viewport-clear-g')) || 0.10;
-      const b = parseFloat(style.getPropertyValue('--color-viewport-clear-b')) || 0.12;
-      renderer.setClearColor(r, g, b);
-      const gr = parseFloat(style.getPropertyValue('--color-viewport-grid-r')) || 0.35;
-      const gg = parseFloat(style.getPropertyValue('--color-viewport-grid-g')) || 0.35;
-      const gb = parseFloat(style.getPropertyValue('--color-viewport-grid-b')) || 0.35;
-      renderer.setGridColor(gr, gg, gb);
-    } catch {
-      // CSS custom properties unavailable in test environment
-    }
-  }, [theme, status]);
-
-  // Listen for viewport events from other components
-  useEffect(() => {
-    const unsubscribe = onViewportEvent((event) => {
-      const renderer = rendererRef.current;
-      if (!renderer) return;
-      switch (event.type) {
-        case 'zoom-to-fit':
-          renderer.fitToVertices();
-          break;
-        case 'zoom-to-selected':
-          (async () => {
-            try {
-              const service = await getPlatformService();
-              const { project: currentProject } = useProjectStore.getState();
-              const road = currentProject.roads.find((r) => r.id === event.roadId);
-              if (!road) return;
-              const verts = await service.generateSingleRoadVertices(road, 2.0, [0.2, 0.5, 1.0, 0.7]);
-              renderer.fitToVertices(verts);
-            } catch (err) {
-              console.error('[Viewport] zoom-to-selected failed:', err);
-            }
-          })();
-          break;
-        case 'zoom-to-junction':
-          (async () => {
-            try {
-              const service = await getPlatformService();
-              const { project: currentProject } = useProjectStore.getState();
-              const verts = await service.generateSingleJunctionVertices(
-                currentProject,
-                event.junctionId,
-                [0.7, 0.4, 1.0, 0.65],
-              );
-              renderer.fitToVertices(verts);
-            } catch (err) {
-              console.error('[Viewport] zoom-to-junction failed:', err);
-            }
-          })();
-          break;
-        case 'pan-to-road':
-          (async () => {
-            try {
-              const service = await getPlatformService();
-              const { project: currentProject } = useProjectStore.getState();
-              const road = currentProject.roads.find((r) => r.id === event.roadId);
-              if (!road) return;
-              const verts = await service.generateSingleRoadVertices(road, 2.0, [0.2, 0.5, 1.0, 0.7]);
-              if (verts.length > 0) renderer.panToCenter(verts);
-            } catch (err) {
-              console.error('[Viewport] pan-to-road failed:', err);
-            }
-          })();
-          break;
-        case 'pan-to-junction':
-          (async () => {
-            try {
-              const service = await getPlatformService();
-              const { project: currentProject } = useProjectStore.getState();
-              const verts = await service.generateSingleJunctionVertices(
-                currentProject,
-                event.junctionId,
-                [0.7, 0.4, 1.0, 0.65],
-              );
-              if (verts.length > 0) renderer.panToCenter(verts);
-            } catch (err) {
-              console.error('[Viewport] pan-to-junction failed:', err);
-            }
-          })();
-          break;
-        case 'pan-to-signal': {
-          // Pan to the actual world position of the signal (using cached project)
-          (async () => {
-            try {
-              const service = await getPlatformService();
-              const pos = await service.getSignalWorldPosCached(event.roadId, event.signalId);
-              if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
-                // Build a tiny synthetic quad centred on the signal position
-                const sz = 1.0;
-                const synth = new Float32Array([
-                  pos.x - sz, pos.y - sz, 0, 1, 1, 1, 1,
-                  pos.x + sz, pos.y - sz, 0, 1, 1, 1, 1,
-                  pos.x,      pos.y + sz, 0, 1, 1, 1, 1,
-                ]);
-                renderer.panToCenter(synth);
-              }
-            } catch (err) {
-              console.error('[Viewport] pan-to-signal failed:', err);
-            }
-          })();
-          break;
-        }
-        case 'pan-to-object': {
-          // Pan to the actual world position of the object (using cached project)
-          (async () => {
-            try {
-              const service = await getPlatformService();
-              const pos = await service.getObjectWorldPosCached(event.roadId, event.objectId);
-              if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
-                const sz = 1.0;
-                const synth = new Float32Array([
-                  pos.x - sz, pos.y - sz, 0, 1, 1, 1, 1,
-                  pos.x + sz, pos.y - sz, 0, 1, 1, 1, 1,
-                  pos.x,      pos.y + sz, 0, 1, 1, 1, 1,
-                ]);
-                renderer.panToCenter(synth);
-              }
-            } catch (err) {
-              console.error('[Viewport] pan-to-object failed:', err);
-            }
-          })();
-          break;
-        }
-        case 'pan-to-lane': {
-          // Pan to the center of the lane
-          (async () => {
-            try {
-              const service = await getPlatformService();
-              const pos = await service.getLaneWorldPosCached(event.roadId, event.sectionIndex, event.laneId);
-              if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
-                const sz = 1.0;
-                const synth = new Float32Array([
-                  pos.x - sz, pos.y - sz, 0, 1, 1, 1, 1,
-                  pos.x + sz, pos.y - sz, 0, 1, 1, 1, 1,
-                  pos.x,      pos.y + sz, 0, 1, 1, 1, 1,
-                ]);
-                renderer.panToCenter(synth);
-              }
-            } catch (err) {
-              console.error('[Viewport] pan-to-lane failed:', err);
-            }
-          })();
-          break;
-        }
-        case 'set-dimension':
-          renderer.setDimension(event.dimension);
-          break;
-        case 'set-show-grid':
-          renderer.setShowGrid(event.show);
-          break;
-        case 'set-show-axis':
-          renderer.setShowAxis(event.show);
-          break;
-        case 'capture-screenshot': {
-          // Capture the WebGPU canvas as PNG and trigger a browser download
-          const canvas = canvasRef.current;
-          if (!canvas) break;
-          try {
-            const dataUrl = canvas.toDataURL('image/png');
-            const a = document.createElement('a');
-            a.href = dataUrl;
-            a.download = event.filename ?? `worldeditor-${Date.now()}.png`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-          } catch (err) {
-            console.error('[Viewport] Screenshot capture failed:', err);
-          }
-          break;
-        }
-      }
-    });
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    if (!ViewportRenderer.isSupported()) {
-      setStatus('unsupported');
-      return;
-    }
-
-    const renderer = new ViewportRenderer();
-    rendererRef.current = renderer;
-
-    const initRenderer = async () => {
-      const tMount = performance.now();
-      // Size canvas to container
-      const rect = canvas.parentElement?.getBoundingClientRect();
-      if (rect) {
-        canvas.width = Math.floor(rect.width * devicePixelRatio);
-        canvas.height = Math.floor(rect.height * devicePixelRatio);
-      }
-
-      const ok = await renderer.init(canvas);
-      const tInit = performance.now();
-      if (ok) {
-        setStatus('ready');
-        renderer.start();
-        renderer.setScaleChangeCallback((info) => {
-          useProjectStore.getState().setViewportInfo(info);
-        });
-        console.info(`[Viewport:perf] mount→ready ${(tInit - tMount).toFixed(1)}ms`);
-      } else {
-        setStatus('unsupported');
-      }
-    };
-
-    initRenderer();
-
-    // Handle resize
-    const observer = new ResizeObserver((entries) => {
-      // Debounce resize via rAF to avoid redundant depth-texture recreations
-      requestAnimationFrame(() => {
-        for (const entry of entries) {
-          const { width, height } = entry.contentRect;
-          const w = Math.floor(width * devicePixelRatio);
-          const h = Math.floor(height * devicePixelRatio);
-          if (canvas.width !== w || canvas.height !== h) {
-            canvas.width = w;
-            canvas.height = h;
-            renderer.resize(w, h);
-          }
-        }
-      });
-    });
-    observer.observe(canvas.parentElement!);
-
-    return () => {
-      observer.disconnect();
-      renderer.dispose();
-      rendererRef.current = null;
-    };
   }, []);
 
   // Wire plugin viewport overlays to the renderer
