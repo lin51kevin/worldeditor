@@ -132,7 +132,9 @@
     "toggleInspector": "Toggle Inspector",
     "toggleLeftPanel": "Toggle Left Panel",
     "toggleOutputPanel": "Toggle Output Panel",
-    "zoomToFit": "Zoom to Fit"
+    "zoomToFit": "Zoom to Fit",
+    "selectionModeTitle": "Selection Mode",
+    "viewModeTitle": "View Mode"
   },
   "statusBar": {
     "roads": "Roads",

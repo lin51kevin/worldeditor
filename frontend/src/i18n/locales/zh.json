@@ -132,7 +132,9 @@
     "toggleInspector": "切换检查器",
     "toggleLeftPanel": "切换左面板",
     "toggleOutputPanel": "切换输出面板",
-    "zoomToFit": "适应视图"
+    "zoomToFit": "适应视图",
+    "selectionModeTitle": "选择模式",
+    "viewModeTitle": "查看模式"
   },
   "statusBar": {
     "roads": "道路",

@@ -494,8 +494,8 @@ export function MenuBar({
             <button
               className={`menubar-action-btn ${selectionModeOpen ? 'active' : ''}`}
               onClick={toggleSelectionMode}
-              title={t('toolbar.selectionModeTitle', 'Selection Mode')}
-              aria-label={t('toolbar.selectionModeTitle', 'Selection Mode')}
+              title={t('toolbar.selectionModeTitle')}
+              aria-label={t('toolbar.selectionModeTitle')}
               aria-haspopup="dialog"
               aria-expanded={selectionModeOpen}
             >
@@ -516,8 +516,8 @@ export function MenuBar({
             <button
               className={`menubar-action-btn ${viewModeOpen ? 'active' : ''}`}
               onClick={toggleViewMode}
-              title={t('toolbar.viewModeTitle', 'View Mode')}
-              aria-label={t('toolbar.viewModeTitle', 'View Mode')}
+              title={t('toolbar.viewModeTitle')}
+              aria-label={t('toolbar.viewModeTitle')}
               aria-haspopup="dialog"
               aria-expanded={viewModeOpen}
             >

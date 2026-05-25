@@ -5,7 +5,7 @@ type ViewMode = 'sketch' | 'wire' | 'solid';
 
 const MODES: { value: ViewMode; labelKey: string }[] = [
   { value: 'sketch', labelKey: 'toolbar.sketch' },
-  { value: 'wire', labelKey: 'toolbar.wireframe' },
+  { value: 'wire', labelKey: 'toolbar.wire' },
   { value: 'solid', labelKey: 'toolbar.solid' },
 ];
 
@@ -18,11 +18,11 @@ export function ViewModePanel() {
     <div
       className="menubar-snap-settings-panel"
       role="dialog"
-      aria-label={t('toolbar.viewModeTitle', 'View Mode')}
+      aria-label={t('toolbar.viewModeTitle')}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="menubar-snap-settings-header">
-        {t('toolbar.viewModeTitle', 'View Mode')}
+        {t('toolbar.viewModeTitle')}
       </div>
       <div className="menubar-snap-settings-section">
         {MODES.map((mode) => (

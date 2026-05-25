@@ -5,6 +5,7 @@ import {
   Circle,
   Move,
   RotateCw,
+  Spline,
 } from 'lucide-react';
 import { resolveIcon } from '../shared/IconRenderer';
 import { useViewportStore } from '../../stores/viewportStore';
@@ -106,42 +107,7 @@ export const Toolbar = memo(function Toolbar() {
       onMouseDownCapture={handleButtonMouseDownCapture}
       onMouseDown={handleMouseDown}
     >
-      {/* DrawMode group: spline / arc / spiral */}
-      <div className="toolbar-group">
-        <button
-          className={`toolbar-btn toolbar-toggle ${editMode === 'spline' ? 'active' : ''}`}
-          onClick={() => { setEditMode('spline'); clearSplineKnots(); }}
-          title={t('toolbar.splineEditTitle')}
-          aria-label={t('toolbar.splineEdit')}
-          aria-pressed={editMode === 'spline'}
-        >
-          <Route size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.splineEdit')}</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${editMode === 'drawArc' ? 'active' : ''}`}
-          onClick={() => { setEditMode('drawArc'); clearSplineKnots(); }}
-          title={t('toolbar.arcEditTitle')}
-          aria-label={t('toolbar.arcEdit')}
-          aria-pressed={editMode === 'drawArc'}
-        >
-          <Circle size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.arcEdit')}</span>
-        </button>
-        <button
-          className={`toolbar-btn toolbar-toggle ${editMode === 'drawSpiral' ? 'active' : ''}`}
-          onClick={() => { setEditMode('drawSpiral'); clearSplineKnots(); }}
-          title={t('toolbar.spiralEditTitle')}
-          aria-label={t('toolbar.spiralEdit')}
-          aria-pressed={editMode === 'drawSpiral'}
-        >
-          <Route size={16} className="tb-icon" />
-          <span className="tb-label">{t('toolbar.spiralEdit')}</span>
-        </button>
-      </div>
-
       {/* Edit mode group: move / rotate */}
-      <div className="toolbar-separator" />
       <div className="toolbar-group">
         <button
           className={`toolbar-btn toolbar-toggle ${editMode === 'move-road' ? 'active' : ''}`}
@@ -162,6 +128,40 @@ export const Toolbar = memo(function Toolbar() {
           aria-pressed={editMode === 'rotate-road'}
         >
           <RotateCw size={16} className="tb-icon" />
+        </button>
+      </div>
+      <div className="toolbar-separator" />
+      {/* DrawMode group: spline / arc / spiral */}
+      <div className="toolbar-group">
+        <button
+          className={`toolbar-btn toolbar-toggle ${editMode === 'drawSpiral' ? 'active' : ''}`}
+          onClick={() => { setEditMode('drawSpiral'); clearSplineKnots(); }}
+          title={t('toolbar.spiralEditTitle')}
+          aria-label={t('toolbar.spiralEdit')}
+          aria-pressed={editMode === 'drawSpiral'}
+        >
+          <Spline size={16} className="tb-icon" />
+          <span className="tb-label">{t('toolbar.spiralEdit')}</span>
+        </button>
+        <button
+          className={`toolbar-btn toolbar-toggle ${editMode === 'drawArc' ? 'active' : ''}`}
+          onClick={() => { setEditMode('drawArc'); clearSplineKnots(); }}
+          title={t('toolbar.arcEditTitle')}
+          aria-label={t('toolbar.arcEdit')}
+          aria-pressed={editMode === 'drawArc'}
+        >
+          <Circle size={16} className="tb-icon" />
+          <span className="tb-label">{t('toolbar.arcEdit')}</span>
+        </button>
+        <button
+          className={`toolbar-btn toolbar-toggle ${editMode === 'spline' ? 'active' : ''}`}
+          onClick={() => { setEditMode('spline'); clearSplineKnots(); }}
+          title={t('toolbar.splineEditTitle')}
+          aria-label={t('toolbar.splineEdit')}
+          aria-pressed={editMode === 'spline'}
+        >
+          <Route size={16} className="tb-icon" />
+          <span className="tb-label">{t('toolbar.splineEdit')}</span>
         </button>
       </div>
 

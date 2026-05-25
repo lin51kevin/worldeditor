@@ -4,9 +4,9 @@ import { useViewportStore } from '../../stores/viewportStore';
 type SelectionMode = 'road' | 'laneSection' | 'lane';
 
 const MODES: { value: SelectionMode; labelKey: string }[] = [
-  { value: 'road', labelKey: 'toolbar.selectRoad' },
-  { value: 'laneSection', labelKey: 'toolbar.selectLaneSection' },
-  { value: 'lane', labelKey: 'toolbar.selectLane' },
+  { value: 'road', labelKey: 'toolPanel.selectionModes.road' },
+  { value: 'laneSection', labelKey: 'toolPanel.selectionModes.laneSection' },
+  { value: 'lane', labelKey: 'toolPanel.selectionModes.lane' },
 ];
 
 export function SelectionModePanel() {
@@ -18,11 +18,11 @@ export function SelectionModePanel() {
     <div
       className="menubar-snap-settings-panel"
       role="dialog"
-      aria-label={t('toolbar.selectionModeTitle', 'Selection Mode')}
+      aria-label={t('toolbar.selectionModeTitle')}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="menubar-snap-settings-header">
-        {t('toolbar.selectionModeTitle', 'Selection Mode')}
+        {t('toolbar.selectionModeTitle')}
       </div>
       <div className="menubar-snap-settings-section">
         {MODES.map((mode) => (
