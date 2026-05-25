@@ -3,9 +3,10 @@
  * Automatically selects Tauri or Web adapter based on runtime environment.
  */
 import type { PlatformService } from './platform';
+import { buildInfo } from '../buildInfo';
 
-/** Application version — single source of truth for frontend version display. */
-export const APP_VERSION = '0.1.1';
+/** Application version — derived from package.json at build time. */
+export const APP_VERSION = buildInfo.version;
 
 let instance: PlatformService | null = null;
 
