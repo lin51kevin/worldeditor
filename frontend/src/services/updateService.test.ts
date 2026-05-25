@@ -37,24 +37,24 @@ describe('checkForUpdate', () => {
 
   it('returns update information when a newer release is available', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      releaseResponse('v0.1.10', {
-        html_url: 'https://github.com/worldeditor-dev/worldeditor-next/releases/tag/v0.1.10',
+      releaseResponse('v0.3.0', {
+        html_url: 'https://github.com/worldeditor-dev/worldeditor-next/releases/tag/v0.3.0',
         body: 'Bug fixes and improvements',
       }),
     );
 
     await expect(checkForUpdate()).resolves.toEqual({
-      latestVersion: '0.1.10',
-      releaseUrl: 'https://github.com/worldeditor-dev/worldeditor-next/releases/tag/v0.1.10',
+      latestVersion: '0.3.0',
+      releaseUrl: 'https://github.com/worldeditor-dev/worldeditor-next/releases/tag/v0.3.0',
       releaseNotes: 'Bug fixes and improvements',
     });
   });
 
   it('treats longer semver strings as newer versions', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(releaseResponse('v0.1.1.1', { body: 'Patch metadata' }));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(releaseResponse('v0.2.0.1', { body: 'Patch metadata' }));
 
     await expect(checkForUpdate()).resolves.toEqual({
-      latestVersion: '0.1.1.1',
+      latestVersion: '0.2.0.1',
       releaseUrl: 'https://example.com/release',
       releaseNotes: 'Patch metadata',
     });

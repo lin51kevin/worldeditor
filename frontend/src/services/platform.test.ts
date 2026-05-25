@@ -71,6 +71,6 @@ describe('platform services', () => {
     const { WebPlatformService } = await import('./web');
     const service = new WebPlatformService();
 
-    expect(service.getPlatformInfo()).toEqual({ type: 'web', version: '0.1.1' });
+    expect(service.getPlatformInfo()).toEqual({ type: 'web', version: '0.2.0' });
   });
 });

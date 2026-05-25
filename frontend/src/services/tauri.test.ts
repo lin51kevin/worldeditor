@@ -61,7 +61,7 @@ describe('TauriPlatformService', () => {
 
   it('returns tauri platform info', () => {
     const service = new TauriPlatformService();
-    expect(service.getPlatformInfo()).toEqual({ type: 'tauri', version: '0.1.1' });
+    expect(service.getPlatformInfo()).toEqual({ type: 'tauri', version: '0.2.0' });
   });
 
   it('initialises the WASM module exactly once across multiple WASM-backed calls', async () => {
