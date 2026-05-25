@@ -174,11 +174,12 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // V: exit to select mode (force return to default tool)
+      // V: exit to select mode (force return to default tool, clearing any in-progress draw state)
       if (e.key === 'v' || e.key === 'V') {
         e.preventDefault();
-        const { editMode, setEditMode } = useViewportStore.getState();
+        const { editMode, setEditMode, clearSplineKnots } = useViewportStore.getState();
         if (editMode !== null && editMode !== 'default') {
+          if (editMode === 'spline') clearSplineKnots();
           setEditMode('default');
         }
         return;

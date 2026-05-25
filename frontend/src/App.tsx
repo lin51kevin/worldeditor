@@ -148,6 +148,10 @@ export function App() {
       if (isEditMode && current === mode) {
         setEditMode('default');
       } else {
+        // Leaving spline draw mode: discard any in-progress knots
+        if (current === 'spline' && mode !== 'spline') {
+          clearSplineKnots();
+        }
         setEditMode(mode);
         if (mode === 'spline') {
           clearSplineKnots();

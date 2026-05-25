@@ -436,6 +436,7 @@ export const useViewportStore = create<EditorViewState>((set) => ({
     geometryEditRoadId: roadId,
     geometryEditSpline: spline,
     draggingKnot: null,
+    editMode: 'default',
   }),
   exitGeometryEdit: () => set({
     geometryEditRoadId: null,

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../stores/projectStore';
 import { useViewportStore } from '../../stores/viewportStore';
+import { useSplineOperations } from '../../hooks/useSplineOperations';
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -12,6 +13,8 @@ export function RoadEditToolbar() {
   const setEditMode = useViewportStore((s) => s.setEditMode);
   const clearSplineKnots = useViewportStore((s) => s.clearSplineKnots);
   const setSoftSelectionRadius = useViewportStore((s) => s.setSoftSelectionRadius);
+  const geometryEditRoadId = useViewportStore((s) => s.geometryEditRoadId);
+  const { finalizeGeometryEdit } = useSplineOperations();
 
   const isAdjustNodeActive = editMode === 'spline';
   const hasRoad = !!selectedRoadId;
@@ -21,9 +24,23 @@ export function RoadEditToolbar() {
     if (isAdjustNodeActive) {
       setEditMode('default');
     } else {
+      // If in geometry edit, finalize before entering spline draw mode
+      if (geometryEditRoadId) void finalizeGeometryEdit();
       setEditMode('spline');
       clearSplineKnots();
     }
+  };
+
+  const handleMoveRoad = () => {
+    const next = editMode === 'move-road' ? 'default' : 'move-road';
+    if (geometryEditRoadId) void finalizeGeometryEdit();
+    setEditMode(next);
+  };
+
+  const handleRotateRoad = () => {
+    const next = editMode === 'rotate-road' ? 'default' : 'rotate-road';
+    if (geometryEditRoadId) void finalizeGeometryEdit();
+    setEditMode(next);
   };
 
   // ── Instant road actions ─────────────────────────────────────────────────
@@ -114,7 +131,7 @@ export function RoadEditToolbar() {
         <button
           className={`toolbar-btn ${editMode === 'move-road' ? 'active' : ''}`}
           title={`${t('toolPanel.moveRoad')} [M]`}
-          onClick={() => setEditMode(editMode === 'move-road' ? 'default' : 'move-road')}
+          onClick={handleMoveRoad}
           disabled={!hasRoad}
         >
           {t('toolPanel.moveRoad')}
@@ -122,7 +139,7 @@ export function RoadEditToolbar() {
         <button
           className={`toolbar-btn ${editMode === 'rotate-road' ? 'active' : ''}`}
           title={`${t('toolPanel.rotateRoad')} [R]`}
-          onClick={() => setEditMode(editMode === 'rotate-road' ? 'default' : 'rotate-road')}
+          onClick={handleRotateRoad}
           disabled={!hasRoad}
         >
           {t('toolPanel.rotateRoad')}

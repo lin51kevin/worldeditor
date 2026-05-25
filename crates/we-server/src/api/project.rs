@@ -203,3 +203,116 @@ pub fn router() -> Router<sqlx::PgPool> {
         .route("/:id", put(update_project))
         .route("/:id", delete(delete_project))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_project_validate_rejects_blank_name() {
+        let input = CreateProject {
+            name: "   ".to_string(),
+            description: None,
+        };
+
+        assert!(matches!(
+            input.validate(),
+            Err(Error::Validation(message)) if message == "Project name cannot be empty"
+        ));
+    }
+
+    #[test]
+    fn test_create_project_validate_rejects_name_longer_than_255_chars() {
+        let input = CreateProject {
+            name: "a".repeat(256),
+            description: None,
+        };
+
+        assert!(matches!(
+            input.validate(),
+            Err(Error::Validation(message)) if message == "Project name cannot exceed 255 characters"
+        ));
+    }
+
+    #[test]
+    fn test_create_project_validate_rejects_description_longer_than_4096_chars() {
+        let input = CreateProject {
+            name: "Valid Project".to_string(),
+            description: Some("d".repeat(4097)),
+        };
+
+        assert!(matches!(
+            input.validate(),
+            Err(Error::Validation(message)) if message == "Project description cannot exceed 4096 characters"
+        ));
+    }
+
+    #[test]
+    fn test_create_project_validate_accepts_boundary_lengths() {
+        let input = CreateProject {
+            name: "a".repeat(255),
+            description: Some("d".repeat(4096)),
+        };
+
+        assert!(input.validate().is_ok());
+    }
+
+    #[test]
+    fn test_update_project_validate_rejects_blank_name() {
+        let input = UpdateProject {
+            name: Some(" \n\t ".to_string()),
+            description: None,
+        };
+
+        assert!(matches!(
+            input.validate(),
+            Err(Error::Validation(message)) if message == "Project name cannot be empty"
+        ));
+    }
+
+    #[test]
+    fn test_update_project_validate_rejects_name_longer_than_255_chars() {
+        let input = UpdateProject {
+            name: Some("a".repeat(256)),
+            description: None,
+        };
+
+        assert!(matches!(
+            input.validate(),
+            Err(Error::Validation(message)) if message == "Project name cannot exceed 255 characters"
+        ));
+    }
+
+    #[test]
+    fn test_update_project_validate_rejects_description_longer_than_4096_chars() {
+        let input = UpdateProject {
+            name: None,
+            description: Some("d".repeat(4097)),
+        };
+
+        assert!(matches!(
+            input.validate(),
+            Err(Error::Validation(message)) if message == "Project description cannot exceed 4096 characters"
+        ));
+    }
+
+    #[test]
+    fn test_update_project_validate_accepts_empty_patch() {
+        let input = UpdateProject {
+            name: None,
+            description: None,
+        };
+
+        assert!(input.validate().is_ok());
+    }
+
+    #[test]
+    fn test_update_project_validate_accepts_boundary_lengths() {
+        let input = UpdateProject {
+            name: Some("a".repeat(255)),
+            description: Some("d".repeat(4096)),
+        };
+
+        assert!(input.validate().is_ok());
+    }
+}

@@ -363,6 +363,7 @@ export const createRoadSlice: SliceCreator<RoadSlice> = (set) => ({
       const updatedRoad: Road = {
         ...road,
         plan_view: road.plan_view.map((g) => ({ ...g, x: g.x + dx, y: g.y + dy })),
+        spline_edit_data: road.spline_edit_data?.map(([x, y, z]) => [x + dx, y + dy, z]),
       };
       return {
         ...pushUndo(state),
@@ -391,6 +392,11 @@ export const createRoadSlice: SliceCreator<RoadSlice> = (set) => ({
             y: cy + rx * sinA + ry * cosA,
             hdg: g.hdg + angle,
           };
+        }),
+        spline_edit_data: road.spline_edit_data?.map(([x, y, z]) => {
+          const rx = x - cx;
+          const ry = y - cy;
+          return [cx + rx * cosA - ry * sinA, cy + rx * sinA + ry * cosA, z];
         }),
       };
       return {
