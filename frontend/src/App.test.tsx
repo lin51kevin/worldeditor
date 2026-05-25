@@ -146,6 +146,12 @@ describe('App', () => {
     expect(document.querySelector('.shortcut-help-overlay')).not.toBeNull();
   });
 
+  it('should show shortcut help overlay when / is pressed', () => {
+    render(<App />);
+    fireEvent.keyDown(window, { key: '/' });
+    expect(document.querySelector('.shortcut-help-overlay')).not.toBeNull();
+  });
+
   it('should hide shortcut help overlay when Escape is pressed', () => {
     render(<App />);
     fireEvent.keyDown(window, { key: '?' });

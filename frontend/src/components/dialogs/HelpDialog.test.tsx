@@ -18,14 +18,14 @@ describe('HelpDialog', () => {
 
   it('should render a close button', () => {
     render(<HelpDialog onClose={() => {}} />);
-    const closeBtn = screen.getByRole('button', { name: /close/i });
+    const closeBtn = screen.getByRole('button', { name: /关闭|close/i });
     expect(closeBtn).toBeDefined();
   });
 
   it('should call onClose when close button is clicked', () => {
     let closed = false;
     render(<HelpDialog onClose={() => { closed = true; }} />);
-    screen.getByRole('button', { name: /close/i }).click();
+    screen.getByRole('button', { name: /关闭|close/i }).click();
     expect(closed).toBe(true);
   });
 

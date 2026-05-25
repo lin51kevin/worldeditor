@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SHORTCUT_HELP_SECTIONS, type ShortcutHelpRow } from '../../constants/shortcutHelp';
 import './ShortcutHelpOverlay.css';
 
 interface Props {
@@ -7,56 +8,31 @@ interface Props {
   onClose: () => void;
 }
 
-interface ShortcutRow {
-  key: string;
-  descKey: string;
+function renderKeyCombo(combo: string) {
+  return (
+    <span key={combo}>
+      {combo.split('+').map((part, index) => (
+        <span key={`${combo}-${part}-${index}`}>
+          {index > 0 && <span className="shortcut-help-plus">+</span>}
+          <kbd>{part}</kbd>
+        </span>
+      ))}
+    </span>
+  );
 }
 
-const SECTIONS: Array<{ titleKey: string; rows: ShortcutRow[] }> = [
-  {
-    titleKey: 'shortcutHelp.sections.drawing',
-    rows: [
-      { key: 'L', descKey: 'shortcutHelp.keys.drawLine' },
-      { key: 'A', descKey: 'shortcutHelp.keys.drawArc' },
-      { key: 'P', descKey: 'shortcutHelp.keys.drawSpiral' },
-      { key: 'S', descKey: 'shortcutHelp.keys.drawSpline' },
-    ],
-  },
-  {
-    titleKey: 'shortcutHelp.sections.transform',
-    rows: [
-      { key: 'M', descKey: 'shortcutHelp.keys.moveRoad' },
-      { key: 'R', descKey: 'shortcutHelp.keys.rotateRoad' },
-      { key: 'X', descKey: 'shortcutHelp.keys.splitRoadAtPoint' },
-    ],
-  },
-  {
-    titleKey: 'shortcutHelp.sections.edit',
-    rows: [
-      { key: 'Ctrl+Z',       descKey: 'shortcutHelp.keys.undo' },
-      { key: 'Ctrl+Y',       descKey: 'shortcutHelp.keys.redo' },
-      { key: 'Ctrl+A',       descKey: 'shortcutHelp.keys.selectAll' },
-      { key: 'Ctrl+C',       descKey: 'shortcutHelp.keys.copy' },
-      { key: 'Ctrl+V',       descKey: 'shortcutHelp.keys.paste' },
-      { key: 'Delete / ⌫',  descKey: 'shortcutHelp.keys.delete' },
-    ],
-  },
-  {
-    titleKey: 'shortcutHelp.sections.view',
-    rows: [
-      { key: 'F',    descKey: 'shortcutHelp.keys.zoomFit' },
-      { key: 'Esc',  descKey: 'shortcutHelp.keys.escape' },
-    ],
-  },
-  {
-    titleKey: 'shortcutHelp.sections.panels',
-    rows: [
-      { key: 'I',      descKey: 'shortcutHelp.keys.inspector' },
-      { key: 'Ctrl+B', descKey: 'shortcutHelp.keys.leftPanel' },
-      { key: '?',      descKey: 'shortcutHelp.keys.help' },
-    ],
-  },
-];
+function renderShortcutKeys(row: ShortcutHelpRow) {
+  return (
+    <>
+      {row.keys.map((combo, index) => (
+        <span key={combo}>
+          {index > 0 && <span className="shortcut-help-plus"> / </span>}
+          {renderKeyCombo(combo)}
+        </span>
+      ))}
+    </>
+  );
+}
 
 export function ShortcutHelpOverlay({ open, onClose }: Props) {
   const { t } = useTranslation();
@@ -100,7 +76,7 @@ export function ShortcutHelpOverlay({ open, onClose }: Props) {
         </div>
 
         <div className="shortcut-help-body">
-          {SECTIONS.map((section) => (
+          {SHORTCUT_HELP_SECTIONS.map((section) => (
             <section key={section.titleKey}>
               <h4 className="shortcut-help-section-title">
                 {t(section.titleKey)}
@@ -108,14 +84,9 @@ export function ShortcutHelpOverlay({ open, onClose }: Props) {
               <table>
                 <tbody>
                   {section.rows.map((row) => (
-                    <tr key={row.key}>
+                    <tr key={`${section.titleKey}-${row.descKey}`}>
                       <td className="shortcut-help-key">
-                        {row.key.split('+').map((part, i) => (
-                          <span key={i}>
-                            {i > 0 && <span className="shortcut-help-plus">+</span>}
-                            <kbd>{part}</kbd>
-                          </span>
-                        ))}
+                        {renderShortcutKeys(row)}
                       </td>
                       <td className="shortcut-help-desc">{t(row.descKey)}</td>
                     </tr>

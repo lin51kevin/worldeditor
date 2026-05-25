@@ -31,8 +31,11 @@ describe('ShortcutHelpOverlay', () => {
   it('shows key bindings', () => {
     render(<ShortcutHelpOverlay open={true} onClose={vi.fn()} />);
     const allKbd = Array.from(document.querySelectorAll('kbd')).map((el) => el.textContent);
-    expect(allKbd).toContain('L');
+    expect(allKbd).toContain('/');
+    expect(allKbd).toContain('?');
+    expect(allKbd).toContain('E');
     expect(allKbd).toContain('M');
+    expect(allKbd).toContain('V');
     expect(allKbd).toContain('Esc');
   });
 
