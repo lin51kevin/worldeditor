@@ -7,6 +7,7 @@
  * crosswalk deployment, and stop line deployment.
  */
 
+import { genId } from '../plugins/editing/templates/engine';
 import type {
   Road,
   Lane,
@@ -24,6 +25,13 @@ import type {
 const DEFAULT_SIDEWALK_WIDTH = 2.0;
 const DEFAULT_MARK_WIDTH = 0.15;
 const DEFAULT_LANE_WIDTH = 3.5;
+const DEFAULT_WELD_POSITION_TOLERANCE = 0.5;
+const DEFAULT_WELD_HEADING_TOLERANCE = Math.PI / 9;
+
+export interface WeldOptions {
+  positionTolerance?: number;
+  headingTolerance?: number;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -132,6 +140,229 @@ function distanceSquared(x1: number, y1: number, x2: number, y2: number): number
   const dx = x1 - x2;
   const dy = y1 - y2;
   return dx * dx + dy * dy;
+}
+
+function normalizeAngle(angle: number): number {
+  let value = angle;
+  while (value > Math.PI) value -= 2 * Math.PI;
+  while (value <= -Math.PI) value += 2 * Math.PI;
+  return value;
+}
+
+function angleDelta(a: number, b: number): number {
+  return Math.abs(normalizeAngle(a - b));
+}
+
+function reverseGeometryType(geoType: Geometry['geo_type']): Geometry['geo_type'] {
+  if (geoType === 'Line') return 'Line';
+  if ('Arc' in geoType) {
+    return { Arc: { curvature: -geoType.Arc.curvature } };
+  }
+  if ('Spiral' in geoType) {
+    return {
+      Spiral: {
+        curv_start: -geoType.Spiral.curv_end,
+        curv_end: -geoType.Spiral.curv_start,
+      },
+    };
+  }
+  return geoType;
+}
+
+function needsResampledReverse(road: Road): boolean {
+  return road.plan_view.some((geo) => geo.geo_type !== 'Line' && !('Arc' in geo.geo_type) && !('Spiral' in geo.geo_type));
+}
+
+function getRoadEndpointPose(road: Road, contactPoint: 'Start' | 'End'): { x: number; y: number; hdg: number } {
+  return evalRoadAtS(road, contactPoint === 'Start' ? 0 : road.length);
+}
+
+function cloneLaneWithMirroredId(lane: Lane): Lane {
+  return {
+    ...lane,
+    id: lane.id === 0 ? 0 : -lane.id,
+    link: lane.link
+      ? {
+        predecessor: lane.link.successor === null ? null : -lane.link.successor,
+        successor: lane.link.predecessor === null ? null : -lane.link.predecessor,
+      }
+      : lane.link,
+  };
+}
+
+function reverseLaneSection(section: LaneSection): LaneSection {
+  return {
+    ...section,
+    left: section.right.map(cloneLaneWithMirroredId),
+    center: section.center.map(cloneLaneWithMirroredId),
+    right: section.left.map(cloneLaneWithMirroredId),
+  };
+}
+
+function reverseStationRecords<T extends { s: number }>(records: T[] | undefined, totalLength: number): T[] | undefined {
+  if (!records) {
+    return records;
+  }
+
+  return records
+    .map((record) => ({ ...record, s: clampStation(totalLength - record.s, totalLength) }) as T)
+    .sort((left, right) => left.s - right.s);
+}
+
+function reverseStationRangeRecords<T extends { s: number; length: number }>(records: T[] | undefined, totalLength: number): T[] | undefined {
+  if (!records) {
+    return records;
+  }
+
+  return records
+    .map((record) => ({
+      ...record,
+      s: clampStation(totalLength - (record.s + record.length), totalLength),
+    }) as T)
+    .sort((left, right) => left.s - right.s);
+}
+
+function reverseLaneSections(laneSections: LaneSection[], totalLength: number): LaneSection[] {
+  if (laneSections.length === 0) {
+    return laneSections;
+  }
+
+  return laneSections
+    .map((section, index) => {
+      const nextStart = laneSections[index + 1]?.s ?? totalLength;
+      return {
+        ...reverseLaneSection(section),
+        s: clampStation(totalLength - nextStart, totalLength),
+      };
+    })
+    .reverse();
+}
+
+function reverseRoadObjects(objects: Road['objects'], totalLength: number): Road['objects'] {
+  return objects
+    ?.map((object) => ({
+      ...object,
+      position: {
+        ...object.position,
+        x: clampStation(totalLength - object.position.x, totalLength),
+      },
+      hdg: normalizeAngle(object.hdg + Math.PI),
+      orientation: normalizeAngle((object.orientation * Math.PI) / 180 + Math.PI) * (180 / Math.PI),
+      corners: object.corners.map((corner) => ({
+        ...corner,
+        x: clampStation(totalLength - corner.x, totalLength),
+      })),
+      validity: object.validity
+        ? {
+          from_lane: -object.validity.to_lane,
+          to_lane: -object.validity.from_lane,
+        }
+        : object.validity,
+    }))
+    .sort((left, right) => left.position.x - right.position.x);
+}
+
+function reverseRoad(road: Road): Road {
+  const roadToReverse = needsResampledReverse(road)
+    ? resampleRoad(road, Math.max(Math.min(road.length / 16, 2), 0.5))
+    : road;
+
+  if (roadToReverse.plan_view.length === 0) {
+    return roadToReverse;
+  }
+
+  let currentS = 0;
+  const reversedPlanView: Geometry[] = roadToReverse.plan_view
+    .slice()
+    .reverse()
+    .map((geo) => {
+      const endPose = evalGeometryAtS(geo, geo.length);
+      const reversed: Geometry = {
+        s: currentS,
+        x: endPose.x,
+        y: endPose.y,
+        hdg: normalizeAngle(endPose.hdg + Math.PI),
+        length: geo.length,
+        geo_type: reverseGeometryType(geo.geo_type),
+      };
+      currentS += geo.length;
+      return reversed;
+    });
+
+  return {
+    ...roadToReverse,
+    plan_view: reversedPlanView,
+    link: roadToReverse.link
+      ? {
+        predecessor: roadToReverse.link.successor,
+        successor: roadToReverse.link.predecessor,
+      }
+      : roadToReverse.link,
+    elevation_profile: reverseStationRecords(roadToReverse.elevation_profile, roadToReverse.length) ?? [],
+    lane_sections: reverseLaneSections(roadToReverse.lane_sections, roadToReverse.length),
+    lane_offsets: reverseStationRecords(roadToReverse.lane_offsets, roadToReverse.length),
+    lateral_profile: roadToReverse.lateral_profile
+      ? {
+        ...roadToReverse.lateral_profile,
+        superelevation: reverseStationRecords(roadToReverse.lateral_profile.superelevation, roadToReverse.length),
+        crossfall: reverseStationRecords(roadToReverse.lateral_profile.crossfall, roadToReverse.length),
+        superelevations: reverseStationRecords(roadToReverse.lateral_profile.superelevations, roadToReverse.length),
+        crossfalls: reverseStationRecords(roadToReverse.lateral_profile.crossfalls, roadToReverse.length),
+      }
+      : roadToReverse.lateral_profile,
+    bridges: reverseStationRangeRecords(roadToReverse.bridges, roadToReverse.length),
+    tunnels: reverseStationRangeRecords(roadToReverse.tunnels, roadToReverse.length),
+    signals: reverseStationRecords(roadToReverse.signals, roadToReverse.length),
+    objects: reverseRoadObjects(roadToReverse.objects, roadToReverse.length),
+    spline_edit_data: roadToReverse.spline_edit_data ? [...roadToReverse.spline_edit_data].reverse() : roadToReverse.spline_edit_data,
+  };
+}
+
+function offsetStationRecords<T extends { s: number }>(records: T[] | undefined, offset: number): T[] | undefined {
+  return records?.map((record) => ({ ...record, s: record.s + offset }) as T);
+}
+
+function offsetStationRangeRecords<T extends { s: number; length: number }>(records: T[] | undefined, offset: number): T[] | undefined {
+  return records?.map((record) => ({ ...record, s: record.s + offset }) as T);
+}
+
+function offsetRoadObjects(objects: Road['objects'], offset: number): Road['objects'] {
+  return objects?.map((object) => ({
+    ...object,
+    position: {
+      ...object.position,
+      x: object.position.x + offset,
+    },
+    corners: object.corners.map((corner) => ({
+      ...corner,
+      x: corner.x + offset,
+    })),
+  }));
+}
+
+function combineLateralProfile(primary: Road['lateral_profile'], secondary: Road['lateral_profile'], offset: number): Road['lateral_profile'] {
+  if (!primary && !secondary) {
+    return undefined;
+  }
+
+  return {
+    superelevation: [...(primary?.superelevation ?? []), ...(offsetStationRecords(secondary?.superelevation, offset) ?? [])],
+    crossfall: [...(primary?.crossfall ?? []), ...(offsetStationRecords(secondary?.crossfall, offset) ?? [])],
+    superelevations: [...(primary?.superelevations ?? []), ...(offsetStationRecords(secondary?.superelevations, offset) ?? [])],
+    crossfalls: [...(primary?.crossfalls ?? []), ...(offsetStationRecords(secondary?.crossfalls, offset) ?? [])],
+  };
+}
+
+function getLaneSignature(section: LaneSection | undefined): string {
+  if (!section) {
+    return 'none';
+  }
+
+  const encode = (lanes: Lane[]) => lanes
+    .map((lane) => `${Math.abs(lane.id)}:${lane.lane_type}`)
+    .sort()
+    .join('|');
+  return encode([...section.left, ...section.center, ...section.right]);
 }
 
 function refineClosestDs(geo: Geometry, worldPos: { x: number; y: number }, bestDs: number, sampleStep: number): number {
@@ -545,10 +776,9 @@ export function splitRoadAt(
     );
   }
 
-  const ts = Date.now();
-  const id1 = `${road.id}-a-${ts}`;
-  const id2 = `${road.id}-b-${ts}`;
-  const junctionId = `junc-split-${ts}`;
+  const id1 = genId();
+  const id2 = genId();
+  const junctionId = genId();
 
   // ── Build plan_view for each half ─────────────────────────────────────────
   const pv1: Geometry[] = [];
@@ -681,7 +911,7 @@ export function splitRoadAt(
     name: `${road.name}_Junction`,
     connections: [
       {
-        id: `conn-${ts}`,
+        id: genId(),
         incoming_road: id1,
         connecting_road: id2,
         contact_point: 'Start',
@@ -702,21 +932,56 @@ export function splitRoadAt(
  * road1.length. The welded road keeps road1's id and uses road1's predecessor
  * link and road2's successor link.
  */
-export function weldRoads(road1: Road, road2: Road): Road {
+export function weldRoads(road1: Road, road2: Road, options?: WeldOptions): Road {
+  const positionTolerance = options?.positionTolerance ?? DEFAULT_WELD_POSITION_TOLERANCE;
+  const headingTolerance = options?.headingTolerance ?? DEFAULT_WELD_HEADING_TOLERANCE;
+  const road1End = getRoadEndpointPose(road1, 'End');
+  const road2Start = getRoadEndpointPose(road2, 'Start');
+  const road2End = getRoadEndpointPose(road2, 'End');
+  const startDistance = distanceSquared(road1End.x, road1End.y, road2Start.x, road2Start.y);
+  const endDistance = distanceSquared(road1End.x, road1End.y, road2End.x, road2End.y);
+  const orientedRoad2 = endDistance < startDistance ? reverseRoad(road2) : road2;
+  const orientedRoad2Start = getRoadEndpointPose(orientedRoad2, 'Start');
+  const seamDistance = Math.sqrt(
+    distanceSquared(road1End.x, road1End.y, orientedRoad2Start.x, orientedRoad2Start.y),
+  );
+
+  if (seamDistance > positionTolerance) {
+    throw new Error(`Road endpoints are too far apart to weld (${seamDistance.toFixed(2)} m)`);
+  }
+
+  const seamHeadingDelta = angleDelta(road1End.hdg, orientedRoad2Start.hdg);
+  if (seamHeadingDelta > headingTolerance) {
+    throw new Error('Road headings are incompatible at the weld point');
+  }
+
+  if (getLaneSignature(road1.lane_sections[road1.lane_sections.length - 1]) !== getLaneSignature(orientedRoad2.lane_sections[0])) {
+    throw new Error('Road lane layouts are incompatible at the weld point');
+  }
+
   const offset = road1.length;
 
-  const pv2: Geometry[] = road2.plan_view.map((geo) => ({ ...geo, s: geo.s + offset }));
-  const ls2: LaneSection[] = road2.lane_sections.map((ls) => ({ ...ls, s: ls.s + offset }));
+  const pv2: Geometry[] = orientedRoad2.plan_view.map((geo) => ({ ...geo, s: geo.s + offset }));
+  const ls2: LaneSection[] = orientedRoad2.lane_sections.map((ls) => ({ ...ls, s: ls.s + offset }));
 
   return {
     ...road1,
-    name: `${road1.name} + ${road2.name}`,
-    length: road1.length + road2.length,
+    name: `${road1.name} + ${orientedRoad2.name}`,
+    junction_id: null,
+    length: road1.length + orientedRoad2.length,
     plan_view: [...road1.plan_view, ...pv2],
+    elevation_profile: [...road1.elevation_profile, ...(offsetStationRecords(orientedRoad2.elevation_profile, offset) ?? [])],
     lane_sections: [...road1.lane_sections, ...ls2],
+    lane_offsets: [...(road1.lane_offsets ?? []), ...(offsetStationRecords(orientedRoad2.lane_offsets, offset) ?? [])],
+    lateral_profile: combineLateralProfile(road1.lateral_profile, orientedRoad2.lateral_profile, offset),
+    bridges: [...(road1.bridges ?? []), ...(offsetStationRangeRecords(orientedRoad2.bridges, offset) ?? [])],
+    tunnels: [...(road1.tunnels ?? []), ...(offsetStationRangeRecords(orientedRoad2.tunnels, offset) ?? [])],
+    signals: [...(road1.signals ?? []), ...(offsetStationRecords(orientedRoad2.signals, offset) ?? [])],
+    objects: [...(road1.objects ?? []), ...(offsetRoadObjects(orientedRoad2.objects, offset) ?? [])],
+    spline_edit_data: [...(road1.spline_edit_data ?? []), ...(orientedRoad2.spline_edit_data ?? [])],
     link: {
       predecessor: road1.link?.predecessor ?? null,
-      successor: road2.link?.successor ?? null,
+      successor: orientedRoad2.link?.successor ?? null,
     },
   };
 }

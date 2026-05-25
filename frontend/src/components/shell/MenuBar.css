@@ -153,97 +153,99 @@
 }
 
 .menubar-snap-control {
- position: relative;
- display: inline-flex;
- align-items: center;
- gap: 1px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
 }
 
 .menubar-snap-settings-trigger {
- padding-inline: 4px;
+  padding-inline: 4px;
 }
 
 .menubar-snap-settings-panel {
- position: absolute;
- top: calc(100% + 8px);
- right: 0;
- width: 240px;
- background: var(--color-menu-bg);
- border: 1px solid var(--color-border);
- border-radius: var(--radius-md);
- box-shadow: var(--shadow-md);
- padding: 12px;
- z-index: 1002;
- display: flex;
- flex-direction: column;
- gap: 12px;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: max-content;
+  min-width: 120px;
+  background: var(--color-menu-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 12px;
+  z-index: 1002;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  white-space: nowrap;
 }
 
 .menubar-snap-settings-header {
- font-size: 12px;
- font-weight: 600;
- color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .menubar-snap-settings-section {
- display: flex;
- flex-direction: column;
- gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .menubar-snap-settings-section-label {
- font-size: 11px;
- font-weight: 600;
- color: var(--color-text-secondary);
- text-transform: uppercase;
- letter-spacing: 0.04em;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .menubar-snap-settings-checkbox {
- display: flex;
- align-items: center;
- gap: 8px;
- color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-primary);
 }
 
 .menubar-snap-settings-checkbox input {
- margin: 0;
+  margin: 0;
 }
 
 .menubar-snap-settings-field {
- display: flex;
- flex-direction: column;
- gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .menubar-snap-settings-field-header {
- display: flex;
- align-items: center;
- justify-content: space-between;
- gap: 12px;
- color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--color-text-primary);
 }
 
 .menubar-snap-settings-field-header label {
- font-size: 12px;
+  font-size: 12px;
 }
 
 .menubar-snap-settings-field-header span {
- font-size: 11px;
- color: var(--color-text-secondary);
+  font-size: 11px;
+  color: var(--color-text-secondary);
 }
 
 .menubar-snap-settings-range,
 .menubar-snap-settings-number {
- width: 100%;
+  width: 100%;
 }
 
 .menubar-snap-settings-number {
- padding: 6px 8px;
- border: 1px solid var(--color-border);
- border-radius: var(--radius-sm);
- background: var(--color-bg-secondary);
- color: var(--color-text-primary);
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
 }
 
 .menubar-view-label {

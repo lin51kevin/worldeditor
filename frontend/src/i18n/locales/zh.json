@@ -697,6 +697,7 @@
     "roadTooShort": "道路过短，无法分割（最短 2 米）。",
     "splitPointTooClose": "请选择远离道路端点的位置进行分割。",
     "splitPointFailed": "分割道路失败：",
+    "weldRoadsFailed": "焊接道路失败：",
     "selectTwoRoads": "请至少选择 2 条道路才能焊接。",
     "requiresWasm": "此功能需要 WASM 后端支持，将在未来版本中提供。",
     "placeSignal": "放置信号",
@@ -833,6 +834,7 @@
       "drawArc": "绘制圆弧道路",
       "drawSpiral": "绘制回旋线道路",
       "drawSpline": "绘制样条道路",
+      "geometryEdit": "进入几何编辑",
       "moveRoad": "移动道路",
       "rotateRoad": "旋转道路",
       "splitRoadAtPoint": "在光标处拆分选中道路",
@@ -843,9 +845,12 @@
       "paste": "从剪贴板粘贴",
       "delete": "删除选中",
       "zoomFit": "缩放到全部",
+      "selectMode": "返回选择模式",
       "escape": "取消 / 返回选择模式",
       "inspector": "切换检查器面板",
       "leftPanel": "切换图层面板",
+      "outputPanel": "切换输出面板",
+      "validationPanel": "切换校验面板",
       "help": "显示快捷键帮助"
     }
   },

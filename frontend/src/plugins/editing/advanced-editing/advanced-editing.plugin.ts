@@ -30,6 +30,7 @@ import { getPlatformService } from '../../../services';
 import {
   attachRoadToJunction,
   chooseRoadConnectionContactPoint,
+  cleanupJunctionsForRemovedRoads,
   detachRoadFromJunction,
   fillJunctionConnectionGaps,
   getJunctionIncomingRoads,
@@ -362,19 +363,32 @@ function weldRoads(): void {
     return;
   }
   const [id1, id2] = selectedRoadIds;
+  if (!id1 || !id2) {
+    void showAlert(t('advancedEditing.selectTwoRoads', 'Select at least 2 roads to weld'));
+    return;
+  }
   const r1 = project.roads.find((r) => r.id === id1);
   const r2 = project.roads.find((r) => r.id === id2);
-  if (!r1 || !r2) return;
-  executePluginCommand(
-    t('advancedEditing.weldRoads', 'Weld Roads'),
-    (p) => {
-      const welded = weldRoadsUtil(r1, r2);
-      return {
-        ...p,
-        roads: p.roads.filter((r) => r.id !== id1 && r.id !== id2).concat([welded]),
-      };
-    },
-  );
+  if (!r1 || !r2) {
+    void showAlert(t('advancedEditing.invalidRoadSelection', 'The specified road could not be found'));
+    return;
+  }
+
+  try {
+    executePluginCommand(
+      t('advancedEditing.weldRoads', 'Weld Roads'),
+      (p) => {
+        const welded = weldRoadsUtil(r1, r2);
+        return cleanupJunctionsForRemovedRoads({
+          ...p,
+          roads: p.roads.filter((r) => r.id !== id1 && r.id !== id2).concat([welded]),
+        }, [id1, id2]);
+      },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    void showAlert(`${t('advancedEditing.weldRoadsFailed', 'Failed to weld roads: ')}${message}`);
+  }
 }
 
 /** Attach a road arm to the selected junction. */
@@ -550,7 +564,7 @@ export function mountAdvancedEditingPlugin(): () => void {
     {
       id: `${PLUGIN_ID}:resample-road`,
       pluginId: PLUGIN_ID,
-      icon: 'Ruler',
+      icon: 'AudioWaveform',
       labelKey: 'advancedEditing.resampleRoad',
       tooltipKey: 'advancedEditing.resampleRoadTooltip',
       group: 'action',

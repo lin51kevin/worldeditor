@@ -1,12 +1,19 @@
 import { findClosestSOnRoad, resampleRoad, splitRoadAt, weldRoads } from './roadEdit';
 import type { Road, Geometry, GeometryType, LaneSection } from '../services/platform';
 
-function makeRoad(geo: Geometry[], length: number, lane_sections?: LaneSection[]): Road {
+function makeRoad(
+  geo: Geometry[],
+  length: number,
+  lane_sections?: LaneSection[],
+  overrides?: Partial<Road>,
+): Road {
   return {
     id: 'r1',
     name: 'test',
     length,
+    junction_id: null,
     plan_view: geo,
+    elevation_profile: [],
     lane_sections: lane_sections ?? [
       {
         s: 0,
@@ -26,8 +33,17 @@ function makeRoad(geo: Geometry[], length: number, lane_sections?: LaneSection[]
       },
     ],
     link: { predecessor: null, successor: null },
-    type: '',
-    junction: '',
+    ...overrides,
+  };
+}
+
+function makeLaneSection(s: number, width: number): LaneSection {
+  return {
+    s,
+    single_side: false,
+    left: [],
+    center: [],
+    right: [{ id: -1, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: width, b: 0, c: 0, d: 0 }], road_marks: [] }],
   };
 }
 
@@ -181,6 +197,146 @@ describe('splitRoadAt', () => {
     expect(road2.plan_view).toHaveLength(1);
     expect(road2.plan_view[0].s).toBe(0);
     expect(road2.plan_view[0].x).toBeCloseTo(50, 4);
+  });
+});
+
+describe('weldRoads', () => {
+  it('welds compatible end-to-start roads without changing direction', () => {
+    const road1 = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 50, geo_type: 'Line' }],
+      50,
+      [makeLaneSection(0, 3.5)],
+      { id: 'r1', name: 'Road 1' },
+    );
+    const road2 = makeRoad(
+      [{ s: 0, x: 50, y: 0, hdg: 0, length: 30, geo_type: 'Line' }],
+      30,
+      [makeLaneSection(0, 3.5)],
+      { id: 'r2', name: 'Road 2' },
+    );
+
+    const welded = weldRoads(road1, road2);
+
+    expect(welded.length).toBe(80);
+  expect(welded.junction_id).toBeNull();
+    expect(welded.plan_view).toHaveLength(2);
+    expect(welded.plan_view[1]?.s).toBe(50);
+    expect(welded.plan_view[1]?.x).toBeCloseTo(50, 6);
+    expect(welded.plan_view[1]?.hdg).toBeCloseTo(0, 6);
+  });
+
+  it('auto-reverses road2 when its end matches the weld point', () => {
+    const road1 = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 50, geo_type: 'Line' }],
+      50,
+      [makeLaneSection(0, 3.5)],
+      { id: 'r1', name: 'Road 1' },
+    );
+    const road2 = makeRoad(
+      [{ s: 0, x: 80, y: 0, hdg: Math.PI, length: 30, geo_type: 'Line' }],
+      30,
+      [makeLaneSection(0, 3.5), makeLaneSection(10, 3.5)],
+      { id: 'r2', name: 'Road 2' },
+    );
+
+    const welded = weldRoads(road1, road2);
+
+    expect(welded.plan_view[1]?.x).toBeCloseTo(50, 6);
+    expect(welded.plan_view[1]?.y).toBeCloseTo(0, 6);
+    expect(welded.plan_view[1]?.hdg).toBeCloseTo(0, 6);
+    expect(welded.lane_sections.map((section) => section.s)).toEqual([0, 50, 70]);
+  });
+
+  it('throws when road endpoints are too far apart', () => {
+    const road1 = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 50, geo_type: 'Line' }],
+      50,
+      [makeLaneSection(0, 3.5)],
+    );
+    const road2 = makeRoad(
+      [{ s: 0, x: 55, y: 2, hdg: 0, length: 30, geo_type: 'Line' }],
+      30,
+      [makeLaneSection(0, 3.5)],
+      { id: 'r2' },
+    );
+
+    expect(() => weldRoads(road1, road2)).toThrow(/too far apart/i);
+  });
+
+  it('uses the larger default weld tolerance for near-miss endpoints', () => {
+    const road1 = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 50, geo_type: 'Line' }],
+      50,
+      [makeLaneSection(0, 3.5)],
+      { id: 'r1' },
+    );
+    const road2 = makeRoad(
+      [{ s: 0, x: 50.35, y: 0, hdg: 0, length: 30, geo_type: 'Line' }],
+      30,
+      [makeLaneSection(0, 3.5)],
+      { id: 'r2' },
+    );
+
+    expect(() => weldRoads(road1, road2)).not.toThrow();
+  });
+
+  it('accepts custom weld tolerances', () => {
+    const road1 = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 50, geo_type: 'Line' }],
+      50,
+      [makeLaneSection(0, 3.5)],
+      { id: 'r1' },
+    );
+    const road2 = makeRoad(
+      [{ s: 0, x: 50, y: 0, hdg: Math.PI / 8, length: 30, geo_type: 'Line' }],
+      30,
+      [makeLaneSection(0, 3.5)],
+      { id: 'r2' },
+    );
+
+    expect(() => weldRoads(road1, road2, { headingTolerance: Math.PI / 6 })).not.toThrow();
+    expect(() => weldRoads(road1, road2, { headingTolerance: Math.PI / 16 })).toThrow(/headings are incompatible/i);
+  });
+
+  it('throws when road headings are incompatible at the weld point', () => {
+    const road1 = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 50, geo_type: 'Line' }],
+      50,
+      [makeLaneSection(0, 3.5)],
+    );
+    const road2 = makeRoad(
+      [{ s: 0, x: 50, y: 0, hdg: Math.PI / 2, length: 30, geo_type: 'Line' }],
+      30,
+      [makeLaneSection(0, 3.5)],
+      { id: 'r2' },
+    );
+
+    expect(() => weldRoads(road1, road2)).toThrow(/headings are incompatible/i);
+  });
+
+  it('throws when lane topologies are incompatible at the weld point', () => {
+    const road1 = makeRoad(
+      [{ s: 0, x: 0, y: 0, hdg: 0, length: 50, geo_type: 'Line' }],
+      50,
+      [makeLaneSection(0, 3.5)],
+    );
+    const road2 = makeRoad(
+      [{ s: 0, x: 50, y: 0, hdg: 0, length: 30, geo_type: 'Line' }],
+      30,
+      [{
+        s: 0,
+        single_side: false,
+        left: [],
+        center: [],
+        right: [
+          { id: -1, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] },
+          { id: -2, lane_type: 'Driving', level: 0, link: null, width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }], road_marks: [] },
+        ],
+      }],
+      { id: 'r2' },
+    );
+
+    expect(() => weldRoads(road1, road2)).toThrow(/lane layouts are incompatible/i);
   });
 });
 

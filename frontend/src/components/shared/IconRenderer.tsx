@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  AudioWaveform,
   Scissors,
   Link2,
   Ruler,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 
 const iconMap: Record<string, React.FC<{ size?: number; className?: string }>> = {
+  AudioWaveform,
   Scissors,
   Link2,
   Ruler,

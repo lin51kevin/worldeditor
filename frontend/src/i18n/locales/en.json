@@ -697,6 +697,7 @@
     "roadTooShort": "Road is too short to split (minimum 2 m).",
     "splitPointTooClose": "Choose a split point away from the road ends.",
     "splitPointFailed": "Failed to split road: ",
+    "weldRoadsFailed": "Failed to weld roads: ",
     "selectTwoRoads": "Please select at least 2 roads to weld.",
     "requiresWasm": "This feature requires WASM backend support and will be available in a future release.",
     "placeSignal": "Place Signal",
@@ -833,6 +834,7 @@
       "drawArc": "Draw arc road",
       "drawSpiral": "Draw spiral road",
       "drawSpline": "Draw spline road",
+      "geometryEdit": "Enter geometry edit",
       "moveRoad": "Move road",
       "rotateRoad": "Rotate road",
       "splitRoadAtPoint": "Split selected road at cursor point",
@@ -843,9 +845,12 @@
       "paste": "Paste from clipboard",
       "delete": "Delete selected",
       "zoomFit": "Zoom to fit",
+      "selectMode": "Return to select mode",
       "escape": "Cancel / return to select",
       "inspector": "Toggle inspector panel",
       "leftPanel": "Toggle layer panel",
+      "outputPanel": "Toggle output panel",
+      "validationPanel": "Toggle validation panel",
       "help": "Show this shortcut help"
     }
   },
