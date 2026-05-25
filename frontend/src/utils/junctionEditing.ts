@@ -397,6 +397,49 @@ export function removeJunctionConnectionFromProject(
   };
 }
 
+export function cleanupJunctionsForRemovedRoads(project: Project, removedRoadIds: string[]): Project {
+  if (removedRoadIds.length === 0) {
+    return project;
+  }
+
+  const survivingRoadIds = new Set(project.roads.map((road) => road.id));
+
+  const retainedJunctions = project.junctions
+    .map((junction) => ({
+      ...junction,
+      connections: junction.connections.filter((connection) => (
+        survivingRoadIds.has(connection.incoming_road)
+        && survivingRoadIds.has(connection.connecting_road)
+      )),
+    }))
+    .filter((junction) => junction.connections.length > 0);
+
+  const removedJunctionIds = new Set(
+    project.junctions
+      .filter((junction) => !retainedJunctions.some((retained) => retained.id === junction.id))
+      .map((junction) => junction.id),
+  );
+
+  return {
+    ...project,
+    junctions: retainedJunctions,
+    roads: project.roads.map((road) => ({
+      ...road,
+      junction_id: road.junction_id && removedJunctionIds.has(road.junction_id) ? null : road.junction_id,
+      link: road.link
+        ? {
+          predecessor: road.link.predecessor?.element_type === 'Junction' && removedJunctionIds.has(road.link.predecessor.element_id)
+            ? null
+            : road.link.predecessor,
+          successor: road.link.successor?.element_type === 'Junction' && removedJunctionIds.has(road.link.successor.element_id)
+            ? null
+            : road.link.successor,
+        }
+        : road.link,
+    })),
+  };
+}
+
 export function addConnectionBetweenRoads(
   project: Project,
   junctionId: string,
