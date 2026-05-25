@@ -3,7 +3,7 @@ import { ViewportRenderer } from '../viewport/renderer';
 import { emitCursorMove } from '../viewport/cursorEvents';
 import { getPlatformService } from '../services';
 import { useProjectStore } from '../stores/projectStore';
-import { useViewportStore } from '../stores/viewportStore';
+import { useViewportStore, type ActiveMode } from '../stores/viewportStore';
 import {
   buildEditableSpline,
   findSplineControlPointHit,
@@ -14,6 +14,15 @@ import {
 import { findNearestSplinePoint } from '../viewport/splineVertexBuilder';
 import { useSplineOperations } from './useSplineOperations';
 import type { SplineKnot } from '../services/platform';
+import {
+  buildGeometryEditPreviewProject,
+  canDeleteSelectedKnot,
+  isKnotControlPoint,
+  recolorVertices,
+  shouldEnterGeometryEditMode,
+  shouldEnterGeometryEditOnDoubleClick,
+} from './geometryEditModeUtils';
+import { mergeFloat32Arrays } from '../components/viewportUtils';
 
 type ViewportStatus = 'loading' | 'ready' | 'unsupported';
 
@@ -22,18 +31,6 @@ type WorldPosition = { x: number; y: number };
 /** Screen-space pixel threshold for inserting a knot by clicking on the curve. */
 const INSERT_KNOT_THRESHOLD_PX = 20;
 
-/** Recolor all vertices in a Float32Array (7 floats per vertex) to the given RGBA. */
-function recolorVertices(data: Float32Array, r: number, g: number, b: number, a: number): Float32Array {
-  const result = new Float32Array(data);
-  for (let i = 0; i < result.length; i += 7) {
-    result[i + 3] = r;
-    result[i + 4] = g;
-    result[i + 5] = b;
-    result[i + 6] = a;
-  }
-  return result;
-}
-
 interface UseGeometryEditModeOptions {
   canvasRef: RefObject<HTMLCanvasElement | null>;
   rendererRef: RefObject<ViewportRenderer | null>;
@@ -41,10 +38,6 @@ interface UseGeometryEditModeOptions {
   pendingCursorRef: MutableRefObject<WorldPosition | null>;
   hoveredControlPointRef: MutableRefObject<SplineControlPoint | null>;
   status: ViewportStatus;
-}
-
-function isDrawMode(mode: string): mode is 'spline' {
-  return mode === 'spline';
 }
 
 /**
@@ -60,6 +53,8 @@ export function useGeometryEditMode({
 }: UseGeometryEditModeOptions) {
   const geometryEditSpline = useViewportStore((state) => state.geometryEditSpline);
   const geometryEditRoadId = useViewportStore((state) => state.geometryEditRoadId);
+  const display = useViewportStore((state) => state.display);
+  const viewMode = useViewportStore((state) => state.viewMode);
   const project = useProjectStore((state) => state.project);
   const { enterGeometryEditMode, finalizeGeometryEdit } = useSplineOperations();
 
@@ -113,15 +108,32 @@ export function useGeometryEditMode({
           return;
         }
         const previewRoad = { ...baseRoad, plan_view: geometries, length: totalLength };
-        const singleProject = { ...currentProject, roads: [previewRoad] };
-        const [singleRoadVerts, singleLaneLineVerts, centerLineVerts, highlightVerts] = await Promise.all([
-          service.generateSingleRoadVertices(previewRoad, resolution, [0.35, 0.35, 0.35, 1.0]),
-          service.generateLaneLineVertices(singleProject, resolution),
-          service.generateCenterLineVertices(singleProject, 2.0),
+        const previewProject = buildGeometryEditPreviewProject(currentProject, display, previewRoad);
+        const lineProject = {
+          ...previewProject,
+          roads: previewProject.roads.filter((road) => !road.junction_id),
+        };
+        const empty = new Float32Array(0);
+        const [roadVerts, laneBoundaryVerts, laneLineVerts, centerLineVerts, highlightVerts] = await Promise.all([
+          service.generateRoadVertices(previewProject, resolution, display.colorMode).catch(() => empty),
+          viewMode !== 'solid'
+            ? service.generateLaneBoundaryVertices(lineProject, resolution).catch(() => empty)
+            : empty,
+          viewMode === 'wire' || display.showLaneLines
+            ? service.generateLaneLineVertices(lineProject, resolution).catch(() => empty)
+            : empty,
+          display.showReferenceLine || viewMode !== 'solid'
+            ? service.generateCenterLineVertices(lineProject, 2.0).catch(() => empty)
+            : empty,
           service.generateSingleRoadVertices(previewRoad, resolution, [0.95, 0.18, 0.18, 0.82]),
         ]);
-        rendererRef.current?.uploadRoadVertices(singleRoadVerts);
-        rendererRef.current?.uploadLaneLineVertices(singleLaneLineVerts);
+        rendererRef.current?.uploadRoadVertices(roadVerts);
+        rendererRef.current?.uploadLaneLineVertices(
+          mergeFloat32Arrays(
+            mergeFloat32Arrays(laneBoundaryVerts, laneLineVerts),
+            centerLineVerts,
+          ),
+        );
         if (highlightVerts.length > 0) {
           rendererRef.current?.uploadHighlightVertices(highlightVerts);
         }
@@ -142,7 +154,7 @@ export function useGeometryEditMode({
         }
       }
     })();
-  }, [isPreviewingRoadRef, rendererRef]);
+  }, [display, isPreviewingRoadRef, rendererRef, viewMode]);
 
   useEffect(() => {
     if (!geometryEditSpline) {
@@ -160,7 +172,7 @@ export function useGeometryEditMode({
     const skipCurve = !!geometryEditRoadId;
     renderer.setSplinePreviewKnots(knots, tangentOverrides, false, skipCurve);
     renderer.refreshSplineMarkers(hoveredControlPointRef.current, selectedEditKnotRef.current);
-  }, [clearGeometryEditHover, geometryEditSpline, geometryEditRoadId, rendererRef, status]);
+  }, [clearGeometryEditHover, geometryEditSpline, geometryEditRoadId, hoveredControlPointRef, rendererRef, status]);
 
   // ── Sync geometry edit spline on undo/redo ──────────────────────────────
   // When the project changes externally (undo/redo), re-derive the editing
@@ -240,13 +252,47 @@ export function useGeometryEditMode({
         return;
       }
 
-      // ── E: enter geometry edit mode ──────────────────────────────────────
-      if ((event.key === 'e' || event.key === 'E') && !event.ctrlKey && !event.metaKey && !event.altKey) {
-        if (viewState.geometryEditRoadId || isDrawMode(viewState.editMode) || viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
+      // ── V / M / R / S while in geometry edit: finalize and switch mode ────
+      // Set the target editMode directly and stop propagation so
+      // useKeyboardShortcuts doesn't re-handle (and potentially toggle) it.
+      if (
+        viewState.geometryEditRoadId &&
+        !event.ctrlKey && !event.metaKey && !event.altKey
+      ) {
+        const modeForKey: Record<string, ActiveMode> = {
+          'v': 'default', 'V': 'default',
+          'm': 'move-road', 'M': 'move-road',
+          'r': 'rotate-road', 'R': 'rotate-road',
+          's': 'spline', 'S': 'spline',
+        };
+        const targetMode = modeForKey[event.key];
+        if (targetMode !== undefined) {
+          void finalizeGeometryEdit();
+          // Apply the target mode atomically
+          const vs = useViewportStore.getState();
+          if (targetMode === 'spline') {
+            vs.clearSplineKnots();
+          }
+          if (targetMode !== 'default') {
+            vs.setEditMode(targetMode);
+          }
+          event.preventDefault();
+          event.stopImmediatePropagation();
           return;
         }
+      }
+
+      // ── E: enter geometry edit mode ──────────────────────────────────────
+      if (shouldEnterGeometryEditMode(event.key, event, viewState, useProjectStore.getState().selectedRoadId)) {
         const { selectedRoadId } = useProjectStore.getState();
         if (selectedRoadId) {
+          // Clean up current mode before entering geometry edit
+          if (viewState.editMode === 'spline') {
+            viewState.clearSplineKnots();
+          }
+          if (viewState.editMode !== 'default') {
+            viewState.setEditMode('default');
+          }
           void enterGeometryEditMode(selectedRoadId);
         }
         return;
@@ -256,10 +302,7 @@ export function useGeometryEditMode({
       if ((event.key === 'Delete' || event.key === 'Backspace') && viewState.geometryEditRoadId) {
         const sel = selectedEditKnotRef.current;
         const spline = viewState.geometryEditSpline;
-        if (!sel || sel.type !== 'knot' || !spline) return;
-        // Cannot delete first or last knot, and must keep at least 2 knots.
-        if (sel.index === 0 || sel.index === spline.knots.length - 1) return;
-        if (spline.knots.length <= 2) return;
+        if (!isKnotControlPoint(sel) || !spline || !canDeleteSelectedKnot(sel, spline)) return;
 
         const newKnots = spline.knots.filter((_, i) => i !== sel.index);
         const updatedSpline = { ...spline, knots: newKnots };
@@ -275,7 +318,7 @@ export function useGeometryEditMode({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [enterGeometryEditMode, finalizeGeometryEdit, previewEditedRoad]);
+  }, [enterGeometryEditMode, finalizeGeometryEdit, previewEditedRoad, rendererRef]);
 
   const handleGeometryEditMouseMove = useCallback(async (worldPos: WorldPosition, canvas: HTMLCanvasElement, renderer: ViewportRenderer): Promise<boolean> => {
     const viewState = useViewportStore.getState();
@@ -286,43 +329,56 @@ export function useGeometryEditMode({
 
     const drag = viewState.draggingKnot;
     if (drag) {
-      let updatedSpline = spline;
       if (drag.index >= 0 && drag.index < spline.knots.length) {
-        if (drag.type === 'knot') {
-          try {
-            const service = await getPlatformService();
-            updatedSpline = await service.moveSplineKnot(
-              spline,
-              drag.index,
-              worldPos.x,
-              worldPos.y,
-              spline.knots[drag.index]!.position[2],
-            );
-          } catch {
-            syncCursor(worldPos);
-            return true;
-          }
-        } else {
-          const tangentOut = tangentFromHandlePosition(
-            spline.knots[drag.index]!.position,
-            worldPos,
-            drag.type,
-          );
-          updatedSpline = {
-            ...spline,
-            knots: spline.knots.map((knot, index) => (
-              index === drag.index
-                ? {
-                    ...knot,
-                    // Rust spline fitting expects manual in/out tangents to be
-                    // stored with the same direction at a knot.
-                    tangent_in: tangentOut,
-                    tangent_out: tangentOut,
-                    tangent_mode: 'Manual' as const,
-                  }
-                : knot
-            )),
-          };
+        const draggedKnot = spline.knots[drag.index];
+        if (!draggedKnot) {
+          syncCursor(worldPos);
+          return true;
+        }
+
+        const updatedSpline =
+          drag.type === 'knot'
+            ? await (async () => {
+                try {
+                  const service = await getPlatformService();
+                  return await service.moveSplineKnot(
+                    spline,
+                    drag.index,
+                    worldPos.x,
+                    worldPos.y,
+                    draggedKnot.position[2],
+                  );
+                } catch (error) {
+                  console.error('[Viewport] Failed to move spline knot:', error);
+                  syncCursor(worldPos);
+                  return null;
+                }
+              })()
+            : (() => {
+                const tangentOut = tangentFromHandlePosition(
+                  draggedKnot.position,
+                  worldPos,
+                  drag.type,
+                );
+                return {
+                  ...spline,
+                  knots: spline.knots.map((knot, index) => (
+                    index === drag.index
+                      ? {
+                          ...knot,
+                          // Rust spline fitting expects manual in/out tangents to be
+                          // stored with the same direction at a knot.
+                          tangent_in: tangentOut,
+                          tangent_out: tangentOut,
+                          tangent_mode: 'Manual' as const,
+                        }
+                      : knot
+                  )),
+                };
+              })();
+
+        if (!updatedSpline) {
+          return true;
         }
 
         // Always update the spline state so control point markers track the mouse.
@@ -484,10 +540,17 @@ export function useGeometryEditMode({
   }, [canvasRef, hoveredControlPointRef, rendererRef]);
 
   const handleRoadDoubleClick = useCallback((roadId: string | null, detail: number): boolean => {
-    const { geometryEditRoadId } = useViewportStore.getState();
+    const viewState = useViewportStore.getState();
     const { selectedRoadId } = useProjectStore.getState();
-    if (geometryEditRoadId || detail < 2 || !roadId || roadId !== selectedRoadId) {
+    if (!roadId || !shouldEnterGeometryEditOnDoubleClick(viewState.geometryEditRoadId, roadId, detail, selectedRoadId)) {
       return false;
+    }
+    // Clean up current mode before entering geometry edit
+    if (viewState.editMode === 'spline') {
+      viewState.clearSplineKnots();
+    }
+    if (viewState.editMode !== 'default') {
+      viewState.setEditMode('default');
     }
     void enterGeometryEditMode(roadId);
     return true;
