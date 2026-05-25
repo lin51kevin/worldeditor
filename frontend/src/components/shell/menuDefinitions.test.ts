@@ -14,11 +14,22 @@ vi.mock('../../utils/dialog', () => ({
   showAlert: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../buildInfo', () => ({
+  buildInfo: {
+    version: '0.2.0',
+    buildTime: '2026-05-26T07:00:00.000Z',
+    gitCommit: 'abc1234',
+    gitBranch: 'main',
+  },
+}));
+
 const t = (key: string) => ({
   'app.title': 'WorldEditor',
   'dialog.version': 'Version',
   'dialog.aboutTitle': 'About',
   'dialog.buildDate': 'Build Date',
+  'dialog.commitId': 'Commit',
+  'dialog.branch': 'Branch',
   'dialog.versionTitle': 'Version Info',
   'dialog.userManualContent': 'Manual content',
   'dialog.userManualTitle': 'User Manual',
@@ -52,12 +63,17 @@ describe('menuDefinitions helpers', () => {
 
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('WorldEditor'),
+      expect.stringContaining('0.2.0'),
+      'About',
+    );
+    expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('abc1234'),
       'About',
     );
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining('Build Date'),
+      expect.stringContaining('0.2.0'),
       'Version Info',
     );
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(3, 'Manual content', 'User Manual');

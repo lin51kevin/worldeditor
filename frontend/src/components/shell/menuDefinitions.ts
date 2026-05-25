@@ -1,5 +1,6 @@
 import type { MenuItemContrib } from '../../stores/pluginContribStore';
 import { showAlert } from '../../utils/dialog';
+import { buildInfo } from '../../buildInfo';
 
 export type TranslateFn = (key: string) => string;
 
@@ -19,17 +20,25 @@ export interface Menu {
 }
 
 export async function showAbout(t: TranslateFn) {
-  const version = '1.8.0430';
-  await showAlert(`${t('app.title')}\n\n${t('dialog.version')}: ${version}`, t('dialog.aboutTitle'));
+  const lines = [
+    `${t('app.title')}`,
+    '',
+    `${t('dialog.version')}: ${buildInfo.version}`,
+    `${t('dialog.buildDate')}: ${buildInfo.buildTime.split('T')[0]}`,
+    `${t('dialog.commitId')}: ${buildInfo.gitCommit}`,
+    `${t('dialog.branch')}: ${buildInfo.gitBranch}`,
+  ];
+  await showAlert(lines.join('\n'), t('dialog.aboutTitle'));
 }
 
 export async function showVersion(t: TranslateFn) {
-  const version = '1.8.0430';
-  const buildDate = '2024-12-12';
-  await showAlert(
-    `${t('dialog.version')}: ${version}\n${t('dialog.buildDate')}: ${buildDate}`,
-    t('dialog.versionTitle'),
-  );
+  const lines = [
+    `${t('dialog.version')}: ${buildInfo.version}`,
+    `${t('dialog.buildDate')}: ${buildInfo.buildTime.split('T')[0]}`,
+    `${t('dialog.commitId')}: ${buildInfo.gitCommit}`,
+    `${t('dialog.branch')}: ${buildInfo.gitBranch}`,
+  ];
+  await showAlert(lines.join('\n'), t('dialog.versionTitle'));
 }
 
 export async function showUserManual(t: TranslateFn) {
