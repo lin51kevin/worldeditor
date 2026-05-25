@@ -15,10 +15,13 @@ export const DRAG_THRESHOLD_SQ = 9;
 export const HOVER_HIGHLIGHT_COLOR: [number, number, number, number] = [0.2, 0.8, 1.0, 1.0];
 export const SELECT_HIGHLIGHT_COLOR: [number, number, number, number] = [1.0, 0.76, 0.0, 1.0];
 export const MULTI_SELECT_HIGHLIGHT_COLOR: [number, number, number, number] = [1.0, 0.55, 0.0, 1.0];
+export const PREDECESSOR_HIGHLIGHT_COLOR: [number, number, number, number] = [0.2, 0.6, 1.0, 0.75];
+export const SUCCESSOR_HIGHLIGHT_COLOR: [number, number, number, number] = [0.2, 1.0, 0.4, 0.75];
 export const GRID_COLOR: [number, number, number, number] = [0.35, 0.35, 0.35, 0.5];
 export const AXIS_COLOR_X: [number, number, number, number] = [0.9, 0.3, 0.3, 1.0];
 export const AXIS_COLOR_Y: [number, number, number, number] = [0.3, 0.9, 0.3, 1.0];
 export const HOVER_HIGHLIGHT_Z_LIFT = 0.03;
+export const LINK_HIGHLIGHT_Z_LIFT = 0.02;
 
 // ── Types ─────────────────────────────────────────────────────────────────
 

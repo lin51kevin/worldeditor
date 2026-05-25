@@ -846,6 +846,7 @@
       "delete": "Delete selected",
       "zoomFit": "Zoom to fit",
       "selectMode": "Return to select mode",
+      "toggleRoadLinks": "Toggle predecessor/successor highlight",
       "escape": "Cancel / return to select",
       "inspector": "Toggle inspector panel",
       "leftPanel": "Toggle layer panel",

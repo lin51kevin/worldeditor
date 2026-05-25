@@ -2,16 +2,17 @@
  * useKeyboardShortcuts — centralised keyboard shortcut handler.
  *
  * Tool shortcuts:
- *   Drawing modes  — P (spiral) · S (spline)
+ *   Drawing modes  — A (arc) · P (spiral) · S (spline)
  *   Transform      — M (move-road, toggle) · R (rotate-road, toggle) · X (split, toggle)
  *   Universal      — Escape (smart cancel) · Delete/Backspace (delete) · F (zoom-to-fit)
- *   Panels         — I (inspector) · Ctrl+B (left panel) · ? (help)
+ *   Panels         — I (inspector) · Ctrl+B/Ctrl+J (panels) · / or ? (help)
  *
  * Escape behaviour in draw modes (spline):
  *   1st press — clears in-progress knots (cancels current stroke, stays in mode)
  *   2nd press — returns to default select mode
  */
 import { useEffect } from 'react';
+import { isShortcutHelpTrigger } from '../constants/shortcutHelp';
 import { useProjectStore } from '../stores/projectStore';
 import { isDrawMode, useViewportStore } from '../stores/viewportStore';
 import type { ActiveMode } from '../stores/viewportStore';
@@ -185,11 +186,17 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // ?: open shortcut help
-      // Use both key === '?' and code-based check (Slash + Shift) to handle
-      // cases where a Chinese IME produces a full-width ？ instead of ASCII ?.
-      // event.code refers to the physical key regardless of IME state.
-      if (e.key === '?' || (e.code === 'Slash' && e.shiftKey)) {
+      // T: toggle road link (predecessor/successor) highlight
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        useViewportStore.getState().toggleRoadLinks();
+        return;
+      }
+
+      // / or ?: open shortcut help. Match both printable values and the
+      // physical Slash key so layouts/IME variants stay consistent.
+      if (isShortcutHelpTrigger(e)) {
+        e.preventDefault();
         onShowShortcutHelp(true);
         return;
       }

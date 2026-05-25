@@ -25,6 +25,7 @@ import { useLaneLineEdit } from '../hooks/useLaneLineEdit';
 import { useViewportKeyboard } from '../hooks/useViewportKeyboard';
 import { useViewportMeshes } from '../hooks/useViewportMeshes';
 import { useSelectionHighlight } from '../hooks/useSelectionHighlight';
+import { useRoadLinkHighlight } from '../hooks/useRoadLinkHighlight';
 import { useMeasureOverlay } from '../hooks/useMeasureOverlay';
 import { useViewportTouch } from '../hooks/useViewportTouch';
 import { useViewportHoverPick } from '../hooks/useViewportHoverPick';
@@ -194,6 +195,9 @@ export function Viewport() {
 
   // ── Selection highlight ──
   useSelectionHighlight({ rendererRef, status });
+
+  // ── Road link (predecessor/successor) highlight ──
+  useRoadLinkHighlight({ rendererRef, status });
 
   // Throttle Zustand cursor updates to once per animation frame
   useEffect(() => {

@@ -118,6 +118,7 @@ interface EditorViewState {
   showGrid: boolean;
   showAxis: boolean;
   showHoverHighlight: boolean;
+  showRoadLinks: boolean;
 
   // Edit mode
   editMode: ActiveMode;
@@ -198,6 +199,7 @@ interface EditorViewState {
   toggleGrid: () => void;
   toggleAxis: () => void;
   toggleHoverHighlight: () => void;
+  toggleRoadLinks: () => void;
   setEditMode: (m: ActiveMode) => void;
   setSelectionMode: (mode: SelectionMode) => void;
   setSplineTemplateId: (templateId: string) => void;
@@ -382,6 +384,7 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   showGrid: storedPrefs.showGrid ?? true,
   showAxis: storedPrefs.showAxis ?? true,
   showHoverHighlight: false,
+  showRoadLinks: false,
   editMode: 'default',
   selectionMode: storedPrefs.selectionMode ?? 'road',
   splineTemplateId: 'tpl:road:single',
@@ -421,6 +424,7 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   toggleGrid: () => set((state) => { const showGrid = !state.showGrid; savePrefs({ showGrid }); return { showGrid }; }),
   toggleAxis: () => set((state) => { const showAxis = !state.showAxis; savePrefs({ showAxis }); return { showAxis }; }),
   toggleHoverHighlight: () => set((state) => ({ showHoverHighlight: !state.showHoverHighlight })),
+  toggleRoadLinks: () => set((state) => ({ showRoadLinks: !state.showRoadLinks })),
   setEditMode: (editMode) => set({ editMode }),
   setSelectionMode: (selectionMode) => { set({ selectionMode }); savePrefs({ selectionMode }); },
   setSplineTemplateId: (splineTemplateId) => set({ splineTemplateId }),

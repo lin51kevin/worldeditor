@@ -846,6 +846,7 @@
       "delete": "删除选中",
       "zoomFit": "缩放到全部",
       "selectMode": "返回选择模式",
+      "toggleRoadLinks": "切换前后继道路高亮",
       "escape": "取消 / 返回选择模式",
       "inspector": "切换检查器面板",
       "leftPanel": "切换图层面板",

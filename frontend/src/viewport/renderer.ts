@@ -94,6 +94,9 @@ export class ViewportRenderer {
   // Selection highlight mesh
   private highlightMeshes: RenderableMesh[] = [];
 
+  // Road link (predecessor/successor) highlight mesh
+  private linkHighlightMeshes: RenderableMesh[] = [];
+
   // Hover highlight mesh (shown when mouse hovers over a road/junction)
   private hoverMeshes: RenderableMesh[] = [];
 
@@ -341,6 +344,26 @@ export class ViewportRenderer {
     this.markSceneDirty();
   }
 
+  /** Upload road link (predecessor/successor) highlight vertex data. */
+  uploadLinkHighlightVertices(vertexData: Float32Array): void {
+    if (vertexData.length === 0) {
+      this.clearLinkHighlight();
+      return;
+    }
+    this.uploadMeshData(this.linkHighlightMeshes, vertexData);
+    this.markSceneDirty();
+  }
+
+  /** Clear the road link highlight mesh. */
+  clearLinkHighlight(): void {
+    if (this.linkHighlightMeshes.length === 0) return;
+    for (const m of this.linkHighlightMeshes) {
+      m.vertexBuffer.destroy();
+    }
+    this.linkHighlightMeshes = [];
+    this.markSceneDirty();
+  }
+
   /** Upload hover highlight vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
   uploadHoverVertices(vertexData: Float32Array): void {
     if (vertexData.length === 0) {
@@ -563,6 +586,7 @@ export class ViewportRenderer {
     this.disposeMeshes(this.overlayMeshes);
     this.markerRenderer.dispose();
     this.disposeMeshes(this.highlightMeshes);
+    this.disposeMeshes(this.linkHighlightMeshes);
     this.disposeMeshes(this.hoverMeshes);
     this.depthTexture?.destroy();
     this.msaaTexture?.destroy();
@@ -665,6 +689,19 @@ export class ViewportRenderer {
       pass.setPipeline(this.highlightPipeline);
       pass.setBindGroup(0, this.basicBindGroup);
       const batches = batchMeshes(this.hoverMeshes, 'highlight');
+      for (const batch of batches) {
+        for (const mesh of batch.meshes) {
+          pass.setVertexBuffer(0, mesh.vertexBuffer);
+          pass.draw(mesh.vertexCount);
+        }
+      }
+    }
+
+    // Draw road link (predecessor/successor) highlight
+    if (this.linkHighlightMeshes.length > 0) {
+      pass.setPipeline(this.highlightPipeline);
+      pass.setBindGroup(0, this.basicBindGroup);
+      const batches = batchMeshes(this.linkHighlightMeshes, 'highlight');
       for (const batch of batches) {
         for (const mesh of batch.meshes) {
           pass.setVertexBuffer(0, mesh.vertexBuffer);

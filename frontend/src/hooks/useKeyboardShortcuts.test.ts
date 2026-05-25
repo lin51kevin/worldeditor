@@ -152,6 +152,16 @@ describe('useKeyboardShortcuts — universal shortcuts', () => {
     press('?');
     expect(config.onShowShortcutHelp).toHaveBeenCalledWith(true);
   });
+
+  it('/ → opens shortcut help', () => {
+    press('/');
+    expect(config.onShowShortcutHelp).toHaveBeenCalledWith(true);
+  });
+
+  it('Slash key with IME-style key value still opens shortcut help', () => {
+    press('？', { code: 'Slash' });
+    expect(config.onShowShortcutHelp).toHaveBeenCalledWith(true);
+  });
 });
 
 describe('useKeyboardShortcuts — suppressed inside editable targets', () => {
