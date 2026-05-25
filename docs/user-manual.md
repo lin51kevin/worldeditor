@@ -4,7 +4,7 @@
 
 WorldEditor is an autonomous driving road network editor that supports creating, editing, and exporting OpenDRIVE-format HD maps. It runs as a native desktop application (Tauri) and in web browsers (WASM).
 
-**Current Version**: 0.1.1 (Phase 1 — Feature Development)
+**Current Version**: 0.2.0 (Phase 1 — Feature Development)
 
 ### Feature Status Legend
 
@@ -112,7 +112,14 @@ Throughout this manual, features are marked with their current status:
 
 - **File > Open File... (Ctrl+O)** — open an OpenDRIVE `.xodr` file
 - **File > Open Recent Files...** — open a recently used file directly without a dialog
+- **Drag and drop** — drag `.xodr` files into the viewport to open
+- A loading progress bar appears during parsing for large files (uses Web Worker for non-blocking parsing)
 - If a recent file no longer exists, it will be removed from the list and a notification will appear
+
+### Closing Files
+
+- **File > Close File (Ctrl+W)** — close the current project
+- If unsaved changes exist, a confirmation dialog will prompt to save or discard
 
 ### Saving Files
 
@@ -267,6 +274,70 @@ Interactive 3D transform handles for moving and rotating objects in the viewport
 
 - Switch to rotation mode via the toolbar or Edit menu
 - Drag the colored rings to rotate around an axis
+
+---
+
+## Bridge & Tunnel Management ✅
+
+Mark road segments as bridges or tunnels.
+
+### Creating a Bridge
+
+1. Select a road in Road Edit mode
+2. In the **Property Panel**, find the **Bridge / Tunnel** section
+3. Click **Add Bridge** and specify the start/end station (s-range)
+4. The viewport highlights the bridge segment with elevated rendering
+
+### Creating a Tunnel
+
+1. Same as Bridge, but click **Add Tunnel**
+2. Tunnel segments render with a semi-transparent overlay
+
+### Properties
+
+- **s_start / s_end**: Station range of the bridge/tunnel
+- **type**: Bridge or Tunnel
+- **name**: Optional label
+
+---
+
+## Junction Templates ✅
+
+Automatic generation of junction connector roads with configurable topologies.
+
+### Available Templates
+
+| Template | Description |
+|----------|-------------|
+| T-Junction | 3-arm intersection with driving connectors |
+| Cross Junction (4-way) | 4-arm intersection with full pair connectivity |
+| Roundabout | Ring road with entry/exit connectors per arm |
+| Roundabout 4 | 4-arm roundabout with arc-gap architecture |
+
+### Placing a Junction
+
+1. Open the **Template Panel** (left side)
+2. Select a junction template
+3. Click in the viewport to place — connector roads are auto-generated
+4. Each placement is a single undo entry
+
+### Connector Roads
+
+- Connectors are automatically generated per-lane matching the C# reference
+- Arm placement follows radial positioning for T/Cross topologies
+- Roundabouts use arc-gap architecture with ring shoulder lanes
+
+---
+
+## Shape Vector Layer Editing ✅
+
+Draw and edit custom vector shapes on the map (polygons, rectangles, circles).
+
+1. Open the **Shape Editor** from the Tools menu
+2. Select a shape tool (polygon, rectangle, circle)
+3. Click in the viewport to place vertices
+4. Close the shape by clicking the first vertex or pressing Enter
+5. Edit existing shapes by selecting and dragging vertices
 
 ---
 
