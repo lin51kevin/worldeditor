@@ -129,6 +129,8 @@
     "splineDraw": "绘制样条",
     "moveRoad": "移动道路",
     "rotateRoad": "旋转道路",
+    "moveElement": "移动元素 [M]",
+    "rotateElement": "旋转元素 [R]",
     "toggleInspector": "切换检查器",
     "toggleLeftPanel": "切换左面板",
     "toggleOutputPanel": "切换输出面板",

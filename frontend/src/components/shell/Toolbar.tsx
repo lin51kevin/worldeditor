@@ -33,6 +33,7 @@ export const Toolbar = memo(function Toolbar() {
   } = useViewportStore();
 
   const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
+  const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
 
   const { toolbarButtons } = usePluginContribStore();
 
@@ -113,8 +114,12 @@ export const Toolbar = memo(function Toolbar() {
           className={`toolbar-btn toolbar-toggle ${editMode === 'move-road' ? 'active' : ''}`}
           onClick={handleMoveRoad}
           disabled={!selectedRoadId}
-          title={t('toolPanel.moveRoad', 'Move Road')}
-          aria-label={t('toolPanel.moveRoad', 'Move Road')}
+          title={selectedSceneNode?.type === 'signal' || selectedSceneNode?.type === 'object'
+            ? t('toolPanel.moveElement', 'Move Element [M]')
+            : t('toolPanel.moveRoad', 'Move Road [M]')}
+          aria-label={selectedSceneNode?.type === 'signal' || selectedSceneNode?.type === 'object'
+            ? t('toolPanel.moveElement', 'Move Element [M]')
+            : t('toolPanel.moveRoad', 'Move Road [M]')}
           aria-pressed={editMode === 'move-road'}
         >
           <Move size={16} className="tb-icon" />
@@ -123,8 +128,12 @@ export const Toolbar = memo(function Toolbar() {
           className={`toolbar-btn toolbar-toggle ${editMode === 'rotate-road' ? 'active' : ''}`}
           onClick={handleRotateRoad}
           disabled={!selectedRoadId}
-          title={t('toolPanel.rotateRoad', 'Rotate Road')}
-          aria-label={t('toolPanel.rotateRoad', 'Rotate Road')}
+          title={selectedSceneNode?.type === 'signal' || selectedSceneNode?.type === 'object'
+            ? t('toolPanel.rotateElement', 'Rotate Element [R]')
+            : t('toolPanel.rotateRoad', 'Rotate Road [R]')}
+          aria-label={selectedSceneNode?.type === 'signal' || selectedSceneNode?.type === 'object'
+            ? t('toolPanel.rotateElement', 'Rotate Element [R]')
+            : t('toolPanel.rotateRoad', 'Rotate Road [R]')}
           aria-pressed={editMode === 'rotate-road'}
         >
           <RotateCw size={16} className="tb-icon" />

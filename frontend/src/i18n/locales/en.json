@@ -129,6 +129,8 @@
     "splineDraw": "Draw Spline",
     "moveRoad": "Move Road",
     "rotateRoad": "Rotate Road",
+    "moveElement": "Move Element [M]",
+    "rotateElement": "Rotate Element [R]",
     "toggleInspector": "Toggle Inspector",
     "toggleLeftPanel": "Toggle Left Panel",
     "toggleOutputPanel": "Toggle Output Panel",

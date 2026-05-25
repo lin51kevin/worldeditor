@@ -46,6 +46,28 @@ export interface MoveRotateDragState {
   currentAngle: number;
 }
 
+export interface MoveRotateElementDragState {
+  mode: 'move-road' | 'rotate-road';
+  elementType: 'signal' | 'object';
+  roadId: string;
+  elementId: string;
+  startWorldX: number;
+  startWorldY: number;
+  /** World position of the element (rotation pivot). */
+  elementWorldX: number;
+  elementWorldY: number;
+  /** Road heading at element position (for projecting world delta to s/t). */
+  roadHeading: number;
+  /** Initial values for undo comparison. */
+  initialS: number;
+  initialT: number;
+  initialHdg: number;
+  /** Accumulated values. */
+  currentS: number;
+  currentT: number;
+  currentHdg: number;
+}
+
 export interface SplineControlPoint {
   index: number;
   type: 'knot' | 'in' | 'out';
