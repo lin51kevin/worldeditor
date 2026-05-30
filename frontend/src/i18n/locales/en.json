@@ -868,6 +868,7 @@
   "shortcutHelp": {
     "title": "Keyboard Shortcuts",
     "sections": {
+      "navigation": "Navigation",
       "drawing": "Drawing",
       "transform": "Transform",
       "edit": "Edit",
@@ -875,6 +876,13 @@
       "panels": "Panels"
     },
     "keys": {
+      "flyLook": "Free look (mouselook)",
+      "flyMove": "Fly forward/back/left/right",
+      "flyUpDown": "Fly up/down",
+      "flySprint": "Sprint (fast fly)",
+      "flySpeed": "Adjust fly speed",
+      "orbit": "Orbit around target",
+      "pan": "Pan camera",
       "drawArc": "Draw arc road",
       "drawSpiral": "Draw spiral road",
       "drawSpline": "Draw spline road",

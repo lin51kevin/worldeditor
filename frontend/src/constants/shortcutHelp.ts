@@ -10,6 +10,18 @@ export interface ShortcutHelpSection {
 
 export const SHORTCUT_HELP_SECTIONS: readonly ShortcutHelpSection[] = [
   {
+    titleKey: 'shortcutHelp.sections.navigation',
+    rows: [
+      { keys: ['RMB+Drag'], descKey: 'shortcutHelp.keys.flyLook' },
+      { keys: ['RMB+WASD'], descKey: 'shortcutHelp.keys.flyMove' },
+      { keys: ['RMB+Q/E'], descKey: 'shortcutHelp.keys.flyUpDown' },
+      { keys: ['RMB+Shift'], descKey: 'shortcutHelp.keys.flySprint' },
+      { keys: ['RMB+Scroll'], descKey: 'shortcutHelp.keys.flySpeed' },
+      { keys: ['Alt+LMB'], descKey: 'shortcutHelp.keys.orbit' },
+      { keys: ['MMB+Drag'], descKey: 'shortcutHelp.keys.pan' },
+    ],
+  },
+  {
     titleKey: 'shortcutHelp.sections.drawing',
     rows: [
       { keys: ['A'], descKey: 'shortcutHelp.keys.drawArc' },

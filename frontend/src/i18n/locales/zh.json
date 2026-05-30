@@ -868,6 +868,7 @@
   "shortcutHelp": {
     "title": "键盘快捷键",
     "sections": {
+      "navigation": "导航",
       "drawing": "绘图模式",
       "transform": "变换工具",
       "edit": "编辑操作",
@@ -875,6 +876,13 @@
       "panels": "面板"
     },
     "keys": {
+      "flyLook": "自由视角（鼠标环视）",
+      "flyMove": "飞行前进/后退/左/右",
+      "flyUpDown": "飞行上升/下降",
+      "flySprint": "加速飞行",
+      "flySpeed": "调节飞行速度",
+      "orbit": "围绕目标旋转",
+      "pan": "平移相机",
       "drawArc": "绘制圆弧道路",
       "drawSpiral": "绘制回旋线道路",
       "drawSpline": "绘制样条道路",

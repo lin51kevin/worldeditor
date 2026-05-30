@@ -38,6 +38,7 @@ import {
 } from './pipelineFactory';
 import { CameraController } from './cameraController';
 import { MarkerRenderer } from './markerRenderer';
+import { FlyKeyboardController } from './flyControls';
 import type { RenderableMesh } from './markerRenderer';
 
 export class ViewportRenderer {
@@ -60,6 +61,7 @@ export class ViewportRenderer {
 
   private cameraController = new CameraController();
   private markerRenderer = new MarkerRenderer();
+  private flyKeyboard = new FlyKeyboardController();
 
   // Road meshes
   private meshes: RenderableMesh[] = [];
@@ -82,6 +84,8 @@ export class ViewportRenderer {
   // mesh data uploaded, visibility toggled, or resize).  On a completely static
   // scene the GPU is idle, saving ~85 % of idle power consumption.
   private sceneDirty = true;
+  /** Timestamp of last rendered frame (for fly mode delta-time calculation). */
+  private lastFrameTime = 0;
 
   // Visibility flags for grid/axis
   private showGrid = true;
@@ -550,8 +554,22 @@ export class ViewportRenderer {
     // Wake the loop whenever the camera controller marks the view as dirty.
     this.cameraController.setViewDirtyCallback(() => this.renderLoop?.wakeUp());
     this.renderLoop = createRenderLoop({
-      isDirty: () => this.sceneDirty || this.cameraController.isViewDirty,
+      isDirty: () => {
+        // Keep rendering while fly mode keys are pressed
+        if (this.cameraController.isFlyMode && this.flyKeyboard.isAnyKeyPressed()) {
+          return true;
+        }
+        return this.sceneDirty || this.cameraController.isViewDirty;
+      },
       onRender: () => {
+        const now = performance.now();
+        // Process fly movement each frame
+        if (this.cameraController.isFlyMode && this.flyKeyboard.isAnyKeyPressed()) {
+          const dt = this.lastFrameTime > 0 ? Math.min((now - this.lastFrameTime) / 1000, 0.1) : 0.016;
+          const mv = this.flyKeyboard.getMovementVector();
+          this.cameraController.flyMove(mv.forward, mv.right, mv.up, dt, mv.sprint);
+        }
+        this.lastFrameTime = now;
         this.renderFrame();
       },
       onDirtyCleared: () => {
@@ -579,6 +597,7 @@ export class ViewportRenderer {
     // Mark as disposed first so any in-flight async init() bails out.
     this.disposed = true;
     this.stop();
+    this.flyKeyboard.detach();
     this.disposeMeshes(this.meshes);
     this.disposeMeshes(this.laneLineMeshes);
     this.disposeMeshes(this.overlayMeshes);
@@ -855,6 +874,14 @@ export class ViewportRenderer {
       if (onDocUp)   { document.removeEventListener('mouseup', onDocUp); onDocUp = null; }
     };
 
+    const exitFlyModeCleanup = () => {
+      this.flyKeyboard.detach();
+      // Release pointer lock if active
+      if (document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+      }
+    };
+
     canvas.addEventListener('mousemove', (e) => {
       if (this.cameraController.pointerDragging) return;
       if (this.markerRenderer.knotCount === 0) return;
@@ -881,10 +908,25 @@ export class ViewportRenderer {
       }
 
       if (!this.cameraController.beginPointerDrag(e.button, e)) return;
-      canvas.style.cursor = 'grabbing';
+
+      // Fly mode: request pointer lock and attach keyboard controller
+      if (this.cameraController.isFlyMode) {
+        canvas.style.cursor = 'crosshair';
+        this.flyKeyboard.attach();
+        canvas.requestPointerLock?.();
+        this.renderLoop?.wakeUp();
+      } else {
+        canvas.style.cursor = 'grabbing';
+      }
+
       detachDocListeners();
 
       onDocMove = (me: MouseEvent) => {
+        // In pointer-lock mode, use movementX/Y for raw deltas
+        if (this.cameraController.isFlyMode) {
+          this.cameraController.flyLook(me.movementX, me.movementY);
+          return;
+        }
         if (!this.cameraController.updatePointerDrag(canvas, me)) {
           canvas.style.cursor = '';
           detachDocListeners();
@@ -893,6 +935,9 @@ export class ViewportRenderer {
 
       onDocUp = () => {
         canvas.style.cursor = '';
+        if (this.cameraController.isFlyMode) {
+          exitFlyModeCleanup();
+        }
         this.cameraController.endPointerDrag();
         detachDocListeners();
       };
@@ -922,6 +967,16 @@ export class ViewportRenderer {
   /** True while the user is panning/orbiting with a mouse button held down. */
   get pointerDragging(): boolean {
     return this.cameraController.pointerDragging;
+  }
+
+  /** True while the camera is in free-roaming fly/pilot mode. */
+  get isFlyMode(): boolean {
+    return this.cameraController.isFlyMode;
+  }
+
+  /** Current fly speed in meters per second (for status bar display). */
+  get flySpeed(): number {
+    return this.cameraController.flySpeed;
   }
 
   /** Return the distance from camera to its target point. */

@@ -35,6 +35,19 @@ const DEPTH_CORRECTION = new Float32Array([
 const MIN_CAM_DIST = 0.5;
 const MAX_CAM_DIST = 50000.0;
 
+/** Fly mode: default movement speed in meters per second. */
+const DEFAULT_FLY_SPEED = 20;
+/** Fly mode: minimum fly speed. */
+const MIN_FLY_SPEED = 0.5;
+/** Fly mode: maximum fly speed. */
+const MAX_FLY_SPEED = 5000;
+/** Fly mode: sprint multiplier when Shift is held. */
+const FLY_SPRINT_MULTIPLIER = 3.0;
+/** Fly mode: mouse sensitivity for yaw/pitch. */
+const FLY_LOOK_SENSITIVITY = 0.003;
+/** Fly mode: maximum pitch angle (radians, slightly less than 90°). */
+const FLY_MAX_PITCH = Math.PI / 2 - 0.01;
+
 /** 2D mode: fixed camera height above target (same as C# version). */
 const ORTHO_CAM_HEIGHT = 10000;
 /** 2D mode: minimum pixels per meter (fully zoomed out — shows huge area). */
@@ -49,7 +62,7 @@ const GRID_TARGET_PX = 50;
 /** Camera state, transforms, and orbit/pan/zoom input handling for the viewport. */
 export class CameraController {
   private camera: CameraState = {
-    position: [0, -100, 50],
+    position: [0, -80, 60],
     target: [0, 0, 0],
     up: [0, 0, 1],
     fovY: Math.PI / 4,
@@ -92,6 +105,15 @@ export class CameraController {
   /** 2D pan: camera position at drag start. */
   private panStartPosition: [number, number, number] = [0, 0, 0];
 
+  /** Fly mode: whether the camera is in free-roaming fly mode. */
+  private _flyMode = false;
+  /** Fly mode: yaw angle in radians (horizontal rotation around Z axis). */
+  private _flyYaw = 0;
+  /** Fly mode: pitch angle in radians (vertical tilt, positive = looking up). */
+  private _flyPitch = 0;
+  /** Fly mode: movement speed in meters per second. */
+  private _flySpeed = DEFAULT_FLY_SPEED;
+
   get state(): Readonly<CameraState> {
     return this.camera;
   }
@@ -110,7 +132,7 @@ export class CameraController {
       this.dimensionMode = '2d';
     } else {
       this.camera = {
-        position: [0, -100, 50],
+        position: [0, -80, 60],
         target: [0, 0, 0],
         up: [0, 0, 1],
         fovY: Math.PI / 4,
@@ -217,7 +239,7 @@ export class CameraController {
       const mpp = 1 / this.numPixelsPerMeter;
       const halfWorld = mpp * this.height / 2;
       const perspDist = halfWorld / Math.tan(this.camera.fovY / 2);
-      this._animEndPos = [tx, ty - perspDist * 0.5, tz + perspDist * 0.7];
+      this._animEndPos = [tx, ty - perspDist * 0.6, tz + perspDist * 0.8];
       this._animEndUp = [0, 0, 1];
     }
 
@@ -355,7 +377,7 @@ export class CameraController {
       this.camera.far = ORTHO_CAM_HEIGHT * 2 + 100;
     } else {
       const dist = maxExtent * 0.8;
-      this.camera.position = [cx, cy - dist * 0.5, cz + dist];
+      this.camera.position = [cx, cy - dist * 0.6, cz + dist * 0.8];
       this.camera.up = [0, 0, 1];
       this.camera.near = Math.max(0.1, maxExtent * 0.001);
       this.camera.far = Math.max(100000, maxExtent * 10);
@@ -408,10 +430,16 @@ export class CameraController {
     this.reportScale();
   }
 
-  beginPointerDrag(button: number, event: Pick<MouseEvent, 'clientX' | 'clientY' | 'ctrlKey' | 'shiftKey'>): boolean {
+  beginPointerDrag(button: number, event: Pick<MouseEvent, 'clientX' | 'clientY' | 'ctrlKey' | 'shiftKey' | 'altKey'>): boolean {
     if (this.cameraLocked) return false;
-    const action = resolveMouseDragAction(button, event);
+    const action = resolveMouseDragAction(button, event, this.dimensionMode);
     if (!action) return false;
+
+    // Enter fly mode on right-click in 3D
+    if (action === 'fly') {
+      this.enterFlyMode();
+    }
+
     this.isDragging = true;
     this.activeMouseButton = button;
     this.activeDragAction = action;
@@ -427,7 +455,7 @@ export class CameraController {
 
   updatePointerDrag(
     canvas: HTMLCanvasElement,
-    event: Pick<MouseEvent, 'buttons' | 'clientX' | 'clientY' | 'ctrlKey' | 'shiftKey'>,
+    event: Pick<MouseEvent, 'buttons' | 'clientX' | 'clientY' | 'ctrlKey' | 'shiftKey' | 'altKey'>,
   ): boolean {
     if (!this.isDragging || this.activeMouseButton === null) return false;
     const requiredMask = mouseButtonMask(this.activeMouseButton);
@@ -438,10 +466,14 @@ export class CameraController {
 
     const previousMouse = this.lastMouse;
     this.lastMouse = [event.clientX, event.clientY];
-    const dragAction = resolveMouseDragAction(this.activeMouseButton, event) ?? this.activeDragAction;
+    const dragAction = resolveMouseDragAction(this.activeMouseButton, event, this.dimensionMode) ?? this.activeDragAction;
     this.activeDragAction = dragAction;
 
-    if (dragAction === 'orbit' && this.dimensionMode !== '2d') {
+    if (dragAction === 'fly') {
+      const dx = event.clientX - previousMouse[0];
+      const dy = event.clientY - previousMouse[1];
+      this.flyLook(dx, dy);
+    } else if (dragAction === 'orbit' && this.dimensionMode !== '2d') {
       const dx = (event.clientX - previousMouse[0]) * 0.005;
       const dy = (event.clientY - previousMouse[1]) * 0.005;
       this.orbit(dx, dy);
@@ -457,6 +489,9 @@ export class CameraController {
   }
 
   endPointerDrag(): void {
+    if (this._flyMode) {
+      this.exitFlyMode();
+    }
     this.stopDragging();
   }
 
@@ -521,11 +556,159 @@ export class CameraController {
 
   handleWheel(deltaY: number): void {
     if (this.cameraLocked) return;
+    if (this._flyMode) {
+      this.adjustFlySpeed(deltaY);
+      return;
+    }
     if (this.dimensionMode === '2d') {
       this.zoom2D(deltaY);
     } else {
       this.zoom(deltaY > 0 ? 1.1 : 0.9);
     }
+  }
+
+  // ── Fly mode (Unreal-style free-roaming camera) ───────────────────────────
+
+  /** Whether the camera is currently in fly/pilot mode. */
+  get isFlyMode(): boolean {
+    return this._flyMode;
+  }
+
+  /** Current fly speed in meters per second. */
+  get flySpeed(): number {
+    return this._flySpeed;
+  }
+
+  /**
+   * Enter fly mode. Computes initial yaw/pitch from the current
+   * camera position → target direction. Only works in 3D mode.
+   */
+  enterFlyMode(): void {
+    if (this.cameraLocked || this.dimensionMode === '2d') return;
+    if (this._flyMode) return;
+
+    const [px, py, pz] = this.camera.position;
+    const [tx, ty, tz] = this.camera.target;
+    const dx = tx - px;
+    const dy = ty - py;
+    const dz = tz - pz;
+
+    this._flyYaw = Math.atan2(dy, dx);
+    const horizDist = Math.sqrt(dx * dx + dy * dy);
+    this._flyPitch = Math.atan2(dz, horizDist);
+
+    // Auto-scale fly speed based on current camera distance
+    const camDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    this._flySpeed = Math.max(MIN_FLY_SPEED, Math.min(MAX_FLY_SPEED, camDist * 0.15));
+
+    this._flyMode = true;
+  }
+
+  /**
+   * Exit fly mode. Rebuilds the target point at a fixed distance
+   * in front of the camera along the current look direction,
+   * preserving visual continuity when returning to orbit mode.
+   */
+  exitFlyMode(): void {
+    if (!this._flyMode) return;
+    this._flyMode = false;
+
+    // Rebuild target 50m in front of camera along look direction
+    const [px, py, pz] = this.camera.position;
+    const cosPitch = Math.cos(this._flyPitch);
+    const lookX = Math.cos(this._flyYaw) * cosPitch;
+    const lookY = Math.sin(this._flyYaw) * cosPitch;
+    const lookZ = Math.sin(this._flyPitch);
+    const targetDist = 50;
+    this.camera.target = [
+      px + lookX * targetDist,
+      py + lookY * targetDist,
+      pz + lookZ * targetDist,
+    ];
+    this.camera.up = [0, 0, 1];
+
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+    this.reportScale();
+  }
+
+  /**
+   * Rotate the camera view direction by mouse delta (mouselook).
+   * dx/dy are raw pixel deltas from mouse movement.
+   */
+  flyLook(dx: number, dy: number): void {
+    if (!this._flyMode) return;
+
+    this._flyYaw += dx * FLY_LOOK_SENSITIVITY;
+    this._flyPitch -= dy * FLY_LOOK_SENSITIVITY;
+    this._flyPitch = Math.max(-FLY_MAX_PITCH, Math.min(FLY_MAX_PITCH, this._flyPitch));
+
+    // Update target from yaw/pitch
+    const [px, py, pz] = this.camera.position;
+    const cosPitch = Math.cos(this._flyPitch);
+    const lookX = Math.cos(this._flyYaw) * cosPitch;
+    const lookY = Math.sin(this._flyYaw) * cosPitch;
+    const lookZ = Math.sin(this._flyPitch);
+    this.camera.target = [px + lookX, py + lookY, pz + lookZ];
+    this.camera.up = [0, 0, 1];
+
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+  }
+
+  /**
+   * Move the camera in fly mode. Parameters are unit-scale direction
+   * inputs (-1 to 1). deltaTime is in seconds.
+   *
+   * @param forward - Forward/backward (W/S: +1/-1)
+   * @param right   - Strafe left/right (A/D: -1/+1)
+   * @param up      - Up/down (E/Q: +1/-1)
+   * @param deltaTime - Frame time in seconds
+   * @param sprint  - Whether sprint (Shift) is held
+   */
+  flyMove(forward: number, right: number, up: number, deltaTime: number, sprint = false): void {
+    if (!this._flyMode) return;
+
+    const speed = this._flySpeed * (sprint ? FLY_SPRINT_MULTIPLIER : 1.0);
+    const distance = speed * deltaTime;
+
+    // Forward direction (projected on horizontal plane for WASD, full 3D for vertical)
+    const cosPitch = Math.cos(this._flyPitch);
+    const fwdX = Math.cos(this._flyYaw) * cosPitch;
+    const fwdY = Math.sin(this._flyYaw) * cosPitch;
+    const fwdZ = Math.sin(this._flyPitch);
+
+    // Right direction (perpendicular to forward on XY plane)
+    const rightX = Math.cos(this._flyYaw - Math.PI / 2);
+    const rightY = Math.sin(this._flyYaw - Math.PI / 2);
+
+    // Compute total displacement
+    const moveX = (fwdX * forward + rightX * right) * distance;
+    const moveY = (fwdY * forward + rightY * right) * distance;
+    const moveZ = (fwdZ * forward + up) * distance;
+
+    const [px, py, pz] = this.camera.position;
+    this.camera.position = [px + moveX, py + moveY, pz + moveZ];
+    // Keep target at unit distance in look direction
+    const lookX = Math.cos(this._flyYaw) * cosPitch;
+    const lookY = Math.sin(this._flyYaw) * cosPitch;
+    const lookZ = Math.sin(this._flyPitch);
+    this.camera.target = [
+      px + moveX + lookX,
+      py + moveY + lookY,
+      pz + moveZ + lookZ,
+    ];
+
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+    this.reportScale();
+  }
+
+  /** Adjust fly speed via scroll wheel delta. */
+  adjustFlySpeed(deltaY: number): void {
+    const notches = deltaY / 120;
+    this._flySpeed *= Math.pow(1.15, -notches);
+    this._flySpeed = Math.max(MIN_FLY_SPEED, Math.min(MAX_FLY_SPEED, this._flySpeed));
   }
 
   computeViewProj(): Float32Array {

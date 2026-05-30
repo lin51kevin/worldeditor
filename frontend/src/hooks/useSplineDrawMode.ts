@@ -323,6 +323,15 @@ export function useSplineDrawMode({
 
     const point: [number, number, number] = [px, py, 0];
     const knotIndex = viewState.splineKnots.length;
+
+    // Double-click finalizes without adding a duplicate point at the same position.
+    if (e.detail >= 2) {
+      if (viewState.editMode === 'spline' && viewState.splineKnots.length >= 2) {
+        await finalizeSplineCreation(viewState.splineKnots, 'parampoly3');
+      }
+      return true;
+    }
+
     const nextKnots: Array<[number, number, number]> = [...viewState.splineKnots, point];
     viewState.setSplineKnots(nextKnots);
 
@@ -339,17 +348,6 @@ export function useSplineDrawMode({
         roadId: snap.targetId!,
         contactPoint: snap.contactPoint!,
       });
-    }
-
-    if (e.detail < 2) {
-      return true;
-    }
-
-    if (viewState.editMode === 'spline') {
-      if (nextKnots.length >= 2) {
-        await finalizeSplineCreation(nextKnots, 'parampoly3');
-      }
-      return true;
     }
 
     return true;

@@ -1,8 +1,13 @@
 /**
- * useRoadLinkHighlight — generates and uploads road link (predecessor/successor)
- * highlight meshes when the user toggles link display (T key) with a road selected.
+ * useRoadLinkHighlight — generates and uploads predecessor/successor highlight
+ * meshes when the user toggles link display (T key).
  *
- * Predecessor roads are highlighted in blue; successor roads in green.
+ * Context-sensitive:
+ * - Road selected → highlight predecessor/successor roads
+ * - LaneSection selected → highlight adjacent lane sections (same road + cross-road)
+ * - Lane selected → highlight linked lanes via lane.link (same road + cross-road)
+ *
+ * Predecessor elements are highlighted in blue; successor elements in green.
  */
 import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
@@ -10,7 +15,10 @@ import type { ViewportRenderer } from '../viewport/renderer';
 import { useProjectStore } from '../stores/projectStore';
 import { useViewportStore } from '../stores/viewportStore';
 import { getPlatformService } from '../services';
-import { tintVertices } from '../utils/sceneGraph';
+import { buildHighlightProject, tintVertices } from '../utils/sceneGraph';
+import type { SceneNodeSelection } from '../utils/sceneGraph';
+import { resolveConnectivity } from '../utils/connectivity';
+import type { PlatformService, Project } from '../services/platform';
 import {
   mergeFloat32Arrays,
   liftMeshZ,
@@ -22,6 +30,32 @@ import {
 interface UseRoadLinkHighlightParams {
   rendererRef: MutableRefObject<ViewportRenderer | null>;
   status: 'loading' | 'ready' | 'unsupported';
+}
+
+/**
+ * Generate tinted + Z-lifted highlight vertices for a list of scene node
+ * selections. Returns a merged Float32Array (empty if nothing to render).
+ */
+async function generateHighlightForNodes(
+  service: PlatformService,
+  project: Project,
+  nodes: SceneNodeSelection[],
+  color: [number, number, number, number],
+): Promise<Float32Array> {
+  const parts: Float32Array[] = [];
+
+  for (const node of nodes) {
+    const hlProject = buildHighlightProject(project, node);
+    if (!hlProject) continue;
+
+    const verts = await service.generateRoadVertices(hlProject, 2.0);
+    if (verts.length > 0) {
+      parts.push(liftMeshZ(tintVertices(verts, color), LINK_HIGHLIGHT_Z_LIFT));
+    }
+  }
+
+  if (parts.length === 0) return new Float32Array();
+  return parts.reduce((acc, p) => mergeFloat32Arrays(acc, p), new Float32Array());
 }
 
 export function useRoadLinkHighlight({
@@ -36,33 +70,16 @@ export function useRoadLinkHighlight({
     const renderer = rendererRef.current;
     if (!renderer || status !== 'ready') return;
 
-    // Only show when toggle is active and a road is selected
-    if (!showRoadLinks || !selectedSceneNode || selectedSceneNode.type !== 'road') {
+    // Only show when toggle is active and a supported selection type is active
+    const supportedTypes = new Set(['road', 'laneSection', 'lane']);
+    if (!showRoadLinks || !selectedSceneNode || !supportedTypes.has(selectedSceneNode.type)) {
       renderer.clearLinkHighlight();
       return;
     }
 
-    const selectedRoadId = selectedSceneNode.roadId;
-    const selectedRoad = project.roads.find((r) => r.id === selectedRoadId);
-    if (!selectedRoad || !selectedRoad.link) {
-      renderer.clearLinkHighlight();
-      return;
-    }
+    const { predecessors, successors } = resolveConnectivity(project, selectedSceneNode);
 
-    const { predecessor, successor } = selectedRoad.link;
-
-    // Collect road IDs to highlight (skip junction-type links for v1)
-    const predecessorRoadIds: string[] = [];
-    const successorRoadIds: string[] = [];
-
-    if (predecessor && predecessor.element_type === 'Road') {
-      predecessorRoadIds.push(predecessor.element_id);
-    }
-    if (successor && successor.element_type === 'Road') {
-      successorRoadIds.push(successor.element_id);
-    }
-
-    if (predecessorRoadIds.length === 0 && successorRoadIds.length === 0) {
+    if (predecessors.length === 0 && successors.length === 0) {
       renderer.clearLinkHighlight();
       return;
     }
@@ -74,44 +91,22 @@ export function useRoadLinkHighlight({
         const service = await getPlatformService();
         if (cancelled) return;
 
-        const parts: Float32Array[] = [];
-
-        // Generate predecessor highlight (blue)
-        if (predecessorRoadIds.length > 0) {
-          const predRoads = project.roads.filter((r) => predecessorRoadIds.includes(r.id));
-          if (predRoads.length > 0) {
-            const predProject = { ...project, roads: predRoads };
-            const verts = await service.generateRoadVertices(predProject, 2.0);
-            if (!cancelled && verts.length > 0) {
-              parts.push(liftMeshZ(tintVertices(verts, PREDECESSOR_HIGHLIGHT_COLOR), LINK_HIGHLIGHT_Z_LIFT));
-            }
-          }
-        }
-
-        // Generate successor highlight (green)
-        if (successorRoadIds.length > 0) {
-          const succRoads = project.roads.filter((r) => successorRoadIds.includes(r.id));
-          if (succRoads.length > 0) {
-            const succProject = { ...project, roads: succRoads };
-            const verts = await service.generateRoadVertices(succProject, 2.0);
-            if (!cancelled && verts.length > 0) {
-              parts.push(liftMeshZ(tintVertices(verts, SUCCESSOR_HIGHLIGHT_COLOR), LINK_HIGHLIGHT_Z_LIFT));
-            }
-          }
-        }
+        const [predVerts, succVerts] = await Promise.all([
+          generateHighlightForNodes(service, project, predecessors, PREDECESSOR_HIGHLIGHT_COLOR),
+          generateHighlightForNodes(service, project, successors, SUCCESSOR_HIGHLIGHT_COLOR),
+        ]);
 
         if (cancelled) return;
 
-        if (parts.length === 0) {
+        const combined = mergeFloat32Arrays(predVerts, succVerts);
+        if (combined.length === 0) {
           renderer.clearLinkHighlight();
-          return;
+        } else {
+          renderer.uploadLinkHighlightVertices(combined);
         }
-
-        const combined = parts.reduce((acc, p) => mergeFloat32Arrays(acc, p), new Float32Array());
-        renderer.uploadLinkHighlightVertices(combined);
       } catch (err) {
         if (!cancelled) {
-          console.error('[Viewport] Failed to generate road link highlight:', err);
+          console.error('[Viewport] Failed to generate link highlight:', err);
         }
       }
     })();
