@@ -78,7 +78,7 @@ export function deployCrosswalks(project: Project, junctionId: string): Project 
         sPosition: road.length / 2,
         laneId: 0,
         type: 'crosswalk',
-        validity: 'all',
+        validity: null,
       };
     })
     .filter((o): o is NonNullable<typeof o> => o !== null);
@@ -107,7 +107,7 @@ export function deployStopLines(project: Project, junctionId: string): Project {
         sPosition: Math.max(0, road.length - 1.0),
         laneId: 0,
         type: 'stopline',
-        validity: 'all',
+        validity: null,
       };
     })
     .filter((o): o is NonNullable<typeof o> => o !== null);

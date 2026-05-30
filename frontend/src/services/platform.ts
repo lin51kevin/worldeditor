@@ -173,7 +173,7 @@ export interface Signal {
   sPosition: number;
   laneId: number;
   type: string;
-  validity: string;
+  validity: RoadObjectValidity | null;
 }
 
 /** Road-level signal as parsed from OpenDRIVE `<signal>` elements (road.signals[]). */
@@ -200,7 +200,7 @@ export interface RoadObject {
   sPosition: number;
   laneId: number;
   type: string;
-  validity: string;
+  validity: RoadObjectValidity | null;
 }
 
 /** Road-level object as parsed from OpenDRIVE `<object>` elements (road.objects[]). */

@@ -578,7 +578,7 @@ function protoObjectToRoadObject(
     sPosition: 0,
     laneId: 0,
     type: normalizeOptionalString(object.type) ?? 'object',
-    validity: 'all',
+    validity: null,
   };
 }
 

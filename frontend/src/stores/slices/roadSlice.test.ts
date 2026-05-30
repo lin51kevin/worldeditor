@@ -161,7 +161,7 @@ describe('roadSlice', () => {
   });
 
   it('addSignal appends signal to project.signals', () => {
-    const signal = { id: 's1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'sign', validity: 'all' };
+    const signal = { id: 's1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'sign', validity: null };
     useProjectStore.getState().addSignal(signal);
     expect(useProjectStore.getState().project.signals).toContainEqual(signal);
     expect(useProjectStore.getState().isDirty).toBe(true);
@@ -170,7 +170,7 @@ describe('roadSlice', () => {
   it('removeSignal removes from project.signals and road.signals', () => {
     const road = makeRoad('r1', { signals: [{ id: 's1', name: 'S', signal_type: '', signal_subtype: '', s: 5, t: 0, z_offset: 0, h_offset: 0, width: 0, height: 0, value: '', orientation: '+', is_dynamic: false }] });
     useProjectStore.setState({
-      project: { ...initialProject, roads: [road], signals: [{ id: 's1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'sign', validity: 'all' }] },
+      project: { ...initialProject, roads: [road], signals: [{ id: 's1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'sign', validity: null }] },
       selectedSceneNode: { type: 'signal', roadId: 'r1', signalId: 's1' },
       selectedRoadId: 'r1',
     });
@@ -185,22 +185,22 @@ describe('roadSlice', () => {
   it('updateSignal updates in both project.signals and road.signals', () => {
     const road = makeRoad('r1', { signals: [{ id: 's1', name: 'S', signal_type: '', signal_subtype: '', s: 5, t: 0, z_offset: 0, h_offset: 0, width: 0, height: 0, value: '', orientation: '+', is_dynamic: false }] });
     useProjectStore.setState({
-      project: { ...initialProject, roads: [road], signals: [{ id: 's1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'sign', validity: 'all' }] },
+      project: { ...initialProject, roads: [road], signals: [{ id: 's1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'sign', validity: null }] },
     });
     useProjectStore.getState().updateSignal('s1', { sPosition: 10 });
     expect(useProjectStore.getState().project.signals[0]?.sPosition).toBe(10);
   });
 
   it('addObject appends object to project.objects', () => {
-    const obj = { id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: 'all' };
+    const obj = { id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: null };
     useProjectStore.getState().addObject(obj);
     expect(useProjectStore.getState().project.objects).toContainEqual(obj);
   });
 
   it('removeObject removes from project.objects and road.objects', () => {
-    const road = makeRoad('r1', { objects: [{ id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: 'all' }] });
+    const road = makeRoad('r1', { objects: [{ id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: null }] });
     useProjectStore.setState({
-      project: { ...initialProject, roads: [road], objects: [{ id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: 'all' }] },
+      project: { ...initialProject, roads: [road], objects: [{ id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: null }] },
       selectedSceneNode: { type: 'object', roadId: 'r1', objectId: 'o1' },
       selectedRoadId: 'r1',
     });
@@ -212,9 +212,9 @@ describe('roadSlice', () => {
   });
 
   it('updateObject updates matching object in project.objects and road.objects', () => {
-    const road = makeRoad('r1', { objects: [{ id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: 'all' }] });
+    const road = makeRoad('r1', { objects: [{ id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: null }] });
     useProjectStore.setState({
-      project: { ...initialProject, roads: [road], objects: [{ id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: 'all' }] },
+      project: { ...initialProject, roads: [road], objects: [{ id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: null }] },
     });
     useProjectStore.getState().updateObject('o1', { sPosition: 20 });
     expect(useProjectStore.getState().project.objects[0]?.sPosition).toBe(20);
@@ -224,7 +224,7 @@ describe('roadSlice', () => {
     useProjectStore.setState({
       project: { ...initialProject, roads: [makeRoad('r1')] },
     });
-    useProjectStore.getState().addRoadObjectItem('r1', { id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: 'all' });
+    useProjectStore.getState().addRoadObjectItem('r1', { id: 'o1', roadId: 'r1', sPosition: 5, laneId: 0, type: 'pole', validity: null });
     expect(useProjectStore.getState().project.roads[0]?.objects).toHaveLength(1);
   });
 
