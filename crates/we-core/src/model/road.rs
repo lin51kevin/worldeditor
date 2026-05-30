@@ -499,7 +499,9 @@ pub struct Validity {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoadObject {
     pub id: String,
+    #[serde(alias = "type")]
     pub object_type: ObjectType,
+    #[serde(default)]
     pub name: String,
     /// Position in road-local coordinates: x=s (station), y=t (lateral offset), z=zOffset.
     pub position: Point3D,
