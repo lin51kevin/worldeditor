@@ -448,7 +448,7 @@ pub enum ObjectType {
     #[serde(alias = "crosswalk")]
     Crosswalk,
     /// Stop line
-    #[serde(alias = "stopLine", alias = "stop_line")]
+    #[serde(alias = "stopLine", alias = "stop_line", alias = "stopline")]
     StopLine,
     /// Cross-hatch no-stopping area
     #[serde(alias = "crossHatchArea", alias = "cross_hatch_area")]
