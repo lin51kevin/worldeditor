@@ -878,10 +878,6 @@ export class ViewportRenderer {
     const exitFlyModeCleanup = () => {
       this.flyKeyboard.detach();
       useViewportStore.getState().setFlyMode(false);
-      // Release pointer lock if active
-      if (document.pointerLockElement === canvas) {
-        document.exitPointerLock();
-      }
     };
 
     canvas.addEventListener('mousemove', (e) => {
@@ -914,11 +910,10 @@ export class ViewportRenderer {
 
       if (!this.cameraController.beginPointerDrag(e.button, e)) return;
 
-      // Fly mode: request pointer lock and attach keyboard controller
+      // Fly mode: attach keyboard controller (no pointer lock — avoids browser notification)
       if (this.cameraController.isFlyMode) {
         canvas.style.cursor = 'crosshair';
         this.flyKeyboard.attach(() => this.renderLoop?.wakeUp());
-        canvas.requestPointerLock?.();
         useViewportStore.getState().setFlyMode(true);
         this.renderLoop?.wakeUp();
       } else {
@@ -928,11 +923,6 @@ export class ViewportRenderer {
       detachDocListeners();
 
       onDocMove = (me: MouseEvent) => {
-        // In pointer-lock mode, use movementX/Y for raw deltas
-        if (this.cameraController.isFlyMode) {
-          this.cameraController.flyLook(me.movementX, me.movementY);
-          return;
-        }
         if (!this.cameraController.updatePointerDrag(canvas, me)) {
           canvas.style.cursor = '';
           detachDocListeners();

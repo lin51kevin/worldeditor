@@ -414,6 +414,14 @@ export interface PlatformService {
   /** Open a file picker and return the file contents. */
   openFile(): Promise<{ name: string; content: string; path?: string } | null>;
 
+  /**
+   * Show the OS file-picker dialog and return the selected absolute path,
+   * WITHOUT reading the file. This allows the caller to show a loading
+   * indicator before the (potentially slow) file-read begins.
+   * Optional — platforms that cannot expose paths (e.g. Web) may omit this.
+   */
+  openFilePath?(): Promise<string | null>;
+
   /** Open a file directly by path when the platform supports it. */
   openFileByPath(path: string): Promise<{ name: string; content: string } | null>;
 

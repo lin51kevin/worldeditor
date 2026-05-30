@@ -27,35 +27,38 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
     return invoke('write_opendrive', { project });
   }
 
-  async openFile(): Promise<{ name: string; content: string; path?: string } | null> {
+  /**
+   * Show OS file-picker dialog, return normalised absolute path without
+   * reading the file. Callers can show a progress overlay before the read.
+   */
+  async openFilePath(): Promise<string | null> {
     const { open } = await import('@tauri-apps/plugin-dialog');
-    const { readTextFile } = await import('@tauri-apps/plugin-fs');
-
     const rawPath = await open({
       filters: [{ name: 'OpenDRIVE', extensions: ['xodr', 'xml'] }],
     });
     const filePath = normalizeDialogPath(rawPath);
-
     if (!filePath) return null;
 
+    // Normalize to an absolute path (handles UNC / mapped drives on Windows).
+    if (!filePath.match(/^(?:[A-Za-z]:\\|\\\\|\/)/)) {
+      try {
+        const { resolve } = await import('@tauri-apps/api/path');
+        return await resolve(filePath);
+      } catch {
+        console.warn('[openFilePath] Could not resolve absolute path for:', filePath);
+      }
+    }
+    return filePath;
+  }
+
+  async openFile(): Promise<{ name: string; content: string; path?: string } | null> {
+    const filePath = await this.openFilePath();
+    if (!filePath) return null;
     try {
+      const { readTextFile } = await import('@tauri-apps/plugin-fs');
       const content = await readTextFile(filePath);
       const name = filePath.split(/[/\\]/).pop() ?? 'untitled';
-      // Ensure we store an absolute path for "recent files" re-opening.
-      // On Windows, dialog open() may return a relative-style path in some
-      // edge cases (UNC, mapped drives).  Normalize with resolveResourcePath
-      // so that openFileByPath can always find the file later.
-      let absolutePath = filePath;
-      if (!filePath.match(/^(?:[A-Za-z]:\\|\\\\|\/)/)) {
-        try {
-          const { resolve } = await import('@tauri-apps/api/path');
-          absolutePath = await resolve(filePath);
-        } catch {
-          // Fallback: leave as-is, console.warn for debugging
-          console.warn('[openFile] Could not resolve absolute path for:', filePath);
-        }
-      }
-      return { name, content, path: absolutePath };
+      return { name, content, path: filePath };
     } catch (error) {
       throw new Error(`Failed to read selected file: ${String(error)}`);
     }

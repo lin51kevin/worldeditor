@@ -31,6 +31,7 @@ import { useRecentFilesStore } from './stores/recentFilesStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { BUILTIN_PLUGINS } from './plugins/builtinRegistry';
 import { getPlatformService } from './services';
+import { useLoadingProgressStore } from './stores/loadingProgressStore';
 import { showAlert } from './utils/dialog';
 import { emitViewportEvent } from './viewport/viewportEvents';
 import { STORAGE_KEYS } from './constants/storage';
@@ -184,13 +185,62 @@ export function App() {
   const handleOpenFile = useCallback(async () => {
     try {
       const ps = await getPlatformService();
+
+      // If the platform supports openFilePath() (Tauri), separate the dialog
+      // from the file read so we can show the progress overlay while the
+      // (potentially several-second) disk read is in progress.
+      if (ps.openFilePath) {
+        const filePath = await ps.openFilePath();
+        if (!filePath) return;
+
+        const name = filePath.split(/[/\\]/).pop() ?? 'untitled';
+        const { startLoading, updateProgress, reset } = useLoadingProgressStore.getState();
+
+        // Show progress overlay immediately — user sees feedback right away.
+        startLoading(name);
+        updateProgress('reading', 5);
+
+        // Double-rAF guarantees one full paint cycle has completed before we
+        // continue. Single rAF fires *before* paint; the nested second rAF
+        // fires after the browser has composited and displayed the frame.
+        // This ensures the "正在读取文件..." overlay is physically visible
+        // before the (potentially multi-second) file read IPC starts.
+        await new Promise<void>(resolve =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+
+        let content: string;
+        try {
+          const result = await ps.openFileByPath(filePath);
+          if (!result) { reset(); return; }
+          content = result.content;
+        } catch (err) {
+          reset();
+          throw err;
+        }
+
+        // Mark reading complete and yield another paint frame so the user
+        // sees "reading 100%" before the phase switches to "parsing".
+        updateProgress('reading', 100);
+        await new Promise<void>(resolve =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+
+        // Parse + mesh. Skip startLoading — we already called it above.
+        const loadResult = await loadFile(content, name, { skipStartLoading: true });
+        if (loadResult.success) {
+          pushRecentFile(name, filePath);
+          setIsEditorOpen(true);
+        }
+        return;
+      }
+
+      // Web fallback: openFile() does dialog + read in one shot.
       const result = await ps.openFile();
       if (!result) return;
       const loadResult = await loadFile(result.content, result.name);
       if (loadResult.success) {
-        if (result.path) {
-          pushRecentFile(result.name, result.path);
-        }
+        if (result.path) pushRecentFile(result.name, result.path);
         setIsEditorOpen(true);
       }
     } catch (err) {

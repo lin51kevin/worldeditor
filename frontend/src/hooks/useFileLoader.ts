@@ -96,15 +96,24 @@ export function useFileLoader() {
   const loadFile = useCallback(async (
     content: string,
     fileName: string,
+    options?: { skipStartLoading?: boolean },
   ): Promise<FileLoaderResult> => {
     const { startLoading, updateProgress, finishLoading, reset } =
       useLoadingProgressStore.getState();
 
     try {
-      startLoading(fileName);
+      if (!options?.skipStartLoading) {
+        startLoading(fileName);
+        // Phase 1: Reading (already done by caller, just mark progress)
+        updateProgress('reading', 10);
 
-      // Phase 1: Reading (already done by caller, just mark progress)
-      updateProgress('reading', 10);
+        // Yield a paint frame so the "reading" overlay is rendered before
+        // we immediately overwrite it with "parsing".  Without this,
+        // React 18 automatic batching merges both updates into one render.
+        await new Promise<void>(resolve =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+      }
 
       // Phase 2: Parsing
       updateProgress('parsing', 15);
