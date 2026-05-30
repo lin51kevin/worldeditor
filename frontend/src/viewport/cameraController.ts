@@ -205,9 +205,7 @@ export class CameraController {
     if (this.dimensionMode === '2d') {
       return 1 / this.numPixelsPerMeter;
     }
-    const [px, py, pz] = this.camera.position;
-    const [tx, ty, tz] = this.camera.target;
-    const camDist = Math.sqrt((px - tx) ** 2 + (py - ty) ** 2 + (pz - tz) ** 2);
+    const camDist = this.getEffectiveCameraDistance();
     const halfWorldWidth = camDist * Math.tan(this.camera.fovY / 2);
     return (halfWorldWidth * 2) / Math.max(1, this.width);
   }
@@ -510,16 +508,30 @@ export class CameraController {
     return Math.sqrt((px - tx) ** 2 + (py - ty) ** 2 + (pz - tz) ** 2);
   }
 
+  /**
+   * Effective camera distance for grid/scale calculations.
+   * In fly mode, the target is only 1 unit away (mouselook), so we use
+   * camera height above ground (Z) as a proxy for "how far the camera is
+   * from the scene". Falls back to position-to-target distance in orbit mode.
+   */
+  private getEffectiveCameraDistance(): number {
+    if (this._flyMode) {
+      // Use height above ground (Z=0), clamped to a minimum
+      return Math.max(1, Math.abs(this.camera.position[2]));
+    }
+    return this.getCameraDistance();
+  }
+
   /** Get the effective distance for grid fade calculation.
    *  In 2D mode, returns visible half-extent so grid fades at screen edges.
-   *  In 3D mode, returns actual camera distance. */
+   *  In 3D mode, returns effective camera distance (height-based in fly mode). */
   getGridFadeDistance(): number {
     if (this.dimensionMode === '2d') {
       const halfH = (Math.max(1, this.height) / 2) / this.numPixelsPerMeter;
       const aspect = Math.max(1, this.width) / Math.max(1, this.height);
       return Math.max(halfH, halfH * aspect);
     }
-    return this.getCameraDistance();
+    return this.getEffectiveCameraDistance();
   }
 
   applyPan(canvas: HTMLCanvasElement, prevClientXY: [number, number], currClientXY: [number, number]): void {
@@ -605,7 +617,7 @@ export class CameraController {
   }
 
   /**
-   * Exit fly mode. Rebuilds the target point at a fixed distance
+   * Exit fly mode. Rebuilds the target point at a reasonable distance
    * in front of the camera along the current look direction,
    * preserving visual continuity when returning to orbit mode.
    */
@@ -613,19 +625,21 @@ export class CameraController {
     if (!this._flyMode) return;
     this._flyMode = false;
 
-    // Rebuild target 50m in front of camera along look direction
+    // Rebuild target at a distance proportional to camera height (natural orbit radius)
     const [px, py, pz] = this.camera.position;
     const cosPitch = Math.cos(this._flyPitch);
     const lookX = Math.cos(this._flyYaw) * cosPitch;
     const lookY = Math.sin(this._flyYaw) * cosPitch;
     const lookZ = Math.sin(this._flyPitch);
-    const targetDist = 50;
+    const targetDist = Math.max(10, Math.abs(pz) * 0.5);
     this.camera.target = [
       px + lookX * targetDist,
       py + lookY * targetDist,
       pz + lookZ * targetDist,
     ];
     this.camera.up = [0, 0, 1];
+    this.camera.near = Math.max(0.1, targetDist * 0.001);
+    this.camera.far = Math.max(100000, targetDist * 100);
 
     this.viewDirty = true;
     this.onViewBecameDirty?.();

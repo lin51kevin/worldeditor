@@ -188,4 +188,127 @@ describe('CameraController', () => {
       expect(zoomedOutDist).toBeGreaterThan(2000);
     });
   });
+
+  describe('fly mode', () => {
+    it('enterFlyMode sets isFlyMode to true in 3D', () => {
+      expect(cam.isFlyMode).toBe(false);
+      cam.enterFlyMode();
+      expect(cam.isFlyMode).toBe(true);
+    });
+
+    it('enterFlyMode is no-op in 2D mode', () => {
+      cam.setDimension('2d');
+      cam.enterFlyMode();
+      expect(cam.isFlyMode).toBe(false);
+    });
+
+    it('enterFlyMode is no-op when camera is locked', () => {
+      cam.lock();
+      cam.enterFlyMode();
+      expect(cam.isFlyMode).toBe(false);
+    });
+
+    it('exitFlyMode sets isFlyMode to false', () => {
+      cam.enterFlyMode();
+      expect(cam.isFlyMode).toBe(true);
+      cam.exitFlyMode();
+      expect(cam.isFlyMode).toBe(false);
+    });
+
+    it('exitFlyMode preserves camera position', () => {
+      cam.enterFlyMode();
+      const posBefore = [...cam.state.position];
+      cam.exitFlyMode();
+      expect(cam.state.position).toEqual(posBefore);
+    });
+
+    it('flyLook changes target but not position', () => {
+      cam.enterFlyMode();
+      const posBefore = [...cam.state.position];
+      const targetBefore = [...cam.state.target];
+      cam.flyLook(100, 50);
+      expect(cam.state.position).toEqual(posBefore);
+      expect(cam.state.target).not.toEqual(targetBefore);
+    });
+
+    it('flyLook is no-op when not in fly mode', () => {
+      const targetBefore = [...cam.state.target];
+      cam.flyLook(100, 50);
+      expect(cam.state.target).toEqual(targetBefore);
+    });
+
+    it('flyMove moves camera forward', () => {
+      cam.enterFlyMode();
+      const posBefore = [...cam.state.position];
+      cam.flyMove(1, 0, 0, 0.1);
+      // Camera should have moved
+      const moved = Math.sqrt(
+        (cam.state.position[0] - posBefore[0]) ** 2 +
+        (cam.state.position[1] - posBefore[1]) ** 2 +
+        (cam.state.position[2] - posBefore[2]) ** 2,
+      );
+      expect(moved).toBeGreaterThan(0);
+    });
+
+    it('flyMove with sprint multiplies speed', () => {
+      // Use two separate controllers to avoid speed recalculation between runs
+      const cam1 = new CameraController();
+      cam1.setViewportSize(800, 600);
+      cam1.enterFlyMode();
+      const pos1Start = [...cam1.state.position];
+      cam1.flyMove(1, 0, 0, 0.1, false);
+      const distNormal = Math.sqrt(
+        (cam1.state.position[0] - pos1Start[0]) ** 2 +
+        (cam1.state.position[1] - pos1Start[1]) ** 2 +
+        (cam1.state.position[2] - pos1Start[2]) ** 2,
+      );
+
+      const cam2 = new CameraController();
+      cam2.setViewportSize(800, 600);
+      cam2.enterFlyMode();
+      const pos2Start = [...cam2.state.position];
+      cam2.flyMove(1, 0, 0, 0.1, true);
+      const distSprint = Math.sqrt(
+        (cam2.state.position[0] - pos2Start[0]) ** 2 +
+        (cam2.state.position[1] - pos2Start[1]) ** 2 +
+        (cam2.state.position[2] - pos2Start[2]) ** 2,
+      );
+
+      expect(distSprint).toBeGreaterThan(distNormal);
+    });
+
+    it('flyMove is no-op when not in fly mode', () => {
+      const posBefore = [...cam.state.position];
+      cam.flyMove(1, 0, 0, 0.1);
+      expect(cam.state.position).toEqual(posBefore);
+    });
+
+    it('flyMove vertical (Q/E) changes Z', () => {
+      cam.enterFlyMode();
+      const zBefore = cam.state.position[2];
+      cam.flyMove(0, 0, 1, 0.1);
+      expect(cam.state.position[2]).toBeGreaterThan(zBefore);
+    });
+
+    it('adjustFlySpeed changes speed', () => {
+      cam.enterFlyMode();
+      const speedBefore = cam.flySpeed;
+      cam.handleWheel(-120); // scroll up → increase speed
+      expect(cam.flySpeed).toBeGreaterThan(speedBefore);
+    });
+
+    it('handleWheel adjusts fly speed when in fly mode', () => {
+      cam.enterFlyMode();
+      const speedBefore = cam.flySpeed;
+      cam.handleWheel(120); // scroll down
+      expect(cam.flySpeed).not.toBe(speedBefore);
+    });
+
+    it('endPointerDrag exits fly mode', () => {
+      cam.beginPointerDrag(2, { clientX: 100, clientY: 100, ctrlKey: false, shiftKey: false, altKey: false });
+      expect(cam.isFlyMode).toBe(true);
+      cam.endPointerDrag();
+      expect(cam.isFlyMode).toBe(false);
+    });
+  });
 });
