@@ -146,6 +146,10 @@ export function useKeyboardShortcuts({
       if (isEditableTarget(e)) return;
       if (mod || e.altKey) return;
 
+      // While in fly mode (RMB held in 3D), reserve keyboard for camera
+      // navigation (WASD/QE). Only Escape is allowed through.
+      if (useViewportStore.getState().isFlyMode && e.key !== 'Escape') return;
+
       // Escape: smart cancel (draw modes: clear knots first; then → default)
       if (e.key === 'Escape') {
         e.preventDefault();

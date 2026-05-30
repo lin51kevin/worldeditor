@@ -191,6 +191,9 @@ interface EditorViewState {
   // Geometry drawing (draw-line / draw-arc / draw-spiral)
   // NOTE: line/arc/spiral modes now reuse splineKnots for control points.
 
+  // Fly mode (RMB held in 3D — WASD/QE reserved for camera)
+  isFlyMode: boolean;
+
   // Soft selection radius for knot editing
   softSelectionRadius: number;
 
@@ -251,6 +254,7 @@ interface EditorViewState {
   enterGeometryEdit: (roadId: string, spline: EditableSpline) => void;
   exitGeometryEdit: () => void;
   setGeometryEditSpline: (spline: EditableSpline) => void;
+  setFlyMode: (active: boolean) => void;
   setSoftSelectionRadius: (radius: number) => void;
 
   // Geometry drawing actions (deprecated — line/arc/spiral now use splineKnots/appendSplineKnot/clearSplineKnots)
@@ -418,6 +422,7 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   lastMeasurement: null,
   geometryEditRoadId: null,
   geometryEditSpline: null,
+  isFlyMode: false,
   softSelectionRadius: 50.0,
 
   setDimension: (dimension) => { set({ dimension }); savePrefs({ dimension }); },
@@ -425,6 +430,7 @@ export const useViewportStore = create<EditorViewState>((set) => ({
   toggleAxis: () => set((state) => { const showAxis = !state.showAxis; savePrefs({ showAxis }); return { showAxis }; }),
   toggleHoverHighlight: () => set((state) => ({ showHoverHighlight: !state.showHoverHighlight })),
   toggleRoadLinks: () => set((state) => ({ showRoadLinks: !state.showRoadLinks })),
+  setFlyMode: (isFlyMode) => set({ isFlyMode }),
   setEditMode: (editMode) => set({ editMode }),
   setSelectionMode: (selectionMode) => { set({ selectionMode }); savePrefs({ selectionMode }); },
   setSplineTemplateId: (splineTemplateId) => set({ splineTemplateId }),

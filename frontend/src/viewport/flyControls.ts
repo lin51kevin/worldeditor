@@ -26,8 +26,11 @@ export class FlyKeyboardController {
   private _onBlur: (() => void) | null = null;
   private _attached = false;
 
-  /** Start listening for keyboard events on the window. */
-  attach(): void {
+  /** Start listening for keyboard events on the window.
+   * @param wakeUp Optional callback called whenever a tracked key is pressed,
+   *   used to restart an idle render loop so fly movement is processed immediately.
+   */
+  attach(wakeUp?: () => void): void {
     if (this._attached) return;
     this._attached = true;
     this.keys.clear();
@@ -46,6 +49,9 @@ export class FlyKeyboardController {
       if (this.isTrackedKey(key)) {
         e.preventDefault();
         this.keys.add(key);
+        // Wake the render loop so fly movement is processed even when the
+        // loop went idle between pointer-lock entry and the first key press.
+        wakeUp?.();
       }
     };
 

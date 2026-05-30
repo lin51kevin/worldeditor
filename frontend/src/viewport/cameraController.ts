@@ -510,16 +510,12 @@ export class CameraController {
 
   /**
    * Effective camera distance for grid/scale calculations.
-   * In fly mode, the target is only 1 unit away (mouselook), so we use
-   * camera height above ground (Z) as a proxy for "how far the camera is
-   * from the scene". Falls back to position-to-target distance in orbit mode.
+   * Always uses camera height above the ground plane (Z=0) so there is no
+   * visual jump when entering or exiting fly mode (camera position is
+   * unchanged at that moment, so the metric is continuous).
    */
   private getEffectiveCameraDistance(): number {
-    if (this._flyMode) {
-      // Use height above ground (Z=0), clamped to a minimum
-      return Math.max(1, Math.abs(this.camera.position[2]));
-    }
-    return this.getCameraDistance();
+    return Math.max(1, Math.abs(this.camera.position[2]));
   }
 
   /** Get the effective distance for grid fade calculation.

@@ -35,7 +35,7 @@ describe('viewportTypes utilities', () => {
       expect(resolveMouseDragAction(0, { ctrlKey: false, shiftKey: true, altKey: false })).toBe('orbit');
     });
 
-    it('returns orbit for Alt + left button in 3D (Unreal-style)', () => {
+    it('returns orbit for Alt + left button', () => {
       expect(resolveMouseDragAction(0, { ctrlKey: false, shiftKey: false, altKey: true }, '3d')).toBe('orbit');
     });
   });

@@ -40,6 +40,7 @@ import { CameraController } from './cameraController';
 import { MarkerRenderer } from './markerRenderer';
 import { FlyKeyboardController } from './flyControls';
 import type { RenderableMesh } from './markerRenderer';
+import { isDrawMode, useViewportStore } from '../stores/viewportStore';
 
 export class ViewportRenderer {
   private device!: GPUDevice;
@@ -876,6 +877,7 @@ export class ViewportRenderer {
 
     const exitFlyModeCleanup = () => {
       this.flyKeyboard.detach();
+      useViewportStore.getState().setFlyMode(false);
       // Release pointer lock if active
       if (document.pointerLockElement === canvas) {
         document.exitPointerLock();
@@ -907,13 +909,17 @@ export class ViewportRenderer {
         if (hit) return;
       }
 
+      // In draw mode, right-click finalizes the road — skip camera drag.
+      if (e.button === 2 && isDrawMode(useViewportStore.getState().editMode)) return;
+
       if (!this.cameraController.beginPointerDrag(e.button, e)) return;
 
       // Fly mode: request pointer lock and attach keyboard controller
       if (this.cameraController.isFlyMode) {
         canvas.style.cursor = 'crosshair';
-        this.flyKeyboard.attach();
+        this.flyKeyboard.attach(() => this.renderLoop?.wakeUp());
         canvas.requestPointerLock?.();
+        useViewportStore.getState().setFlyMode(true);
         this.renderLoop?.wakeUp();
       } else {
         canvas.style.cursor = 'grabbing';

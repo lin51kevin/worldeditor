@@ -46,8 +46,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   let line = max(min(grid.x, grid.y), 0.0);
   let grid_alpha = 1.0 - min(line, 1.0);
   let dist = length(in.world_pos.xy - uniforms.camera_pos.xy);
-  let fade_radius = uniforms.cam_dist * 2.0;
-  let fade_start = fade_radius * 0.4;
+  let fade_radius = uniforms.cam_dist * 8.0;
+  let fade_start = fade_radius * 0.6;
   let fade_end = fade_radius;
   let fade = 1.0 - smoothstep(fade_start, fade_end, dist);
   // Axis: screen-space constant width (approx 2px) regardless of zoom

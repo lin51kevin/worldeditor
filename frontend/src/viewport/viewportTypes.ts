@@ -35,12 +35,12 @@ export function resolveMouseDragAction(
   dimension?: '3d' | '2d',
 ): MouseDragAction | null {
   const is3d = dimension !== '2d';
-  // Right-click: fly mode in 3D, orbit in 2D
+  // Right-click: fly mode in 3D (hold RMB — Unreal style), orbit in 2D
   if (button === 2) return is3d ? 'fly' : 'orbit';
   if (button === 1) return 'pan';
   if (button !== 0) return null;
-  // Alt + Left-click: orbit (Unreal-style, 3D only)
-  if (is3d && modifiers.altKey) return 'orbit';
+  // Alt + Left-click: orbit
+  if (modifiers.altKey) return 'orbit';
   return modifiers.ctrlKey || modifiers.shiftKey ? 'orbit' : 'pan';
 }
 
