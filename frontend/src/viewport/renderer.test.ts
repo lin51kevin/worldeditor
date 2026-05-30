@@ -3,16 +3,20 @@ import { computeGroundPanOffset, resolveMouseDragAction } from './renderer';
 
 describe('resolveMouseDragAction', () => {
   it('maps plain left-button drag to pan', () => {
-    expect(resolveMouseDragAction(0, { ctrlKey: false, shiftKey: false })).toBe('pan');
+    expect(resolveMouseDragAction(0, { ctrlKey: false, shiftKey: false, altKey: false })).toBe('pan');
   });
 
-  it('maps right-button drag to orbit', () => {
-    expect(resolveMouseDragAction(2, { ctrlKey: false, shiftKey: false })).toBe('orbit');
+  it('maps right-button drag to fly in 3D (default)', () => {
+    expect(resolveMouseDragAction(2, { ctrlKey: false, shiftKey: false, altKey: false })).toBe('fly');
+  });
+
+  it('maps right-button drag to orbit in 2D', () => {
+    expect(resolveMouseDragAction(2, { ctrlKey: false, shiftKey: false, altKey: false }, '2d')).toBe('orbit');
   });
 
   it('maps modified left-button drag to orbit', () => {
-    expect(resolveMouseDragAction(0, { ctrlKey: true, shiftKey: false })).toBe('orbit');
-    expect(resolveMouseDragAction(0, { ctrlKey: false, shiftKey: true })).toBe('orbit');
+    expect(resolveMouseDragAction(0, { ctrlKey: true, shiftKey: false, altKey: false })).toBe('orbit');
+    expect(resolveMouseDragAction(0, { ctrlKey: false, shiftKey: true, altKey: false })).toBe('orbit');
   });
 });
 

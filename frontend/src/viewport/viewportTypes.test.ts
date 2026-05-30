@@ -3,28 +3,40 @@ import { resolveMouseDragAction, mouseButtonMask, computeGroundPanOffset } from 
 
 describe('viewportTypes utilities', () => {
   describe('resolveMouseDragAction', () => {
-    it('returns orbit for right button (button=2)', () => {
-      expect(resolveMouseDragAction(2, { ctrlKey: false, shiftKey: false })).toBe('orbit');
+    it('returns fly for right button (button=2) in 3D mode', () => {
+      expect(resolveMouseDragAction(2, { ctrlKey: false, shiftKey: false, altKey: false }, '3d')).toBe('fly');
+    });
+
+    it('returns orbit for right button (button=2) in 2D mode', () => {
+      expect(resolveMouseDragAction(2, { ctrlKey: false, shiftKey: false, altKey: false }, '2d')).toBe('orbit');
+    });
+
+    it('returns fly for right button when dimension not specified (defaults to 3D)', () => {
+      expect(resolveMouseDragAction(2, { ctrlKey: false, shiftKey: false, altKey: false })).toBe('fly');
     });
 
     it('returns pan for middle button (button=1)', () => {
-      expect(resolveMouseDragAction(1, { ctrlKey: false, shiftKey: false })).toBe('pan');
+      expect(resolveMouseDragAction(1, { ctrlKey: false, shiftKey: false, altKey: false })).toBe('pan');
     });
 
     it('returns null for unknown button (e.g. button=3)', () => {
-      expect(resolveMouseDragAction(3, { ctrlKey: false, shiftKey: false })).toBeNull();
+      expect(resolveMouseDragAction(3, { ctrlKey: false, shiftKey: false, altKey: false })).toBeNull();
     });
 
     it('returns pan for left button (button=0) without modifiers', () => {
-      expect(resolveMouseDragAction(0, { ctrlKey: false, shiftKey: false })).toBe('pan');
+      expect(resolveMouseDragAction(0, { ctrlKey: false, shiftKey: false, altKey: false })).toBe('pan');
     });
 
     it('returns orbit for left button + ctrlKey', () => {
-      expect(resolveMouseDragAction(0, { ctrlKey: true, shiftKey: false })).toBe('orbit');
+      expect(resolveMouseDragAction(0, { ctrlKey: true, shiftKey: false, altKey: false })).toBe('orbit');
     });
 
     it('returns orbit for left button + shiftKey', () => {
-      expect(resolveMouseDragAction(0, { ctrlKey: false, shiftKey: true })).toBe('orbit');
+      expect(resolveMouseDragAction(0, { ctrlKey: false, shiftKey: true, altKey: false })).toBe('orbit');
+    });
+
+    it('returns orbit for Alt + left button in 3D (Unreal-style)', () => {
+      expect(resolveMouseDragAction(0, { ctrlKey: false, shiftKey: false, altKey: true }, '3d')).toBe('orbit');
     });
   });
 
