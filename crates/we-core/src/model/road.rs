@@ -378,7 +378,7 @@ pub struct Signal {
 }
 
 /// 3D point with optional id reference.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Point3D {
     #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
     pub x: f64,
@@ -504,6 +504,7 @@ pub struct RoadObject {
     #[serde(default)]
     pub name: String,
     /// Position in road-local coordinates: x=s (station), y=t (lateral offset), z=zOffset.
+    #[serde(default)]
     pub position: Point3D,
     /// Heading offset relative to road direction (degrees, 0 = forward, 180 = backward).
     #[serde(default, deserialize_with = "crate::serde_helpers::f64_or_zero")]
