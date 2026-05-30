@@ -344,12 +344,12 @@ describe('chooseRoadConnectionContactPoint', () => {
 // ─── createConnectorRoadId / createJunctionConnectionId ───────────────────────
 
 describe('createConnectorRoadId', () => {
-  it('combines junction and road ids', () => {
-    expect(createConnectorRoadId('j1', 'roadA', 'roadB')).toBe('j1_roadA_roadB');
-  });
-
-  it('sanitizes special characters', () => {
-    expect(createConnectorRoadId('j1', 'a/b', 'c d')).toBe('j1_a_b_c_d');
+  it('returns a sequential numeric id', () => {
+    const id1 = createConnectorRoadId('j1', 'roadA', 'roadB');
+    const id2 = createConnectorRoadId('j1', 'a/b', 'c d');
+    expect(Number(id1)).not.toBeNaN();
+    expect(Number(id2)).not.toBeNaN();
+    expect(Number(id2)).toBeGreaterThan(Number(id1));
   });
 });
 

@@ -167,7 +167,7 @@ describe('PropertyPanel', () => {
 
     expect(screen.getByText('路口属性')).toBeInTheDocument();
     expect(screen.getByDisplayValue('测试路口')).toBeInTheDocument();
-    expect(screen.getByText('入口道路列表 (1)')).toBeInTheDocument();
+    expect(screen.getByText('入口道路列表 (2)')).toBeInTheDocument();
     expect(screen.getByText('路口内部连接道路 (1)')).toBeInTheDocument();
     expect(screen.getByText('连接表 (1)')).toBeInTheDocument();
     expect(screen.getAllByText('入口道路 (r-in)').length).toBeGreaterThan(0);

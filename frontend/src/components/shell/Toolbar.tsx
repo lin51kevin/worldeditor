@@ -34,7 +34,6 @@ export const Toolbar = memo(function Toolbar() {
 
   const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
   const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
-
   const { toolbarButtons } = usePluginContribStore();
 
   const { t } = useTranslation();

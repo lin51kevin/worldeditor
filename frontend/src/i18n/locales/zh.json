@@ -734,7 +734,19 @@
     "requiresWasm": "此功能需要 WASM 后端支持，将在未来版本中提供。",
     "placeSignal": "放置信号",
     "placeObject": "放置物体",
-    "addSignalHere": "在此处添加信号"
+    "addSignalHere": "在此处添加信号",
+    "editJunction": "编辑路口（点击道路）",
+    "editJunctionTooltip": "进入交互模式：点击道路可添加/移除入口道路",
+    "autoCreateJunction": "创建路口",
+    "autoCreateJunctionTooltip": "从选中的道路创建路口",
+    "buildJunctionPolygonTooltip": "生成路口区域多边形",
+    "autoDeployCrosswalksTooltip": "在路口入口处自动铺设斑马线",
+    "autoDeployStopLinesTooltip": "在路口入口处自动铺设停车线",
+    "junctionPolygonInsufficient": "无法构建多边形：道路连接不足（需要至少3个边界点）",
+    "junctionPolygonSuccess": "路口多边形构建成功",
+    "junctionPolygonArea": "面积",
+    "junctionPolygonVertices": "边界顶点数",
+    "junctionPolygonFailed": "构建路口多边形失败："
   },
   "converter": {
     "batchConvert": "批量转换..."

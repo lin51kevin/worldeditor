@@ -147,6 +147,12 @@ export abstract class BasePlatformService implements PlatformService {
     return JSON.parse(json) as Project;
   }
 
+  async computeJunctionArea(project: Project, junctionId: string): Promise<import('./platform').JunctionArea | null> {
+    const wasm = await this.getWasm();
+    const result = wasm.compute_junction_area(JSON.stringify(project), junctionId);
+    return result ?? null;
+  }
+
   // --- Project cache (avoids per-call JSON serialisation on mousemove) ---
 
   /** Store the project in the WASM-side cache. Call once per project mutation. */

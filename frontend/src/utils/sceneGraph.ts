@@ -99,7 +99,7 @@ export function buildRenderableProject(
   const hiddenSignalKeys = new Set(visibility.hiddenSignalKeys ?? []);
   const hiddenObjectKeys = new Set(visibility.hiddenObjectKeys ?? []);
 
-  const roads = project.roads
+  const visibleRoads = project.roads
     .filter((road) => !hiddenRoadSet.has(road.id))
     .map((road) => {
       const cloned = cloneRoad(road, hiddenLaneSectionKeys, hiddenLaneKeys);
@@ -111,16 +111,28 @@ export function buildRenderableProject(
       );
       return { ...cloned, signals, objects };
     });
-  const roadIds = new Set(roads.map((road) => road.id));
+
+  // Keep junctions intact — don't filter connections by road visibility
   const junctions = project.junctions
-    .filter((junction) => !hiddenJunctionSet.has(junction.id))
-    .map((junction) => ({
-      ...junction,
-      connections: junction.connections.filter((connection) =>
-        roadIds.has(connection.incoming_road) && roadIds.has(connection.connecting_road),
-      ),
-    }))
-    .filter((junction) => junction.connections.length > 0);
+    .filter((junction) => !hiddenJunctionSet.has(junction.id));
+
+  // Collect road IDs referenced by visible junctions but hidden by user
+  const visibleRoadIds = new Set(visibleRoads.map((r) => r.id));
+  const junctionReferencedHiddenRoadIds = new Set<string>();
+  for (const junction of junctions) {
+    for (const conn of junction.connections) {
+      if (!visibleRoadIds.has(conn.incoming_road)) junctionReferencedHiddenRoadIds.add(conn.incoming_road);
+      if (!visibleRoadIds.has(conn.connecting_road)) junctionReferencedHiddenRoadIds.add(conn.connecting_road);
+    }
+  }
+
+  // Include junction-referenced hidden roads with render_hidden: true
+  // so junction polygon computation has access to their geometry
+  const junctionSupportRoads = project.roads
+    .filter((road) => junctionReferencedHiddenRoadIds.has(road.id))
+    .map((road) => ({ ...road, render_hidden: true }));
+
+  const roads = [...visibleRoads, ...junctionSupportRoads];
 
   return { ...project, roads, junctions };
 }

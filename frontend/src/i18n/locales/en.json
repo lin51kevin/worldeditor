@@ -734,7 +734,19 @@
     "requiresWasm": "This feature requires WASM backend support and will be available in a future release.",
     "placeSignal": "Place Signal",
     "placeObject": "Place Object",
-    "addSignalHere": "Add Signal Here"
+    "addSignalHere": "Add Signal Here",
+    "editJunction": "Edit Junction (Click Roads)",
+    "editJunctionTooltip": "Enter interactive mode: click roads to attach/detach from junction",
+    "autoCreateJunction": "Create Junction",
+    "autoCreateJunctionTooltip": "Create a junction from the selected roads",
+    "buildJunctionPolygonTooltip": "Generate junction area polygon",
+    "autoDeployCrosswalksTooltip": "Auto-deploy crosswalks at junction entrances",
+    "autoDeployStopLinesTooltip": "Auto-deploy stop lines at junction entrances",
+    "junctionPolygonInsufficient": "Cannot build polygon: insufficient road connections (need at least 3 boundary points)",
+    "junctionPolygonSuccess": "Junction polygon built successfully",
+    "junctionPolygonArea": "Area",
+    "junctionPolygonVertices": "Boundary vertices",
+    "junctionPolygonFailed": "Failed to build junction polygon: "
   },
   "converter": {
     "batchConvert": "Batch Convert…"

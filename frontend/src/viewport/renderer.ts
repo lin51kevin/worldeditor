@@ -291,8 +291,6 @@ export class ViewportRenderer {
     vertexData: Float32Array,
     options?: { preserveLastVertexDataOnEmpty?: boolean },
   ): void {
-    // Track whether this is a fresh load (previously empty) to decide on auto-fit
-    const wasEmpty = this.lastVertexData === null || this.lastVertexData.length === 0;
     const preserveLastVertexDataOnEmpty = options?.preserveLastVertexDataOnEmpty === true;
 
     if (vertexData.length === 0) {
@@ -317,8 +315,8 @@ export class ViewportRenderer {
     // Store for later zoomToFit calls
     this.lastVertexData = vertexData;
 
-    // Auto-fit camera on first load or when a pending fit was requested (new file open)
-    if (wasEmpty || this.pendingFitToVertices) {
+    // Auto-fit camera only when explicitly requested (e.g. file open, reset camera)
+    if (this.pendingFitToVertices) {
       this.pendingFitToVertices = false;
       this.fitToVertices(vertexData);
     }

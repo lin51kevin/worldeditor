@@ -28,7 +28,7 @@ export interface ToolbarButtonContrib {
   labelKey: string;
   /** i18n key for the tooltip; falls back to labelKey */
   tooltipKey?: string;
-  group: 'mode' | 'action';
+  group: 'mode' | 'action' | 'junction';
   /** Returns true when the button should appear pressed/active */
   isActive?: () => boolean;
   /** Returns false to hide the button entirely */

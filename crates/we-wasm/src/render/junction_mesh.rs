@@ -34,9 +34,6 @@ pub(crate) fn build_junction_polygon_points(
         let Some(connecting) = project.roads.iter().find(|r| r.id == conn.connecting_road) else {
             continue;
         };
-        if connecting.render_hidden {
-            continue;
-        }
         let connecting_s = if conn.contact_point == we_core::model::ContactPoint::Start {
             0.0
         } else {
@@ -59,9 +56,6 @@ pub(crate) fn build_junction_polygon_points(
         let Some(incoming) = project.roads.iter().find(|r| r.id == conn.incoming_road) else {
             continue;
         };
-        if incoming.render_hidden {
-            continue;
-        }
         let Some(in_start) = road_point_at_s(&incoming.plan_view, 0.0) else {
             continue;
         };

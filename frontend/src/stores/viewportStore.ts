@@ -37,7 +37,7 @@ type ViewDimension = '3d' | '2d';
 /** Selection-based interaction modes. */
 export type SelectMode = 'default' | 'road' | 'lane' | 'lanesection';
 /** Geometry manipulation modes (transform existing roads). */
-export type EditMode = 'move-road' | 'rotate-road' | 'split' | 'adjust-edge' | 'road-markings' | 'editLaneLine' | 'placeSignal' | 'placeObject';
+export type EditMode = 'move-road' | 'rotate-road' | 'split' | 'adjust-edge' | 'road-markings' | 'editLaneLine' | 'placeSignal' | 'placeObject' | 'editJunction';
 /** Road drawing / creation modes. */
 export type DrawMode = 'spline' | 'drawArc' | 'drawSpiral';
 /** Union of all active-mode categories. */

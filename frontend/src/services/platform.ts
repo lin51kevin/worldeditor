@@ -305,6 +305,13 @@ export interface Junction {
   connections: JunctionConnection[];
 }
 
+export interface JunctionArea {
+  id: string;
+  center: [number, number];
+  boundary: Array<{ x: number; y: number }>;
+  area: number;
+}
+
 export interface JunctionConnection {
   id: string;
   incoming_road: string;
@@ -466,6 +473,10 @@ export interface PlatformService {
   /** Auto-generate connector roads for all unconnected arm pairs in a junction.
    *  Returns the updated Project. */
   autoJunctionConnectors(project: Project, junctionId: string): Promise<Project>;
+
+  /** Compute the boundary polygon and area of a junction.
+   *  Returns { id, center, boundary, area } or null if insufficient data. */
+  computeJunctionArea(project: Project, junctionId: string): Promise<JunctionArea | null>;
 
   // --- Project cache (avoids per-call JSON serialisation on 60 Hz mousemove) ---
 

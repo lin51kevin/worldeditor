@@ -443,6 +443,7 @@ export function Viewport() {
     const isClickToPlace =
       isDrawMode(viewState0.editMode) ||
       viewState0.editMode === 'split' ||
+      viewState0.editMode === 'editJunction' ||
       viewState0.editMode === 'placeSignal' ||
       viewState0.editMode === 'placeObject' ||
       !!viewState0.pendingTemplateId ||
@@ -508,6 +509,33 @@ export function Viewport() {
       return;
     }
     if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road' || viewState.editMode === 'adjust-edge' || viewState.editMode === 'editLaneLine') {
+      return;
+    }
+
+    // editJunction mode: click a road to toggle it as incoming road of the selected junction
+    if (viewState.editMode === 'editJunction') {
+      const { selectedJunctionId } = useProjectStore.getState();
+      if (selectedJunctionId) {
+        try {
+          const service = await getPlatformService();
+          const roadId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 8.0);
+          if (roadId) {
+            const store = useProjectStore.getState();
+            const road = store.project.roads.find((r) => r.id === roadId);
+            if (road) {
+              const { attachRoadToJunction, detachRoadFromJunction, isRoadLinkedToJunction, chooseRoadConnectionContactPoint } = await import('../utils/junctionEditing');
+              if (isRoadLinkedToJunction(road, selectedJunctionId)) {
+                store.executePluginCommand('Detach Road from Junction', (p) => detachRoadFromJunction(p, selectedJunctionId, roadId));
+              } else {
+                const contactPoint = chooseRoadConnectionContactPoint(store.project, selectedJunctionId, road);
+                store.executePluginCommand('Attach Road to Junction', (p) => attachRoadToJunction(p, selectedJunctionId, roadId, contactPoint));
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[Viewport] editJunction click failed:', err);
+        }
+      }
       return;
     }
 

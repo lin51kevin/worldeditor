@@ -26,6 +26,7 @@ import { useViewportStore } from '../../../stores/viewportStore';
 import type { MenuItemContrib, ToolbarButtonContrib, ContextMenuContrib, ContextMenuCtx } from '../../../stores/pluginContribStore';
 import {
   enterSplitMode,
+  enterEditJunctionMode,
   enterSignalPlacementMode,
   enterObjectPlacementMode,
   addSignalHere,
@@ -44,6 +45,7 @@ import {
   rebuildSelectedJunctionConnections,
   fillSelectedJunctionGap,
   buildJunctionPolygon,
+  autoCreateJunction,
 } from './commands';
 
 const PLUGIN_ID = 'advanced-editing';
@@ -88,6 +90,17 @@ export function mountAdvancedEditingPlugin(): () => void {
       isActive: () => false,
       isDisabled: () => !useProjectStore.getState().selectedRoadId,
       onClick: resampleSelectedRoad,
+    },
+    {
+      id: `${PLUGIN_ID}:auto-create-junction`,
+      pluginId: PLUGIN_ID,
+      icon: 'Diamond',
+      labelKey: 'advancedEditing.autoCreateJunction',
+      tooltipKey: 'advancedEditing.autoCreateJunctionTooltip',
+      group: 'action',
+      isActive: () => false,
+      isDisabled: () => useProjectStore.getState().selectedRoadIds.length < 2,
+      onClick: autoCreateJunction,
     },
   ];
 
@@ -179,6 +192,26 @@ export function mountAdvancedEditingPlugin(): () => void {
       onClick: enterObjectPlacementMode,
     },
     // Junction menu group
+    {
+      id: `${PLUGIN_ID}:auto-create-junction-menu`,
+      pluginId: PLUGIN_ID,
+      menu: 'road',
+      labelKey: 'advancedEditing.autoCreateJunction',
+      label: 'Create Junction from Selected Roads',
+      group: 'junction',
+      isDisabled: () => useProjectStore.getState().selectedRoadIds.length < 2,
+      onClick: autoCreateJunction,
+    },
+    {
+      id: `${PLUGIN_ID}:edit-junction-mode-menu`,
+      pluginId: PLUGIN_ID,
+      menu: 'road',
+      labelKey: 'advancedEditing.editJunction',
+      label: 'Edit Junction (Click Roads)',
+      group: 'junction',
+      isDisabled: () => !useProjectStore.getState().selectedJunctionId,
+      onClick: enterEditJunctionMode,
+    },
     {
       id: `${PLUGIN_ID}:add-incoming-road-menu`,
       pluginId: PLUGIN_ID,

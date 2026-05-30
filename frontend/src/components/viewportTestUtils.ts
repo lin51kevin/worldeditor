@@ -152,6 +152,7 @@ export function createPlatformMock(vertices = new Float32Array([1, 2, 3])): Plat
     generateRoadVerticesCached: vi.fn().mockResolvedValue(vertices),
     generateBridgeTunnelVertices: vi.fn().mockResolvedValue(new Float32Array()),
     autoJunctionConnectors: vi.fn().mockResolvedValue(makeProject()),
+    computeJunctionArea: vi.fn().mockResolvedValue(null),
   };
 }
 

@@ -25,6 +25,7 @@ import {
   deployStopLines as deployStopLinesUtil,
   resampleRoad as resampleRoadUtil,
 } from '../../../utils/roadEdit';
+import { genId } from '../templates/engine';
 import {
   createRoadSignalFromPlacement,
   startObjectPlacement,
@@ -82,6 +83,24 @@ async function promptForRoadId(
 }
 
 // ─── Mode entry commands ────────────────────────────────────────────────────
+
+export function enterEditJunctionMode(): void {
+  const { selectedJunctionId } = getStore();
+  if (!selectedJunctionId) {
+    void showAlert(t('advancedEditing.noJunctionSelected', 'No junction selected'));
+    return;
+  }
+
+  const viewportState = useViewportStore.getState();
+  if (viewportState.editMode === 'editJunction') {
+    viewportState.setEditMode('default');
+    return;
+  }
+  if (viewportState.editMode === 'spline' || viewportState.editMode === 'drawArc' || viewportState.editMode === 'drawSpiral') {
+    viewportState.clearSplineKnots();
+  }
+  viewportState.setEditMode('editJunction');
+}
 
 export function enterSplitMode(): void {
   const { selectedRoadId } = getStore();
@@ -492,5 +511,85 @@ export function buildJunctionPolygon(): void {
     void showAlert(t('advancedEditing.noJunctionSelected', 'No junction selected'));
     return;
   }
-  void showAlert(t('advancedEditing.requiresWasm', 'This feature requires WASM backend support and will be available in a future release'));
+
+  void (async () => {
+    try {
+      const store = getStore();
+      const service = await getPlatformService();
+      const area = await service.computeJunctionArea(store.project, selectedJunctionId);
+      if (!area) {
+        void showAlert(
+          t('advancedEditing.junctionPolygonInsufficient', 'Cannot build polygon: insufficient road connections (need at least 3 boundary points)')
+        );
+        return;
+      }
+      void showAlert(
+        t('advancedEditing.junctionPolygonSuccess', 'Junction polygon built successfully') +
+          `\n\n` +
+          t('advancedEditing.junctionPolygonArea', 'Area') + `: ${area.area.toFixed(2)} m²\n` +
+          t('advancedEditing.junctionPolygonVertices', 'Boundary vertices') + `: ${area.boundary.length}`
+      );
+    } catch (err) {
+      void showAlert(
+        t('advancedEditing.junctionPolygonFailed', 'Failed to build junction polygon: ') +
+          String(err instanceof Error ? err.message : err)
+      );
+    }
+  })();
+}
+
+/**
+ * Auto-create a junction from the currently selected roads.
+ * Selects 2+ roads whose endpoints are within proximity → creates junction and attaches them.
+ */
+export function autoCreateJunction(): void {
+  const { selectedRoadIds, selectedRoadId, project, executePluginCommand, selectJunction } = getStore();
+
+  const roadIds = selectedRoadIds.length >= 2
+    ? selectedRoadIds
+    : selectedRoadId ? [selectedRoadId] : [];
+
+  if (roadIds.length < 2) {
+    void showAlert(t('advancedEditing.selectTwoRoads', 'Select at least 2 roads to create a junction'));
+    return;
+  }
+
+  const roads = roadIds
+    .map((id) => project.roads.find((r) => r.id === id))
+    .filter((r): r is NonNullable<typeof r> => !!r);
+
+  if (roads.length < 2) {
+    void showAlert(t('advancedEditing.invalidRoadSelection', 'The specified road could not be found'));
+    return;
+  }
+
+  const junctionId = genId();
+
+  executePluginCommand(
+    t('advancedEditing.autoCreateJunction', 'Create Junction'),
+    (p) => {
+      const newJunction = {
+        id: junctionId,
+        name: `Junction(${junctionId})`,
+        connections: [],
+      };
+
+      let updatedProject = {
+        ...p,
+        junctions: [...p.junctions, newJunction],
+      };
+
+      for (const road of roads) {
+        const contactPoint = chooseRoadConnectionContactPoint(updatedProject, junctionId, road);
+        updatedProject = attachRoadToJunction(updatedProject, junctionId, road.id, contactPoint);
+      }
+
+      return updatedProject;
+    },
+  );
+
+  // Select the new junction after creation
+  setTimeout(() => {
+    selectJunction(junctionId);
+  }, 0);
 }

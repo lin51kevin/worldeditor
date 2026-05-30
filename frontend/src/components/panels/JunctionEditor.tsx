@@ -10,6 +10,16 @@ import {
   getJunctionIncomingRoads,
   getJunctionOutgoingRoads,
 } from '../../utils/junctionEditing';
+import {
+  addIncomingRoadToJunction,
+  removeIncomingRoadFromJunction,
+  rebuildSelectedJunctionConnections,
+  fillSelectedJunctionGap,
+  buildJunctionPolygon,
+  autoDeployCrosswalks,
+  autoDeployStopLines,
+  enterEditJunctionMode,
+} from '../../plugins/editing/advanced-editing/commands';
 
 type RoadLookup = Record<string, Road | undefined>;
 
@@ -93,6 +103,34 @@ export const JunctionEditor = memo(function JunctionEditor({ junction }: Junctio
 
   return (
     <div className="inspector-cards">
+      {/* Quick action buttons — inspired by C# WorldEditor junction editing */}
+      <div className="junction-editor-actions">
+        <button className="property-btn junction-action-btn junction-action-btn--primary" onClick={enterEditJunctionMode} title={t('advancedEditing.editJunction', 'Edit Junction (Click Roads)')}>
+          {t('advancedEditing.editJunction', 'Edit Junction (Click Roads)')}
+        </button>
+        <button className="property-btn junction-action-btn" onClick={addIncomingRoadToJunction} title={t('advancedEditing.addIncomingRoad', 'Add Incoming Road')}>
+          {t('advancedEditing.addIncomingRoad', 'Add Incoming Road')}
+        </button>
+        <button className="property-btn junction-action-btn" onClick={removeIncomingRoadFromJunction} title={t('advancedEditing.removeIncomingRoad', 'Remove Incoming Road')}>
+          {t('advancedEditing.removeIncomingRoad', 'Remove Incoming Road')}
+        </button>
+        <button className="property-btn junction-action-btn" onClick={() => void rebuildSelectedJunctionConnections()} title={t('advancedEditing.rebuildConnections', 'Rebuild Connections')}>
+          {t('advancedEditing.rebuildConnections', 'Rebuild Connections')}
+        </button>
+        <button className="property-btn junction-action-btn" onClick={fillSelectedJunctionGap} title={t('advancedEditing.fillGap', 'Fill Gap')}>
+          {t('advancedEditing.fillGap', 'Fill Gap')}
+        </button>
+        <button className="property-btn junction-action-btn" onClick={buildJunctionPolygon} title={t('advancedEditing.buildJunctionPolygon', 'Build Polygon')}>
+          {t('advancedEditing.buildJunctionPolygon', 'Build Polygon')}
+        </button>
+        <button className="property-btn junction-action-btn" onClick={autoDeployCrosswalks} title={t('advancedEditing.autoDeployCrosswalks', 'Crosswalks')}>
+          {t('advancedEditing.autoDeployCrosswalks', 'Crosswalks')}
+        </button>
+        <button className="property-btn junction-action-btn" onClick={autoDeployStopLines} title={t('advancedEditing.autoDeployStopLines', 'Stop Lines')}>
+          {t('advancedEditing.autoDeployStopLines', 'Stop Lines')}
+        </button>
+      </div>
+
       <JunctionEditorCard title={t('propertyPanel.junctionProperties')}>
         <div className="property-row">
           <span className="property-label">{t('propertyPanel.id')}</span>

@@ -8,6 +8,7 @@ import type {
   Project,
   Road,
 } from '../services/platform';
+import { genId } from '../plugins/editing/templates/engine';
 import { evalRoadAtS } from './roadEdit';
 
 const DEFAULT_LANE_WIDTH = 3.5;
@@ -46,29 +47,74 @@ function makeDefaultDrivingLane(id: number): Lane {
   };
 }
 
-function cloneLaneSectionTemplate(section?: LaneSection, laneCount = 1): LaneSection {
+function cloneLaneSectionTemplate(section?: LaneSection, laneCount = 1, includeOutermostShoulder = false): LaneSection {
   const baseCenter = section?.center.map(cloneLane) ?? [{ id: 0, lane_type: 'none', level: 0, link: null, width: [], road_marks: [] }];
-  const rightTemplate = section?.right?.[0] ? cloneLane(section.right[0]) : makeDefaultDrivingLane(-1);
+  const drivingLanes = section?.right.filter((lane) => String(lane.lane_type).toLowerCase() === 'driving') ?? [];
+  const rightLanes: Lane[] = Array.from({ length: Math.max(laneCount, 1) }, (_, index) => {
+    const templateLane = drivingLanes[index] ?? drivingLanes[0];
+    if (templateLane) {
+      return { ...cloneLane(templateLane), id: -(index + 1), link: null };
+    }
+    return { ...makeDefaultDrivingLane(-(index + 1)), link: null };
+  });
+  // Append outermost shoulder only for adjacent CW pairs.
+  if (includeOutermostShoulder && section?.right.length) {
+    const outermost = section.right[section.right.length - 1];
+    if (outermost && String(outermost.lane_type).toLowerCase() === 'shoulder') {
+      rightLanes.push({ ...cloneLane(outermost), id: -(rightLanes.length + 1), link: null });
+    }
+  }
   return {
     s: 0,
     single_side: section?.single_side ?? false,
     left: [],
     center: baseCenter,
-    right: Array.from({ length: Math.max(laneCount, 1) }, (_, index) => ({
-      ...cloneLane(rightTemplate),
-      id: -(index + 1),
-      link: null,
-    })),
+    right: rightLanes,
   };
 }
 
-function countDrivingRightLanes(road: Road): number {
+function countRightLanes(road: Road): number {
   const count = road.lane_sections[0]?.right.filter((lane) => String(lane.lane_type).toLowerCase() === 'driving').length ?? 0;
   return Math.max(count, 1);
 }
 
-function sanitizeRoadId(id: string): string {
-  return id.replace(/[^a-zA-Z0-9_]/g, '_');
+/**
+ * Check if (fromRoadId → toRoadId) are angularly adjacent in clockwise direction
+ * around the junction center (cwDist == 1). Used to decide whether to include
+ * the outermost shoulder lane on connector roads.
+ */
+function isArmPairCwAdjacent(
+  project: Project,
+  junctionId: string,
+  fromRoadId: string,
+  toRoadId: string,
+): boolean {
+  // Collect all arm positions for roads touching this junction.
+  const armPositions: Array<{ roadId: string; x: number; y: number }> = [];
+  for (const road of project.roads) {
+    if (road.junction_id === junctionId) continue; // skip connector roads
+    const contact = getRoadJunctionContactPoint(road, junctionId);
+    if (!contact) continue;
+    const pose = evalRoadAtS(road, contact === 'Start' ? 0 : road.length);
+    armPositions.push({ roadId: road.id, x: pose.x, y: pose.y });
+  }
+  if (armPositions.length < 2) return false;
+
+  // Compute centroid.
+  const cx = armPositions.reduce((s, a) => s + a.x, 0) / armPositions.length;
+  const cy = armPositions.reduce((s, a) => s + a.y, 0) / armPositions.length;
+
+  // Sort by angle.
+  const sorted = [...armPositions].sort(
+    (a, b) => Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx),
+  );
+
+  const n = sorted.length;
+  const fromIdx = sorted.findIndex((a) => a.roadId === fromRoadId);
+  const toIdx = sorted.findIndex((a) => a.roadId === toRoadId);
+  if (fromIdx < 0 || toIdx < 0) return false;
+
+  return (toIdx - fromIdx + n) % n === 1;
 }
 
 function sampleArcLength(
@@ -160,7 +206,7 @@ export function getJunctionIncomingRoads(project: Project, junctionId: string): 
   const junction = getJunctionFromProject(project, junctionId);
   const incomingIds = new Set(junction?.connections.map((connection) => connection.incoming_road) ?? []);
   project.roads.forEach((road) => {
-    if (isJunctionLink(road.link?.successor, junctionId)) {
+    if (isJunctionLink(road.link?.successor, junctionId) || isJunctionLink(road.link?.predecessor, junctionId)) {
       incomingIds.add(road.id);
     }
   });
@@ -171,7 +217,7 @@ export function getJunctionOutgoingRoads(project: Project, junctionId: string): 
   const junction = getJunctionFromProject(project, junctionId);
   const outgoingIds = new Set<string>();
   project.roads.forEach((road) => {
-    if (isJunctionLink(road.link?.predecessor, junctionId)) {
+    if (isJunctionLink(road.link?.predecessor, junctionId) || isJunctionLink(road.link?.successor, junctionId)) {
       outgoingIds.add(road.id);
     }
   });
@@ -240,8 +286,8 @@ export function chooseRoadConnectionContactPoint(project: Project, junctionId: s
   return startDistance <= endDistance ? 'Start' : 'End';
 }
 
-export function createConnectorRoadId(junctionId: string, incomingRoadId: string, outgoingRoadId: string): string {
-  return `${junctionId}_${sanitizeRoadId(incomingRoadId)}_${sanitizeRoadId(outgoingRoadId)}`;
+export function createConnectorRoadId(_junctionId: string, _incomingRoadId: string, _outgoingRoadId: string): string {
+  return genId();
 }
 
 export function createJunctionConnectionId(junction: Junction): string {
@@ -269,20 +315,41 @@ export function buildConnectorRoad(
     return null;
   }
 
-  const start = evalRoadAtS(incomingRoad, incomingRoad.length);
-  const end = evalRoadAtS(outgoingRoad, 0);
+  const incomingContact = getRoadJunctionContactPoint(incomingRoad, junctionId) ?? 'End';
+  const outgoingContact = getRoadJunctionContactPoint(outgoingRoad, junctionId) ?? 'Start';
+
+  // Evaluate position at the junction endpoint of each road
+  const startRaw = incomingContact === 'End'
+    ? evalRoadAtS(incomingRoad, incomingRoad.length)
+    : evalRoadAtS(incomingRoad, 0);
+  const endRaw = outgoingContact === 'Start'
+    ? evalRoadAtS(outgoingRoad, 0)
+    : evalRoadAtS(outgoingRoad, outgoingRoad.length);
+
+  // Reverse heading when road's Start is at junction (incoming leaves junction)
+  // or road's End is at junction (outgoing arrives from junction)
+  const start = incomingContact === 'Start'
+    ? { ...startRaw, hdg: startRaw.hdg + Math.PI }
+    : startRaw;
+  const end = outgoingContact === 'End'
+    ? { ...endRaw, hdg: endRaw.hdg + Math.PI }
+    : endRaw;
+
   const coeffs = buildHermiteCoefficients(start, end);
-  const laneCount = Math.max(1, Math.min(countDrivingRightLanes(incomingRoad), countDrivingRightLanes(outgoingRoad)));
+  const laneCount = Math.max(1, Math.min(countRightLanes(incomingRoad), countRightLanes(outgoingRoad)));
   const laneSectionTemplate = incomingRoad.lane_sections[0] ?? outgoingRoad.lane_sections[0];
+
+  // Determine angular adjacency: include outermost shoulder only for CW-adjacent pairs.
+  const adjacent = isArmPairCwAdjacent(project, junctionId, incomingRoadId, outgoingRoadId);
 
   return {
     id: roadId,
-    name: `${incomingRoad.name || incomingRoad.id} → ${outgoingRoad.name || outgoingRoad.id}`,
+    name: `Road(${incomingRoad.name || incomingRoad.id}→${outgoingRoad.name || outgoingRoad.id})`,
     length: coeffs.length,
     junction_id: junctionId,
     link: {
-      predecessor: { element_id: incomingRoadId, element_type: 'Road', contact_point: 'End' },
-      successor: { element_id: outgoingRoadId, element_type: 'Road', contact_point: 'Start' },
+      predecessor: { element_id: incomingRoadId, element_type: 'Road', contact_point: incomingContact },
+      successor: { element_id: outgoingRoadId, element_type: 'Road', contact_point: outgoingContact },
     },
     plan_view: [{
       s: 0,
@@ -305,7 +372,7 @@ export function buildConnectorRoad(
       },
     }],
     elevation_profile: [],
-    lane_sections: [cloneLaneSectionTemplate(laneSectionTemplate, laneCount)],
+    lane_sections: [cloneLaneSectionTemplate(laneSectionTemplate, laneCount, adjacent)],
   };
 }
 
@@ -466,10 +533,10 @@ export function addConnectionBetweenRoads(
     return project;
   }
 
-  if (!isJunctionLink(incomingRoad.link?.successor, junctionId)) {
+  if (!isJunctionLink(incomingRoad.link?.successor, junctionId) && !isJunctionLink(incomingRoad.link?.predecessor, junctionId)) {
     nextProject = attachRoadToJunction(nextProject, junctionId, incomingRoadId, 'End');
   }
-  if (!isJunctionLink(outgoingRoad.link?.predecessor, junctionId)) {
+  if (!isJunctionLink(outgoingRoad.link?.predecessor, junctionId) && !isJunctionLink(outgoingRoad.link?.successor, junctionId)) {
     nextProject = attachRoadToJunction(nextProject, junctionId, outgoingRoadId, 'Start');
   }
 
