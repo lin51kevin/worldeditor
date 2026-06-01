@@ -178,7 +178,7 @@ pub fn build_junction_connectors(
             // The connector road goes FROM the from_arm INTO the junction, and OUT to the to_arm.
             let effective_from = JunctionArm {
                 road_id: from_arm.road_id.clone(),
-                contact_point: from_arm.contact_point.clone(),
+                contact_point: from_arm.contact_point,
                 x: from_arm.x,
                 y: from_arm.y,
                 hdg: if from_arm.contact_point == ContactPoint::End {
@@ -191,7 +191,7 @@ pub fn build_junction_connectors(
 
             let effective_to = JunctionArm {
                 road_id: to_arm.road_id.clone(),
-                contact_point: to_arm.contact_point.clone(),
+                contact_point: to_arm.contact_point,
                 x: to_arm.x,
                 y: to_arm.y,
                 hdg: if to_arm.contact_point == ContactPoint::Start {
@@ -225,13 +225,11 @@ pub fn build_junction_connectors(
                         .cloned()
                         .collect();
                     // Append outermost shoulder only for adjacent CW pairs.
-                    if is_adjacent {
-                        if let Some(outermost) = ls.right.last() {
-                            if matches!(outermost.lane_type, LaneType::Shoulder) {
+                    if is_adjacent
+                        && let Some(outermost) = ls.right.last()
+                            && matches!(outermost.lane_type, LaneType::Shoulder) {
                                 lanes.push(outermost.clone());
                             }
-                        }
-                    }
                     lanes
                 })
                 .unwrap_or_default();
@@ -411,8 +409,8 @@ fn make_connector_road(
     let mut road = Road::from_centerline_with_width(road_id, vec![geo], lane_width);
 
     // Replace the default single driving lane with template lanes (preserving types).
-    if !template_lanes.is_empty() {
-        if let Some(ls) = road.lane_sections.first_mut() {
+    if !template_lanes.is_empty()
+        && let Some(ls) = road.lane_sections.first_mut() {
             ls.right = template_lanes
                 .iter()
                 .enumerate()
@@ -424,7 +422,6 @@ fn make_connector_road(
                 })
                 .collect();
         }
-    }
 
     // Mark as belonging to the junction and set concise name.
     road.junction_id = Some(junction_id.to_owned());
@@ -435,12 +432,12 @@ fn make_connector_road(
         predecessor: Some(LinkElement {
             element_type: LinkElementType::Road,
             element_id: from.road_id.clone(),
-            contact_point: Some(from.contact_point.clone()),
+            contact_point: Some(from.contact_point),
         }),
         successor: Some(LinkElement {
             element_type: LinkElementType::Road,
             element_id: to.road_id.clone(),
-            contact_point: Some(to.contact_point.clone()),
+            contact_point: Some(to.contact_point),
         }),
     });
 
@@ -450,6 +447,7 @@ fn make_connector_road(
 /// Compute hermite cubic ParamPoly3 coefficients in the local frame of `from`.
 ///
 /// Returns `(a_u, b_u, c_u, d_u, a_v, b_v, c_v, d_v)` for normalised p ∈ [0,1].
+#[allow(clippy::too_many_arguments)]
 fn hermite_param_poly3(
     x0: f64,
     y0: f64,
@@ -492,6 +490,7 @@ fn hermite_param_poly3(
 }
 
 /// Approximate the arc length of a normalised ParamPoly3 curve by sampling.
+#[allow(clippy::too_many_arguments)]
 fn sample_arc_length(
     a_u: f64,
     b_u: f64,

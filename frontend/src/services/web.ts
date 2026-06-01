@@ -20,19 +20,25 @@ export class WebPlatformService extends BasePlatformService implements PlatformS
     return wasm.write_opendrive(JSON.stringify(project));
   }
 
-  async openFile(): Promise<{ name: string; content: string; path?: string } | null> {
+  async openFile(): Promise<{ name: string; content: string; buffer?: ArrayBuffer; path?: string } | null> {
     return new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.xodr,.xml';
+      input.accept = '.xodr,.xml,.geoz';
       input.onchange = async () => {
         const file = input.files?.[0];
         if (!file) {
           resolve(null);
           return;
         }
-        const content = await file.text();
-        resolve({ name: file.name, content });
+        // Binary formats (e.g. .geoz) return ArrayBuffer instead of text
+        if (/\.geoz$/i.test(file.name)) {
+          const buffer = await file.arrayBuffer();
+          resolve({ name: file.name, content: '', buffer });
+        } else {
+          const content = await file.text();
+          resolve({ name: file.name, content });
+        }
       };
       input.click();
     });

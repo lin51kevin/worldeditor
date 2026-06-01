@@ -264,11 +264,117 @@ describe('geoz parser', () => {
       id: 'signal-1',
       name: 'traffic_light',
     });
-    expect(project.objects[0]).toMatchObject({
-      id: 'object-1',
-      roadId: 'road-1',
-      type: 'barrier',
+    // GeoZ proto objects lack geometry fields required by Rust RoadObject;
+    // they are omitted to prevent WASM deserialization failures.
+    expect(project.objects).toEqual([]);
+  });
+
+  it('parses road marks from lane geometry boundaries', () => {
+    const project = geoToProject(
+      [
+        {
+          header: { name: 'Road Marks Test' },
+          roads: [
+            {
+              header: { id: 'road-1', length: 10, name: 'Road 1', junction_id: '' },
+              road_predecessors: [],
+              road_successors: [],
+              road_sections: [
+                {
+                  section_id: 's0', section_index: 0, s: 0,
+                  section_direction_type: 'RIGHT_SECTION',
+                  lanes: [
+                    { header: { id: '-1', lane_type: 'driving' }, predecessors: [], successors: [] },
+                  ],
+                },
+              ],
+              road_signal: [],
+              road_objects: [],
+            },
+          ],
+          junctions: [],
+        },
+      ],
+      [
+        {
+          stem: 'road-1',
+          data: {
+            road_geometry: {
+              id: 'road-1',
+              reference_line: { point: [{ x: 0, y: 0, z: 0 }, { x: 10, y: 0, z: 0 }] },
+              lane_geometrys: [
+                {
+                  id: '-1',
+                  left_boundary: {
+                    point: [{ x: 0, y: 0, z: 0 }, { x: 10, y: 0, z: 0 }],
+                    road_mark: [
+                      { offset: 0, length: 5, mark_type: 'type_solid', mark_color: 'color_white', mark_weight: 'weight_standard', width: 0.15 },
+                      { offset: 5, length: 5, mark_type: 'type_broken', mark_color: 'color_yellow', mark_weight: 'weight_bold', width: 0.2 },
+                    ],
+                  },
+                  right_boundary: {
+                    point: [{ x: 0, y: -3.5, z: 0 }, { x: 10, y: -3.5, z: 0 }],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+      'road-marks.geoz',
+    );
+
+    const lane = project.roads[0]?.lane_sections[0]?.right[0];
+    expect(lane?.road_marks).toHaveLength(2);
+    expect(lane?.road_marks[0]).toMatchObject({
+      s_offset: 0,
+      mark_type: 'solid',
+      color: 'white',
+      weight: 'standard',
+      width: 0.15,
+      material: '',
+      lane_change: '',
     });
+    expect(lane?.road_marks[1]).toMatchObject({
+      s_offset: 5,
+      mark_type: 'broken',
+      color: 'yellow',
+      weight: 'bold',
+      width: 0.2,
+      material: '',
+      lane_change: '',
+    });
+  });
+
+  it('returns empty road_marks when no geometry matches', () => {
+    const project = geoToProject(
+      [
+        {
+          header: { name: 'No Match' },
+          roads: [
+            {
+              header: { id: 'road-1', length: 10, name: 'R1', junction_id: '' },
+              road_predecessors: [], road_successors: [],
+              road_sections: [
+                {
+                  section_id: 's0', section_index: 0, s: 0,
+                  section_direction_type: 'RIGHT_SECTION',
+                  lanes: [
+                    { header: { id: '-1', lane_type: 'driving' }, predecessors: [], successors: [] },
+                  ],
+                },
+              ],
+              road_signal: [], road_objects: [],
+            },
+          ],
+          junctions: [],
+        },
+      ],
+      [],
+      'no-geo.geoz',
+    );
+
+    expect(project.roads[0]?.lane_sections[0]?.right[0]?.road_marks).toEqual([]);
   });
 
   it('throws when the input is not a valid GeoZ archive', async () => {
@@ -277,5 +383,131 @@ describe('geoz parser', () => {
     await expect(importGeoZ(invalidContent, 'broken.geoz')).rejects.toThrow(
       /Failed to read GeoZ archive/i,
     );
+  });
+
+  it('falls back to center_line when reference_line is missing', () => {
+    const project = geoToProject(
+      [
+        {
+          header: { name: 'CenterLine Fallback' },
+          roads: [
+            {
+              header: { id: 'road-1', length: 0, name: 'Road A', junction_id: '' },
+              road_predecessors: [], road_successors: [],
+              road_sections: [],
+              road_signal: [], road_objects: [],
+            },
+          ],
+          junctions: [],
+        },
+      ],
+      [
+        {
+          stem: 'road-1',
+          data: {
+            road_geometry: {
+              id: 'road-1',
+              reference_line: { point: [] },
+              center_line: {
+                point: [
+                  { x: 0, y: 0, z: 0 },
+                  { x: 20, y: 5, z: 0 },
+                  { x: 40, y: 0, z: 0 },
+                ],
+              },
+              lane_geometrys: [],
+            },
+          },
+        },
+      ],
+      'center-line.geoz',
+    );
+
+    expect(project.roads[0]?.plan_view.length).toBeGreaterThanOrEqual(2);
+    expect(project.roads[0]?.plan_view[0]).toMatchObject({ x: 0, y: 0, geo_type: 'Line' });
+  });
+
+  it('synthesizes reference line from lane boundaries when reference_line and center_line are missing', () => {
+    const project = geoToProject(
+      [
+        {
+          header: { name: 'Lane Boundary Fallback' },
+          roads: [
+            {
+              header: { id: 'road-1', length: 0, name: 'Road B', junction_id: '' },
+              road_predecessors: [], road_successors: [],
+              road_sections: [
+                {
+                  section_id: 's0', section_index: 0, s: 0,
+                  section_direction_type: 'RIGHT_SECTION',
+                  lanes: [
+                    { header: { id: '-1', lane_type: 'driving' }, predecessors: [], successors: [] },
+                  ],
+                },
+              ],
+              road_signal: [], road_objects: [],
+            },
+          ],
+          junctions: [],
+        },
+      ],
+      [
+        {
+          stem: 'road-1',
+          data: {
+            road_geometry: {
+              id: 'road-1',
+              // No reference_line, no center_line
+              lane_geometrys: [
+                {
+                  id: '-1',
+                  left_boundary: {
+                    point: [
+                      { x: 0, y: 2, z: 0 },
+                      { x: 50, y: 2, z: 0 },
+                    ],
+                  },
+                  right_boundary: {
+                    point: [
+                      { x: 0, y: -2, z: 0 },
+                      { x: 50, y: -2, z: 0 },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+      'lane-fallback.geoz',
+    );
+
+    // Should have synthesized a center line at y=0 (avg of y=2 and y=-2)
+    expect(project.roads[0]?.plan_view.length).toBeGreaterThanOrEqual(1);
+    expect(project.roads[0]?.plan_view[0]).toMatchObject({ x: 0, y: 0, geo_type: 'Line' });
+    expect(project.roads[0]?.plan_view[0]?.length).toBeCloseTo(50, 0);
+  });
+
+  it('produces empty plan_view when no geometry data is available', () => {
+    const project = geoToProject(
+      [
+        {
+          header: { name: 'No Geometry' },
+          roads: [
+            {
+              header: { id: 'road-1', length: 30, name: 'Ghost Road', junction_id: '' },
+              road_predecessors: [], road_successors: [],
+              road_sections: [],
+              road_signal: [], road_objects: [],
+            },
+          ],
+          junctions: [],
+        },
+      ],
+      [], // No geo files at all
+      'no-geo.geoz',
+    );
+
+    expect(project.roads[0]?.plan_view).toEqual([]);
   });
 });

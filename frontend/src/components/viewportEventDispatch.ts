@@ -38,7 +38,7 @@ export function updateSnapIndicator(
   const snapEl = ctx.snapIndicatorDomRef.current;
   if (!snapEl) return;
 
-  if (snapped && worldX != null && worldY != null) {
+  if (snapped && worldX !== null && worldX !== undefined && worldY !== null && worldY !== undefined) {
     const screenPos = ctx.renderer.projectWorldToScreen(worldX, worldY);
     if (screenPos) {
       snapEl.style.left = `${screenPos.x}px`;

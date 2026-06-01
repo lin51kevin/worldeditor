@@ -139,7 +139,7 @@ test.describe('Open & Parse & Render', () => {
     const rewritten = await page.evaluate(async () => {
       const getSvc = (window as Record<string, any>).__getPlatformService;
       const svc = await getSvc();
-      const store = (window as Record<string, any>).__editorStore;
+      const store = (window as Record<string, any>).__projectStore;
       const project = store.getState().project;
       return await svc.writeOpenDrive(project);
     });

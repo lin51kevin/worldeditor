@@ -546,6 +546,7 @@ pub struct UpdateBridge {
 
 impl UpdateBridge {
     /// Create from old and new values.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         road_id: impl Into<String>,
         bridge_id: impl Into<String>,
@@ -685,6 +686,7 @@ pub struct UpdateTunnel {
 }
 
 impl UpdateTunnel {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         road_id: impl Into<String>,
         tunnel_id: impl Into<String>,

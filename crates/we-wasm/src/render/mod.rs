@@ -1283,4 +1283,117 @@ mod tests {
             pt.y
         );
     }
+
+    /// Verify that a GeoZ-like project JSON (with lanes) deserializes and generates vertices.
+    #[test]
+    fn test_geoz_project_with_lanes_generates_vertices() {
+        let project_json = r#"{
+            "name": "test.geoz",
+            "header": {
+                "rev_major": 1, "rev_minor": 6, "name": "test", "date": "2026-06-01",
+                "north": 10.0, "south": 0.0, "east": 10.0, "west": 0.0,
+                "geo_reference": null
+            },
+            "roads": [{
+                "id": "road-1", "name": "Road 1", "length": 10.0,
+                "junction_id": null, "render_hidden": false, "link": null,
+                "plan_view": [{"s": 0.0, "x": 0.0, "y": 0.0, "hdg": 0.0, "length": 10.0, "geo_type": "Line"}],
+                "elevation_profile": [],
+                "lane_sections": [{
+                    "s": 0.0, "single_side": false, "render_hidden": false,
+                    "left": [],
+                    "center": [{"id": 0, "lane_type": "None", "level": 0, "render_hidden": false, "link": null, "width": [{"s_offset": 0, "a": 0, "b": 0, "c": 0, "d": 0}], "road_marks": []}],
+                    "right": [{"id": -1, "lane_type": "Driving", "level": 0, "render_hidden": false, "link": null, "width": [{"s_offset": 0, "a": 3.5, "b": 0, "c": 0, "d": 0}], "road_marks": []}]
+                }],
+                "lane_offsets": [],
+                "lateral_profile": {"superelevations": [], "crossfalls": []},
+                "bridges": [], "tunnels": [], "signals": [], "objects": []
+            }],
+            "junctions": [],
+            "signals": [{"id": "sig-1", "name": "traffic_light", "s": 5.0, "t": 2.0, "z_offset": 0.0, "h_offset": 0.0, "width": 1.0, "height": 2.0, "signal_type": "traffic_light", "signal_subtype": "-1", "value": null, "orientation": "+", "is_dynamic": false}],
+            "objects": []
+        }"#;
+
+        let result = generate_road_vertices(project_json, 2.0, "byLaneType");
+        assert!(result.is_ok(), "GeoZ project deserialization failed: {:?}", result.err());
+        let verts = result.unwrap();
+        assert!(
+            !verts.is_empty(),
+            "GeoZ project with lanes should produce non-empty vertices"
+        );
+    }
+
+    /// Verify that a GeoZ-like project with NO lane sections triggers the fallback ribbon.
+    #[test]
+    fn test_geoz_project_no_lanes_generates_fallback_ribbon() {
+        let project_json = r#"{
+            "name": "test.geoz",
+            "header": {
+                "rev_major": 1, "rev_minor": 6, "name": "test", "date": "2026-06-01",
+                "north": 10.0, "south": 0.0, "east": 10.0, "west": 0.0,
+                "geo_reference": null
+            },
+            "roads": [{
+                "id": "road-1", "name": "Road 1", "length": 10.0,
+                "junction_id": null, "render_hidden": false, "link": null,
+                "plan_view": [{"s": 0.0, "x": 0.0, "y": 0.0, "hdg": 0.0, "length": 10.0, "geo_type": "Line"}],
+                "elevation_profile": [],
+                "lane_sections": [],
+                "lane_offsets": [],
+                "lateral_profile": {"superelevations": [], "crossfalls": []},
+                "bridges": [], "tunnels": [], "signals": [], "objects": []
+            }],
+            "junctions": [],
+            "signals": [],
+            "objects": []
+        }"#;
+
+        let result = generate_road_vertices(project_json, 2.0, "byLaneType");
+        assert!(result.is_ok(), "GeoZ project deserialization failed: {:?}", result.err());
+        let verts = result.unwrap();
+        assert!(
+            !verts.is_empty(),
+            "GeoZ project with no lane sections should produce fallback ribbon vertices"
+        );
+    }
+
+    /// Verify that road marks with valid types don't break deserialization.
+    #[test]
+    fn test_geoz_project_with_road_marks_deserializes() {
+        let project_json = r#"{
+            "name": "test.geoz",
+            "header": {
+                "rev_major": 1, "rev_minor": 6, "name": "test", "date": "2026-06-01",
+                "north": 10.0, "south": 0.0, "east": 10.0, "west": 0.0,
+                "geo_reference": null
+            },
+            "roads": [{
+                "id": "road-1", "name": "Road 1", "length": 10.0,
+                "junction_id": null, "render_hidden": false, "link": null,
+                "plan_view": [{"s": 0.0, "x": 0.0, "y": 0.0, "hdg": 0.0, "length": 10.0, "geo_type": "Line"}],
+                "elevation_profile": [],
+                "lane_sections": [{
+                    "s": 0.0, "single_side": false, "render_hidden": false,
+                    "left": [],
+                    "center": [{"id": 0, "lane_type": "None", "level": 0, "link": null, "width": [], "road_marks": []}],
+                    "right": [{"id": -1, "lane_type": "Driving", "level": 0, "link": null, "width": [{"s_offset": 0, "a": 3.5, "b": 0, "c": 0, "d": 0}], "road_marks": [
+                        {"s_offset": 0.0, "mark_type": "solid", "weight": "standard", "color": "white", "material": "", "width": 0.15, "lane_change": ""},
+                        {"s_offset": 0.0, "mark_type": "broken", "weight": "bold", "color": "yellow", "material": "", "width": 0.1, "lane_change": ""},
+                        {"s_offset": 0.0, "mark_type": "none", "weight": "standard", "color": "standard", "material": "", "width": 0.0, "lane_change": ""}
+                    ]}]
+                }],
+                "lane_offsets": [],
+                "lateral_profile": {"superelevations": [], "crossfalls": []},
+                "bridges": [], "tunnels": [], "signals": [], "objects": []
+            }],
+            "junctions": [],
+            "signals": [],
+            "objects": []
+        }"#;
+
+        let result = generate_road_vertices(project_json, 2.0, "byLaneType");
+        assert!(result.is_ok(), "GeoZ project with road marks failed: {:?}", result.err());
+        let verts = result.unwrap();
+        assert!(!verts.is_empty(), "Should produce vertices with road marks");
+    }
 }

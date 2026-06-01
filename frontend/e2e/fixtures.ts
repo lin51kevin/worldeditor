@@ -27,11 +27,11 @@ export const test = base.extend<{
 
 export { expect } from '@playwright/test';
 
-/** Inject a project into the Zustand store via the __editorStore bridge. */
+/** Inject a project into the Zustand store via the __projectStore bridge. */
 export async function injectProject(page: Page, project: Project): Promise<void> {
   await page.evaluate((proj) => {
-    const store = (window as Record<string, any>).__editorStore;
-    if (!store) throw new Error('__editorStore not available — is DEV mode running?');
+    const store = (window as Record<string, any>).__projectStore;
+    if (!store) throw new Error('__projectStore not available — is DEV mode running?');
     store.getState().setProject(proj);
   }, project);
 }
@@ -39,7 +39,7 @@ export async function injectProject(page: Page, project: Project): Promise<void>
 /** Get current project state from the Zustand store. */
 export async function getProject(page: Page): Promise<Project> {
   return page.evaluate(() => {
-    const store = (window as Record<string, any>).__editorStore;
+    const store = (window as Record<string, any>).__projectStore;
     return store.getState().project;
   });
 }
@@ -47,7 +47,7 @@ export async function getProject(page: Page): Promise<Project> {
 /** Get the isDirty flag from the store. */
 export async function getIsDirty(page: Page): Promise<boolean> {
   return page.evaluate(() => {
-    const store = (window as Record<string, any>).__editorStore;
+    const store = (window as Record<string, any>).__projectStore;
     return store.getState().isDirty;
   });
 }
@@ -101,7 +101,7 @@ export async function openXodrInBrowser(page: Page, xml: string, filename = 'tes
       const svc = await getSvc();
       const project = await svc.parseOpenDrive(xmlContent);
       project.name = name;
-      const store = (window as Record<string, any>).__editorStore;
+      const store = (window as Record<string, any>).__projectStore;
       store.getState().setProject(project);
     },
     { xmlContent: xml, name: filename },

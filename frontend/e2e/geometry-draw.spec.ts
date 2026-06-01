@@ -41,7 +41,7 @@ async function getDrawPoints(page: Page): Promise<Array<[number, number, number]
 /** Helper: get number of roads in the project. */
 async function getRoadCount(page: Page): Promise<number> {
   return page.evaluate(() => {
-    const store = (window as any).__editorStore;
+    const store = (window as any).__projectStore;
     return store.getState().project.roads.length;
   });
 }
@@ -49,7 +49,7 @@ async function getRoadCount(page: Page): Promise<number> {
 /** Helper: get the last created road from the project. */
 async function getLastRoad(page: Page): Promise<any> {
   return page.evaluate(() => {
-    const store = (window as any).__editorStore;
+    const store = (window as any).__projectStore;
     const roads = store.getState().project.roads;
     return roads.length > 0 ? roads[roads.length - 1] : null;
   });
@@ -58,7 +58,7 @@ async function getLastRoad(page: Page): Promise<any> {
 /** Helper: get selectedRoadId from the editor store. */
 async function getSelectedRoadId(page: Page): Promise<string | null> {
   return page.evaluate(() => {
-    const store = (window as any).__editorStore;
+    const store = (window as any).__projectStore;
     return store.getState().selectedRoadId;
   });
 }
@@ -101,7 +101,7 @@ async function clearDrawPoints(page: Page): Promise<void> {
 async function simulateDrawClick(page: Page, x: number, y: number): Promise<void> {
   await page.evaluate(({ x, y }) => {
     const viewStore = (window as any).__editorViewStore;
-    const editorStore = (window as any).__editorStore;
+    const editorStore = (window as any).__projectStore;
     const geomBuilder = (window as any).__geometryBuilder;
     const state = viewStore.getState();
 

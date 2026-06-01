@@ -8,8 +8,25 @@
 import { useCallback } from 'react';
 import { useLoadingProgressStore } from '../stores/loadingProgressStore';
 import { useProjectStore } from '../stores/projectStore';
+import { usePluginContribStore } from '../stores/pluginContribStore';
 import { getPlatformService } from '../services';
 import type { Project } from '../services/platform';
+
+/** File extensions that require binary (ArrayBuffer) reading instead of text. */
+const BINARY_EXTENSIONS = ['.geoz', '.zip'] as const;
+
+function isBinaryFile(fileName: string): boolean {
+  const lower = fileName.toLowerCase();
+  return BINARY_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+function findImporterForFile(fileName: string) {
+  const lower = fileName.toLowerCase();
+  const { importers } = usePluginContribStore.getState();
+  return importers.find(
+    (imp) => !imp.disabled && imp.extensions.some((ext) => lower.endsWith(ext)),
+  );
+}
 
 /** Threshold (bytes) above which parsing is offloaded to Web Worker. */
 const WORKER_THRESHOLD = 512 * 1024; // 512 KB
@@ -152,6 +169,32 @@ export function useFileLoader() {
   }, []);
 
   const loadFromDrop = useCallback(async (file: File): Promise<FileLoaderResult> => {
+    if (isBinaryFile(file.name)) {
+      // Binary files (e.g. .geoz, .zip) must be read as ArrayBuffer and
+      // routed through the matching plugin importer, not the XML parser.
+      const importer = findImporterForFile(file.name);
+      if (!importer) {
+        return { success: false, error: `No importer found for: ${file.name}` };
+      }
+      const { startLoading, updateProgress, finishLoading, reset } =
+        useLoadingProgressStore.getState();
+      try {
+        startLoading(file.name);
+        updateProgress('reading', 10);
+        const buffer = await file.arrayBuffer();
+        updateProgress('parsing', 30);
+        const project = await importer.onImport(buffer, file.name);
+        project.name = file.name;
+        useProjectStore.getState().setProject(project);
+        finishLoading();
+        return { success: true, project };
+      } catch (err) {
+        reset();
+        const message = err instanceof Error ? err.message : String(err);
+        console.error('[useFileLoader] Failed to load binary file:', message);
+        return { success: false, error: message };
+      }
+    }
     const content = await file.text();
     return loadFile(content, file.name);
   }, [loadFile]);

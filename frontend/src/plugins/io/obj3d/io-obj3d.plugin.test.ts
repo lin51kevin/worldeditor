@@ -99,7 +99,7 @@ describe('generateObjContent', () => {
     const obj = generateObjContent(project);
     // Default width would give offset 1.75; lane width 4 gives offset 2
     // Check that vertices are wider than default
-    const coords = obj.match(/v ([\d.\-]+) ([\d.\-]+) 0/g)!;
+    const coords = obj.match(/v ([\d.-]+) ([\d.-]+) 0/g)!;
     // Left side x should be 2.0 (half of 4), not 1.75
     expect(coords[0]).toContain(' 2 ');
   });

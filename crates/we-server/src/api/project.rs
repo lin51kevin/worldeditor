@@ -36,13 +36,12 @@ impl CreateProject {
                 "Project name cannot exceed 255 characters".to_string(),
             ));
         }
-        if let Some(desc) = &self.description {
-            if desc.len() > 4096 {
+        if let Some(desc) = &self.description
+            && desc.len() > 4096 {
                 return Err(Error::Validation(
                     "Project description cannot exceed 4096 characters".to_string(),
                 ));
             }
-        }
         Ok(())
     }
 }
@@ -67,13 +66,12 @@ impl UpdateProject {
                 ));
             }
         }
-        if let Some(desc) = &self.description {
-            if desc.len() > 4096 {
+        if let Some(desc) = &self.description
+            && desc.len() > 4096 {
                 return Err(Error::Validation(
                     "Project description cannot exceed 4096 characters".to_string(),
                 ));
             }
-        }
         Ok(())
     }
 }

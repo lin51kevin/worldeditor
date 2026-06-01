@@ -171,8 +171,8 @@ test.describe('Layer panel type-tag badge alignment', () => {
 
     // Inject a minimal project with one lane, one signal, one object
     await page.evaluate(() => {
-      const store = (window as Record<string, any>).__editorStore;
-      if (!store) throw new Error('__editorStore not available');
+      const store = (window as Record<string, any>).__projectStore;
+      if (!store) throw new Error('__projectStore not available');
 
       const road = {
         id: 'r1',

@@ -219,6 +219,7 @@ pub struct MoveShapeNode {
 }
 
 impl MoveShapeNode {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         layer_id: impl Into<String>,
         node_id: impl Into<String>,

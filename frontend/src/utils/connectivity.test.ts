@@ -10,7 +10,7 @@ function makeLane(id: number, pred: number | null = null, succ: number | null = 
     id,
     lane_type: 'Driving',
     level: 0,
-    link: pred != null || succ != null ? { predecessor: pred, successor: succ } : null,
+    link: pred !== null || succ !== null ? { predecessor: pred, successor: succ } : null,
     width: [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }],
     road_marks: [],
   };

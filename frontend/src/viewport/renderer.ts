@@ -79,6 +79,7 @@ export class ViewportRenderer {
   private deviceLost = false;
   // Set to true by dispose(); guards against async init() completing after cleanup
   private disposed = false;
+  private mouseControlsCleanup: (() => void) | null = null;
 
   // ── Render-on-demand ────────────────────────────────────────────────────────
   // The render loop only submits GPU work when the scene is dirty (camera moved,
@@ -187,13 +188,11 @@ export class ViewportRenderer {
       return false;
     }
 
-    let adapter: GPUAdapter | null;
     let device: GPUDevice;
     if (prewarmed) {
-      adapter = prewarmed.adapter;
       device = prewarmed.device;
     } else {
-      adapter = await navigator.gpu.requestAdapter();
+      const adapter = await navigator.gpu.requestAdapter();
       if (this.disposed || !adapter) return false;
       device = await adapter.requestDevice({
         requiredLimits: { maxBufferSize: adapter.limits.maxBufferSize },
@@ -599,6 +598,8 @@ export class ViewportRenderer {
     this.disposed = true;
     this.stop();
     this.flyKeyboard.detach();
+    this.mouseControlsCleanup?.();
+    this.mouseControlsCleanup = null;
     this.disposeMeshes(this.meshes);
     this.disposeMeshes(this.laneLineMeshes);
     this.disposeMeshes(this.overlayMeshes);
@@ -880,7 +881,7 @@ export class ViewportRenderer {
       useViewportStore.getState().setFlyMode(false);
     };
 
-    canvas.addEventListener('mousemove', (e) => {
+    const handleMouseMove = (e: MouseEvent) => {
       if (this.cameraController.pointerDragging) return;
       if (this.markerRenderer.knotCount === 0) return;
       const rect = canvas.getBoundingClientRect();
@@ -891,9 +892,9 @@ export class ViewportRenderer {
         this.onControlPointHovered?.(hit);
         this.refreshSplineMarkers(hit, undefined);
       }
-    });
+    };
 
-    canvas.addEventListener('mousedown', (e) => {
+    const handleMouseDown = (e: MouseEvent) => {
       // If clicking on a spline control point (knot or tangent handle), skip camera
       // drag so the React geometry-edit layer can handle the interaction and
       // regenerate road mesh during drag.
@@ -940,14 +941,27 @@ export class ViewportRenderer {
 
       document.addEventListener('mousemove', onDocMove);
       document.addEventListener('mouseup', onDocUp);
-    });
+    };
 
-    canvas.addEventListener('wheel', (e) => {
+    const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       this.cameraController.handleWheel(e.deltaY);
-    }, { passive: false });
+    };
 
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
+
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    canvas.addEventListener('contextmenu', handleContextMenu);
+
+    this.mouseControlsCleanup = () => {
+      detachDocListeners();
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('wheel', handleWheel);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
+    };
   }
 
   /** Lock camera controls (pan/orbit/zoom) — used during spline knot dragging. */

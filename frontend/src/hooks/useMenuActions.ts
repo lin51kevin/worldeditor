@@ -7,6 +7,7 @@ import { getPlatformService } from '../services';
 import { showAlert, showConfirm, showPrompt } from '../utils/dialog';
 import { useRecentFilesStore } from '../stores/recentFilesStore';
 import type { Project } from '../services/platform';
+import { usePluginContribStore } from '../stores/pluginContribStore';
 import { useFileLoader } from './useFileLoader';
 
 function calculateTotalRoadLength(project: Project): number {
@@ -42,6 +43,27 @@ export function useMenuActions() {
       const platform = await getPlatformService();
       const file = await platform.openFile();
       if (!file) return;
+
+      // Binary files (.geoz) are handled via the plugin importer system
+      if (file.buffer) {
+        const { importers } = usePluginContribStore.getState();
+        const lower = file.name.toLowerCase();
+        const importer = importers.find(
+          (imp) => !imp.disabled && imp.extensions.some((ext) => lower.endsWith(ext)),
+        );
+        if (!importer) {
+          await showAlert(t('dialog.parseError'));
+          return;
+        }
+        const project = await importer.onImport(file.buffer, file.name);
+        project.name = file.name;
+        useProjectStore.getState().setProject(project);
+        if (file.path) {
+          pushRecentFile(file.name, file.path);
+        }
+        return;
+      }
+
       const result = await loadFile(file.content, file.name);
       if (!result.success) {
         await showAlert(t('dialog.parseError'));

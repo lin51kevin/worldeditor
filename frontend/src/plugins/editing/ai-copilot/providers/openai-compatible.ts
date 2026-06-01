@@ -35,7 +35,7 @@ export class OpenAICompatibleProvider implements AIProvider {
     } catch (err) {
       if (err instanceof TypeError) {
         // TypeError typically indicates a network error or CORS failure
-        throw new Error('network_error');
+        throw new Error('network_error', { cause: err });
       }
       return false;
     } finally {

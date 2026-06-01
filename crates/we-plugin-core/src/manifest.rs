@@ -46,7 +46,8 @@ pub struct PluginManifest {
 }
 
 impl PluginManifest {
-    /// Load manifest from a file path
+    /// Load manifest from a file path (not available on WASM)
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_path<P: AsRef<Path>>(path: P) -> PluginResult<Self> {
         let path = path.as_ref();
         let content = std::fs::read_to_string(path).map_err(|e| {

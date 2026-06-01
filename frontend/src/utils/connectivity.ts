@@ -165,7 +165,7 @@ function resolveLaneConnectivity(
   const successors: SceneNodeSelection[] = [];
 
   // Within same road: predecessor lane is in the previous section
-  if (lane.link?.predecessor != null && sectionIndex > 0) {
+  if (lane.link && lane.link.predecessor !== null && lane.link.predecessor !== undefined && sectionIndex > 0) {
     const predSection = road.lane_sections[sectionIndex - 1];
     if (predSection) {
       const predLaneId = lane.link.predecessor;
@@ -183,7 +183,7 @@ function resolveLaneConnectivity(
   }
 
   // Within same road: successor lane is in the next section
-  if (lane.link?.successor != null && sectionIndex < road.lane_sections.length - 1) {
+  if (lane.link && lane.link.successor !== null && lane.link.successor !== undefined && sectionIndex < road.lane_sections.length - 1) {
     const succSection = road.lane_sections[sectionIndex + 1];
     if (succSection) {
       const succLaneId = lane.link.successor;
@@ -201,7 +201,7 @@ function resolveLaneConnectivity(
   }
 
   // Across road boundary: predecessor lane in connected road
-  if (sectionIndex === 0 && lane.link?.predecessor != null) {
+  if (sectionIndex === 0 && lane.link && lane.link.predecessor !== null && lane.link.predecessor !== undefined) {
     const alreadyFoundInSameRoad = predecessors.length > 0;
     if (!alreadyFoundInSameRoad && road.link?.predecessor?.element_type === 'Road') {
       const predRoad = project.roads.find((r) => r.id === road.link!.predecessor!.element_id);
@@ -230,7 +230,7 @@ function resolveLaneConnectivity(
 
   // Across road boundary: successor lane in connected road
   const lastIndex = road.lane_sections.length - 1;
-  if (sectionIndex === lastIndex && lane.link?.successor != null) {
+  if (sectionIndex === lastIndex && lane.link && lane.link.successor !== null && lane.link.successor !== undefined) {
     const alreadyFoundInSameRoad = successors.length > 0;
     if (!alreadyFoundInSameRoad && road.link?.successor?.element_type === 'Road') {
       const succRoad = project.roads.find((r) => r.id === road.link!.successor!.element_id);

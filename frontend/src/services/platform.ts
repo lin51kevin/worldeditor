@@ -67,7 +67,7 @@ export interface Elevation {
   d: number;
 }
 
-export interface Superelevation extends Elevation {}
+export type Superelevation = Elevation;
 
 export interface Crossfall extends Elevation {
   side?: 'left' | 'right' | 'both';
@@ -411,8 +411,8 @@ export interface PlatformService {
   /** Serialize a Project to OpenDRIVE XML. */
   writeOpenDrive(project: Project): Promise<string>;
 
-  /** Open a file picker and return the file contents. */
-  openFile(): Promise<{ name: string; content: string; path?: string } | null>;
+  /** Open a file picker and return the file contents. Binary files return `buffer` instead of `content`. */
+  openFile(): Promise<{ name: string; content: string; buffer?: ArrayBuffer; path?: string } | null>;
 
   /**
    * Show the OS file-picker dialog and return the selected absolute path,

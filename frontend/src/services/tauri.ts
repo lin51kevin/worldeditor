@@ -34,7 +34,9 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
   async openFilePath(): Promise<string | null> {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const rawPath = await open({
-      filters: [{ name: 'OpenDRIVE', extensions: ['xodr', 'xml'] }],
+      filters: [
+        { name: 'OpenDRIVE / GeoZ', extensions: ['xodr', 'xml', 'geoz'] },
+      ],
     });
     const filePath = normalizeDialogPath(rawPath);
     if (!filePath) return null;
@@ -51,16 +53,22 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
     return filePath;
   }
 
-  async openFile(): Promise<{ name: string; content: string; path?: string } | null> {
+  async openFile(): Promise<{ name: string; content: string; buffer?: ArrayBuffer; path?: string } | null> {
     const filePath = await this.openFilePath();
     if (!filePath) return null;
+    const name = filePath.split(/[/\\]/).pop() ?? 'untitled';
     try {
+      // Binary formats (e.g. .geoz) need ArrayBuffer, not text
+      if (/\.geoz$/i.test(filePath)) {
+        const { readFile } = await import('@tauri-apps/plugin-fs');
+        const bytes = await readFile(filePath);
+        return { name, content: '', buffer: bytes.buffer as ArrayBuffer, path: filePath };
+      }
       const { readTextFile } = await import('@tauri-apps/plugin-fs');
       const content = await readTextFile(filePath);
-      const name = filePath.split(/[/\\]/).pop() ?? 'untitled';
       return { name, content, path: filePath };
     } catch (error) {
-      throw new Error(`Failed to read selected file: ${String(error)}`);
+      throw new Error(`Failed to read selected file: ${String(error)}`, { cause: error });
     }
   }
 
@@ -89,7 +97,7 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
       try {
         await writeTextFile(path, content);
       } catch (error) {
-        throw new Error(`Failed to write file: ${String(error)}`);
+        throw new Error(`Failed to write file: ${String(error)}`, { cause: error });
       }
       return path;
     }

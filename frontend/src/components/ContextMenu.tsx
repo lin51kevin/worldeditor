@@ -40,16 +40,18 @@ export function ContextMenu() {
     document.addEventListener('contextmenu:show', handler);
 
     const closeHandler = () => hide();
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') hide();
+    };
     document.addEventListener('click', closeHandler);
     document.addEventListener('contextmenu', closeHandler);
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') hide();
-    });
+    document.addEventListener('keydown', keyHandler);
 
     return () => {
       document.removeEventListener('contextmenu:show', handler);
       document.removeEventListener('click', closeHandler);
       document.removeEventListener('contextmenu', closeHandler);
+      document.removeEventListener('keydown', keyHandler);
     };
   }, [show, hide]);
 

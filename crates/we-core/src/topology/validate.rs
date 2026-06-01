@@ -101,8 +101,8 @@ fn check_link_target(
 fn check_junction_refs(project: &Project, report: &mut TopologyReport) {
     // Check road.junction_id references
     for road in &project.roads {
-        if let Some(ref jid) = road.junction_id {
-            if jid != "-1" && !project.junctions.iter().any(|j| j.id == *jid) {
+        if let Some(ref jid) = road.junction_id
+            && jid != "-1" && !project.junctions.iter().any(|j| j.id == *jid) {
                 report.issues.push(TopologyIssue {
                     severity: IssueSeverity::Error,
                     kind: IssueKind::OrphanJunctionRef,
@@ -113,7 +113,6 @@ fn check_junction_refs(project: &Project, report: &mut TopologyReport) {
                     element_id: road.id.clone(),
                 });
             }
-        }
     }
 
     // Check junction connection road references
@@ -212,8 +211,8 @@ fn check_junction_lane_links(project: &Project, report: &mut TopologyReport) {
 
             for ll in &conn.lane_links {
                 // Check incoming lane exists
-                if let Some(road) = incoming_road {
-                    if !road_has_lane(road, ll.from) {
+                if let Some(road) = incoming_road
+                    && !road_has_lane(road, ll.from) {
                         report.issues.push(TopologyIssue {
                             severity: IssueSeverity::Warning,
                             kind: IssueKind::InvalidLaneLink,
@@ -224,11 +223,10 @@ fn check_junction_lane_links(project: &Project, report: &mut TopologyReport) {
                             element_id: junction.id.clone(),
                         });
                     }
-                }
 
                 // Check connecting lane exists
-                if let Some(road) = connecting_road {
-                    if !road_has_lane(road, ll.to) {
+                if let Some(road) = connecting_road
+                    && !road_has_lane(road, ll.to) {
                         report.issues.push(TopologyIssue {
                             severity: IssueSeverity::Warning,
                             kind: IssueKind::InvalidLaneLink,
@@ -239,7 +237,6 @@ fn check_junction_lane_links(project: &Project, report: &mut TopologyReport) {
                             element_id: junction.id.clone(),
                         });
                     }
-                }
             }
         }
     }

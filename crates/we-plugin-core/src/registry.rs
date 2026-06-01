@@ -41,13 +41,21 @@ impl PluginRegistry {
     }
 
     /// Set the plugins directory and scan for available plugins
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn with_plugins_dir(mut self, dir: impl Into<PathBuf>) -> Self {
         self.plugins_dir = dir.into();
         self.discover();
         self
     }
 
+    /// Set the plugins directory (no-op on WASM — no filesystem scanning)
+    #[cfg(target_arch = "wasm32")]
+    pub fn with_plugins_dir(self, _dir: impl Into<PathBuf>) -> Self {
+        self
+    }
+
     /// Discover all plugins in the plugins directory
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn discover(&mut self) {
         self.discovered.clear();
 
@@ -78,7 +86,14 @@ impl PluginRegistry {
         log::info!("Discovered {} plugins", self.discovered.len());
     }
 
+    /// Discover plugins — no-op on WASM (no filesystem access)
+    #[cfg(target_arch = "wasm32")]
+    pub fn discover(&mut self) {
+        self.discovered.clear();
+    }
+
     /// Find all manifest.json files in the plugins directory
+    #[cfg(not(target_arch = "wasm32"))]
     fn find_manifests(&self) -> Vec<PathBuf> {
         let mut manifests = Vec::new();
         if !self.plugins_dir.exists() {
@@ -99,6 +114,12 @@ impl PluginRegistry {
         }
 
         manifests
+    }
+
+    /// Find all manifest.json files — stub for WASM (no filesystem access)
+    #[cfg(target_arch = "wasm32")]
+    fn find_manifests(&self) -> Vec<PathBuf> {
+        Vec::new()
     }
 
     /// List all discovered plugins (not yet loaded)

@@ -82,11 +82,11 @@ export function useMoveRotateMode(
     if (!road) return;
 
     const service = await getPlatformService();
-    let elementWorldPos: { x: number; y: number } | null = null;
-    let initialS = 0;
-    let initialT = 0;
-    let initialHdg = 0;
-    let elementId = '';
+    let elementWorldPos: { x: number; y: number } | null;
+    let initialS: number;
+    let initialT: number;
+    let initialHdg: number;
+    let elementId: string;
 
     if (node.type === 'signal') {
       elementId = node.signalId;

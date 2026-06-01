@@ -140,6 +140,7 @@ impl InstanceCollector {
     }
 
     /// Add a box instance at the given position and orientation.
+    #[allow(clippy::too_many_arguments)]
     pub fn add_box(
         &mut self,
         x: f32,
@@ -172,6 +173,7 @@ impl InstanceCollector {
     }
 
     /// Add a ground quad (flat decal on the road surface).
+    #[allow(clippy::too_many_arguments)]
     pub fn add_ground_quad(
         &mut self,
         x: f32,

@@ -296,7 +296,7 @@ pub(super) fn emit_rect_outline(
 /// - `cos_t, sin_t`: cosine/sine of road heading at origin
 /// - `alpha_min, alpha_max`: along-road AABB of the polygon (for scan line extent)
 /// - `beta`: lateral position at which to intersect (in road-frame)
-#[allow(dead_code)]
+#[allow(dead_code, clippy::too_many_arguments)]
 fn clip_scanline_alpha(
     world_poly: &[(f64, f64)],
     ox: f64,
@@ -337,7 +337,7 @@ fn clip_scanline_alpha(
         }
         let t_line = ((ax - sx0) * dy_edge - (ay - sy0) * dx_edge) / denom;
         let t_edge = ((ax - sx0) * dy_line - (ay - sy0) * dx_line) / denom;
-        if t_edge >= -1e-9 && t_edge <= 1.0 + 1e-9 {
+        if (-1e-9..=1.0 + 1e-9).contains(&t_edge) {
             // Project hit back to alpha coordinate along the scan line
             let hit_alpha = alpha_min - 1.0 + t_line * (alpha_max - alpha_min + 2.0);
             hits.push(hit_alpha);
@@ -352,6 +352,7 @@ fn clip_scanline_alpha(
 ///
 /// The sweep coordinate system is defined by `(cos_sw, sin_sw)` as the along-sweep direction.
 /// Returns sorted lateral values where the scan line enters/exits the polygon.
+#[allow(clippy::too_many_arguments)]
 fn clip_scanline_lateral(
     world_poly: &[(f64, f64)],
     ox: f64,
@@ -387,7 +388,7 @@ fn clip_scanline_lateral(
         }
         let t_line = ((ax - sx0) * dy_edge - (ay - sy0) * dx_edge) / denom;
         let t_edge = ((ax - sx0) * dy_line - (ay - sy0) * dx_line) / denom;
-        if t_edge >= -1e-9 && t_edge <= 1.0 + 1e-9 {
+        if (-1e-9..=1.0 + 1e-9).contains(&t_edge) {
             let hit_l = l_min - 1.0 + t_line * (l_max - l_min + 2.0);
             hits.push(hit_l);
         }
@@ -409,6 +410,7 @@ fn clip_scanline_lateral(
 /// 4. Sweep stripes in the lateral direction (perpendicular to road tangent + Angle offset);
 ///    each stripe bar extends along the road tangent direction, clipped to the polygon.
 ///    This matches WEO's `buildCrosswalkSurface`: sweep along t, bars along heading.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn emit_crosswalk_stripes(
     corners: &[we_core::model::Point3D],
     exact_ref_pt: &we_core::geometry::eval::RefLinePoint,
@@ -535,7 +537,7 @@ pub(super) fn emit_crosswalk_stripes(
             let p11 = world_from_sweep(s_end, l_end);
             let p01 = world_from_sweep(s_end, l_start);
 
-            let z = z_base + corners.get(0).map_or(0.0, |c| c.z as f32);
+            let z = z_base + corners.first().map_or(0.0, |c| c.z as f32);
 
             out.extend_from_slice(&[p00.0 as f32, p00.1 as f32, z, r, g, b_color, a]);
             out.extend_from_slice(&[p10.0 as f32, p10.1 as f32, z, r, g, b_color, a]);

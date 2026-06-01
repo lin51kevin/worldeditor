@@ -30,11 +30,10 @@ pub(super) fn parse_f64(
             }
         }
     }
-    if let Some(pos) = truncate_at {
-        if let Ok(v) = s[..pos].parse::<f64>() {
+    if let Some(pos) = truncate_at
+        && let Ok(v) = s[..pos].parse::<f64>() {
             return Ok(v);
         }
-    }
     Err(OpenDriveError::InvalidStructure(format!(
         "Invalid float value '{}' for attribute '{}'",
         s,

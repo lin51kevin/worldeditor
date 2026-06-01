@@ -60,7 +60,7 @@ export function LayerPanel() {
       return;
     }
 
-    let id: string | null = null;
+    let id: string | null;
 
     if (selectedSceneNode?.type === 'signal') {
       const { roadId, signalId } = selectedSceneNode;

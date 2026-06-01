@@ -63,15 +63,14 @@ pub fn repair_topology(project: &Project) -> (Project, Vec<String>) {
 
     // 2. Clear orphan junction_id references on roads
     for road in &mut p.roads {
-        if let Some(ref jid) = road.junction_id {
-            if jid != "-1" && !junction_ids.contains(jid) {
+        if let Some(ref jid) = road.junction_id
+            && jid != "-1" && !junction_ids.contains(jid) {
                 actions.push(format!(
                     "Cleared orphan junction_id '{}' on road '{}'",
                     jid, road.id
                 ));
                 road.junction_id = None;
             }
-        }
     }
 
     // 3. Remove junction connections referencing non-existent roads

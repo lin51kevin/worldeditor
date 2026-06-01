@@ -525,11 +525,10 @@ fn get_road_endpoints(road: &Road) -> Vec<(f64, f64)> {
     if let Some(pt) = evaluate_road_at_s(road, 0.0) {
         endpoints.push((pt.x, pt.y));
     }
-    if road.length > 1e-9 {
-        if let Some(pt) = evaluate_road_at_s(road, road.length) {
+    if road.length > 1e-9
+        && let Some(pt) = evaluate_road_at_s(road, road.length) {
             endpoints.push((pt.x, pt.y));
         }
-    }
     endpoints
 }
 

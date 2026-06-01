@@ -84,7 +84,7 @@ test.describe('Visual regression — rendering', () => {
     await waitForRender(page);
     // Select the road via the store.
     await page.evaluate(() => {
-      const store = (window as Record<string, any>).__editorStore;
+      const store = (window as Record<string, any>).__projectStore;
       store.getState().selectRoad('r1');
     });
     await waitForRender(page);

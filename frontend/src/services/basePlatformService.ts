@@ -53,7 +53,7 @@ export abstract class BasePlatformService implements PlatformService {
   // --- Platform-specific methods (implemented by subclasses) ---
   abstract parseOpenDrive(xml: string): Promise<Project>;
   abstract writeOpenDrive(project: Project): Promise<string>;
-  abstract openFile(): Promise<{ name: string; content: string; path?: string } | null>;
+  abstract openFile(): Promise<{ name: string; content: string; buffer?: ArrayBuffer; path?: string } | null>;
   abstract openFileByPath(path: string): Promise<{ name: string; content: string } | null>;
   abstract saveFile(filename: string, content: string): Promise<string | null>;
   abstract getPlatformInfo(): { type: 'tauri' | 'web'; version: string };

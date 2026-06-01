@@ -100,7 +100,7 @@ describe('WebPlatformService', () => {
     });
 
     expect(input.type).toBe('file');
-    expect(input.accept).toBe('.xodr,.xml');
+    expect(input.accept).toBe('.xodr,.xml,.geoz');
     expect(input.click).toHaveBeenCalledTimes(1);
   });
 

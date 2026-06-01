@@ -10,7 +10,7 @@ test.describe('Undo / Redo', () => {
   test('undo reverts addRoad, redo restores it', async ({ editorPage: page }) => {
     // Add a road via store injection (simulates a user action that pushes undo)
     await page.evaluate(() => {
-      const store = (window as Record<string, any>).__editorStore;
+      const store = (window as Record<string, any>).__projectStore;
       store.getState().addRoad({
         id: '1',
         name: 'Undo Test Road',
@@ -43,7 +43,7 @@ test.describe('Undo / Redo', () => {
   test('Ctrl+Z / Ctrl+Y keyboard shortcuts', async ({ editorPage: page }) => {
     // Add a road
     await page.evaluate(() => {
-      const store = (window as Record<string, any>).__editorStore;
+      const store = (window as Record<string, any>).__projectStore;
       store.getState().addRoad({
         id: '99',
         name: 'Shortcut Road',
@@ -73,7 +73,7 @@ test.describe('Undo / Redo', () => {
 
     // Add a road (mutation)
     await page.evaluate(() => {
-      const store = (window as Record<string, any>).__editorStore;
+      const store = (window as Record<string, any>).__projectStore;
       store.getState().addRoad({
         id: '1',
         name: 'Dirty Road',

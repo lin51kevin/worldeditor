@@ -6,7 +6,7 @@ import { usePluginContribStore } from '../stores/pluginContribStore';
 import { useFileLoader } from './useFileLoader';
 
 /** Accepted file extensions for drag-and-drop open. */
-const ACCEPTED_EXTENSIONS = ['.xodr', '.xml'];
+export const ACCEPTED_EXTENSIONS = ['.xodr', '.xml', '.geoz', '.zip'] as const;
 
 function isAcceptedFile(file: File): boolean {
   const name = file.name.toLowerCase();

@@ -18,6 +18,7 @@ import type {
   Road,
   RoadLink,
   RoadObject,
+  RoadMark,
   RoadSignal,
 } from '../../../services/platform';
 import mainProto from './proto/Main.proto?raw';
@@ -71,6 +72,16 @@ interface ProtoRoadBoundary {
 
 interface ProtoLaneBoundary {
   point?: ProtoPoint3D[] | null;
+  road_mark?: ProtoRoadMark[] | null;
+}
+
+interface ProtoRoadMark {
+  offset?: number | null;
+  length?: number | null;
+  mark_type?: ProtoEnum;
+  mark_color?: ProtoEnum;
+  mark_weight?: ProtoEnum;
+  width?: number | null;
 }
 
 interface ProtoLaneGeometry {
@@ -442,6 +453,75 @@ function toLaneLink(protoLane: ProtoLaneTopo): LaneLink | null {
   return { predecessor, successor };
 }
 
+function mapRoadMarkType(proto: ProtoEnum): string {
+  switch (proto) {
+    case 'type_solid':
+    case 1: return 'solid';
+    case 'type_broken':
+    case 2: return 'broken';
+    case 'type_solid_solid':
+    case 3: return 'solid_solid';
+    case 'type_solid_broken':
+    case 4: return 'solid_broken';
+    case 'type_broken_solid':
+    case 5: return 'broken_solid';
+    case 'type_broken_broken':
+    case 6: return 'broken';
+    case 'type_botts_dots':
+    case 7: return 'botts_dots';
+    case 'type_grass':
+    case 8: return 'grass';
+    case 'type_curb':
+    case 9: return 'curb';
+    case 'custom':
+    case 10: return 'custom';
+    case 'edge':
+    case 11: return 'solid';
+    default: return 'none';
+  }
+}
+
+function mapRoadMarkColor(proto: ProtoEnum): string {
+  switch (proto) {
+    case 'color_standard':
+    case 1: return 'standard';
+    case 'color_blue':
+    case 2: return 'blue';
+    case 'color_green':
+    case 3: return 'green';
+    case 'color_red':
+    case 4: return 'red';
+    case 'color_white':
+    case 5: return 'white';
+    case 'color_yellow':
+    case 6: return 'yellow';
+    case 'color_orange':
+    case 7: return 'orange';
+    default: return 'standard';
+  }
+}
+
+function mapRoadMarkWeight(proto: ProtoEnum): string {
+  switch (proto) {
+    case 'weight_bold':
+    case 2: return 'bold';
+    default: return 'standard';
+  }
+}
+
+function convertRoadMarks(marks: readonly ProtoRoadMark[] | null | undefined): RoadMark[] {
+  if (!marks?.length) return [];
+  return marks.map((m) => ({
+    s_offset: m.offset ?? 0,
+    mark_type: mapRoadMarkType(m.mark_type),
+    weight: mapRoadMarkWeight(m.mark_weight),
+    color: mapRoadMarkColor(m.mark_color),
+    material: '',
+    width: m.width ?? 0,
+    lane_change: '',
+  }));
+}
+
 function createCenterLane(): Lane {
   return {
     id: 0,
@@ -462,6 +542,9 @@ function createLane(
   const protoLaneId = normalizeOptionalString(protoLane.header?.id);
   const laneGeometry = protoLaneId ? laneGeometryMap.get(protoLaneId) : undefined;
   const width = estimateLaneWidth(laneGeometry);
+  const roadMarkBoundary = laneGeometry
+    ? (laneId > 0 ? laneGeometry.right_boundary : laneGeometry.left_boundary)
+    : undefined;
 
   return {
     id: laneId,
@@ -470,7 +553,7 @@ function createLane(
     render_hidden: false,
     link: toLaneLink(protoLane),
     width: [{ s_offset: 0, a: width, b: 0, c: 0, d: 0 }],
-    road_marks: [],
+    road_marks: convertRoadMarks(roadMarkBoundary?.road_mark),
   };
 }
 
@@ -499,16 +582,11 @@ function buildLaneSections(
   laneGeometryMap: ReadonlyMap<string, ProtoLaneGeometry>,
 ): LaneSection[] {
   if (roadSections.length === 0) {
-    return [
-      {
-        s: 0,
-        single_side: false,
-        render_hidden: false,
-        left: [],
-        center: [createCenterLane()],
-        right: [],
-      },
-    ];
+    // Return empty array so the WASM fallback ribbon renders a visible road
+    // surface using the reference line geometry. A center-only section would
+    // suppress the fallback (lane_sections is non-empty) while producing no
+    // vertices (no left/right lanes).
+    return [];
   }
 
   const groupedSections = new Map<string, SectionAccumulator>();
@@ -609,6 +687,75 @@ function computeRoadLength(planView: readonly Geometry[]): number {
   return planView.reduce((total, geometry) => total + geometry.length, 0);
 }
 
+/**
+ * Resolve reference line points using a fallback chain:
+ * 1. roadGeometry.reference_line.point (primary)
+ * 2. roadGeometry.center_line.point (alternate center-line field)
+ * 3. Synthesize from innermost lane boundaries (average left+right midpoints)
+ *
+ * This matches WorldEditorOnline's approach of using lane geometry data when
+ * the explicit reference line is unavailable.
+ */
+function resolveReferencePoints(
+  roadGeometry: ProtoRoadGeometry | undefined,
+  laneGeometryMap: ReadonlyMap<string, ProtoLaneGeometry>,
+): ProtoPoint3D[] {
+  // Fallback 1: explicit reference_line
+  const refPoints = roadGeometry?.reference_line?.point;
+  if (refPoints && refPoints.length >= 2) {
+    return refPoints as ProtoPoint3D[];
+  }
+
+  // Fallback 2: center_line (alternate field in the proto)
+  const centerPoints = roadGeometry?.center_line?.point;
+  if (centerPoints && centerPoints.length >= 2) {
+    return centerPoints as ProtoPoint3D[];
+  }
+
+  // Fallback 3: synthesize from lane boundary geometry
+  // Find any lane geometry that has boundary points and compute the midline
+  for (const laneGeometry of laneGeometryMap.values()) {
+    const leftPoints = laneGeometry.left_boundary?.point;
+    const rightPoints = laneGeometry.right_boundary?.point;
+    if (leftPoints && rightPoints && leftPoints.length >= 2 && rightPoints.length >= 2) {
+      return synthesizeCenterFromBoundaries(leftPoints, rightPoints);
+    }
+
+    // If only one boundary is available, use it directly as a reference line
+    const singleBoundary = leftPoints ?? rightPoints;
+    if (singleBoundary && singleBoundary.length >= 2) {
+      return singleBoundary as ProtoPoint3D[];
+    }
+  }
+
+  // No geometry data available at all
+  return [];
+}
+
+/**
+ * Synthesize a center-line polyline by averaging left and right boundary points.
+ * Uses linear interpolation along the shorter boundary to align point counts.
+ */
+function synthesizeCenterFromBoundaries(
+  leftPoints: readonly ProtoPoint3D[],
+  rightPoints: readonly ProtoPoint3D[],
+): ProtoPoint3D[] {
+  const count = Math.min(leftPoints.length, rightPoints.length);
+  const result: ProtoPoint3D[] = [];
+
+  for (let i = 0; i < count; i += 1) {
+    const left = leftPoints[i]!;
+    const right = rightPoints[i]!;
+    result.push({
+      x: ((left.x ?? 0) + (right.x ?? 0)) / 2,
+      y: ((left.y ?? 0) + (right.y ?? 0)) / 2,
+      z: ((left.z ?? 0) + (right.z ?? 0)) / 2,
+    });
+  }
+
+  return result;
+}
+
 function convertRoad(
   roadTopo: ProtoRoadTopo,
   roadGeometry: ProtoRoadGeometry | undefined,
@@ -626,7 +773,7 @@ function convertRoad(
     }
   }
 
-  const referencePoints = roadGeometry?.reference_line?.point ?? [];
+  const referencePoints = resolveReferencePoints(roadGeometry, laneGeometryMap);
   const planView = pointsToGeometry(referencePoints);
   const computedLength = computeRoadLength(planView);
   const roadLength = roadTopo.header?.length && roadTopo.header.length > 0
@@ -744,7 +891,11 @@ export function geoToProject(
     roads,
     junctions,
     signals: convertedRoads.flatMap((entry) => entry.signals),
-    objects: convertedRoads.flatMap((entry) => entry.objects),
+    // GeoZ proto objects lack the geometry fields required by the Rust RoadObject
+    // struct (position, corners, object_type enum). Passing them would cause WASM
+    // deserialization to fail. Project-level objects are omitted; road-level objects
+    // are already empty in convertRoad().
+    objects: [],
   };
 }
 
@@ -757,7 +908,7 @@ export async function importGeoZ(
   try {
     zip = await JSZip.loadAsync(getZipInput(fileContent));
   } catch (error) {
-    throw new Error(`Failed to read GeoZ archive: ${getErrorMessage(error)}`);
+    throw new Error(`Failed to read GeoZ archive: ${getErrorMessage(error)}`, { cause: error });
   }
 
   const topoEntries = Object.values(zip.files).filter(

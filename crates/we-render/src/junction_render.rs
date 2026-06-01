@@ -42,13 +42,11 @@ pub fn generate_junction_meshes(project: &Project, config: &RoadRenderConfig) ->
         let mut arm_edges: Vec<([f32; 3], [f32; 3])> = Vec::new();
 
         for conn in &junction.connections {
-            if seen.insert(conn.incoming_road.as_str()) {
-                if let Some(road) = road_map.get(conn.incoming_road.as_str()) {
-                    if let Some((left, right)) = compute_arm_edges(road) {
+            if seen.insert(conn.incoming_road.as_str())
+                && let Some(road) = road_map.get(conn.incoming_road.as_str())
+                    && let Some((left, right)) = compute_arm_edges(road) {
                         arm_edges.push((left, right));
                     }
-                }
-            }
         }
 
         if arm_edges.is_empty() {
