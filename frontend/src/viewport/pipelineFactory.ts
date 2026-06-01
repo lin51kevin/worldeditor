@@ -131,7 +131,13 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
         },
       }],
     },
-    depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'less-equal' },
+    depthStencil: {
+      format: 'depth32float',
+      depthWriteEnabled: false,
+      depthCompare: 'less-equal',
+      depthBias: -2,
+      depthBiasSlopeScale: -2.0,
+    },
     multisample: { count: 4 },
     primitive: { topology: 'triangle-list' },
   });

@@ -15,7 +15,7 @@ import {
   isSceneSelectionVisible,
   tintVertices,
 } from '../utils/sceneGraph';
-import { mergeFloat32Arrays } from '../components/viewportUtils';
+import { mergeFloat32Arrays, liftMeshZ, LINK_HIGHLIGHT_Z_LIFT } from '../components/viewportUtils';
 
 interface UseSelectionHighlightParams {
   rendererRef: MutableRefObject<ViewportRenderer | null>;
@@ -65,11 +65,11 @@ export function useSelectionHighlight({
           if (selectedRoadIds.length > 0) {
             const multiProject = { ...project, roads: project.roads.filter((r) => selectedRoadIds.includes(r.id)) };
             const verts = await service.generateRoadVertices(multiProject, 2.0);
-            parts.push(tintVertices(verts, [0.95, 0.18, 0.18, 0.82]));
+            parts.push(liftMeshZ(tintVertices(verts, [0.95, 0.18, 0.18, 0.82]), LINK_HIGHLIGHT_Z_LIFT));
           }
           for (const jId of selectedJunctionIds) {
             const jVerts = await service.generateSingleJunctionVertices(project, jId, [0.7, 0.4, 1.0, 0.65]);
-            parts.push(jVerts);
+            parts.push(liftMeshZ(jVerts, LINK_HIGHLIGHT_Z_LIFT));
           }
           const combined = parts.reduce((acc, p) => mergeFloat32Arrays(acc, p), new Float32Array());
           renderer.uploadHighlightVertices(combined);
@@ -99,7 +99,7 @@ export function useSelectionHighlight({
                   project, selectedSceneNode.roadId, selectedSceneNode.signalId,
                   [0.2, 0.9, 0.9, 1.0],
                 );
-            if (verts.length > 0) renderer.uploadHighlightVertices(verts);
+            if (verts.length > 0) renderer.uploadHighlightVertices(liftMeshZ(verts, LINK_HIGHLIGHT_Z_LIFT));
             else renderer.clearHighlight();
             return;
           }
@@ -119,7 +119,7 @@ export function useSelectionHighlight({
                   project, selectedSceneNode.roadId, selectedSceneNode.objectId,
                   [0.2, 0.9, 0.9, 1.0],
                 );
-            if (verts.length > 0) renderer.uploadHighlightVertices(verts);
+            if (verts.length > 0) renderer.uploadHighlightVertices(liftMeshZ(verts, LINK_HIGHLIGHT_Z_LIFT));
             else renderer.clearHighlight();
             return;
           }
@@ -130,11 +130,14 @@ export function useSelectionHighlight({
           }
           const highlightVerts = await service.generateRoadVertices(highlightProject, 2.0);
           renderer.uploadHighlightVertices(
-            tintVertices(
-              highlightVerts,
-              selectedSceneNode.type === 'road'
-                ? [0.95, 0.18, 0.18, 0.82]
-                : [0.92, 0.3, 0.3, 0.72],
+            liftMeshZ(
+              tintVertices(
+                highlightVerts,
+                selectedSceneNode.type === 'road'
+                  ? [0.95, 0.18, 0.18, 0.82]
+                  : [0.92, 0.3, 0.3, 0.72],
+              ),
+              LINK_HIGHLIGHT_Z_LIFT,
             ),
           );
           return;
@@ -144,7 +147,7 @@ export function useSelectionHighlight({
           const highlightVerts = await service.generateSingleJunctionVertices(
             project, selectedJunctionId, [0.7, 0.4, 1.0, 0.65],
           );
-          renderer.uploadHighlightVertices(highlightVerts);
+          renderer.uploadHighlightVertices(liftMeshZ(highlightVerts, LINK_HIGHLIGHT_Z_LIFT));
           return;
         }
         renderer.clearHighlight();

@@ -299,7 +299,7 @@ describe('Viewport', () => {
     const highlightVerts = highlightCalls[highlightCalls.length - 1]?.[0] as Float32Array;
     expect(highlightVerts[0]).toBe(0);
     expect(highlightVerts[1]).toBe(0);
-    expect(highlightVerts[2]).toBe(0);
+    expect(highlightVerts[2]).toBeCloseTo(0.02);
     expect(highlightVerts[3]).toBeCloseTo(0.95);
     expect(highlightVerts[4]).toBeCloseTo(0.18);
     expect(highlightVerts[5]).toBeCloseTo(0.18);
