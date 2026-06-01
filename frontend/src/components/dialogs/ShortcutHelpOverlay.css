@@ -14,8 +14,8 @@
   border-radius: var(--radius-lg, 8px);
   box-shadow: var(--shadow-dialog, 0 8px 32px rgba(0, 0, 0, 0.4));
   padding: 0;
-  min-width: 420px;
-  max-width: 540px;
+  min-width: 540px;
+  max-width: 700px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
@@ -64,8 +64,8 @@
 }
 
 .shortcut-help-body section {
-  min-width: 160px;
-  flex: 1 1 160px;
+  min-width: 200px;
+  flex: 1 1 200px;
   padding: 8px 0;
 }
 
@@ -97,6 +97,7 @@
 .shortcut-help-desc {
   color: var(--color-text-secondary, #969696);
   padding-left: 12px !important;
+  white-space: nowrap;
 }
 
 .shortcut-help-plus {

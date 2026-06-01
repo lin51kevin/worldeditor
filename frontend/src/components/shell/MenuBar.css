@@ -143,13 +143,14 @@
 }
 
 .menubar-action-btn.active {
-  background: var(--color-accent-light);
-  color: var(--color-accent);
+  background: var(--color-toolbar-active-bg, var(--color-accent-light));
+  color: var(--color-toolbar-active-text, var(--color-accent));
+  border: 1px solid var(--color-toolbar-active-border, transparent);
 }
 
 .menubar-action-btn.active:hover:not(:disabled) {
-  background: var(--color-accent-light);
-  color: var(--color-accent);
+  background: var(--color-toolbar-active-bg, var(--color-accent-light));
+  color: var(--color-toolbar-active-text, var(--color-accent));
 }
 
 .menubar-snap-control {

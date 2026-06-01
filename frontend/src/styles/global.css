@@ -32,6 +32,11 @@
   --color-accent-light: #264f78;
   --color-accent-subtle: #1a3a5c;
 
+  /* ── Colors: Toolbar active state ── */
+  --color-toolbar-active-bg: #1a6fa8;
+  --color-toolbar-active-border: #4db2ff;
+  --color-toolbar-active-text: #ffffff;
+
   /* ── Colors: Selection & Highlight ── */
   --color-selection-bg: #37373d;
   --color-selection-text: #ffffff;
@@ -168,6 +173,11 @@
   --color-accent-hover: #106ebe;
   --color-accent-light: #c4e1f6;
   --color-accent-subtle: #e8f2fc;
+
+  /* ── Colors: Toolbar active state ── */
+  --color-toolbar-active-bg: #c4e1f6;
+  --color-toolbar-active-border: #0078d4;
+  --color-toolbar-active-text: #004a8f;
 
   /* ── Colors: Selection & Highlight ── */
   --color-selection-bg: #d6ebff;

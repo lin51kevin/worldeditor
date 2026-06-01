@@ -55,8 +55,9 @@
 }
 
 .toolbar-btn.toolbar-toggle.active {
-  background: var(--color-accent-light);
-  border-color: var(--color-accent);
+  background: var(--color-toolbar-active-bg, var(--color-accent-light));
+  border-color: var(--color-toolbar-active-border, var(--color-accent));
+  color: var(--color-toolbar-active-text, var(--color-text-primary));
 }
 
 .tb-icon {
