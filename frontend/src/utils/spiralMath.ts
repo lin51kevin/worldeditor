@@ -26,7 +26,7 @@ function integrateLocalSpiral(
 
   const curvatureRate = (curvEnd - curvStart) / safeLength;
   const thetaAt = (station: number) => curvStart * station + 0.5 * curvatureRate * station * station;
-  const steps = Math.max(24, Math.ceil(s * 3));
+  const steps = Math.max(24, Math.ceil(s));
   const ds = s / steps;
   let x = 0;
   let y = 0;

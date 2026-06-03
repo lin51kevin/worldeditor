@@ -105,7 +105,7 @@ function resolvePreviewPoints(
     ];
   }
 
-  const sampleCount = Math.max(32, Math.ceil(geometry.length * 2));
+  const sampleCount = Math.max(32, Math.ceil(geometry.length * 0.5));
   return sampleSpiralPoints(
     geometry.x,
     geometry.y,
@@ -244,20 +244,19 @@ export function useSpiralDrawMode({
     }
   }, [cursorPreviewPos, editMode, onPreviewEnd, splineKnots]);
 
+  // Cache existing road line vertices — only regenerate when project/display/viewMode change
+  const existingLineVertsRef = useRef<Float32Array>(new Float32Array(0));
   useEffect(() => {
-    const renderer = rendererRef.current;
-    const previewPoints = isSpiralDrawMode(editMode) ? resolvePreviewPoints(splineKnots, cursorPreviewPos) : null;
-    if (!renderer || status !== 'ready' || !previewPoints || previewPoints.length < 2) {
+    if (!isSpiralDrawMode(editMode) || status !== 'ready') {
       return;
     }
-
     let cancelled = false;
     void (async () => {
       try {
         const service = await getPlatformService();
         const visibleProject = buildRenderableProject(project, display);
         const empty = new Float32Array(0);
-        const [existingLaneVerts, existingCenterVerts, existingMarkVerts] = await Promise.all([
+        const [laneVerts, centerVerts, markVerts] = await Promise.all([
           visibleProject && viewMode !== 'solid'
             ? service.generateLaneBoundaryVertices(visibleProject, 2.0).catch(() => empty)
             : empty,
@@ -268,28 +267,31 @@ export function useSpiralDrawMode({
             ? service.generateLaneLineVertices(visibleProject, 2.0).catch(() => empty)
             : empty,
         ]);
-        if (cancelled) {
-          return;
+        if (!cancelled) {
+          existingLineVertsRef.current = mergeFloat32Arrays(
+            mergeFloat32Arrays(laneVerts, markVerts),
+            centerVerts,
+          );
         }
-
-        const previewVerts = buildPolylineVertices(previewPoints, renderer.getMetersPerPixel(), PREVIEW_COLOR);
-        const combined = mergeFloat32Arrays(
-          mergeFloat32Arrays(
-            mergeFloat32Arrays(existingLaneVerts, existingMarkVerts),
-            existingCenterVerts,
-          ),
-          previewVerts,
-        );
-        renderer.uploadLaneLineVertices(combined);
       } catch {
-        // Ignore preview failures.
+        // Ignore failures.
       }
     })();
+    return () => { cancelled = true; };
+  }, [display, editMode, project, status, viewMode]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [cursorPreviewPos, display, editMode, project, rendererRef, splineKnots, status, viewMode]);
+  // Update preview line on cursor move — lightweight, only rebuilds the polyline
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    const previewPoints = isSpiralDrawMode(editMode) ? resolvePreviewPoints(splineKnots, cursorPreviewPos) : null;
+    if (!renderer || status !== 'ready' || !previewPoints || previewPoints.length < 2) {
+      return;
+    }
+
+    const previewVerts = buildPolylineVertices(previewPoints, renderer.getMetersPerPixel(), PREVIEW_COLOR);
+    const combined = mergeFloat32Arrays(existingLineVertsRef.current, previewVerts);
+    renderer.uploadLaneLineVertices(combined);
+  }, [cursorPreviewPos, editMode, rendererRef, splineKnots, status]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
