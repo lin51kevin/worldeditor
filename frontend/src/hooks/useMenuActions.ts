@@ -74,7 +74,8 @@ export function useMenuActions() {
       }
     } catch (err) {
       console.error('[MenuBar] Failed to open file:', err);
-      await showAlert(t('dialog.openError'));
+      const detail = err instanceof Error ? err.message : String(err);
+      await showAlert(`${t('dialog.openError')}\n\n${detail}`);
     }
   }, [loadFile, pushRecentFile, t]);
 

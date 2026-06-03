@@ -55,7 +55,7 @@ export default defineConfig(({ mode }) => {
           manualChunks: {
             vendor: ['react', 'react-dom'],
             'vendor-i18n': ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
-            'vendor-utils': ['jszip', 'protobufjs/minimal'],
+            'vendor-utils': ['jszip', 'protobufjs'],
           },
         },
       },

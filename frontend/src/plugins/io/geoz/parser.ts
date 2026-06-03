@@ -5,7 +5,7 @@
  */
 
 import JSZip from 'jszip';
-import * as protobuf from 'protobufjs';
+import protobuf from 'protobufjs';
 import type {
   Geometry,
   Junction,
@@ -219,16 +219,15 @@ interface SectionAccumulator {
   rightLanes: ProtoLaneTopo[];
 }
 
-const pb: any = (protobuf as any).default ?? protobuf;
 let protoRootPromise: Promise<protobuf.Root> | null = null;
 
 /** Builds and caches the GeoZ protobuf schema root from bundled .proto sources. */
 export async function buildGeoZProtoRoot(): Promise<protobuf.Root> {
   if (!protoRootPromise) {
     protoRootPromise = Promise.resolve().then(() => {
-      const root = new (pb.Root)();
+      const root = new protobuf.Root();
       for (const source of PROTO_SOURCES) {
-        pb.parse(source.content, root, {
+        protobuf.parse(source.content, root, {
           keepCase: true,
           alternateCommentMode: true,
         });

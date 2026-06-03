@@ -5,7 +5,7 @@
  */
 
 import JSZip from 'jszip';
-import * as protobuf from 'protobufjs';
+import protobuf from 'protobufjs';
 import mainProto from '../io/geoz/proto/Main.proto?raw';
 import mapProto from '../io/geoz/proto/map.proto?raw';
 import mapGeometryProto from '../io/geoz/proto/map_geometry.proto?raw';
@@ -32,15 +32,14 @@ const PROTO_SOURCES = [
   { name: 'Main.proto', content: mainProto },
 ] as const;
 
-const pb: any = (protobuf as any).default ?? protobuf;
 let protoRootPromise: Promise<protobuf.Root> | null = null;
 
 async function buildGeoZProtoRoot(): Promise<protobuf.Root> {
   if (!protoRootPromise) {
     protoRootPromise = Promise.resolve().then(() => {
-      const root = new (pb.Root)();
+      const root = new protobuf.Root();
       for (const source of PROTO_SOURCES) {
-        pb.parse(source.content, root, { keepCase: true, alternateCommentMode: true });
+        protobuf.parse(source.content, root, { keepCase: true, alternateCommentMode: true });
       }
       return root;
     });
