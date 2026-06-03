@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn test_height_at_valid_index() {
         let mut p = CrgProfile::new(default_ref(), 3, 3, 1.0, 1.0, -1.0);
-        p.data[1 * 3 + 2] = 5.0; // u=1, v=2
+        p.data[3 + 2] = 5.0; // u=1, v=2
         assert_eq!(p.height_at(1, 2), Some(5.0));
     }
 

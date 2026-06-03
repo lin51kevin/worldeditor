@@ -896,7 +896,11 @@ mod tests {
         let result = pick_road(&project, 50.0, 0.0, 10.0);
         assert!(result.is_some());
         let r = result.unwrap();
-        assert!(r.distance < 0.001, "Distance on centerline should be near-zero, got {}", r.distance);
+        assert!(
+            r.distance < 0.001,
+            "Distance on centerline should be near-zero, got {}",
+            r.distance
+        );
     }
 
     #[test]
@@ -908,8 +912,16 @@ mod tests {
         let result = pick_road(&project, 51.0, 0.0, 5.0);
         assert!(result.is_some());
         let r = result.unwrap();
-        assert!(r.distance < 0.001, "Distance between samples should be near-zero, got {}", r.distance);
-        assert!((r.s - 51.0).abs() < 0.1, "Station should be ~51, got {}", r.s);
+        assert!(
+            r.distance < 0.001,
+            "Distance between samples should be near-zero, got {}",
+            r.distance
+        );
+        assert!(
+            (r.s - 51.0).abs() < 0.1,
+            "Station should be ~51, got {}",
+            r.s
+        );
     }
 
     #[test]

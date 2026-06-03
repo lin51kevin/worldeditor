@@ -397,8 +397,10 @@ mod tests {
     #[test]
     fn test_importer_contrib_import() {
         let importer = ImporterContrib::new("Test Format", vec![".test"], |_data, _name| {
-            let mut proj = Project::default();
-            proj.name = "imported".to_string();
+            let proj = Project {
+                name: "imported".to_string(),
+                ..Project::default()
+            };
             Ok(proj)
         });
 
@@ -418,8 +420,10 @@ mod tests {
         let exporter =
             ExporterContrib::new("Test Format", |proj| Ok(proj.name.as_bytes().to_vec()));
 
-        let mut project = Project::default();
-        project.name = "export_me".to_string();
+        let project = Project {
+            name: "export_me".to_string(),
+            ..Project::default()
+        };
         let result = exporter.export(&project).unwrap();
         assert_eq!(result, b"export_me");
     }
@@ -478,8 +482,10 @@ mod tests {
             |_| {},
         );
 
-        let mut project = Project::default();
-        project.name = "updated".to_string();
+        let project = Project {
+            name: "updated".to_string(),
+            ..Project::default()
+        };
         ctx.set_project(project);
 
         assert_eq!(*received.lock().unwrap(), "updated");

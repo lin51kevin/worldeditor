@@ -37,7 +37,7 @@ mod tests {
 
     #[test]
     fn test_point_cloud_loader_default_returns_constructible_loader() {
-        let loader = PointCloudLoader::default();
+        let loader = PointCloudLoader;
 
         assert_eq!(size_of_val(&loader), 0);
     }

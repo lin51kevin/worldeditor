@@ -222,7 +222,8 @@ impl SnapCache {
                     road_id: road.id.clone(),
                     metadata: SnapMetadata {
                         contact_point: Some(contact_point.to_string()),
-                        heading: get_road_endpoint_tangent(road, contact_point).map(|tangent| tangent.hdg),
+                        heading: get_road_endpoint_tangent(road, contact_point)
+                            .map(|tangent| tangent.hdg),
                         ..SnapMetadata::default()
                     },
                 });
@@ -290,8 +291,13 @@ impl SnapCache {
         let nearby = self.nearby_indices(pos, threshold);
 
         if config.endpoint_enabled
-            && let Some(result) =
-                self.find_best_candidate(&nearby, pos, threshold, SnapType::Endpoint, exclude_road_id)
+            && let Some(result) = self.find_best_candidate(
+                &nearby,
+                pos,
+                threshold,
+                SnapType::Endpoint,
+                exclude_road_id,
+            )
         {
             return Some(result);
         }
@@ -309,8 +315,13 @@ impl SnapCache {
         }
 
         if config.midpoint_enabled
-            && let Some(result) =
-                self.find_best_candidate(&nearby, pos, threshold, SnapType::Midpoint, exclude_road_id)
+            && let Some(result) = self.find_best_candidate(
+                &nearby,
+                pos,
+                threshold,
+                SnapType::Midpoint,
+                exclude_road_id,
+            )
         {
             return Some(result);
         }
@@ -345,7 +356,9 @@ impl SnapCache {
             let Some(candidate) = self.candidate_by_index(index) else {
                 continue;
             };
-            if candidate.snap_type != snap_type || exclude_road_id == Some(candidate.road_id.as_str()) {
+            if candidate.snap_type != snap_type
+                || exclude_road_id == Some(candidate.road_id.as_str())
+            {
                 continue;
             }
 
@@ -372,24 +385,16 @@ impl SnapCache {
         self.grid.clear();
 
         let mut next_index = 0;
-        next_index = Self::insert_group(
-            &mut self.grid,
-            self.cell_size,
-            next_index,
-            &self.endpoints,
-        );
+        next_index =
+            Self::insert_group(&mut self.grid, self.cell_size, next_index, &self.endpoints);
         next_index = Self::insert_group(
             &mut self.grid,
             self.cell_size,
             next_index,
             &self.lane_endpoints,
         );
-        next_index = Self::insert_group(
-            &mut self.grid,
-            self.cell_size,
-            next_index,
-            &self.midpoints,
-        );
+        next_index =
+            Self::insert_group(&mut self.grid, self.cell_size, next_index, &self.midpoints);
         let _ = Self::insert_group(
             &mut self.grid,
             self.cell_size,
@@ -441,8 +446,7 @@ impl SnapCache {
         if index < self.midpoints.len() {
             return self.midpoints.get(index);
         }
-        self.perpendicular_samples
-            .get(index - self.midpoints.len())
+        self.perpendicular_samples.get(index - self.midpoints.len())
     }
 
     fn cell_key(x: f64, y: f64, cell_size: f64) -> (i32, i32) {
@@ -480,7 +484,8 @@ fn get_lane_boundary_endpoints(road: &Road) -> Vec<LaneEndpointCandidate> {
                 continue;
             }
 
-            if let Some(endpoint) = lane_boundary_endpoint_at(road, section, lane.id, 0.0, "Start") {
+            if let Some(endpoint) = lane_boundary_endpoint_at(road, section, lane.id, 0.0, "Start")
+            {
                 endpoints.push(endpoint);
             }
 
@@ -526,9 +531,10 @@ fn get_road_endpoints(road: &Road) -> Vec<(f64, f64)> {
         endpoints.push((pt.x, pt.y));
     }
     if road.length > 1e-9
-        && let Some(pt) = evaluate_road_at_s(road, road.length) {
-            endpoints.push((pt.x, pt.y));
-        }
+        && let Some(pt) = evaluate_road_at_s(road, road.length)
+    {
+        endpoints.push((pt.x, pt.y));
+    }
     endpoints
 }
 

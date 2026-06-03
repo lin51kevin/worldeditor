@@ -130,10 +130,11 @@ impl Command for OptimizeAllJunctions {
         for jid in &junction_ids {
             if let Some(new_conns) = topology::optimize_junction(&p, jid)
                 && let Some(junction) = p.junctions.iter_mut().find(|j| j.id == *jid)
-                    && junction.connections != new_conns {
-                        junction.connections = new_conns;
-                        changed = true;
-                    }
+                && junction.connections != new_conns
+            {
+                junction.connections = new_conns;
+                changed = true;
+            }
         }
 
         if !changed {

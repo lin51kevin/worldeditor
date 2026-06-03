@@ -1315,7 +1315,11 @@ mod tests {
         }"#;
 
         let result = generate_road_vertices(project_json, 2.0, "byLaneType");
-        assert!(result.is_ok(), "GeoZ project deserialization failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "GeoZ project deserialization failed: {:?}",
+            result.err()
+        );
         let verts = result.unwrap();
         assert!(
             !verts.is_empty(),
@@ -1349,7 +1353,11 @@ mod tests {
         }"#;
 
         let result = generate_road_vertices(project_json, 2.0, "byLaneType");
-        assert!(result.is_ok(), "GeoZ project deserialization failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "GeoZ project deserialization failed: {:?}",
+            result.err()
+        );
         let verts = result.unwrap();
         assert!(
             !verts.is_empty(),
@@ -1392,7 +1400,11 @@ mod tests {
         }"#;
 
         let result = generate_road_vertices(project_json, 2.0, "byLaneType");
-        assert!(result.is_ok(), "GeoZ project with road marks failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "GeoZ project with road marks failed: {:?}",
+            result.err()
+        );
         let verts = result.unwrap();
         assert!(!verts.is_empty(), "Should produce vertices with road marks");
     }

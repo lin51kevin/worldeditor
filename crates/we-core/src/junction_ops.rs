@@ -151,18 +151,14 @@ pub fn build_junction_connectors(
             // Skip if a connector between this pair already exists in covered set.
             let already_covered = covered.iter().any(|(incoming, connecting)| {
                 incoming == &from_arm.road_id
-                    && new_project
-                        .roads
-                        .iter()
-                        .chain(new_roads.iter())
-                        .any(|r| {
-                            r.id == *connecting
-                                && r.link
-                                    .as_ref()
-                                    .and_then(|l| l.successor.as_ref())
-                                    .map(|s| s.element_id == to_arm.road_id)
-                                    .unwrap_or(false)
-                        })
+                    && new_project.roads.iter().chain(new_roads.iter()).any(|r| {
+                        r.id == *connecting
+                            && r.link
+                                .as_ref()
+                                .and_then(|l| l.successor.as_ref())
+                                .map(|s| s.element_id == to_arm.road_id)
+                                .unwrap_or(false)
+                    })
             });
             if already_covered || connected_pairs.contains(&pair_key) {
                 continue;
@@ -227,26 +223,46 @@ pub fn build_junction_connectors(
                     // Append outermost shoulder only for adjacent CW pairs.
                     if is_adjacent
                         && let Some(outermost) = ls.right.last()
-                            && matches!(outermost.lane_type, LaneType::Shoulder) {
-                                lanes.push(outermost.clone());
-                            }
+                        && matches!(outermost.lane_type, LaneType::Shoulder)
+                    {
+                        lanes.push(outermost.clone());
+                    }
                     lanes
                 })
                 .unwrap_or_default();
 
             // Build a concise name like "1 → 2" using road names or IDs.
             let from_name = from_road
-                .map(|r| if r.name.is_empty() { r.id.clone() } else { r.name.clone() })
+                .map(|r| {
+                    if r.name.is_empty() {
+                        r.id.clone()
+                    } else {
+                        r.name.clone()
+                    }
+                })
                 .unwrap_or_else(|| from_arm.road_id.clone());
             let to_name = new_project
                 .roads
                 .iter()
                 .find(|r| r.id == to_arm.road_id)
-                .map(|r| if r.name.is_empty() { r.id.clone() } else { r.name.clone() })
+                .map(|r| {
+                    if r.name.is_empty() {
+                        r.id.clone()
+                    } else {
+                        r.name.clone()
+                    }
+                })
                 .unwrap_or_else(|| to_arm.road_id.clone());
 
-            let connector =
-                make_connector_road(&effective_from, &effective_to, &connector_id, junction_id, &template_lanes, &from_name, &to_name);
+            let connector = make_connector_road(
+                &effective_from,
+                &effective_to,
+                &connector_id,
+                junction_id,
+                &template_lanes,
+                &from_name,
+                &to_name,
+            );
 
             // Build JunctionConnection.
             let lane_links: Vec<JunctionLaneLink> = (1..=lane_count as i32)
@@ -321,7 +337,9 @@ fn sorted_arm_indices_by_angle(arms: &[JunctionArm]) -> Vec<usize> {
     indices.sort_by(|&a, &b| {
         let angle_a = (arms[a].y - cy).atan2(arms[a].x - cx);
         let angle_b = (arms[b].y - cy).atan2(arms[b].x - cx);
-        angle_a.partial_cmp(&angle_b).unwrap_or(std::cmp::Ordering::Equal)
+        angle_a
+            .partial_cmp(&angle_b)
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
     indices
 }
@@ -337,8 +355,12 @@ fn is_cw_adjacent(
     if n < 2 {
         return false;
     }
-    let from_pos = arm_order.iter().position(|&idx| arms[idx].road_id == from_road_id);
-    let to_pos = arm_order.iter().position(|&idx| arms[idx].road_id == to_road_id);
+    let from_pos = arm_order
+        .iter()
+        .position(|&idx| arms[idx].road_id == from_road_id);
+    let to_pos = arm_order
+        .iter()
+        .position(|&idx| arms[idx].road_id == to_road_id);
     match (from_pos, to_pos) {
         (Some(f), Some(t)) => (t + n - f) % n == 1,
         _ => false,
@@ -410,18 +432,19 @@ fn make_connector_road(
 
     // Replace the default single driving lane with template lanes (preserving types).
     if !template_lanes.is_empty()
-        && let Some(ls) = road.lane_sections.first_mut() {
-            ls.right = template_lanes
-                .iter()
-                .enumerate()
-                .map(|(i, tpl)| {
-                    let mut lane = tpl.clone();
-                    lane.id = -(i as i32 + 1);
-                    lane.link = None;
-                    lane
-                })
-                .collect();
-        }
+        && let Some(ls) = road.lane_sections.first_mut()
+    {
+        ls.right = template_lanes
+            .iter()
+            .enumerate()
+            .map(|(i, tpl)| {
+                let mut lane = tpl.clone();
+                lane.id = -(i as i32 + 1);
+                lane.link = None;
+                lane
+            })
+            .collect();
+    }
 
     // Mark as belonging to the junction and set concise name.
     road.junction_id = Some(junction_id.to_owned());
@@ -531,7 +554,8 @@ mod tests {
     };
 
     fn make_straight_road(id: &str, x: f64, y: f64, length: f64, hdg: f64) -> Road {
-        let road = Road::from_centerline(
+        
+        Road::from_centerline(
             id,
             vec![Geometry {
                 s: 0.0,
@@ -541,8 +565,7 @@ mod tests {
                 length,
                 geo_type: GeometryType::Line,
             }],
-        );
-        road
+        )
     }
 
     fn project_two_arm_junction() -> Project {
@@ -606,8 +629,14 @@ mod tests {
         assert_eq!(result.roads.len(), 4, "two connector roads added");
         let junction = result.junctions.iter().find(|j| j.id == "j1").unwrap();
         assert_eq!(junction.connections.len(), 2, "two connections registered");
-        let conn_ab = junction.connections.iter().find(|c| c.incoming_road == "road-a");
-        let conn_ba = junction.connections.iter().find(|c| c.incoming_road == "road-b");
+        let conn_ab = junction
+            .connections
+            .iter()
+            .find(|c| c.incoming_road == "road-a");
+        let conn_ba = junction
+            .connections
+            .iter()
+            .find(|c| c.incoming_road == "road-b");
         assert!(conn_ab.is_some(), "connection from road-a exists");
         assert!(conn_ba.is_some(), "connection from road-b exists");
     }

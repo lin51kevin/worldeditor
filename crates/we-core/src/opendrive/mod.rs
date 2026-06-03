@@ -1817,11 +1817,11 @@ mod tests {
                 "Parser removes duplicate closing vertex"
             );
             assert!(
-                (ps58.pitch - 7.4164533963758464e-11).abs() < 1e-15,
+                (ps58.pitch - 7.416_453_396_375_846e-11).abs() < 1e-15,
                 "pitch should be preserved"
             );
             assert!(
-                (ps58.roll - 8.8020671870275826e-10).abs() < 1e-15,
+                (ps58.roll - 8.802_067_187_027_583e-10).abs() < 1e-15,
                 "roll should be preserved"
             );
 

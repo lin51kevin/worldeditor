@@ -1,4 +1,4 @@
-import { test, expect, injectProject, getProject, makeTestProject, makeTestRoad } from './fixtures';
+import { test, expect } from './fixtures';
 
 test.describe('Undo / Redo', () => {
   test('undo and redo buttons are disabled initially', async ({ editorPage: page }) => {

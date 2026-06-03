@@ -199,8 +199,8 @@ fn compare_roads(ctx: &mut ComparisonContext, project: &Project, baseline: &Base
         let base_jid = base_road.junction_id_str();
         ctx.assert_eq(
             &format!("{prefix}.junction_id"),
-            &our_jid.as_deref().unwrap_or("none"),
-            &base_jid.as_deref().unwrap_or("none"),
+            our_jid.as_deref().unwrap_or("none"),
+            base_jid.as_deref().unwrap_or("none"),
             "Junction ID",
         );
 

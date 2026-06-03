@@ -44,9 +44,10 @@ pub fn generate_junction_meshes(project: &Project, config: &RoadRenderConfig) ->
         for conn in &junction.connections {
             if seen.insert(conn.incoming_road.as_str())
                 && let Some(road) = road_map.get(conn.incoming_road.as_str())
-                    && let Some((left, right)) = compute_arm_edges(road) {
-                        arm_edges.push((left, right));
-                    }
+                && let Some((left, right)) = compute_arm_edges(road)
+            {
+                arm_edges.push((left, right));
+            }
         }
 
         if arm_edges.is_empty() {

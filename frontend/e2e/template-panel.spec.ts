@@ -54,13 +54,6 @@ async function getSplineTemplateId(page: Page): Promise<string | null> {
   });
 }
 
-async function getRoadCount(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const store = (window as any).__projectStore;
-    return (store.getState().project.roads as any[]).length;
-  });
-}
-
 /** Click the tab whose visible text matches the given label. */
 async function clickTab(page: Page, label: string): Promise<void> {
   await page.locator('.template-tab', { hasText: label }).click();

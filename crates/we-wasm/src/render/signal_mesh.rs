@@ -860,12 +860,12 @@ mod tests {
         let all_x: Vec<f32> = out.chunks(7).map(|v| v[0]).collect();
         let all_y: Vec<f32> = out.chunks(7).map(|v| v[1]).collect();
         assert!(
-            all_x.iter().all(|&x| x >= 9.5 && x <= 14.5),
+            all_x.iter().all(|&x| (9.5..=14.5).contains(&x)),
             "Stripe x coords should be in [10,14] range, got {:?}",
             all_x
         );
         assert!(
-            all_y.iter().all(|&y| y >= -1.5 && y <= 1.5),
+            all_y.iter().all(|&y| (-1.5..=1.5).contains(&y)),
             "Stripe y coords should be in [-1,1] range, got {:?}",
             all_y
         );
@@ -933,7 +933,7 @@ mod tests {
         // With rotation: lateral range = 10.7m; period = 1.05m → ~10 stripes.
         let num_stripes = out.len() / 42;
         assert!(
-            num_stripes >= 8 && num_stripes <= 12,
+            (8..=12).contains(&num_stripes),
             "Expected ~10 stripes for 10.7 m lateral range, got {num_stripes}"
         );
 
@@ -1019,7 +1019,7 @@ mod tests {
         // Without rotation: lateral range = 10.9m; period = 1.05m → ~10 stripes.
         let num_stripes = out.len() / 42;
         assert!(
-            num_stripes >= 8 && num_stripes <= 12,
+            (8..=12).contains(&num_stripes),
             "Expected ~10 stripes for 10.9 m lateral range, got {num_stripes}"
         );
 
