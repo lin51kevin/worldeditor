@@ -4,6 +4,13 @@ description = "WorldEditor web server with REST API + WebSocket"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+# Phase 3 stub — S3/OSS storage backend. Hidden from default builds.
+s3 = []
+# Placeholder — WebSocket collaborative editing. Hidden from default builds.
+websocket = []
+
 [dependencies]
 we-core = { workspace = true }
 axum = { version = "0.7", features = ["ws"] }

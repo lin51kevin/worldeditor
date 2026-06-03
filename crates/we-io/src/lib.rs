@@ -11,6 +11,7 @@ pub mod nio_proto;
 pub mod obj_export;
 pub mod shapefile_io;
 pub mod signal_json;
+#[cfg(feature = "sumo")]
 pub mod sumo;
 pub mod traits;
 

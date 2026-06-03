@@ -4,6 +4,11 @@ description = "WorldEditor I/O abstraction layer — platform-agnostic file syst
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+# Phase 3 stub — SUMO traffic simulator I/O. Hidden from default builds.
+sumo = []
+
 [dependencies]
 we-core = { workspace = true }
 serde = { workspace = true }

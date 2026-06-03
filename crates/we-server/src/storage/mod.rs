@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use std::error::Error as StdError;
 
+#[cfg(feature = "s3")]
 pub mod s3;
 
 #[async_trait]

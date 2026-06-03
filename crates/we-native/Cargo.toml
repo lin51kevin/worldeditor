@@ -4,6 +4,11 @@ description = "WorldEditor native-only features — GDAL, large point clouds, FB
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+# Phase 3 stub — point cloud loading (LAS/PCD). Hidden from default builds.
+pointcloud = []
+
 [dependencies]
 we-core = { workspace = true }
 we-io = { workspace = true }

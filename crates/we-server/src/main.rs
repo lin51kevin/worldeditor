@@ -2,12 +2,16 @@ use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
     Router, middleware,
-    routing::{get, post},
+    routing::post,
 };
+#[cfg(feature = "websocket")]
+use axum::routing::get;
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
 
-use we_server::{api, auth, storage, ws};
+use we_server::{api, auth, storage};
+#[cfg(feature = "websocket")]
+use we_server::ws;
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -63,6 +67,7 @@ async fn main() -> anyhow::Result<()> {
         ));
 
     // WebSocket route (unprotected for now, but could add auth later)
+    #[cfg(feature = "websocket")]
     let ws_routes =
         Router::new().route("/ws/editor/:project_id", get(ws::editor::editor_ws_handler));
 
@@ -85,8 +90,10 @@ async fn main() -> anyhow::Result<()> {
     // Combine all routes
     let app = Router::new()
         .merge(protected_routes)
-        .merge(ws_routes)
-        .merge(auth_routes)
+        .merge(auth_routes);
+    #[cfg(feature = "websocket")]
+    let app = app.merge(ws_routes);
+    let app = app
         .layer(
             CorsLayer::new()
                 .allow_origin(origins)

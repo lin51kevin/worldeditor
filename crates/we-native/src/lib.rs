@@ -6,9 +6,10 @@
 //! - Large-scale point cloud processing (memory-mapped files)
 //! - FBX SDK FFI
 
+#[cfg(feature = "pointcloud")]
 pub mod pointcloud;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "pointcloud"))]
 mod tests {
     use crate::pointcloud::PointCloudLoader;
     use std::mem::size_of_val;

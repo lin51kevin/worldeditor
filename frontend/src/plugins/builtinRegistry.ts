@@ -132,8 +132,29 @@ const BUILTIN_META: PluginInfo[] = [
   { id: 'shape-editor', name: 'Shape Editor', nameKey: 'pluginManager.builtinShapeEditorName', version: '1.0.0', description: 'Vector shape layer editor for pre-road geometry construction', descriptionKey: 'pluginManager.builtinShapeEditorDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
 ];
 
-/** Builtin plugins with mount functions attached. */
-export const BUILTIN_PLUGINS: BuiltinPluginEntry[] = BUILTIN_META.map((meta) => ({
+/**
+ * Beta / experimental plugins. Excluded from the registry in production builds,
+ * so they are neither listed in the Plugin Manager nor mounted. They remain
+ * available in dev and test builds, or in production when
+ * `VITE_SHOW_BETA_PLUGINS=true` is set.
+ */
+const BETA_PLUGIN_IDS = new Set<string>([
+  'lane-detect',
+  'pointcloud-beta',
+  'satellite-beta',
+  '3d-models',
+  'scripting-beta',
+  'ecosystem-beta',
+]);
+
+/** Whether beta plugins should be included in this build. */
+const BETA_PLUGINS_ENABLED =
+  import.meta.env.DEV || import.meta.env.VITE_SHOW_BETA_PLUGINS === 'true';
+
+/** Builtin plugins with mount functions attached (beta plugins hidden in production). */
+export const BUILTIN_PLUGINS: BuiltinPluginEntry[] = BUILTIN_META.filter(
+  (meta) => BETA_PLUGINS_ENABLED || !BETA_PLUGIN_IDS.has(meta.id),
+).map((meta) => ({
   ...meta,
   mount: MOUNT_MAP[meta.id] ?? (() => () => {}),
 }));
