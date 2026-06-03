@@ -309,6 +309,14 @@ export class ViewportRenderer {
         }
       } else {
         this.lastVertexData = vertexData;
+        // Cancel any pending auto-fit: loading an empty project arms
+        // pendingFitToVertices via resetCamera(), but with no content there is
+        // nothing to fit. Clearing it here prevents the stale fit intent from
+        // leaking onto the first road the user later draws (which would snap the
+        // camera back to a default/fit position). Opening a file that already
+        // contains roads still fits, because its non-empty upload consumes the
+        // flag before any empty upload occurs.
+        this.pendingFitToVertices = false;
       }
       return;
     }
