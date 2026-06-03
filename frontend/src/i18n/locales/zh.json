@@ -136,7 +136,8 @@
     "toggleOutputPanel": "切换输出面板",
     "zoomToFit": "适应视图",
     "selectionModeTitle": "选择模式",
-    "viewModeTitle": "查看模式"
+    "viewModeTitle": "查看模式",
+    "snapshotTitle": "导出快照"
   },
   "statusBar": {
     "roads": "道路",
@@ -557,6 +558,22 @@
     "initializing": "3D 视口 — 正在初始化 WebGPU...",
     "unsupported": "3D 视口 — 不支持 WebGPU",
     "dropToOpen": "拖放文件以打开"
+  },
+  "snapshot": {
+    "title": "导出快照",
+    "exportPath": "导出路径",
+    "browse": "选择路径",
+    "format": "图片格式",
+    "backgroundColor": "背景色",
+    "transparent": "透明背景",
+    "jpegNoTransparent": "JPEG 不支持透明",
+    "resolution": "分辨率",
+    "custom": "自定义",
+    "quality": "图片质量",
+    "outputSize": "输出尺寸",
+    "generatingPreview": "正在生成预览...",
+    "export": "导出",
+    "exporting": "导出中..."
   },
   "loading": {
     "readingFile": "正在读取文件...",

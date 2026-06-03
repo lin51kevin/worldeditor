@@ -3,6 +3,7 @@
  */
 import { useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
 import { ViewportRenderer } from '../viewport/renderer';
+import { setViewportRenderer } from '../viewport/viewportRef';
 import { useProjectStore } from '../stores/projectStore';
 
 export function useViewportInit(
@@ -35,6 +36,7 @@ export function useViewportInit(
       if (ok) {
         setStatus('ready');
         renderer.start();
+        setViewportRenderer(renderer);
         renderer.setScaleChangeCallback((info) => {
           useProjectStore.getState().setViewportInfo(info);
         });
@@ -64,6 +66,7 @@ export function useViewportInit(
 
     return () => {
       observer.disconnect();
+      setViewportRenderer(null);
       renderer.dispose();
       (rendererRef as { current: ViewportRenderer | null }).current = null;
     };

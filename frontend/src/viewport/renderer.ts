@@ -556,6 +556,51 @@ export class ViewportRenderer {
     this.renderLoop?.wakeUp();
   }
 
+  /**
+   * Force a synchronous render and immediately capture the canvas content.
+   * This ensures the WebGPU canvas has valid pixels when toDataURL() is called
+   * (before the compositor can expire the frame).
+   *
+   * @param options.transparent - If true, renders with transparent clear color
+   *   and excludes grid/axis so the export has a clean transparent background.
+   */
+  captureFrame(options?: { transparent?: boolean }): string | null {
+    if (this.deviceLost || this.disposed) return null;
+
+    // Save state that we temporarily override for capture
+    const prevShowGrid = this.showGrid;
+    const prevShowAxis = this.showAxis;
+    const prevClearColor = this.clearColor;
+
+    // Always hide grid and axis for snapshot export
+    this.showGrid = false;
+    this.showAxis = false;
+
+    // When transparent, use a fully transparent clear color
+    if (options?.transparent) {
+      this.clearColor = { r: 0, g: 0, b: 0, a: 0 };
+    }
+
+    // Force a render
+    this.sceneDirty = true;
+    this.cameraController.isViewDirty = true;
+    this.renderFrame();
+
+    // Restore state
+    this.showGrid = prevShowGrid;
+    this.showAxis = prevShowAxis;
+    this.clearColor = prevClearColor;
+
+    // Immediately read back — the texture is still valid in this microtask
+    try {
+      const canvas = this.context?.canvas as HTMLCanvasElement | undefined;
+      if (!canvas) return null;
+      return canvas.toDataURL('image/png');
+    } catch {
+      return null;
+    }
+  }
+
   /** Start the render loop (render-on-demand: stops when idle, wakes on events). */
   start(): void {
     this.cameraController.reportScale();

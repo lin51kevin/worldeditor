@@ -14,6 +14,7 @@ import {
   Ruler,
   RotateCcw,
   Bot,
+  Camera,
   ChevronDown,
   MousePointer,
   SplitSquareHorizontal,
@@ -43,6 +44,7 @@ import { ViewMenu } from './menus/ViewMenu';
 import { SnapSettingsPanel } from '../panels/SnapSettingsPanel';
 import { SelectionModePanel } from '../panels/SelectionModePanel';
 import { ViewModePanel } from '../panels/ViewModePanel';
+import { SnapshotExportDialog } from '../dialogs/SnapshotExportDialog';
 import './MenuBar.css';
 
 export { showVersion } from './menuDefinitions';
@@ -146,6 +148,7 @@ export function MenuBar({
   const [snapSettingsOpen, setSnapSettingsOpen] = useState(false);
   const [selectionModeOpen, setSelectionModeOpen] = useState(false);
   const [viewModeOpen, setViewModeOpen] = useState(false);
+  const [snapshotDialogOpen, setSnapshotDialogOpen] = useState(false);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
   const closeMenus = useCallback(() => {
@@ -463,6 +466,13 @@ export function MenuBar({
           >
             <Crosshair size={14} />
           </button>
+          <button
+            className="menubar-action-btn"
+            onClick={() => setSnapshotDialogOpen(true)}
+            title={t('toolbar.snapshotTitle')}
+          >
+            <Camera size={14} />
+          </button>
 
           <div className="menubar-action-separator" />
 
@@ -578,6 +588,12 @@ export function MenuBar({
           </span>
         </button>
       </div>
+      {snapshotDialogOpen && (
+        <SnapshotExportDialog
+          open={snapshotDialogOpen}
+          onClose={() => setSnapshotDialogOpen(false)}
+        />
+      )}
     </div>
   );
 }
