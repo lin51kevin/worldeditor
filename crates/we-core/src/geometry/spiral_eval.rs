@@ -90,12 +90,10 @@ pub fn fresnel_cs(t: f64) -> (f64, f64) {
     }
 }
 
-/// Evaluate an Euler spiral (clothoid) using Fresnel integrals (when possible)
-/// or Simpson's rule as fallback.
+/// Evaluate an Euler spiral (clothoid) using Simpson's rule numerical integration.
 ///
 /// Curvature varies linearly from `curv_start` to `curv_end` over `length`.
-/// When `curv_start == 0`, uses the analytical Fresnel integral solution (O(1)).
-/// Otherwise uses Simpson's rule with optimized step count.
+/// Uses composite Simpson's rule for all non-degenerate cases.
 pub fn evaluate_spiral(curv_start: f64, curv_end: f64, length: f64, ds: f64) -> (f64, f64, f64) {
     if length < 1e-15 {
         return (0.0, 0.0, 0.0);
@@ -114,25 +112,12 @@ pub fn evaluate_spiral(curv_start: f64, curv_end: f64, length: f64, ds: f64) -> 
         return (r * theta.sin(), r * (1.0 - theta.cos()), theta_end);
     }
 
-    // When curv_start == 0 (common for entry spirals), use Fresnel integrals.
-    // kappa(s) = c_dot * s, theta(s) = 0.5 * c_dot * s^2
-    // x = integral_0^ds cos(0.5*c_dot*s^2) ds = A * C(u), where u = ds*sqrt(c_dot/pi)
-    // y = integral_0^ds sin(0.5*c_dot*s^2) ds = A * S(u) * sign(c_dot)
-    // A = sqrt(1/|c_dot|)
-    if curv_start.abs() < 1e-12 {
-        // kappa(s) = c_dot * s, theta(s) = 0.5 * c_dot * s^2
-        // x = integral_0^ds cos(c_dot*s^2/2) ds = sqrt(pi/c_dot) * C(u)
-        // y = integral_0^ds sin(c_dot*s^2/2) ds = sqrt(pi/c_dot) * sign(c_dot) * S(u)
-        // where u = ds * sqrt(c_dot/pi)
-        let a_sqrt_pi = (std::f64::consts::PI / c_dot.abs()).sqrt();
-        let u1 = ds * (c_dot.abs() / std::f64::consts::PI).sqrt();
-        let (c1, s1) = fresnel_cs(u1);
-        let sign = c_dot.signum();
-        return (a_sqrt_pi * c1, a_sqrt_pi * sign * s1, theta_end);
-    }
-
-    // General case (curv_start != 0): Simpson's rule with good accuracy
-    let n = ((ds / 0.5).ceil() as usize).max(20);
+    // Simpson's rule numerical integration for all non-degenerate cases.
+    // This handles both curv_start == 0 (entry spirals) and general spirals uniformly.
+    // theta(s) = curv_start * s + 0.5 * c_dot * s^2
+    let n_raw = ((ds / 0.5).ceil() as usize).max(20);
+    // Composite Simpson's rule requires an even number of subintervals
+    let n = if n_raw % 2 == 1 { n_raw + 1 } else { n_raw };
     let h = ds / n as f64;
 
     let mut x = 0.0;
@@ -231,8 +216,8 @@ mod tests {
         // Fresnel integrals always stay in [0, 1] for positive t
         for &t in &[2.0_f64, 5.0, 10.0, 20.0] {
             let (c, s) = fresnel_cs(t);
-            assert!(c >= 0.0 && c <= 1.0, "C({t}) out of range: {c}");
-            assert!(s >= 0.0 && s <= 1.0, "S({t}) out of range: {s}");
+            assert!((0.0..=1.0).contains(&c), "C({t}) out of range: {c}");
+            assert!((0.0..=1.0).contains(&s), "S({t}) out of range: {s}");
         }
     }
 
@@ -256,10 +241,10 @@ mod tests {
         // Values close to the boundary should be non-negative and bounded
         let (c1, s1) = fresnel_cs(1.4);
         let (c2, s2) = fresnel_cs(1.6);
-        assert!(c1 >= 0.0 && c1 <= 1.0, "C(1.4) = {c1}");
-        assert!(s1 >= 0.0 && s1 <= 1.0, "S(1.4) = {s1}");
-        assert!(c2 >= 0.0 && c2 <= 1.0, "C(1.6) = {c2}");
-        assert!(s2 >= 0.0 && s2 <= 1.0, "S(1.6) = {s2}");
+        assert!((0.0..=1.0).contains(&c1), "C(1.4) = {c1}");
+        assert!((0.0..=1.0).contains(&s1), "S(1.4) = {s1}");
+        assert!((0.0..=1.0).contains(&c2), "C(1.6) = {c2}");
+        assert!((0.0..=1.0).contains(&s2), "S(1.6) = {s2}");
     }
 
     #[test]
@@ -294,16 +279,39 @@ mod tests {
     }
 
     #[test]
-    fn test_spiral_fresnel_vs_simpson_entry_spiral() {
-        // Entry spiral (curv_start = 0) should use Fresnel path
+    fn test_spiral_entry_spiral_agrees_with_simpson() {
+        // Entry spiral (curv_start = 0) should agree with reference Simpson
         let curv_end = 0.1;
         let length = 10.0;
         let ds = 8.0;
         let (xf, yf, hf) = evaluate_spiral(0.0, curv_end, length, ds);
         let (xs, ys, hs) = evaluate_spiral_simpson(0.0, curv_end, length, ds);
-        assert!((xf - xs).abs() < 1e-4, "x: fresnel={xf}, simpson={xs}");
-        assert!((yf - ys).abs() < 1e-4, "y: fresnel={yf}, simpson={ys}");
+        assert!((xf - xs).abs() < 1e-4, "x: eval={xf}, simpson={xs}");
+        assert!((yf - ys).abs() < 1e-4, "y: eval={yf}, simpson={ys}");
         assert!((hf - hs).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_spiral_entry_high_curvature_no_inner_loop() {
+        // Regression test: a long entry spiral (curv_start=0, high curvEnd)
+        // should not produce an inner curl/loop that deviates from Simpson reference.
+        // This case corresponds to u ≈ 2.0 in Fresnel parameter space where
+        // the previous Fresnel approximation had ~30% error in S(2.0).
+        let curv_end = 0.2;
+        let length = 50.0;
+        let ds = 50.0;
+        let (x, y, _) = evaluate_spiral(0.0, curv_end, length, ds);
+        let (xs, ys, _) = evaluate_spiral_simpson(0.0, curv_end, length, ds);
+        assert!(
+            (x - xs).abs() < 1e-3,
+            "High-curv entry spiral x: eval={x}, simpson={xs}, diff={}",
+            (x - xs).abs()
+        );
+        assert!(
+            (y - ys).abs() < 1e-3,
+            "High-curv entry spiral y: eval={y}, simpson={ys}, diff={}",
+            (y - ys).abs()
+        );
     }
 
     #[test]
