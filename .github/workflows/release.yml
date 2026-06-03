@@ -64,6 +64,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
+      - name: Build WASM
+        run: wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release
+
       - name: Install yarn
         run: npm install -g yarn@1
 
