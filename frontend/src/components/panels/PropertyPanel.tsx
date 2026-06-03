@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useProjectStore } from '../../stores/projectStore';
@@ -62,22 +62,21 @@ export function PropertyPanel() {
   }, [selectedRoad?.id, selectedRoad?.name]);
 
   // Resolve selected signal when a signal node is selected
-  const selectedSignal: RoadSignal | null = (() => {
-    if (selectedSceneNode?.type !== 'signal') return null;
-    const road = project.roads.find((r) => r.id === selectedSceneNode.roadId);
-    return (road?.signals ?? []).find((s) => s.id === selectedSceneNode.signalId) ?? null;
-  })();
-  const selectedSignalRoad: Road | null = (() => {
+  const selectedSignalRoad: Road | null = useMemo(() => {
     if (selectedSceneNode?.type !== 'signal') return null;
     return project.roads.find((r) => r.id === selectedSceneNode.roadId) ?? null;
-  })();
+  }, [project.roads, selectedSceneNode]);
+  const selectedSignal: RoadSignal | null = useMemo(() => {
+    if (selectedSceneNode?.type !== 'signal') return null;
+    return (selectedSignalRoad?.signals ?? []).find((s) => s.id === selectedSceneNode.signalId) ?? null;
+  }, [selectedSignalRoad, selectedSceneNode]);
 
   // Resolve selected object when an object node is selected
-  const selectedObject: RoadObjectItem | null = (() => {
+  const selectedObject: RoadObjectItem | null = useMemo(() => {
     if (selectedSceneNode?.type !== 'object') return null;
     const road = project.roads.find((r) => r.id === selectedSceneNode.roadId);
     return (road?.objects ?? []).find((o) => o.id === selectedSceneNode.objectId) ?? null;
-  })();
+  }, [project.roads, selectedSceneNode]);
 
   const isEditingGeometry = geometryEditRoadId === selectedRoadId;
   const superelevationProfile = selectedRoad?.lateral_profile?.superelevation
