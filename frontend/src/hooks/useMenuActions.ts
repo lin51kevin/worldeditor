@@ -127,6 +127,11 @@ export function useMenuActions() {
     }
   }, [loadFile, pushRecentFile, t]);
 
+  const handleImportPointCloud = useCallback(() => {
+    const { showPanel } = usePluginContribStore.getState();
+    showPanel('pointcloud-beta:panel');
+  }, []);
+
   const handleOpenRecentFile = useCallback(async (recent: { name: string; path: string }) => {
     try {
       const platform = await getPlatformService();
@@ -236,7 +241,7 @@ export function useMenuActions() {
     undo, redo, canUndo, canRedo,
     toggleSnap, setMeasureMode,
     handleNew, handleOpen, handleSave, handleSaveAs,
-    handleClose, handleImportOpenDrive, handleOpenRecentFile, handleExportOpenDrive,
+    handleClose, handleImportOpenDrive, handleImportPointCloud, handleOpenRecentFile, handleExportOpenDrive,
     handleDelete, handleView3D, handleView2D,
     handleZoomToFit, handleZoomToSelected,
     handleToggleGrid, handleToggleAxis, handleToggleHoverHighlight,

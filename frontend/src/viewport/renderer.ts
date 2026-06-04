@@ -35,6 +35,7 @@ import {
   createBasicPipelines,
   createLaneLinePipeline as createLaneLinePipelineFn,
   createBillboardPipeline as createBillboardPipelineFn,
+  createPointCloudPipeline as createPointCloudPipelineFn,
 } from './pipelineFactory';
 import { CameraController } from './cameraController';
 import { MarkerRenderer } from './markerRenderer';
@@ -58,6 +59,7 @@ export class ViewportRenderer {
   private highlightPipeline!: GPURenderPipeline;
   private basicShaderModule!: GPUShaderModule;
   private basicBindGroup!: GPUBindGroup;
+  private basicBindGroupLayout!: GPUBindGroupLayout;
   private basicUniformBuffer!: GPUBuffer;
 
   private cameraController = new CameraController();
@@ -105,6 +107,10 @@ export class ViewportRenderer {
 
   // Hover highlight mesh (shown when mouse hovers over a road/junction)
   private hoverMeshes: RenderableMesh[] = [];
+
+  // Point cloud background mesh (rendered behind roads)
+  private pointCloudMeshes: RenderableMesh[] = [];
+  private pointCloudPipeline: GPURenderPipeline | null = null;
 
   // Last uploaded vertex data (needed for zoomToFit re-trigger)
   private lastVertexData: Float32Array | null = null;
@@ -465,6 +471,25 @@ export class ViewportRenderer {
     this.markSceneDirty();
   }
 
+  /** Upload point cloud vertex data (7 floats per vertex: x,y,z,r,g,b,a). Rendered as point-list. */
+  uploadPointCloudVertices(vertexData: Float32Array): void {
+    if (vertexData.length === 0) {
+      if (this.pointCloudMeshes.length === 0) return;
+      for (const m of this.pointCloudMeshes) { m.vertexBuffer.destroy(); }
+      this.pointCloudMeshes = [];
+      this.markSceneDirty();
+      return;
+    }
+    // Lazy-create point cloud pipeline on first use
+    if (!this.pointCloudPipeline) {
+      this.pointCloudPipeline = createPointCloudPipelineFn(
+        this.device, this.format, this.basicShaderModule, this.basicBindGroupLayout,
+      );
+    }
+    this.uploadMeshData(this.pointCloudMeshes, vertexData);
+    this.markSceneDirty();
+  }
+
   /** Upload lane line vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
   uploadLaneLineVertices(vertexData: Float32Array): void {
     if (vertexData.length === 0) {
@@ -563,14 +588,21 @@ export class ViewportRenderer {
    *
    * @param options.transparent - If true, renders with transparent clear color
    *   and excludes grid/axis so the export has a clean transparent background.
+   * @param options.fitToContent - If true, temporarily fits the camera to show
+   *   all road content before rendering, then restores the original camera.
    */
-  captureFrame(options?: { transparent?: boolean }): string | null {
+  captureFrame(options?: { transparent?: boolean; fitToContent?: boolean }): string | null {
     if (this.deviceLost || this.disposed) return null;
 
     // Save state that we temporarily override for capture
     const prevShowGrid = this.showGrid;
     const prevShowAxis = this.showAxis;
     const prevClearColor = this.clearColor;
+
+    // Save camera state if we need to fit to content
+    const savedCameraState = options?.fitToContent
+      ? this.cameraController.saveState()
+      : null;
 
     // Always hide grid and axis for snapshot export
     this.showGrid = false;
@@ -579,6 +611,11 @@ export class ViewportRenderer {
     // When transparent, use a fully transparent clear color
     if (options?.transparent) {
       this.clearColor = { r: 0, g: 0, b: 0, a: 0 };
+    }
+
+    // Fit camera to show all content at appropriate zoom level
+    if (options?.fitToContent && this.lastVertexData) {
+      this.cameraController.fitToVertices(this.lastVertexData);
     }
 
     // Force a render
@@ -590,6 +627,9 @@ export class ViewportRenderer {
     this.showGrid = prevShowGrid;
     this.showAxis = prevShowAxis;
     this.clearColor = prevClearColor;
+    if (savedCameraState) {
+      this.cameraController.restoreState(savedCameraState);
+    }
 
     // Immediately read back — the texture is still valid in this microtask
     try {
@@ -656,6 +696,7 @@ export class ViewportRenderer {
     this.disposeMeshes(this.meshes);
     this.disposeMeshes(this.laneLineMeshes);
     this.disposeMeshes(this.overlayMeshes);
+    this.disposeMeshes(this.pointCloudMeshes);
     this.markerRenderer.dispose();
     this.disposeMeshes(this.highlightMeshes);
     this.disposeMeshes(this.linkHighlightMeshes);
@@ -741,6 +782,16 @@ export class ViewportRenderer {
       pass.setPipeline(this.gridPipeline);
       pass.setBindGroup(0, this.gridBindGroup);
       pass.draw(6);
+    }
+
+    // Draw point cloud (behind roads, on top of grid)
+    if (this.pointCloudMeshes.length > 0 && this.pointCloudPipeline) {
+      pass.setPipeline(this.pointCloudPipeline);
+      pass.setBindGroup(0, this.basicBindGroup);
+      for (const mesh of this.pointCloudMeshes) {
+        pass.setVertexBuffer(0, mesh.vertexBuffer);
+        pass.draw(mesh.vertexCount);
+      }
     }
 
     // Draw road meshes (render first - on bottom)
@@ -895,6 +946,7 @@ export class ViewportRenderer {
     this.basicPipeline = result.pipeline;
     this.highlightPipeline = result.highlightPipeline;
     this.basicBindGroup = result.bindGroup;
+    this.basicBindGroupLayout = result.bindGroupLayout;
     this.basicUniformBuffer = result.uniformBuffer;
   }
 

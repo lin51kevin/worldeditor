@@ -32,6 +32,7 @@
     "save": "保存",
     "saveAs": "另存为...",
     "importOpenDrive": "导入 OpenDRIVE...",
+    "importPointCloud": "导入点云...",
     "exportOpenDrive": "导出 OpenDRIVE...",
     "undo": "撤销",
     "redo": "重做",
@@ -470,6 +471,7 @@
     "gisTools": "GIS工具",
     "satellite": "卫星影像",
     "batchConverter": "批量转换",
+    "pointcloud": "点云",
     "pluginPanels": "插件面板"
   },
   "pluginManager": {
@@ -567,6 +569,7 @@
     "backgroundColor": "背景色",
     "transparent": "透明背景",
     "jpegNoTransparent": "JPEG 不支持透明",
+    "fitToContent": "适应内容",
     "resolution": "分辨率",
     "custom": "自定义",
     "quality": "图片质量",
@@ -958,5 +961,31 @@
     "settingsConnected": "已连接",
     "settingsFailed": "连接失败",
     "settingsInvalidConfig": "配置无效，请检查接口地址"
+  },
+  "pointcloud": {
+    "title": "点云 → 矢量",
+    "loadAnother": "加载其他文件…",
+    "loadPointCloud": "加载点云…",
+    "webHint": "网页版支持 PCD / PLY / XYZ 格式。LAS / LAZ 需使用桌面版。",
+    "points": "点数",
+    "hasRgb": "含 RGB",
+    "hasIntensity": "含强度",
+    "boundsX": "X 范围",
+    "boundsY": "Y 范围",
+    "colorMode": "着色模式",
+    "colorElevation": "高程",
+    "colorIntensity": "强度",
+    "colorRgb": "RGB",
+    "voxelSize": "体素大小 (m)",
+    "workflow": "工作流",
+    "extractGround": "1. 提取地面",
+    "extractGroundDone": "1. 提取地面 ✓",
+    "extractMarkings": "2. 提取标线",
+    "vectorize": "3. 矢量化 → 道路",
+    "stage": "阶段",
+    "working": "处理中…",
+    "unload": "卸载点云",
+    "yes": "是",
+    "no": "否"
   }
 }

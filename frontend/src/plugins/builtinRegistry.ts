@@ -140,7 +140,6 @@ const BUILTIN_META: PluginInfo[] = [
  */
 const BETA_PLUGIN_IDS = new Set<string>([
   'lane-detect',
-  'pointcloud-beta',
   'satellite-beta',
   '3d-models',
   'scripting-beta',

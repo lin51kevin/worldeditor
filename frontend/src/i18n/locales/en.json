@@ -32,6 +32,7 @@
     "save": "Save",
     "saveAs": "Save As...",
     "importOpenDrive": "Import OpenDRIVE...",
+    "importPointCloud": "Import Point Cloud...",
     "exportOpenDrive": "Export OpenDRIVE...",
     "undo": "Undo",
     "redo": "Redo",
@@ -470,6 +471,7 @@
     "gisTools": "GIS Tools",
     "satellite": "Satellite",
     "batchConverter": "Batch Converter",
+    "pointcloud": "Point Cloud",
     "pluginPanels": "Plugin Panels"
   },
   "pluginManager": {
@@ -567,6 +569,7 @@
     "backgroundColor": "Background",
     "transparent": "Transparent",
     "jpegNoTransparent": "JPEG doesn't support transparency",
+    "fitToContent": "Fit to Content",
     "resolution": "Resolution",
     "custom": "Custom",
     "quality": "Quality",
@@ -958,5 +961,31 @@
     "settingsConnected": "Connected",
     "settingsFailed": "Connection Failed",
     "settingsInvalidConfig": "Invalid config, please check base URL"
+  },
+  "pointcloud": {
+    "title": "Point Cloud → Vector",
+    "loadAnother": "Load Another…",
+    "loadPointCloud": "Load Point Cloud…",
+    "webHint": "Web build supports PCD / PLY / XYZ. LAS / LAZ require the desktop app.",
+    "points": "Points",
+    "hasRgb": "Has RGB",
+    "hasIntensity": "Has intensity",
+    "boundsX": "Bounds X",
+    "boundsY": "Bounds Y",
+    "colorMode": "Color mode",
+    "colorElevation": "Elevation",
+    "colorIntensity": "Intensity",
+    "colorRgb": "RGB",
+    "voxelSize": "Voxel size (m)",
+    "workflow": "Workflow",
+    "extractGround": "1. Extract Ground",
+    "extractGroundDone": "1. Extract Ground ✓",
+    "extractMarkings": "2. Extract Markings",
+    "vectorize": "3. Vectorize → Roads",
+    "stage": "Stage",
+    "working": "working…",
+    "unload": "Unload Point Cloud",
+    "yes": "yes",
+    "no": "no"
   }
 }

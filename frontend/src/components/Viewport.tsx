@@ -31,6 +31,7 @@ import { useSignalPlacement } from '../hooks/useSignalPlacement';
 import { useViewportEvents } from '../hooks/useViewportEvents';
 import { useViewportInit } from '../hooks/useViewportInit';
 import { useViewportSync } from '../hooks/useViewportSync';
+import { usePointCloudViewport } from '../hooks/usePointCloudViewport';
 import './Viewport.css';
 
 import {
@@ -61,6 +62,7 @@ export function Viewport() {
   useViewportInit(canvasRef, rendererRef, setStatus);
   useViewportSync(rendererRef, status);
   useViewportEvents(rendererRef, canvasRef);
+  usePointCloudViewport({ rendererRef, status });
 
   // ── Mesh lifecycle (surface + lines + visible project + WASM cache) ──
   const { getVisibleProject, updateSurfaceMesh, updateLineMesh, getCachedLineVertices } = useViewportMeshes({

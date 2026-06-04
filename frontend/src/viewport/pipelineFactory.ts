@@ -63,6 +63,7 @@ export interface BasicPipelineResult {
   pipeline: GPURenderPipeline;
   highlightPipeline: GPURenderPipeline;
   bindGroup: GPUBindGroup;
+  bindGroupLayout: GPUBindGroupLayout;
   uniformBuffer: GPUBuffer;
 }
 
@@ -142,7 +143,7 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
     primitive: { topology: 'triangle-list' },
   });
 
-  return { shaderModule, pipeline, highlightPipeline, bindGroup, uniformBuffer };
+  return { shaderModule, pipeline, highlightPipeline, bindGroup, bindGroupLayout, uniformBuffer };
 }
 
 /** Create lane line pipeline (LineVertex: 10 floats, stride 40). */
@@ -214,5 +215,33 @@ export function createBillboardPipeline(
     depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'less' },
     multisample: { count: 4 },
     primitive: { topology: 'triangle-list' },
+  });
+}
+
+/** Point cloud pipeline — same vertex layout as basic (7 floats: pos3+color4)
+ *  but renders as point-list topology. Depth write enabled so points occlude. */
+export function createPointCloudPipeline(
+  device: GPUDevice,
+  format: GPUTextureFormat,
+  shaderModule: GPUShaderModule,
+  bindGroupLayout: GPUBindGroupLayout,
+): GPURenderPipeline {
+  return device.createRenderPipeline({
+    layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+    vertex: { module: shaderModule, entryPoint: 'vs_main', buffers: [BASIC_VERTEX_LAYOUT] },
+    fragment: {
+      module: shaderModule,
+      entryPoint: 'fs_main',
+      targets: [{
+        format,
+        blend: {
+          color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+        },
+      }],
+    },
+    depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' },
+    multisample: { count: 4 },
+    primitive: { topology: 'point-list' },
   });
 }
