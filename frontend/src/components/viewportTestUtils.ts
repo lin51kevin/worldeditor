@@ -153,6 +153,16 @@ export function createPlatformMock(vertices = new Float32Array([1, 2, 3])): Plat
     generateBridgeTunnelVertices: vi.fn().mockResolvedValue(new Float32Array()),
     autoJunctionConnectors: vi.fn().mockResolvedValue(makeProject()),
     computeJunctionArea: vi.fn().mockResolvedValue(null),
+    loadPointCloud: vi.fn().mockResolvedValue({
+      handle: 1,
+      summary: { count: 0, origin: [0, 0, 0], min: [0, 0, 0], max: [0, 0, 0], has_intensity: false, has_rgb: false, has_heightmap: false },
+    }),
+    freePointCloud: vi.fn().mockResolvedValue(undefined),
+    pointCloudRenderBuffer: vi.fn().mockResolvedValue(new Float32Array()),
+    extractPointCloudGround: vi.fn().mockResolvedValue({}),
+    extractPointCloudMarkings: vi.fn().mockResolvedValue([]),
+    vectorizePointCloud: vi.fn().mockResolvedValue([]),
+    samplePointCloudGround: vi.fn().mockResolvedValue(null),
   };
 }
 

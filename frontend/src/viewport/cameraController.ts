@@ -385,6 +385,39 @@ export class CameraController {
     this.reportScale();
   }
 
+  /**
+   * Save current camera state (position, target, up, near, far, numPixelsPerMeter).
+   * Used to temporarily override the camera for snapshot export and then restore.
+   */
+  saveState(): { camera: CameraState; numPixelsPerMeter: number } {
+    return {
+      camera: {
+        position: [...this.camera.position],
+        target: [...this.camera.target],
+        up: [...this.camera.up],
+        fovY: this.camera.fovY,
+        near: this.camera.near,
+        far: this.camera.far,
+      },
+      numPixelsPerMeter: this.numPixelsPerMeter,
+    };
+  }
+
+  /**
+   * Restore camera state previously saved with saveState().
+   */
+  restoreState(saved: { camera: CameraState; numPixelsPerMeter: number }): void {
+    this.camera.position = [...saved.camera.position];
+    this.camera.target = [...saved.camera.target];
+    this.camera.up = [...saved.camera.up];
+    this.camera.fovY = saved.camera.fovY;
+    this.camera.near = saved.camera.near;
+    this.camera.far = saved.camera.far;
+    this.numPixelsPerMeter = saved.numPixelsPerMeter;
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+  }
+
   panToCenter(vertexData: Float32Array): void {
     const stride = 7;
     const count = vertexData.length / stride;

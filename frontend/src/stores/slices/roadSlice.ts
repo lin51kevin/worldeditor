@@ -7,6 +7,8 @@ import { pushUndo } from './types';
 
 export interface RoadSlice {
   addRoad: (road: Road) => void;
+  /** Add multiple roads as a single undo step (e.g. point-cloud vectorization). */
+  addRoads: (roads: Road[]) => void;
   removeRoad: (id: string) => void;
   updateRoad: (id: string, updates: Partial<Pick<Road, 'name' | 'length' | 'junction_id'>>) => void;
   updateRoadGeometry: (id: string, planView: Geometry[], length: number, splineEditData?: [number, number, number][]) => void;
@@ -42,6 +44,19 @@ export const createRoadSlice: SliceCreator<RoadSlice> = (set, get) => ({
       project: { ...state.project, roads: [...state.project.roads, road] },
       isDirty: true,
     })),
+
+  addRoads: (roads) =>
+    set((state) => {
+      if (roads.length === 0) return {};
+      const existing = new Set(state.project.roads.map((r) => r.id));
+      const fresh = roads.filter((r) => !existing.has(r.id));
+      if (fresh.length === 0) return {};
+      return {
+        ...pushUndo(state),
+        project: { ...state.project, roads: [...state.project.roads, ...fresh] },
+        isDirty: true,
+      };
+    }),
 
   removeRoad: (id) =>
     set((state) => ({

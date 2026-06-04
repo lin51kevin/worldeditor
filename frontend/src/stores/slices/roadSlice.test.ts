@@ -64,6 +64,22 @@ describe('roadSlice', () => {
     expect(state.isDirty).toBe(true);
   });
 
+  it('addRoads appends multiple roads, skips duplicates, pushes undo', () => {
+    useProjectStore.getState().addRoad(makeRoad('r1'));
+    useProjectStore.getState().addRoads([makeRoad('r1'), makeRoad('r2'), makeRoad('r3')]);
+
+    const state = useProjectStore.getState();
+    expect(state.project.roads).toHaveLength(3); // r1 exists, r2+r3 added
+    expect(state.isDirty).toBe(true);
+  });
+
+  it('addRoads with empty array does nothing', () => {
+    useProjectStore.getState().addRoads([]);
+    const state = useProjectStore.getState();
+    expect(state.project.roads).toHaveLength(0);
+    expect(state.isDirty).toBe(false);
+  });
+
   it('removeRoad removes the matching road and clears focused road selection state', () => {
     useProjectStore.setState({
       project: { ...initialProject, roads: [makeRoad('r1')] },

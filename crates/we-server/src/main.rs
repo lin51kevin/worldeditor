@@ -1,17 +1,14 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use axum::{
-    Router, middleware,
-    routing::post,
-};
 #[cfg(feature = "websocket")]
 use axum::routing::get;
+use axum::{Router, middleware, routing::post};
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
 
-use we_server::{api, auth, storage};
 #[cfg(feature = "websocket")]
 use we_server::ws;
+use we_server::{api, auth, storage};
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -88,28 +85,25 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Combine all routes
-    let app = Router::new()
-        .merge(protected_routes)
-        .merge(auth_routes);
+    let app = Router::new().merge(protected_routes).merge(auth_routes);
     #[cfg(feature = "websocket")]
     let app = app.merge(ws_routes);
-    let app = app
-        .layer(
-            CorsLayer::new()
-                .allow_origin(origins)
-                .allow_methods(vec![
-                    axum::http::Method::GET,
-                    axum::http::Method::POST,
-                    axum::http::Method::PUT,
-                    axum::http::Method::DELETE,
-                    axum::http::Method::OPTIONS,
-                ])
-                .allow_headers([
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::header::AUTHORIZATION,
-                    axum::http::header::ACCEPT,
-                ]),
-        );
+    let app = app.layer(
+        CorsLayer::new()
+            .allow_origin(origins)
+            .allow_methods(vec![
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+                axum::http::Method::OPTIONS,
+            ])
+            .allow_headers([
+                axum::http::header::CONTENT_TYPE,
+                axum::http::header::AUTHORIZATION,
+                axum::http::header::ACCEPT,
+            ]),
+    );
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));

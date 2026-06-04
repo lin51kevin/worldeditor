@@ -12,6 +12,7 @@ pub mod model;
 pub mod opendrive;
 pub mod osm_export;
 pub mod picking;
+pub mod pointcloud;
 pub mod road_ops;
 pub mod routing;
 pub mod serde_helpers;

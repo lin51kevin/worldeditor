@@ -59,6 +59,7 @@ export function SnapshotExportDialog({ open, onClose }: SnapshotExportDialogProp
   const [format, setFormat] = useState<SnapshotOptions['format']>('png');
   const [backgroundColor, setBackgroundColor] = useState(DEFAULT_SNAPSHOT_OPTIONS.backgroundColor);
   const [transparent, setTransparent] = useState(true);
+  const [fitToContent, setFitToContent] = useState(true);
   const [scaleOption, setScaleOption] = useState<ScaleOption>(1);
   const [customWidth, setCustomWidth] = useState(1920);
   const [customHeight, setCustomHeight] = useState(1080);
@@ -103,6 +104,7 @@ export function SnapshotExportDialog({ open, onClose }: SnapshotExportDialogProp
           transparent: format === 'jpeg' ? false : transparent,
           scale: previewScale,
           quality: 0.8,
+          fitToContent,
         });
 
         if (cancelled) return;
@@ -123,7 +125,7 @@ export function SnapshotExportDialog({ open, onClose }: SnapshotExportDialogProp
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open, canvas, format, backgroundColor, transparent, scaleOption, customWidth, customHeight, canvasWidth, canvasHeight]);
+  }, [open, canvas, format, backgroundColor, transparent, fitToContent, scaleOption, customWidth, customHeight, canvasWidth, canvasHeight]);
 
   // Cleanup preview URL on unmount
   useEffect(() => {
@@ -165,6 +167,7 @@ export function SnapshotExportDialog({ open, onClose }: SnapshotExportDialogProp
         transparent: format === 'jpeg' ? false : transparent,
         scale,
         quality,
+        fitToContent,
       });
 
       // Determine filename from exportPath
@@ -190,7 +193,7 @@ export function SnapshotExportDialog({ open, onClose }: SnapshotExportDialogProp
     } finally {
       setExporting(false);
     }
-  }, [canvas, format, backgroundColor, transparent, scaleOption, customWidth, customHeight, canvasWidth, canvasHeight, quality, exportPath, onClose]);
+  }, [canvas, format, backgroundColor, transparent, fitToContent, scaleOption, customWidth, customHeight, canvasWidth, canvasHeight, quality, exportPath, onClose]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -288,6 +291,16 @@ export function SnapshotExportDialog({ open, onClose }: SnapshotExportDialogProp
             {format === 'jpeg' && (
               <span className="snapshot-color-hex">({t('snapshot.jpegNoTransparent')})</span>
             )}
+          </div>
+
+          {/* Fit to content */}
+          <div className="snapshot-field">
+            <label>{t('snapshot.fitToContent')}</label>
+            <input
+              type="checkbox"
+              checked={fitToContent}
+              onChange={(e) => setFitToContent(e.target.checked)}
+            />
           </div>
 
           {/* Resolution */}

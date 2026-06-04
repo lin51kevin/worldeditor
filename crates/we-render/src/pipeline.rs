@@ -3,7 +3,7 @@
 //! Creates and caches wgpu render pipelines for different geometry types.
 
 use crate::gpu::GpuContext;
-use crate::vertex::{ColorVertex, LineVertex, SurfaceVertex};
+use crate::vertex::{ColorVertex, LineVertex, PointVertex, SurfaceVertex};
 
 /// Uniform buffer data for the basic (vertex-color) pipeline.
 #[repr(C)]
@@ -58,6 +58,9 @@ pub struct Pipelines {
     /// Textured road surface pipeline using `road_textured.wgsl`.
     pub surface: wgpu::RenderPipeline,
     pub surface_bind_group_layout: wgpu::BindGroupLayout,
+    /// Point cloud pipeline (`PointList` topology) using `point.wgsl`.
+    pub point: wgpu::RenderPipeline,
+    pub point_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl Pipelines {
@@ -68,6 +71,7 @@ impl Pipelines {
         let lane_line = Self::create_lane_line_pipeline(gpu, surface_format);
         let object = Self::create_object_pipeline(gpu, surface_format);
         let surface_pipe = Self::create_surface_pipeline(gpu, surface_format);
+        let point = Self::create_point_pipeline(gpu, surface_format);
         Self {
             basic: basic.0,
             basic_bind_group_layout: basic.1,
@@ -79,6 +83,8 @@ impl Pipelines {
             object_bind_group_layout: object.1,
             surface: surface_pipe.0,
             surface_bind_group_layout: surface_pipe.1,
+            point: point.0,
+            point_bind_group_layout: point.1,
         }
     }
 
@@ -157,6 +163,86 @@ impl Pipelines {
                         slope_scale: 1.0,
                         clamp: 0.01,
                     },
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            });
+
+        (pipeline, bind_group_layout)
+    }
+
+    fn create_point_pipeline(
+        gpu: &GpuContext,
+        format: wgpu::TextureFormat,
+    ) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
+        let shader = gpu
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("point.wgsl"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("shaders/point.wgsl").into()),
+            });
+
+        let bind_group_layout =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("point_bind_group_layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
+        let pipeline_layout = gpu
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("point_pipeline_layout"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
+
+        let pipeline = gpu
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("point_pipeline"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[PointVertex::LAYOUT],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::PointList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    unclipped_depth: false,
+                    conservative: false,
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
                 }),
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,

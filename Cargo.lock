@@ -2320,6 +2320,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
+name = "las"
+version = "0.9.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48c2594be0d2ec4f04c944f5cb5160625cd1a69451db14de73b990065f97fb84"
+dependencies = [
+ "byteorder",
+ "chrono",
+ "laz",
+ "log",
+ "num-traits",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
+name = "laz"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "efb1d9809cf87aa6500b6010e1164c6b6cd3cc15202ba79d6bb1dfb84c555a9b"
+dependencies = [
+ "byteorder",
+ "num-traits",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5943,6 +5968,7 @@ dependencies = [
 name = "we-native"
 version = "0.2.0"
 dependencies = [
+ "las",
  "log",
  "thiserror 2.0.18",
  "tokio",

@@ -123,6 +123,11 @@ export function export_to_shapefile(project_json: string): Uint8Array;
 export function fit_affine_from_gcps(gcps_json: string): any;
 
 /**
+ * Free a registered cloud and any derived data.
+ */
+export function free_point_cloud(handle: number): void;
+
+/**
  * Convert GCJ-02 coordinates to WGS84.
  */
 export function gcj02_to_wgs84(lat: number, lon: number, alt: number): any;
@@ -423,6 +428,14 @@ export function init(): void;
 export function invalidate_project_cache(): void;
 
 /**
+ * Parse a point cloud file and register it, returning an opaque handle.
+ *
+ * `format` is one of `pcd`, `ply`, `xyz` (case-insensitive). LAS/LAZ are
+ * desktop-only and handled natively.
+ */
+export function load_point_cloud(bytes: Uint8Array, format: string): number;
+
+/**
  * Measure the angle at a vertex (p2) formed by p1-p2-p3.
  *
  * Returns JSON `{ radians, degrees }`.
@@ -552,6 +565,42 @@ export function pick_signal_at_point_cached(x: number, y: number, threshold: num
  * Returns JSON: `{ "index": number, "distance": number }` or `null` if none within threshold.
  */
 export function pick_spline_knot(spline_json: string, x: number, y: number, threshold: number): any;
+
+/**
+ * Extract ground points + heightmap. Caches the heightmap on the handle for
+ * later vectorization/elevation snapping. Returns the [`GroundResult`] as JSON.
+ */
+export function point_cloud_extract_ground(handle: number, config_json: string): any;
+
+/**
+ * Extract candidate marking polylines (local coords) as JSON `[[ [x,y,z],.. ],..]`.
+ */
+export function point_cloud_extract_markings(handle: number, config_json: string): any;
+
+/**
+ * Build an interleaved render buffer `[x, y, z, r, g, b, ...]` (local coords,
+ * colors `0..1`), decimated to at most `max_points` via stride sampling.
+ */
+export function point_cloud_render_buffer(handle: number, color_mode: string, max_points: number): Float32Array;
+
+/**
+ * Sample the cached ground heightmap at local XY, returning the elevation or
+ * `null` when outside the grid / no heightmap available.
+ */
+export function point_cloud_sample_ground(handle: number, x: number, y: number): number | undefined;
+
+/**
+ * Return a JSON summary `{ count, origin, min, max, has_intensity, has_rgb }`.
+ */
+export function point_cloud_summary(handle: number): any;
+
+/**
+ * Convert polylines (JSON `[[ [x,y,z],.. ],..]`, local coords) into roads.
+ *
+ * When `use_ground` is true and a ground heightmap was extracted, elevations
+ * are snapped to the surface. Returns `Vec<Road>` as JSON.
+ */
+export function point_cloud_vectorize(handle: number, polylines_json: string, config_json: string, use_ground: boolean): any;
 
 /**
  * Test if a point is inside a junction's computed area.
@@ -718,6 +767,7 @@ export interface InitOutput {
     readonly export_to_nio: (a: number, b: number) => [number, number, number, number];
     readonly export_to_shapefile: (a: number, b: number) => [number, number, number, number];
     readonly fit_affine_from_gcps: (a: number, b: number) => [number, number, number];
+    readonly free_point_cloud: (a: number) => void;
     readonly gcj02_to_wgs84: (a: number, b: number, c: number) => any;
     readonly generate_bridge_tunnel_vertices: (a: number, b: number) => [number, number, number, number];
     readonly generate_center_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
@@ -757,6 +807,7 @@ export interface InitOutput {
     readonly import_signals_from_json: (a: number, b: number) => [number, number, number, number];
     readonly init: () => void;
     readonly invalidate_project_cache: () => void;
+    readonly load_point_cloud: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly measure_angle: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly measure_area: (a: number, b: number) => [number, number, number];
     readonly measure_distance: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
@@ -776,6 +827,12 @@ export interface InitOutput {
     readonly pick_signal_at_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pick_signal_at_point_cached: (a: number, b: number, c: number) => [number, number, number];
     readonly pick_spline_knot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly point_cloud_extract_ground: (a: number, b: number, c: number) => [number, number, number];
+    readonly point_cloud_extract_markings: (a: number, b: number, c: number) => [number, number, number];
+    readonly point_cloud_render_buffer: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly point_cloud_sample_ground: (a: number, b: number, c: number) => [number, number];
+    readonly point_cloud_summary: (a: number) => [number, number, number];
+    readonly point_cloud_vectorize: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly point_in_junction: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly project_is_valid: (a: number, b: number) => [number, number, number];
     readonly query_elevation: (a: number, b: number, c: number) => [number, number, number];

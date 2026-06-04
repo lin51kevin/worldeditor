@@ -106,12 +106,10 @@ describe('stub plugins — mount, register, and showAlert on click', () => {
     expect(mockShowAlert).toHaveBeenCalled();
   });
 
-  it('pointcloud importer returns project + showAlert', async () => {
+  it('pointcloud plugin registers a panel', () => {
     mountPointcloudPlugin();
-    const imp = reg().find(r => r.type === 'importer')!.data as { onImport: () => Promise<unknown> };
-    const result = await imp.onImport();
-    expect(result).toHaveProperty('roads');
-    expect(mockShowAlert).toHaveBeenCalled();
+    const panel = reg().find(r => r.type === 'panel');
+    expect(panel).toBeDefined();
   });
 
   it('models3d importer returns project + showAlert', async () => {

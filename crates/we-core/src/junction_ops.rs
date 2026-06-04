@@ -554,7 +554,6 @@ mod tests {
     };
 
     fn make_straight_road(id: &str, x: f64, y: f64, length: f64, hdg: f64) -> Road {
-        
         Road::from_centerline(
             id,
             vec![Geometry {

@@ -14,6 +14,7 @@ vi.mock('react-i18next', () => ({
         'snapshot.backgroundColor': 'Background',
         'snapshot.transparent': 'Transparent',
         'snapshot.jpegNoTransparent': "JPEG doesn't support transparency",
+        'snapshot.fitToContent': 'Fit to Content',
         'snapshot.resolution': 'Resolution',
         'snapshot.custom': 'Custom',
         'snapshot.quality': 'Quality',
@@ -96,8 +97,9 @@ describe('SnapshotExportDialog', () => {
     render(<SnapshotExportDialog open={true} onClose={vi.fn()} />);
     const select = screen.getByRole('combobox');
     fireEvent.change(select, { target: { value: 'jpeg' } });
-    const checkbox = screen.getByRole('checkbox');
-    expect(checkbox).toBeDisabled();
+    const checkboxes = screen.getAllByRole('checkbox');
+    // First checkbox is transparent
+    expect(checkboxes[0]).toBeDisabled();
   });
 
   it('should show custom size inputs when Custom is selected', () => {

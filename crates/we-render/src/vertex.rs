@@ -84,6 +84,42 @@ impl SurfaceVertex {
     }
 }
 
+/// A vertex for point cloud rendering (position + RGB color).
+///
+/// Built from the interleaved `[x, y, z, r, g, b]` buffer produced by
+/// `we_core::pointcloud::build_render_buffer`. Rendered with `PointList` topology.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct PointVertex {
+    pub position: [f32; 3],
+    pub color: [f32; 3],
+}
+
+impl PointVertex {
+    pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<PointVertex>() as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[
+            // position @location(0)
+            wgpu::VertexAttribute {
+                offset: 0,
+                shader_location: 0,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+            // color @location(1)
+            wgpu::VertexAttribute {
+                offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                shader_location: 1,
+                format: wgpu::VertexFormat::Float32x3,
+            },
+        ],
+    };
+
+    pub fn new(position: [f32; 3], color: [f32; 3]) -> Self {
+        Self { position, color }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct LineVertex {
@@ -189,6 +225,18 @@ mod tests {
     #[test]
     fn test_line_vertex_size() {
         assert_eq!(std::mem::size_of::<LineVertex>(), 48); // 12 + 8 + 16 + 8 + 4
+    }
+
+    #[test]
+    fn test_point_vertex_size() {
+        assert_eq!(std::mem::size_of::<PointVertex>(), 24); // 3*4 + 3*4
+    }
+
+    #[test]
+    fn test_point_vertex_is_pod() {
+        let v = PointVertex::new([1.0, 2.0, 3.0], [0.5, 0.6, 0.7]);
+        let bytes = bytemuck::bytes_of(&v);
+        assert_eq!(bytes.len(), 24);
     }
 
     #[test]

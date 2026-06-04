@@ -22,6 +22,8 @@ export interface SnapshotOptions {
   scale: number;
   /** JPEG/WebP quality (0-1). Default: 0.92 */
   quality: number;
+  /** Whether to auto-fit camera to show all content. Default: true */
+  fitToContent: boolean;
 }
 
 export const DEFAULT_SNAPSHOT_OPTIONS: SnapshotOptions = {
@@ -30,6 +32,7 @@ export const DEFAULT_SNAPSHOT_OPTIONS: SnapshotOptions = {
   transparent: true,
   scale: 1,
   quality: 0.92,
+  fitToContent: true,
 };
 
 function getMimeType(format: SnapshotOptions['format']): string {
@@ -92,7 +95,7 @@ export async function captureViewportSnapshot(
   const renderer = getViewportRenderer();
   let dataUrl: string | null = null;
   if (renderer) {
-    dataUrl = renderer.captureFrame({ transparent });
+    dataUrl = renderer.captureFrame({ transparent, fitToContent: opts.fitToContent });
   }
   // Fallback: try direct toDataURL (may return empty for expired WebGPU frames)
   if (!dataUrl || dataUrl === 'data:,') {

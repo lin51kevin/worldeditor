@@ -140,6 +140,16 @@ function createPlatformMock() {
     pickJunctionAtPointCached: vi.fn<PlatformService['pickJunctionAtPointCached']>().mockResolvedValue(null),
     snapPointCached: vi.fn<PlatformService['snapPointCached']>().mockResolvedValue({ x: 0, y: 0, snapped: false, snap_type: 'None', target_id: null, contact_point: null }),
     snapPointOnRoad: vi.fn<PlatformService['snapPointOnRoad']>().mockResolvedValue({ s: 0, t: 0, hdg: 0 }),
+    loadPointCloud: vi.fn<PlatformService['loadPointCloud']>().mockResolvedValue({
+      handle: 1,
+      summary: { count: 0, origin: [0, 0, 0], min: [0, 0, 0], max: [0, 0, 0], has_intensity: false, has_rgb: false, has_heightmap: false },
+    }),
+    freePointCloud: vi.fn<PlatformService['freePointCloud']>().mockResolvedValue(undefined),
+    pointCloudRenderBuffer: vi.fn<PlatformService['pointCloudRenderBuffer']>().mockResolvedValue(new Float32Array()),
+    extractPointCloudGround: vi.fn<PlatformService['extractPointCloudGround']>().mockResolvedValue({}),
+    extractPointCloudMarkings: vi.fn<PlatformService['extractPointCloudMarkings']>().mockResolvedValue([]),
+    vectorizePointCloud: vi.fn<PlatformService['vectorizePointCloud']>().mockResolvedValue([]),
+    samplePointCloudGround: vi.fn<PlatformService['samplePointCloudGround']>().mockResolvedValue(null),
   };
 
   return {

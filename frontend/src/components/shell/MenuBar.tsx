@@ -77,6 +77,7 @@ export function MenuBar({
     handleSaveAs,
     handleClose,
     handleImportOpenDrive,
+    handleImportPointCloud,
     handleOpenRecentFile,
     handleExportOpenDrive,
     handleDelete,
@@ -343,6 +344,7 @@ export function MenuBar({
                 onSaveAs={handleSaveAs}
                 onExit={handleExit}
                 onImportOpenDrive={handleImportOpenDrive}
+                onImportPointCloud={handleImportPointCloud}
                 onOpenRecentFile={handleOpenRecentFile}
                 onExportOpenDrive={handleExportOpenDrive}
               />

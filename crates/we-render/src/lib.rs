@@ -12,6 +12,7 @@ pub mod junction_render;
 pub mod mark_render;
 pub mod object_render;
 pub mod pipeline;
+pub mod point_render;
 pub mod render_config;
 pub mod renderer;
 pub mod road_mesh;
@@ -27,9 +28,10 @@ pub use endpoint_render::{
     START_COLOR, generate_endpoint_markers,
 };
 pub use gpu::{GpuContext, GpuError};
+pub use point_render::build_point_vertices;
 pub use renderer::{LaneLineMesh, RenderMesh, Renderer};
 pub use road_mesh::{generate_road_lane_lines, generate_road_mesh};
-pub use vertex::{ColorVertex, LineVertex};
+pub use vertex::{ColorVertex, LineVertex, PointVertex};
 
 #[cfg(test)]
 pub mod test_helpers {

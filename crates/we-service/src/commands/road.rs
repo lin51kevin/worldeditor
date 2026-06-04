@@ -44,7 +44,59 @@ impl Command for AddRoad {
     }
 }
 
-// ── DeleteRoad ───────────────────────────────────────
+// ── AddRoads ─────────────────────────────────────────
+
+/// Add multiple roads as a single undo unit (e.g. from point-cloud vectorization).
+#[derive(Debug, Clone)]
+pub struct AddRoads {
+    pub roads: Vec<Road>,
+    label: String,
+}
+
+impl AddRoads {
+    /// Create a command adding `roads` with a default description.
+    pub fn new(roads: Vec<Road>) -> Self {
+        Self {
+            roads,
+            label: "Add Roads".to_string(),
+        }
+    }
+
+    /// Create with a custom description (shown in the undo history).
+    pub fn with_label(roads: Vec<Road>, label: impl Into<String>) -> Self {
+        Self {
+            roads,
+            label: label.into(),
+        }
+    }
+}
+
+impl Command for AddRoads {
+    fn execute(&self, project: &Project) -> Result<Project, EditorError> {
+        for road in &self.roads {
+            if project.roads.iter().any(|r| r.id == road.id) {
+                return Err(EditorError::OperationFailed(format!(
+                    "Road '{}' already exists",
+                    road.id
+                )));
+            }
+        }
+        let mut p = project.clone();
+        p.roads.extend(self.roads.iter().cloned());
+        Ok(p)
+    }
+
+    fn undo(&self, project: &Project) -> Result<Project, EditorError> {
+        let mut p = project.clone();
+        p.roads
+            .retain(|r| !self.roads.iter().any(|added| added.id == r.id));
+        Ok(p)
+    }
+
+    fn description(&self) -> &str {
+        &self.label
+    }
+}
 
 /// Remove a road from the project by ID.
 #[derive(Debug, Clone)]
@@ -924,6 +976,42 @@ mod tests {
         let command = AddRoad::new(sample_road("road-1"));
 
         assert_operation_failed(command.execute(&project), "already exists");
+    }
+
+    #[test]
+    fn test_add_roads_execute_adds_all() {
+        let original = Project::default();
+        let command = AddRoads::new(vec![sample_road("r-1"), sample_road("r-2")]);
+
+        let result = command.execute(&original).unwrap();
+
+        assert_eq!(result.roads.len(), 2);
+    }
+
+    #[test]
+    fn test_add_roads_undo_restores_original() {
+        let original = project_with_road();
+        let command = AddRoads::new(vec![sample_road("r-1"), sample_road("r-2")]);
+        let modified = command.execute(&original).unwrap();
+        assert_eq!(modified.roads.len(), 3);
+
+        let undone = command.undo(&modified).unwrap();
+
+        assert_projects_equal(&undone, &original);
+    }
+
+    #[test]
+    fn test_add_roads_duplicate_id_returns_error() {
+        let project = project_with_road();
+        let command = AddRoads::new(vec![sample_road("road-1")]);
+
+        assert_operation_failed(command.execute(&project), "already exists");
+    }
+
+    #[test]
+    fn test_add_roads_custom_label() {
+        let command = AddRoads::with_label(vec![], "Vectorize Point Cloud");
+        assert_eq!(command.description(), "Vectorize Point Cloud");
     }
 
     #[test]
