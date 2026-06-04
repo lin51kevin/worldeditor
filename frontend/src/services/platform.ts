@@ -404,6 +404,41 @@ export interface RoadTemplate {
   lane_width: number;
 }
 
+// ── Point cloud → vector pipeline ─────────────────────────────────────────────
+
+/** Coloring mode for the point cloud render buffer. */
+export type PointCloudColorMode = 'rgb' | 'intensity' | 'elevation';
+
+/** Summary of a loaded point cloud. */
+export interface PointCloudSummary {
+  count: number;
+  origin: [number, number, number];
+  min: [number, number, number];
+  max: [number, number, number];
+  has_intensity: boolean;
+  has_rgb: boolean;
+  has_heightmap: boolean;
+}
+
+/** Result of loading a point cloud: an opaque handle plus a summary. */
+export interface PointCloudLoadResult {
+  handle: number;
+  summary: PointCloudSummary;
+}
+
+/** Source for a point cloud load: a desktop file path or in-memory bytes (web). */
+export interface PointCloudSource {
+  /** Absolute file path (desktop / Tauri). */
+  path?: string;
+  /** Raw file bytes (web / WASM). */
+  bytes?: Uint8Array;
+  /** Lower-case format hint (`pcd` | `ply` | `xyz`) — required for byte loads. */
+  format?: string;
+}
+
+/** A polyline in local point-cloud coordinates: a list of `[x, y, z]` points. */
+export type PointCloudPolyline = Array<[number, number, number]>;
+
 export interface PlatformService {
   /** Parse an OpenDRIVE XML string into a Project. */
   parseOpenDrive(xml: string): Promise<Project>;
@@ -638,4 +673,36 @@ export interface PlatformService {
    * @param mode - `'classify'` (optimal geometry types) or `'parampoly3'` (force ParamPoly3)
    */
   splineToGeometries(spline: EditableSpline, mode?: 'classify' | 'parampoly3'): Promise<Geometry[]>;
+
+  // --- Point cloud → vector pipeline ---
+
+  /** Load a point cloud from a desktop path (LAS/LAZ/PCD/PLY/XYZ) or web bytes
+   *  (PCD/PLY/XYZ). `voxelSize > 0` applies voxel down-sampling. */
+  loadPointCloud(source: PointCloudSource, voxelSize?: number): Promise<PointCloudLoadResult>;
+
+  /** Free a loaded point cloud and any derived data. */
+  freePointCloud(handle: number): Promise<void>;
+
+  /** Build an interleaved render buffer `[x,y,z,r,g,b,...]` (local coords,
+   *  colors 0..1), decimated to at most `maxPoints` points. */
+  pointCloudRenderBuffer(handle: number, colorMode: PointCloudColorMode, maxPoints: number): Promise<Float32Array>;
+
+  /** Extract ground points + heightmap (cached on the handle). Returns the raw
+   *  ground result (point indices + heightmap metadata) as a plain object. */
+  extractPointCloudGround(handle: number, config?: Record<string, unknown>): Promise<unknown>;
+
+  /** Extract candidate lane-marking polylines (local coords). */
+  extractPointCloudMarkings(handle: number, config?: Record<string, unknown>): Promise<PointCloudPolyline[]>;
+
+  /** Convert polylines (local coords) into roads. When `useGround` is true and a
+   *  ground heightmap was extracted, elevations are snapped to the surface. */
+  vectorizePointCloud(
+    handle: number,
+    polylines: PointCloudPolyline[],
+    config?: Record<string, unknown>,
+    useGround?: boolean,
+  ): Promise<Road[]>;
+
+  /** Sample the cached ground heightmap at local XY, or `null` when unavailable. */
+  samplePointCloudGround(handle: number, x: number, y: number): Promise<number | null>;
 }

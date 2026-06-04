@@ -14,6 +14,7 @@ import type {
   ElevationQueryResult, SnapConfig, SnapResult, EndpointTangent,
   DistanceMeasurement, AngleMeasurement, AreaMeasurement, EditableSpline,
   Geometry, LaneBoundaryPoint,
+  PointCloudColorMode, PointCloudLoadResult, PointCloudPolyline, PointCloudSource, PointCloudSummary,
 } from './platform';
 
 type WasmModule = typeof import('../../wasm/pkg/we_wasm');
@@ -383,5 +384,59 @@ export abstract class BasePlatformService implements PlatformService {
     const wasm = await this.getWasm();
     const json = wasm.spline_to_geometries(JSON.stringify(spline), mode);
     return JSON.parse(json) as Geometry[];
+  }
+
+  // --- Point cloud → vector pipeline (WASM / web; Tauri overrides for native paths) ---
+
+  async loadPointCloud(source: PointCloudSource, voxelSize = 0): Promise<PointCloudLoadResult> {
+    void voxelSize; // web/WASM load does not down-sample; native (Tauri) honours voxelSize.
+    if (!source.bytes || !source.format) {
+      throw new Error('Web point cloud load requires file bytes and a format hint (pcd/ply/xyz).');
+    }
+    const wasm = await this.getWasm();
+    const handle = wasm.load_point_cloud(source.bytes, source.format);
+    const summary = wasm.point_cloud_summary(handle) as PointCloudSummary;
+    return { handle, summary };
+  }
+
+  async freePointCloud(handle: number): Promise<void> {
+    const wasm = await this.getWasm();
+    wasm.free_point_cloud(handle);
+  }
+
+  async pointCloudRenderBuffer(handle: number, colorMode: PointCloudColorMode, maxPoints: number): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.point_cloud_render_buffer(handle, colorMode, maxPoints);
+  }
+
+  async extractPointCloudGround(handle: number, config: Record<string, unknown> = {}): Promise<unknown> {
+    const wasm = await this.getWasm();
+    return wasm.point_cloud_extract_ground(handle, JSON.stringify(config));
+  }
+
+  async extractPointCloudMarkings(handle: number, config: Record<string, unknown> = {}): Promise<PointCloudPolyline[]> {
+    const wasm = await this.getWasm();
+    return wasm.point_cloud_extract_markings(handle, JSON.stringify(config)) as PointCloudPolyline[];
+  }
+
+  async vectorizePointCloud(
+    handle: number,
+    polylines: PointCloudPolyline[],
+    config: Record<string, unknown> = {},
+    useGround = false,
+  ): Promise<Road[]> {
+    const wasm = await this.getWasm();
+    return wasm.point_cloud_vectorize(
+      handle,
+      JSON.stringify(polylines),
+      JSON.stringify(config),
+      useGround,
+    ) as Road[];
+  }
+
+  async samplePointCloudGround(handle: number, x: number, y: number): Promise<number | null> {
+    const wasm = await this.getWasm();
+    const value = wasm.point_cloud_sample_ground(handle, x, y);
+    return value ?? null;
   }
 }

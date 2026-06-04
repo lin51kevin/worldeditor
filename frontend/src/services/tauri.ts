@@ -4,7 +4,10 @@
  * Geometry/rendering operations delegate to WASM via BasePlatformService.
  */
 
-import type { PlatformService, Project } from './platform';
+import type {
+  PlatformService, Project, Road,
+  PointCloudColorMode, PointCloudLoadResult, PointCloudPolyline, PointCloudSource,
+} from './platform';
 import { APP_VERSION } from './index';
 import { BasePlatformService } from './basePlatformService';
 
@@ -106,5 +109,63 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
 
   getPlatformInfo() {
     return { type: 'tauri' as const, version: APP_VERSION };
+  }
+
+  // --- Point cloud → vector pipeline (native: path-based, supports LAS/LAZ) ---
+
+  override async loadPointCloud(source: PointCloudSource, voxelSize = 0): Promise<PointCloudLoadResult> {
+    if (!source.path) {
+      // Fall back to the WASM byte loader if no path is available.
+      return super.loadPointCloud(source, voxelSize);
+    }
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<PointCloudLoadResult>('point_cloud_load', {
+      path: source.path,
+      voxelSize: voxelSize > 0 ? voxelSize : null,
+    });
+  }
+
+  override async freePointCloud(handle: number): Promise<void> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('point_cloud_free', { handle });
+  }
+
+  override async pointCloudRenderBuffer(handle: number, colorMode: PointCloudColorMode, maxPoints: number): Promise<Float32Array> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const data = await invoke<number[]>('point_cloud_render_buffer', { handle, colorMode, maxPoints });
+    // Backend returns raw bytes (Vec<u8> transmuted from Vec<f32>) for performance.
+    const bytes = new Uint8Array(data);
+    return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
+  }
+
+  override async extractPointCloudGround(handle: number, config: Record<string, unknown> = {}): Promise<unknown> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke('point_cloud_extract_ground', { handle, configJson: JSON.stringify(config) });
+  }
+
+  override async extractPointCloudMarkings(handle: number, config: Record<string, unknown> = {}): Promise<PointCloudPolyline[]> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<PointCloudPolyline[]>('point_cloud_extract_markings', { handle, configJson: JSON.stringify(config) });
+  }
+
+  override async vectorizePointCloud(
+    handle: number,
+    polylines: PointCloudPolyline[],
+    config: Record<string, unknown> = {},
+    useGround = false,
+  ): Promise<Road[]> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<Road[]>('point_cloud_vectorize', {
+      handle,
+      polylinesJson: JSON.stringify(polylines),
+      configJson: JSON.stringify(config),
+      useGround,
+    });
+  }
+
+  override async samplePointCloudGround(handle: number, x: number, y: number): Promise<number | null> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const value = await invoke<number | null>('point_cloud_sample_ground', { handle, x, y });
+    return value ?? null;
   }
 }
