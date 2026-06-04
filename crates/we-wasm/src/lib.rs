@@ -12,6 +12,7 @@ pub mod junction_ops;
 pub mod measure;
 pub mod opendrive;
 pub mod picking;
+pub mod pointcloud;
 pub mod render;
 pub mod spline;
 pub mod topology;

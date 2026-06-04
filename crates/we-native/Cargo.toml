@@ -6,8 +6,8 @@ edition.workspace = true
 
 [features]
 default = []
-# Phase 3 stub — point cloud loading (LAS/PCD). Hidden from default builds.
-pointcloud = []
+# Point cloud loading (LAS/LAZ via the `las` crate). Enable on desktop builds.
+pointcloud = ["dep:las"]
 
 [dependencies]
 we-core = { workspace = true }
@@ -18,6 +18,6 @@ tokio = { version = "1", features = ["full"] }
 
 # Native-only dependencies (will not compile to WASM)
 # gdal = "0.17"        # uncomment when ready
-# las = "0.9"          # uncomment when ready
+las = { version = "0.9", features = ["laz"], optional = true }
 
 [dev-dependencies]
