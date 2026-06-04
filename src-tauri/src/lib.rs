@@ -1,4 +1,5 @@
 mod commands;
+mod pointcloud;
 
 use tauri::Manager;
 
@@ -26,6 +27,15 @@ pub fn run() {
             commands::plugin_install,
             commands::plugin_unload,
             commands::set_window_theme,
+            // Point cloud pipeline
+            pointcloud::point_cloud_load,
+            pointcloud::point_cloud_load_dir,
+            pointcloud::point_cloud_free,
+            pointcloud::point_cloud_render_buffer,
+            pointcloud::point_cloud_extract_ground,
+            pointcloud::point_cloud_extract_markings,
+            pointcloud::point_cloud_vectorize,
+            pointcloud::point_cloud_sample_ground,
         ])
         .setup(|app| {
             // Create the main window programmatically so we can call
@@ -70,6 +80,9 @@ pub fn run() {
             let mut registry = we_plugin_core::PluginRegistry::new(&plugins_dir);
             registry.discover();
             app.manage(we_plugin_core::SharedPluginRegistry::new(registry));
+
+            // Backend store for loaded point clouds (keyed by opaque handle).
+            app.manage(pointcloud::PointCloudStore::default());
 
             Ok(())
         })
