@@ -451,17 +451,38 @@ pub(super) fn emit_crosswalk_stripes(
     let road_theta = ref_pt.hdg;
     let (cos_road, sin_road) = (road_theta.cos(), road_theta.sin());
 
-    // Convention detection via object length/width attributes:
+    // Convention detection for cornerLocal coordinate frame:
     //
-    // - length > 0 && width > 0 (e.g. CityScape): the exporter stored cornerLocal
-    //   (u, v) already in road-frame orientation (u = along-road, v = lateral).
-    //   obj_hdg is metadata only; applying it would rotate the clipping polygon
-    //   and produce wrong stripe count / orientation.  → NO hdg rotation.
+    // Two real-world conventions exist:
     //
-    // - length = 0 && width = 0 (e.g. junction_crosswalk_signal): cornerLocal (u, v)
-    //   is in the object's own local frame.  obj_hdg must be applied to map them
-    //   into road-frame before stripe generation.  → APPLY hdg rotation.
-    let apply_hdg = !(obj_length > 0.0 && obj_width > 0.0);
+    // - **Road-frame** (e.g. CityScape/RoadRunner): cornerLocal (u, v) is already
+    //   in road-frame orientation (u = along-road, v = lateral). The polygon's
+    //   v-extent (lateral / road-spanning) is larger than u-extent (along-road depth).
+    //   obj_hdg is metadata only → NO hdg rotation.
+    //
+    // - **Object-local frame** (e.g. 51World, spec-compliant): cornerLocal (u, v)
+    //   is in the object's own heading frame. For crosswalks perpendicular to road
+    //   (hdg ≈ π/2), u-extent (along object heading = across road) is larger than
+    //   v-extent. obj_hdg must be applied → APPLY hdg rotation.
+    //
+    // Detection: when length > 0 && width > 0, use the corner aspect ratio to
+    // distinguish conventions. If u-extent > v-extent, corners are in object-local
+    // frame (the longer dimension is along the object heading, not along the road).
+    // When length = 0 || width = 0, always apply hdg (original junction_crosswalk_signal
+    // behavior).
+    let apply_hdg = if obj_length > 0.0 && obj_width > 0.0 {
+        let (u_min, u_max) = corners.iter().fold(
+            (f64::INFINITY, f64::NEG_INFINITY),
+            |(mn, mx), c| (mn.min(c.x), mx.max(c.x)),
+        );
+        let (v_min, v_max) = corners.iter().fold(
+            (f64::INFINITY, f64::NEG_INFINITY),
+            |(mn, mx), c| (mn.min(c.y), mx.max(c.y)),
+        );
+        (u_max - u_min) > (v_max - v_min)
+    } else {
+        true
+    };
     let (cos_h, sin_h) = if apply_hdg {
         (obj_hdg.cos(), obj_hdg.sin())
     } else {
@@ -1037,6 +1058,96 @@ mod tests {
             (x_max - x_min) > 2.5,
             "First stripe along-road extent={:.1}, expected ~3.6m",
             x_max - x_min
+        );
+    }
+
+    /// Verify that a crosswalk with hdg=π/2 and length>0/width>0 but u-extent > v-extent
+    /// (51World / spec-compliant style) DOES apply hdg rotation.
+    ///
+    /// Corners from crosswalk_signals.xodr id=115:
+    /// u ∈ [-6.33, 4.31] (10.6m), v ∈ [-2.81, 1.87] (4.7m).
+    /// Since u-extent (10.6) > v-extent (4.7), corners are in object-local frame.
+    /// After hdg=π/2 rotation: along-road ≈ v-extent (4.7m), lateral ≈ u-extent (10.6m).
+    /// Lateral sweep → 10.6m → ~10 stripes, each bar spans ~4.7m along-road.
+    #[test]
+    fn test_crosswalk_stripes_51world_convention_length_gt_zero() {
+        let ref_pts = straight_road_pts();
+        let corners = vec![
+            Point3D {
+                x: 4.1716,
+                y: 1.8650,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: -6.3277,
+                y: 1.7411,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: -6.3277,
+                y: -2.8060,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 4.3121,
+                y: -2.6651,
+                z: 0.0,
+                id: None,
+            },
+        ];
+        let elevations: Vec<Elevation> = vec![];
+        let mut out = Vec::new();
+        let offset_fn = &offset_pt_flat;
+
+        // length=10.64, width=4.67 (both > 0) but u-extent > v-extent → apply hdg
+        emit_crosswalk_stripes(
+            &corners,
+            &ref_pts[5],
+            &elevations,
+            5.0,
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            0.0,
+            offset_fn,
+            0.0,
+            0.45,
+            0.6,
+            10.64,
+            4.67,
+            &mut out,
+        );
+
+        assert!(
+            !out.is_empty(),
+            "Expected stripes for 51World-style crosswalk"
+        );
+
+        // With rotation: lateral range ≈ 10.6m; period = 1.05m → ~10 stripes.
+        let num_stripes = out.len() / 42;
+        assert!(
+            (8..=12).contains(&num_stripes),
+            "Expected ~10 stripes for 10.6m lateral range, got {num_stripes}"
+        );
+
+        // Each stripe bar should span the along-road extent (~4.7m after rotation),
+        // NOT 10.6m (which would be the broken behavior without rotation).
+        let first_stripe_xs: Vec<f32> = out[..42].chunks(7).map(|v| v[0]).collect();
+        let x_min = first_stripe_xs
+            .iter()
+            .cloned()
+            .fold(f32::INFINITY, f32::min);
+        let x_max = first_stripe_xs
+            .iter()
+            .cloned()
+            .fold(f32::NEG_INFINITY, f32::max);
+        let bar_extent = x_max - x_min;
+        assert!(
+            bar_extent > 3.0 && bar_extent < 6.0,
+            "First stripe along-road extent={:.1}, expected ~4.7m (not 10.6m)",
+            bar_extent
         );
     }
 

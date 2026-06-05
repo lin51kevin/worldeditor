@@ -298,6 +298,18 @@ export function generate_single_signal_vertices(project_json: string, road_id: s
 export function generate_single_signal_vertices_cached(road_id: string, signal_id: string, r: number, g: number, b: number, a: number): Float32Array;
 
 /**
+ * Generate sprite instance data for billboard rendering of traffic lights and road signs.
+ *
+ * Returns a JSON string: array of objects `{ pos: [x, y, z], type: string, subtype: string, w: number, h: number, rot: number }`.
+ * The frontend uses the `type`/`subtype` fields to resolve the texture URL via the manifest.
+ *
+ * This function is complementary to `generate_signal_paint_vertices` — that one emits
+ * colored geometry (arrows + diamond markers), while this one provides metadata for
+ * textured sprite rendering that replaces/overlays the diamond markers.
+ */
+export function generate_sprite_data(project_json: string): any;
+
+/**
  * Convert WGS84 geodetic coordinates to an MGRS grid reference string.
  *
  * `precision`: number of digits per easting/northing component (1–5).
@@ -786,6 +798,7 @@ export interface InitOutput {
     readonly generate_single_road_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly generate_single_signal_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
     readonly generate_single_signal_vertices_cached: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly generate_sprite_data: (a: number, b: number) => [number, number, number];
     readonly geo_to_mgrs: (a: number, b: number, c: number) => [number, number, number, number];
     readonly geo_to_utm: (a: number, b: number, c: number) => any;
     readonly geodetic_to_ecef: (a: number, b: number, c: number) => [number, number, number];

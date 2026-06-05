@@ -23,7 +23,10 @@ pub(super) fn emit_road_mark(
     let lc = mark_color(rm.color);
     let lw = mark_line_width(rm);
 
-    const DOUBLE_SPACING: f64 = 0.05; // half of 0.1m gap → each line offset ±0.05m
+    // Half the center-to-center distance between two parallel lines.
+    // Each line is offset ±double_spacing from the nominal lateral position.
+    // Gap between inner edges = 2*double_spacing - lw; we target a visible ~8cm gap.
+    let double_spacing: f64 = (lw as f64 / 2.0) + 0.04;
 
     match rm.mark_type {
         // Double-line: left line is solid, right line is solid
@@ -33,7 +36,7 @@ pub(super) fn emit_road_mark(
                 elevations,
                 section_s,
                 lane_offsets,
-                &|ds| lateral_offset_at_ds(ds) + DOUBLE_SPACING,
+                &|ds| lateral_offset_at_ds(ds) + double_spacing,
                 lw,
                 lc,
                 false,
@@ -49,7 +52,7 @@ pub(super) fn emit_road_mark(
                 elevations,
                 section_s,
                 lane_offsets,
-                &|ds| lateral_offset_at_ds(ds) - DOUBLE_SPACING,
+                &|ds| lateral_offset_at_ds(ds) - double_spacing,
                 lw,
                 lc,
                 false,
@@ -68,7 +71,7 @@ pub(super) fn emit_road_mark(
                 elevations,
                 section_s,
                 lane_offsets,
-                &|ds| lateral_offset_at_ds(ds) + DOUBLE_SPACING,
+                &|ds| lateral_offset_at_ds(ds) + double_spacing,
                 lw,
                 lc,
                 false,
@@ -84,7 +87,7 @@ pub(super) fn emit_road_mark(
                 elevations,
                 section_s,
                 lane_offsets,
-                &|ds| lateral_offset_at_ds(ds) - DOUBLE_SPACING,
+                &|ds| lateral_offset_at_ds(ds) - double_spacing,
                 lw,
                 lc,
                 true,
@@ -103,7 +106,7 @@ pub(super) fn emit_road_mark(
                 elevations,
                 section_s,
                 lane_offsets,
-                &|ds| lateral_offset_at_ds(ds) + DOUBLE_SPACING,
+                &|ds| lateral_offset_at_ds(ds) + double_spacing,
                 lw,
                 lc,
                 true,
@@ -119,7 +122,7 @@ pub(super) fn emit_road_mark(
                 elevations,
                 section_s,
                 lane_offsets,
-                &|ds| lateral_offset_at_ds(ds) - DOUBLE_SPACING,
+                &|ds| lateral_offset_at_ds(ds) - double_spacing,
                 lw,
                 lc,
                 false,

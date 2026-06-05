@@ -509,6 +509,10 @@ export interface PlatformService {
    *  Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateObjectVertices(project: Project): Promise<Float32Array>;
 
+  /** Generate sprite instance data for textured billboard signals and road paint arrows.
+   *  Returns structured data with positions, types, and sizes for the sprite renderer. */
+  generateSpriteData(project: Project): Promise<SpriteDataResult>;
+
   /** Generate bridge deck and tunnel enclosure overlay vertices.
    *  Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateBridgeTunnelVertices(project: Project): Promise<Float32Array>;

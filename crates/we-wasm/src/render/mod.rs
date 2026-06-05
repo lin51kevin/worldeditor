@@ -546,6 +546,114 @@ pub fn generate_signal_paint_vertices(
     Ok(all_floats)
 }
 
+/// Generate sprite instance data for billboard rendering of traffic lights and road signs.
+///
+/// Returns a JSON string: array of objects `{ pos: [x, y, z], type: string, subtype: string, w: number, h: number, rot: number }`.
+/// The frontend uses the `type`/`subtype` fields to resolve the texture URL via the manifest.
+///
+/// This function is complementary to `generate_signal_paint_vertices` — that one emits
+/// colored geometry (arrows + diamond markers), while this one provides metadata for
+/// textured sprite rendering that replaces/overlays the diamond markers.
+#[wasm_bindgen]
+pub fn generate_sprite_data(project_json: &str) -> Result<JsValue, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point};
+    use we_core::model::Project;
+
+    let project: Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    let mut sprites: Vec<SpriteInstanceData> = Vec::new();
+    let paints: Vec<PaintInstanceData> = Vec::new();
+
+    for road in &project.roads {
+        if road.signals.is_empty() {
+            continue;
+        }
+
+        for signal in &road.signals {
+            // Road paint arrows (Graphics type) are rendered by generate_signal_paint_vertices
+            // as tessellated white polygons — skip them here (PNGs have gray backgrounds).
+            if signal.signal_type == "Graphics" {
+                continue;
+            }
+
+            // Only generate sprites for signals that have matching PNG textures:
+            // - Traffic lights: types with commas (e.g. "1,000,011")
+            // - Chinese GB/T road signs: 10+ digit numeric codes (e.g. "1010203800001413")
+            let type_str = &signal.signal_type;
+            let is_traffic_light = type_str.contains(',');
+            let is_chinese_sign = type_str.len() >= 10
+                && type_str.chars().all(|c| c.is_ascii_digit());
+
+            if !is_traffic_light && !is_chinese_sign {
+                continue;
+            }
+
+            let Some(ref_pt) = road_point_at_s(&road.plan_view, signal.s) else {
+                continue;
+            };
+            let z_road = evaluate_elevation(&road.elevation_profile, signal.s) as f32;
+
+            // Vertical signal — billboard sprite
+            let (mx, my, _) = offset_point(&ref_pt, signal.t, 0.0);
+            let z_offset = if signal.z_offset > 0.0 {
+                signal.z_offset as f32
+            } else {
+                3.5 // default pole height
+            };
+            let z = z_road + z_offset;
+            // WEO uses 2×2 world-unit billboards; clamp to sane range
+            let w = if signal.width > 0.0 && signal.width < 5.0 {
+                signal.width as f32
+            } else {
+                0.9
+            };
+            let h = if signal.height > 0.0 && signal.height < 5.0 {
+                signal.height as f32
+            } else {
+                0.9
+            };
+
+            sprites.push(SpriteInstanceData {
+                pos: [mx as f32, my as f32, z],
+                signal_type: signal.signal_type.clone(),
+                subtype: signal.signal_subtype.clone(),
+                w,
+                h,
+                value: signal.value.clone().unwrap_or_default(),
+            });
+        }
+    }
+
+    let result = SpriteDataResult { sprites, paints };
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
+}
+
+#[derive(serde::Serialize)]
+struct SpriteInstanceData {
+    pos: [f32; 3],
+    signal_type: String,
+    subtype: String,
+    w: f32,
+    h: f32,
+    value: String,
+}
+
+#[derive(serde::Serialize)]
+struct PaintInstanceData {
+    pos: [f32; 3],
+    subtype: String,
+    w: f32,
+    h: f32,
+    rot: f32,
+}
+
+#[derive(serde::Serialize)]
+struct SpriteDataResult {
+    sprites: Vec<SpriteInstanceData>,
+    paints: Vec<PaintInstanceData>,
+}
+
 /// Progressive WASM data pipeline (#6): validates that we-core geometry types
 /// can be deserialized from JSON, mesh-generated, and returned as JSON vertices.
 /// Returns a JSON object with "vertices" (array of [x,y,z,r,g,b,a]) and "count".

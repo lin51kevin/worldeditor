@@ -12,6 +12,31 @@ interface WasmProject {
   [key: string]: unknown;
 }
 
+/** Sprite instance data for billboard rendering (traffic lights, road signs). */
+interface SpriteInstanceRaw {
+  pos: [number, number, number];
+  signal_type: string;
+  subtype: string;
+  w: number;
+  h: number;
+  value: string;
+}
+
+/** Paint instance data for ground-aligned textured quads (road arrows). */
+interface PaintInstanceRaw {
+  pos: [number, number, number];
+  subtype: string;
+  w: number;
+  h: number;
+  rot: number;
+}
+
+/** Result from generate_sprite_data WASM function. */
+interface SpriteDataResult {
+  sprites: SpriteInstanceRaw[];
+  paints: PaintInstanceRaw[];
+}
+
 declare module '../../wasm/pkg/we_wasm' {
   export default function init(): Promise<void>;
 
@@ -33,6 +58,7 @@ declare module '../../wasm/pkg/we_wasm' {
   export function generate_center_line_vertices(project_json: string, sample_step: number): Float32Array;
   export function generate_signal_paint_vertices(project_json: string, sample_step: number): Float32Array;
   export function generate_object_vertices(project_json: string): Float32Array;
+  export function generate_sprite_data(project_json: string): SpriteDataResult;
 
   // Picking
   export function pick_road_at_point(project_json: string, x: number, y: number, threshold: number): string | null;

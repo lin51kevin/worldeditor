@@ -39,6 +39,7 @@ export const generate_single_object_vertices_cached: (a: number, b: number, c: n
 export const generate_single_road_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
 export const generate_single_signal_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
 export const generate_single_signal_vertices_cached: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+export const generate_sprite_data: (a: number, b: number) => [number, number, number];
 export const geo_to_mgrs: (a: number, b: number, c: number) => [number, number, number, number];
 export const geo_to_utm: (a: number, b: number, c: number) => any;
 export const geodetic_to_ecef: (a: number, b: number, c: number) => [number, number, number];
