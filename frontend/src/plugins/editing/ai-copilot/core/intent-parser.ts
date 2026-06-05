@@ -1,4 +1,5 @@
 import type { ParsedIntent, RoadActionType } from './types';
+import { getAssetUrl } from '../../../../utils/assetUrl';
 
 // ─── Config types ───
 
@@ -94,10 +95,7 @@ async function loadBundledConfig(): Promise<IntentsConfigFile> {
 }
 
 function getBundledConfigUrl(): string {
-  if (typeof window !== 'undefined' && window.location?.href) {
-    return new URL('/config/intents.json', window.location.href).toString();
-  }
-  return 'http://localhost/config/intents.json';
+  return getAssetUrl('config/intents.json');
 }
 
 async function loadUserConfig(defaultConfig: IntentsConfigFile): Promise<IntentsConfigFile> {
