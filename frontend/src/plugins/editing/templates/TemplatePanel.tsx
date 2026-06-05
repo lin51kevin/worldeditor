@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { usePluginContribStore } from '../../../stores/pluginContribStore';
 import { isDrawMode, useViewportStore } from '../../../stores/viewportStore';
 import type { TemplateItemDef } from '../../../stores/pluginContribStore';
+import { getAssetUrl } from '../../../utils/assetUrl';
 import './TemplatePanel.css';
 
 const FAVORITES_KEY = 'we_template_favorites';
@@ -194,7 +195,11 @@ export const TemplatePanel = memo(function TemplatePanel() {
                 }
               }}
             >
-              <div className="template-thumb">{item.icon}</div>
+              <div className="template-thumb">
+                {item.thumbnailUrl
+                  ? <img src={getAssetUrl(item.thumbnailUrl)} alt="" className="template-thumb-img" />
+                  : item.icon}
+              </div>
               <div className="template-label">{t(item.labelKey, item.labelKey)}</div>
               <button
                 className={`template-fav-btn${favorites.includes(item.id) ? ' active' : ''}`}

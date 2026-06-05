@@ -47,6 +47,7 @@ function roadConfigToItem(config: RoadTemplateConfig): TemplateItemDef {
     id: config.id,
     labelKey: config.labelKey,
     icon: config.icon,
+    thumbnailUrl: config.thumbnailUrl,
     onApply: (opts) => {
       if (opts?.x === undefined || opts?.y === undefined) return;
       const road = buildRoadFromConfig(config, opts.x, opts.y, opts.hdg ?? 0);
@@ -64,6 +65,7 @@ function junctionConfigToItem(config: JunctionTemplateConfig): TemplateItemDef {
     id: config.id,
     labelKey: config.labelKey,
     icon: config.icon,
+    thumbnailUrl: config.thumbnailUrl,
     onApply: (opts) => {
       if (opts?.x === undefined || opts?.y === undefined) return;
       const { junction, roads, extraJunctions } = buildJunctionFromConfig(config, opts.x, opts.y);
@@ -86,6 +88,7 @@ function signalConfigToItem(config: SignalTemplateConfig): TemplateItemDef {
     id: config.id,
     labelKey: config.labelKey,
     icon: config.icon,
+    thumbnailUrl: config.thumbnailUrl,
     onApply: (opts) => {
       const store = useProjectStore.getState();
       const targetRoadId = opts?.roadId ?? store.selectedRoadId;
@@ -204,6 +207,7 @@ function objectConfigToItem(config: RoadObjectTemplateConfig): TemplateItemDef {
     id: config.id,
     labelKey: config.labelKey,
     icon: config.icon,
+    thumbnailUrl: config.thumbnailUrl,
     onApply: (opts) => {
       if (opts?.roadId === undefined) return;
       const s = opts.x ?? 0;
@@ -222,6 +226,7 @@ function signConfigToItem(config: SignTemplateConfig): TemplateItemDef {
     id: config.id,
     labelKey: config.labelKey,
     icon: config.icon,
+    thumbnailUrl: config.thumbnailUrl,
     onApply: (opts) => {
       if (opts?.roadId === undefined) return;
       const s = opts.x ?? 0;

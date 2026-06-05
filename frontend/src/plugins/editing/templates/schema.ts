@@ -47,6 +47,8 @@ export interface RoadTemplateConfig {
   id: string;
   labelKey: string;
   icon: string;
+  /** Optional PNG thumbnail URL (overrides icon when provided) */
+  thumbnailUrl?: string;
   /** Road length in metres. Defaults to 100 */
   length?: number;
   /** Left-side lanes (positive IDs, ordered from center outward) */
@@ -71,6 +73,8 @@ export interface JunctionTemplateConfig {
   id: string;
   labelKey: string;
   icon: string;
+  /** Optional PNG thumbnail URL (overrides icon when provided) */
+  thumbnailUrl?: string;
   /** Junction shape/layout */
   topology: JunctionTopology;
   /** Number of arms (ignored for 'T'=3 and 'Cross'=4) */
@@ -94,6 +98,8 @@ export interface SignalTemplateConfig {
   id: string;
   labelKey: string;
   icon: string;
+  /** Optional PNG thumbnail URL (overrides icon when provided) */
+  thumbnailUrl?: string;
   /** OpenDRIVE signal type code (e.g. '1000001', '206') */
   signalType: string;
   /** Signal subtype. Defaults to '-1' */
@@ -136,6 +142,8 @@ export interface RoadObjectTemplateConfig {
   id: string;
   labelKey: string;
   icon: string;
+  /** Optional PNG thumbnail URL (overrides icon when provided) */
+  thumbnailUrl?: string;
   /** Maps to Rust ObjectType (serialised as plain string) */
   objectType: RoadObjectTypeKey;
   /** Default object width in metres */
@@ -159,6 +167,8 @@ export interface SignTemplateConfig {
   id: string;
   labelKey: string;
   icon: string;
+  /** Optional PNG thumbnail URL (overrides icon when provided) */
+  thumbnailUrl?: string;
   /** Maps to Rust ObjectType (serialised as plain string) */
   objectType: SignTypeKey;
   /** Default sign width in metres */

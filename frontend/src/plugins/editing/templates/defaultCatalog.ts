@@ -25,6 +25,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:road:single',
       labelKey: 'templatePanel.roads.singleLane',
       icon: '╺',
+      thumbnailUrl: '/assets/textures/Roads/OneLane.png',
       left: [],
       right: [
         { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
@@ -34,6 +35,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:road:dual2',
       labelKey: 'templatePanel.roads.dual2Lane',
       icon: '┃┃',
+      thumbnailUrl: '/assets/textures/Roads/TwoWayTwoLane.png',
       left: [
         { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
       ],
@@ -45,6 +47,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:road:dual4',
       labelKey: 'templatePanel.roads.dual4Lane',
       icon: '┃┃┃┃',
+      thumbnailUrl: '/assets/textures/Roads/TwoWayFourLaneWithShoulder.png',
       left: [
         { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
         { laneType: 'Shoulder', width: SW, mark: { type: 'Solid' } },
@@ -58,6 +61,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:road:dual6',
       labelKey: 'templatePanel.roads.dual6Lane',
       icon: '┃┃┃┃┃┃',
+      thumbnailUrl: '/assets/textures/Roads/TwoWaySixLaneWithShoulder.png',
       left: [
         { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
         { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
@@ -92,6 +96,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:road:ramp',
       labelKey: 'templatePanel.roads.ramp',
       icon: '↗',
+      thumbnailUrl: '/assets/textures/Roads/TwoLane.png',
       left: [],
       right: [
         { laneType: 'Driving', width: W, mark: { type: 'Solid' } },
@@ -102,6 +107,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:road:urban',
       labelKey: 'templatePanel.roads.urbanRoad',
       icon: '🏙',
+      thumbnailUrl: '/assets/textures/Roads/ThreeLane.png',
       left: [
         { laneType: 'Driving', width: W, mark: { type: 'Solid' } },
         { laneType: 'Parking', width: 2.5, mark: { type: 'Solid' } },
@@ -124,6 +130,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:jct:t',
       labelKey: 'templatePanel.junctions.tIntersection',
       icon: '⊤',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionThreeRoads.png',
       topology: 'T',
       armLength: 100,
       name: 'T-Intersection',
@@ -145,6 +152,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:jct:t-single',
       labelKey: 'templatePanel.junctions.tSingleLane',
       icon: '⊤',
+      thumbnailUrl: '/assets/textures/Junctions/DefaultJunction.png',
       topology: 'T',
       armLength: 60,
       name: 'T-Intersection Single',
@@ -164,6 +172,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:jct:cross',
       labelKey: 'templatePanel.junctions.crossIntersection',
       icon: '✜',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionCrossRoad.png',
       topology: 'Cross',
       armLength: 100,
       name: 'Cross Intersection',
@@ -185,6 +194,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:jct:fork',
       labelKey: 'templatePanel.junctions.fork',
       icon: '⑂',
+      thumbnailUrl: '/assets/textures/Junctions/VirtualJunction.png',
       topology: 'Radial',
       armCount: 3,
       armLength: 100,
@@ -207,6 +217,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:jct:5way',
       labelKey: 'templatePanel.junctions.fiveWay',
       icon: '✳',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionFiveRoads.png',
       topology: 'Radial',
       armCount: 5,
       armLength: 100,
@@ -251,6 +262,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:jct:roundabout3',
       labelKey: 'templatePanel.junctions.roundabout',
       icon: '⭕',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionRoundaboutThree.png',
       topology: 'Roundabout',
       armCount: 3,
       armLength: 100,
@@ -262,6 +274,7 @@ const catalog: TemplateCatalog = {
       id: 'tpl:jct:roundabout4',
       labelKey: 'templatePanel.junctions.roundabout4',
       icon: '⭕',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionRoundabout.png',
       topology: 'Roundabout',
       armCount: 4,
       armLength: 100,
@@ -276,7 +289,7 @@ const catalog: TemplateCatalog = {
   // ═══════════════════════════════════════════════════════════════════════════
 
   signals: [
-    { id: 'tpl:sig:traffic-light', labelKey: 'templatePanel.signals.trafficLight', icon: '🚦', signalType: '1000001' },
+    { id: 'tpl:sig:traffic-light', labelKey: 'templatePanel.signals.trafficLight', icon: '🚦', signalType: '1000001', thumbnailUrl: '/assets/textures/TrafficLights/StandardTrafficLight.png' },
     { id: 'tpl:sig:stop', labelKey: 'templatePanel.signals.stopSign', icon: '🛑', signalType: '206' },
     { id: 'tpl:sig:warning', labelKey: 'templatePanel.signals.warningSign', icon: '⚠', signalType: '101' },
     { id: 'tpl:sig:give-way', labelKey: 'templatePanel.signals.giveWay', icon: '⬡', signalType: '002' },
@@ -286,9 +299,9 @@ const catalog: TemplateCatalog = {
     { id: 'tpl:sig:speed60', labelKey: 'templatePanel.signals.speedLimit60', icon: '㊿', signalType: '274.1' },
     { id: 'tpl:sig:speed80', labelKey: 'templatePanel.signals.speedLimit80', icon: '🔢', signalType: '274.2' },
     { id: 'tpl:sig:speed120', labelKey: 'templatePanel.signals.speedLimit120', icon: '🏎', signalType: '274.3' },
-    { id: 'tpl:sig:arrow-straight', labelKey: 'templatePanel.signals.arrowStraight', icon: '⬆', signalType: 'Graphics', signalSubtype: 'straight' },
-    { id: 'tpl:sig:arrow-left', labelKey: 'templatePanel.signals.arrowLeft', icon: '⬅', signalType: 'Graphics', signalSubtype: 'left' },
-    { id: 'tpl:sig:arrow-right', labelKey: 'templatePanel.signals.arrowRight', icon: '➡', signalType: 'Graphics', signalSubtype: 'right' },
+    { id: 'tpl:sig:arrow-straight', labelKey: 'templatePanel.signals.arrowStraight', icon: '⬆', signalType: 'Graphics', signalSubtype: 'straight', thumbnailUrl: '/assets/textures/RoadPaints/StraightArrowPaint.png' },
+    { id: 'tpl:sig:arrow-left', labelKey: 'templatePanel.signals.arrowLeft', icon: '⬅', signalType: 'Graphics', signalSubtype: 'left', thumbnailUrl: '/assets/textures/RoadPaints/LeftTurnArrowPaint.png' },
+    { id: 'tpl:sig:arrow-right', labelKey: 'templatePanel.signals.arrowRight', icon: '➡', signalType: 'Graphics', signalSubtype: 'right', thumbnailUrl: '/assets/textures/RoadPaints/RightTurnArrowPaint.png' },
   ],
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -311,19 +324,19 @@ const catalog: TemplateCatalog = {
   // ═══════════════════════════════════════════════════════════════════════════
 
   objects: [
-    { id: 'tpl:obj:crosswalk', labelKey: 'templatePanel.objects.crosswalk', icon: '🚶', objectType: 'Crosswalk', defaultWidth: 3.0, defaultLength: 5.0, defaultHeight: 0.0 },
-    { id: 'tpl:obj:stop-line', labelKey: 'templatePanel.objects.stopLine', icon: '⛔', objectType: 'StopLine', defaultWidth: 6.0, defaultLength: 0.4, defaultHeight: 0.0 },
-    { id: 'tpl:obj:yield-slow', labelKey: 'templatePanel.objects.yieldSlowLine', icon: '🔽', objectType: 'SlowDownToYieldLine', defaultWidth: 6.0, defaultLength: 0.6, defaultHeight: 0.0 },
-    { id: 'tpl:obj:yield-stop', labelKey: 'templatePanel.objects.yieldStopLine', icon: '✋', objectType: 'StopToYieldLine', defaultWidth: 6.0, defaultLength: 0.6, defaultHeight: 0.0 },
-    { id: 'tpl:obj:cross-hatch', labelKey: 'templatePanel.objects.crossHatch', icon: '▦', objectType: 'CrossHatchArea', defaultWidth: 4.0, defaultLength: 4.0, defaultHeight: 0.0 },
-    { id: 'tpl:obj:woven', labelKey: 'templatePanel.objects.wovenArea', icon: '▥', objectType: 'WovenArea', defaultWidth: 4.0, defaultLength: 6.0, defaultHeight: 0.0 },
-    { id: 'tpl:obj:forward-wait', labelKey: 'templatePanel.objects.forwardWaiting', icon: '🚗', objectType: 'ForwardWaitingArea', defaultWidth: 3.5, defaultLength: 5.0, defaultHeight: 0.0 },
-    { id: 'tpl:obj:turn-left-wait', labelKey: 'templatePanel.objects.turnLeftWaiting', icon: '↰', objectType: 'TurnLeftWaitingArea', defaultWidth: 3.5, defaultLength: 5.0, defaultHeight: 0.0 },
-    { id: 'tpl:obj:parking', labelKey: 'templatePanel.objects.parkingSpace', icon: '🅿', objectType: 'ParkingSpace', defaultWidth: 2.5, defaultLength: 5.0, defaultHeight: 0.0 },
-    { id: 'tpl:obj:guardrail', labelKey: 'templatePanel.objects.guardrail', icon: '|', objectType: 'Guardrail', defaultWidth: 0.3, defaultLength: 10.0, defaultHeight: 0.9 },
-    { id: 'tpl:obj:barrier', labelKey: 'templatePanel.objects.barrier', icon: '▌', objectType: 'Barrier', defaultWidth: 0.5, defaultLength: 5.0, defaultHeight: 1.0 },
+    { id: 'tpl:obj:crosswalk', labelKey: 'templatePanel.objects.crosswalk', icon: '🚶', objectType: 'Crosswalk', defaultWidth: 3.0, defaultLength: 5.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/ZebraStripsArea.png' },
+    { id: 'tpl:obj:stop-line', labelKey: 'templatePanel.objects.stopLine', icon: '⛔', objectType: 'StopLine', defaultWidth: 6.0, defaultLength: 0.4, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/StopLine.png' },
+    { id: 'tpl:obj:yield-slow', labelKey: 'templatePanel.objects.yieldSlowLine', icon: '🔽', objectType: 'SlowDownToYieldLine', defaultWidth: 6.0, defaultLength: 0.6, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/SlowDownToYieldLine.png' },
+    { id: 'tpl:obj:yield-stop', labelKey: 'templatePanel.objects.yieldStopLine', icon: '✋', objectType: 'StopToYieldLine', defaultWidth: 6.0, defaultLength: 0.6, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/StopToYieldLine.png' },
+    { id: 'tpl:obj:cross-hatch', labelKey: 'templatePanel.objects.crossHatch', icon: '▦', objectType: 'CrossHatchArea', defaultWidth: 4.0, defaultLength: 4.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/CrossHatchArea.png' },
+    { id: 'tpl:obj:woven', labelKey: 'templatePanel.objects.wovenArea', icon: '▥', objectType: 'WovenArea', defaultWidth: 4.0, defaultLength: 6.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/WovenArea.png' },
+    { id: 'tpl:obj:forward-wait', labelKey: 'templatePanel.objects.forwardWaiting', icon: '🚗', objectType: 'ForwardWaitingArea', defaultWidth: 3.5, defaultLength: 5.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/ForwardWaitingArea.png' },
+    { id: 'tpl:obj:turn-left-wait', labelKey: 'templatePanel.objects.turnLeftWaiting', icon: '↰', objectType: 'TurnLeftWaitingArea', defaultWidth: 3.5, defaultLength: 5.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/TurnLeftWaitingArea.png' },
+    { id: 'tpl:obj:parking', labelKey: 'templatePanel.objects.parkingSpace', icon: '🅿', objectType: 'ParkingSpace', defaultWidth: 2.5, defaultLength: 5.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/ParkingSpace.png' },
+    { id: 'tpl:obj:guardrail', labelKey: 'templatePanel.objects.guardrail', icon: '|', objectType: 'Guardrail', defaultWidth: 0.3, defaultLength: 10.0, defaultHeight: 0.9, thumbnailUrl: '/assets/textures/Objects/RoadGuardrail.png' },
+    { id: 'tpl:obj:barrier', labelKey: 'templatePanel.objects.barrier', icon: '▌', objectType: 'Barrier', defaultWidth: 0.5, defaultLength: 5.0, defaultHeight: 1.0, thumbnailUrl: '/assets/textures/Objects/SidewalkRail.png' },
     { id: 'tpl:obj:cone', labelKey: 'templatePanel.objects.trafficCone', icon: '🔸', objectType: 'TrafficCone', defaultWidth: 0.4, defaultLength: 0.4, defaultHeight: 0.7 },
-    { id: 'tpl:obj:street-light', labelKey: 'templatePanel.objects.streetLight', icon: '💡', objectType: 'StreetLightPole', defaultWidth: 0.2, defaultLength: 0.2, defaultHeight: 8.0 },
+    { id: 'tpl:obj:street-light', labelKey: 'templatePanel.objects.streetLight', icon: '💡', objectType: 'StreetLightPole', defaultWidth: 0.2, defaultLength: 0.2, defaultHeight: 8.0, thumbnailUrl: '/assets/textures/Objects/StreetLightPole.png' },
   ],
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -331,11 +344,11 @@ const catalog: TemplateCatalog = {
   // ═══════════════════════════════════════════════════════════════════════════
 
   signs: [
-    { id: 'tpl:sign:sign-pole', labelKey: 'templatePanel.signs.signPole', icon: '🪧', objectType: 'Sign', defaultWidth: 0.6, defaultHeight: 2.0 },
-    { id: 'tpl:sign:gantry', labelKey: 'templatePanel.signs.gantry', icon: '🌉', objectType: 'SignGantry', defaultWidth: 8.0, defaultHeight: 6.0 },
-    { id: 'tpl:sign:signal-pole-simple', labelKey: 'templatePanel.signs.simpleSignalPole', icon: '🚦', objectType: 'SimpleSignalPole', defaultWidth: 0.2, defaultHeight: 5.0 },
-    { id: 'tpl:sign:traffic-light-pole', labelKey: 'templatePanel.signs.trafficLightPole', icon: '🚦', objectType: 'TrafficLightPole', defaultWidth: 0.2, defaultHeight: 6.0 },
-    { id: 'tpl:sign:l-pole', labelKey: 'templatePanel.signs.lTypePole', icon: '⌐', objectType: 'LTypeSignalPole', defaultWidth: 0.2, defaultHeight: 5.5 },
+    { id: 'tpl:sign:sign-pole', labelKey: 'templatePanel.signs.signPole', icon: '🪧', objectType: 'Sign', defaultWidth: 0.6, defaultHeight: 2.0, thumbnailUrl: '/assets/textures/Objects/Pole.png' },
+    { id: 'tpl:sign:gantry', labelKey: 'templatePanel.signs.gantry', icon: '🌉', objectType: 'SignGantry', defaultWidth: 8.0, defaultHeight: 6.0, thumbnailUrl: '/assets/textures/Objects/SignGantry.png' },
+    { id: 'tpl:sign:signal-pole-simple', labelKey: 'templatePanel.signs.simpleSignalPole', icon: '🚦', objectType: 'SimpleSignalPole', defaultWidth: 0.2, defaultHeight: 5.0, thumbnailUrl: '/assets/textures/Objects/SimpleSignalPole.png' },
+    { id: 'tpl:sign:traffic-light-pole', labelKey: 'templatePanel.signs.trafficLightPole', icon: '🚦', objectType: 'TrafficLightPole', defaultWidth: 0.2, defaultHeight: 6.0, thumbnailUrl: '/assets/textures/Objects/TrafficLightPole.png' },
+    { id: 'tpl:sign:l-pole', labelKey: 'templatePanel.signs.lTypePole', icon: '⌐', objectType: 'LTypeSignalPole', defaultWidth: 0.2, defaultHeight: 5.5, thumbnailUrl: '/assets/textures/Objects/LTypeSignalPole.png' },
   ],
 };
 

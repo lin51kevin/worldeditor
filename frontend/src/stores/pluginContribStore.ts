@@ -60,8 +60,10 @@ export interface TemplateItemDef {
   id: string;
   /** i18n key for the visible label */
   labelKey: string;
-  /** Unicode glyph / emoji used as thumbnail */
+  /** Unicode glyph / emoji used as thumbnail fallback */
   icon: string;
+  /** Optional PNG thumbnail URL (overrides icon when provided) */
+  thumbnailUrl?: string;
   /**
    * Called when the user clicks or activates the item.
    * @param opts optional drop position in world coordinates, or roadId for road-object placement
