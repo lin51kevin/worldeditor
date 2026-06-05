@@ -9,6 +9,7 @@ import {
   loadPointCloud,
   vectorizeToRoads,
 } from './pointcloudActions';
+import './PointCloudPanel.css';
 
 const COLOR_MODE_KEYS: Array<{ value: PointCloudColorMode; key: string }> = [
   { value: 'elevation', key: 'pointcloud.colorElevation' },
@@ -57,26 +58,26 @@ export default function PointCloudPanel() {
   };
 
   return (
-    <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, color: '#c9d1d9' }}>
-      <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{t('pointcloud.title')}</h3>
+    <div className="pc-panel">
+      <h3>{t('pointcloud.title')}</h3>
 
       {isWeb && (
         <input ref={fileInputRef} type="file" accept={WEB_ACCEPT} style={{ display: 'none' }} onChange={onWebFile} />
       )}
 
-      <button type="button" disabled={busy} onClick={onLoadClick} style={btnStyle}>
+      <button type="button" disabled={busy} onClick={onLoadClick} className="pc-btn">
         {loaded ? t('pointcloud.loadAnother') : t('pointcloud.loadPointCloud')}
       </button>
 
       {isWeb && (
-        <div style={{ fontSize: 11, color: '#8b949e' }}>
+        <div className="pc-hint">
           {t('pointcloud.webHint')}
         </div>
       )}
 
       {summary && (
-        <div style={cardStyle}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>{fileName}</div>
+        <div className="pc-card">
+          <div className="pc-card-title">{fileName}</div>
           <Row label={t('pointcloud.points')} value={fmt(summary.count)} />
           <Row label={t('pointcloud.hasRgb')} value={summary.has_rgb ? t('pointcloud.yes') : t('pointcloud.no')} />
           <Row label={t('pointcloud.hasIntensity')} value={summary.has_intensity ? t('pointcloud.yes') : t('pointcloud.no')} />
@@ -91,7 +92,7 @@ export default function PointCloudPanel() {
         </div>
       )}
 
-      <label style={fieldStyle}>
+      <label className="pc-field">
         <span>{t('pointcloud.colorMode')}</span>
         <select
           value={colorMode}
@@ -104,7 +105,7 @@ export default function PointCloudPanel() {
         </select>
       </label>
 
-      <label style={fieldStyle}>
+      <label className="pc-field">
         <span>{t('pointcloud.voxelSize')}</span>
         <input
           type="number"
@@ -113,46 +114,45 @@ export default function PointCloudPanel() {
           value={voxelSize}
           disabled={busy}
           onChange={(e) => setVoxelSize(Number(e.target.value))}
-          style={{ width: 72 }}
         />
       </label>
 
-      <hr style={{ width: '100%', borderColor: '#30363d', opacity: 0.5 }} />
+      <hr className="pc-divider" />
 
-      <div style={{ fontSize: 12, fontWeight: 600 }}>{t('pointcloud.workflow')}</div>
+      <div className="pc-section-title">{t('pointcloud.workflow')}</div>
 
       {busy && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-          <Spinner />
-          <span style={{ fontSize: 12, color: '#58a6ff' }}>{t('pointcloud.working')}</span>
+        <div className="pc-busy">
+          <span className="pc-spinner" />
+          <span className="pc-busy-text">{t('pointcloud.working')}</span>
         </div>
       )}
 
-      <button type="button" disabled={!loaded || busy} onClick={() => void extractGround()} style={btnStyle}>
+      <button type="button" disabled={!loaded || busy} onClick={() => void extractGround()} className="pc-btn">
         {hasGround ? t('pointcloud.extractGroundDone') : t('pointcloud.extractGround')}
       </button>
-      <button type="button" disabled={!loaded || busy} onClick={() => void extractMarkings()} style={btnStyle}>
+      <button type="button" disabled={!loaded || busy} onClick={() => void extractMarkings()} className="pc-btn">
         {t('pointcloud.extractMarkings')}{markings.length > 0 ? ` (${markings.length})` : ''}
       </button>
       <button
         type="button"
         disabled={!loaded || busy || markings.length === 0}
         onClick={() => void vectorizeToRoads()}
-        style={btnPrimaryStyle}
+        className="pc-btn-primary"
       >
         {t('pointcloud.vectorize')}
       </button>
 
-      <div style={{ fontSize: 11, color: '#8b949e' }}>
+      <div className="pc-stage">
         {t('pointcloud.stage')}: {stage}
       </div>
 
       {error && (
-        <div style={{ fontSize: 11, color: '#f85149', whiteSpace: 'pre-wrap' }}>{error}</div>
+        <div className="pc-error">{error}</div>
       )}
 
       {loaded && (
-        <button type="button" disabled={busy} onClick={() => void freeCurrentCloud()} style={btnStyle}>
+        <button type="button" disabled={busy} onClick={() => void freeCurrentCloud()} className="pc-btn">
           {t('pointcloud.unload')}
         </button>
       )}
@@ -162,59 +162,9 @@ export default function PointCloudPanel() {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-      <span style={{ color: '#8b949e' }}>{label}</span>
+    <div className="pc-row">
+      <span className="pc-row-label">{label}</span>
       <span>{value}</span>
     </div>
-  );
-}
-
-const btnStyle: React.CSSProperties = {
-  padding: '6px 10px',
-  background: '#21262d',
-  color: '#c9d1d9',
-  border: '1px solid #30363d',
-  borderRadius: 6,
-  cursor: 'pointer',
-  fontSize: 12,
-};
-
-const btnPrimaryStyle: React.CSSProperties = {
-  ...btnStyle,
-  background: '#1f6feb',
-  borderColor: '#1f6feb',
-  color: '#ffffff',
-  fontWeight: 600,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: '#0d1117',
-  border: '1px solid #30363d',
-  borderRadius: 6,
-  padding: 8,
-};
-
-const fieldStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  fontSize: 12,
-};
-
-function Spinner() {
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        width: 14,
-        height: 14,
-        border: '2px solid #30363d',
-        borderTopColor: '#58a6ff',
-        borderRadius: '50%',
-        animation: 'pc-spin 0.8s linear infinite',
-      }}
-    >
-      <style>{`@keyframes pc-spin { to { transform: rotate(360deg); } }`}</style>
-    </span>
   );
 }
