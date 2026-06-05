@@ -95,3 +95,114 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   return in.color;
 }
 `;
+
+/**
+ * Sprite billboard shader — renders textured quads that always face the camera.
+ *
+ * Vertex input (per-instance quad, 6 verts):
+ *   position: vec3<f32>  — world center of the sprite
+ *   uv: vec2<f32>        — texture coordinate (0-1)
+ *   offset: vec2<f32>    — billboard corner offset in clip-space pixels
+ *
+ * Uniforms (group 0):
+ *   view_proj: mat4x4    — combined view-projection matrix
+ *   viewport_size: vec2  — canvas pixel dimensions (for screen-space sizing)
+ *   sprite_scale: f32    — global scale multiplier
+ *
+ * Texture (group 1):
+ *   texture + sampler    — the sprite PNG
+ */
+export const SPRITE_SHADER = `
+struct Uniforms {
+  view_proj: mat4x4<f32>,
+  viewport_size: vec2<f32>,
+  sprite_scale: f32,
+  _pad: f32,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
+@group(1) @binding(0) var sprite_texture: texture_2d<f32>;
+@group(1) @binding(1) var sprite_sampler: sampler;
+
+struct VertexInput {
+  @location(0) position: vec3<f32>,
+  @location(1) uv: vec2<f32>,
+  @location(2) offset: vec2<f32>,
+};
+
+struct VertexOutput {
+  @builtin(position) clip_position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+  var out: VertexOutput;
+  // Project center to clip space
+  let clip_center = uniforms.view_proj * vec4<f32>(vertex.position, 1.0);
+  // Apply screen-space offset (billboard expansion) — offset is in NDC pixels
+  let pixel_scale = uniforms.sprite_scale * 2.0 / uniforms.viewport_size;
+  out.clip_position = vec4<f32>(
+    clip_center.xy + vertex.offset * pixel_scale * clip_center.w,
+    clip_center.z,
+    clip_center.w,
+  );
+  out.uv = vertex.uv;
+  return out;
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+  let color = textureSample(sprite_texture, sprite_sampler, in.uv);
+  // Discard fully transparent pixels
+  if (color.a < 0.05) { discard; }
+  return color;
+}
+`;
+
+/**
+ * Road paint shader — renders textured quads flat on the road surface (ground-aligned).
+ *
+ * Vertex input (per-quad, 6 verts):
+ *   position: vec3<f32>  — world position of the vertex (pre-transformed on CPU)
+ *   uv: vec2<f32>        — texture coordinate
+ *
+ * Same uniform/texture binding as SPRITE_SHADER but no billboard expansion.
+ */
+export const ROAD_PAINT_SHADER = `
+struct Uniforms {
+  view_proj: mat4x4<f32>,
+  viewport_size: vec2<f32>,
+  sprite_scale: f32,
+  _pad: f32,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
+@group(1) @binding(0) var paint_texture: texture_2d<f32>;
+@group(1) @binding(1) var paint_sampler: sampler;
+
+struct VertexInput {
+  @location(0) position: vec3<f32>,
+  @location(1) uv: vec2<f32>,
+};
+
+struct VertexOutput {
+  @builtin(position) clip_position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@vertex
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+  var out: VertexOutput;
+  out.clip_position = uniforms.view_proj * vec4<f32>(vertex.position, 1.0);
+  out.uv = vertex.uv;
+  return out;
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+  let color = textureSample(paint_texture, paint_sampler, in.uv);
+  if (color.a < 0.05) { discard; }
+  return color;
+}
+`;

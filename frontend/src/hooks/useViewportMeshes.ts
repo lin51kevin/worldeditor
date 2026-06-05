@@ -102,6 +102,7 @@ export function useViewportMeshes({
   const cachedJunctionVertsRef = useRef<Float32Array>(new Float32Array(0));
   const cachedSignalVertsRef = useRef<Float32Array>(new Float32Array(0));
   const cachedObjectVertsRef = useRef<Float32Array>(new Float32Array(0));
+  const cachedSpriteInstancesRef = useRef<Array<{ position: [number, number, number]; textureUrl: string; size: [number, number] }>>([]);
   const surfaceColorModeRef = useRef(display.colorMode);
 
   const updateSurfaceMesh = useCallback(async () => {
@@ -160,9 +161,12 @@ export function useViewportMeshes({
       const objectProm = needObjects
         ? service.generateObjectVertices(visibleProject).catch(() => new Float32Array(0))
         : empty;
+      const spriteProm = (needSignals || needObjects)
+        ? service.generateSpriteData(visibleProject).catch(() => ({ sprites: [], paints: [] } as SpriteDataResult))
+        : Promise.resolve(null);
 
-      const [roadVerts, junctionVerts, signalVerts, objectVerts] = await Promise.all([
-        roadProm, junctionProm, signalProm, objectProm,
+      const [roadVerts, junctionVerts, signalVerts, objectVerts, spriteData] = await Promise.all([
+        roadProm, junctionProm, signalProm, objectProm, spriteProm,
       ]);
 
       if (needRoads) cachedRoadVertsRef.current = roadVerts;
@@ -173,14 +177,44 @@ export function useViewportMeshes({
       // Merge visible layers — in non-solid mode, surfaces are hidden (not cleared)
       const tWasm = performance.now();
       let uploadedVertCount = 0;
+
+      // Upload sprite data for textured billboard rendering
+      if (spriteData && spriteData.sprites.length > 0 && display.showSignals) {
+        const texMgr = renderer.getTextureManager();
+        if (texMgr) {
+          // Ensure manifest is loaded before resolving texture URLs
+          await renderer.waitForManifest();
+
+          const spriteInstances = spriteData.sprites.map((s) => ({
+            position: s.pos as [number, number, number],
+            textureUrl: texMgr.resolveSignalTexture(s.signal_type, s.subtype, s.value) ?? '',
+            size: [Math.max(s.w, s.h) * 28, Math.max(s.w, s.h) * 28] as [number, number],
+          })).filter((s) => s.textureUrl !== '');
+
+          cachedSpriteInstancesRef.current = spriteInstances;
+          if (spriteInstances.length > 0) {
+            renderer.uploadSpriteData(spriteInstances);
+          }
+        }
+      } else if (display.showSignals && cachedSpriteInstancesRef.current.length > 0) {
+        // Re-upload cached sprite billboards when signals are toggled back on
+        renderer.uploadSpriteData(cachedSpriteInstancesRef.current);
+      } else if (!display.showSignals) {
+        // Clear existing sprite billboards when signals are hidden
+        renderer.uploadSpriteData([]);
+      }
+
       if (viewMode !== 'solid') {
         // Wire/sketch: no surface polygons, just preserve last frame for smooth transition
         renderer.uploadRoadVertices(new Float32Array(0), { preserveLastVertexDataOnEmpty: true });
       } else {
         let surfaceVerts = mergeFloat32Arrays(cachedRoadVertsRef.current, cachedJunctionVertsRef.current);
+        // Always include signal polygons (tessellated arrows + diamond markers).
+        // Billboard sprites render at z_offset=3.5+ above road, no z-fighting.
         if (display.showSignals && cachedSignalVertsRef.current.length > 0) {
           surfaceVerts = mergeFloat32Arrays(surfaceVerts, cachedSignalVertsRef.current);
         }
+        // Object vertices (crosswalks, parking spaces, guardrails, etc.) stay as-is
         if (display.showObjects && cachedObjectVertsRef.current.length > 0) {
           surfaceVerts = mergeFloat32Arrays(surfaceVerts, cachedObjectVertsRef.current);
         }

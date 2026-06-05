@@ -109,6 +109,7 @@ export function createPlatformMock(vertices = new Float32Array([1, 2, 3])): Plat
     generateCenterLineVertices: vi.fn().mockResolvedValue(new Float32Array()),
     generateSignalPaintVertices: vi.fn().mockResolvedValue(new Float32Array()),
     generateSingleJunctionVertices: vi.fn().mockResolvedValue(new Float32Array()),
+    generateSpriteData: vi.fn().mockResolvedValue({ sprites: [], paints: [] }),
     pickRoadAtPoint: vi.fn().mockResolvedValue(null),
     pickJunctionAtPoint: vi.fn().mockResolvedValue(null),
     queryElevation: vi.fn().mockResolvedValue({ elevation: 0, grade: 0, grade_pct: 0 }),

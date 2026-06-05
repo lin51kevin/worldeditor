@@ -42,6 +42,10 @@ import { MarkerRenderer } from './markerRenderer';
 import { FlyKeyboardController } from './flyControls';
 import type { RenderableMesh } from './markerRenderer';
 import { isDrawMode, useViewportStore } from '../stores/viewportStore';
+import { SpriteRenderer } from './spriteRenderer';
+import type { SpriteInstance, PaintInstance } from './spriteRenderer';
+import { TextureManager } from './textureManager';
+import { initAssetResolver } from '../utils/assetUrl';
 
 export class ViewportRenderer {
   private device!: GPUDevice;
@@ -65,6 +69,8 @@ export class ViewportRenderer {
   private cameraController = new CameraController();
   private markerRenderer = new MarkerRenderer();
   private flyKeyboard = new FlyKeyboardController();
+  private textureManager: TextureManager | null = null;
+  private spriteRenderer: SpriteRenderer | null = null;
 
   // Road meshes
   private meshes: RenderableMesh[] = [];
@@ -239,6 +245,7 @@ export class ViewportRenderer {
     const tGrid = performance.now();
     this.createBasicPipeline();
     const tBasic = performance.now();
+    this.initSpriteRenderer();
     this.setupMouseControls(canvas);
     const tDone = performance.now();
 
@@ -705,6 +712,8 @@ export class ViewportRenderer {
     this.msaaTexture?.destroy();
     this.gridUniformBuffer?.destroy();
     this.basicUniformBuffer?.destroy();
+    this.spriteRenderer?.destroy();
+    this.textureManager?.destroy();
     // Release the canvas from this device so a subsequent renderer can
     // configure it cleanly without a device-mismatch error.
     this.context?.unconfigure();
@@ -872,6 +881,21 @@ export class ViewportRenderer {
       }
     }
 
+    // Draw road paint textured quads (arrows on road surface)
+    if (this.spriteRenderer?.hasContent()) {
+      // Refresh bind groups if textures finished loading since last frame
+      if (this.spriteRenderer.refreshBindGroups()) {
+        this.markSceneDirty();
+      }
+      this.spriteRenderer.updateUniforms(
+        this.cameraController.computeViewProj(),
+        this.width, this.height,
+        1.0, // sprite scale (1.0 = sizes are in absolute pixels)
+      );
+      this.spriteRenderer.renderPaints(pass);
+      this.spriteRenderer.renderSprites(pass);
+    }
+
     // Draw spline preview curve on top of road surface
     if (this.markerRenderer.curveMeshes.length > 0) {
       pass.setPipeline(this.basicPipeline);
@@ -968,6 +992,45 @@ export class ViewportRenderer {
     if (this._billboardPipeline) return this._billboardPipeline;
     this._billboardPipeline = createBillboardPipelineFn(this.device, this.format, this.basicShaderModule);
     return this._billboardPipeline;
+  }
+
+  /** Initialize the texture manager and sprite renderer. */
+  private manifestReady: Promise<void> = Promise.resolve();
+
+  private initSpriteRenderer(): void {
+    this.textureManager = new TextureManager(this.device);
+    this.spriteRenderer = new SpriteRenderer(this.device, this.textureManager);
+    this.spriteRenderer.init(this.format);
+    // Ensure asset URL resolver is ready before loading manifest
+    this.manifestReady = initAssetResolver().then(() =>
+      this.textureManager!.loadManifest()
+    ).then(() => {
+      console.info('[Renderer] Texture manifest loaded');
+    });
+  }
+
+  /** Wait until texture manifest is loaded. */
+  async waitForManifest(): Promise<void> {
+    return this.manifestReady;
+  }
+
+  /** Upload billboard sprite data (traffic lights, road signs). */
+  uploadSpriteData(sprites: SpriteInstance[]): void {
+    if (!this.spriteRenderer) return;
+    this.spriteRenderer.uploadSprites(sprites);
+    this.markSceneDirty();
+  }
+
+  /** Upload road paint textured quad data. */
+  uploadPaintData(paints: PaintInstance[]): void {
+    if (!this.spriteRenderer) return;
+    this.spriteRenderer.uploadPaints(paints);
+    this.markSceneDirty();
+  }
+
+  /** Get the texture manager (for resolving signal type → texture URL). */
+  getTextureManager(): TextureManager | null {
+    return this.textureManager;
   }
 
   private setupMouseControls(canvas: HTMLCanvasElement): void {
