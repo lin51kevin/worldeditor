@@ -1,0 +1,60 @@
+{
+    "basePath": "/assets/textures",
+    "trafficLights": {
+        "1,000,001": "TrafficLights/StandardTrafficLight.png",
+        "1,000,002": "TrafficLights/WalkingTrafficLight.png",
+        "1,000,011:30": "TrafficLights/ForwardTrafficLight.png",
+        "1,000,011:10": "TrafficLights/TurnLeftTrafficLight.png",
+        "1,000,011:20": "TrafficLights/TurnRightTrafficLight.png",
+        "1,000,013": "TrafficLights/BikingTrafficLight.png",
+        "2,000,011:60": "TrafficLights/TurnUTrafficLight.png",
+        "_default": "TrafficLights/StandardTrafficLight.png"
+    },
+    "roadPaints": {
+        "StraightAheadArrow": "RoadPaints/StraightArrowPaint.png",
+        "LeftTurnArrow": "RoadPaints/LeftTurnArrowPaint.png",
+        "RightTurnArrow": "RoadPaints/RightTurnArrowPaint.png",
+        "UTurnArrow": "RoadPaints/UTurnArrowPaint.png",
+        "StraightOrLeftTurnArrow": "RoadPaints/StraightLeftTurnArrowPaint.png",
+        "StraightOrRightTurnArrow": "RoadPaints/StraightRightTurnArrowPaint.png",
+        "LeftOrRightTurnArrow": "RoadPaints/LeftOrRightTurnArrowPaint.png",
+        "StraightOrLeftOrRightTurnArrow": "RoadPaints/StraightOrLeftOrRightTurnArrowPaint.png",
+        "StraightOrUTurnArrow": "RoadPaints/StraightUTurnArrowPaint.png",
+        "LeftOrUTurnArrow": "RoadPaints/LeftOrUTurnArrowPaint.png",
+        "MergeToLeftLaneArrow": "RoadPaints/MergeToLeftLaneArrowPaint.png",
+        "MergeToRightLaneArrow": "RoadPaints/MergeToRightLaneArrowPaint.png",
+        "BicyclePaint": "RoadPaints/BycyclePaint.png",
+        "PedestrianPaint": "RoadPaints/PedestrianPaint.png",
+        "DisabledPaint": "RoadPaints/DisabledPaint.png",
+        "_default": "RoadPaints/StraightArrowPaint.png"
+    },
+    "roadSigns": {
+        "_prefix": "RoadSigns/",
+        "_suffix": ".png",
+        "_speedLimitBase": "1010203800001413"
+    },
+    "objects": {
+        "CrossHatchArea": "Objects/CrossHatchArea.png",
+        "Curb": "Objects/Curb.png",
+        "FlowerBed": "Objects/FlowerBed.png",
+        "ForwardWaitingArea": "Objects/ForwardWaitingArea.png",
+        "LTypeSignalPole": "Objects/LTypeSignalPole.png",
+        "ParkingSpace": "Objects/ParkingSpace.png",
+        "Pole": "Objects/Pole.png",
+        "RoadGuardrail": "Objects/RoadGuardrail.png",
+        "SidewalkRail": "Objects/SidewalkRail.png",
+        "SignGantry": "Objects/SignGantry.png",
+        "SimpleCrossHatchArea": "Objects/SimpleCrossHatchArea.png",
+        "SimpleSignalPole": "Objects/SimpleSignalPole.png",
+        "SlowDownToYieldLine": "Objects/SlowDownToYieldLine.png",
+        "StopLine": "Objects/StopLine.png",
+        "StopToYieldLine": "Objects/StopToYieldLine.png",
+        "StreetLightPole": "Objects/StreetLightPole.png",
+        "TrafficLightPole": "Objects/TrafficLightPole.png",
+        "TrashBin": "Objects/TrashBin.png",
+        "TTYpeSignalPole": "Objects/TTYpeSignalPole.png",
+        "TurnLeftWaitingArea": "Objects/TurnLeftWaitingArea.png",
+        "WovenArea": "Objects/WovenArea.png",
+        "ZebraStripsArea": "Objects/ZebraStripsArea.png"
+    }
+}
