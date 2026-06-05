@@ -188,7 +188,13 @@ export function useViewportMeshes({
           const spriteInstances = spriteData.sprites.map((s) => ({
             position: s.pos as [number, number, number],
             textureUrl: texMgr.resolveSignalTexture(s.signal_type, s.subtype, s.value) ?? '',
-            size: [Math.max(s.w, s.h) * 28, Math.max(s.w, s.h) * 28] as [number, number],
+            // Size in world units (meters). The renderer passes pixelsPerMeter as
+            // sprite_scale so the billboard scales proportionally with zoom, just
+            // like road geometry. Use at least 0.5 m to keep tiny signals visible.
+            size: [
+              Math.max(s.w, s.h, 0.5),
+              Math.max(s.w, s.h, 0.5),
+            ] as [number, number],
           })).filter((s) => s.textureUrl !== '');
 
           cachedSpriteInstancesRef.current = spriteInstances;
@@ -331,6 +337,10 @@ export function useViewportMeshes({
     const renderer = rendererRef.current;
     if (status !== 'ready') return;
     renderer?.clearVertexCache();
+    // Clear sprite instances and flush GPU billboard state so stale sprites
+    // from the previous project do not bleed into the new one.
+    cachedSpriteInstancesRef.current = [];
+    renderer?.uploadSpriteData([]);
     visibleProjectRef.current = null;
     visibleProjectKeyRef.current = '';
     surfaceDepsRef.current = { roadRefs: new Map(), junctionRefs: new Map() };

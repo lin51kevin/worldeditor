@@ -14,7 +14,7 @@ export interface SpriteInstance {
   position: [number, number, number];
   /** Texture URL path (resolved from manifest). */
   textureUrl: string;
-  /** Display size in world units [width, height]. */
+  /** Display size in world units [width, height] (meters). Renderer converts to pixels via pixelsPerMeter. */
   size: [number, number];
 }
 
@@ -356,8 +356,8 @@ export class SpriteRenderer {
 
     for (const s of sprites) {
       const [px, py, pz] = s.position;
-      const hw = s.size[0] * 0.5; // half width in pixels
-      const hh = s.size[1] * 0.5; // half height in pixels
+      const hw = s.size[0] * 0.5; // half width in world units (meters)
+      const hh = s.size[1] * 0.5; // half height in world units (meters)
 
       // 6 vertices forming 2 triangles (CCW):
       //   0--2    Tri1: 0,1,2   Tri2: 2,1,3

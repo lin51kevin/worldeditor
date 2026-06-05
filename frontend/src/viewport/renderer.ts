@@ -890,7 +890,8 @@ export class ViewportRenderer {
       this.spriteRenderer.updateUniforms(
         this.cameraController.computeViewProj(),
         this.width, this.height,
-        1.0, // sprite scale (1.0 = sizes are in absolute pixels)
+        // Pass pixels-per-meter so billboard offsets (in world units) scale with zoom.
+        1.0 / this.cameraController.getMetersPerPixel(),
       );
       this.spriteRenderer.renderPaints(pass);
       this.spriteRenderer.renderSprites(pass);
