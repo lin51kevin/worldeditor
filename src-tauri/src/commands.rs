@@ -3,7 +3,7 @@
 //! These functions bridge the frontend TypeScript calls to Rust backend logic.
 
 use serde_json::Value;
-use tauri::State;
+use tauri::{Manager, State};
 use we_core::model::Project;
 use we_plugin_core::{PluginStatus, SharedPluginRegistry};
 
@@ -250,18 +250,67 @@ fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result
     Ok(())
 }
 
+/// Resolve the path of the persisted theme file (`<app_config_dir>/theme`).
+///
+/// The frontend stores the active theme in `localStorage`, which the Rust side
+/// cannot read at startup. Persisting the theme to a small config file lets the
+/// backend create the main window with the correct native title-bar colour on
+/// the very first frame, avoiding a dark→light flash.
+pub fn theme_config_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_config_dir().ok().map(|d| d.join("theme"))
+}
+
+/// Read the persisted theme, defaulting to `"dark"` when unavailable.
+pub fn read_persisted_theme(app: &tauri::AppHandle) -> String {
+    theme_config_path(app)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| s == "light" || s == "dark")
+        .unwrap_or_else(|| "dark".to_string())
+}
+
+/// Persist the theme string to the config file (best-effort, non-fatal).
+fn persist_theme(app: &tauri::AppHandle, theme: &str) {
+    if let Some(path) = theme_config_path(app) {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Err(e) = std::fs::write(&path, theme) {
+            log::warn!("Failed to persist theme to {:?}: {}", path, e);
+        }
+    }
+}
+
 /// Set the native window theme (title bar colour) from the frontend.
 ///
 /// Calling `window.setTheme()` via the JS API can silently fail on Windows in
 /// production builds because the call must originate from the main thread.
 /// Routing it through a Tauri command runs on the correct thread reliably.
+///
+/// The chosen theme is also persisted so the backend can recreate the window
+/// with the matching native theme on the next launch.
 #[tauri::command]
 pub fn set_window_theme(window: tauri::WebviewWindow, theme: String) -> Result<(), String> {
     let tauri_theme = match theme.as_str() {
         "light" => Some(tauri::Theme::Light),
         _ => Some(tauri::Theme::Dark),
     };
+    persist_theme(window.app_handle(), &theme);
     window.set_theme(tauri_theme).map_err(|e| e.to_string())
+}
+
+/// Reveal the main window once the frontend has rendered its first themed frame.
+///
+/// The window is created hidden (and NOT maximized) so the user never sees an
+/// unthemed white flash, a wrongly-coloured title bar, or the OS briefly showing
+/// the window to apply the maximized state. Maximizing the still-hidden window
+/// and then showing it makes the fully-styled, maximized UI appear in one step.
+#[tauri::command]
+pub fn show_main_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    let _ = window.maximize();
+    window.show().map_err(|e| e.to_string())?;
+    let _ = window.set_focus();
+    Ok(())
 }
 
 /// Notify the backend that a plugin has been unloaded from the frontend JS context.

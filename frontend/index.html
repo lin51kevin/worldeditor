@@ -27,6 +27,15 @@
       height: 100%;
     }
 
+    /* Default to the dark surface so the very first paint is never white,
+       even before the data-theme attribute is applied. */
+    html,
+    html body,
+    html #root {
+      background: #1e1e1e;
+      color: #cccccc;
+    }
+
     html[data-theme='dark'] body,
     html[data-theme='dark'] #root {
       background: #1e1e1e;

@@ -88,6 +88,39 @@ export function App() {
     initLayout();
   }, [initTheme, initLayout]);
 
+  // Reveal the native window only AFTER the correct native title-bar theme has been
+  // applied and a themed frame has painted. The window is created hidden (see
+  // src-tauri/src/lib.rs), so the user never sees the unthemed white flash, nor the
+  // title-bar colour switching from dark to light on startup. A backend fallback
+  // timer also reveals the window if this effect never runs (e.g. an early error).
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
+    let cancelled = false;
+    const saved = localStorage.getItem(STORAGE_KEYS.THEME);
+    const theme = saved === 'light' ? 'light' : 'dark';
+    void (async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        // Apply the native title-bar theme BEFORE the window becomes visible so the
+        // user never sees the initial colour flip from dark to light.
+        await invoke('set_window_theme', { theme });
+        if (cancelled) return;
+        // Wait two frames so the webview has painted a themed frame, then reveal.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (cancelled) return;
+            void invoke('show_main_window').catch(() => {});
+          });
+        });
+      } catch {
+        /* non-critical: backend fallback timer reveals the window */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Conditionally mount enabled builtin plugins via registry
   useEffect(() => {
     const { suspendPanelUpdates } = usePluginContribStore.getState();
