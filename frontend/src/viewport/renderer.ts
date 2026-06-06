@@ -41,7 +41,7 @@ import { CameraController } from './cameraController';
 import { MarkerRenderer } from './markerRenderer';
 import { FlyKeyboardController } from './flyControls';
 import type { RenderableMesh } from './markerRenderer';
-import { isDrawMode, useViewportStore } from '../stores/viewportStore';
+import { setupRendererInput } from './rendererInputHandler';
 import { SpriteRenderer } from './spriteRenderer';
 import type { SpriteInstance, PaintInstance } from './spriteRenderer';
 import { TextureManager } from './textureManager';
@@ -1035,102 +1035,16 @@ export class ViewportRenderer {
   }
 
   private setupMouseControls(canvas: HTMLCanvasElement): void {
-    // Document-level move/up handlers are attached on mousedown and removed on mouseup,
-    // so pan/orbit continues even when the cursor temporarily leaves the canvas.
-    let onDocMove: ((e: MouseEvent) => void) | null = null;
-    let onDocUp: (() => void) | null = null;
-
-    const detachDocListeners = () => {
-      if (onDocMove) { document.removeEventListener('mousemove', onDocMove); onDocMove = null; }
-      if (onDocUp)   { document.removeEventListener('mouseup', onDocUp); onDocUp = null; }
-    };
-
-    const exitFlyModeCleanup = () => {
-      this.flyKeyboard.detach();
-      useViewportStore.getState().setFlyMode(false);
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (this.cameraController.pointerDragging) return;
-      if (this.markerRenderer.knotCount === 0) return;
-      const rect = canvas.getBoundingClientRect();
-      const sx = e.clientX - rect.left;
-      const sy = e.clientY - rect.top;
-      const hit = this.pickControlPointAtScreen(sx, sy);
-      if (hit?.index !== this.markerRenderer.hovered?.index || hit?.type !== this.markerRenderer.hovered?.type) {
-        this.onControlPointHovered?.(hit);
-        this.refreshSplineMarkers(hit, undefined);
-      }
-    };
-
-    const handleMouseDown = (e: MouseEvent) => {
-      // If clicking on a spline control point (knot or tangent handle), skip camera
-      // drag so the React geometry-edit layer can handle the interaction and
-      // regenerate road mesh during drag.
-      if (e.button === 0 && this.markerRenderer.knotCount >= 2) {
-        const rect = canvas.getBoundingClientRect();
-        const sx = e.clientX - rect.left;
-        const sy = e.clientY - rect.top;
-        const hit = this.pickControlPointAtScreen(sx, sy);
-        if (hit) return;
-      }
-
-      // In draw mode, right-click finalizes the road — skip camera drag.
-      if (e.button === 2 && isDrawMode(useViewportStore.getState().editMode)) return;
-
-      if (!this.cameraController.beginPointerDrag(e.button, e)) return;
-
-      // Fly mode: attach keyboard controller (no pointer lock — avoids browser notification)
-      if (this.cameraController.isFlyMode) {
-        canvas.style.cursor = 'crosshair';
-        this.flyKeyboard.attach(() => this.renderLoop?.wakeUp());
-        useViewportStore.getState().setFlyMode(true);
-        this.renderLoop?.wakeUp();
-      } else {
-        canvas.style.cursor = 'grabbing';
-      }
-
-      detachDocListeners();
-
-      onDocMove = (me: MouseEvent) => {
-        if (!this.cameraController.updatePointerDrag(canvas, me)) {
-          canvas.style.cursor = '';
-          detachDocListeners();
-        }
-      };
-
-      onDocUp = () => {
-        canvas.style.cursor = '';
-        if (this.cameraController.isFlyMode) {
-          exitFlyModeCleanup();
-        }
-        this.cameraController.endPointerDrag();
-        detachDocListeners();
-      };
-
-      document.addEventListener('mousemove', onDocMove);
-      document.addEventListener('mouseup', onDocUp);
-    };
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      this.cameraController.handleWheel(e.deltaY);
-    };
-
-    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
-
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mousedown', handleMouseDown);
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-    canvas.addEventListener('contextmenu', handleContextMenu);
-
-    this.mouseControlsCleanup = () => {
-      detachDocListeners();
-      canvas.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('mousedown', handleMouseDown);
-      canvas.removeEventListener('wheel', handleWheel);
-      canvas.removeEventListener('contextmenu', handleContextMenu);
-    };
+    this.mouseControlsCleanup = setupRendererInput(canvas, {
+      cameraController: this.cameraController,
+      markerRenderer: this.markerRenderer,
+      flyKeyboard: this.flyKeyboard,
+      getRenderLoop: () => this.renderLoop,
+      pickControlPointAtScreen: (sx, sy) => this.pickControlPointAtScreen(sx, sy),
+      refreshSplineMarkers: (hovered, selected) => this.refreshSplineMarkers(hovered, selected),
+      onControlPointHovered: () => this.onControlPointHovered,
+      markSceneDirty: () => this.markSceneDirty(),
+    });
   }
 
   /** Lock camera controls (pan/orbit/zoom) — used during spline knot dragging. */
