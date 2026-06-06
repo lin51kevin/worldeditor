@@ -51,6 +51,9 @@ const rendererMocks = vi.hoisted(() => ({
   applyZoomFactor: vi.fn(),
   clearLinkHighlight: vi.fn(),
   uploadLinkHighlightVertices: vi.fn(),
+  uploadSpriteData: vi.fn(),
+  getTextureManager: vi.fn().mockReturnValue(null),
+  waitForManifest: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../services', () => ({
@@ -104,6 +107,9 @@ vi.mock('../viewport/renderer', () => ({
       applyZoomFactor: rendererMocks.applyZoomFactor,
       clearLinkHighlight: rendererMocks.clearLinkHighlight,
       uploadLinkHighlightVertices: rendererMocks.uploadLinkHighlightVertices,
+      uploadSpriteData: rendererMocks.uploadSpriteData,
+      getTextureManager: rendererMocks.getTextureManager,
+      waitForManifest: rendererMocks.waitForManifest,
     })),
     { isSupported: rendererMocks.isSupported },
   ),
