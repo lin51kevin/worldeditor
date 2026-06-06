@@ -1,5 +1,5 @@
 /// Select a lane surface color based on the active color mode.
-pub(super) fn select_lane_color(
+pub(crate) fn select_lane_color(
     color_mode: &str,
     lane_type: we_core::model::LaneType,
     road_idx: usize,
@@ -12,7 +12,7 @@ pub(super) fn select_lane_color(
 }
 
 /// Generate a distinct color for a road by cycling hue using the golden angle.
-pub(super) fn road_hue_color(road_idx: usize) -> [f32; 4] {
+pub(crate) fn road_hue_color(road_idx: usize) -> [f32; 4] {
     let hue = (road_idx as f32 * 137.508) % 360.0;
     hsv_to_rgba(hue, 0.55, 0.62)
 }

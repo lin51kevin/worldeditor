@@ -2,7 +2,7 @@ use super::helpers::sum_widths_at_ds;
 
 /// Generate a colored triangle strip for one lane.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-pub(super) fn gen_lane_strip(
+pub(crate) fn gen_lane_strip(
     ref_pts: &[&we_core::geometry::eval::RefLinePoint],
     widths: &[we_core::model::LaneWidth],
     section_s: f64,
@@ -68,7 +68,7 @@ pub(super) fn gen_lane_strip(
 }
 
 /// Generate a default ribbon when no lane section data is available.
-pub(super) fn gen_default_ribbon(
+pub(crate) fn gen_default_ribbon(
     ref_pts: &[we_core::geometry::eval::RefLinePoint],
     elevations: &[we_core::model::Elevation],
     half_width: f64,

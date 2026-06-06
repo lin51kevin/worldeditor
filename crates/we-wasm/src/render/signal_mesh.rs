@@ -2,7 +2,7 @@
 ///
 /// `subtype` selects the polygon template. The result is a flat list of 7-float
 /// vertex records ready for GPU upload.
-pub(super) fn arrow_triangles(
+pub(crate) fn arrow_triangles(
     subtype: &str,
     cx: f32,
     cy: f32,
@@ -140,7 +140,7 @@ pub(super) fn arrow_triangles(
 }
 
 /// Marker color for vertical sign types.
-pub(super) fn sign_marker_color(signal_type: &str) -> [f32; 4] {
+pub(crate) fn sign_marker_color(signal_type: &str) -> [f32; 4] {
     match signal_type {
         t if t.starts_with("1000") => [0.2, 0.8, 0.2, 0.9], // traffic lights → green
         "1010203800001413" | "1010203900001613" => [0.9, 0.2, 0.2, 0.9], // speed limit → red
