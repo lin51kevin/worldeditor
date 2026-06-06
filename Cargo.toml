@@ -40,4 +40,4 @@ we-native = { path = "crates/we-native" }
 [profile.release]
 lto = true
 codegen-units = 1
-opt-level = 'z'
+opt-level = 's'
