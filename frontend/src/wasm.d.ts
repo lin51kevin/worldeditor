@@ -153,4 +153,50 @@ declare module '../../wasm/pkg/we_wasm' {
 
   // Validation
   export function validate_project(project_json: string): string;
+  export function project_is_valid(project_json: string): boolean;
+  export function validate_topology(project_json: string): string;
+  export function repair_topology(project_json: string): { project: string; actions: string[] };
+
+  // Road transform operations
+  export function translate_road(project_json: string, road_id: string, dx: number, dy: number, dz: number): string;
+  export function rotate_road(project_json: string, road_id: string, pivot_x: number, pivot_y: number, angle_rad: number): string;
+  export function compute_road_width(road_json: string, s: number): { left: number; right: number };
+  export function sample_lane_boundary(road_json: string, section_s: number, lane_id: number, step: number): string;
+
+  // Junction extended operations
+  export function compute_junction_area(project_json: string, junction_id: string): { id: string; center: [number, number]; boundary: Array<[number, number]>; area: number } | null;
+  export function optimize_junction(project_json: string, junction_id: string): string | null;
+  export function get_junction_arms(project_json: string, junction_id: string): string;
+  export function point_in_junction(project_json: string, junction_id: string, x: number, y: number): boolean;
+  export function generate_default_lane_section(s: number, n_lanes_per_side: number, lane_width: number, with_shoulder: boolean): string;
+
+  // Spline/geometry utilities
+  export function compute_soft_selection(spline_json: string, selected_index: number, radius: number, falloff_type: string): string;
+  export function pick_spline_knot(spline_json: string, x: number, y: number, threshold: number): { index: number; distance: number } | null;
+
+  // GIS affine transform
+  export function fit_affine_from_gcps(gcps_json: string): { a00: number; a01: number; b0: number; a10: number; a11: number; b1: number };
+  export function apply_affine_transform(transform_json: string, source_x: number, source_y: number): { x: number; y: number };
+
+  // Spatial query
+  export function spatial_query_point(project_json: string, x: number, y: number, radius: number): Array<{ id: string; kind: string; aabb: unknown }>;
+
+  // Road mesh pipeline
+  export function generate_road_mesh_from_json(road_json: string, sample_step: number): string;
+
+  // I/O
+  export function export_signals_to_json(project_json: string): string;
+
+  // Point cloud (WASM path — desktop uses native, web uses these)
+  export function load_point_cloud(bytes: Uint8Array, format: string): number;
+  export function free_point_cloud(handle: number): void;
+  export function point_cloud_summary(handle: number): { count: number; origin: [number, number, number]; min: [number, number, number]; max: [number, number, number]; has_intensity: boolean; has_rgb: boolean };
+  export function point_cloud_render_buffer(handle: number, color_mode: string, max_points: number): Float32Array;
+  export function point_cloud_extract_ground(handle: number, config_json: string): unknown;
+  export function point_cloud_sample_ground(handle: number, x: number, y: number): number | undefined;
+  export function point_cloud_extract_markings(handle: number, config_json: string): unknown;
+  export function point_cloud_vectorize(handle: number, polylines_json: string, config_json: string, use_ground: boolean): unknown;
+
+  // Version
+  export function version(): string;
 }
