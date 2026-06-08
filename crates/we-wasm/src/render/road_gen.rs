@@ -2,7 +2,9 @@
 
 use wasm_bindgen::prelude::*;
 
-use super::{eval_lane_offset, gen_default_ribbon, gen_lane_strip, road_hue_color, select_lane_color};
+use super::{
+    eval_lane_offset, gen_default_ribbon, gen_lane_strip, road_hue_color, select_lane_color,
+};
 
 /// Generate road mesh vertices from a project JSON. Returns vertex data as Float32Array.
 ///

@@ -184,7 +184,7 @@ jobs:
           echo "All coverage thresholds passed!"
       - name: Generate coverage report
         if: matrix.run_coverage
-        run: cargo llvm-cov report --workspace
+        run: cargo llvm-cov report
 
   test-wasm:
     name: Test WASM

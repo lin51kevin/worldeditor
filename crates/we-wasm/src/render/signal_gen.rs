@@ -133,8 +133,8 @@ pub fn generate_sprite_data(project_json: &str) -> Result<JsValue, JsError> {
             // - Chinese GB/T road signs: 10+ digit numeric codes (e.g. "1010203800001413")
             let type_str = &signal.signal_type;
             let is_traffic_light = type_str.contains(',');
-            let is_chinese_sign = type_str.len() >= 10
-                && type_str.chars().all(|c| c.is_ascii_digit());
+            let is_chinese_sign =
+                type_str.len() >= 10 && type_str.chars().all(|c| c.is_ascii_digit());
 
             if !is_traffic_light && !is_chinese_sign {
                 continue;

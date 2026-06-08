@@ -21,8 +21,8 @@ mod tests {
     use we_core::spline::{EditableSpline, SplineKnot, SplineOutputMode};
 
     use super::*;
-    use crate::editor::Command;
     use crate::EditorError;
+    use crate::editor::Command;
 
     fn assert_projects_equal(actual: &Project, expected: &Project) {
         assert_eq!(to_value(actual).unwrap(), to_value(expected).unwrap());
