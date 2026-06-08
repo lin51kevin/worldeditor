@@ -471,14 +471,16 @@ pub(super) fn emit_crosswalk_stripes(
     // When length = 0 || width = 0, always apply hdg (original junction_crosswalk_signal
     // behavior).
     let apply_hdg = if obj_length > 0.0 && obj_width > 0.0 {
-        let (u_min, u_max) = corners.iter().fold(
-            (f64::INFINITY, f64::NEG_INFINITY),
-            |(mn, mx), c| (mn.min(c.x), mx.max(c.x)),
-        );
-        let (v_min, v_max) = corners.iter().fold(
-            (f64::INFINITY, f64::NEG_INFINITY),
-            |(mn, mx), c| (mn.min(c.y), mx.max(c.y)),
-        );
+        let (u_min, u_max) = corners
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
+                (mn.min(c.x), mx.max(c.x))
+            });
+        let (v_min, v_max) = corners
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
+                (mn.min(c.y), mx.max(c.y))
+            });
         (u_max - u_min) > (v_max - v_min)
     } else {
         true

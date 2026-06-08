@@ -53,7 +53,10 @@ pub fn run() {
             // very first composited frame is never white.
             let (initial_theme, bg_color) =
                 match commands::read_persisted_theme(app.handle()).as_str() {
-                    "light" => (tauri::Theme::Light, tauri::window::Color(243, 243, 243, 255)),
+                    "light" => (
+                        tauri::Theme::Light,
+                        tauri::window::Color(243, 243, 243, 255),
+                    ),
                     _ => (tauri::Theme::Dark, tauri::window::Color(30, 30, 30, 255)),
                 };
             //
@@ -110,10 +113,9 @@ pub fn run() {
                 );
             }
 
-            let shared_registry =
-                we_plugin_core::SharedPluginRegistry::new(we_plugin_core::PluginRegistry::new(
-                    &plugins_dir,
-                ));
+            let shared_registry = we_plugin_core::SharedPluginRegistry::new(
+                we_plugin_core::PluginRegistry::new(&plugins_dir),
+            );
             let registry_handle = shared_registry.inner().clone();
             app.manage(shared_registry);
             std::thread::spawn(move || {
