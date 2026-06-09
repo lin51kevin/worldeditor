@@ -16,7 +16,7 @@ vi.mock('../../utils/dialog', () => ({
 
 vi.mock('../../buildInfo', () => ({
   buildInfo: {
-    version: '0.2.0',
+    version: '0.3.0',
     buildTime: '2026-05-26T07:00:00.000Z',
     gitCommit: 'abc1234',
     gitBranch: 'main',
@@ -63,7 +63,7 @@ describe('menuDefinitions helpers', () => {
 
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('0.2.0'),
+      expect.stringContaining('0.3.0'),
       'About',
     );
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
@@ -73,7 +73,7 @@ describe('menuDefinitions helpers', () => {
     );
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining('0.2.0'),
+      expect.stringContaining('0.3.0'),
       'Version Info',
     );
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(3, 'Manual content', 'User Manual');

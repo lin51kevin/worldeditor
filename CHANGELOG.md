@@ -5,6 +5,51 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ---
 
+<a name="0.3.0"></a>
+## [0.3.0] — 2026-06-09
+
+### Features
+
+- **pointcloud**: 新增点云可视化功能 — 核心算法 + WASM 绑定、Tauri IPC 二进制渲染缓冲、Web Worker、视口渲染与面板 UI ([`c7aebd4`], [`e555096`], [`162ce5f`], [`ce6d96d`])
+- **render**: 新增 WebGPU sprite 渲染器，支持 PNG 纹理 ([`3acdcf4`])
+- **render/wasm**: 从信号与标线物体生成 sprite 数据 ([`128e959`])
+- **templates**: 模板面板新增 PNG 缩略图支持 ([`f6e2081`])
+- **frontend**: 新增视口快照导出对话框 + 道路 addRoads + 交叉口/渲染改进 ([`434158e`], [`bb2b87f`])
+- **wasm**: 扩展新增 WASM 导出的 TypeScript 声明 ([`05ea710`])
+- **build**: Phase 3 stub 模块与 beta 插件改由构建标志门控 ([`462e887`])
+
+### Fixes
+
+- **tauri**: 修复生产环境资源加载（移除 bundle externalization） ([`094da2a`])
+- **tauri**: 消除启动闪烁与双窗口效果 ([`0217902`])
+- **render**: 修复 sprite billboard 缩放与文件切换清理 ([`f42f2a0`])
+- **viewport**: 加载空项目时清除挂起的自动适配 ([`1396de6`])
+- **ci**: 修复 rustfmt 违规与 cargo-llvm-cov report 标志 ([`6d89b0d`])
+
+### Performance
+
+- **frontend**: 缓存 PropertyPanel 道路/信号/物体查找 ([`14e1c87`])
+- **frontend**: 缓存已有道路顶点修复螺旋绘制预览卡顿 ([`eb760af`])
+
+### Refactor
+
+- **viewport**: 提取 setupMouseControls 到 rendererInputHandler ([`a52a123`])
+- **we-wasm**: 拆分 road_gen 与 signal_gen 渲染子模块 ([`93ce42f`])
+- **we-service**: 将 lane/road 命令文件拆分为子目录 ([`5ee8a54`])
+- **pointcloud**: 内联样式提取到 CSS；新增斑马线 fixture ([`14fd326`])
+
+### Build & CI
+
+- **build**: release opt-level 由 'z' 改为 's' ([`04acc6a`])
+- **ci**: 启用覆盖率门禁并新增 lint job ([`da32174`])
+- **tauri**: 桌面构建移除 devtools feature ([`5eb623e`])
+- **assets**: 新增交通信号、道路与交通灯 PNG 纹理 ([`98f13b8`])
+
+### Tests
+
+- **viewport**: 新增 WebGPU stubs 与单元测试 ([`fb47995`])
+- **we-server**: 新增 auth 中间件测试 ([`576dc77`])
+
 <a name="0.2.0"></a>
 ## [0.2.0] — 2026-05-25
 

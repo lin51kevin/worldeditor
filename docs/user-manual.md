@@ -4,7 +4,7 @@
 
 WorldEditor is an autonomous driving road network editor that supports creating, editing, and exporting OpenDRIVE-format HD maps. It runs as a native desktop application (Tauri) and in web browsers (WASM).
 
-**Current Version**: 0.2.0 (Phase 1 — Feature Development)
+**Current Version**: 0.3.0 (Phase 2 — Point Cloud, 3D Models & Collaboration)
 
 ### Feature Status Legend
 
