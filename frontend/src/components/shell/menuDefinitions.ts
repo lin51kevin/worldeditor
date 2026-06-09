@@ -1,6 +1,12 @@
 import type { MenuItemContrib } from '../../stores/pluginContribStore';
-import { showAlert } from '../../utils/dialog';
+import { showAlert, showConfirm } from '../../utils/dialog';
 import { buildInfo } from '../../buildInfo';
+import {
+  checkDesktopUpdate,
+  checkForUpdate,
+  installDesktopUpdate,
+  isDesktopRuntime,
+} from '../../services/updateService';
 
 export type TranslateFn = (key: string) => string;
 
@@ -46,8 +52,42 @@ export async function showUserManual(t: TranslateFn) {
 }
 
 export async function checkForUpdates(t: TranslateFn) {
-  // TODO: [Phase D4] Implement real version check via GitHub Releases API
-  await showAlert('Update check: coming in a future version.', t('menu.checkForUpdates'));
+  const title = t('menu.checkForUpdates');
+
+  // Desktop (Tauri): signed download + install via tauri-plugin-updater.
+  if (isDesktopRuntime()) {
+    try {
+      const update = await checkDesktopUpdate();
+      if (!update) {
+        await showAlert(t('update.upToDate'), title);
+        return;
+      }
+      const message = [`${t('update.available')} v${update.version}`, '', update.body ?? '']
+        .join('\n')
+        .trim();
+      const proceed = await showConfirm(`${message}\n\n${t('update.installPrompt')}`, title);
+      if (!proceed) return;
+      // Downloads, verifies the signature, installs, then relaunches the app.
+      await installDesktopUpdate(update);
+    } catch {
+      await showAlert(t('update.error'), title);
+    }
+    return;
+  }
+
+  // Web / non-Tauri: notify-only fallback with a download link.
+  const info = await checkForUpdate();
+  if (!info) {
+    await showAlert(t('update.upToDate'), title);
+    return;
+  }
+  const message = [`${t('update.available')} v${info.latestVersion}`, '', info.releaseNotes]
+    .join('\n')
+    .trim();
+  const goDownload = await showConfirm(`${message}\n\n${t('update.downloadPrompt')}`, title);
+  if (goDownload) {
+    window.open(info.releaseUrl, '_blank', 'noopener,noreferrer');
+  }
 }
 
 function toPluginMenuItem(item: MenuItemContrib, t: TranslateFn): MenuItem {

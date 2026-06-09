@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { showAlert } from '../../utils/dialog';
+import { showAlert, showConfirm } from '../../utils/dialog';
+import {
+  checkDesktopUpdate,
+  checkForUpdate,
+  installDesktopUpdate,
+  isDesktopRuntime,
+  type DesktopUpdate,
+} from '../../services/updateService';
 import {
   appendPluginItems,
   appendRoadItemsToEdit,
@@ -12,6 +19,14 @@ import {
 
 vi.mock('../../utils/dialog', () => ({
   showAlert: vi.fn().mockResolvedValue(undefined),
+  showConfirm: vi.fn().mockResolvedValue(false),
+}));
+
+vi.mock('../../services/updateService', () => ({
+  isDesktopRuntime: vi.fn(() => false),
+  checkForUpdate: vi.fn().mockResolvedValue(null),
+  checkDesktopUpdate: vi.fn().mockResolvedValue(null),
+  installDesktopUpdate: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../buildInfo', () => ({
@@ -79,8 +94,65 @@ describe('menuDefinitions helpers', () => {
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(3, 'Manual content', 'User Manual');
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
       4,
-      'Update check: coming in a future version.',
+      'update.upToDate',
       'Check for Updates',
+    );
+  });
+
+  it('installs a desktop update after the user confirms', async () => {
+    const update = {
+      version: '0.4.0',
+      currentVersion: '0.3.0',
+      body: 'New stuff',
+      downloadAndInstall: vi.fn(),
+    } as unknown as DesktopUpdate;
+    vi.mocked(isDesktopRuntime).mockReturnValue(true);
+    vi.mocked(checkDesktopUpdate).mockResolvedValue(update);
+    vi.mocked(showConfirm).mockResolvedValue(true);
+
+    await checkForUpdates(t);
+
+    expect(checkDesktopUpdate).toHaveBeenCalledTimes(1);
+    expect(installDesktopUpdate).toHaveBeenCalledWith(update);
+  });
+
+  it('skips installation when the user declines a desktop update', async () => {
+    const update = { version: '0.4.0', currentVersion: '0.3.0', downloadAndInstall: vi.fn() } as unknown as DesktopUpdate;
+    vi.mocked(isDesktopRuntime).mockReturnValue(true);
+    vi.mocked(checkDesktopUpdate).mockResolvedValue(update);
+    vi.mocked(showConfirm).mockResolvedValue(false);
+
+    await checkForUpdates(t);
+
+    expect(installDesktopUpdate).not.toHaveBeenCalled();
+  });
+
+  it('reports the error when a desktop update check throws', async () => {
+    vi.mocked(isDesktopRuntime).mockReturnValue(true);
+    vi.mocked(checkDesktopUpdate).mockRejectedValue(new Error('network down'));
+
+    await checkForUpdates(t);
+
+    expect(vi.mocked(showAlert)).toHaveBeenCalledWith('update.error', 'Check for Updates');
+    expect(installDesktopUpdate).not.toHaveBeenCalled();
+  });
+
+  it('opens the download page on web when an update is available and confirmed', async () => {
+    vi.mocked(isDesktopRuntime).mockReturnValue(false);
+    vi.mocked(checkForUpdate).mockResolvedValue({
+      latestVersion: '0.4.0',
+      releaseUrl: 'https://github.com/lin51kevin/worldeditor/releases/tag/v0.4.0',
+      releaseNotes: 'notes',
+    });
+    vi.mocked(showConfirm).mockResolvedValue(true);
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+
+    await checkForUpdates(t);
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://github.com/lin51kevin/worldeditor/releases/tag/v0.4.0',
+      '_blank',
+      'noopener,noreferrer',
     );
   });
 

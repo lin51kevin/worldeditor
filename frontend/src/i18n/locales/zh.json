@@ -68,6 +68,13 @@
     "checkForUpdates": "检查更新",
     "welcome": "欢迎"
   },
+  "update": {
+    "upToDate": "当前已是最新版本。",
+    "available": "发现新版本：",
+    "installPrompt": "是否立即下载并安装？完成后应用将自动重启。",
+    "downloadPrompt": "是否立即打开下载页面？",
+    "error": "检查更新失败，请稍后重试。"
+  },
   "toolbar": {
     "select": "选择",
     "pan": "平移",

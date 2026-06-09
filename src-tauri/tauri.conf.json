@@ -1,6 +1,6 @@
 {
   "productName": "WorldEditor",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "identifier": "com.worldeditor",
   "build": {
     "frontendDist": "../frontend/dist",
@@ -16,6 +16,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -32,6 +33,12 @@
     "dialog": null,
     "shell": {
       "open": true
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/lin51kevin/worldeditor/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ5ODgxNzVGQzA2MzlFNzAKUldSd25tUEFYeGVJMmRiM3lxa3lHZGhJT3hEYi9ZbWRxaVdDRVV4eWNxVmNqMmNuTTFvd0N4cEMK"
     }
   }
 }

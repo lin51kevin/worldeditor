@@ -3,7 +3,7 @@ import { APP_VERSION } from './index';
 import { checkForUpdate } from './updateService';
 
 const GITHUB_RELEASES_URL =
-  'https://api.github.com/repos/worldeditor-dev/worldeditor-next/releases/latest';
+  'https://api.github.com/repos/lin51kevin/worldeditor/releases/latest';
 
 function releaseResponse(tagName: string, overrides?: { body?: string | null; html_url?: string }) {
   return new Response(
@@ -38,14 +38,14 @@ describe('checkForUpdate', () => {
   it('returns update information when a newer release is available', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       releaseResponse('v0.4.0', {
-        html_url: 'https://github.com/worldeditor-dev/worldeditor-next/releases/tag/v0.4.0',
+        html_url: 'https://github.com/lin51kevin/worldeditor/releases/tag/v0.4.0',
         body: 'Bug fixes and improvements',
       }),
     );
 
     await expect(checkForUpdate()).resolves.toEqual({
       latestVersion: '0.4.0',
-      releaseUrl: 'https://github.com/worldeditor-dev/worldeditor-next/releases/tag/v0.4.0',
+      releaseUrl: 'https://github.com/lin51kevin/worldeditor/releases/tag/v0.4.0',
       releaseNotes: 'Bug fixes and improvements',
     });
   });

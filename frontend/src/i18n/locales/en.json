@@ -68,6 +68,13 @@
     "checkForUpdates": "Check for Updates",
     "welcome": "Welcome"
   },
+  "update": {
+    "upToDate": "You are using the latest version.",
+    "available": "A new version is available:",
+    "installPrompt": "Download and install it now? The app will restart automatically.",
+    "downloadPrompt": "Open the download page now?",
+    "error": "Failed to check for updates. Please try again later."
+  },
   "toolbar": {
     "select": "Select",
     "pan": "Pan",
