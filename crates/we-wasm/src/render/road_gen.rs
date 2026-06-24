@@ -49,117 +49,168 @@ pub(super) fn generate_road_vertices_from_project(
     sample_step: f64,
     color_mode: &str,
 ) -> Result<Vec<f32>, JsError> {
-    use we_core::geometry::eval::{
-        evaluate_elevation, evaluate_lane_width, offset_point, sample_road_reference_line,
-    };
-
     let mut all_floats = Vec::new();
 
     for (road_idx, road) in project.roads.iter().enumerate() {
-        if road.render_hidden {
-            continue;
-        }
-
-        let ref_pts = sample_road_reference_line(road, sample_step);
-        if ref_pts.len() < 2 {
-            continue;
-        }
-
-        let mut road_verts: Vec<[f32; 7]> = Vec::new();
-
-        for section in &road.lane_sections {
-            if section.render_hidden {
-                continue;
-            }
-
-            let section_end_s = road
-                .lane_sections
-                .iter()
-                .find(|ls| ls.s > section.s + 1e-9)
-                .map(|ls| ls.s)
-                .unwrap_or(road.length);
-
-            let section_pts: Vec<_> = ref_pts
-                .iter()
-                .filter(|p| p.s >= section.s - 1e-9 && p.s <= section_end_s + 1e-9)
-                .collect();
-
-            if section_pts.len() < 2 {
-                continue;
-            }
-
-            // Right lanes (negative IDs, inner to outer)
-            let mut right_sorted: Vec<_> = section.right.iter().collect();
-            right_sorted.sort_by_key(|l| l.id.abs());
-            let mut right_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
-            for lane in &right_sorted {
-                if !lane.render_hidden {
-                    let color = select_lane_color(color_mode, lane.lane_type, road_idx);
-                    road_verts.extend(gen_lane_strip(
-                        &section_pts,
-                        &lane.width,
-                        section.s,
-                        &road.elevation_profile,
-                        &road.lane_offsets,
-                        &right_prev_widths,
-                        false,
-                        color,
-                        &evaluate_elevation,
-                        &evaluate_lane_width,
-                        &eval_lane_offset,
-                        &offset_point,
-                    ));
-                }
-                right_prev_widths.push(&lane.width);
-            }
-
-            // Left lanes (positive IDs, inner to outer)
-            let mut left_sorted: Vec<_> = section.left.iter().collect();
-            left_sorted.sort_by_key(|l| l.id);
-            let mut left_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
-            for lane in &left_sorted {
-                if !lane.render_hidden {
-                    let color = select_lane_color(color_mode, lane.lane_type, road_idx);
-                    road_verts.extend(gen_lane_strip(
-                        &section_pts,
-                        &lane.width,
-                        section.s,
-                        &road.elevation_profile,
-                        &road.lane_offsets,
-                        &left_prev_widths,
-                        true,
-                        color,
-                        &evaluate_elevation,
-                        &evaluate_lane_width,
-                        &eval_lane_offset,
-                        &offset_point,
-                    ));
-                }
-                left_prev_widths.push(&lane.width);
-            }
-        }
-
-        // Fall back to default gray ribbon when no lane sections are defined
-        if road_verts.is_empty() && road.lane_sections.is_empty() {
-            let ribbon_color = match color_mode {
-                "single" => [0.45f32, 0.45, 0.45, 1.0],
-                "byRoad" => road_hue_color(road_idx),
-                _ => [0.35, 0.35, 0.38, 1.0],
-            };
-            road_verts.extend(gen_default_ribbon(
-                &ref_pts,
-                &road.elevation_profile,
-                3.5,
-                ribbon_color,
-            ));
-        }
-
+        let road_verts = build_road_surface_vertices(road, road_idx, sample_step, color_mode);
         for v in &road_verts {
             all_floats.extend_from_slice(v);
         }
     }
 
     Ok(all_floats)
+}
+
+/// Generate the per-lane-colored surface vertices for a single road.
+///
+/// Mirrors one iteration of [`generate_road_vertices_from_project`]'s road loop.
+/// `road_idx` is the road's position in the project — required so that the
+/// `"byRoad"` palette (golden-angle hue per index) matches the full-project
+/// output exactly, making single-road regeneration splice-compatible.
+pub(super) fn build_road_surface_vertices(
+    road: &we_core::model::Road,
+    road_idx: usize,
+    sample_step: f64,
+    color_mode: &str,
+) -> Vec<[f32; 7]> {
+    use we_core::geometry::eval::{
+        evaluate_elevation, evaluate_lane_width, offset_point, sample_road_reference_line,
+    };
+
+    if road.render_hidden {
+        return Vec::new();
+    }
+
+    let ref_pts = sample_road_reference_line(road, sample_step);
+    if ref_pts.len() < 2 {
+        return Vec::new();
+    }
+
+    let mut road_verts: Vec<[f32; 7]> = Vec::new();
+
+    for section in &road.lane_sections {
+        if section.render_hidden {
+            continue;
+        }
+
+        let section_end_s = road
+            .lane_sections
+            .iter()
+            .find(|ls| ls.s > section.s + 1e-9)
+            .map(|ls| ls.s)
+            .unwrap_or(road.length);
+
+        let section_pts: Vec<_> = ref_pts
+            .iter()
+            .filter(|p| p.s >= section.s - 1e-9 && p.s <= section_end_s + 1e-9)
+            .collect();
+
+        if section_pts.len() < 2 {
+            continue;
+        }
+
+        // Right lanes (negative IDs, inner to outer)
+        let mut right_sorted: Vec<_> = section.right.iter().collect();
+        right_sorted.sort_by_key(|l| l.id.abs());
+        let mut right_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
+        for lane in &right_sorted {
+            if !lane.render_hidden {
+                let color = select_lane_color(color_mode, lane.lane_type, road_idx);
+                road_verts.extend(gen_lane_strip(
+                    &section_pts,
+                    &lane.width,
+                    section.s,
+                    &road.elevation_profile,
+                    &road.lane_offsets,
+                    &right_prev_widths,
+                    false,
+                    color,
+                    &evaluate_elevation,
+                    &evaluate_lane_width,
+                    &eval_lane_offset,
+                    &offset_point,
+                ));
+            }
+            right_prev_widths.push(&lane.width);
+        }
+
+        // Left lanes (positive IDs, inner to outer)
+        let mut left_sorted: Vec<_> = section.left.iter().collect();
+        left_sorted.sort_by_key(|l| l.id);
+        let mut left_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
+        for lane in &left_sorted {
+            if !lane.render_hidden {
+                let color = select_lane_color(color_mode, lane.lane_type, road_idx);
+                road_verts.extend(gen_lane_strip(
+                    &section_pts,
+                    &lane.width,
+                    section.s,
+                    &road.elevation_profile,
+                    &road.lane_offsets,
+                    &left_prev_widths,
+                    true,
+                    color,
+                    &evaluate_elevation,
+                    &evaluate_lane_width,
+                    &eval_lane_offset,
+                    &offset_point,
+                ));
+            }
+            left_prev_widths.push(&lane.width);
+        }
+    }
+
+    // Fall back to default gray ribbon when no lane sections are defined
+    if road_verts.is_empty() && road.lane_sections.is_empty() {
+        let ribbon_color = match color_mode {
+            "single" => [0.45f32, 0.45, 0.45, 1.0],
+            "byRoad" => road_hue_color(road_idx),
+            _ => [0.35, 0.35, 0.38, 1.0],
+        };
+        road_verts.extend(gen_default_ribbon(
+            &ref_pts,
+            &road.elevation_profile,
+            3.5,
+            ribbon_color,
+        ));
+    }
+
+    road_verts
+}
+
+/// Generate the per-lane-colored surface vertices for a single road, looked up
+/// by id from the cached project (avoids JSON serialization).
+///
+/// Requires `set_project_cache()` to have been called previously. Returns an
+/// empty vec when the road id is not present. The output is byte-identical to
+/// the corresponding road's slice in [`generate_road_vertices_cached`], so the
+/// frontend can splice it into the merged surface buffer for incremental,
+/// single-road mesh updates during drag-edit.
+#[wasm_bindgen]
+pub fn generate_single_road_surface_vertices_cached(
+    road_id: &str,
+    sample_step: f64,
+    color_mode: &str,
+) -> Result<Vec<f32>, JsError> {
+    use crate::picking::with_project_cache;
+
+    with_project_cache(|cache| {
+        let Some((road_idx, road)) = cache
+            .project
+            .roads
+            .iter()
+            .enumerate()
+            .find(|(_, r)| r.id == road_id)
+        else {
+            return Ok(Vec::new());
+        };
+        let road_verts = build_road_surface_vertices(road, road_idx, sample_step, color_mode);
+        let mut floats = Vec::with_capacity(road_verts.len() * 7);
+        for v in &road_verts {
+            floats.extend_from_slice(v);
+        }
+        Ok(floats)
+    })
 }
 
 fn build_single_road_preview_vertices(
@@ -431,5 +482,69 @@ mod tests {
             "Single-lane preview should stay 3.5m wide, got {}",
             mesh_width(&vertices)
         );
+    }
+
+    /// The cached single-road surface generator must produce output identical to
+    /// that road's slice in the full-project mesh, so the frontend can splice it
+    /// in place for incremental single-road updates.
+    #[test]
+    fn test_single_road_surface_cached_matches_full_project_slice() {
+        use we_core::model::{Geometry, GeometryType, Project, Road};
+
+        let make_road = |id: &str, y: f64| {
+            Road::from_centerline(
+                id,
+                vec![Geometry {
+                    s: 0.0,
+                    x: 0.0,
+                    y,
+                    hdg: 0.0,
+                    length: 20.0,
+                    geo_type: GeometryType::Line,
+                }],
+            )
+        };
+        let project = Project {
+            roads: vec![make_road("road-0", 0.0), make_road("road-1", 50.0)],
+            ..Project::default()
+        };
+        let json = serde_json::to_string(&project).unwrap();
+
+        let full = generate_road_vertices(&json, 2.0, "byLaneType").unwrap();
+
+        crate::picking::set_project_cache(&json).unwrap();
+        let r0 = generate_single_road_surface_vertices_cached("road-0", 2.0, "byLaneType").unwrap();
+        let r1 = generate_single_road_surface_vertices_cached("road-1", 2.0, "byLaneType").unwrap();
+
+        // Roads concatenate in project order, so r0 ++ r1 == full project mesh.
+        let mut spliced = r0.clone();
+        spliced.extend_from_slice(&r1);
+        assert_eq!(full, spliced);
+        assert!(!r0.is_empty() && !r1.is_empty());
+    }
+
+    #[test]
+    fn test_single_road_surface_cached_unknown_id_returns_empty() {
+        use we_core::model::{Geometry, GeometryType, Project, Road};
+
+        let project = Project {
+            roads: vec![Road::from_centerline(
+                "road-0",
+                vec![Geometry {
+                    s: 0.0,
+                    x: 0.0,
+                    y: 0.0,
+                    hdg: 0.0,
+                    length: 20.0,
+                    geo_type: GeometryType::Line,
+                }],
+            )],
+            ..Project::default()
+        };
+        let json = serde_json::to_string(&project).unwrap();
+        crate::picking::set_project_cache(&json).unwrap();
+
+        let verts = generate_single_road_surface_vertices_cached("nope", 2.0, "byLaneType").unwrap();
+        assert!(verts.is_empty());
     }
 }
