@@ -99,23 +99,6 @@ pub struct SpatialIndex {
 }
 
 impl SpatialIndex {
-    // TODO(perf): Incremental spatial index update
-    //
-    // Currently `build` performs a full reconstruction every call. When only a
-    // single road changes (e.g. during drag-edit), the entire index is rebuilt.
-    // Future optimisation: incrementally update only affected cells.
-    //
-    // Proposed algorithm:
-    //   1. On road change, compute old & new AABB for the modified road.
-    //   2. Determine which grid cells overlap the union of old and new AABBs.
-    //   3. For each affected cell: remove old entry index, insert new entry index.
-    //   4. If the road was removed entirely, delete its entry from `entries` and
-    //      patch all indices (or use a generational handle scheme to avoid reindexing).
-    //   5. If the road was added, append to `entries` and insert into relevant cells.
-    //
-    // This reduces amortised cost from O(N) to O(k) where k = number of roads
-    // per affected cell (typically 2–5).
-
     /// Build a spatial index from a project.
     ///
     /// `cell_size` controls the grid resolution. A typical value is 50–200 meters.
@@ -208,6 +191,28 @@ impl SpatialIndex {
         self.id_index.get(id).map(|&idx| self.entries[idx].aabb)
     }
 
+    /// Incrementally move an already-indexed element to a new bounding box.
+    ///
+    /// Removes the element's index from every grid cell its **old** box covered
+    /// and re-inserts it into the cells its **new** box covers, keeping the
+    /// stable entry index (and therefore all other entries) untouched.
+    ///
+    /// Returns `true` if the element existed and was updated, `false` otherwise.
+    /// Use a full [`Self::build`] when elements are **added** or **removed**.
+    ///
+    /// Cost is O(k) where k = number of grid cells the old and new boxes cover,
+    /// versus O(N) for a full rebuild.
+    pub fn update_entry(&mut self, id: &str, new_aabb: Aabb) -> bool {
+        let Some(&idx) = self.id_index.get(id) else {
+            return false;
+        };
+        let old_aabb = self.entries[idx].aabb;
+        remove_from_grid(&mut self.grid, idx, &old_aabb, self.cell_size);
+        self.entries[idx].aabb = new_aabb;
+        insert_into_grid(&mut self.grid, idx, &new_aabb, self.cell_size);
+        true
+    }
+
     /// Total number of indexed elements.
     pub fn len(&self) -> usize {
         self.entries.len()
@@ -239,6 +244,10 @@ pub struct ProjectCache {
     snap_cache: Option<SnapCache>,
     #[serde(skip)]
     snap_cache_dirty: bool,
+    /// Per-road incremental-update queue. When non-empty (and a full rebuild is
+    /// not already pending) [`Self::get_index`] patches just these roads.
+    #[serde(skip)]
+    dirty_road_ids: HashSet<String>,
 }
 
 impl ProjectCache {
@@ -251,6 +260,7 @@ impl ProjectCache {
             spatial_index_dirty: true,
             snap_cache: None,
             snap_cache_dirty: true,
+            dirty_road_ids: HashSet::new(),
         }
     }
 
@@ -259,6 +269,26 @@ impl ProjectCache {
     pub fn invalidate(&mut self) {
         self.spatial_index_dirty = true;
         self.snap_cache_dirty = true;
+        self.dirty_road_ids.clear();
+    }
+
+    /// Signal that a single road changed in place, enabling an **incremental**
+    /// spatial-index update on the next [`Self::get_index`] call.
+    ///
+    /// This is the fast path for drag-edit: only the moved road (and any
+    /// junctions that reference it) are re-boxed, instead of rebuilding the
+    /// whole index. Adding or removing a road is handled transparently by
+    /// falling back to a full rebuild.
+    ///
+    /// The snap cache is still fully rebuilt, since it has no incremental path.
+    pub fn invalidate_road(&mut self, road_id: &str) {
+        self.snap_cache_dirty = true;
+        // A full rebuild is already pending (or no index exists yet): the road
+        // will be picked up by the next full build, so don't bother tracking.
+        if self.spatial_index_dirty || self.spatial_index.is_none() {
+            return;
+        }
+        self.dirty_road_ids.insert(road_id.to_string());
     }
 
     /// Get a reference to the spatial index, rebuilding it only when dirty.
@@ -267,8 +297,76 @@ impl ProjectCache {
         if self.spatial_index_dirty || self.spatial_index.is_none() {
             self.spatial_index = Some(SpatialIndex::build(&self.project, DEFAULT_CELL_SIZE));
             self.spatial_index_dirty = false;
+            self.dirty_road_ids.clear();
+        } else if !self.dirty_road_ids.is_empty() {
+            self.apply_incremental_road_updates();
         }
         self.spatial_index.as_ref()
+    }
+
+    /// Apply queued per-road updates incrementally, falling back to a full
+    /// rebuild if any road was added, removed, or became un-indexable.
+    fn apply_incremental_road_updates(&mut self) {
+        let dirty = std::mem::take(&mut self.dirty_road_ids);
+        let index = match self.spatial_index.as_ref() {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        // Collect new boxes first (immutable borrows), then apply them.
+        let mut updates: Vec<(String, Aabb)> = Vec::new();
+        let mut need_full = false;
+
+        'outer: for rid in &dirty {
+            match (
+                self.project.roads.iter().find(|r| &r.id == rid),
+                index.get_aabb(rid),
+            ) {
+                // Road still present and already indexed: re-box it.
+                (Some(road), Some(_)) => match compute_road_aabb(road) {
+                    Some(aabb) => updates.push((rid.clone(), aabb)),
+                    // Became degenerate (no samples): needs structural change.
+                    None => {
+                        need_full = true;
+                        break;
+                    }
+                },
+                // Added (not yet indexed) or removed (still indexed): structural.
+                _ => {
+                    need_full = true;
+                    break;
+                }
+            }
+
+            // A moved road can resize any junction that references it.
+            for junction in &self.project.junctions {
+                let references = junction
+                    .connections
+                    .iter()
+                    .any(|c| &c.connecting_road == rid || &c.incoming_road == rid);
+                if !references {
+                    continue;
+                }
+                match (
+                    index.get_aabb(&junction.id),
+                    compute_junction_aabb(&self.project, junction),
+                ) {
+                    (Some(_), Some(jaabb)) => updates.push((junction.id.clone(), jaabb)),
+                    _ => {
+                        need_full = true;
+                        break 'outer;
+                    }
+                }
+            }
+        }
+
+        if need_full {
+            self.spatial_index = Some(SpatialIndex::build(&self.project, DEFAULT_CELL_SIZE));
+        } else if let Some(index) = self.spatial_index.as_mut() {
+            for (id, aabb) in updates {
+                index.update_entry(&id, aabb);
+            }
+        }
     }
 
     /// Get a reference to the cached snap candidate grid, rebuilding it when dirty.
@@ -324,6 +422,35 @@ fn insert_into_grid(
     for cx in min_cx..=max_cx {
         for cy in min_cy..=max_cy {
             grid.entry(CellKey { cx, cy }).or_default().push(idx);
+        }
+    }
+}
+
+/// Remove an entry index from every grid cell the given box covers, dropping
+/// any cell that becomes empty so the grid does not accumulate dead cells.
+fn remove_from_grid(
+    grid: &mut HashMap<CellKey, Vec<usize>>,
+    idx: usize,
+    aabb: &Aabb,
+    cell_size: f64,
+) {
+    let min_cx = (aabb.min_x / cell_size).floor() as i64;
+    let max_cx = (aabb.max_x / cell_size).floor() as i64;
+    let min_cy = (aabb.min_y / cell_size).floor() as i64;
+    let max_cy = (aabb.max_y / cell_size).floor() as i64;
+
+    for cx in min_cx..=max_cx {
+        for cy in min_cy..=max_cy {
+            let key = CellKey { cx, cy };
+            let became_empty = if let Some(v) = grid.get_mut(&key) {
+                v.retain(|&i| i != idx);
+                v.is_empty()
+            } else {
+                false
+            };
+            if became_empty {
+                grid.remove(&key);
+            }
         }
     }
 }
@@ -555,5 +682,115 @@ mod tests {
         // But the caches are still rebuildable
         assert_eq!(restored.get_index().unwrap().len(), 1);
         assert_eq!(restored.get_snap_cache().endpoints.len(), 2);
+    }
+
+    // ---- Incremental spatial index update (P1) ----
+
+    /// Sorted (id, kind) pairs from a range query — stable for comparison.
+    fn query_ids_sorted(idx: &SpatialIndex, region: &Aabb) -> Vec<String> {
+        let mut ids: Vec<String> = idx.query_range(region).into_iter().map(|r| r.id).collect();
+        ids.sort();
+        ids
+    }
+
+    #[test]
+    fn test_update_entry_moves_aabb() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        project.roads.push(make_road_at("r2", 500.0, 500.0, 100.0));
+        let mut idx = SpatialIndex::build(&project, 100.0);
+
+        // Move r1 far away.
+        let moved = Aabb::new(1000.0, 1000.0, 1100.0, 1010.0);
+        assert!(idx.update_entry("r1", moved));
+
+        // No longer found at the old location.
+        assert!(idx.query_point(50.0, 0.0, 20.0).is_empty());
+        // Found at the new location.
+        let hits = idx.query_point(1050.0, 1005.0, 20.0);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "r1");
+        // AABB lookup reflects the new box.
+        assert_eq!(idx.get_aabb("r1").unwrap().min_x, 1000.0);
+    }
+
+    #[test]
+    fn test_update_entry_unknown_id_returns_false() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        let mut idx = SpatialIndex::build(&project, 100.0);
+        assert!(!idx.update_entry("ghost", Aabb::new(0.0, 0.0, 1.0, 1.0)));
+    }
+
+    #[test]
+    fn test_incremental_update_matches_full_rebuild() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        project.roads.push(make_road_at("r2", 300.0, 0.0, 100.0));
+        project.roads.push(make_road_at("r3", 0.0, 300.0, 100.0));
+        let mut cache = ProjectCache::new(project);
+        // Force a full build first.
+        let _ = cache.get_index();
+
+        // Reshape r2 in place (simulate drag-edit).
+        if let Some(r2) = cache.project_mut().roads.iter_mut().find(|r| r.id == "r2") {
+            r2.plan_view[0].x = 700.0;
+            r2.plan_view[0].y = 700.0;
+        }
+        cache.invalidate_road("r2");
+        let incremental = cache.get_index().expect("index").clone();
+
+        // Independent full rebuild of the SAME project.
+        let full = SpatialIndex::build(cache.project(), DEFAULT_CELL_SIZE);
+
+        // Same element count.
+        assert_eq!(incremental.len(), full.len());
+        // Same query results across several probe regions.
+        for region in [
+            Aabb::new(-50.0, -50.0, 50.0, 50.0),
+            Aabb::new(250.0, -50.0, 450.0, 50.0),
+            Aabb::new(600.0, 600.0, 800.0, 800.0),
+            Aabb::new(-50.0, 250.0, 50.0, 450.0),
+        ] {
+            assert_eq!(
+                query_ids_sorted(&incremental, &region),
+                query_ids_sorted(&full, &region),
+                "mismatch in region {region:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_invalidate_road_falls_back_to_full_on_add() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        let mut cache = ProjectCache::new(project);
+        let _ = cache.get_index();
+
+        // Add a brand-new road, then signal it via per-road invalidation.
+        cache
+            .project_mut()
+            .roads
+            .push(make_road_at("r2", 500.0, 500.0, 100.0));
+        cache.invalidate_road("r2");
+
+        // Even though r2 was not previously indexed, the index must include it.
+        assert_eq!(cache.get_index().unwrap().len(), 2);
+        assert!(cache.get_index().unwrap().get_aabb("r2").is_some());
+    }
+
+    #[test]
+    fn test_invalidate_road_falls_back_to_full_on_remove() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        project.roads.push(make_road_at("r2", 500.0, 500.0, 100.0));
+        let mut cache = ProjectCache::new(project);
+        let _ = cache.get_index();
+
+        cache.project_mut().roads.retain(|r| r.id != "r2");
+        cache.invalidate_road("r2");
+
+        assert_eq!(cache.get_index().unwrap().len(), 1);
+        assert!(cache.get_index().unwrap().get_aabb("r2").is_none());
     }
 }

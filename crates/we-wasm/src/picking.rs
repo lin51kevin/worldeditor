@@ -48,6 +48,36 @@ pub fn has_project_cache() -> bool {
     PROJECT_CACHE.with(|cell| cell.borrow().is_some())
 }
 
+/// Replace (or insert) a single road in the cached project and incrementally
+/// re-index just that road.
+///
+/// This is the fast path for drag-edit: instead of re-serialising the entire
+/// project via [`set_project_cache`] on every commit, the frontend sends only
+/// the changed road. When the road already exists the spatial index is patched
+/// in place (O(k)); adding a road transparently falls back to a full rebuild.
+#[wasm_bindgen]
+pub fn update_cached_road(road_json: &str) -> Result<(), JsError> {
+    let road: we_core::model::Road =
+        serde_json::from_str(road_json).map_err(|e| JsError::new(&e.to_string()))?;
+    PROJECT_CACHE.with(|cell| {
+        let mut borrow = cell.borrow_mut();
+        let cache = borrow.as_mut().ok_or_else(|| {
+            JsError::new("Project cache not initialised — call set_project_cache() first")
+        })?;
+        let id = road.id.clone();
+        {
+            let project = cache.project_mut();
+            if let Some(existing) = project.roads.iter_mut().find(|r| r.id == id) {
+                *existing = road;
+            } else {
+                project.roads.push(road);
+            }
+        }
+        cache.invalidate_road(&id);
+        Ok(())
+    })
+}
+
 /// Access the cached project for internal cross-module use (e.g. render).
 ///
 /// Calls the closure with an immutable reference to the `ProjectCache`.
@@ -141,6 +171,67 @@ mod tests {
         let back: we_core::snapping::SnapConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(config.grid_size, back.grid_size);
         assert_eq!(config.snap_to_lane_endpoints, back.snap_to_lane_endpoints);
+    }
+
+    fn line_road(id: &str, x: f64, y: f64, length: f64) -> we_core::model::Road {
+        we_core::model::Road::from_centerline(
+            id,
+            vec![we_core::model::Geometry {
+                s: 0.0,
+                x,
+                y,
+                hdg: 0.0,
+                length,
+                geo_type: we_core::model::GeometryType::Line,
+            }],
+        )
+    }
+
+    #[test]
+    fn test_update_cached_road_moves_pick_target() {
+        clear_cache();
+        let mut project = we_core::model::Project::default();
+        project.roads.push(line_road("r1", 0.0, 0.0, 100.0));
+        PROJECT_CACHE.with(|cell| {
+            *cell.borrow_mut() = Some(ProjectCache::new(project));
+        });
+
+        // Move r1 far away via the single-road incremental update path.
+        let moved = line_road("r1", 1000.0, 0.0, 100.0);
+        super::update_cached_road(&serde_json::to_string(&moved).unwrap()).unwrap();
+
+        PROJECT_CACHE.with(|cell| {
+            let mut borrow = cell.borrow_mut();
+            let cache = borrow.as_mut().unwrap();
+            // Old location no longer hits.
+            assert!(we_core::picking::pick_road_cached(cache, 50.0, 0.0, 5.0).is_none());
+            // New location hits r1.
+            let hit = we_core::picking::pick_road_cached(cache, 1050.0, 0.0, 5.0);
+            assert_eq!(hit.map(|h| h.id), Some("r1".to_string()));
+        });
+        clear_cache();
+    }
+
+    #[test]
+    fn test_update_cached_road_inserts_new_road() {
+        clear_cache();
+        let mut project = we_core::model::Project::default();
+        project.roads.push(line_road("r1", 0.0, 0.0, 100.0));
+        PROJECT_CACHE.with(|cell| {
+            *cell.borrow_mut() = Some(ProjectCache::new(project));
+        });
+
+        let added = line_road("r2", 500.0, 0.0, 100.0);
+        super::update_cached_road(&serde_json::to_string(&added).unwrap()).unwrap();
+
+        PROJECT_CACHE.with(|cell| {
+            let mut borrow = cell.borrow_mut();
+            let cache = borrow.as_mut().unwrap();
+            assert_eq!(cache.project().roads.len(), 2);
+            let hit = we_core::picking::pick_road_cached(cache, 550.0, 0.0, 5.0);
+            assert_eq!(hit.map(|h| h.id), Some("r2".to_string()));
+        });
+        clear_cache();
     }
 }
 
