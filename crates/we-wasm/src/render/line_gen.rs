@@ -14,7 +14,7 @@ pub fn generate_lane_line_vertices(
     sample_step: f64,
 ) -> Result<Vec<f32>, JsError> {
     use we_core::geometry::eval::{evaluate_lane_width, sample_road_reference_line};
-    use we_core::model::{Project, RoadMarkType};
+    use we_core::model::Project;
 
     let project: Project =
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
@@ -52,55 +52,19 @@ pub fn generate_lane_line_vertices(
                 continue;
             }
 
-            // Helper: emit all road marks for a lane, each covering its s_offset sub-range.
-            // Marks are processed in ascending sOffset order; each mark covers from its
-            // sOffset to the next mark's sOffset (or to section_end_s for the last).
-            let emit_lane_marks = |road_marks: &[we_core::model::RoadMark],
-                                   lateral_fn: &dyn Fn(f64) -> f64,
-                                   out: &mut Vec<f32>| {
-                let mut sorted: Vec<&we_core::model::RoadMark> = road_marks.iter().collect();
-                sorted.sort_by(|a, b| {
-                    a.s_offset
-                        .partial_cmp(&b.s_offset)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
-
-                for (idx, rm) in sorted.iter().enumerate() {
-                    if rm.mark_type == RoadMarkType::None {
-                        continue;
-                    }
-                    let abs_start = section.s + rm.s_offset;
-                    let abs_end = sorted
-                        .get(idx + 1)
-                        .map(|next| section.s + next.s_offset)
-                        .unwrap_or(section_end_s);
-
-                    let mark_pts: Vec<_> = section_pts
-                        .iter()
-                        .filter(|p| p.s >= abs_start - 1e-9 && p.s <= abs_end + 1e-9)
-                        .copied()
-                        .collect();
-
-                    if mark_pts.len() < 2 {
-                        continue;
-                    }
-                    emit_road_mark(
-                        rm,
-                        &mark_pts,
-                        &road.elevation_profile,
-                        section.s,
-                        &road.lane_offsets,
-                        lateral_fn,
-                        out,
-                    );
-                }
-            };
-
             // Center lane road mark at offset 0 (the center dividing line)
             if let Some(center_lane) = section.center.first()
                 && !center_lane.render_hidden
             {
-                emit_lane_marks(&center_lane.road_marks, &|_| 0.0, &mut all_floats);
+                emit_lane_marks(
+                    road,
+                    section.s,
+                    section_end_s,
+                    &section_pts,
+                    &center_lane.road_marks,
+                    |_| 0.0,
+                    &mut all_floats,
+                );
             }
 
             // Right lane outer boundaries (inner → outer, accumulating offset)
@@ -115,8 +79,12 @@ pub fn generate_lane_line_vertices(
                         bw
                     };
                     emit_lane_marks(
+                        road,
+                        section.s,
+                        section_end_s,
+                        &section_pts,
                         &lane.road_marks,
-                        &|ds| -sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
+                        |ds| -sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
                         &mut all_floats,
                     );
                 }
@@ -135,8 +103,12 @@ pub fn generate_lane_line_vertices(
                         bw
                     };
                     emit_lane_marks(
+                        road,
+                        section.s,
+                        section_end_s,
+                        &section_pts,
                         &lane.road_marks,
-                        &|ds| sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
+                        |ds| sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
                         &mut all_floats,
                     );
                 }
@@ -146,6 +118,64 @@ pub fn generate_lane_line_vertices(
     }
 
     Ok(all_floats)
+}
+
+/// Emit all road marks for a single lane boundary, each mark covering its
+/// `s_offset` sub-range. Marks are processed in ascending `s_offset` order;
+/// each covers from its `s_offset` to the next mark's `s_offset` (or to
+/// `section_end_s` for the last).
+///
+/// `lateral_fn` maps an `s`-distance from the section start to the boundary's
+/// lateral offset. It is a generic parameter so each call site is monomorphized
+/// (no `dyn Fn` dispatch in the per-vertex hot loop).
+#[allow(clippy::too_many_arguments)]
+fn emit_lane_marks<F: Fn(f64) -> f64>(
+    road: &we_core::model::Road,
+    section_s: f64,
+    section_end_s: f64,
+    section_pts: &[&we_core::geometry::eval::RefLinePoint],
+    road_marks: &[we_core::model::RoadMark],
+    lateral_fn: F,
+    out: &mut Vec<f32>,
+) {
+    use we_core::model::RoadMarkType;
+
+    let mut sorted: Vec<&we_core::model::RoadMark> = road_marks.iter().collect();
+    sorted.sort_by(|a, b| {
+        a.s_offset
+            .partial_cmp(&b.s_offset)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    for (idx, rm) in sorted.iter().enumerate() {
+        if rm.mark_type == RoadMarkType::None {
+            continue;
+        }
+        let abs_start = section_s + rm.s_offset;
+        let abs_end = sorted
+            .get(idx + 1)
+            .map(|next| section_s + next.s_offset)
+            .unwrap_or(section_end_s);
+
+        let mark_pts: Vec<_> = section_pts
+            .iter()
+            .filter(|p| p.s >= abs_start - 1e-9 && p.s <= abs_end + 1e-9)
+            .copied()
+            .collect();
+
+        if mark_pts.len() < 2 {
+            continue;
+        }
+        emit_road_mark(
+            rm,
+            &mark_pts,
+            &road.elevation_profile,
+            section_s,
+            &road.lane_offsets,
+            &lateral_fn,
+            out,
+        );
+    }
 }
 
 /// Generate reference line (centerline) visualization vertices from a project JSON.
@@ -427,5 +457,40 @@ mod tests {
         assert_eq!(&verts[3..7], &[0.976, 0.827, 0.137, 1.0]);
         assert!(verts.chunks(7).any(|v| (v[1] - 0.1).abs() < 0.01));
         assert!(verts.chunks(7).any(|v| (v[1] + 0.1).abs() < 0.01));
+    }
+
+    /// Characterization test guarding the lateral-offset refactor (dyn Fn → generics).
+    /// Captures exact vertex output for a road with marks on center, a right lane,
+    /// and a left lane so the monomorphized code path stays behavior-identical.
+    #[test]
+    fn test_generate_lane_line_vertices_marks_on_all_sides_is_stable() {
+        let mut road = straight_road("road", 0.0, None);
+        road.lane_sections[0].center[0]
+            .road_marks
+            .push(road_mark(RoadMarkType::Solid));
+        // Right + left lanes already exist via from_centerline default section;
+        // attach a solid mark to the first right and first left lane.
+        road.lane_sections[0].right[0]
+            .road_marks
+            .push(road_mark(RoadMarkType::Solid));
+        road.lane_sections[0].left[0]
+            .road_marks
+            .push(road_mark(RoadMarkType::Solid));
+        let project = Project {
+            roads: vec![road],
+            ..Project::default()
+        };
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts = generate_lane_line_vertices(&json, 10.0).unwrap();
+
+        // 3 marks (center, right, left) × 6 verts × 7 floats.
+        assert_eq!(verts.len(), 3 * 6 * 7);
+        // Stable fingerprint of the geometry (sum of all floats, rounded).
+        let sum: f64 = verts.iter().map(|f| *f as f64).sum();
+        assert!(
+            (sum - 143.1900).abs() < 0.01,
+            "geometry fingerprint drifted: {sum}"
+        );
     }
 }

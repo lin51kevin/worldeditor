@@ -14,7 +14,7 @@ pub(super) fn emit_road_mark(
     elevations: &[we_core::model::Elevation],
     section_s: f64,
     lane_offsets: &[we_core::model::LaneOffset],
-    lateral_offset_at_ds: &(impl Fn(f64) -> f64 + ?Sized),
+    lateral_offset_at_ds: &impl Fn(f64) -> f64,
     out: &mut Vec<f32>,
 ) {
     use we_core::geometry::eval::{evaluate_elevation, offset_point};
@@ -166,7 +166,7 @@ pub(super) fn gen_road_mark_line(
     elevations: &[we_core::model::Elevation],
     section_s: f64,
     lane_offsets: &[we_core::model::LaneOffset],
-    lateral_offset_at_ds: &(impl Fn(f64) -> f64 + ?Sized),
+    lateral_offset_at_ds: &impl Fn(f64) -> f64,
     line_width: f32,
     color: [f32; 4],
     is_dashed: bool,
