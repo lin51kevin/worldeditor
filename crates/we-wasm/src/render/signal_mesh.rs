@@ -461,28 +461,46 @@ pub(super) fn emit_crosswalk_stripes(
     //   obj_hdg is metadata only → NO hdg rotation.
     //
     // - **Object-local frame** (e.g. 51World, spec-compliant): cornerLocal (u, v)
-    //   is in the object's own heading frame. For crosswalks perpendicular to road
-    //   (hdg ≈ π/2), u-extent (along object heading = across road) is larger than
-    //   v-extent. obj_hdg must be applied → APPLY hdg rotation.
+    //   is in the object's own heading frame. obj_hdg must be applied → APPLY rotation.
     //
-    // Detection: when length > 0 && width > 0, use the corner aspect ratio to
-    // distinguish conventions. If u-extent > v-extent, corners are in object-local
-    // frame (the longer dimension is along the object heading, not along the road).
-    // When length = 0 || width = 0, always apply hdg (original junction_crosswalk_signal
-    // behavior).
+    // Detection strategy:
+    //
+    // Case 1 — hdg ≈ ±π (road-aligned, backward):
+    //   The aspect-ratio heuristic is unreliable here. A spec-compliant object with
+    //   u = depth (small) along hdg direction and v = width (large) perpendicular to
+    //   hdg looks identical to road-frame (u_span < v_span). 51World exports all
+    //   junction crosswalks with hdg≈±π in object-local frame, so we always apply
+    //   the heading rotation for this case. Applying hdg=π is equivalent to reflecting
+    //   both axes (alpha=−u, beta=−v), which correctly positions asymmetric polygons.
+    //
+    // Case 2 — hdg ≈ π/2 (perpendicular, the classic 51World case):
+    //   Aspect-ratio heuristic is reliable: u-extent (across road) > v-extent (depth)
+    //   indicates object-local frame. CityScape/RoadRunner in road-frame has u < v here.
+    //
+    // Case 3 — length = 0 || width = 0:
+    //   Always apply hdg (original junction_crosswalk_signal behaviour).
     let apply_hdg = if obj_length > 0.0 && obj_width > 0.0 {
-        let (u_min, u_max) = corners
-            .iter()
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
-                (mn.min(c.x), mx.max(c.x))
-            });
-        let (v_min, v_max) = corners
-            .iter()
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
-                (mn.min(c.y), mx.max(c.y))
-            });
-        (u_max - u_min) > (v_max - v_min)
+        // Case 1: hdg ≈ ±π — always treat as object-local (aspect ratio is ambiguous).
+        let hdg_near_pi =
+            (obj_hdg.abs() - std::f64::consts::PI).abs() < 0.17; // ≈ 10° tolerance
+        if hdg_near_pi {
+            true
+        } else {
+            // Case 2: aspect-ratio heuristic for other headings (reliable for hdg ≈ π/2).
+            let (u_min, u_max) = corners
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
+                    (mn.min(c.x), mx.max(c.x))
+                });
+            let (v_min, v_max) = corners
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
+                    (mn.min(c.y), mx.max(c.y))
+                });
+            (u_max - u_min) > (v_max - v_min)
+        }
     } else {
+        // Case 3: no size info — always apply.
         true
     };
     let (cos_h, sin_h) = if apply_hdg {
@@ -1150,6 +1168,91 @@ mod tests {
             bar_extent > 3.0 && bar_extent < 6.0,
             "First stripe along-road extent={:.1}, expected ~4.7m (not 10.6m)",
             bar_extent
+        );
+    }
+
+    /// Verify that a crosswalk with hdg≈π and length>0/width>0 (51World / Industrypark2 style)
+    /// DOES apply hdg rotation even though u_span < v_span (old aspect-ratio heuristic
+    /// would have set apply_hdg=false and placed the polygon on the wrong side of the road).
+    ///
+    /// Corners are in object-local frame (u = depth backward along road, v = lateral):
+    ///   u ∈ [-1.24, 0.80] (depth 2.04 m), v ∈ [-6.97, 10.45] (width 17.42 m).
+    /// u_span(2.04) < v_span(17.42) — old detection would skip rotation.
+    /// With hdg≈π fix → apply_hdg=true: alpha=−u, beta=−v.
+    ///
+    /// On a straight east-pointing road (ref y=0, obj_t=0):
+    ///   apply_hdg=true  centroid_y ≈ −1.74  (correct: polygon reflects to negative side)
+    ///   apply_hdg=false centroid_y ≈ +1.74  (old bug)
+    #[test]
+    fn test_crosswalk_stripes_hdg_pi_51world_applies_rotation() {
+        let ref_pts = straight_road_pts();
+        // Corners from Industrypark2 crosswalk 198882 (object-local, hdg≈π).
+        let corners = vec![
+            Point3D {
+                x: 0.80,
+                y: -6.95,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: 0.23,
+                y: 10.45,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: -1.24,
+                y: 10.42,
+                z: 0.0,
+                id: None,
+            },
+            Point3D {
+                x: -0.59,
+                y: -6.97,
+                z: 0.0,
+                id: None,
+            },
+        ];
+        let elevations: Vec<Elevation> = vec![];
+        let mut out = Vec::new();
+        let offset_fn = &offset_pt_flat;
+
+        // u_span=2.04 < v_span=17.42 — old code would give apply_hdg=false.
+        // hdg≈π → new code must use apply_hdg=true.
+        emit_crosswalk_stripes(
+            &corners,
+            &ref_pts[5],
+            &elevations,
+            5.0,
+            0.0, // obj_t = 0 → ref at road centre
+            std::f64::consts::PI,
+            0.0,
+            offset_fn,
+            0.0,
+            0.45,
+            0.6,
+            2.04, // obj_length > 0
+            17.42, // obj_width > 0
+            &mut out,
+        );
+
+        assert!(!out.is_empty(), "Expected stripes for Industrypark2-style hdg≈π crosswalk");
+
+        // Compute mean y-coordinate of all output vertices (every 7th float starting at [1]).
+        let ys: Vec<f32> = out.iter().skip(1).step_by(7).cloned().collect();
+        assert!(
+            !ys.is_empty(),
+            "No vertex y-values in output"
+        );
+        let mean_y: f32 = ys.iter().sum::<f32>() / ys.len() as f32;
+
+        // apply_hdg=true  → polygon reflected; centroid y ≈ −1.74 on east road at y=0.
+        // apply_hdg=false → centroid y ≈ +1.74 (the old wrong result).
+        assert!(
+            mean_y < 0.0,
+            "mean_y={:.2} — expected negative (apply_hdg=true used); positive means \
+             hdg rotation was not applied (old bug)",
+            mean_y
         );
     }
 

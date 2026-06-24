@@ -53,8 +53,9 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
             let z_offset = obj.position.z as f32;
 
             // Skip objects with negative s (invalid placement).
-            // Objects with s > road.length are allowed — road_point_at_s
-            // extrapolates the road geometry by tangent extension.
+            // Objects with s > road.length are allowed; road_point_at_s extrapolates by
+            // tangent extension, which correctly positions objects that straddle the
+            // road/junction boundary (common in 51World XODR exports).
             if s < -1.0 {
                 continue;
             }
@@ -184,6 +185,10 @@ pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError>
                                     }
                                 }
                                 // Corner-based zebra stripe generation with correct heading rotation.
+                                // ref_pt is the tangent-extended position at obj.s — for crosswalks
+                                // with s slightly beyond road.length (common in 51World exports) this
+                                // correctly places the stripes at the junction entrance, consistent
+                                // with the selection-highlight box drawn by generate_single_object_vertices.
                                 emit_crosswalk_stripes(
                                     &obj.corners,
                                     &ref_pt,
@@ -634,5 +639,48 @@ mod tests {
         let verts = generate_object_vertices(&json).unwrap();
 
         assert!(verts.is_empty());
+    }
+
+    /// Crosswalk with s > road.length is rendered at the tangent-extrapolated position,
+    /// consistent with all other road objects and with the selection-highlight box from
+    /// generate_single_object_vertices.  This keeps the stripes co-located with the
+    /// placeholder indicator that editors show for the object.
+    #[test]
+    fn test_crosswalk_past_road_end_renders_at_extrapolated_position() {
+        // Road: straight east, length=10. Crosswalk at s=20 (10 m past road end).
+        let cw = RoadObject {
+            id: "cw-1".to_string(),
+            object_type: ObjectType::Crosswalk,
+            name: String::new(),
+            position: Point3D::new(20.0, 0.0, 0.0),
+            orientation: 0.0,
+            hdg: 0.0,
+            pitch: 0.0,
+            roll: 0.0,
+            width: 3.0,
+            height: 0.0,
+            length: 2.0,
+            corners: vec![],
+            corner_type: Default::default(),
+            validity: None,
+            from_object_ref: false,
+            user_data: vec![],
+        };
+        let project = road_with_object(cw, None);
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts = generate_object_vertices(&json).unwrap();
+
+        assert!(!verts.is_empty(), "expected vertices for crosswalk at s > road.length");
+
+        // All vertex x-coordinates must be near x≈20 (tangent-extrapolated position),
+        // not clamped to x≈10 (road endpoint).  The fallback rect outline is ≤4m wide.
+        for chunk in verts.chunks(7) {
+            let vx = chunk[0];
+            assert!(
+                vx > 15.0,
+                "crosswalk vertex x={vx:.2} should be near extrapolated position (~20), not clamped to road endpoint (~10)"
+            );
+        }
     }
 }
