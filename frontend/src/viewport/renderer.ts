@@ -433,9 +433,10 @@ export class ViewportRenderer {
     this.cameraController.markDirty();
   }
 
-  /** Set the WebGPU clear (background) color. */
-  setClearColor(r: number, g: number, b: number): void {
-    this.clearColor = { r, g, b, a: 1.0 };
+  /** Set the WebGPU clear (background) color. Pass `a = 0` for a transparent
+   *  background (the canvas is configured with premultiplied alpha). */
+  setClearColor(r: number, g: number, b: number, a = 1.0): void {
+    this.clearColor = { r, g, b, a };
     this.markSceneDirty();
     if (this.markerRenderer.knotCount > 0) {
       this.markerRenderer.refreshSplineMarkers(this.getMetersPerPixel(), this.clearColor);
@@ -586,6 +587,37 @@ export class ViewportRenderer {
   markSceneDirty(): void {
     this.sceneDirty = true;
     this.renderLoop?.wakeUp();
+  }
+
+  /**
+   * Place the 2D orthographic camera at an absolute world center with an
+   * explicit zoom (meters per screen pixel). For external map hosts (e.g. the
+   * rnk-next Leaflet adapter) that drive the camera directly. No-op outside 2D.
+   */
+  set2DView(centerX: number, centerY: number, metersPerPixel: number): void {
+    this.cameraController.set2DView(centerX, centerY, metersPerPixel);
+    this.markSceneDirty();
+  }
+
+  /**
+   * Force a single synchronous frame. Useful when the host drives rendering
+   * explicitly (no internal render loop) — e.g. after a camera/data change from
+   * an embedding map control. Safe to call before/after init lifecycle bounds.
+   */
+  render(): void {
+    if (this.deviceLost || this.disposed || !this.device) return;
+    this.sceneDirty = true;
+    this.cameraController.isViewDirty = true;
+    this.renderFrame();
+  }
+
+  /**
+   * Render the current frame and return it as a PNG data URL (empty string on
+   * failure). Convenience wrapper over {@link captureFrame} for hosts that want
+   * a non-null string (e.g. thumbnail generation in rnk-next).
+   */
+  toDataURL(): string {
+    return this.captureFrame() ?? '';
   }
 
   /**

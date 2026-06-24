@@ -386,6 +386,38 @@ export class CameraController {
   }
 
   /**
+   * Place the 2D orthographic camera at an absolute world center with an explicit
+   * zoom expressed as meters-per-screen-pixel. Used by external map hosts (e.g.
+   * the rnk-next Leaflet adapter) that drive the camera directly instead of via
+   * pan/zoom gestures.
+   *
+   * No-op outside 2D mode.
+   *
+   * @param centerX        world X (meters) to center on
+   * @param centerY        world Y (meters) to center on
+   * @param metersPerPixel world meters spanned by one screen pixel (zoom)
+   */
+  set2DView(centerX: number, centerY: number, metersPerPixel: number): void {
+    if (this.dimensionMode !== '2d') return;
+    if (!isFinite(centerX) || !isFinite(centerY)) return;
+
+    if (isFinite(metersPerPixel) && metersPerPixel > 0) {
+      const pxPerMeter = 1 / metersPerPixel;
+      this.numPixelsPerMeter = Math.max(MINIMAL_SCALE, Math.min(MAXIMAL_SCALE, pxPerMeter));
+    }
+
+    this.camera.target = [centerX, centerY, 0];
+    this.camera.position = [centerX, centerY, ORTHO_CAM_HEIGHT];
+    this.camera.up = [0, 1, 0];
+    this.camera.near = 0.1;
+    this.camera.far = ORTHO_CAM_HEIGHT * 2 + 100;
+
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+    this.reportScale();
+  }
+
+  /**
    * Save current camera state (position, target, up, near, far, numPixelsPerMeter).
    * Used to temporarily override the camera for snapshot export and then restore.
    */

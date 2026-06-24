@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "build:web": "tsc -b && vite build --mode web",
     "build:tauri": "tsc -b && vite build --mode tauri",
+    "build:rnk": "vite build --config vite.rnk-next.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

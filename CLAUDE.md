@@ -260,6 +260,9 @@ cd frontend && yarn playwright test   # E2E 全套测试
 just build-wasm                       # Debug WASM → frontend/wasm/pkg/
 just build-wasm-release               # Release WASM + wasm-opt 优化
 
+# rnk-next SDK 库构建 (供外部宿主应用嵌入渲染地图)
+cd frontend && yarn build:rnk         # → frontend/dist-rnk/worldeditor-next-sdk.js (产物已 gitignore, 详见 docs/sdk-integration.md)
+
 # 桌面应用
 cargo build --workspace               # Native 构建
 just bundle                           # Tauri 打包桌面安装程序
