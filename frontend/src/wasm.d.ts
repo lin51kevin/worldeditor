@@ -58,6 +58,7 @@ declare module '../../wasm/pkg/we_wasm' {
   export function generate_center_line_vertices(project_json: string, sample_step: number): Float32Array;
   export function generate_signal_paint_vertices(project_json: string, sample_step: number): Float32Array;
   export function generate_object_vertices(project_json: string): Float32Array;
+  export function generate_object_vertices_cached(): Float32Array;
   export function generate_sprite_data(project_json: string): SpriteDataResult;
 
   // Picking
@@ -112,6 +113,7 @@ declare module '../../wasm/pkg/we_wasm' {
 
   // Project cache (spatial index + JSON avoidance on mousemove)
   export function set_project_cache(project_json: string): void;
+  export function update_cached_road(road_json: string): void;
   export function invalidate_project_cache(): void;
   export function has_project_cache(): boolean;
 
@@ -134,6 +136,7 @@ declare module '../../wasm/pkg/we_wasm' {
   // Vertex generation (additional)
   export function generate_road_vertices(project_json: string, sample_step: number, color_mode: string): Float32Array;
   export function generate_road_vertices_cached(sample_step: number, color_mode: string): Float32Array;
+  export function generate_single_road_surface_vertices_cached(road_id: string, sample_step: number, color_mode: string): Float32Array;
   export function generate_lane_boundary_vertices(project_json: string, sample_step: number): Float32Array;
   export function generate_bridge_tunnel_vertices(project_json: string): Float32Array;
   export function generate_single_signal_vertices(project_json: string, road_id: string, signal_id: string, r: number, g: number, b: number, a: number): Float32Array;

@@ -206,6 +206,15 @@ export function generate_lane_line_vertices(project_json: string, sample_step: n
 export function generate_object_vertices(project_json: string): Float32Array;
 
 /**
+ * Generate road object vertices using the cached project (avoids JSON serialization).
+ *
+ * Requires `set_project_cache()` to have been called previously. This is the
+ * fast path used on every surface-mesh refresh so the whole project no longer
+ * has to be re-serialised to JSON just to re-tessellate its objects.
+ */
+export function generate_object_vertices_cached(): Float32Array;
+
+/**
  * Progressive WASM data pipeline (#6): validates that we-core geometry types
  * can be deserialized from JSON, mesh-generated, and returned as JSON vertices.
  * Returns a JSON object with "vertices" (array of [x,y,z,r,g,b,a]) and "count".
@@ -272,6 +281,18 @@ export function generate_single_object_vertices(project_json: string, road_id: s
  * to avoid JSON re-serialization (~1.3s savings on large maps).
  */
 export function generate_single_object_vertices_cached(road_id: string, object_id: string, r: number, g: number, b: number, a: number): Float32Array;
+
+/**
+ * Generate the per-lane-colored surface vertices for a single road, looked up
+ * by id from the cached project (avoids JSON serialization).
+ *
+ * Requires `set_project_cache()` to have been called previously. Returns an
+ * empty vec when the road id is not present. The output is byte-identical to
+ * the corresponding road's slice in [`generate_road_vertices_cached`], so the
+ * frontend can splice it into the merged surface buffer for incremental,
+ * single-road mesh updates during drag-edit.
+ */
+export function generate_single_road_surface_vertices_cached(road_id: string, sample_step: number, color_mode: string): Float32Array;
 
 /**
  * Generate road mesh vertices for a single road. Returns Float32Array.
@@ -719,6 +740,17 @@ export function spline_to_geometries(spline_json: string, mode: string): string;
 export function translate_road(project_json: string, road_id: string, dx: number, dy: number, dz: number): string;
 
 /**
+ * Replace (or insert) a single road in the cached project and incrementally
+ * re-index just that road.
+ *
+ * This is the fast path for drag-edit: instead of re-serialising the entire
+ * project via [`set_project_cache`] on every commit, the frontend sends only
+ * the changed road. When the road already exists the spatial index is patched
+ * in place (O(k)); adding a road transparently falls back to a full rebuild.
+ */
+export function update_cached_road(road_json: string): void;
+
+/**
  * Convert UTM to WGS84.
  */
 export function utm_to_geo(easting: number, northing: number, zone: number, is_northern: boolean, alt: number): any;
@@ -788,6 +820,7 @@ export interface InitOutput {
     readonly generate_lane_boundary_vertices: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_lane_line_vertices: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_object_vertices: (a: number, b: number) => [number, number, number, number];
+    readonly generate_object_vertices_cached: () => [number, number, number, number];
     readonly generate_road_mesh_from_json: (a: number, b: number, c: number) => [number, number, number, number];
     readonly generate_road_vertices: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly generate_road_vertices_cached: (a: number, b: number, c: number) => [number, number, number, number];
@@ -795,6 +828,7 @@ export interface InitOutput {
     readonly generate_single_junction_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly generate_single_object_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
     readonly generate_single_object_vertices_cached: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly generate_single_road_surface_vertices_cached: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly generate_single_road_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly generate_single_signal_vertices: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number, number];
     readonly generate_single_signal_vertices_cached: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
@@ -861,6 +895,7 @@ export interface InitOutput {
     readonly spatial_query_point: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly spline_to_geometries: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly translate_road: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+    readonly update_cached_road: (a: number, b: number) => [number, number];
     readonly utm_to_geo: (a: number, b: number, c: number, d: number, e: number) => any;
     readonly validate_project: (a: number, b: number) => [number, number, number];
     readonly validate_topology: (a: number, b: number) => [number, number, number];

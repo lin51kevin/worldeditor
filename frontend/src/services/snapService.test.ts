@@ -56,6 +56,7 @@ async function loadSnapService() {
   };
   const service = {
     setProjectCache: vi.fn().mockResolvedValue(undefined),
+    updateCachedRoad: vi.fn().mockResolvedValue(undefined),
     snapPointCached: vi.fn().mockResolvedValue({
       x: 10,
       y: 20,

@@ -93,6 +93,11 @@ export abstract class BasePlatformService implements PlatformService {
     return wasm.generate_road_vertices_cached(sampleStep, colorMode ?? 'byLaneType');
   }
 
+  async generateSingleRoadSurfaceVerticesCached(roadId: string, sampleStep: number, colorMode?: string): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_single_road_surface_vertices_cached(roadId, sampleStep, colorMode ?? 'byLaneType');
+  }
+
   async generateSingleRoadVertices(road: Road, sampleStep: number, color: [number, number, number, number]): Promise<Float32Array> {
     const wasm = await this.getWasm();
     return wasm.generate_single_road_vertices(
@@ -137,6 +142,11 @@ export abstract class BasePlatformService implements PlatformService {
     return wasm.generate_object_vertices(JSON.stringify(project));
   }
 
+  async generateObjectVerticesCached(): Promise<Float32Array> {
+    const wasm = await this.getWasm();
+    return wasm.generate_object_vertices_cached();
+  }
+
   async generateSpriteData(project: Project): Promise<SpriteDataResult> {
     const wasm = await this.getWasm();
     return wasm.generate_sprite_data(JSON.stringify(project));
@@ -165,6 +175,13 @@ export abstract class BasePlatformService implements PlatformService {
   async setProjectCache(project: Project): Promise<void> {
     const wasm = await this.getWasm();
     wasm.set_project_cache(JSON.stringify(project));
+  }
+
+  /** Replace (or insert) a single road in the WASM cache and incrementally
+   *  re-index just that road. Fast path for drag-edit commits. */
+  async updateCachedRoad(road: Road): Promise<void> {
+    const wasm = await this.getWasm();
+    wasm.update_cached_road(JSON.stringify(road));
   }
 
   /** Invalidate the WASM spatial index without re-parsing the project. */

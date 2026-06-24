@@ -129,6 +129,7 @@ export interface WorldEditorWasm {
     a: number,
   ): Float32Array;
   set_project_cache(projectJson: string): void;
+  update_cached_road(roadJson: string): void;
   pick_lane_at_point_cached(x: number, y: number, threshold: number): LanePick | null;
   generate_lane_highlight_vertices(
     roadId: string,
@@ -282,6 +283,26 @@ function adaptWasm(wasm: WasmModule): WorldEditorWasm {
     set_project_cache: (projectJson) => {
       cachedProjectJson = projectJson;
       wasm.set_project_cache(projectJson);
+    },
+
+    update_cached_road: (roadJson) => {
+      wasm.update_cached_road(roadJson);
+      // Keep the host-side project copy consistent so highlight lookups stay
+      // accurate after a single-road edit.
+      if (cachedProjectJson) {
+        try {
+          const project = JSON.parse(cachedProjectJson) as { roads?: Array<{ id: string }> };
+          const road = JSON.parse(roadJson) as { id: string };
+          if (Array.isArray(project.roads)) {
+            const idx = project.roads.findIndex((r) => r.id === road.id);
+            if (idx >= 0) project.roads[idx] = road;
+            else project.roads.push(road);
+            cachedProjectJson = JSON.stringify(project);
+          }
+        } catch {
+          // Leave the cached copy untouched on malformed input.
+        }
+      }
     },
 
     pick_lane_at_point_cached: (x, y, threshold) =>

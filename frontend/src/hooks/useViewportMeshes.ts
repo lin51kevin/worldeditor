@@ -143,10 +143,25 @@ export function useViewportMeshes({
       // Only regenerate layers that actually need updating (always generate for solid cache)
       const empty = Promise.resolve(new Float32Array(0));
 
-      // For road vertices: use cached WASM fn (no JSON serialization) when only colorMode changed
-      // Falls back to full-serialization path if cached function unavailable
+      // Make the WASM project cache authoritative for THIS frame before using the
+      // serialization-free cached generators (road + object). The lifecycle effect also
+      // pushes the cache, but its async timing relative to this callback is not guaranteed,
+      // so pushing here guarantees the cached generators see exactly `visibleProject`.
+      // On failure we simply fall back to the JSON-serialization paths below.
+      let cacheReady = false;
+      if (needRoads || needObjects) {
+        try {
+          await service.setProjectCache(visibleProject);
+          cacheReady = true;
+        } catch {
+          cacheReady = false;
+        }
+      }
+
+      // For road vertices: prefer the cached WASM fn (no JSON serialization) once the
+      // cache is authoritative. Falls back to full-serialization path otherwise.
       const roadProm = needRoads
-        ? ((!roadsChanged && service.generateRoadVerticesCached)
+        ? ((cacheReady && service.generateRoadVerticesCached)
             ? service.generateRoadVerticesCached(2.0, display.colorMode).catch(() =>
                 service.generateRoadVertices(visibleProject, 2.0, display.colorMode))
             : service.generateRoadVertices(visibleProject, 2.0, display.colorMode)
@@ -158,8 +173,13 @@ export function useViewportMeshes({
       const signalProm = needSignals
         ? service.generateSignalPaintVertices(visibleProject, 2.0).catch(() => new Float32Array(0))
         : empty;
+      // Object vertices: prefer the cached generator (no JSON serialization) when the cache
+      // is authoritative; otherwise serialize the visible project as before.
       const objectProm = needObjects
-        ? service.generateObjectVertices(visibleProject).catch(() => new Float32Array(0))
+        ? ((cacheReady && service.generateObjectVerticesCached)
+            ? service.generateObjectVerticesCached().catch(() => service.generateObjectVertices(visibleProject))
+            : service.generateObjectVertices(visibleProject)
+          ).catch(() => new Float32Array(0))
         : empty;
       const spriteProm = (needSignals || needObjects)
         ? service.generateSpriteData(visibleProject).catch(() => ({ sprites: [], paints: [] } as SpriteDataResult))

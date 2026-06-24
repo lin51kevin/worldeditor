@@ -484,6 +484,11 @@ export interface PlatformService {
   /** Generate road mesh using cached project (skips JSON serialization). */
   generateRoadVerticesCached(sampleStep: number, colorMode?: string): Promise<Float32Array>;
 
+  /** Generate a single road's surface mesh from the cached project, looked up by id.
+   *  Output matches that road's slice in generateRoadVerticesCached, enabling
+   *  incremental single-road mesh updates during drag-edit. */
+  generateSingleRoadSurfaceVerticesCached(roadId: string, sampleStep: number, colorMode?: string): Promise<Float32Array>;
+
   /** Generate vertices for a single road with a custom color. Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateSingleRoadVertices(road: Road, sampleStep: number, color: [number, number, number, number]): Promise<Float32Array>;
 
@@ -509,6 +514,9 @@ export interface PlatformService {
    *  Returns Float32Array of [x,y,z,r,g,b,a] per vertex. */
   generateObjectVertices(project: Project): Promise<Float32Array>;
 
+  /** Generate road object vertices from the cached project (skips JSON serialization). */
+  generateObjectVerticesCached(): Promise<Float32Array>;
+
   /** Generate sprite instance data for textured billboard signals and road paint arrows.
    *  Returns structured data with positions, types, and sizes for the sprite renderer. */
   generateSpriteData(project: Project): Promise<SpriteDataResult>;
@@ -529,6 +537,10 @@ export interface PlatformService {
 
   /** Store the project in the WASM-side cache. Call once per project mutation. */
   setProjectCache(project: Project): Promise<void>;
+
+  /** Replace (or insert) a single road in the WASM cache and incrementally
+   *  re-index just that road. Fast path for drag-edit commits. */
+  updateCachedRoad(road: Road): Promise<void>;
 
   /** Invalidate the WASM spatial index without re-parsing the project. */
   invalidateProjectCache(): Promise<void>;
