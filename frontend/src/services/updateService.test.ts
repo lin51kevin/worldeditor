@@ -51,10 +51,10 @@ describe('checkForUpdate', () => {
   });
 
   it('treats longer semver strings as newer versions', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(releaseResponse('v0.3.0.1', { body: 'Patch metadata' }));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(releaseResponse('v0.3.1.1', { body: 'Patch metadata' }));
 
     await expect(checkForUpdate()).resolves.toEqual({
-      latestVersion: '0.3.0.1',
+      latestVersion: '0.3.1.1',
       releaseUrl: 'https://example.com/release',
       releaseNotes: 'Patch metadata',
     });
