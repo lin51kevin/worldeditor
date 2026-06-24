@@ -23,11 +23,32 @@ use super::signal_mesh::{
 /// - Other: small colored square marker.
 #[wasm_bindgen]
 pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError> {
-    use we_core::geometry::eval::{evaluate_elevation, offset_point, sample_road_reference_line};
-    use we_core::model::{CornerType, ObjectType, Project};
+    use we_core::model::Project;
 
     let project: Project =
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+
+    generate_object_vertices_from_project(&project)
+}
+
+/// Generate road object vertices using the cached project (avoids JSON serialization).
+///
+/// Requires `set_project_cache()` to have been called previously. This is the
+/// fast path used on every surface-mesh refresh so the whole project no longer
+/// has to be re-serialised to JSON just to re-tessellate its objects.
+#[wasm_bindgen]
+pub fn generate_object_vertices_cached() -> Result<Vec<f32>, JsError> {
+    use crate::picking::with_project_cache;
+
+    with_project_cache(|cache| generate_object_vertices_from_project(&cache.project))
+}
+
+/// Internal: generate road object vertices from a parsed `Project` reference.
+pub(super) fn generate_object_vertices_from_project(
+    project: &we_core::model::Project,
+) -> Result<Vec<f32>, JsError> {
+    use we_core::geometry::eval::{evaluate_elevation, offset_point, sample_road_reference_line};
+    use we_core::model::{CornerType, ObjectType};
 
     let mut all_floats = Vec::new();
 
@@ -682,5 +703,22 @@ mod tests {
                 "crosswalk vertex x={vx:.2} should be near extrapolated position (~20), not clamped to road endpoint (~10)"
             );
         }
+    }
+
+    /// The cached object generator must produce byte-identical output to the
+    /// JSON path — it only skips re-serialising the whole project.
+    #[test]
+    fn test_generate_object_vertices_cached_matches_json_path() {
+        let project = road_with_object(road_object("obj-1", ObjectType::Sign, 5.0, 2.0), None);
+        let json = serde_json::to_string(&project).unwrap();
+
+        let from_json = generate_object_vertices(&json).unwrap();
+
+        // Populate the thread-local cache, then generate via the cached path.
+        crate::picking::set_project_cache(&json).unwrap();
+        let from_cache = super::generate_object_vertices_cached().unwrap();
+
+        assert_eq!(from_json, from_cache);
+        assert!(!from_cache.is_empty());
     }
 }
