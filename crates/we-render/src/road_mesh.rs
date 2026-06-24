@@ -6,7 +6,8 @@
 use crate::render_config::RoadRenderConfig;
 use crate::vertex::ColorVertex;
 use we_core::geometry::eval::{
-    evaluate_elevation, evaluate_lane_width, offset_point, sample_road_reference_line,
+    TessellationParams, evaluate_elevation, evaluate_lane_width, offset_point,
+    sample_road_reference_line_adaptive,
 };
 use we_core::model::{LaneType, Road, RoadMarkColor};
 
@@ -32,7 +33,8 @@ pub fn generate_road_mesh(
     sample_step: f64,
     config: &RoadRenderConfig,
 ) -> Vec<ColorVertex> {
-    let ref_pts = sample_road_reference_line(road, sample_step);
+    let ref_pts =
+        sample_road_reference_line_adaptive(road, &TessellationParams::with_max_step(sample_step));
     if ref_pts.len() < 2 {
         return Vec::new();
     }
@@ -358,7 +360,8 @@ pub fn generate_lane_lines(
 /// Generate lane boundary lines for all lanes of a road.
 /// Returns a flat `Vec<ColorVertex>` ready for GPU upload.
 pub fn generate_road_lane_lines(road: &Road, sample_step: f64) -> Vec<ColorVertex> {
-    let ref_pts = sample_road_reference_line(road, sample_step);
+    let ref_pts =
+        sample_road_reference_line_adaptive(road, &TessellationParams::with_max_step(sample_step));
     if ref_pts.len() < 2 {
         return Vec::new();
     }
@@ -426,6 +429,7 @@ pub fn generate_road_lane_lines(road: &Road, sample_step: f64) -> Vec<ColorVerte
 #[cfg(test)]
 mod tests {
     use super::*;
+    use we_core::geometry::eval::sample_road_reference_line;
     use we_core::model::*;
 
     fn default_config() -> RoadRenderConfig {

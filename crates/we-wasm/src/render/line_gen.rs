@@ -13,7 +13,9 @@ pub fn generate_lane_line_vertices(
     project_json: &str,
     sample_step: f64,
 ) -> Result<Vec<f32>, JsError> {
-    use we_core::geometry::eval::{evaluate_lane_width, sample_road_reference_line};
+    use we_core::geometry::eval::{
+        TessellationParams, evaluate_lane_width, sample_road_reference_line_adaptive,
+    };
     use we_core::model::Project;
 
     let project: Project =
@@ -26,7 +28,8 @@ pub fn generate_lane_line_vertices(
             continue;
         }
 
-        let ref_pts = sample_road_reference_line(road, sample_step);
+        let ref_pts =
+            sample_road_reference_line_adaptive(road, &TessellationParams::with_max_step(sample_step));
         if ref_pts.len() < 2 {
             continue;
         }
@@ -188,7 +191,9 @@ pub fn generate_center_line_vertices(
     project_json: &str,
     sample_step: f64,
 ) -> Result<Vec<f32>, JsError> {
-    use we_core::geometry::eval::{evaluate_elevation, offset_point, sample_road_reference_line};
+    use we_core::geometry::eval::{
+        TessellationParams, evaluate_elevation, offset_point, sample_road_reference_line_adaptive,
+    };
     use we_core::model::Project;
 
     let project: Project =
@@ -199,7 +204,8 @@ pub fn generate_center_line_vertices(
     let z_lift = 0.02f32;
 
     for road in &project.roads {
-        let ref_pts = sample_road_reference_line(road, sample_step);
+        let ref_pts =
+            sample_road_reference_line_adaptive(road, &TessellationParams::with_max_step(sample_step));
         if ref_pts.len() < 2 {
             continue;
         }
@@ -250,7 +256,8 @@ pub fn generate_lane_boundary_vertices(
     sample_step: f64,
 ) -> Result<Vec<f32>, JsError> {
     use we_core::geometry::eval::{
-        evaluate_elevation, evaluate_lane_width, offset_point, sample_road_reference_line,
+        TessellationParams, evaluate_elevation, evaluate_lane_width, offset_point,
+        sample_road_reference_line_adaptive,
     };
     use we_core::model::Project;
 
@@ -286,7 +293,8 @@ pub fn generate_lane_boundary_vertices(
             continue;
         }
 
-        let ref_pts = sample_road_reference_line(road, sample_step);
+        let ref_pts =
+            sample_road_reference_line_adaptive(road, &TessellationParams::with_max_step(sample_step));
         if ref_pts.len() < 2 {
             continue;
         }

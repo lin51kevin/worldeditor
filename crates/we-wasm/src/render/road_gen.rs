@@ -74,14 +74,16 @@ pub(super) fn build_road_surface_vertices(
     color_mode: &str,
 ) -> Vec<[f32; 7]> {
     use we_core::geometry::eval::{
-        evaluate_elevation, evaluate_lane_width, offset_point, sample_road_reference_line,
+        TessellationParams, evaluate_elevation, evaluate_lane_width, offset_point,
+        sample_road_reference_line_adaptive,
     };
 
     if road.render_hidden {
         return Vec::new();
     }
 
-    let ref_pts = sample_road_reference_line(road, sample_step);
+    let ref_pts =
+        sample_road_reference_line_adaptive(road, &TessellationParams::with_max_step(sample_step));
     if ref_pts.len() < 2 {
         return Vec::new();
     }
@@ -219,10 +221,12 @@ fn build_single_road_preview_vertices(
     color: [f32; 4],
 ) -> Vec<f32> {
     use we_core::geometry::eval::{
-        evaluate_elevation, evaluate_lane_width, offset_point, sample_road_reference_line,
+        TessellationParams, evaluate_elevation, evaluate_lane_width, offset_point,
+        sample_road_reference_line_adaptive,
     };
 
-    let ref_pts = sample_road_reference_line(road, sample_step);
+    let ref_pts =
+        sample_road_reference_line_adaptive(road, &TessellationParams::with_max_step(sample_step));
     if ref_pts.len() < 2 {
         return Vec::new();
     }

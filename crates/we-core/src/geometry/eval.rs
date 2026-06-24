@@ -137,11 +137,142 @@ pub fn evaluate_road_at_s(road: &Road, s: f64) -> Option<RefLinePoint> {
     None
 }
 
-/// Sample the entire road reference line at a given step interval.
+/// Base sampling step (metres) applied on high-curvature sections.
+///
+/// Mirrors WorldEditorOnline's `TESSELLATION_STEP_IN_METERS`.
+pub const TESS_BASE_STEP: f64 = 0.5;
+/// Coarsest sampling step (metres) applied on straight / low-curvature sections.
+///
+/// Mirrors WorldEditorOnline's `TESSELLATION_MAX_STEP_IN_METERS`.
+pub const TESS_MAX_STEP: f64 = 5.0;
+/// Maximum allowed chord (sagitta) error in metres driving the adaptive step.
+///
+/// Mirrors WorldEditorOnline's `TESSELLATION_MAX_ERROR_IN_METERS`.
+pub const TESS_MAX_ERROR: f64 = 0.01;
+
+/// Parameters controlling adaptive (curvature-driven) reference-line tessellation.
+///
+/// On each geometry element the marching step is chosen from the local curvature
+/// `k` so the chord (sagitta) error stays within `max_error`:
+/// `step = clamp(sqrt(8 * max_error / |k|), base_step, max_step)`.
+/// Straight sections (`k → 0`) coarsen to `max_step`; tight curves refine to
+/// `base_step`.
+#[derive(Debug, Clone, Copy)]
+pub struct TessellationParams {
+    /// Base (finest) step in metres on high-curvature sections.
+    pub base_step: f64,
+    /// Maximum (coarsest) step in metres on straight sections.
+    pub max_step: f64,
+    /// Chord-error tolerance in metres.
+    pub max_error: f64,
+}
+
+impl Default for TessellationParams {
+    fn default() -> Self {
+        Self {
+            base_step: TESS_BASE_STEP,
+            max_step: TESS_MAX_STEP,
+            max_error: TESS_MAX_ERROR,
+        }
+    }
+}
+
+impl TessellationParams {
+    /// Build parameters with WorldEditorOnline defaults but a custom coarsest step.
+    ///
+    /// The supplied `max_step` is the coarsest spacing allowed on straight
+    /// sections; it is clamped to be no finer than `base_step`.
+    pub fn with_max_step(max_step: f64) -> Self {
+        let base_step = TESS_BASE_STEP;
+        Self {
+            base_step,
+            max_step: max_step.max(base_step),
+            max_error: TESS_MAX_ERROR,
+        }
+    }
+
+    /// Choose the marching step for a given (signed) local curvature.
+    fn step_for_curvature(&self, curvature: f64) -> f64 {
+        let k = curvature.abs();
+        if k < 1e-9 {
+            return self.max_step;
+        }
+        (8.0 * self.max_error / k)
+            .sqrt()
+            .clamp(self.base_step, self.max_step)
+    }
+}
+
+/// Signed curvature `k = 1/R` of a geometry element at local offset `ds`.
+///
+/// Positive curves left, negative curves right. Lines return `0`.
+/// For poly3 / paramPoly3 the curvature is computed from the first and second
+/// derivatives and is invariant to the parameterisation.
+pub fn curvature_at(geo: &Geometry, ds: f64) -> f64 {
+    let ds = ds.clamp(0.0, geo.length);
+    match &geo.geo_type {
+        GeometryType::Line => 0.0,
+        GeometryType::Arc { curvature } => *curvature,
+        GeometryType::Spiral {
+            curv_start,
+            curv_end,
+        } => {
+            if geo.length > 0.0 {
+                let t = ds / geo.length;
+                curv_start + (curv_end - curv_start) * t
+            } else {
+                *curv_start
+            }
+        }
+        GeometryType::Poly3 { b, c, d, .. } => {
+            // v = a + b*u + c*u^2 + d*u^3, with u = ds (x = u).
+            let dv = b + 2.0 * c * ds + 3.0 * d * ds * ds;
+            let ddv = 2.0 * c + 6.0 * d * ds;
+            let denom = (1.0 + dv * dv).powf(1.5);
+            if denom > 1e-12 { ddv / denom } else { 0.0 }
+        }
+        GeometryType::ParamPoly3 {
+            b_u,
+            c_u,
+            d_u,
+            b_v,
+            c_v,
+            d_v,
+            p_range,
+            ..
+        } => {
+            let p = match p_range {
+                ParamPoly3Range::ArcLength => ds,
+                ParamPoly3Range::Normalized => {
+                    if geo.length > 0.0 {
+                        ds / geo.length
+                    } else {
+                        0.0
+                    }
+                }
+            };
+            let du = b_u + 2.0 * c_u * p + 3.0 * d_u * p * p;
+            let dv = b_v + 2.0 * c_v * p + 3.0 * d_v * p * p;
+            let ddu = 2.0 * c_u + 6.0 * d_u * p;
+            let ddv = 2.0 * c_v + 6.0 * d_v * p;
+            let denom = (du * du + dv * dv).powf(1.5);
+            if denom > 1e-12 {
+                (du * ddv - dv * ddu) / denom
+            } else {
+                0.0
+            }
+        }
+    }
+}
+
+/// Sample the entire road reference line at a given uniform step interval.
 ///
 /// Returns points along the centerline in world coordinates.
 /// Lane section boundaries are always included as exact evaluation points,
 /// preventing mesh gaps when a boundary falls between two sample positions.
+///
+/// Prefer [`sample_road_reference_line_adaptive`] for rendering: it refines
+/// tight curves while coarsening straight sections.
 pub fn sample_road_reference_line(road: &Road, step: f64) -> Vec<RefLinePoint> {
     let mut points = Vec::new();
 
@@ -155,20 +286,55 @@ pub fn sample_road_reference_line(road: &Road, step: f64) -> Vec<RefLinePoint> {
         }
     }
 
+    finalize_ref_points(road, points)
+}
+
+/// Sample the road reference line with adaptive, curvature-driven tessellation.
+///
+/// Each geometry element is marched with a step chosen from its local curvature
+/// so the chord (sagitta) error stays within `params.max_error`. Straight
+/// sections coarsen towards `params.max_step`; tight curves refine towards
+/// `params.base_step`. Lane section boundaries are inserted exactly, identical
+/// to [`sample_road_reference_line`].
+pub fn sample_road_reference_line_adaptive(
+    road: &Road,
+    params: &TessellationParams,
+) -> Vec<RefLinePoint> {
+    let mut points = Vec::new();
+
+    for geo in &road.plan_view {
+        if geo.length <= 0.0 {
+            points.push(evaluate_geometry(geo, 0.0));
+            continue;
+        }
+
+        let mut ds = 0.0;
+        loop {
+            points.push(evaluate_geometry(geo, ds));
+            if ds >= geo.length - 1e-9 {
+                break;
+            }
+            let step = params.step_for_curvature(curvature_at(geo, ds));
+            ds = (ds + step).min(geo.length);
+        }
+    }
+
+    finalize_ref_points(road, points)
+}
+
+/// Deduplicate shared geometry endpoints and insert exact lane-section boundary
+/// points so adjacent sections share an edge vertex.
+///
+/// When a lane section boundary (`section.s`) does not coincide with a sampled
+/// point, the two adjacent sections each lose their shared edge vertex: section
+/// N ends one sample *before* the boundary and section N+1 starts one sample
+/// *after* it, leaving a visible strip of unrendered road surface. Mirroring the
+/// C# approach (CurveLaneLine knots placed at every section boundary), we insert
+/// geometry-accurate points here so both sections share the exact coordinate.
+fn finalize_ref_points(road: &Road, mut points: Vec<RefLinePoint>) -> Vec<RefLinePoint> {
     // Deduplicate consecutive near-identical points (geometry boundaries)
     points.dedup_by(|a, b| (a.s - b.s).abs() < 1e-9);
 
-    // Insert exact evaluation points at lane section boundaries.
-    //
-    // When a lane section boundary (section.s) does not coincide with a
-    // geometry-derived sample point, the two adjacent sections each lose
-    // their shared edge vertex: section N ends one sample *before* the
-    // boundary and section N+1 starts one sample *after* it, leaving a
-    // visible strip of unrendered road surface.
-    //
-    // Mirroring the C# approach (CurveLaneLine knots placed at every section
-    // boundary), we insert geometry-accurate points here so both sections
-    // share the exact boundary coordinate.
     for section in &road.lane_sections {
         let s = section.s;
         if s <= 1e-9 || s >= road.length - 1e-9 {
@@ -489,6 +655,133 @@ mod tests {
         let last = pts.last().unwrap();
         assert!((last.x - 100.0).abs() < 1e-6);
         assert!((last.y - 100.0).abs() < 1e-6);
+    }
+
+    // --- Curvature tests ---
+
+    #[test]
+    fn test_curvature_line_is_zero() {
+        let geo = line_geometry(0.0, 0.0, 0.0, 0.0, 100.0);
+        assert!(curvature_at(&geo, 0.0).abs() < 1e-12);
+        assert!(curvature_at(&geo, 50.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_curvature_arc_is_constant() {
+        let geo = arc_geometry(0.0, 0.0, 0.0, 0.0, 100.0, 0.02);
+        assert!((curvature_at(&geo, 0.0) - 0.02).abs() < 1e-12);
+        assert!((curvature_at(&geo, 100.0) - 0.02).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_curvature_spiral_lerps() {
+        let geo = Geometry {
+            s: 0.0,
+            x: 0.0,
+            y: 0.0,
+            hdg: 0.0,
+            length: 100.0,
+            geo_type: GeometryType::Spiral {
+                curv_start: 0.0,
+                curv_end: 0.04,
+            },
+        };
+        assert!(curvature_at(&geo, 0.0).abs() < 1e-12);
+        assert!((curvature_at(&geo, 50.0) - 0.02).abs() < 1e-12);
+        assert!((curvature_at(&geo, 100.0) - 0.04).abs() < 1e-12);
+    }
+
+    // --- Adaptive sampling tests ---
+
+    #[test]
+    fn test_adaptive_straight_uses_max_step() {
+        let mut road = Road::new("1", 100.0);
+        road.plan_view
+            .push(line_geometry(0.0, 0.0, 0.0, 0.0, 100.0));
+
+        let params = TessellationParams::default();
+        let pts = sample_road_reference_line_adaptive(&road, &params);
+
+        // 100 m / 5 m max step → 21 points (0,5,...,100)
+        assert_eq!(pts.len(), 21);
+        for w in pts.windows(2) {
+            assert!((w[1].s - w[0].s - params.max_step).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_adaptive_curve_finer_than_straight() {
+        let mut straight = Road::new("1", 100.0);
+        straight
+            .plan_view
+            .push(line_geometry(0.0, 0.0, 0.0, 0.0, 100.0));
+
+        // R = 50 m arc of equal length.
+        let mut curve = Road::new("2", 100.0);
+        curve
+            .plan_view
+            .push(arc_geometry(0.0, 0.0, 0.0, 0.0, 100.0, 1.0 / 50.0));
+
+        let params = TessellationParams::default();
+        let n_straight = sample_road_reference_line_adaptive(&straight, &params).len();
+        let n_curve = sample_road_reference_line_adaptive(&curve, &params).len();
+
+        // The curve must be tessellated more finely than the straight.
+        assert!(
+            n_curve > n_straight,
+            "curve={n_curve} should exceed straight={n_straight}"
+        );
+    }
+
+    #[test]
+    fn test_adaptive_arc_chord_error_within_tolerance() {
+        // R = 50 m → unclamped step ≈ 2 m, well inside [base, max].
+        let r = 50.0;
+        let length = std::f64::consts::FRAC_PI_2 * r;
+        let mut road = Road::new("1", length);
+        road.plan_view
+            .push(arc_geometry(0.0, 0.0, 0.0, 0.0, length, 1.0 / r));
+
+        let params = TessellationParams::default();
+        let pts = sample_road_reference_line_adaptive(&road, &params);
+
+        for w in pts.windows(2) {
+            let sm = 0.5 * (w[0].s + w[1].s);
+            let mid = evaluate_road_at_s(&road, sm).unwrap();
+            // Perpendicular distance from the true mid-arc point to the chord.
+            let dx = w[1].x - w[0].x;
+            let dy = w[1].y - w[0].y;
+            let len = (dx * dx + dy * dy).sqrt().max(1e-9);
+            let sag = ((mid.x - w[0].x) * dy - (mid.y - w[0].y) * dx).abs() / len;
+            assert!(
+                sag <= params.max_error + 1e-4,
+                "chord error {sag} exceeds tolerance {}",
+                params.max_error
+            );
+        }
+    }
+
+    #[test]
+    fn test_adaptive_tight_curve_clamps_to_base_step() {
+        // R = 5 m → unclamped step ≈ 0.63 m, but very tight curves must never
+        // sample finer than base_step.
+        let r = 5.0;
+        let length = std::f64::consts::FRAC_PI_2 * r;
+        let mut road = Road::new("1", length);
+        road.plan_view
+            .push(arc_geometry(0.0, 0.0, 0.0, 0.0, length, 1.0 / r));
+
+        let params = TessellationParams::default();
+        let pts = sample_road_reference_line_adaptive(&road, &params);
+
+        for w in pts.windows(2) {
+            // No interior segment finer than base_step (last segment may be shorter).
+            let ds = w[1].s - w[0].s;
+            assert!(ds >= params.base_step - 1e-6 || (w[1].s - length).abs() < 1e-6);
+        }
+        // Endpoints preserved.
+        assert!((pts.first().unwrap().s).abs() < 1e-9);
+        assert!((pts.last().unwrap().s - length).abs() < 1e-6);
     }
 
     // --- Utility tests ---

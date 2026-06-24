@@ -19,6 +19,16 @@ import { buildRenderableProject } from '../utils/sceneGraph';
 import { mergeFloat32Arrays } from '../components/viewportUtils';
 import type { Project } from '../services/platform';
 
+/**
+ * Coarsest reference-line sampling step (metres) for road/lane tessellation.
+ *
+ * The WASM samplers are adaptive (curvature-driven): this value is the upper
+ * bound applied on straight sections, while tight curves refine down to ~0.5 m
+ * within a 0.01 m chord-error tolerance. Mirrors WorldEditorOnline's
+ * `TESSELLATION_MAX_STEP_IN_METERS`.
+ */
+const TESS_MAX_STEP_M = 5.0;
+
 interface UseViewportMeshesParams {
   rendererRef: MutableRefObject<ViewportRenderer | null>;
   status: 'loading' | 'ready' | 'unsupported';
@@ -162,9 +172,9 @@ export function useViewportMeshes({
       // cache is authoritative. Falls back to full-serialization path otherwise.
       const roadProm = needRoads
         ? ((cacheReady && service.generateRoadVerticesCached)
-            ? service.generateRoadVerticesCached(2.0, display.colorMode).catch(() =>
-                service.generateRoadVertices(visibleProject, 2.0, display.colorMode))
-            : service.generateRoadVertices(visibleProject, 2.0, display.colorMode)
+            ? service.generateRoadVerticesCached(TESS_MAX_STEP_M, display.colorMode).catch(() =>
+                service.generateRoadVertices(visibleProject, TESS_MAX_STEP_M, display.colorMode))
+            : service.generateRoadVertices(visibleProject, TESS_MAX_STEP_M, display.colorMode)
           ).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); })
         : empty;
       const junctionProm = needJunctions
@@ -306,9 +316,9 @@ export function useViewportMeshes({
         };
         // Always generate all line layers so mode switching is instant
         const [centerLineVerts, laneBoundaryVerts, roadMarkVerts] = await Promise.all([
-          service.generateCenterLineVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0)),
-          service.generateLaneBoundaryVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0)),
-          service.generateLaneLineVertices(nonConnectorProject, 2.0).catch(() => new Float32Array(0)),
+          service.generateCenterLineVertices(nonConnectorProject, TESS_MAX_STEP_M).catch(() => new Float32Array(0)),
+          service.generateLaneBoundaryVertices(nonConnectorProject, TESS_MAX_STEP_M).catch(() => new Float32Array(0)),
+          service.generateLaneLineVertices(nonConnectorProject, TESS_MAX_STEP_M).catch(() => new Float32Array(0)),
         ]);
 
         cachedCenterLineVertsRef.current = centerLineVerts;

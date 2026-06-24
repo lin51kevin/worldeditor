@@ -1,6 +1,8 @@
 use wasm_bindgen::prelude::*;
 
-use we_core::geometry::eval::{evaluate_elevation, sample_road_reference_line};
+use we_core::geometry::eval::{
+    TessellationParams, evaluate_elevation, sample_road_reference_line_adaptive,
+};
 
 /// Grey-blue color for bridge deck overlays (RGBA).
 const BRIDGE_COLOR: [f32; 4] = [0.50, 0.55, 0.65, 0.80];
@@ -39,7 +41,8 @@ pub fn generate_bridge_tunnel_vertices(project_json: &str) -> Result<Vec<f32>, J
             continue;
         }
 
-        let ref_pts = sample_road_reference_line(road, 2.0);
+        let ref_pts =
+            sample_road_reference_line_adaptive(road, &TessellationParams::default());
         if ref_pts.len() < 2 {
             continue;
         }
