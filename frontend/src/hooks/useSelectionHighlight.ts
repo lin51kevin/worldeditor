@@ -108,16 +108,16 @@ export function useSelectionHighlight({
             const verts = service.generateSingleObjectVerticesCached
               ? await service.generateSingleObjectVerticesCached(
                   selectedSceneNode.roadId, selectedSceneNode.objectId,
-                  [0.2, 0.9, 0.9, 1.0],
+                  [0.95, 0.18, 0.18, 0.82],
                 ).catch(() =>
                   service.generateSingleObjectVertices(
                     project, selectedSceneNode.roadId, selectedSceneNode.objectId,
-                    [0.2, 0.9, 0.9, 1.0],
+                    [0.95, 0.18, 0.18, 0.82],
                   ),
                 )
               : await service.generateSingleObjectVertices(
                   project, selectedSceneNode.roadId, selectedSceneNode.objectId,
-                  [0.2, 0.9, 0.9, 1.0],
+                  [0.95, 0.18, 0.18, 0.82],
                 );
             if (verts.length > 0) renderer.uploadHighlightVertices(liftMeshZ(verts, LINK_HIGHLIGHT_Z_LIFT));
             else renderer.clearHighlight();

@@ -270,8 +270,14 @@ export function generate_single_junction_vertices(project_json: string, junction
 /**
  * Generate highlight vertices for a single road object.
  *
- * Looks up the object by road_id + object_id, evaluates its world position,
- * and returns a square marker mesh tinted with the given colour.
+ * Generate a selection-highlight mesh for a single road object.
+ *
+ * For objects that have corner data (crosswalks, parking spaces, etc.) the
+ * highlight is rendered as an outline of the object polygon so the user can
+ * see exactly what was selected.  Objects without corners fall back to a
+ * labelled rectangle sized from the object's `length` / `width` attributes,
+ * or a small square when neither is provided.
+ *
  * Each vertex is 7 floats: [x, y, z, r, g, b, a].
  */
 export function generate_single_object_vertices(project_json: string, road_id: string, object_id: string, r: number, g: number, b: number, a: number): Float32Array;

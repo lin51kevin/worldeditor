@@ -397,6 +397,118 @@ fn clip_scanline_lateral(
     hits
 }
 
+/// Detect whether a crosswalk's `cornerLocal` coordinates are stored in the
+/// object's own heading frame (apply `obj_hdg` rotation) or already in the
+/// road frame (identity).
+///
+/// This is the single source of truth shared by [`emit_crosswalk_stripes`]
+/// (which draws the zebra surface) and [`crosswalk_world_polygon`] (used for
+/// the selection-highlight outline and picking), so the outline always matches
+/// the rendered stripes.
+///
+/// See `emit_crosswalk_stripes` for the detailed rationale behind each case.
+pub(crate) fn detect_crosswalk_apply_hdg(
+    corners: &[we_core::model::Point3D],
+    obj_hdg: f64,
+    obj_length: f64,
+    obj_width: f64,
+) -> bool {
+    if obj_length > 0.0 && obj_width > 0.0 {
+        // Case 1: hdg ≈ ±π — always treat as object-local (aspect ratio is ambiguous).
+        let hdg_near_pi = (obj_hdg.abs() - std::f64::consts::PI).abs() < 0.17; // ≈ 10°
+        if hdg_near_pi {
+            true
+        } else {
+            // Case 2: aspect-ratio heuristic for other headings (reliable for hdg ≈ π/2).
+            let (u_min, u_max) = corners
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
+                    (mn.min(c.x), mx.max(c.x))
+                });
+            let (v_min, v_max) = corners
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
+                    (mn.min(c.y), mx.max(c.y))
+                });
+            (u_max - u_min) > (v_max - v_min)
+        }
+    } else {
+        // Case 3: no size info — always apply.
+        true
+    }
+}
+
+/// Map a crosswalk's `cornerLocal` corners to world-space `(x, y)` polygon
+/// vertices using [`detect_crosswalk_apply_hdg`] so the result is identical to
+/// the polygon used by [`emit_crosswalk_stripes`] when clipping the stripes.
+pub(crate) fn crosswalk_world_polygon(
+    corners: &[we_core::model::Point3D],
+    ref_pt: &we_core::geometry::eval::RefLinePoint,
+    obj_t: f64,
+    obj_hdg: f64,
+    offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
+    obj_length: f64,
+    obj_width: f64,
+) -> Vec<(f64, f64)> {
+    let (ox, oy, _) = offset_pt(ref_pt, obj_t, 0.0);
+    let road_theta = ref_pt.hdg;
+    let (cos_road, sin_road) = (road_theta.cos(), road_theta.sin());
+    let apply_hdg = detect_crosswalk_apply_hdg(corners, obj_hdg, obj_length, obj_width);
+    let (cos_h, sin_h) = if apply_hdg {
+        (obj_hdg.cos(), obj_hdg.sin())
+    } else {
+        (1.0_f64, 0.0_f64)
+    };
+    corners
+        .iter()
+        .map(|c| {
+            let alpha = c.x * cos_h - c.y * sin_h;
+            let beta = c.x * sin_h + c.y * cos_h;
+            (
+                ox + alpha * cos_road - beta * sin_road,
+                oy + alpha * sin_road + beta * cos_road,
+            )
+        })
+        .collect()
+}
+
+/// Emit a closed outline (thick line loop) around a world-space polygon at a
+/// fixed elevation. Used by the crosswalk selection highlight so the outline
+/// hugs the exact stripe area.
+pub(crate) fn emit_world_polygon_outline(
+    world_poly: &[(f64, f64)],
+    z: f32,
+    bar_thickness: f64,
+    color: [f32; 4],
+    out: &mut Vec<f32>,
+) {
+    let n = world_poly.len();
+    if n < 2 {
+        return;
+    }
+    let [r, g, b, a] = color;
+    let hw = bar_thickness / 2.0;
+    for i in 0..n {
+        let (ax, ay) = world_poly[i];
+        let (bx, by) = world_poly[(i + 1) % n];
+        let dx = bx - ax;
+        let dy = by - ay;
+        let len = (dx * dx + dy * dy).sqrt().max(1e-9);
+        let nx = -dy / len * hw;
+        let ny = dx / len * hw;
+        let p0 = ((ax + nx) as f32, (ay + ny) as f32);
+        let p1 = ((ax - nx) as f32, (ay - ny) as f32);
+        let p2 = ((bx - nx) as f32, (by - ny) as f32);
+        let p3 = ((bx + nx) as f32, (by + ny) as f32);
+        out.extend_from_slice(&[p0.0, p0.1, z, r, g, b, a]);
+        out.extend_from_slice(&[p1.0, p1.1, z, r, g, b, a]);
+        out.extend_from_slice(&[p2.0, p2.1, z, r, g, b, a]);
+        out.extend_from_slice(&[p0.0, p0.1, z, r, g, b, a]);
+        out.extend_from_slice(&[p2.0, p2.1, z, r, g, b, a]);
+        out.extend_from_slice(&[p3.0, p3.1, z, r, g, b, a]);
+    }
+}
+
 /// Emit crosswalk zebra stripes given `cornerLocal` polygon data and the object's heading.
 ///
 /// Uses the caller-provided `exact_ref_pt` (evaluated exactly at `obj_s`) to build all
@@ -433,11 +545,16 @@ pub(super) fn emit_crosswalk_stripes(
         return;
     }
 
+    // Crosswalk stripes must be rendered clearly above the road surface.
+    // Using 5 cm (vs. the former 2 cm) prevents depth-fighting in perspective
+    // and avoids roads covering the crosswalk when corner z-values are negative.
+    const CROSSWALK_Z_LIFT: f32 = 0.05;
+
     let ref_pt = exact_ref_pt;
 
     // Object world-space origin (includes the lateral obj_t offset).
     let (ox, oy, _) = offset_pt(ref_pt, obj_t, 0.0);
-    let z_base = evaluate_elevation(elevations, ref_pt.s) as f32 + 0.02;
+    let z_base = evaluate_elevation(elevations, ref_pt.s) as f32 + CROSSWALK_Z_LIFT;
 
     // Stripe directions: bars extend along road tangent (parallel to traffic),
     // spaced in the lateral (perpendicular) direction.
@@ -447,80 +564,11 @@ pub(super) fn emit_crosswalk_stripes(
     let sweep_theta = bar_theta + std::f64::consts::FRAC_PI_2; // spacing direction (lateral)
     let (cos_sw, sin_sw) = (sweep_theta.cos(), sweep_theta.sin());
 
-    // Corner transform: road tangent for the tangent-plane mapping.
-    let road_theta = ref_pt.hdg;
-    let (cos_road, sin_road) = (road_theta.cos(), road_theta.sin());
-
-    // Convention detection for cornerLocal coordinate frame:
-    //
-    // Two real-world conventions exist:
-    //
-    // - **Road-frame** (e.g. CityScape/RoadRunner): cornerLocal (u, v) is already
-    //   in road-frame orientation (u = along-road, v = lateral). The polygon's
-    //   v-extent (lateral / road-spanning) is larger than u-extent (along-road depth).
-    //   obj_hdg is metadata only → NO hdg rotation.
-    //
-    // - **Object-local frame** (e.g. 51World, spec-compliant): cornerLocal (u, v)
-    //   is in the object's own heading frame. obj_hdg must be applied → APPLY rotation.
-    //
-    // Detection strategy:
-    //
-    // Case 1 — hdg ≈ ±π (road-aligned, backward):
-    //   The aspect-ratio heuristic is unreliable here. A spec-compliant object with
-    //   u = depth (small) along hdg direction and v = width (large) perpendicular to
-    //   hdg looks identical to road-frame (u_span < v_span). 51World exports all
-    //   junction crosswalks with hdg≈±π in object-local frame, so we always apply
-    //   the heading rotation for this case. Applying hdg=π is equivalent to reflecting
-    //   both axes (alpha=−u, beta=−v), which correctly positions asymmetric polygons.
-    //
-    // Case 2 — hdg ≈ π/2 (perpendicular, the classic 51World case):
-    //   Aspect-ratio heuristic is reliable: u-extent (across road) > v-extent (depth)
-    //   indicates object-local frame. CityScape/RoadRunner in road-frame has u < v here.
-    //
-    // Case 3 — length = 0 || width = 0:
-    //   Always apply hdg (original junction_crosswalk_signal behaviour).
-    let apply_hdg = if obj_length > 0.0 && obj_width > 0.0 {
-        // Case 1: hdg ≈ ±π — always treat as object-local (aspect ratio is ambiguous).
-        let hdg_near_pi =
-            (obj_hdg.abs() - std::f64::consts::PI).abs() < 0.17; // ≈ 10° tolerance
-        if hdg_near_pi {
-            true
-        } else {
-            // Case 2: aspect-ratio heuristic for other headings (reliable for hdg ≈ π/2).
-            let (u_min, u_max) = corners
-                .iter()
-                .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
-                    (mn.min(c.x), mx.max(c.x))
-                });
-            let (v_min, v_max) = corners
-                .iter()
-                .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
-                    (mn.min(c.y), mx.max(c.y))
-                });
-            (u_max - u_min) > (v_max - v_min)
-        }
-    } else {
-        // Case 3: no size info — always apply.
-        true
-    };
-    let (cos_h, sin_h) = if apply_hdg {
-        (obj_hdg.cos(), obj_hdg.sin())
-    } else {
-        (1.0_f64, 0.0_f64) // identity: alpha = u, beta = v
-    };
-
-    // Build world-space polygon vertices for stripe clipping.
-    let world_poly: Vec<(f64, f64)> = corners
-        .iter()
-        .map(|c| {
-            let alpha = c.x * cos_h - c.y * sin_h;
-            let beta = c.x * sin_h + c.y * cos_h;
-            (
-                ox + alpha * cos_road - beta * sin_road,
-                oy + alpha * sin_road + beta * cos_road,
-            )
-        })
-        .collect();
+    // Build world-space polygon vertices for stripe clipping. Uses the shared
+    // `crosswalk_world_polygon` helper so the selection-highlight outline (which
+    // calls the same helper) hugs exactly the same area.
+    let world_poly =
+        crosswalk_world_polygon(corners, ref_pt, obj_t, obj_hdg, offset_pt, obj_length, obj_width);
 
     // Project world polygon onto sweep coordinate system to compute AABB.
     let mut s_min = f64::INFINITY;
@@ -578,7 +626,10 @@ pub(super) fn emit_crosswalk_stripes(
             let p11 = world_from_sweep(s_end, l_end);
             let p01 = world_from_sweep(s_end, l_start);
 
-            let z = z_base + corners.first().map_or(0.0, |c| c.z as f32);
+            // Do not add corners[0].z: corner z-values from XODR data are often
+            // slightly negative (e.g. 51World exports), which would push stripes
+            // back down to or below the road surface, causing z-fighting.
+            let z = z_base;
 
             out.extend_from_slice(&[p00.0 as f32, p00.1 as f32, z, r, g, b_color, a]);
             out.extend_from_slice(&[p10.0 as f32, p10.1 as f32, z, r, g, b_color, a]);
@@ -612,7 +663,7 @@ pub(super) fn emit_crosswalk_stripes(
 /// Detection uses `obj_length > 0 && obj_width > 0` from the XML attributes, which
 /// reliably distinguishes the two conventions regardless of corner aspect ratio.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn emit_polygon_outline(
+pub(crate) fn emit_polygon_outline(
     corners: &[we_core::model::Point3D],
     exact_ref_pt: &we_core::geometry::eval::RefLinePoint,
     elevations: &[we_core::model::Elevation],
@@ -725,7 +776,9 @@ pub(super) fn emit_polygon_outline_road_corners(
         .filter_map(|c| {
             let rp = road_point_at_s(plan_view, c.x)?;
             let (wx, wy, _) = offset_pt(&rp, c.y, 0.0);
-            let z = evaluate_elevation(elevations, c.x) as f32 + c.z as f32 + 0.02;
+            // Use the same 5 cm lift as the stripe path; clamp corner dz to ≥ 0
+            // so negative cornerRoad z values cannot push below road surface.
+            let z = evaluate_elevation(elevations, c.x) as f32 + (c.z as f32).max(0.0) + 0.05;
             Some((wx, wy, z))
         })
         .collect();

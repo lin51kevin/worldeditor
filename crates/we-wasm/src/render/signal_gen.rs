@@ -336,6 +336,7 @@ pub fn generate_single_object_vertices_cached(
     a: f32,
 ) -> Result<Vec<f32>, JsError> {
     use we_core::geometry::eval::{evaluate_elevation, offset_point};
+    use we_core::model::{CornerType, ObjectType};
 
     crate::picking::with_project_cache(|cache| {
         let project = cache.project();
@@ -353,21 +354,77 @@ pub fn generate_single_object_vertices_cached(
             return Ok(Vec::new());
         };
 
-        let (mx, my, _) = offset_point(&ref_pt, t, 0.0);
-        let z_road = evaluate_elevation(&road.elevation_profile, s) as f32;
-        let mx = mx as f32;
-        let my = my as f32;
-        let sz = 0.6f32;
-        let z = z_road + 0.05;
+        let color = [r, g, b, a];
+        let z_base = evaluate_elevation(&road.elevation_profile, s) as f32 + 0.08;
+        let mut floats: Vec<f32> = Vec::new();
 
-        let tl = [mx - sz, my - sz, z];
-        let tr = [mx + sz, my - sz, z];
-        let bl = [mx - sz, my + sz, z];
-        let br = [mx + sz, my + sz, z];
-
-        let mut floats = Vec::with_capacity(6 * 7);
-        for p in &[tl, tr, br, tl, br, bl] {
-            floats.extend_from_slice(&[p[0], p[1], p[2], r, g, b, a]);
+        if !obj.corners.is_empty() {
+            use crate::render::signal_mesh::{
+                crosswalk_world_polygon, emit_polygon_outline, emit_world_polygon_outline,
+            };
+            // Crosswalks (cornerLocal) render as zebra stripes; reuse the same
+            // world polygon so the highlight outline hugs the stripe area.
+            let is_crosswalk_local =
+                obj.object_type == ObjectType::Crosswalk && obj.corner_type == CornerType::Local;
+            if is_crosswalk_local {
+                let world_poly = crosswalk_world_polygon(
+                    &obj.corners,
+                    &ref_pt,
+                    t,
+                    obj.hdg,
+                    &offset_point,
+                    obj.length,
+                    obj.width,
+                );
+                emit_world_polygon_outline(&world_poly, z_base, 0.35, color, &mut floats);
+            } else {
+                emit_polygon_outline(
+                    &obj.corners,
+                    &ref_pt,
+                    &road.elevation_profile,
+                    s,
+                    t,
+                    obj.hdg,
+                    z_base,
+                    0.35,
+                    color,
+                    &offset_point,
+                    &mut floats,
+                    obj.length,
+                    obj.width,
+                );
+            }
+        } else {
+            let (mx, my, _) = offset_point(&ref_pt, t, 0.0);
+            let mx = mx as f32;
+            let my = my as f32;
+            let half_l = if obj.length > 0.0 { (obj.length / 2.0) as f32 } else { 0.6 };
+            let half_w = if obj.width > 0.0 { (obj.width / 2.0) as f32 } else { 0.6 };
+            let z = z_base;
+            let (cos_h, sin_h) = (obj.hdg.cos() as f32, obj.hdg.sin() as f32);
+            let corners = [
+                (mx + cos_h * half_l - sin_h * half_w, my + sin_h * half_l + cos_h * half_w),
+                (mx + cos_h * half_l + sin_h * half_w, my + sin_h * half_l - cos_h * half_w),
+                (mx - cos_h * half_l + sin_h * half_w, my - sin_h * half_l - cos_h * half_w),
+                (mx - cos_h * half_l - sin_h * half_w, my - sin_h * half_l + cos_h * half_w),
+            ];
+            let hw = 0.18f32;
+            let [cr, cg, cb, ca] = color;
+            for i in 0..4 {
+                let (ax, ay) = corners[i];
+                let (bx, by) = corners[(i + 1) % 4];
+                let dx = bx - ax;
+                let dy = by - ay;
+                let len = (dx * dx + dy * dy).sqrt().max(1e-5);
+                let nx = -dy / len * hw;
+                let ny = dx / len * hw;
+                floats.extend_from_slice(&[ax + nx, ay + ny, z, cr, cg, cb, ca]);
+                floats.extend_from_slice(&[ax - nx, ay - ny, z, cr, cg, cb, ca]);
+                floats.extend_from_slice(&[bx - nx, by - ny, z, cr, cg, cb, ca]);
+                floats.extend_from_slice(&[ax + nx, ay + ny, z, cr, cg, cb, ca]);
+                floats.extend_from_slice(&[bx - nx, by - ny, z, cr, cg, cb, ca]);
+                floats.extend_from_slice(&[bx + nx, by + ny, z, cr, cg, cb, ca]);
+            }
         }
         Ok(floats)
     })

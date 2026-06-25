@@ -2,8 +2,9 @@ use wasm_bindgen::prelude::*;
 
 use super::helpers::road_point_at_s;
 use super::signal_mesh::{
-    emit_crosswalk_stripes, emit_longitudinal_strip, emit_polygon_outline,
+    crosswalk_world_polygon, emit_crosswalk_stripes, emit_longitudinal_strip, emit_polygon_outline,
     emit_polygon_outline_road_corners, emit_rect_outline, emit_square_marker, emit_transverse_bar,
+    emit_world_polygon_outline,
 };
 
 /// Generate road object vertices from a project JSON. Returns vertex data as Float32Array.
@@ -96,7 +97,14 @@ pub(super) fn generate_object_vertices_from_project(
             let Some(ref_pt) = road_point_at_s(&road.plan_view, s) else {
                 continue;
             };
-            let z_road = evaluate_elevation(&road.elevation_profile, s) as f32 + z_offset + 0.02;
+            // 5 cm above the road surface prevents z-fighting with road/junction polygons,
+            // even in perspective view where depth precision degrades with distance.
+            // obj.position.z is respected as an additional offset but clamped to ≥ 0 so that
+            // negative z-values in XODR data (common in 51World exports) cannot pull objects
+            // below road surface.
+            let z_road = evaluate_elevation(&road.elevation_profile, s) as f32
+                + z_offset.max(0.0)
+                + 0.05;
 
             match &obj.object_type {
                 ObjectType::StopLine => {
@@ -125,8 +133,8 @@ pub(super) fn generate_object_vertices_from_project(
                         let actual_s = (s + (ds0 + ds1) / 2.0).clamp(0.0, road.length);
                         let rp = road_point_at_s(&road.plan_view, actual_s).unwrap_or(ref_pt);
                         let z = evaluate_elevation(&road.elevation_profile, actual_s) as f32
-                            + z_offset
-                            + 0.02;
+                            + z_offset.max(0.0)
+                            + 0.05;
                         (if w > 0.01 { w } else { obj.width.max(3.5) }, center, rp, z)
                     } else {
                         (
@@ -517,8 +525,14 @@ pub(super) fn generate_object_vertices_from_project(
 
 /// Generate highlight vertices for a single road object.
 ///
-/// Looks up the object by road_id + object_id, evaluates its world position,
-/// and returns a square marker mesh tinted with the given colour.
+/// Generate a selection-highlight mesh for a single road object.
+///
+/// For objects that have corner data (crosswalks, parking spaces, etc.) the
+/// highlight is rendered as an outline of the object polygon so the user can
+/// see exactly what was selected.  Objects without corners fall back to a
+/// labelled rectangle sized from the object's `length` / `width` attributes,
+/// or a small square when neither is provided.
+///
 /// Each vertex is 7 floats: [x, y, z, r, g, b, a].
 #[wasm_bindgen]
 pub fn generate_single_object_vertices(
@@ -531,7 +545,7 @@ pub fn generate_single_object_vertices(
     a: f32,
 ) -> Result<Vec<f32>, JsError> {
     use we_core::geometry::eval::{evaluate_elevation, offset_point};
-    use we_core::model::Project;
+    use we_core::model::{CornerType, ObjectType, Project};
 
     let project: Project =
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
@@ -550,22 +564,80 @@ pub fn generate_single_object_vertices(
         return Ok(Vec::new());
     };
 
-    let (mx, my, _) = offset_point(&ref_pt, t, 0.0);
-    let z_road = evaluate_elevation(&road.elevation_profile, s) as f32;
-    let mx = mx as f32;
-    let my = my as f32;
-    let sz = 0.6f32;
-    let z = z_road + 0.05;
+    let color = [r, g, b, a];
+    let z_base = evaluate_elevation(&road.elevation_profile, s) as f32 + 0.08;
+    let mut floats: Vec<f32> = Vec::new();
 
-    // Square (4 triangles from center):  2 triangles top-right + bottom-left halves
-    let tl = [mx - sz, my - sz, z];
-    let tr = [mx + sz, my - sz, z];
-    let bl = [mx - sz, my + sz, z];
-    let br = [mx + sz, my + sz, z];
-
-    let mut floats = Vec::with_capacity(6 * 7);
-    for p in &[tl, tr, br, tl, br, bl] {
-        floats.extend_from_slice(&[p[0], p[1], p[2], r, g, b, a]);
+    if !obj.corners.is_empty() {
+        // The highlight outline must hug the same geometry the object actually
+        // renders as. Crosswalks (cornerLocal) are drawn as zebra stripes via
+        // `emit_crosswalk_stripes`, which uses `crosswalk_world_polygon` for its
+        // heading-convention detection — so the highlight reuses that exact
+        // polygon. All other area objects share `emit_polygon_outline`.
+        let is_crosswalk_local =
+            obj.object_type == ObjectType::Crosswalk && obj.corner_type == CornerType::Local;
+        if is_crosswalk_local {
+            let world_poly = crosswalk_world_polygon(
+                &obj.corners,
+                &ref_pt,
+                t,
+                obj.hdg,
+                &offset_point,
+                obj.length,
+                obj.width,
+            );
+            emit_world_polygon_outline(&world_poly, z_base, 0.35, color, &mut floats);
+        } else {
+            emit_polygon_outline(
+                &obj.corners,
+                &ref_pt,
+                &road.elevation_profile,
+                s,
+                t,
+                obj.hdg,
+                z_base,
+                0.35,
+                color,
+                &offset_point,
+                &mut floats,
+                obj.length,
+                obj.width,
+            );
+        }
+    } else {
+        // No corner data — render a rect outline sized from length/width, or a
+        // default square for objects that carry neither dimension.
+        let (mx, my, _) = offset_point(&ref_pt, t, 0.0);
+        let mx = mx as f32;
+        let my = my as f32;
+        let half_l = if obj.length > 0.0 { (obj.length / 2.0) as f32 } else { 0.6 };
+        let half_w = if obj.width > 0.0 { (obj.width / 2.0) as f32 } else { 0.6 };
+        let z = z_base;
+        let (cos_h, sin_h) = (obj.hdg.cos() as f32, obj.hdg.sin() as f32);
+        // Four corners of the oriented rectangle.
+        let corners = [
+            (mx + cos_h * half_l - sin_h * half_w, my + sin_h * half_l + cos_h * half_w),
+            (mx + cos_h * half_l + sin_h * half_w, my + sin_h * half_l - cos_h * half_w),
+            (mx - cos_h * half_l + sin_h * half_w, my - sin_h * half_l - cos_h * half_w),
+            (mx - cos_h * half_l - sin_h * half_w, my - sin_h * half_l + cos_h * half_w),
+        ];
+        let hw = 0.18f32;
+        let [cr, cg, cb, ca] = color;
+        for i in 0..4 {
+            let (ax, ay) = corners[i];
+            let (bx, by) = corners[(i + 1) % 4];
+            let dx = bx - ax;
+            let dy = by - ay;
+            let len = (dx * dx + dy * dy).sqrt().max(1e-5);
+            let nx = -dy / len * hw;
+            let ny = dx / len * hw;
+            floats.extend_from_slice(&[ax + nx, ay + ny, z, cr, cg, cb, ca]);
+            floats.extend_from_slice(&[ax - nx, ay - ny, z, cr, cg, cb, ca]);
+            floats.extend_from_slice(&[bx - nx, by - ny, z, cr, cg, cb, ca]);
+            floats.extend_from_slice(&[ax + nx, ay + ny, z, cr, cg, cb, ca]);
+            floats.extend_from_slice(&[bx - nx, by - ny, z, cr, cg, cb, ca]);
+            floats.extend_from_slice(&[bx + nx, by + ny, z, cr, cg, cb, ca]);
+        }
     }
     Ok(floats)
 }
@@ -618,24 +690,36 @@ mod tests {
 
     #[test]
     fn test_generate_single_object_vertices_returns_colored_square_marker() {
+        // Sign object: no corners, length=0 → falls back to default 0.6m half-size rect outline.
+        // Rect outline = 4 edges × 6 verts × 7 floats = 168 floats.
         let project = road_with_object(road_object("obj-1", ObjectType::Sign, 5.0, 2.0), None);
         let json = serde_json::to_string(&project).unwrap();
 
         let verts =
             generate_single_object_vertices(&json, "road-1", "obj-1", 0.1, 0.2, 0.3, 0.4).unwrap();
 
-        assert_eq!(verts.len(), 6 * 7);
-        assert_eq!(&verts[3..7], &[0.1, 0.2, 0.3, 0.4]);
-        assert!(
-            verts
-                .chunks(7)
-                .any(|v| (v[0] - 4.4).abs() < 0.01 && (v[1] - 1.4).abs() < 0.01)
-        );
-        assert!(
-            verts
-                .chunks(7)
-                .any(|v| (v[0] - 5.6).abs() < 0.01 && (v[1] - 2.6).abs() < 0.01)
-        );
+        // 4 edges × 2 triangles × 3 verts × 7 floats
+        assert_eq!(verts.len(), 4 * 6 * 7);
+        // All vertices carry the correct colour.
+        assert!(verts.chunks(7).all(|v| {
+            (v[3] - 0.1).abs() < 1e-4
+                && (v[4] - 0.2).abs() < 1e-4
+                && (v[5] - 0.3).abs() < 1e-4
+                && (v[6] - 0.4).abs() < 1e-4
+        }));
+        // At least one vertex is near the centre x (road s=5) + t_lateral=2
+        // and within the expected half-extents (0.6 × default half, 0.25 from width=0.5).
+        let xs: Vec<f32> = verts.chunks(7).map(|v| v[0]).collect();
+        let ys: Vec<f32> = verts.chunks(7).map(|v| v[1]).collect();
+        let xmin = xs.iter().copied().fold(f32::INFINITY, f32::min);
+        let xmax = xs.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        let ymin = ys.iter().copied().fold(f32::INFINITY, f32::min);
+        let ymax = ys.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        // half_l = 0.6, half_w = 0.25, plus outline half-width = 0.18
+        assert!((xmin - (5.0 - 0.6 - 0.18)).abs() < 0.05, "xmin={xmin}");
+        assert!((xmax - (5.0 + 0.6 + 0.18)).abs() < 0.05, "xmax={xmax}");
+        assert!((ymin - (2.0 - 0.25 - 0.18)).abs() < 0.05, "ymin={ymin}");
+        assert!((ymax - (2.0 + 0.25 + 0.18)).abs() < 0.05, "ymax={ymax}");
     }
 
     #[test]

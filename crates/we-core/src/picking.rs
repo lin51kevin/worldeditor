@@ -141,6 +141,11 @@ pub fn pick_signal_cached(
 ///
 /// Uses the spatial index to narrow candidates to nearby roads, then checks
 /// each object on those roads. Avoids JSON re-parsing on every call.
+///
+/// For objects that carry corner data (crosswalks, parking spaces, etc.) the
+/// click point is tested against the world-space polygon of those corners so
+/// that clicking anywhere on the visible area registers as a hit (distance 0).
+/// Objects without corners fall back to distance-to-centre-point.
 pub fn pick_object_cached(
     cache: &mut ProjectCache,
     x: f64,
@@ -148,12 +153,17 @@ pub fn pick_object_cached(
     threshold: f64,
 ) -> Option<ObjectPickResult> {
     use crate::geometry::eval::{evaluate_road_at_s, offset_point};
+    use crate::geometry::point_in_polygon;
+    use nalgebra::Vector2;
 
     cache.get_index()?;
     let project = &cache.project;
     let index = cache.spatial_index.as_ref().unwrap();
 
-    let candidates = index.query_point(x, y, threshold);
+    // Expand candidate radius so large objects whose centre is far from the
+    // click point are still considered.
+    let query_radius = threshold.max(20.0);
+    let candidates = index.query_point(x, y, query_radius);
 
     let mut best: Option<ObjectPickResult> = None;
     let mut best_dist = threshold;
@@ -175,6 +185,41 @@ pub fn pick_object_cached(
             let Some(ref_pt) = evaluate_road_at_s(road, s) else {
                 continue;
             };
+
+            // --- Polygon hit test for objects with corners ---
+            if !obj.corners.is_empty() {
+                let world_poly = object_corners_to_world(
+                    &obj.corners,
+                    &obj.corner_type,
+                    &ref_pt,
+                    t,
+                    obj.hdg,
+                    obj.length,
+                    obj.width,
+                    &offset_point,
+                    &road.plan_view,
+                );
+                if !world_poly.is_empty() {
+                    let poly_v: Vec<Vector2<f64>> = world_poly
+                        .iter()
+                        .map(|&(px, py)| Vector2::new(px, py))
+                        .collect();
+                    if point_in_polygon(&Vector2::new(x, y), &poly_v) {
+                        // Direct polygon hit — beat any previous candidate.
+                        best_dist = 0.0;
+                        best = Some(ObjectPickResult {
+                            road_id: road.id.clone(),
+                            object_id: obj.id.clone(),
+                            distance: 0.0,
+                        });
+                        continue;
+                    }
+                    // Not inside; fall through to centre-point distance check
+                    // (allows selecting objects by clicking near, not on, them).
+                }
+            }
+
+            // --- Centre-point distance fallback ---
             let (wx, wy, _) = offset_point(&ref_pt, t, 0.0);
             let dx = wx - x;
             let dy = wy - y;
@@ -191,6 +236,101 @@ pub fn pick_object_cached(
     }
 
     best
+}
+
+/// Transform object corners to world-space (x, y) coordinates for polygon
+/// hit-testing. Returns an empty Vec if the corners cannot be projected.
+///
+/// Supports both `CornerType::Local` (object-local frame, apply heading) and
+/// `CornerType::Road` (road-frame absolute s/t, evaluate reference line directly).
+fn object_corners_to_world(
+    corners: &[crate::model::Point3D],
+    corner_type: &crate::model::CornerType,
+    ref_pt: &RefLinePoint,
+    obj_t: f64,
+    obj_hdg: f64,
+    obj_length: f64,
+    obj_width: f64,
+    offset_pt: &impl Fn(&RefLinePoint, f64, f64) -> (f64, f64, f64),
+    plan_view: &[crate::model::Geometry],
+) -> Vec<(f64, f64)> {
+    use crate::geometry::eval::evaluate_geometry;
+
+    match corner_type {
+        crate::model::CornerType::Local => {
+            let (ox, oy, _) = offset_pt(ref_pt, obj_t, 0.0);
+            let theta = ref_pt.hdg;
+            let (cos_t, sin_t) = (theta.cos(), theta.sin());
+            // Mirror the renderer's heading-convention detection so the picking
+            // polygon matches the drawn geometry. See `detect_local_apply_hdg`.
+            let (cos_h, sin_h) = if detect_local_apply_hdg(corners, obj_hdg, obj_length, obj_width)
+            {
+                (obj_hdg.cos(), obj_hdg.sin())
+            } else {
+                (1.0_f64, 0.0_f64)
+            };
+            corners
+                .iter()
+                .map(|c| {
+                    let alpha = c.x * cos_h - c.y * sin_h;
+                    let beta = c.x * sin_h + c.y * cos_h;
+                    (
+                        ox + alpha * cos_t - beta * sin_t,
+                        oy + alpha * sin_t + beta * cos_t,
+                    )
+                })
+                .collect()
+        }
+        crate::model::CornerType::Road => {
+            corners
+                .iter()
+                .filter_map(|c| {
+                    // For cornerRoad: c.x = s (along road), c.y = t (lateral)
+                    let geo = plan_view.iter().rev().find(|g| g.s <= c.x + 1e-9)?;
+                    let ds = (c.x - geo.s).clamp(0.0, geo.length);
+                    let rp = evaluate_geometry(geo, ds);
+                    let (wx, wy, _) = offset_pt(&rp, c.y, 0.0);
+                    Some((wx, wy))
+                })
+                .collect()
+        }
+    }
+}
+
+/// Decide whether `cornerLocal` coordinates are stored in the object's heading
+/// frame (apply `obj_hdg`) or already in the road frame (identity).
+///
+/// This mirrors the renderer's `detect_crosswalk_apply_hdg` (in we-wasm) so that
+/// the picking polygon matches the drawn geometry exactly:
+/// - length > 0 && width > 0 && |hdg| ≈ π → object-local (apply)
+/// - length > 0 && width > 0 (other hdg) → aspect-ratio heuristic
+/// - length == 0 || width == 0 → always apply
+fn detect_local_apply_hdg(
+    corners: &[crate::model::Point3D],
+    obj_hdg: f64,
+    obj_length: f64,
+    obj_width: f64,
+) -> bool {
+    if obj_length > 0.0 && obj_width > 0.0 {
+        let hdg_near_pi = (obj_hdg.abs() - std::f64::consts::PI).abs() < 0.17; // ≈ 10°
+        if hdg_near_pi {
+            true
+        } else {
+            let (u_min, u_max) = corners
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
+                    (mn.min(c.x), mx.max(c.x))
+                });
+            let (v_min, v_max) = corners
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), c| {
+                    (mn.min(c.y), mx.max(c.y))
+                });
+            (u_max - u_min) > (v_max - v_min)
+        }
+    } else {
+        true
+    }
 }
 
 /// Internal implementation that works with a pre-built spatial index.
