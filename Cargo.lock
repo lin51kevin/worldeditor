@@ -6241,7 +6241,7 @@ dependencies = [
 
 [[package]]
 name = "we-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "log",
  "nalgebra",
@@ -6254,7 +6254,7 @@ dependencies = [
 
 [[package]]
 name = "we-io"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "log",
  "serde",
@@ -6269,7 +6269,7 @@ dependencies = [
 
 [[package]]
 name = "we-native"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "las",
  "log",
@@ -6281,7 +6281,7 @@ dependencies = [
 
 [[package]]
 name = "we-plugin-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "log",
  "parking_lot",
@@ -6295,7 +6295,7 @@ dependencies = [
 
 [[package]]
 name = "we-render"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bytemuck",
  "env_logger",
@@ -6309,7 +6309,7 @@ dependencies = [
 
 [[package]]
 name = "we-server"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6333,7 +6333,7 @@ dependencies = [
 
 [[package]]
 name = "we-service"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "log",
  "serde",
@@ -6345,7 +6345,7 @@ dependencies = [
 
 [[package]]
 name = "we-wasm"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "console_error_panic_hook",
  "console_log",
@@ -7294,7 +7294,7 @@ dependencies = [
 
 [[package]]
 name = "worldeditor"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "env_logger",
  "log",
