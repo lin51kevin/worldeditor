@@ -243,6 +243,7 @@ pub fn pick_object_cached(
 ///
 /// Supports both `CornerType::Local` (object-local frame, apply heading) and
 /// `CornerType::Road` (road-frame absolute s/t, evaluate reference line directly).
+#[allow(clippy::too_many_arguments)]
 fn object_corners_to_world(
     corners: &[crate::model::Point3D],
     corner_type: &crate::model::CornerType,
