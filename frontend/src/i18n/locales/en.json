@@ -172,7 +172,7 @@
       "road-markings": "Road Markings"
     },
     "selectionModes": {
-      "road": "Road",
+      "road": "Default",
       "laneSection": "Lane Section",
       "lane": "Lane"
     },
@@ -364,7 +364,7 @@
     "softSelectionRadius": "Soft selection radius: {{radius}} m",
     "noRoadSelected": "Select a road to use these tools",
     "selectionModes": {
-      "road": "Road",
+      "road": "Default",
       "laneSection": "Lane Section",
       "lane": "Lane"
     },

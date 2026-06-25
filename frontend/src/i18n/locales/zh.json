@@ -172,7 +172,7 @@
       "road-markings": "道路标记"
     },
     "selectionModes": {
-      "road": "道路",
+      "road": "默认",
       "laneSection": "车道段",
       "lane": "车道"
     },
@@ -364,7 +364,7 @@
     "softSelectionRadius": "软选择半径: {{radius}} 米",
     "noRoadSelected": "请选择一条道路以使用这些工具",
     "selectionModes": {
-      "road": "道路",
+      "road": "默认",
       "laneSection": "车道段",
       "lane": "车道"
     },
