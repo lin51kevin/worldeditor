@@ -54,8 +54,9 @@ const RoadRow = memo(function RoadRow({
   }, [roadId, onSelectionFromPanel]);
 
   const handleZoom = useCallback(() => {
+    handleSelect();
     emitViewportEvent({ type: 'zoom-to-selected', roadId });
-  }, [roadId]);
+  }, [roadId, handleSelect]);
 
   const handleToggleVisibility = useCallback(() => {
     useViewportStore.getState().toggleRoadVisibility(roadId);
@@ -448,8 +449,9 @@ const JunctionRow = memo(function JunctionRow({
   }, [junctionId, onSelectionFromPanel]);
 
   const handleZoom = useCallback(() => {
+    handleSelect();
     emitViewportEvent({ type: 'zoom-to-junction', junctionId });
-  }, [junctionId]);
+  }, [junctionId, handleSelect]);
 
   const handleToggleVisibility = useCallback(() => {
     useViewportStore.getState().toggleJunctionVisibility(junctionId);

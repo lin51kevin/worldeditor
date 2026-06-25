@@ -228,7 +228,7 @@ export function LayerPanel() {
       setPendingScrollTarget(null);
       // Use rAF to ensure the virtualizer has processed the updated count
       requestAnimationFrame(() => {
-        virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' });
+        virtualizer.scrollToIndex(index, { align: 'center', behavior: 'auto' });
       });
     }
   }, [flatItems, pendingScrollTarget, virtualizer]);
