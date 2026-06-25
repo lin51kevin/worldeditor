@@ -185,7 +185,7 @@ describe('Viewport', () => {
 
     await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
     await waitFor(() => expect(rendererMocks.start).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(platform.generateRoadVerticesCached).toHaveBeenCalledWith(2, 'byLaneType'));
+    await waitFor(() => expect(platform.generateRoadVerticesCached).toHaveBeenCalledWith(5, 'byLaneType'));
     await waitFor(() => expect(rendererMocks.uploadRoadVertices).toHaveBeenCalledWith(vertices));
 
     const resizeObserver = resizeObservers[0]!;
