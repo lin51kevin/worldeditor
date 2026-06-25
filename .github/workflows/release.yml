@@ -9,6 +9,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write
+
 jobs:
   release-tauri:
     name: Build Tauri Desktop App
@@ -43,23 +46,23 @@ jobs:
       - name: Install yarn
         run: npm install -g yarn@1
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --locked
+      - name: Install frontend dependencies
+        run: cd frontend && yarn install --frozen-lockfile
 
-      - name: Build Tauri app
-        run: |
-          cd frontend && yarn install --frozen-lockfile
-          cd .. && cargo tauri build --target ${{ matrix.target }}
+      # tauri-action builds the signed bundles, generates the updater `.sig`
+      # signatures and the `latest.json` manifest, and uploads everything to the
+      # GitHub Release for the pushed tag. The auto-update endpoint configured in
+      # tauri.conf.json points at `releases/latest/download/latest.json`.
+      - name: Build and release Tauri app
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v1
         with:
-          files: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
-            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tagName: ${{ github.ref_name }}
+          releaseName: 'WorldEditor v__VERSION__'
+          releaseBody: 'Desktop builds support in-app auto-update. Download an installer below to get started.'
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}
