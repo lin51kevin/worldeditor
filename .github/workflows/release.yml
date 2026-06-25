@@ -9,9 +9,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
-permissions:
-  contents: write
-
 jobs:
   release-tauri:
     name: Build Tauri Desktop App
@@ -23,10 +20,10 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
-          # - platform: macos-latest
-          #   target: aarch64-apple-darwin
-          # - platform: macos-13
-          #   target: x86_64-apple-darwin
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+          - platform: macos-13
+            target: x86_64-apple-darwin
 
     steps:
       - uses: actions/checkout@v4
@@ -76,23 +73,25 @@ jobs:
       - name: Install yarn
         run: npm install -g yarn@1
 
-      - name: Install frontend dependencies
-        run: cd frontend && yarn install --frozen-lockfile
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --locked
 
-      # tauri-action builds the signed bundles, generates the updater `.sig`
-      # signatures and the `latest.json` manifest, and uploads everything to the
-      # GitHub Release for the pushed tag. The auto-update endpoint configured in
-      # tauri.conf.json points at `releases/latest/download/latest.json`.
-      - name: Build and release Tauri app
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri app
+        run: |
+          cd frontend && yarn install --frozen-lockfile
+          cd .. && cargo tauri build --target ${{ matrix.target }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'WorldEditor v__VERSION__'
-          releaseBody: 'Desktop builds support in-app auto-update. Download an installer below to get started.'
-          releaseDraft: false
-          prerelease: false
-          args: --target ${{ matrix.target }}
+          files: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.rpm
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
