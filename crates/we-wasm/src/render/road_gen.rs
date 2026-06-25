@@ -548,7 +548,8 @@ mod tests {
         let json = serde_json::to_string(&project).unwrap();
         crate::picking::set_project_cache(&json).unwrap();
 
-        let verts = generate_single_road_surface_vertices_cached("nope", 2.0, "byLaneType").unwrap();
+        let verts =
+            generate_single_road_surface_vertices_cached("nope", 2.0, "byLaneType").unwrap();
         assert!(verts.is_empty());
     }
 }

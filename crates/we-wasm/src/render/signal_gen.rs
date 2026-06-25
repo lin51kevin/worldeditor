@@ -398,15 +398,35 @@ pub fn generate_single_object_vertices_cached(
             let (mx, my, _) = offset_point(&ref_pt, t, 0.0);
             let mx = mx as f32;
             let my = my as f32;
-            let half_l = if obj.length > 0.0 { (obj.length / 2.0) as f32 } else { 0.6 };
-            let half_w = if obj.width > 0.0 { (obj.width / 2.0) as f32 } else { 0.6 };
+            let half_l = if obj.length > 0.0 {
+                (obj.length / 2.0) as f32
+            } else {
+                0.6
+            };
+            let half_w = if obj.width > 0.0 {
+                (obj.width / 2.0) as f32
+            } else {
+                0.6
+            };
             let z = z_base;
             let (cos_h, sin_h) = (obj.hdg.cos() as f32, obj.hdg.sin() as f32);
             let corners = [
-                (mx + cos_h * half_l - sin_h * half_w, my + sin_h * half_l + cos_h * half_w),
-                (mx + cos_h * half_l + sin_h * half_w, my + sin_h * half_l - cos_h * half_w),
-                (mx - cos_h * half_l + sin_h * half_w, my - sin_h * half_l - cos_h * half_w),
-                (mx - cos_h * half_l - sin_h * half_w, my - sin_h * half_l + cos_h * half_w),
+                (
+                    mx + cos_h * half_l - sin_h * half_w,
+                    my + sin_h * half_l + cos_h * half_w,
+                ),
+                (
+                    mx + cos_h * half_l + sin_h * half_w,
+                    my + sin_h * half_l - cos_h * half_w,
+                ),
+                (
+                    mx - cos_h * half_l + sin_h * half_w,
+                    my - sin_h * half_l - cos_h * half_w,
+                ),
+                (
+                    mx - cos_h * half_l - sin_h * half_w,
+                    my - sin_h * half_l + cos_h * half_w,
+                ),
             ];
             let hw = 0.18f32;
             let [cr, cg, cb, ca] = color;

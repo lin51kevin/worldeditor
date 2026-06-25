@@ -567,8 +567,9 @@ pub(super) fn emit_crosswalk_stripes(
     // Build world-space polygon vertices for stripe clipping. Uses the shared
     // `crosswalk_world_polygon` helper so the selection-highlight outline (which
     // calls the same helper) hugs exactly the same area.
-    let world_poly =
-        crosswalk_world_polygon(corners, ref_pt, obj_t, obj_hdg, offset_pt, obj_length, obj_width);
+    let world_poly = crosswalk_world_polygon(
+        corners, ref_pt, obj_t, obj_hdg, offset_pt, obj_length, obj_width,
+    );
 
     // Project world polygon onto sweep coordinate system to compute AABB.
     let mut s_min = f64::INFINITY;
@@ -1284,19 +1285,19 @@ mod tests {
             0.0,
             0.45,
             0.6,
-            2.04, // obj_length > 0
+            2.04,  // obj_length > 0
             17.42, // obj_width > 0
             &mut out,
         );
 
-        assert!(!out.is_empty(), "Expected stripes for Industrypark2-style hdg≈π crosswalk");
+        assert!(
+            !out.is_empty(),
+            "Expected stripes for Industrypark2-style hdg≈π crosswalk"
+        );
 
         // Compute mean y-coordinate of all output vertices (every 7th float starting at [1]).
         let ys: Vec<f32> = out.iter().skip(1).step_by(7).cloned().collect();
-        assert!(
-            !ys.is_empty(),
-            "No vertex y-values in output"
-        );
+        assert!(!ys.is_empty(), "No vertex y-values in output");
         let mean_y: f32 = ys.iter().sum::<f32>() / ys.len() as f32;
 
         // apply_hdg=true  → polygon reflected; centroid y ≈ −1.74 on east road at y=0.

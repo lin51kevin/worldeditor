@@ -102,9 +102,8 @@ pub(super) fn generate_object_vertices_from_project(
             // obj.position.z is respected as an additional offset but clamped to ≥ 0 so that
             // negative z-values in XODR data (common in 51World exports) cannot pull objects
             // below road surface.
-            let z_road = evaluate_elevation(&road.elevation_profile, s) as f32
-                + z_offset.max(0.0)
-                + 0.05;
+            let z_road =
+                evaluate_elevation(&road.elevation_profile, s) as f32 + z_offset.max(0.0) + 0.05;
 
             match &obj.object_type {
                 ObjectType::StopLine => {
@@ -610,16 +609,36 @@ pub fn generate_single_object_vertices(
         let (mx, my, _) = offset_point(&ref_pt, t, 0.0);
         let mx = mx as f32;
         let my = my as f32;
-        let half_l = if obj.length > 0.0 { (obj.length / 2.0) as f32 } else { 0.6 };
-        let half_w = if obj.width > 0.0 { (obj.width / 2.0) as f32 } else { 0.6 };
+        let half_l = if obj.length > 0.0 {
+            (obj.length / 2.0) as f32
+        } else {
+            0.6
+        };
+        let half_w = if obj.width > 0.0 {
+            (obj.width / 2.0) as f32
+        } else {
+            0.6
+        };
         let z = z_base;
         let (cos_h, sin_h) = (obj.hdg.cos() as f32, obj.hdg.sin() as f32);
         // Four corners of the oriented rectangle.
         let corners = [
-            (mx + cos_h * half_l - sin_h * half_w, my + sin_h * half_l + cos_h * half_w),
-            (mx + cos_h * half_l + sin_h * half_w, my + sin_h * half_l - cos_h * half_w),
-            (mx - cos_h * half_l + sin_h * half_w, my - sin_h * half_l - cos_h * half_w),
-            (mx - cos_h * half_l - sin_h * half_w, my - sin_h * half_l + cos_h * half_w),
+            (
+                mx + cos_h * half_l - sin_h * half_w,
+                my + sin_h * half_l + cos_h * half_w,
+            ),
+            (
+                mx + cos_h * half_l + sin_h * half_w,
+                my + sin_h * half_l - cos_h * half_w,
+            ),
+            (
+                mx - cos_h * half_l + sin_h * half_w,
+                my - sin_h * half_l - cos_h * half_w,
+            ),
+            (
+                mx - cos_h * half_l - sin_h * half_w,
+                my - sin_h * half_l + cos_h * half_w,
+            ),
         ];
         let hw = 0.18f32;
         let [cr, cg, cb, ca] = color;
@@ -776,7 +795,10 @@ mod tests {
 
         let verts = generate_object_vertices(&json).unwrap();
 
-        assert!(!verts.is_empty(), "expected vertices for crosswalk at s > road.length");
+        assert!(
+            !verts.is_empty(),
+            "expected vertices for crosswalk at s > road.length"
+        );
 
         // All vertex x-coordinates must be near x≈20 (tangent-extrapolated position),
         // not clamped to x≈10 (road endpoint).  The fallback rect outline is ≤4m wide.

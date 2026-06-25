@@ -41,8 +41,7 @@ pub fn generate_bridge_tunnel_vertices(project_json: &str) -> Result<Vec<f32>, J
             continue;
         }
 
-        let ref_pts =
-            sample_road_reference_line_adaptive(road, &TessellationParams::default());
+        let ref_pts = sample_road_reference_line_adaptive(road, &TessellationParams::default());
         if ref_pts.len() < 2 {
             continue;
         }

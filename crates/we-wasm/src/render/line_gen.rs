@@ -28,8 +28,10 @@ pub fn generate_lane_line_vertices(
             continue;
         }
 
-        let ref_pts =
-            sample_road_reference_line_adaptive(road, &TessellationParams::with_max_step(sample_step));
+        let ref_pts = sample_road_reference_line_adaptive(
+            road,
+            &TessellationParams::with_max_step(sample_step),
+        );
         if ref_pts.len() < 2 {
             continue;
         }
@@ -204,8 +206,10 @@ pub fn generate_center_line_vertices(
     let z_lift = 0.02f32;
 
     for road in &project.roads {
-        let ref_pts =
-            sample_road_reference_line_adaptive(road, &TessellationParams::with_max_step(sample_step));
+        let ref_pts = sample_road_reference_line_adaptive(
+            road,
+            &TessellationParams::with_max_step(sample_step),
+        );
         if ref_pts.len() < 2 {
             continue;
         }
@@ -293,8 +297,10 @@ pub fn generate_lane_boundary_vertices(
             continue;
         }
 
-        let ref_pts =
-            sample_road_reference_line_adaptive(road, &TessellationParams::with_max_step(sample_step));
+        let ref_pts = sample_road_reference_line_adaptive(
+            road,
+            &TessellationParams::with_max_step(sample_step),
+        );
         if ref_pts.len() < 2 {
             continue;
         }
