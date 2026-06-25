@@ -62,7 +62,7 @@ export async function checkForUpdates(t: TranslateFn) {
         await showAlert(t('update.upToDate'), title);
         return;
       }
-      const message = [`${t('update.available')} v${update.version}`, '', update.body ?? '']
+      const message = [`${t('update.available')} v${update.version}`, '', t('update.desktopNote')]
         .join('\n')
         .trim();
       const proceed = await showConfirm(`${message}\n\n${t('update.installPrompt')}`, title);
