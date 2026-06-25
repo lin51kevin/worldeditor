@@ -327,6 +327,7 @@ export function MenuBar({
           {openMenu !== null && (
             <div
               className="menubar-mega-dropdown"
+              onMouseLeave={closeMenus}
             >
               <FileMenu
                 {...getMenuSectionProps(0)}

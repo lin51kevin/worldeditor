@@ -78,6 +78,7 @@ export function MenuSection({
               <button
                 key={i}
                 className={`menubar-dropdown-item ${item.disabled ? 'disabled' : ''} ${item.checked ? 'checked' : ''}`}
+                onMouseEnter={() => onSubItemHover(null)}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!item.disabled) {
