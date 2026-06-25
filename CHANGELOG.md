@@ -5,6 +5,40 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ---
 
+<a name="0.3.2"></a>
+## [0.3.2] — 2026-06-25
+
+### Features
+
+- **picking**: 多边形命中检测替代中心点距离检测——点击 crosswalk 白条任意位置即可选中物体，大型物体候选半径扩展至 20 m ([`dcd2c8d`])
+- **render**: 物体选中高亮改为完整 BoundingBox 轮廓，Crosswalk 轮廓与斑马线区域精确重合，颜色与道路选中红色一致 ([`dcd2c8d`])
+
+### Fixes
+
+- **render**: Crosswalk 及道路物体 z-offset 提升至 0.05 m，解决与道路表面的深度冲突 ([`dcd2c8d`])
+- **viewport**: LayerPanel 定位到选中项改为即时跳转，消除 smooth 动画延迟 ([`5e0cd68`])
+- **viewport**: 图层面板聚焦按钮同时选中目标项（原仅聚焦不改变选中态） ([`5e0cd68`])
+- **i18n**: 选择模式标签 "Road/道路" 改为 "Default/默认"，更准确反映全道路选择语义 ([`fe69a66`])
+
+### CI
+
+- **ci**: 重新启用 macOS aarch64/x86_64 发布构建目标，用 `cargo tauri build` + `softprops/action-gh-release` 替代 `tauri-apps/tauri-action` ([`49eedea`])
+
+### Tests
+
+- **test**: 修正 Viewport 测试中 tessellation step 断言 2 → 5（跟进 71e7aa4 常量调整） ([`f765ea2`])
+
+---
+
+<a name="0.3.1"></a>
+## [0.3.1] — 2026-06-17
+
+### Performance
+
+- **render**: 曲率自适应细分道路参考线——直线最大步长 5 m，小半径圆弧自动加密至 0.5 m（`TESS_MAX_ERROR = 0.01 m`），匹配 WorldEditorOnline 常量 ([`71e7aa4`])
+
+---
+
 <a name="0.3.0"></a>
 ## [0.3.0] — 2026-06-09
 
