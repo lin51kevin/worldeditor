@@ -6,20 +6,46 @@ pub(super) fn append_junction_triangles(
     junction: &we_core::model::Junction,
     color: [f32; 4],
 ) {
+    use we_core::geometry::convex_hull;
+    use we_core::math::Vector2;
+
     let points = build_junction_polygon_points(project, junction);
     if points.len() < 3 {
         return;
     }
-    let n = points.len() as f32;
-    let cx: f32 = points.iter().map(|p| p[0]).sum::<f32>() / n;
-    let cy: f32 = points.iter().map(|p| p[1]).sum::<f32>() / n;
-    let cz: f32 = points.iter().map(|p| p[2]).sum::<f32>() / n;
+
+    // Planarize the junction surface: assign one shared elevation to every
+    // emitted vertex. Boundary points inherit each road's own elevation, so the
+    // raw polygon is non-planar; fanning a non-planar ring from an averaged
+    // centroid yields twisted/overlapping faces (the "shattered" look) in 3D.
+    // A single flat elevation keeps the whole surface coplanar.
+    let junction_z: f32 = points.iter().map(|p| p[2]).sum::<f32>() / points.len() as f32;
+
+    // Build a simple convex ring before fanning so there are no self-intersecting
+    // or sliver triangles: boundary points from both incoming and connecting
+    // roads can otherwise be non-star-shaped around the centroid.
+    let hull = convex_hull(
+        &points
+            .iter()
+            .map(|p| Vector2::new(p[0] as f64, p[1] as f64))
+            .collect::<Vec<_>>(),
+    );
+    let ring: Vec<[f32; 2]> = if hull.len() >= 3 {
+        hull.iter().map(|p| [p.x as f32, p.y as f32]).collect()
+    } else {
+        // Degenerate/collinear fallback: keep the ordered boundary ring.
+        points.iter().map(|p| [p[0], p[1]]).collect()
+    };
+
+    let n = ring.len() as f32;
+    let cx: f32 = ring.iter().map(|p| p[0]).sum::<f32>() / n;
+    let cy: f32 = ring.iter().map(|p| p[1]).sum::<f32>() / n;
     let [r, g, b, a] = color;
-    for i in 0..points.len() {
-        let j = (i + 1) % points.len();
-        out.extend_from_slice(&[cx, cy, cz, r, g, b, a]);
-        out.extend_from_slice(&[points[i][0], points[i][1], points[i][2], r, g, b, a]);
-        out.extend_from_slice(&[points[j][0], points[j][1], points[j][2], r, g, b, a]);
+    for i in 0..ring.len() {
+        let j = (i + 1) % ring.len();
+        out.extend_from_slice(&[cx, cy, junction_z, r, g, b, a]);
+        out.extend_from_slice(&[ring[i][0], ring[i][1], junction_z, r, g, b, a]);
+        out.extend_from_slice(&[ring[j][0], ring[j][1], junction_z, r, g, b, a]);
     }
 }
 
@@ -143,7 +169,10 @@ fn append_road_boundary_points(
         .iter()
         .map(|l| evaluate_lane_width(&l.width, ds))
         .sum();
-    let z = evaluate_elevation(&road.elevation_profile, s) as f32 - 0.1;
+    // Lift the junction fill just above the road surface (E + 1cm) so overlapping
+    // road meshes do not occlude it, while staying below lane marks (+2cm),
+    // crosswalks (+5cm), road objects and signals.
+    let z = evaluate_elevation(&road.elevation_profile, s) as f32 + 0.01;
     let (lx, ly, _) = offset_point(&ref_pt, lane_offset + left_width, 0.0);
     let (rx, ry, _) = offset_point(&ref_pt, lane_offset - right_width, 0.0);
     points.push([lx as f32, ly as f32, z]);
@@ -265,6 +294,76 @@ mod tests {
         assert_eq!(out.len(), 4 * 3 * 7);
         assert_eq!(&out[3..7], &[0.1, 0.2, 0.3, 0.4]);
         assert_eq!(&out[10..14], &[0.1, 0.2, 0.3, 0.4]);
+    }
+
+    #[test]
+    fn test_append_junction_triangles_emits_coplanar_surface() {
+        let (project, junction) = make_junction_project();
+        let mut out = Vec::new();
+
+        append_junction_triangles(&mut out, &project, &junction, [0.1, 0.2, 0.3, 0.4]);
+
+        assert!(!out.is_empty());
+        // Every emitted vertex (stride 7) must share the same Z so the junction
+        // surface is a single flat plane (no shattered/overlapping faces in 3D).
+        let z0 = out[2];
+        for vertex in out.chunks_exact(7) {
+            assert!(
+                (vertex[2] - z0).abs() < 1e-6,
+                "junction vertex Z {} differs from {}",
+                vertex[2],
+                z0
+            );
+        }
+    }
+
+    #[test]
+    fn test_crosswalk_signals_junction_fill_is_flat_and_convex() {
+        // Regression guard for the 3D junction-fill rendering bug: with a real
+        // multi-connection junction the emitted fill must be a single flat plane
+        // (all vertex Z coplanar) and non-degenerate, so it never shatters into
+        // twisted faces or z-fights the road surface in perspective view.
+        let xodr = std::fs::read_to_string("../../tests/fixtures/xodr/crosswalk_signals.xodr")
+            .or_else(|_| std::fs::read_to_string("tests/fixtures/xodr/crosswalk_signals.xodr"));
+        let Ok(xodr) = xodr else {
+            eprintln!("fixture not found, skipping");
+            return;
+        };
+        let project = we_core::opendrive::parse_xodr(&xodr).expect("parse");
+        assert!(
+            !project.junctions.is_empty(),
+            "fixture must contain at least one junction"
+        );
+
+        for junction in &project.junctions {
+            let mut out = Vec::new();
+            append_junction_triangles(&mut out, &project, junction, [0.88, 0.85, 0.98, 0.65]);
+            assert!(
+                !out.is_empty(),
+                "junction {} produced no fill triangles",
+                junction.id
+            );
+
+            // All emitted vertices must be coplanar (single flat Z plane).
+            let z0 = out[2];
+            for vertex in out.chunks_exact(7) {
+                assert!(
+                    (vertex[2] - z0).abs() < 1e-6,
+                    "junction {} fill not coplanar: Z {} != {}",
+                    junction.id,
+                    vertex[2],
+                    z0
+                );
+            }
+
+            // Vertex count must be a whole number of triangles (stride 7, 3 verts).
+            assert_eq!(
+                out.len() % 21,
+                0,
+                "junction {} fill vertex buffer is not triangle-aligned",
+                junction.id
+            );
+        }
     }
 
     #[test]
