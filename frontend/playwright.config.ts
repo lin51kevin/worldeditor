@@ -3,6 +3,12 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   outputDir: 'test-results',
+  // `E2E_FUNCTIONAL_ONLY=1` excludes the screenshot-based specs so the
+  // functional suite can act as a deterministic, non-flaky CI gate that does
+  // not depend on platform-specific pixel baselines.
+  testIgnore: process.env.E2E_FUNCTIONAL_ONLY
+    ? ['**/visual-regression.spec.ts', '**/theme-visual.spec.ts']
+    : [],
   timeout: 30_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

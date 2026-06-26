@@ -224,3 +224,77 @@ jobs:
         run: cd frontend && yarn test
       - name: Run coverage
         run: cd frontend && yarn test:coverage
+
+  # Stage 3: End-to-end (functional gate) + visual regression (artifact)
+  e2e-functional:
+    name: E2E Functional
+    runs-on: ubuntu-22.04
+    needs: [build-wasm, build-frontend]
+    env:
+      E2E_FUNCTIONAL_ONLY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download WASM pkg
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: frontend/wasm/pkg/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install -g yarn@1 && cd frontend && yarn install --frozen-lockfile
+      - name: Install Playwright browser
+        run: cd frontend && npx playwright install --with-deps chromium
+      - name: Run functional E2E specs (blocking)
+        run: cd frontend && yarn test:e2e:func
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-functional
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7
+
+  e2e-visual:
+    name: E2E Visual Regression
+    runs-on: ubuntu-22.04
+    needs: [build-wasm, build-frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download WASM pkg
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: frontend/wasm/pkg/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install -g yarn@1 && cd frontend && yarn install --frozen-lockfile
+      - name: Install Playwright browser
+        run: cd frontend && npx playwright install --with-deps chromium
+      # Visual baselines are platform-specific and must be generated on this
+      # CI runner (Ubuntu + SwiftShader). Until CI-generated baselines under
+      # frontend/e2e/__snapshots__/ are committed, this job is non-blocking and
+      # publishes the generated/diffed snapshots as an artifact for review.
+      # To promote to a blocking gate: download the artifact, commit the
+      # baselines, then remove `continue-on-error` below.
+      - name: Run visual regression specs
+        id: visual
+        continue-on-error: true
+        run: cd frontend && yarn test:visual --update-snapshots
+      - name: Upload visual snapshots & report
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-snapshots
+          path: |
+            frontend/e2e/__snapshots__/
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 14
+      - name: Flag visual job status
+        if: steps.visual.outcome != 'success'
+        run: echo "::warning::Visual regression non-blocking — review the 'visual-regression-snapshots' artifact and commit CI baselines to enable the gate."

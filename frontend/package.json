@@ -17,6 +17,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
+    "test:e2e:func": "playwright test",
+    "test:visual": "playwright test e2e/visual-regression.spec.ts e2e/theme-visual.spec.ts",
+    "test:visual:update": "playwright test e2e/visual-regression.spec.ts e2e/theme-visual.spec.ts --update-snapshots",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
