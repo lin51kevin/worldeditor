@@ -1088,4 +1088,193 @@ mod tests {
         assert!(result.is_some());
         assert_eq!(result.unwrap().id, "1");
     }
+
+    // ---- Cached road / lane variants ----
+
+    #[test]
+    fn test_pick_road_cached_finds_road() {
+        let mut project = Project::default();
+        project.roads.push(make_straight_road("1", 100.0));
+        let mut cache = ProjectCache::new(project);
+        let result = pick_road_cached(&mut cache, 50.0, 0.0, 10.0);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, "1");
+    }
+
+    #[test]
+    fn test_pick_road_cached_too_far() {
+        let mut project = Project::default();
+        project.roads.push(make_straight_road("1", 100.0));
+        let mut cache = ProjectCache::new(project);
+        assert!(pick_road_cached(&mut cache, 500.0, 500.0, 5.0).is_none());
+    }
+
+    #[test]
+    fn test_pick_lane_cached_finds_lane() {
+        let mut project = Project::default();
+        project.roads.push(make_straight_road("1", 100.0));
+        let mut cache = ProjectCache::new(project);
+        let result = pick_lane_cached(&mut cache, 50.0, -1.75, 5.0);
+        assert!(result.is_some());
+        let (road_id, _section, lane_id) = result.unwrap();
+        assert_eq!(road_id, "1");
+        assert!(lane_id < 0);
+    }
+
+    // ---- Junction picking ----
+
+    fn make_junction_on(connecting_road: &str) -> Junction {
+        Junction {
+            id: "j1".into(),
+            name: String::new(),
+            connections: vec![JunctionConnection {
+                id: "j1-c0".into(),
+                incoming_road: connecting_road.into(),
+                connecting_road: connecting_road.into(),
+                contact_point: ContactPoint::Start,
+                lane_links: vec![],
+            }],
+        }
+    }
+
+    #[test]
+    fn test_pick_junction_finds_junction() {
+        let mut project = Project::default();
+        // Connecting road spans (0,0)-(10,0); junction centre ≈ (5,0).
+        project.roads.push(make_straight_road("rc", 10.0));
+        project.junctions.push(make_junction_on("rc"));
+        let result = pick_junction(&project, 5.0, 0.0, 20.0);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, "j1");
+    }
+
+    #[test]
+    fn test_pick_junction_cached_finds_junction() {
+        let mut project = Project::default();
+        project.roads.push(make_straight_road("rc", 10.0));
+        project.junctions.push(make_junction_on("rc"));
+        let mut cache = ProjectCache::new(project);
+        let result = pick_junction_cached(&mut cache, 5.0, 0.0, 20.0);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, "j1");
+    }
+
+    #[test]
+    fn test_pick_junction_too_far_returns_none() {
+        let mut project = Project::default();
+        project.roads.push(make_straight_road("rc", 10.0));
+        project.junctions.push(make_junction_on("rc"));
+        assert!(pick_junction(&project, 500.0, 500.0, 5.0).is_none());
+    }
+
+    // ---- Object polygon hit-testing (corners) ----
+
+    fn make_object_with_corners(
+        corners: Vec<Point3D>,
+        corner_type: CornerType,
+        s: f64,
+        length: f64,
+        width: f64,
+    ) -> RoadObject {
+        RoadObject {
+            id: "obj1".into(),
+            object_type: ObjectType::Crosswalk,
+            name: String::new(),
+            position: Point3D {
+                x: s,
+                y: 0.0,
+                z: 0.0,
+                id: None,
+            },
+            orientation: 0.0,
+            hdg: 0.0,
+            pitch: 0.0,
+            roll: 0.0,
+            width,
+            height: 0.0,
+            length,
+            corners,
+            corner_type,
+            validity: None,
+            from_object_ref: false,
+            user_data: vec![],
+        }
+    }
+
+    fn corner(x: f64, y: f64) -> Point3D {
+        Point3D {
+            x,
+            y,
+            z: 0.0,
+            id: None,
+        }
+    }
+
+    #[test]
+    fn test_pick_object_local_corners_polygon_hit() {
+        let mut project = Project::default();
+        let mut road = make_straight_road("1", 100.0);
+        // 4x4 square in object-local frame centred on the reference point at s=30.
+        road.objects.push(make_object_with_corners(
+            vec![
+                corner(-2.0, -2.0),
+                corner(2.0, -2.0),
+                corner(2.0, 2.0),
+                corner(-2.0, 2.0),
+            ],
+            CornerType::Local,
+            30.0,
+            4.0,
+            4.0,
+        ));
+        project.roads.push(road);
+        let mut cache = ProjectCache::new(project);
+        // Click inside the polygon → distance 0 hit.
+        let result = pick_object_cached(&mut cache, 30.0, 0.0, 5.0);
+        assert!(result.is_some());
+        let hit = result.unwrap();
+        assert_eq!(hit.object_id, "obj1");
+        assert_eq!(hit.distance, 0.0);
+    }
+
+    #[test]
+    fn test_pick_object_road_corners_polygon_hit() {
+        let mut project = Project::default();
+        let mut road = make_straight_road("1", 100.0);
+        // Corners expressed in road frame (s, t).
+        road.objects.push(make_object_with_corners(
+            vec![
+                corner(28.0, -2.0),
+                corner(32.0, -2.0),
+                corner(32.0, 2.0),
+                corner(28.0, 2.0),
+            ],
+            CornerType::Road,
+            30.0,
+            4.0,
+            4.0,
+        ));
+        project.roads.push(road);
+        let mut cache = ProjectCache::new(project);
+        let result = pick_object_cached(&mut cache, 30.0, 0.0, 5.0);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().distance, 0.0);
+    }
+
+    #[test]
+    fn test_detect_local_apply_hdg_zero_size_applies() {
+        // length == 0 → always apply heading.
+        assert!(detect_local_apply_hdg(&[corner(0.0, 0.0)], 0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_detect_local_apply_hdg_near_pi() {
+        // hdg ≈ π with non-zero size → apply.
+        assert!(detect_local_apply_hdg(
+            &[corner(-1.0, -1.0), corner(1.0, 1.0)],
+            std::f64::consts::PI,
+            4.0,
+            2.0,
+        ));
+    }
 }

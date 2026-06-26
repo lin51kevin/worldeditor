@@ -223,4 +223,75 @@ mod tests {
         assert_eq!(transform[3][1], 20.0);
         assert_eq!(transform[3][2], 5.0);
     }
+
+    #[test]
+    fn test_signal_default_color_branches() {
+        // Speed-limit signals render as black text.
+        assert_eq!(
+            signal_default_color(&make_signal("1010203800001413", "")),
+            [0.0, 0.0, 0.0, 1.0]
+        );
+        assert_eq!(
+            signal_default_color(&make_signal("1010203900001613", "")),
+            [0.0, 0.0, 0.0, 1.0]
+        );
+        // Traffic lights (1000*) render green.
+        assert_eq!(
+            signal_default_color(&make_signal("1000001", "")),
+            [0.2, 0.8, 0.2, 1.0]
+        );
+        // Unknown sign types fall through to white.
+        assert_eq!(
+            signal_default_color(&make_signal("9999999", "")),
+            [1.0, 1.0, 1.0, 1.0]
+        );
+    }
+
+    #[test]
+    fn test_signal_icon_path_remaining_branches() {
+        assert_eq!(
+            signal_type_to_icon_path(&make_signal("1000002", "")),
+            "WalkingTrafficLight.png"
+        );
+        assert_eq!(
+            signal_type_to_icon_path(&make_signal("1000013", "")),
+            "BikingTrafficLight.png"
+        );
+        // Remove-speed-limit uses default value when none set.
+        assert_eq!(
+            signal_type_to_icon_path(&make_signal("1010203900001613", "")),
+            "removespeedlimit_30.png"
+        );
+        // Unknown type → Signs/<type>.png
+        assert_eq!(
+            signal_type_to_icon_path(&make_signal("ABC123", "")),
+            "Signs/ABC123.png"
+        );
+    }
+
+    #[test]
+    fn test_generate_signal_render_data_skips_unpositioned() {
+        let signals = vec![
+            make_signal("1000001", ""),
+            make_signal("Graphics", "Arrow"),
+            make_signal("9999999", ""),
+        ];
+        // Only the first signal gets a world position; others are skipped.
+        let data = generate_signal_render_data(&signals, 1.0, |s| {
+            if s.signal_type == "1000001" {
+                Some(Point3D::new(1.0, 2.0, 3.0))
+            } else {
+                None
+            }
+        });
+        assert_eq!(data.transforms.len(), 1);
+        assert_eq!(data.billboard_vertices.len(), 6);
+    }
+
+    #[test]
+    fn test_generate_signal_render_data_empty() {
+        let data = generate_signal_render_data(&[], 1.0, |_| Some(Point3D::new(0.0, 0.0, 0.0)));
+        assert!(data.transforms.is_empty());
+        assert!(data.billboard_vertices.is_empty());
+    }
 }

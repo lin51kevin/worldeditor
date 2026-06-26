@@ -793,4 +793,116 @@ mod tests {
         assert_eq!(cache.get_index().unwrap().len(), 1);
         assert!(cache.get_index().unwrap().get_aabb("r2").is_none());
     }
+
+    // ---- Junction indexing ----
+
+    fn make_junction(id: &str, incoming: &str, connecting: &str) -> Junction {
+        Junction {
+            id: id.to_string(),
+            name: String::new(),
+            connections: vec![JunctionConnection {
+                id: format!("{id}-c0"),
+                incoming_road: incoming.to_string(),
+                connecting_road: connecting.to_string(),
+                contact_point: ContactPoint::Start,
+                lane_links: vec![],
+            }],
+        }
+    }
+
+    #[test]
+    fn test_build_index_with_junction() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        project.roads.push(make_road_at("r2", 100.0, 0.0, 100.0));
+        project.junctions.push(make_junction("j1", "r1", "r2"));
+        let idx = SpatialIndex::build(&project, 100.0);
+        // 2 roads + 1 junction.
+        assert_eq!(idx.len(), 3);
+        assert!(idx.get_aabb("j1").is_some());
+    }
+
+    #[test]
+    fn test_query_point_returns_junction_kind() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        project.roads.push(make_road_at("r2", 100.0, 0.0, 100.0));
+        project.junctions.push(make_junction("j1", "r1", "r2"));
+        let idx = SpatialIndex::build(&project, 100.0);
+        let hits = idx.query_point(50.0, 0.0, 10.0);
+        assert!(hits.iter().any(|h| h.kind == ElementKind::Junction));
+        assert!(hits.iter().any(|h| h.kind == ElementKind::Road));
+    }
+
+    #[test]
+    fn test_junction_not_indexed_when_roads_missing() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        // Junction references roads that do not exist → no samples → not indexed.
+        project.junctions.push(make_junction("j1", "ghost_a", "ghost_b"));
+        let idx = SpatialIndex::build(&project, 100.0);
+        assert_eq!(idx.len(), 1); // only r1
+        assert!(idx.get_aabb("j1").is_none());
+    }
+
+    #[test]
+    fn test_incremental_update_reboxes_referencing_junction() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        project.roads.push(make_road_at("r2", 100.0, 0.0, 100.0));
+        project.junctions.push(make_junction("j1", "r1", "r2"));
+        let mut cache = ProjectCache::new(project);
+        let _ = cache.get_index();
+
+        // Move r1 far away; the junction box must follow on incremental update.
+        if let Some(r1) = cache.project_mut().roads.iter_mut().find(|r| r.id == "r1") {
+            r1.plan_view[0].x = 900.0;
+            r1.plan_view[0].y = 900.0;
+        }
+        cache.invalidate_road("r1");
+        let incremental = cache.get_index().expect("index").clone();
+
+        let full = SpatialIndex::build(cache.project(), DEFAULT_CELL_SIZE);
+        assert_eq!(incremental.len(), full.len());
+        // Junction box from incremental path equals a full rebuild's box.
+        let inc_j = incremental.get_aabb("j1").unwrap();
+        let full_j = full.get_aabb("j1").unwrap();
+        assert!((inc_j.min_x - full_j.min_x).abs() < 1e-6);
+        assert!((inc_j.max_x - full_j.max_x).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_aabb_expand() {
+        let a = Aabb::new(0.0, 0.0, 10.0, 10.0);
+        let e = a.expand(5.0);
+        assert_eq!(e.min_x, -5.0);
+        assert_eq!(e.min_y, -5.0);
+        assert_eq!(e.max_x, 15.0);
+        assert_eq!(e.max_y, 15.0);
+    }
+
+    #[test]
+    fn test_element_kind_eq_and_serde() {
+        assert_eq!(ElementKind::Road, ElementKind::Road);
+        assert_ne!(ElementKind::Road, ElementKind::Junction);
+        let json = serde_json::to_string(&ElementKind::Junction).unwrap();
+        let back: ElementKind = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ElementKind::Junction);
+    }
+
+    #[test]
+    fn test_has_index_and_snap_cache_transitions() {
+        let mut project = Project::default();
+        project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
+        let mut cache = ProjectCache::new(project);
+        assert!(!cache.has_index());
+        assert!(!cache.has_snap_cache());
+        let _ = cache.get_index();
+        let _ = cache.get_snap_cache();
+        assert!(cache.has_index());
+        assert!(cache.has_snap_cache());
+        cache.invalidate();
+        assert!(!cache.has_index());
+        assert!(!cache.has_snap_cache());
+    }
 }

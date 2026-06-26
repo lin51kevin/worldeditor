@@ -541,4 +541,142 @@ mod tests {
             tip_x_at_max_y
         );
     }
+
+    fn two_points(len: f64) -> Vec<RefLinePoint> {
+        vec![
+            RefLinePoint {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+            },
+            RefLinePoint {
+                s: len,
+                x: len,
+                y: 0.0,
+                hdg: 0.0,
+            },
+        ]
+    }
+
+    fn mark(mark_type: RoadMarkType, color: RoadMarkColor, width: f64) -> RoadMark {
+        RoadMark {
+            s_offset: 0.0,
+            mark_type,
+            weight: we_core::model::RoadMarkWeight::default(),
+            color,
+            material: String::new(),
+            width,
+            lane_change: String::new(),
+            height: 0.01,
+        }
+    }
+
+    #[test]
+    fn test_marking_color_variants_distinct() {
+        // White and Standard both map to white; others must differ from it.
+        assert_eq!(marking_color(&RoadMarkColor::Standard), [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(marking_color(&RoadMarkColor::White), [1.0, 1.0, 1.0, 1.0]);
+        for c in [
+            RoadMarkColor::Yellow,
+            RoadMarkColor::Red,
+            RoadMarkColor::Blue,
+            RoadMarkColor::Green,
+            RoadMarkColor::Orange,
+            RoadMarkColor::Violet,
+        ] {
+            assert_ne!(marking_color(&c), [1.0, 1.0, 1.0, 1.0]);
+        }
+    }
+
+    #[test]
+    fn test_solid_line_too_few_points_is_empty() {
+        let single = vec![RefLinePoint {
+            s: 0.0,
+            x: 0.0,
+            y: 0.0,
+            hdg: 0.0,
+        }];
+        assert!(generate_solid_line(&single, 0.0, 0.15, 0.0, [1.0; 4]).is_empty());
+    }
+
+    #[test]
+    fn test_broken_line_generation() {
+        let pts = two_points(30.0);
+        let v = generate_broken_line(&pts, 0.0, 0.15, 0.01, 3.0, 3.0, [1.0; 4]);
+        // 30m with 6m period (3 dash + 3 gap) → multiple dashes, each 6 verts.
+        assert!(!v.is_empty());
+        assert_eq!(v.len() % 6, 0);
+    }
+
+    #[test]
+    fn test_broken_line_too_few_points_is_empty() {
+        let single = vec![RefLinePoint {
+            s: 0.0,
+            x: 0.0,
+            y: 0.0,
+            hdg: 0.0,
+        }];
+        assert!(generate_broken_line(&single, 0.0, 0.15, 0.0, 3.0, 3.0, [1.0; 4]).is_empty());
+    }
+
+    #[test]
+    fn test_zebra_crossing_generation() {
+        let center = Point3D::new(0.0, 0.0, 0.0);
+        let v = generate_zebra_crossing(&center, 0.0, 4.0, 7.0, 0.5, [1.0; 4]);
+        // road_width / stripe_width = 14 stripes, each 6 verts.
+        assert!(!v.is_empty());
+        assert_eq!(v.len(), 14 * 6);
+    }
+
+    #[test]
+    fn test_arrow_default_type_is_triangle() {
+        let center = Point3D::new(0.0, 0.0, 0.0);
+        let v = generate_arrow(&center, 0.0, 2, 1.0, [1.0; 4]);
+        assert_eq!(v.len(), 3);
+    }
+
+    #[test]
+    fn test_generate_road_markings_solid() {
+        let pts = two_points(10.0);
+        let v = generate_road_markings(&pts, &[mark(RoadMarkType::Solid, RoadMarkColor::White, 0.15)], 3.5);
+        assert!(!v.is_empty());
+    }
+
+    #[test]
+    fn test_generate_road_markings_broken() {
+        let pts = two_points(30.0);
+        let v = generate_road_markings(&pts, &[mark(RoadMarkType::Broken, RoadMarkColor::Yellow, 0.15)], 0.0);
+        assert!(!v.is_empty());
+    }
+
+    #[test]
+    fn test_generate_road_markings_solid_solid() {
+        let pts = two_points(10.0);
+        let v = generate_road_markings(
+            &pts,
+            &[mark(RoadMarkType::SolidSolid, RoadMarkColor::White, 0.3)],
+            0.0,
+        );
+        assert!(!v.is_empty());
+    }
+
+    #[test]
+    fn test_generate_road_markings_stop_line() {
+        let pts = two_points(10.0);
+        let v = generate_road_markings(
+            &pts,
+            &[mark(RoadMarkType::StopLine, RoadMarkColor::White, 0.5)],
+            0.0,
+        );
+        assert_eq!(v.len(), 6);
+    }
+
+    #[test]
+    fn test_generate_road_markings_default_arm() {
+        // Curb falls through to the default solid-line arm.
+        let pts = two_points(10.0);
+        let v = generate_road_markings(&pts, &[mark(RoadMarkType::Curb, RoadMarkColor::Red, 0.2)], 0.0);
+        assert!(!v.is_empty());
+    }
 }
