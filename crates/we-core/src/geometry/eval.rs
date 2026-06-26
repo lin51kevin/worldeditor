@@ -4,7 +4,7 @@
 //! each geometry element (Line, Arc, Spiral, Poly3, ParamPoly3).
 //! Pure Rust, WASM compatible.
 
-use crate::model::{Elevation, Geometry, GeometryType, LaneWidth, ParamPoly3Range, Road};
+use crate::model::{Elevation, Geometry, GeometryType, LaneOffset, LaneWidth, ParamPoly3Range, Road};
 
 #[path = "arc_eval.rs"]
 mod arc_eval;
@@ -373,6 +373,20 @@ pub fn evaluate_lane_width(widths: &[LaneWidth], ds: f64) -> f64 {
     }
 }
 
+/// Evaluate the `laneOffset` polynomial at a road station `s`.
+///
+/// OpenDRIVE `laneOffset` laterally shifts the entire lane cross-section
+/// relative to the reference line (positive = shift towards the left).
+/// Returns `0.0` when no offset entry applies. This mirrors the renderer's
+/// `eval_lane_offset` so picking geometry matches the drawn geometry.
+pub fn evaluate_lane_offset(offsets: &[LaneOffset], s: f64) -> f64 {
+    let Some(entry) = offsets.iter().rev().find(|o| o.s <= s + 1e-9) else {
+        return 0.0;
+    };
+    let ds = (s - entry.s).max(0.0);
+    entry.evaluate(ds)
+}
+
 /// Evaluate elevation at a given road station s.
 pub fn evaluate_elevation(elevations: &[Elevation], s: f64) -> f64 {
     if elevations.is_empty() {
@@ -385,7 +399,13 @@ pub fn evaluate_elevation(elevations: &[Elevation], s: f64) -> f64 {
         .find(|e| e.s <= s + 1e-9)
         .unwrap_or(&elevations[0]);
 
-    entry.evaluate(s - entry.s)
+    // Clamp the local offset to be non-negative. When `s` precedes the first
+    // entry (e.g. a junction connecting road whose elevation profile carries the
+    // parent road's absolute station), the fallback to `elevations[0]` would
+    // otherwise evaluate the cubic with a large negative `ds`, producing massive
+    // backward-extrapolation spikes in the rendered surface.
+    let ds = (s - entry.s).max(0.0);
+    entry.evaluate(ds)
 }
 
 /// Compute an offset point perpendicular to the reference line.
@@ -823,6 +843,77 @@ mod tests {
         }];
         let z = evaluate_elevation(&elevations, 50.0);
         assert!((z - 15.0).abs() < 1e-9); // 10 + 0.1*50
+    }
+
+    #[test]
+    fn test_evaluate_elevation_before_first_entry_clamps_no_spike() {
+        // Elevation profile whose first entry starts at a parent road's absolute
+        // station, with a steep cubic term. Querying at small stations (as a
+        // junction connecting road does) must not extrapolate backward.
+        let elevations = vec![Elevation {
+            s: 245.0,
+            a: 12.0,
+            b: 0.5,
+            c: 0.2,
+            d: 0.1,
+        }];
+        let z = evaluate_elevation(&elevations, 3.0);
+        // Clamped to ds = 0 => flat base elevation, no spike.
+        assert!((z - 12.0).abs() < 1e-9, "expected clamped base 12.0, got {z}");
+    }
+
+    #[test]
+    fn test_evaluate_lane_offset_empty_is_zero() {
+        assert_eq!(evaluate_lane_offset(&[], 50.0), 0.0);
+    }
+
+    #[test]
+    fn test_evaluate_lane_offset_constant() {
+        let offsets = vec![LaneOffset {
+            s: 0.0,
+            a: 5.0,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }];
+        assert!((evaluate_lane_offset(&offsets, 50.0) - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_evaluate_lane_offset_polynomial() {
+        let offsets = vec![LaneOffset {
+            s: 0.0,
+            a: 2.0,
+            b: 0.1,
+            c: 0.0,
+            d: 0.0,
+        }];
+        // 2 + 0.1 * 30 = 5.0
+        assert!((evaluate_lane_offset(&offsets, 30.0) - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_evaluate_lane_offset_uses_latest_applicable_entry() {
+        let offsets = vec![
+            LaneOffset {
+                s: 0.0,
+                a: 1.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            LaneOffset {
+                s: 40.0,
+                a: 9.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+        ];
+        // Before the second entry: first applies.
+        assert!((evaluate_lane_offset(&offsets, 20.0) - 1.0).abs() < 1e-9);
+        // At/after the second entry: second applies, evaluated from its own s.
+        assert!((evaluate_lane_offset(&offsets, 50.0) - 9.0).abs() < 1e-9);
     }
 
     // --- local_to_world s tests ---
