@@ -167,7 +167,7 @@ api/project — 项目 CRUD (create, read, update, delete, list)
 api/files   — 文件上传/下载
 auth/jwt    — JWT 认证中间件 + 令牌生成/验证 (24h 过期)
 storage     — 存储后端抽象 (LocalStorage / S3 预留)
-ws/editor   — WebSocket 协作编辑 (占位)
+ws/editor   — WebSocket 协作编辑 (CollabHub 分房广播, websocket feature)
 error       — 统一错误类型
 ```
 
@@ -526,8 +526,8 @@ Playwright 测试位于 `frontend/e2e/` (17 spec files)，覆盖以下场景：
 - 点云加载未实现（we-native 占位，Phase 4 预留）
 - GDAL/LAS 依赖尚未启用（栅格/异型 CRS 保留为桌面扩展；常见投影 UTM/TM/Web Mercator 已由 we-core 纯 Rust 引擎实现）
 - DXF / Shapefile 导入导出已实现；SUMO net.xml 导入导出已实现（`sumo` feature）
-- we-server WebSocket 协作编辑为占位实现
-- we-server S3 存储后端为 stub
+- we-server WebSocket 协作编辑：房间广播 hub 已实现（`websocket` feature，按 project_id 分房广播）；CRDT/OT 冲突合并为后续项
+- we-server S3 存储后端为 stub（需 aws-sdk-s3 + 实时端点，作为部署期扩展，非 headless 可验证）
 - CSP 仅含 `wasm-unsafe-eval`（允许 WASM 编译，不含 JS `unsafe-eval`）
 - 外部插件 JS 已加静态沙箱守卫（`sandboxGuard`，注入前拦截禁用能力）；完整 realm 隔离（Web Worker）为后续浏览器验证项
 - 实例化渲染尚未补齐，dense scene 性能仍需继续提升

@@ -66,8 +66,9 @@ async fn main() -> anyhow::Result<()> {
 
     // WebSocket route (unprotected for now, but could add auth later)
     #[cfg(feature = "websocket")]
-    let ws_routes =
-        Router::new().route("/ws/editor/:project_id", get(ws::editor::editor_ws_handler));
+    let ws_routes = Router::new()
+        .route("/ws/editor/:project_id", get(ws::editor::editor_ws_handler))
+        .with_state(ws::editor::CollabHub::new());
 
     // Auth routes (unprotected)
     let auth_routes = Router::new()
