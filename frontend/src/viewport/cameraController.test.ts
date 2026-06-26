@@ -34,6 +34,28 @@ describe('CameraController', () => {
       cam.setDimension('2d');  // second call — should be a no-op
       expect(cam.state.position).toEqual(posBefore);
     });
+
+    it('expands the far clip plane beyond camera distance when switching 2D→3D on a large map (regression: only-half rendering)', () => {
+      cam.setDimension('2d');
+      // Large map (~40km span). fitToVertices clears the animation flag and
+      // sets the 2D far plane to the small ortho value (~20100m).
+      const verts = makeVertexBuffer([
+        [0, 0, 0], [40000, 5000, 0],
+      ]);
+      cam.fitToVertices(verts);
+
+      cam.setDimension('3d');
+
+      const { position, target, far } = cam.state;
+      const dist = Math.hypot(
+        position[0] - target[0],
+        position[1] - target[1],
+        position[2] - target[2],
+      );
+      // The far plane must lie beyond the camera-to-target distance; otherwise
+      // the scene is clipped and only the near half renders.
+      expect(far).toBeGreaterThan(dist);
+    });
   });
 
   describe('fitToVertices', () => {

@@ -203,6 +203,9 @@ export class CameraController {
       this.numPixelsPerMeter = Math.max(MINIMAL_SCALE, Math.min(MAXIMAL_SCALE, 1 / currentMpp));
       this._animEndPos = [tx, ty, tz + ORTHO_CAM_HEIGHT];
       this._animEndUp = [0, 1, 0];
+      // Ortho camera sits at a fixed height; the depth slab must span it.
+      this.camera.near = 0.1;
+      this.camera.far = ORTHO_CAM_HEIGHT * 2 + 100;
     } else {
       // Switch back to 3D perspective: compute a camera distance from current scale
       const mpp = 1 / this.numPixelsPerMeter;
@@ -210,6 +213,12 @@ export class CameraController {
       const perspDist = halfWorld / Math.tan(this.camera.fovY / 2);
       this._animEndPos = [tx, ty - perspDist * 0.6, tz + perspDist * 0.8];
       this._animEndUp = [0, 0, 1];
+      // Update clip planes to match the new camera distance. Without this the
+      // far plane keeps the small 2D value (~20100m); on a large map the
+      // camera-to-target distance exceeds it, clipping everything beyond the
+      // far plane — only the near half of the scene renders.
+      this.camera.near = Math.max(0.1, perspDist * 0.001);
+      this.camera.far = Math.max(100000, perspDist * 10);
     }
 
     this._animStartPos = [...this.camera.position] as [number, number, number];
