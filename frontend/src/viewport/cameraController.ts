@@ -578,7 +578,7 @@ export class CameraController {
     }
   }
 
-  handleWheel(deltaY: number): void {
+  handleWheel(deltaY: number, cursorX?: number, cursorY?: number): void {
     if (this.cameraLocked) return;
     if (this._flyState.mode) {
       this.adjustFlySpeed(deltaY);
@@ -586,6 +586,8 @@ export class CameraController {
     }
     if (this.dimensionMode === '2d') {
       this.zoom2D(deltaY);
+    } else if (cursorX !== undefined && cursorY !== undefined) {
+      this.zoomToCursor(deltaY > 0 ? 1.1 : 0.9, cursorX, cursorY);
     } else {
       this.zoom(deltaY > 0 ? 1.1 : 0.9);
     }
@@ -688,6 +690,58 @@ export class CameraController {
     ];
     this.camera.near = Math.max(0.1, dist * 0.001);
     this.camera.far = Math.max(100000, dist * 100);
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+    this.reportScale();
+  }
+
+  /**
+   * 3D zoom-to-cursor: scale the camera (both position and orbit target) about
+   * the world point under the cursor, so the cursor stays locked on the same
+   * location while zooming. This also pulls the orbit pivot toward the geometry
+   * being inspected, so the camera can keep getting closer instead of stalling
+   * at MIN_CAM_DIST away from a stale, far-off pivot.
+   */
+  private zoomToCursor(factor: number, cursorX: number, cursorY: number): void {
+    const anchor = this.unprojectToGround(cursorX, cursorY);
+    // No ground hit (e.g. cursor over the sky): fall back to dolly-to-target.
+    if (!anchor) {
+      this.zoom(factor);
+      return;
+    }
+
+    const [px, py, pz] = this.camera.position;
+    const [tx, ty, tz] = this.camera.target;
+    const dx = tx - px;
+    const dy = ty - py;
+    const dz = tz - pz;
+    const currentDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (currentDist < 1e-6) {
+      this.zoom(factor);
+      return;
+    }
+
+    // Clamp so the camera-to-target distance stays within limits, then derive
+    // the effective scale that keeps the anchor stationary on screen.
+    const clampedDist = Math.min(MAX_CAM_DIST, Math.max(MIN_CAM_DIST, currentDist * factor));
+    const eff = clampedDist / currentDist;
+
+    const ax = anchor.x;
+    const ay = anchor.y;
+    const az = 0; // ground-plane anchor
+
+    this.camera.position = [
+      ax + (px - ax) * eff,
+      ay + (py - ay) * eff,
+      az + (pz - az) * eff,
+    ];
+    this.camera.target = [
+      ax + (tx - ax) * eff,
+      ay + (ty - ay) * eff,
+      az + (tz - az) * eff,
+    ];
+    this.camera.near = Math.max(0.1, clampedDist * 0.001);
+    this.camera.far = Math.max(100000, clampedDist * 100);
     this.viewDirty = true;
     this.onViewBecameDirty?.();
     this.reportScale();

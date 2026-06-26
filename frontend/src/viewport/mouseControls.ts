@@ -137,7 +137,8 @@ export function setupMouseControls(
 
   const handleWheel = (e: WheelEvent) => {
     e.preventDefault();
-    deps.cameraController.handleWheel(e.deltaY);
+    const rect = canvas.getBoundingClientRect();
+    deps.cameraController.handleWheel(e.deltaY, e.clientX - rect.left, e.clientY - rect.top);
   };
 
   const handleContextMenu = (e: MouseEvent) => e.preventDefault();

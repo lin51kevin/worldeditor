@@ -209,6 +209,60 @@ describe('CameraController', () => {
       // Should be able to zoom out significantly beyond 2000 (old limit)
       expect(zoomedOutDist).toBeGreaterThan(2000);
     });
+
+    it('zoom-to-cursor keeps the world point under the cursor stationary on screen', () => {
+      const verts = makeVertexBuffer([
+        [0, 0, 0], [2000, 2000, 0],
+      ]);
+      cam.fitToVertices(verts);
+
+      // Pick an off-centre cursor and record the world point under it.
+      const cx = 200;
+      const cy = 180;
+      const anchor = cam.unprojectToGround(cx, cy);
+      expect(anchor).not.toBeNull();
+
+      cam.handleWheel(-120, cx, cy);  // zoom in toward the cursor
+
+      // The same world point must re-project to (approximately) the cursor.
+      const screen = cam.projectWorldToScreen(anchor!.x, anchor!.y);
+      expect(screen).not.toBeNull();
+      expect(screen!.x).toBeCloseTo(cx, 0);
+      expect(screen!.y).toBeCloseTo(cy, 0);
+    });
+
+    it('zoom-to-cursor pulls the orbit target toward the cursor anchor', () => {
+      const verts = makeVertexBuffer([
+        [0, 0, 0], [2000, 2000, 0],
+      ]);
+      cam.fitToVertices(verts);
+
+      const cx = 200;
+      const cy = 180;
+      const anchor = cam.unprojectToGround(cx, cy);
+      expect(anchor).not.toBeNull();
+
+      const distBefore = Math.hypot(
+        cam.state.target[0] - anchor!.x,
+        cam.state.target[1] - anchor!.y,
+      );
+      cam.handleWheel(-120, cx, cy);  // zoom in toward the cursor
+      const distAfter = Math.hypot(
+        cam.state.target[0] - anchor!.x,
+        cam.state.target[1] - anchor!.y,
+      );
+
+      // Orbit pivot should move closer to where the user is zooming, so the
+      // camera can keep getting closer instead of stalling at MIN_CAM_DIST.
+      expect(distAfter).toBeLessThan(distBefore);
+    });
+
+    it('handles an out-of-bounds cursor without error and still zooms in', () => {
+      const distBefore = cam.getCameraDistance();
+      // Cursor far outside the viewport — exercises the null-anchor guard.
+      cam.handleWheel(-120, -99999, -99999);
+      expect(cam.getCameraDistance()).toBeLessThan(distBefore);
+    });
   });
 
   describe('fly mode', () => {
