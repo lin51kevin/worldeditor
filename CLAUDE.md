@@ -8,7 +8,7 @@
 
 - 点云加载未实现（we-native 占位，Phase 4 预留）
 - GDAL/LAS 依赖尚未启用（保留为桌面插件/扩展路线）
-- DXF / Shapefile / SUMO 导入导出为 stub（Phase 4 预留）
+- DXF / Shapefile 导入导出已实现；SUMO net.xml 导入导出已实现（`sumo` feature）
 
 ## 技术栈速查
 
@@ -144,7 +144,7 @@ nio_proto    — NIO 协议缓冲格式
 obj_export   — OBJ 3D 格式导出
 shapefile_io — Shapefile 格式 (Phase 3 预留)
 signal_json  — 信号配置 JSON
-sumo         — SUMO 交通模拟器 (Phase 3 预留)
+sumo         — SUMO 交通模拟器 net.xml 导入/导出 (feature = "sumo")
 traits       — FileSystem trait (平台无关 I/O 抽象)
 native       — 原生文件系统 (tokio, 仅 native 目标)
 web          — Web 存储 (IndexedDB/localStorage, 仅 wasm32 目标)
@@ -525,7 +525,7 @@ Playwright 测试位于 `frontend/e2e/` (17 spec files)，覆盖以下场景：
 
 - 点云加载未实现（we-native 占位，Phase 4 预留）
 - GDAL/LAS 依赖尚未启用（保留为桌面插件/扩展路线）
-- DXF / Shapefile / SUMO 导入导出为 stub（Phase 4 预留）
+- DXF / Shapefile 导入导出已实现；SUMO net.xml 导入导出已实现（`sumo` feature）
 - we-server WebSocket 协作编辑为占位实现
 - we-server S3 存储后端为 stub
 - CSP 策略包含 `unsafe-eval`（安全加固中）
