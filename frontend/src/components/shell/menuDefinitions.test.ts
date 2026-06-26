@@ -22,6 +22,10 @@ vi.mock('../../utils/dialog', () => ({
   showConfirm: vi.fn().mockResolvedValue(false),
 }));
 
+vi.mock('@tauri-apps/plugin-shell', () => ({
+  open: vi.fn().mockRejectedValue(new Error('not tauri')),
+}));
+
 vi.mock('../../services/updateService', () => ({
   isDesktopRuntime: vi.fn(() => false),
   checkForUpdate: vi.fn().mockResolvedValue(null),
@@ -71,6 +75,8 @@ describe('menuDefinitions helpers', () => {
   });
 
   it('shows about, version, user manual, and update dialogs with expected content', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+
     await showAbout(t);
     await showVersion(t);
     await showUserManual(t);
@@ -91,9 +97,13 @@ describe('menuDefinitions helpers', () => {
       expect.stringContaining('0.3.2'),
       'Version Info',
     );
-    expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(3, 'Manual content', 'User Manual');
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://github.com/lin51kevin/worldeditor/blob/master/docs/user-manual.md',
+      '_blank',
+      'noopener,noreferrer',
+    );
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
-      4,
+      3,
       'update.upToDate',
       'Check for Updates',
     );
