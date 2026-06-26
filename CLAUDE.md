@@ -528,7 +528,7 @@ Playwright 测试位于 `frontend/e2e/` (17 spec files)，覆盖以下场景：
 - DXF / Shapefile 导入导出已实现；SUMO net.xml 导入导出已实现（`sumo` feature）
 - we-server WebSocket 协作编辑：房间广播 hub 已实现（`websocket` feature，按 project_id 分房广播）；CRDT/OT 冲突合并为后续项
 - we-server S3 存储后端为 stub（需 aws-sdk-s3 + 实时端点，作为部署期扩展，非 headless 可验证）
-- CSP 仅含 `wasm-unsafe-eval`（允许 WASM 编译，不含 JS `unsafe-eval`）
+- CSP 含 `unsafe-eval` + `wasm-unsafe-eval`：GeoZ 导入用 protobufjs，其解码器走 `Function()` 运行时 codegen，生产 Tauri 构建必须保留 `unsafe-eval`，否则 .geoz 打开失败（勿删，见 1be71d8）
 - 外部插件 JS 已加静态沙箱守卫（`sandboxGuard`，注入前拦截禁用能力）；完整 realm 隔离（Web Worker）为后续浏览器验证项
 - 实例化渲染尚未补齐，dense scene 性能仍需继续提升
 - 前端 Visual Regression 还未纳入 CI 门禁
