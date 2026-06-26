@@ -35,6 +35,7 @@ export interface RendererFrameInternals {
   pointCloudPipeline: GPURenderPipeline | null;
   basicBindGroup: GPUBindGroup;
   meshes: RenderableMesh[];
+  junctionMeshes: RenderableMesh[];
   basicPipeline: GPURenderPipeline;
   hoverMeshes: RenderableMesh[];
   highlightPipeline: GPURenderPipeline;
@@ -149,6 +150,12 @@ export function renderFrame(r: RendererFrameInternals): void {
 
   // Draw road meshes (render first - on bottom)
   drawBatched(pass, r.meshes, r.basicPipeline, r.basicBindGroup, 'basic');
+
+  // Draw junction fill (above road surface, below everything else). Uses the
+  // depth-biased highlight pipeline (depthWriteEnabled=false, depthBias) so the
+  // translucent fill never z-fights the coplanar road surface and never occludes
+  // lane lines / objects / signals that are drawn afterwards.
+  drawBatched(pass, r.junctionMeshes, r.highlightPipeline, r.basicBindGroup, 'highlight');
 
   // Draw hover highlight (above road surface, below selection so selection overrides)
   drawBatched(pass, r.hoverMeshes, r.highlightPipeline, r.basicBindGroup, 'highlight');

@@ -243,8 +243,14 @@ export function useViewportMeshes({
       if (viewMode !== 'solid') {
         // Wire/sketch: no surface polygons, just preserve last frame for smooth transition
         renderer.uploadRoadVertices(new Float32Array(0), { preserveLastVertexDataOnEmpty: true });
+        renderer.uploadJunctionVertices(new Float32Array(0));
       } else {
-        let surfaceVerts = mergeFloat32Arrays(cachedRoadVertsRef.current, cachedJunctionVertsRef.current);
+        // Junction fill is uploaded to its OWN layer (not merged into the road
+        // surface buffer) so it can be drawn with the depth-biased pipeline,
+        // avoiding z-fighting against the coplanar connecting-road surfaces in 3D.
+        renderer.uploadJunctionVertices(cachedJunctionVertsRef.current);
+
+        let surfaceVerts = cachedRoadVertsRef.current;
         // Always include signal polygons (tessellated arrows + diamond markers).
         // Billboard sprites render at z_offset=3.5+ above road, no z-fighting.
         if (display.showSignals && cachedSignalVertsRef.current.length > 0) {

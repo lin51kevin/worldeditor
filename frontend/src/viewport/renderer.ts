@@ -67,6 +67,10 @@ export class ViewportRenderer {
 
   // Road meshes
   private meshes: RenderableMesh[] = [];
+  // Junction fill meshes (rendered just above road surface with a depth-biased,
+  // non-depth-writing pipeline so the translucent fill never z-fights the road
+  // surface and never occludes lane lines / objects / signals drawn afterwards).
+  private junctionMeshes: RenderableMesh[] = [];
   // Lane line meshes
   private laneLineMeshes: RenderableMesh[] = [];
   // Bridge/tunnel overlay meshes (rendered above road surface)
@@ -417,6 +421,21 @@ export class ViewportRenderer {
   }
 
 
+  /** Upload junction fill vertex data (7 floats per vertex: x,y,z,r,g,b,a).
+   * Drawn as its own layer with the depth-biased highlight pipeline so the
+   * translucent fill sits above the road surface without z-fighting. */
+  uploadJunctionVertices(vertexData: Float32Array): void {
+    if (vertexData.length === 0) {
+      if (this.junctionMeshes.length === 0) return;
+      for (const m of this.junctionMeshes) { m.vertexBuffer.destroy(); }
+      this.junctionMeshes = [];
+      this.markSceneDirty();
+      return;
+    }
+    uploadMeshData(this.device, this.junctionMeshes, vertexData);
+    this.markSceneDirty();
+  }
+
   /** Upload bridge/tunnel overlay vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
   uploadOverlayVertices(vertexData: Float32Array): void {
     if (vertexData.length === 0) {
@@ -638,6 +657,7 @@ export class ViewportRenderer {
     this.mouseControlsCleanup?.();
     this.mouseControlsCleanup = null;
     disposeMeshes(this.meshes);
+    disposeMeshes(this.junctionMeshes);
     disposeMeshes(this.laneLineMeshes);
     disposeMeshes(this.overlayMeshes);
     disposeMeshes(this.pointCloudMeshes);
