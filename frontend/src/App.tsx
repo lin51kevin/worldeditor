@@ -213,7 +213,7 @@ export function App() {
 
   // ── File operations ─────────────────────────────────────────────────────
 
-  const { loadFile } = useFileLoader();
+  const { loadFile, loadBuffer } = useFileLoader();
 
   const handleOpenFile = useCallback(async () => {
     try {
@@ -243,10 +243,12 @@ export function App() {
         );
 
         let content: string;
+        let buffer: ArrayBuffer | undefined;
         try {
           const result = await ps.openFileByPath(filePath);
           if (!result) { reset(); return; }
           content = result.content;
+          buffer = result.buffer;
         } catch (err) {
           reset();
           throw err;
@@ -260,7 +262,10 @@ export function App() {
         );
 
         // Parse + mesh. Skip startLoading — we already called it above.
-        const loadResult = await loadFile(content, name, { skipStartLoading: true });
+        // Binary files (e.g. .geoz) are routed through the plugin importer.
+        const loadResult = buffer
+          ? await loadBuffer(buffer, name, { skipStartLoading: true })
+          : await loadFile(content, name, { skipStartLoading: true });
         if (loadResult.success) {
           pushRecentFile(name, filePath);
           setIsEditorOpen(true);
@@ -271,7 +276,9 @@ export function App() {
       // Web fallback: openFile() does dialog + read in one shot.
       const result = await ps.openFile();
       if (!result) return;
-      const loadResult = await loadFile(result.content, result.name);
+      const loadResult = result.buffer
+        ? await loadBuffer(result.buffer, result.name)
+        : await loadFile(result.content, result.name);
       if (loadResult.success) {
         if (result.path) pushRecentFile(result.name, result.path);
         setIsEditorOpen(true);
@@ -279,7 +286,7 @@ export function App() {
     } catch (err) {
       console.error('Failed to open file:', err);
     }
-  }, [pushRecentFile, loadFile]);
+  }, [pushRecentFile, loadFile, loadBuffer]);
 
   /** Create a new empty project and enter the editor. */
   const handleNew = useCallback(() => {
@@ -297,7 +304,9 @@ export function App() {
         await showAlert(`${t('dialog.fileNotFound')}: ${recentFile.name}`);
         return;
       }
-      const loadResult = await loadFile(result.content, result.name);
+      const loadResult = result.buffer
+        ? await loadBuffer(result.buffer, result.name)
+        : await loadFile(result.content, result.name);
       if (loadResult.success) {
         pushRecentFile(result.name, recentFile.path);
         setIsEditorOpen(true);
@@ -306,7 +315,7 @@ export function App() {
       removeRecentFile(recentFile.path);
       await showAlert(`${t('dialog.fileNotFound')}: ${recentFile.name}`);
     }
-  }, [pushRecentFile, removeRecentFile, t, loadFile]);
+  }, [pushRecentFile, removeRecentFile, t, loadFile, loadBuffer]);
 
   const handleRemoveRecent = useCallback((path: string) => {
     removeRecentFile(path);

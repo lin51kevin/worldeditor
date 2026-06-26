@@ -457,8 +457,8 @@ export interface PlatformService {
    */
   openFilePath?(): Promise<string | null>;
 
-  /** Open a file directly by path when the platform supports it. */
-  openFileByPath(path: string): Promise<{ name: string; content: string } | null>;
+  /** Open a file directly by path when the platform supports it. Binary files (e.g. .geoz) return `buffer` instead of text `content`. */
+  openFileByPath(path: string): Promise<{ name: string; content: string; buffer?: ArrayBuffer } | null>;
 
   /** Save content to a file. */
   saveFile(filename: string, content: string): Promise<string | null>;

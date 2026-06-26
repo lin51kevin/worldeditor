@@ -75,11 +75,17 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
     }
   }
 
-  async openFileByPath(filePath: string): Promise<{ name: string; content: string } | null> {
+  async openFileByPath(filePath: string): Promise<{ name: string; content: string; buffer?: ArrayBuffer } | null> {
     try {
+      const name = filePath.split(/[/\\]/).pop() ?? filePath;
+      // Binary formats (e.g. .geoz) need ArrayBuffer, not text.
+      if (/\.geoz$/i.test(filePath)) {
+        const { readFile } = await import('@tauri-apps/plugin-fs');
+        const bytes = await readFile(filePath);
+        return { name, content: '', buffer: bytes.buffer as ArrayBuffer };
+      }
       const { readTextFile } = await import('@tauri-apps/plugin-fs');
       const content = await readTextFile(filePath);
-      const name = filePath.split(/[/\\]/).pop() ?? filePath;
       return { name, content };
     } catch {
       return null;

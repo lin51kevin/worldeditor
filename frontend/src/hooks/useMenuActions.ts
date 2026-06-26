@@ -29,7 +29,7 @@ export function useMenuActions() {
   const { setDimension, toggleGrid, toggleAxis, toggleHoverHighlight, toggleSnap, setMeasureMode } = useViewportStore();
   const { push: pushRecentFile, remove: removeRecentFile } = useRecentFilesStore();
   const { t } = useTranslation();
-  const { loadFile } = useFileLoader();
+  const { loadFile, loadBuffer } = useFileLoader();
 
   const handleNew = useCallback(async () => {
     if (isDirty) {
@@ -141,7 +141,12 @@ export function useMenuActions() {
         await showAlert(`${t('dialog.fileNotFound')}: ${recent.name}`);
         return;
       }
-      const result = await loadFile(fileResult.content, fileResult.name);
+      // Binary files (e.g. .geoz) are routed through the plugin importer; the
+      // XML text path would receive an empty string and silently produce an
+      // empty project.
+      const result = fileResult.buffer
+        ? await loadBuffer(fileResult.buffer, fileResult.name)
+        : await loadFile(fileResult.content, fileResult.name);
       if (!result.success) {
         await showAlert(t('dialog.parseError'));
         return;
@@ -151,7 +156,7 @@ export function useMenuActions() {
       removeRecentFile(recent.path);
       await showAlert(`${t('dialog.fileNotFound')}: ${recent.name}`);
     }
-  }, [loadFile, pushRecentFile, removeRecentFile, t]);
+  }, [loadFile, loadBuffer, pushRecentFile, removeRecentFile, t]);
 
   const handleExportOpenDrive = useCallback(async () => {
     const platform = await getPlatformService();
