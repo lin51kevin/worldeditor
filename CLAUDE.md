@@ -4,19 +4,14 @@
 
 ## 项目概述
 
-- 以下列表不包含 2026-05-14 ~ 2026-05-15 已修复的 crosswalk / parking space / `objectReference` 问题。
-
-- 点云加载未实现（we-native 占位，Phase 4 预留）
-- GDAL/LAS 依赖尚未启用（栅格/异型 CRS 保留为桌面扩展；常见投影 UTM/TM/Web Mercator 已由 we-core 纯 Rust 引擎实现）
-- DXF / Shapefile 导入导出已实现；SUMO net.xml 导入导出已实现（`sumo` feature）
+自动驾驶道路网络编辑器，Rust + TypeScript，Tauri 2.0 桌面端 + WASM Web 端双端架构。
+当前版本 0.3.x，核心能力：OpenDRIVE 解析/编辑/渲染、多格式导入导出、点云可视化（beta）、
+插件系统、协作编辑后端。完整功能/限制现状见文末「已知限制」。
 
 ## 技术栈速查
 
 | 组件 | 技术 | 版本 |
-- 实例化渲染尚未补齐，dense scene 性能仍需继续提升
-- 前端 Visual Regression 还未纳入 CI 门禁
-- 大项目下的拾取/吸附缓存路径仍需持续回归验证
-- 网格生成为全量重建，增量更新待做
+| --- | --- | --- |
 | 前端 | React + Zustand | 19 / 5 |
 | 桌面壳 | Tauri | 2.x |
 | 渲染 | wgpu + WebGPU | 24 |
@@ -521,19 +516,28 @@ Playwright 测试位于 `frontend/e2e/` (17 spec files)，覆盖以下场景：
 
 ## 已知限制
 
-- 以下列表不包含 2026-05-14 ~ 2026-05-15 已修复的 crosswalk / parking space / `objectReference` 问题。
+> 现状核对日期：2026-06-26。下列条目不含 2026-05-14 ~ 2026-05-15 已修复的 crosswalk / parking space / `objectReference` 问题。
 
-- 点云加载未实现（we-native 占位，Phase 4 预留）
-- GDAL/LAS 依赖尚未启用（栅格/异型 CRS 保留为桌面扩展；常见投影 UTM/TM/Web Mercator 已由 we-core 纯 Rust 引擎实现）
+### 已实现（曾经的限制，现已解决）
+
+- 点云加载已实现（beta）：we-core `pointcloud`（pcd/ply/xyz + 地面/高程/矢量化）+ we-native 加载器（PCD/PLY/XYZ，LAS/LAZ 走 `pointcloud` feature 的 `las` crate）+ we-wasm/Tauri 绑定 + 前端 `gis-viz/pointcloud` 插件全链路打通
+- 常见投影（UTM/TM/Web Mercator）已由 we-core 纯 Rust 引擎实现
 - DXF / Shapefile 导入导出已实现；SUMO net.xml 导入导出已实现（`sumo` feature）
-- we-server WebSocket 协作编辑：房间广播 hub 已实现（`websocket` feature，按 project_id 分房广播）；CRDT/OT 冲突合并为后续项
-- we-server S3 存储后端为 stub（需 aws-sdk-s3 + 实时端点，作为部署期扩展，非 headless 可验证）
-- CSP 含 `unsafe-eval` + `wasm-unsafe-eval`：GeoZ 导入用 protobufjs，其解码器走 `Function()` 运行时 codegen，生产 Tauri 构建必须保留 `unsafe-eval`，否则 .geoz 打开失败（勿删，见 1be71d8）
-- 外部插件 JS 已加静态沙箱守卫（`sandboxGuard`，注入前拦截禁用能力）；完整 realm 隔离（Web Worker）为后续浏览器验证项
-- 实例化渲染尚未补齐，dense scene 性能仍需继续提升
-- 前端 Visual Regression 还未纳入 CI 门禁
+- 实例化渲染核心已实现：we-render `instance_render` + `object_instancing`（InstanceCollector/InstanceData/`collect_road_object_instances`）
+- 网格增量缓存核心已实现：we-render `mesh_cache::SceneMeshCache`（按内容哈希仅重建变更道路）
+- we-server WebSocket 协作编辑：房间广播 hub 已实现（`websocket` feature，按 project_id 分房广播）
+- 外部插件 JS 已加静态沙箱守卫（`sandboxGuard`，注入前拦截禁用能力）
+
+### 仍存在的限制
+
+- GDAL 依赖尚未启用（`crates/we-native/Cargo.toml` 中 `gdal` 仍注释；栅格/异型 CRS 保留为桌面扩展）
+- 实例化渲染与网格增量缓存的**前端实时 GPU buffer 接线**仍为后续浏览器验证项（Rust 核心已就绪，renderer 帧循环尚未接管）
+- we-server S3 存储后端为 stub（`storage/s3.rs` 返回 "not yet implemented"，需 aws-sdk-s3 + 实时端点）
+- we-server 协作仅做分房广播，CRDT/OT 冲突合并为后续项
+- 外部插件完整 realm 隔离（Web Worker）为后续浏览器验证项
+- 前端 Visual Regression 已在 CI 运行（`e2e-visual` 任务，非阻塞 artifact），尚未作为合并门禁
 - 大项目下的拾取/吸附缓存路径仍需持续回归验证
-- 网格生成为全量重建，增量更新待做
+- CSP 含 `unsafe-eval` + `wasm-unsafe-eval`：GeoZ 导入用 protobufjs，其解码器走 `Function()` 运行时 codegen，生产 Tauri 构建必须保留 `unsafe-eval`，否则 .geoz 打开失败（勿删，见 1be71d8）
 
 ## 参考资料
 
