@@ -7,7 +7,7 @@
 - 以下列表不包含 2026-05-14 ~ 2026-05-15 已修复的 crosswalk / parking space / `objectReference` 问题。
 
 - 点云加载未实现（we-native 占位，Phase 4 预留）
-- GDAL/LAS 依赖尚未启用（保留为桌面插件/扩展路线）
+- GDAL/LAS 依赖尚未启用（栅格/异型 CRS 保留为桌面扩展；常见投影 UTM/TM/Web Mercator 已由 we-core 纯 Rust 引擎实现）
 - DXF / Shapefile 导入导出已实现；SUMO net.xml 导入导出已实现（`sumo` feature）
 
 ## 技术栈速查
@@ -524,12 +524,12 @@ Playwright 测试位于 `frontend/e2e/` (17 spec files)，覆盖以下场景：
 - 以下列表不包含 2026-05-14 ~ 2026-05-15 已修复的 crosswalk / parking space / `objectReference` 问题。
 
 - 点云加载未实现（we-native 占位，Phase 4 预留）
-- GDAL/LAS 依赖尚未启用（保留为桌面插件/扩展路线）
+- GDAL/LAS 依赖尚未启用（栅格/异型 CRS 保留为桌面扩展；常见投影 UTM/TM/Web Mercator 已由 we-core 纯 Rust 引擎实现）
 - DXF / Shapefile 导入导出已实现；SUMO net.xml 导入导出已实现（`sumo` feature）
 - we-server WebSocket 协作编辑为占位实现
 - we-server S3 存储后端为 stub
-- CSP 策略包含 `unsafe-eval`（安全加固中）
-- 插件 JavaScript 代码未沙箱化（安全风险）
+- CSP 仅含 `wasm-unsafe-eval`（允许 WASM 编译，不含 JS `unsafe-eval`）
+- 外部插件 JS 已加静态沙箱守卫（`sandboxGuard`，注入前拦截禁用能力）；完整 realm 隔离（Web Worker）为后续浏览器验证项
 - 实例化渲染尚未补齐，dense scene 性能仍需继续提升
 - 前端 Visual Regression 还未纳入 CI 门禁
 - 大项目下的拾取/吸附缓存路径仍需持续回归验证

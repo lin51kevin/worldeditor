@@ -9,6 +9,7 @@
  */
 
 import { installPluginApi, unloadExternalPlugin, setManifestPermissions, type PluginPermission, ALL_PERMISSIONS } from './pluginApi';
+import { assertPluginSourceSafe } from './sandboxGuard';
 
 // ── Manifest schema ───────────────────────────────────────────────────────────
 
@@ -75,6 +76,10 @@ export async function loadPluginBundle(id: string, jsContent: string, manifest?:
     const error = validateManifest(manifest);
     if (error) throw new Error(`Invalid manifest for plugin '${id}': ${error}`);
     if (manifest.id !== id) throw new Error(`Manifest id '${manifest.id}' does not match plugin id '${id}'`);
+    // Security: external (manifest-bearing, untrusted) bundles are statically
+    // scanned for forbidden platform capabilities before they are ever injected.
+    // Built-in plugins (loaded without a manifest) are trusted and skip this.
+    assertPluginSourceSafe(id, jsContent);
   }
   // Ensure the global API is available before any plugin script runs
   installPluginApi();

