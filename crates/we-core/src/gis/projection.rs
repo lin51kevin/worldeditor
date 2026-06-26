@@ -140,7 +140,9 @@ pub fn tmerc_inverse(x: f64, y: f64, p: &TmercParams) -> (f64, f64) {
 
 /// Forward spherical (Web) Mercator: WGS84 lat/lon (degrees) → (x, y) metres.
 pub fn web_mercator_forward(lat_deg: f64, lon_deg: f64) -> (f64, f64) {
-    let lat = lat_deg.to_radians().clamp(-1.484_422_229_745_332, 1.484_422_229_745_332);
+    let lat = lat_deg
+        .to_radians()
+        .clamp(-1.484_422_229_745_332, 1.484_422_229_745_332);
     let x = A * lon_deg.to_radians();
     let y = A * (std::f64::consts::FRAC_PI_4 + lat / 2.0).tan().ln();
     (x, y)

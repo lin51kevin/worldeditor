@@ -39,7 +39,9 @@ fn make_project(n: usize) -> Project {
         let row = i / cols;
         let x0 = col as f64 * 150.0;
         let y0 = row as f64 * 30.0;
-        project.roads.push(make_road(&format!("r{i}"), x0, y0, 100.0));
+        project
+            .roads
+            .push(make_road(&format!("r{i}"), x0, y0, 100.0));
     }
     project
 }

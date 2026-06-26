@@ -150,7 +150,9 @@ pub fn collect_road_object_instances(project: &Project) -> InstanceCollector {
                 PropPrototype::Pole => {
                     let radius = pole_radius(&obj.object_type, obj);
                     let height = pole_height(&obj.object_type, obj);
-                    collector.add_pole(wx as f32, wy as f32, z_ground, heading, radius, height, color);
+                    collector.add_pole(
+                        wx as f32, wy as f32, z_ground, heading, radius, height, color,
+                    );
                 }
                 PropPrototype::Wall => {
                     let length = if obj.length > 0.0 {
@@ -236,8 +238,16 @@ mod tests {
         assert_eq!(batches[0].kind, PrototypeKind::Pole);
         let inst = batches[0].instances[0];
         // Road runs along +X from origin, so s=10 → world x≈10, y≈0.
-        assert!((inst.model_col3[0] - 10.0).abs() < 1e-4, "x={}", inst.model_col3[0]);
-        assert!((inst.model_col3[1]).abs() < 1e-4, "y={}", inst.model_col3[1]);
+        assert!(
+            (inst.model_col3[0] - 10.0).abs() < 1e-4,
+            "x={}",
+            inst.model_col3[0]
+        );
+        assert!(
+            (inst.model_col3[1]).abs() < 1e-4,
+            "y={}",
+            inst.model_col3[1]
+        );
     }
 
     #[test]
@@ -251,7 +261,11 @@ mod tests {
         let batches = collect_road_object_instances(&project_with(road)).into_batches();
         let inst = batches[0].instances[0];
         assert!((inst.model_col3[0] - 5.0).abs() < 1e-4);
-        assert!((inst.model_col3[1] - 3.0).abs() < 1e-4, "y={}", inst.model_col3[1]);
+        assert!(
+            (inst.model_col3[1] - 3.0).abs() < 1e-4,
+            "y={}",
+            inst.model_col3[1]
+        );
     }
 
     #[test]
@@ -266,7 +280,11 @@ mod tests {
         assert_eq!(batches[0].kind, PrototypeKind::Box);
         let inst = batches[0].instances[0];
         // Box half-length along the road tangent = length/2 = 4.
-        assert!((inst.model_col0[0] - 4.0).abs() < 1e-4, "len-scale={}", inst.model_col0[0]);
+        assert!(
+            (inst.model_col0[0] - 4.0).abs() < 1e-4,
+            "len-scale={}",
+            inst.model_col0[0]
+        );
     }
 
     #[test]

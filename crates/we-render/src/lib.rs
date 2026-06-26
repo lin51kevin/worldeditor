@@ -34,8 +34,8 @@ pub use instance_render::{
     InstanceBatch, InstanceCollector, InstanceData, PrototypeKind, ground_quad_vertices,
     unit_box_vertices, unit_pole_vertices,
 };
-pub use object_instancing::collect_road_object_instances;
 pub use mesh_cache::{MeshUpdate, SceneMeshCache};
+pub use object_instancing::collect_road_object_instances;
 pub use point_render::build_point_vertices;
 pub use renderer::{LaneLineMesh, RenderMesh, Renderer};
 pub use road_mesh::{generate_road_lane_lines, generate_road_mesh};

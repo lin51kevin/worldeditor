@@ -57,12 +57,18 @@ fn query_points(cols: usize, rows: usize) -> Vec<(f64, f64)> {
     pts
 }
 
-fn assert_pick_eq(a: &Option<we_core::picking::PickResult>, b: &Option<we_core::picking::PickResult>) {
+fn assert_pick_eq(
+    a: &Option<we_core::picking::PickResult>,
+    b: &Option<we_core::picking::PickResult>,
+) {
     match (a, b) {
         (None, None) => {}
         (Some(x), Some(y)) => {
             assert_eq!(x.id, y.id, "picked id diverged");
-            assert!((x.distance - y.distance).abs() < 1e-9, "pick distance diverged");
+            assert!(
+                (x.distance - y.distance).abs() < 1e-9,
+                "pick distance diverged"
+            );
         }
         _ => panic!("cached pick presence diverged: {a:?} vs {b:?}"),
     }
