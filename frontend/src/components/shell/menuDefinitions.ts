@@ -47,8 +47,14 @@ export async function showVersion(t: TranslateFn) {
   await showAlert(lines.join('\n'), t('dialog.versionTitle'));
 }
 
-export async function showUserManual(t: TranslateFn) {
-  await showAlert(t('dialog.userManualContent'), t('dialog.userManualTitle'));
+const USER_MANUAL_URL = 'https://github.com/lin51kevin/worldeditor/blob/master/docs/user-manual.md';
+
+export function showUserManual(_t: TranslateFn): Promise<void> {
+  return import('@tauri-apps/plugin-shell')
+    .then(({ open }) => open(USER_MANUAL_URL))
+    .catch(() => {
+      window.open(USER_MANUAL_URL, '_blank', 'noopener,noreferrer');
+    });
 }
 
 export async function checkForUpdates(t: TranslateFn) {

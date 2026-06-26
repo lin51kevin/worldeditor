@@ -4,7 +4,9 @@
 //! each geometry element (Line, Arc, Spiral, Poly3, ParamPoly3).
 //! Pure Rust, WASM compatible.
 
-use crate::model::{Elevation, Geometry, GeometryType, LaneOffset, LaneWidth, ParamPoly3Range, Road};
+use crate::model::{
+    Elevation, Geometry, GeometryType, LaneOffset, LaneWidth, ParamPoly3Range, Road,
+};
 
 #[path = "arc_eval.rs"]
 mod arc_eval;
@@ -859,7 +861,10 @@ mod tests {
         }];
         let z = evaluate_elevation(&elevations, 3.0);
         // Clamped to ds = 0 => flat base elevation, no spike.
-        assert!((z - 12.0).abs() < 1e-9, "expected clamped base 12.0, got {z}");
+        assert!(
+            (z - 12.0).abs() < 1e-9,
+            "expected clamped base 12.0, got {z}"
+        );
     }
 
     #[test]

@@ -839,7 +839,9 @@ mod tests {
         let mut project = Project::default();
         project.roads.push(make_road_at("r1", 0.0, 0.0, 100.0));
         // Junction references roads that do not exist → no samples → not indexed.
-        project.junctions.push(make_junction("j1", "ghost_a", "ghost_b"));
+        project
+            .junctions
+            .push(make_junction("j1", "ghost_a", "ghost_b"));
         let idx = SpatialIndex::build(&project, 100.0);
         assert_eq!(idx.len(), 1); // only r1
         assert!(idx.get_aabb("j1").is_none());

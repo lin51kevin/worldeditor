@@ -1322,7 +1322,9 @@ mod tests {
         // Default lanes: left id=1 (3.5m), right id=-1 (3.5m).
         // Rendered right-lane centre = lo - w/2 = 5 - 1.75 = 3.25.
         let mut project = Project::default();
-        project.roads.push(make_road_with_lane_offset("1", 100.0, 5.0));
+        project
+            .roads
+            .push(make_road_with_lane_offset("1", 100.0, 5.0));
 
         // Click at the rendered right-lane centre → right lane.
         let result = pick_lane(&project, 50.0, 3.25, 1.0);
@@ -1342,7 +1344,9 @@ mod tests {
     fn test_pick_road_respects_lane_offset() {
         // laneOffset +5m → road surface spans roughly [1.5, 8.5] in t.
         let mut project = Project::default();
-        project.roads.push(make_road_with_lane_offset("1", 100.0, 5.0));
+        project
+            .roads
+            .push(make_road_with_lane_offset("1", 100.0, 5.0));
 
         // y=8.0 is on the shifted surface (rel_t = 3.0 <= half-width 3.5).
         let on_surface = pick_road(&project, 50.0, 8.0, 2.0);

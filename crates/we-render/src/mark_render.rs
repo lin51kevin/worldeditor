@@ -575,7 +575,10 @@ mod tests {
     #[test]
     fn test_marking_color_variants_distinct() {
         // White and Standard both map to white; others must differ from it.
-        assert_eq!(marking_color(&RoadMarkColor::Standard), [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(
+            marking_color(&RoadMarkColor::Standard),
+            [1.0, 1.0, 1.0, 1.0]
+        );
         assert_eq!(marking_color(&RoadMarkColor::White), [1.0, 1.0, 1.0, 1.0]);
         for c in [
             RoadMarkColor::Yellow,
@@ -639,14 +642,22 @@ mod tests {
     #[test]
     fn test_generate_road_markings_solid() {
         let pts = two_points(10.0);
-        let v = generate_road_markings(&pts, &[mark(RoadMarkType::Solid, RoadMarkColor::White, 0.15)], 3.5);
+        let v = generate_road_markings(
+            &pts,
+            &[mark(RoadMarkType::Solid, RoadMarkColor::White, 0.15)],
+            3.5,
+        );
         assert!(!v.is_empty());
     }
 
     #[test]
     fn test_generate_road_markings_broken() {
         let pts = two_points(30.0);
-        let v = generate_road_markings(&pts, &[mark(RoadMarkType::Broken, RoadMarkColor::Yellow, 0.15)], 0.0);
+        let v = generate_road_markings(
+            &pts,
+            &[mark(RoadMarkType::Broken, RoadMarkColor::Yellow, 0.15)],
+            0.0,
+        );
         assert!(!v.is_empty());
     }
 
@@ -676,7 +687,11 @@ mod tests {
     fn test_generate_road_markings_default_arm() {
         // Curb falls through to the default solid-line arm.
         let pts = two_points(10.0);
-        let v = generate_road_markings(&pts, &[mark(RoadMarkType::Curb, RoadMarkColor::Red, 0.2)], 0.0);
+        let v = generate_road_markings(
+            &pts,
+            &[mark(RoadMarkType::Curb, RoadMarkColor::Red, 0.2)],
+            0.0,
+        );
         assert!(!v.is_empty());
     }
 }
