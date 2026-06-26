@@ -25,6 +25,13 @@ export interface ScaleInfo {
 const MIN_CAM_DIST = 0.5;
 const MAX_CAM_DIST = 50000.0;
 
+/**
+ * 3D zoom-to-cursor: cap the cursor anchor at this many orbit radii from the
+ * camera. Prevents a single wheel notch from flinging the camera across the
+ * scene when the cursor points near the horizon (anchor distance → ∞).
+ */
+const MAX_ANCHOR_DIST_RATIO = 4;
+
 /** 2D mode: fixed camera height above target (same as C# version). */
 const ORTHO_CAM_HEIGHT = 10000;
 /** 2D mode: minimum pixels per meter (fully zoomed out — shows huge area). */
@@ -704,7 +711,8 @@ export class CameraController {
    */
   private zoomToCursor(factor: number, cursorX: number, cursorY: number): void {
     const anchor = this.unprojectToGround(cursorX, cursorY);
-    // No ground hit (e.g. cursor over the sky): fall back to dolly-to-target.
+    // No ground hit (e.g. cursor near/above the horizon after a fly-look):
+    // fall back to a plain dolly-to-target so the view does not jump.
     if (!anchor) {
       this.zoom(factor);
       return;
@@ -721,14 +729,30 @@ export class CameraController {
       return;
     }
 
+    // Bound how far the anchor may sit from the camera. Right-click fly-look can
+    // leave the view pitched toward the horizon, where the ground point under
+    // the cursor is extremely far away; scaling about such a distant anchor
+    // would fling the camera across the scene in a single notch. Clamp the
+    // anchor to a point along the cursor ray no farther than a few orbit radii.
+    let ax = anchor.x;
+    let ay = anchor.y;
+    let az = 0; // ground-plane anchor
+    const avx = ax - px;
+    const avy = ay - py;
+    const avz = az - pz;
+    const anchorDist = Math.sqrt(avx * avx + avy * avy + avz * avz);
+    const maxAnchorDist = currentDist * MAX_ANCHOR_DIST_RATIO;
+    if (anchorDist > maxAnchorDist && anchorDist > 1e-6) {
+      const s = maxAnchorDist / anchorDist;
+      ax = px + avx * s;
+      ay = py + avy * s;
+      az = pz + avz * s;
+    }
+
     // Clamp so the camera-to-target distance stays within limits, then derive
     // the effective scale that keeps the anchor stationary on screen.
     const clampedDist = Math.min(MAX_CAM_DIST, Math.max(MIN_CAM_DIST, currentDist * factor));
     const eff = clampedDist / currentDist;
-
-    const ax = anchor.x;
-    const ay = anchor.y;
-    const az = 0; // ground-plane anchor
 
     this.camera.position = [
       ax + (px - ax) * eff,

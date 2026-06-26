@@ -263,6 +263,69 @@ describe('CameraController', () => {
       cam.handleWheel(-120, -99999, -99999);
       expect(cam.getCameraDistance()).toBeLessThan(distBefore);
     });
+
+    it('zoom-to-cursor does not fling the camera when the cursor points near the horizon', () => {
+      const verts = makeVertexBuffer([
+        [0, 0, 0], [2000, 2000, 0],
+      ]);
+      cam.fitToVertices(verts);
+      const distBefore = cam.getCameraDistance();
+      const posBefore = [...cam.state.position];
+
+      // Cursor near the top edge → ground anchor sits far toward the horizon.
+      cam.handleWheel(-120, 400, 5);
+
+      const posAfter = cam.state.position;
+      const moved = Math.hypot(
+        posAfter[0] - posBefore[0],
+        posAfter[1] - posBefore[1],
+        posAfter[2] - posBefore[2],
+      );
+      // Per-notch displacement must stay bounded relative to the orbit radius,
+      // not explode because the anchor is effectively at infinity.
+      expect(moved).toBeLessThan(distBefore);
+    });
+
+    it('keeps wheel zoom smooth and effective after a right-click fly-look (regression)', () => {
+      const canvas = {} as HTMLCanvasElement;
+      const mods = { ctrlKey: false, shiftKey: false, altKey: false };
+      const verts = makeVertexBuffer([
+        [0, 0, 0], [2000, 2000, 0],
+      ]);
+      cam.fitToVertices(verts);
+
+      // Right-button drag → fly mode, then look around (pitch the view down a bit).
+      expect(cam.beginPointerDrag(2, { clientX: 400, clientY: 300, ...mods })).toBe(true);
+      expect(cam.isFlyMode).toBe(true);
+      cam.updatePointerDrag(canvas, { buttons: 2, clientX: 400, clientY: 360, ...mods });
+      cam.endPointerDrag();  // exit fly mode, rebuild orbit target
+      expect(cam.isFlyMode).toBe(false);
+
+      // Now zoom in at the viewport centre several notches.
+      let prevHeight = Math.abs(cam.state.position[2]);
+      const startHeight = prevHeight;
+      for (let i = 0; i < 6; i++) {
+        const before = [...cam.state.position] as [number, number, number];
+        const distBefore = cam.getCameraDistance();
+        cam.handleWheel(-120, 400, 300);
+        const after = cam.state.position;
+        const moved = Math.hypot(
+          after[0] - before[0],
+          after[1] - before[1],
+          after[2] - before[2],
+        );
+        // No single notch may fling the camera across the scene.
+        expect(moved).toBeLessThan(distBefore);
+        // Camera position must stay finite.
+        expect(Number.isFinite(after[0])).toBe(true);
+        expect(Number.isFinite(after[1])).toBe(true);
+        expect(Number.isFinite(after[2])).toBe(true);
+        prevHeight = Math.abs(after[2]);
+      }
+      // Zooming in repeatedly must actually bring the camera closer to the
+      // ground — the bug was that zoom stalled after a fly-look.
+      expect(prevHeight).toBeLessThan(startHeight);
+    });
   });
 
   describe('fly mode', () => {
