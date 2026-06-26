@@ -36,7 +36,7 @@ pub fn pick_road_cached(
     cache.get_index()?;
     // Now we can get references separately
     let project = &cache.project;
-    let index = cache.spatial_index.as_ref().unwrap();
+    let index = cache.spatial_index.as_ref()?;
     pick_road_with_index(project, index, x, y, threshold)
 }
 
@@ -49,7 +49,7 @@ pub fn pick_junction_cached(
 ) -> Option<PickResult> {
     cache.get_index()?;
     let project = &cache.project;
-    let index = cache.spatial_index.as_ref().unwrap();
+    let index = cache.spatial_index.as_ref()?;
     pick_junction_with_index(project, index, x, y, threshold)
 }
 
@@ -62,7 +62,7 @@ pub fn pick_lane_cached(
 ) -> Option<(String, usize, i32)> {
     cache.get_index()?;
     let project = &cache.project;
-    let index = cache.spatial_index.as_ref().unwrap();
+    let index = cache.spatial_index.as_ref()?;
     pick_lane_with_index(project, index, x, y, threshold)
 }
 
@@ -96,7 +96,7 @@ pub fn pick_signal_cached(
 
     cache.get_index()?;
     let project = &cache.project;
-    let index = cache.spatial_index.as_ref().unwrap();
+    let index = cache.spatial_index.as_ref()?;
 
     // Use spatial index to find nearby roads, then check their signals
     let candidates = index.query_point(x, y, threshold);
@@ -158,7 +158,7 @@ pub fn pick_object_cached(
 
     cache.get_index()?;
     let project = &cache.project;
-    let index = cache.spatial_index.as_ref().unwrap();
+    let index = cache.spatial_index.as_ref()?;
 
     // Expand candidate radius so large objects whose centre is far from the
     // click point are still considered.

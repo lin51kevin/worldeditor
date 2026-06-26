@@ -1,5 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
+use anyhow::Context;
 #[cfg(feature = "websocket")]
 use axum::routing::get;
 use axum::{Router, middleware, routing::post};
@@ -24,8 +25,8 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     // Database connection
-    let database_url =
-        std::env::var("DATABASE_URL").expect("DATABASE_URL environment variable must be set");
+    let database_url = std::env::var("DATABASE_URL")
+        .context("DATABASE_URL environment variable must be set")?;
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
@@ -38,8 +39,8 @@ async fn main() -> anyhow::Result<()> {
     let storage_backend = storage::LocalStorage::new("./uploads");
 
     // Auth service
-    let auth_secret =
-        std::env::var("JWT_SECRET").expect("JWT_SECRET environment variable must be set");
+    let auth_secret = std::env::var("JWT_SECRET")
+        .context("JWT_SECRET environment variable must be set")?;
     if auth_secret.len() < 32 {
         anyhow::bail!("JWT_SECRET must be at least 32 characters long");
     }
