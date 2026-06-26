@@ -7,7 +7,7 @@ use crate::vertex::ColorVertex;
 use we_core::model::{ObjectType, Point3D, RoadObject};
 
 /// Default colors for different object types.
-fn object_color(obj_type: &ObjectType) -> [f32; 4] {
+pub fn object_color(obj_type: &ObjectType) -> [f32; 4] {
     match obj_type {
         ObjectType::Sign => [0.9, 0.9, 0.9, 1.0],
         ObjectType::Guardrail => [0.5, 0.5, 0.5, 1.0],

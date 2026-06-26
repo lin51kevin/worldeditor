@@ -19,6 +19,7 @@ gpu-tests = []  # Enable GPU-dependent tests (requires display/compute device)
 [dev-dependencies]
 pollster = "0.3"
 env_logger = "0.11"
+serde_json = { workspace = true }
 
 [lib]
 crate-type = ["rlib"]

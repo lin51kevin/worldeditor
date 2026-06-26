@@ -6449,6 +6449,7 @@ dependencies = [
  "log",
  "nalgebra",
  "pollster",
+ "serde_json",
  "we-core",
  "wgpu",
 ]

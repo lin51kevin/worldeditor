@@ -172,6 +172,39 @@ impl InstanceCollector {
             .push(instance);
     }
 
+    /// Add a vertical pole/post instance.
+    ///
+    /// The pole stands on the ground at `(x, y, z_base)` and extends `height`
+    /// metres upward. `radius` is the horizontal half-extent. `heading` rotates
+    /// the cross-section about the Z axis (only visible for non-circular
+    /// prototypes). The [`PrototypeKind::Pole`] prototype spans `z ∈ [0, 1]` so
+    /// the instance is placed with its base — not its centre — at `z_base`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_pole(
+        &mut self,
+        x: f32,
+        y: f32,
+        z_base: f32,
+        heading: f32,
+        radius: f32,
+        height: f32,
+        color: [f32; 4],
+    ) {
+        let cos_h = heading.cos();
+        let sin_h = heading.sin();
+        let instance = InstanceData {
+            model_col0: [cos_h * radius, sin_h * radius, 0.0, 0.0],
+            model_col1: [-sin_h * radius, cos_h * radius, 0.0, 0.0],
+            model_col2: [0.0, 0.0, height, 0.0],
+            model_col3: [x, y, z_base, 1.0],
+            color,
+        };
+        self.batches
+            .entry(PrototypeKind::Pole)
+            .or_default()
+            .push(instance);
+    }
+
     /// Add a ground quad (flat decal on the road surface).
     #[allow(clippy::too_many_arguments)]
     pub fn add_ground_quad(
@@ -263,6 +296,44 @@ pub fn ground_quad_vertices() -> (Vec<[f32; 3]>, Vec<u32>) {
     (positions, indices)
 }
 
+/// Number of sides of the octagonal pole prototype.
+const POLE_SIDES: usize = 8;
+
+/// Generate the unit-pole prototype (octagonal prism).
+///
+/// The prism has unit radius in the XY plane and spans `z ∈ [0, 1]` so that the
+/// instance transform places its base at the ground and scales it by the pole
+/// height. Returns `(positions, indices)` for the side walls and the top cap.
+pub fn unit_pole_vertices() -> (Vec<[f32; 3]>, Vec<u32>) {
+    let mut positions = Vec::with_capacity(POLE_SIDES * 2 + 1);
+
+    // Bottom ring (z = 0) then top ring (z = 1).
+    for ring_z in [0.0_f32, 1.0_f32] {
+        for i in 0..POLE_SIDES {
+            let angle = std::f32::consts::TAU * (i as f32) / (POLE_SIDES as f32);
+            positions.push([angle.cos(), angle.sin(), ring_z]);
+        }
+    }
+    // Top-centre vertex for the cap fan.
+    let top_centre = positions.len() as u32;
+    positions.push([0.0, 0.0, 1.0]);
+
+    let mut indices = Vec::with_capacity(POLE_SIDES * 9);
+    for i in 0..POLE_SIDES {
+        let next = (i + 1) % POLE_SIDES;
+        let b0 = i as u32;
+        let b1 = next as u32;
+        let t0 = (POLE_SIDES + i) as u32;
+        let t1 = (POLE_SIDES + next) as u32;
+        // Side wall (two triangles, outward winding).
+        indices.extend_from_slice(&[b0, b1, t1, b0, t1, t0]);
+        // Top cap triangle.
+        indices.extend_from_slice(&[t0, t1, top_centre]);
+    }
+
+    (positions, indices)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,6 +374,38 @@ mod tests {
         let (positions, indices) = ground_quad_vertices();
         assert_eq!(positions.len(), 4);
         assert_eq!(indices.len(), 6);
+    }
+
+    #[test]
+    fn test_unit_pole_vertices() {
+        let (positions, indices) = unit_pole_vertices();
+        // 8 bottom + 8 top + 1 top-centre
+        assert_eq!(positions.len(), POLE_SIDES * 2 + 1);
+        // 8 side quads (6 idx) + 8 cap triangles (3 idx)
+        assert_eq!(indices.len(), POLE_SIDES * 9);
+        // All side indices must reference valid vertices.
+        let max_idx = *indices.iter().max().unwrap() as usize;
+        assert!(max_idx < positions.len());
+        // Base ring sits at z = 0, top ring at z = 1.
+        assert!((positions[0][2]).abs() < 1e-6);
+        assert!((positions[POLE_SIDES][2] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_add_pole_places_base_at_z() {
+        let mut collector = InstanceCollector::new();
+        collector.add_pole(3.0, 4.0, 5.0, 0.0, 0.2, 2.5, [1.0; 4]);
+        let batches = collector.into_batches();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].kind, PrototypeKind::Pole);
+        let inst = batches[0].instances[0];
+        // Base translation preserved, height scales the z column.
+        assert!((inst.model_col3[0] - 3.0).abs() < 1e-6);
+        assert!((inst.model_col3[1] - 4.0).abs() < 1e-6);
+        assert!((inst.model_col3[2] - 5.0).abs() < 1e-6);
+        assert!((inst.model_col2[2] - 2.5).abs() < 1e-6);
+        // Radius scales the in-plane columns.
+        assert!((inst.model_col0[0] - 0.2).abs() < 1e-6);
     }
 
     #[test]
