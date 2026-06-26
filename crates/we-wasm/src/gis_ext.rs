@@ -65,6 +65,36 @@ pub fn parse_proj4_crs(proj4_str: &str) -> Result<JsValue, JsError> {
         .map_err(|e| JsError::new(&e.to_string()))
 }
 
+/// Project WGS84 geographic coordinates into the CRS described by `proj4_str`.
+///
+/// Supports `longlat`, `utm`, `tmerc`/`etmerc` and `merc`/`webmerc`.
+/// Returns JSON `{ x, y }` in the CRS's units (metres for projected systems).
+#[wasm_bindgen]
+pub fn proj4_forward(proj4_str: &str, lat_deg: f64, lon_deg: f64) -> Result<JsValue, JsError> {
+    use we_core::gis::GeoCoord;
+    use we_core::gis::proj4::Proj4Crs;
+    let crs = Proj4Crs::parse(proj4_str).map_err(|e| JsError::new(&e))?;
+    let (x, y) = crs
+        .forward(&GeoCoord::new(lat_deg, lon_deg, 0.0))
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&serde_json::json!({ "x": x, "y": y }))
+        .map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Inverse-project `(x, y)` in the CRS described by `proj4_str` back to WGS84.
+///
+/// Returns JSON `{ lat, lon }` in degrees.
+#[wasm_bindgen]
+pub fn proj4_inverse(proj4_str: &str, x: f64, y: f64) -> Result<JsValue, JsError> {
+    use we_core::gis::proj4::Proj4Crs;
+    let crs = Proj4Crs::parse(proj4_str).map_err(|e| JsError::new(&e))?;
+    let geo = crs
+        .inverse(x, y)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    serde_wasm_bindgen::to_value(&serde_json::json!({ "lat": geo.lat, "lon": geo.lon }))
+        .map_err(|e| JsError::new(&e.to_string()))
+}
+
 // ── WKT ─────────────────────────────────────────────────────────────────────
 
 /// Parse a WKT (Well-Known Text) CRS string and return metadata as JSON.

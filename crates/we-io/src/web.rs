@@ -6,6 +6,12 @@ use crate::traits::{FileSystem, IoError};
 /// Web-based file system using localStorage (small files) or IndexedDB (large files).
 pub struct WebFileSystem;
 
+impl Default for WebFileSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WebFileSystem {
     pub fn new() -> Self {
         Self

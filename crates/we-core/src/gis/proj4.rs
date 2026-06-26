@@ -1,7 +1,8 @@
-//! Proj4 coordinate system stub.
+//! Proj4 coordinate system parsing.
 //!
-//! Provides a simplified Proj4 string parser and CRS identifier.
-//! Full transformation is deferred to Phase 3 (WASM PROJ bindings).
+//! Provides a Proj4 string parser and CRS identifier. Actual coordinate
+//! transformation is implemented in [`super::projection`] (pure Rust, WASM
+//! compatible) for longlat, UTM, generic Transverse Mercator and Web Mercator.
 
 use std::collections::HashMap;
 

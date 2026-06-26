@@ -8,11 +8,13 @@ pub mod gcj02;
 pub mod gcp;
 pub mod mgrs;
 pub mod proj4;
+pub mod projection;
 pub mod utm;
 mod wgs84;
 pub mod wkt;
 
 pub use gcj02::{gcj02_to_wgs84, is_in_china, wgs84_to_gcj02};
+pub use projection::{ProjError, TmercParams};
 pub use utm::{UtmCoord, geo_to_utm, utm_to_geo};
 pub use wgs84::Wgs84Coord;
 
