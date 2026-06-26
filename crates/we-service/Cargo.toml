@@ -15,4 +15,4 @@ log = { workspace = true }
 [dev-dependencies]
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]

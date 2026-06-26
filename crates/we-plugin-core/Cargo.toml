@@ -19,4 +19,4 @@ wasm-bindgen = "0.2"
 tempfile = "3"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]

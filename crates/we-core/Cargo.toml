@@ -16,4 +16,4 @@ quick-xml = { workspace = true }
 proptest = "1"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
