@@ -4,9 +4,10 @@
 //! reference line sampling and distance checks. Pure Rust, WASM compatible.
 
 use crate::geometry::eval::{
-    RefLinePoint, evaluate_lane_width, offset_point, sample_road_reference_line,
+    RefLinePoint, evaluate_lane_offset, evaluate_lane_width, offset_point,
+    sample_road_reference_line,
 };
-use crate::model::{Junction, Project, Road};
+use crate::model::{Junction, ObjectType, Project, Road};
 use crate::spatial_index::{ElementKind, ProjectCache, SpatialIndex};
 
 /// Result of a pick operation.
@@ -191,6 +192,7 @@ pub fn pick_object_cached(
                 let world_poly = object_corners_to_world(
                     &obj.corners,
                     &obj.corner_type,
+                    &obj.object_type,
                     &ref_pt,
                     t,
                     obj.hdg,
@@ -247,6 +249,7 @@ pub fn pick_object_cached(
 fn object_corners_to_world(
     corners: &[crate::model::Point3D],
     corner_type: &crate::model::CornerType,
+    object_type: &ObjectType,
     ref_pt: &RefLinePoint,
     obj_t: f64,
     obj_hdg: f64,
@@ -262,10 +265,19 @@ fn object_corners_to_world(
             let (ox, oy, _) = offset_pt(ref_pt, obj_t, 0.0);
             let theta = ref_pt.hdg;
             let (cos_t, sin_t) = (theta.cos(), theta.sin());
-            // Mirror the renderer's heading-convention detection so the picking
-            // polygon matches the drawn geometry. See `detect_local_apply_hdg`.
-            let (cos_h, sin_h) = if detect_local_apply_hdg(corners, obj_hdg, obj_length, obj_width)
-            {
+            // Mirror the renderer's heading-convention detection per object type
+            // so the picking polygon matches the drawn geometry:
+            // - Crosswalk renders via `crosswalk_world_polygon` → complex heuristic
+            //   (`detect_crosswalk_apply_hdg`, mirrored here by `detect_local_apply_hdg`).
+            // - ParkingSpace / CrossHatchArea / WovenArea render via
+            //   `emit_polygon_outline` → simple `length > 0 && width > 0` rule.
+            let apply_hdg = match object_type {
+                ObjectType::Crosswalk => {
+                    detect_local_apply_hdg(corners, obj_hdg, obj_length, obj_width)
+                }
+                _ => obj_length > 0.0 && obj_width > 0.0,
+            };
+            let (cos_h, sin_h) = if apply_hdg {
                 (obj_hdg.cos(), obj_hdg.sin())
             } else {
                 (1.0_f64, 0.0_f64)
@@ -481,8 +493,10 @@ fn pick_lane_with_index(
                 for pt in &section_pts {
                     let ds = pt.s - section.s;
                     let w = evaluate_lane_width(&lane.width, ds);
-                    let inner_t = -(right_offset);
-                    let outer_t = -(right_offset + w);
+                    // Mirror the renderer: lane boundaries are shifted by laneOffset.
+                    let lo = evaluate_lane_offset(&road.lane_offsets, pt.s);
+                    let inner_t = lo - right_offset;
+                    let outer_t = lo - (right_offset + w);
                     let mid_t = (inner_t + outer_t) / 2.0;
                     let (px, py, _) = offset_point(pt, mid_t, 0.0);
                     let dx = px - x;
@@ -505,8 +519,10 @@ fn pick_lane_with_index(
                 for pt in &section_pts {
                     let ds = pt.s - section.s;
                     let w = evaluate_lane_width(&lane.width, ds);
-                    let inner_t = left_offset;
-                    let outer_t = left_offset + w;
+                    // Mirror the renderer: lane boundaries are shifted by laneOffset.
+                    let lo = evaluate_lane_offset(&road.lane_offsets, pt.s);
+                    let inner_t = lo + left_offset;
+                    let outer_t = lo + left_offset + w;
                     let mid_t = (inner_t + outer_t) / 2.0;
                     let (px, py, _) = offset_point(pt, mid_t, 0.0);
                     let dx = px - x;
@@ -616,14 +632,22 @@ fn distance_to_road(road: &Road, x: f64, y: f64) -> Option<PickResult> {
         return None;
     }
 
-    // Get the road half-width on the relevant side
-    let half_width = road_half_width_at_side(road, best_s, best_t);
+    // The rendered lane cross-section is laterally shifted by `laneOffset`
+    // relative to the reference line, so the perpendicular offset `best_t`
+    // (measured from the reference line) must be re-expressed relative to the
+    // offset centerline before comparing against lane half-widths. Otherwise
+    // roads with a non-zero laneOffset can only be picked off-centre.
+    let lane_offset = evaluate_lane_offset(&road.lane_offsets, best_s);
+    let rel_t = best_t - lane_offset;
 
-    if best_t.abs() <= half_width {
+    // Get the road half-width on the relevant side (relative to offset center)
+    let half_width = road_half_width_at_side(road, best_s, rel_t);
+
+    if rel_t.abs() <= half_width {
         // Point is ON the road surface — use a small fractional distance
         // proportional to how far from the reference line it is, so that
         // overlapping roads are disambiguated (closer to center = smaller distance).
-        let normalized = best_t.abs() / half_width.max(0.01);
+        let normalized = rel_t.abs() / half_width.max(0.01);
         Some(PickResult {
             id: road.id.clone(),
             distance: normalized * 0.001,
@@ -632,7 +656,7 @@ fn distance_to_road(road: &Road, x: f64, y: f64) -> Option<PickResult> {
         })
     } else {
         // Point is outside road surface — return perpendicular distance beyond edge
-        let edge_dist = best_t.abs() - half_width;
+        let edge_dist = rel_t.abs() - half_width;
         Some(PickResult {
             id: road.id.clone(),
             distance: edge_dist,
@@ -1276,5 +1300,113 @@ mod tests {
             4.0,
             2.0,
         ));
+    }
+
+    // ---- laneOffset alignment between rendering and picking ----
+
+    fn make_road_with_lane_offset(id: &str, length: f64, offset: f64) -> Road {
+        let mut road = make_straight_road(id, length);
+        road.lane_offsets.push(LaneOffset {
+            s: 0.0,
+            a: offset,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        });
+        road
+    }
+
+    #[test]
+    fn test_pick_lane_respects_lane_offset() {
+        // Constant laneOffset of +5m shifts the whole lane block laterally.
+        // Default lanes: left id=1 (3.5m), right id=-1 (3.5m).
+        // Rendered right-lane centre = lo - w/2 = 5 - 1.75 = 3.25.
+        let mut project = Project::default();
+        project.roads.push(make_road_with_lane_offset("1", 100.0, 5.0));
+
+        // Click at the rendered right-lane centre → right lane.
+        let result = pick_lane(&project, 50.0, 3.25, 1.0);
+        assert!(result.is_some(), "should hit the shifted right lane");
+        let (road_id, _section, lane_id) = result.unwrap();
+        assert_eq!(road_id, "1");
+        assert!(lane_id < 0, "expected right lane, got {lane_id}");
+
+        // The un-shifted position (t=-1.75) is now well outside the lane block.
+        assert!(
+            pick_lane(&project, 50.0, -1.75, 1.0).is_none(),
+            "lane should no longer be at the un-offset position"
+        );
+    }
+
+    #[test]
+    fn test_pick_road_respects_lane_offset() {
+        // laneOffset +5m → road surface spans roughly [1.5, 8.5] in t.
+        let mut project = Project::default();
+        project.roads.push(make_road_with_lane_offset("1", 100.0, 5.0));
+
+        // y=8.0 is on the shifted surface (rel_t = 3.0 <= half-width 3.5).
+        let on_surface = pick_road(&project, 50.0, 8.0, 2.0);
+        assert!(on_surface.is_some(), "should hit shifted road surface");
+        assert_eq!(on_surface.unwrap().id, "1");
+
+        // The opposite (un-shifted) side is now out of range.
+        assert!(
+            pick_road(&project, 50.0, -3.0, 2.0).is_none(),
+            "road should no longer cover the un-offset side"
+        );
+    }
+
+    // ---- per-object-type heading detection (parking vs crosswalk) ----
+
+    #[test]
+    fn test_object_corners_world_parking_differs_from_crosswalk() {
+        // Corners taller in v than u and hdg far from π: the crosswalk aspect
+        // heuristic yields identity, while the simple parking rule applies hdg.
+        let corners = [
+            corner(-1.0, -2.0),
+            corner(1.0, -2.0),
+            corner(1.0, 2.0),
+            corner(-1.0, 2.0),
+        ];
+        let ref_pt = RefLinePoint {
+            x: 0.0,
+            y: 0.0,
+            hdg: 0.0,
+            s: 0.0,
+        };
+        let plan_view: Vec<crate::model::Geometry> = vec![];
+        let hdg = std::f64::consts::FRAC_PI_2;
+
+        let parking = object_corners_to_world(
+            &corners,
+            &CornerType::Local,
+            &ObjectType::ParkingSpace,
+            &ref_pt,
+            0.0,
+            hdg,
+            2.0,
+            4.0,
+            &offset_point,
+            &plan_view,
+        );
+        let crosswalk = object_corners_to_world(
+            &corners,
+            &CornerType::Local,
+            &ObjectType::Crosswalk,
+            &ref_pt,
+            0.0,
+            hdg,
+            2.0,
+            4.0,
+            &offset_point,
+            &plan_view,
+        );
+
+        // Crosswalk → identity (no rotation).
+        assert!((crosswalk[0].0 - (-1.0)).abs() < 1e-9);
+        assert!((crosswalk[0].1 - (-2.0)).abs() < 1e-9);
+        // Parking → rotated by +90°: (x,y) → (-y, x).
+        assert!((parking[0].0 - 2.0).abs() < 1e-9);
+        assert!((parking[0].1 - (-1.0)).abs() < 1e-9);
     }
 }
