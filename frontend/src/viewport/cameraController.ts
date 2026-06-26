@@ -1,15 +1,12 @@
 import { mouseButtonMask, resolveMouseDragAction, computeGroundPanOffset } from './viewportTypes';
 import type { MouseDragAction } from './viewportTypes';
 import {
-  perspectiveMatrix,
-  orthographicMatrix,
-  lookAtMatrix,
-  multiplyMatrices,
   arraysEqual,
   invertMatrix4,
-  transformPoint,
   niceNumber,
 } from './viewportMath';
+import { createFlyState, flyEnter, flyExit, flyLook, flyMove, flyAdjustSpeed, type FlyState } from './flyCamera';
+import { buildViewProjMatrix, unprojectGround, projectToScreen } from './cameraProjection';
 
 export interface CameraState {
   position: [number, number, number];
@@ -25,28 +22,8 @@ export interface ScaleInfo {
   mpp: number;
 }
 
-const DEPTH_CORRECTION = new Float32Array([
-  1, 0, 0, 0,
-  0, 1, 0, 0,
-  0, 0, 0.5, 0,
-  0, 0, 0.5, 1,
-]);
-
 const MIN_CAM_DIST = 0.5;
 const MAX_CAM_DIST = 50000.0;
-
-/** Fly mode: default movement speed in meters per second. */
-const DEFAULT_FLY_SPEED = 20;
-/** Fly mode: minimum fly speed. */
-const MIN_FLY_SPEED = 0.5;
-/** Fly mode: maximum fly speed. */
-const MAX_FLY_SPEED = 5000;
-/** Fly mode: sprint multiplier when Shift is held. */
-const FLY_SPRINT_MULTIPLIER = 3.0;
-/** Fly mode: mouse sensitivity for yaw/pitch. */
-const FLY_LOOK_SENSITIVITY = 0.003;
-/** Fly mode: maximum pitch angle (radians, slightly less than 90°). */
-const FLY_MAX_PITCH = Math.PI / 2 - 0.01;
 
 /** 2D mode: fixed camera height above target (same as C# version). */
 const ORTHO_CAM_HEIGHT = 10000;
@@ -105,14 +82,8 @@ export class CameraController {
   /** 2D pan: camera position at drag start. */
   private panStartPosition: [number, number, number] = [0, 0, 0];
 
-  /** Fly mode: whether the camera is in free-roaming fly mode. */
-  private _flyMode = false;
-  /** Fly mode: yaw angle in radians (horizontal rotation around Z axis). */
-  private _flyYaw = 0;
-  /** Fly mode: pitch angle in radians (vertical tilt, positive = looking up). */
-  private _flyPitch = 0;
-  /** Fly mode: movement speed in meters per second. */
-  private _flySpeed = DEFAULT_FLY_SPEED;
+  /** Fly mode (Unreal-style free-roaming camera) state. */
+  private _flyState: FlyState = createFlyState();
 
   get state(): Readonly<CameraState> {
     return this.camera;
@@ -278,8 +249,6 @@ export class CameraController {
   unprojectToGround(screenX: number, screenY: number): { x: number; y: number } | null {
     if (this.width === 0 || this.height === 0) return null;
 
-    const ndcX = (screenX / this.width) * 2 - 1;
-    const ndcY = 1 - (screenY / this.height) * 2;
     const viewProj = this.computeViewProj();
     if (!this.cachedViewProj || !arraysEqual(this.cachedViewProj, viewProj)) {
       this.cachedViewProj = new Float32Array(viewProj);
@@ -290,39 +259,12 @@ export class CameraController {
     const inv = this.cachedInverseViewProj;
     if (!inv) return null;
 
-    const nearPt = transformPoint(inv, [ndcX, ndcY, 0]);
-    const farPt = transformPoint(inv, [ndcX, ndcY, 1]);
-    const dx = farPt[0] - nearPt[0];
-    const dy = farPt[1] - nearPt[1];
-    const dz = farPt[2] - nearPt[2];
-    if (Math.abs(dz) < 1e-10) return null;
-
-    const t = -nearPt[2] / dz;
-    if (t < 0) return null;
-    return {
-      x: nearPt[0] + dx * t,
-      y: nearPt[1] + dy * t,
-    };
+    return unprojectGround(inv, this.width, this.height, screenX, screenY);
   }
 
   projectWorldToScreen(wx: number, wy: number): { x: number; y: number } | null {
     if (this.width === 0 || this.height === 0) return null;
-    const viewProj = this.computeViewProj();
-    const x = wx;
-    const y = wy;
-    const z = 0;
-    const w = 1;
-    const px = viewProj[0]! * x + viewProj[4]! * y + viewProj[8]! * z + viewProj[12]! * w;
-    const py = viewProj[1]! * x + viewProj[5]! * y + viewProj[9]! * z + viewProj[13]! * w;
-    const pw = viewProj[3]! * x + viewProj[7]! * y + viewProj[11]! * z + viewProj[15]! * w;
-    if (Math.abs(pw) < 1e-10) return null;
-
-    const ndcX = px / pw;
-    const ndcY = py / pw;
-    return {
-      x: (ndcX + 1) * 0.5 * this.width,
-      y: (1 - ndcY) * 0.5 * this.height,
-    };
+    return projectToScreen(this.computeViewProj(), this.width, this.height, wx, wy);
   }
 
   fitToVertices(vertexData: Float32Array): void {
@@ -552,7 +494,7 @@ export class CameraController {
   }
 
   endPointerDrag(): void {
-    if (this._flyMode) {
+    if (this._flyState.mode) {
       this.exitFlyMode();
     }
     this.stopDragging();
@@ -629,7 +571,7 @@ export class CameraController {
 
   handleWheel(deltaY: number): void {
     if (this.cameraLocked) return;
-    if (this._flyMode) {
+    if (this._flyState.mode) {
       this.adjustFlySpeed(deltaY);
       return;
     }
@@ -644,166 +586,51 @@ export class CameraController {
 
   /** Whether the camera is currently in fly/pilot mode. */
   get isFlyMode(): boolean {
-    return this._flyMode;
+    return this._flyState.mode;
   }
 
   /** Current fly speed in meters per second. */
   get flySpeed(): number {
-    return this._flySpeed;
+    return this._flyState.speed;
   }
 
-  /**
-   * Enter fly mode. Computes initial yaw/pitch from the current
-   * camera position → target direction. Only works in 3D mode.
-   */
   enterFlyMode(): void {
-    if (this.cameraLocked || this.dimensionMode === '2d') return;
-    if (this._flyMode) return;
-
-    const [px, py, pz] = this.camera.position;
-    const [tx, ty, tz] = this.camera.target;
-    const dx = tx - px;
-    const dy = ty - py;
-    const dz = tz - pz;
-
-    this._flyYaw = Math.atan2(dy, dx);
-    const horizDist = Math.sqrt(dx * dx + dy * dy);
-    this._flyPitch = Math.atan2(dz, horizDist);
-
-    // Auto-scale fly speed based on current camera distance
-    const camDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    this._flySpeed = Math.max(MIN_FLY_SPEED, Math.min(MAX_FLY_SPEED, camDist * 0.15));
-
-    this._flyMode = true;
+    flyEnter(this._flyState, this.camera, this.cameraLocked, this.dimensionMode === '2d');
   }
 
-  /**
-   * Exit fly mode. Rebuilds the target point at a reasonable distance
-   * in front of the camera along the current look direction,
-   * preserving visual continuity when returning to orbit mode.
-   */
   exitFlyMode(): void {
-    if (!this._flyMode) return;
-    this._flyMode = false;
-
-    // Rebuild target at a distance proportional to camera height (natural orbit radius)
-    const [px, py, pz] = this.camera.position;
-    const cosPitch = Math.cos(this._flyPitch);
-    const lookX = Math.cos(this._flyYaw) * cosPitch;
-    const lookY = Math.sin(this._flyYaw) * cosPitch;
-    const lookZ = Math.sin(this._flyPitch);
-    const targetDist = Math.max(10, Math.abs(pz) * 0.5);
-    this.camera.target = [
-      px + lookX * targetDist,
-      py + lookY * targetDist,
-      pz + lookZ * targetDist,
-    ];
-    this.camera.up = [0, 0, 1];
-    this.camera.near = Math.max(0.1, targetDist * 0.001);
-    this.camera.far = Math.max(100000, targetDist * 100);
-
-    this.viewDirty = true;
-    this.onViewBecameDirty?.();
-    this.reportScale();
+    flyExit(this._flyState, this.camera, () => this._onViewChanged(), () => this.reportScale());
   }
 
-  /**
-   * Rotate the camera view direction by mouse delta (mouselook).
-   * dx/dy are raw pixel deltas from mouse movement.
-   */
   flyLook(dx: number, dy: number): void {
-    if (!this._flyMode) return;
-
-    this._flyYaw += dx * FLY_LOOK_SENSITIVITY;
-    this._flyPitch -= dy * FLY_LOOK_SENSITIVITY;
-    this._flyPitch = Math.max(-FLY_MAX_PITCH, Math.min(FLY_MAX_PITCH, this._flyPitch));
-
-    // Update target from yaw/pitch
-    const [px, py, pz] = this.camera.position;
-    const cosPitch = Math.cos(this._flyPitch);
-    const lookX = Math.cos(this._flyYaw) * cosPitch;
-    const lookY = Math.sin(this._flyYaw) * cosPitch;
-    const lookZ = Math.sin(this._flyPitch);
-    this.camera.target = [px + lookX, py + lookY, pz + lookZ];
-    this.camera.up = [0, 0, 1];
-
-    this.viewDirty = true;
-    this.onViewBecameDirty?.();
+    flyLook(this._flyState, this.camera, dx, dy, () => this._onViewChanged());
   }
 
-  /**
-   * Move the camera in fly mode. Parameters are unit-scale direction
-   * inputs (-1 to 1). deltaTime is in seconds.
-   *
-   * @param forward - Forward/backward (W/S: +1/-1)
-   * @param right   - Strafe left/right (A/D: -1/+1)
-   * @param up      - Up/down (E/Q: +1/-1)
-   * @param deltaTime - Frame time in seconds
-   * @param sprint  - Whether sprint (Shift) is held
-   */
   flyMove(forward: number, right: number, up: number, deltaTime: number, sprint = false): void {
-    if (!this._flyMode) return;
-
-    const speed = this._flySpeed * (sprint ? FLY_SPRINT_MULTIPLIER : 1.0);
-    const distance = speed * deltaTime;
-
-    // Forward direction (projected on horizontal plane for WASD, full 3D for vertical)
-    const cosPitch = Math.cos(this._flyPitch);
-    const fwdX = Math.cos(this._flyYaw) * cosPitch;
-    const fwdY = Math.sin(this._flyYaw) * cosPitch;
-    const fwdZ = Math.sin(this._flyPitch);
-
-    // Right direction (perpendicular to forward on XY plane)
-    const rightX = Math.cos(this._flyYaw - Math.PI / 2);
-    const rightY = Math.sin(this._flyYaw - Math.PI / 2);
-
-    // Compute total displacement
-    const moveX = (fwdX * forward + rightX * right) * distance;
-    const moveY = (fwdY * forward + rightY * right) * distance;
-    const moveZ = (fwdZ * forward + up) * distance;
-
-    const [px, py, pz] = this.camera.position;
-    this.camera.position = [px + moveX, py + moveY, pz + moveZ];
-    // Keep target at unit distance in look direction
-    const lookX = Math.cos(this._flyYaw) * cosPitch;
-    const lookY = Math.sin(this._flyYaw) * cosPitch;
-    const lookZ = Math.sin(this._flyPitch);
-    this.camera.target = [
-      px + moveX + lookX,
-      py + moveY + lookY,
-      pz + moveZ + lookZ,
-    ];
-
-    this.viewDirty = true;
-    this.onViewBecameDirty?.();
-    this.reportScale();
+    flyMove(this._flyState, this.camera, forward, right, up, deltaTime, sprint, () => this._onViewChanged(), () => this.reportScale());
   }
 
-  /** Adjust fly speed via scroll wheel delta. */
   adjustFlySpeed(deltaY: number): void {
-    const notches = deltaY / 120;
-    this._flySpeed *= Math.pow(1.15, -notches);
-    this._flySpeed = Math.max(MIN_FLY_SPEED, Math.min(MAX_FLY_SPEED, this._flySpeed));
+    flyAdjustSpeed(this._flyState, deltaY);
+  }
+
+  /** Mark the view dirty and wake the render loop. */
+  private _onViewChanged(): void {
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
   }
 
   computeViewProj(): Float32Array {
     if (!this.viewDirty && this.cachedViewProjForRender) {
       return this.cachedViewProjForRender;
     }
-    const aspect = this.width / this.height;
-    const view = lookAtMatrix(this.camera.position, this.camera.target, this.camera.up);
-
-    let proj: Float32Array;
-    if (this.dimensionMode === '2d') {
-      // Orthographic projection: visible area determined by numPixelsPerMeter
-      const halfH = (this.height / 2) / this.numPixelsPerMeter;
-      const halfW = halfH * aspect;
-      proj = orthographicMatrix(-halfW, halfW, -halfH, halfH, this.camera.near, this.camera.far);
-    } else {
-      proj = perspectiveMatrix(this.camera.fovY, aspect, this.camera.near, this.camera.far);
-    }
-
-    const result = multiplyMatrices(DEPTH_CORRECTION, multiplyMatrices(proj, view));
+    const result = buildViewProjMatrix(
+      this.camera,
+      this.dimensionMode,
+      this.numPixelsPerMeter,
+      this.width,
+      this.height,
+    );
     this.cachedViewProjForRender = result;
     this.viewDirty = false;
     return result;

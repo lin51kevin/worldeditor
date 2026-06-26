@@ -9,6 +9,7 @@ mod marking_mesh;
 mod object_gen;
 mod road_gen;
 mod road_mesh;
+mod signal_arrows;
 mod signal_gen;
 mod signal_mesh;
 
@@ -20,7 +21,8 @@ pub(crate) use junction_mesh::{build_junction_polygon_points, point_in_polygon};
 
 pub(crate) use colors::{road_hue_color, select_lane_color};
 pub(crate) use road_mesh::{gen_default_ribbon, gen_lane_strip};
-pub(crate) use signal_mesh::{arrow_triangles, sign_marker_color};
+pub(crate) use signal_arrows::arrow_triangles;
+pub(crate) use signal_mesh::sign_marker_color;
 
 use junction_mesh::append_junction_triangles;
 

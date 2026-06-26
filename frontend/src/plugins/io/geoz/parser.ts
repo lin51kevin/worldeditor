@@ -31,6 +31,25 @@ import mapLaneTopoProto from './proto/map_lane_topo.proto?raw';
 import mapObjectProto from './proto/map_object.proto?raw';
 import mapRoadGeoProto from './proto/map_road_geo.proto?raw';
 import mapRoadTopoProto from './proto/map_road_topo.proto?raw';
+import type {
+  ConvertedRoad,
+  GeoRoadFile,
+  ProtoEnum,
+  ProtoJunctionTopo,
+  ProtoLaneGeometry,
+  ProtoLaneTopo,
+  ProtoObject,
+  ProtoPoint3D,
+  ProtoRoadGeometry,
+  ProtoRoadMark,
+  ProtoRoadSection,
+  ProtoRoadTopo,
+  ProtoRoadlink,
+  ProtoSignal,
+  ProtoTileRoadFile,
+  ProtoTopoMapFile,
+  SectionAccumulator,
+} from './protoTypes';
 
 const DEFAULT_LANE_WIDTH = 3.5;
 const MIN_SEGMENT_LENGTH = 0.01;
@@ -57,167 +76,6 @@ const PROTO_SOURCES = [
   { name: 'map.proto', content: mapProto },
   { name: 'Main.proto', content: mainProto },
 ] as const;
-
-type ProtoEnum = number | string | null | undefined;
-
-interface ProtoPoint3D {
-  x?: number | null;
-  y?: number | null;
-  z?: number | null;
-}
-
-interface ProtoRoadBoundary {
-  point?: ProtoPoint3D[] | null;
-}
-
-interface ProtoLaneBoundary {
-  point?: ProtoPoint3D[] | null;
-  road_mark?: ProtoRoadMark[] | null;
-}
-
-interface ProtoRoadMark {
-  offset?: number | null;
-  length?: number | null;
-  mark_type?: ProtoEnum;
-  mark_color?: ProtoEnum;
-  mark_weight?: ProtoEnum;
-  width?: number | null;
-}
-
-interface ProtoLaneGeometry {
-  id?: string | null;
-  left_boundary?: ProtoLaneBoundary | null;
-  right_boundary?: ProtoLaneBoundary | null;
-  center_boundary?: ProtoLaneBoundary | null;
-}
-
-interface ProtoRoadGeometry {
-  id?: string | null;
-  reference_line?: ProtoRoadBoundary | null;
-  center_line?: ProtoRoadBoundary | null;
-  lane_geometrys?: ProtoLaneGeometry[] | null;
-}
-
-interface ProtoTileRoadFile {
-  road_geometry?: ProtoRoadGeometry | null;
-}
-
-interface ProtoLaneLink {
-  id?: string | null;
-}
-
-interface ProtoLaneHeader {
-  id?: string | null;
-  length?: number | null;
-  lane_type?: ProtoEnum;
-  name?: string | null;
-}
-
-interface ProtoLaneTopo {
-  header?: ProtoLaneHeader | null;
-  predecessors?: ProtoLaneLink[] | null;
-  successors?: ProtoLaneLink[] | null;
-}
-
-interface ProtoRoadlink {
-  id?: string | null;
-  s?: number | null;
-  link_type?: ProtoEnum;
-  link_contact_point?: ProtoEnum;
-}
-
-interface ProtoRoadSection {
-  section_id?: string | null;
-  section_index?: number | null;
-  s?: number | null;
-  length?: number | null;
-  section_direction_type?: ProtoEnum;
-  lanes?: ProtoLaneTopo[] | null;
-}
-
-interface ProtoSignalValidity {
-  road_id?: string | null;
-  from_lane_id?: string | null;
-  to_lane_id?: string | null;
-}
-
-interface ProtoSignal {
-  id?: string | null;
-  type?: string | null;
-  road_id?: string | null;
-  validities?: ProtoSignalValidity[] | null;
-}
-
-interface ProtoObject {
-  id?: string | null;
-  type?: string | null;
-  road_id?: string | null;
-}
-
-interface ProtoRoadHeader {
-  id?: string | null;
-  length?: number | null;
-  name?: string | null;
-  junction_id?: string | null;
-}
-
-interface ProtoRoadTopo {
-  header?: ProtoRoadHeader | null;
-  road_predecessors?: ProtoRoadlink[] | null;
-  road_successors?: ProtoRoadlink[] | null;
-  road_sections?: ProtoRoadSection[] | null;
-  road_signal?: ProtoSignal[] | null;
-  road_objects?: ProtoObject[] | null;
-}
-
-interface ProtoTopoHeader {
-  name?: string | null;
-}
-
-interface ProtoJunctionLaneLink {
-  from?: string | null;
-  to?: string | null;
-}
-
-interface ProtoJunctionLink {
-  connecting_road?: string | null;
-  incoming_road?: string | null;
-  contact_point?: ProtoEnum;
-  junction_lane_link?: ProtoJunctionLaneLink[] | null;
-}
-
-interface ProtoJunctionHeader {
-  id?: string | null;
-  name?: string | null;
-}
-
-interface ProtoJunctionTopo {
-  header?: ProtoJunctionHeader | null;
-  junction_links?: ProtoJunctionLink[] | null;
-}
-
-interface ProtoTopoMapFile {
-  header?: ProtoTopoHeader | null;
-  roads?: ProtoRoadTopo[] | null;
-  junctions?: ProtoJunctionTopo[] | null;
-}
-
-interface GeoRoadFile {
-  stem: string;
-  data: ProtoTileRoadFile;
-}
-
-interface ConvertedRoad {
-  road: Road;
-  signals: RoadSignal[];
-  objects: RoadObject[];
-}
-
-interface SectionAccumulator {
-  s: number;
-  leftLanes: ProtoLaneTopo[];
-  rightLanes: ProtoLaneTopo[];
-}
 
 let protoRootPromise: Promise<protobuf.Root> | null = null;
 

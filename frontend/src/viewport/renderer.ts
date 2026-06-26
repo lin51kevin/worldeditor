@@ -5,7 +5,6 @@ import { takePrewarmedGPU, returnPrewarmedGPU } from './gpuDeviceCache';
 import type { PrewarmedGPU } from './gpuDeviceCache';
 import { createRenderLoop } from './renderLoop';
 import type { RenderLoop } from './renderLoop';
-import { batchMeshes } from './meshBatcher';
 
 /**
  * WebGPU viewport renderer.
@@ -20,15 +19,6 @@ import { batchMeshes } from './meshBatcher';
  *   - See crates/we-wasm/src/lib.rs for the progressive WASM data pipeline.
  */
 
-/** Multiplier for GPU buffer allocation headroom. When a buffer needs to grow,
- *  it is allocated as `requiredBytes × GPU_BUFFER_HEADROOM`. */
-const GPU_BUFFER_HEADROOM = 2.0;
-
-/** Threshold below which an oversized GPU buffer is shrunk.
- *  If `requiredBytes < bufferSize × GPU_BUFFER_SHRINK_THRESHOLD`, the buffer
- *  is reallocated to `requiredBytes × GPU_BUFFER_HEADROOM`. */
-const GPU_BUFFER_SHRINK_THRESHOLD = 0.25;
-
 import type { ControlPointRef } from './tangentHandleController';
 import {
   createGridPipeline as createGridPipelineFn,
@@ -42,6 +32,9 @@ import { MarkerRenderer } from './markerRenderer';
 import { FlyKeyboardController } from './flyControls';
 import type { RenderableMesh } from './markerRenderer';
 import { setupRendererInput } from './rendererInputHandler';
+import { renderFrame as renderFrameImpl, captureFrame as captureFrameImpl } from './rendererFrame';
+import type { RendererFrameInternals } from './rendererFrame';
+import { uploadMeshData, disposeMeshes, createDepthTexture, createMsaaTexture } from './rendererResources';
 import { SpriteRenderer } from './spriteRenderer';
 import type { SpriteInstance, PaintInstance } from './spriteRenderer';
 import { TextureManager } from './textureManager';
@@ -56,13 +49,13 @@ export class ViewportRenderer {
   private msaaTexture: GPUTexture | null = null;
 
   // Pipelines
-  private gridPipeline!: GPURenderPipeline;
-  private gridBindGroup!: GPUBindGroup;
+  gridPipeline!: GPURenderPipeline;
+  gridBindGroup!: GPUBindGroup;
   private gridUniformBuffer!: GPUBuffer;
-  private basicPipeline!: GPURenderPipeline;
-  private highlightPipeline!: GPURenderPipeline;
+  basicPipeline!: GPURenderPipeline;
+  highlightPipeline!: GPURenderPipeline;
   private basicShaderModule!: GPUShaderModule;
-  private basicBindGroup!: GPUBindGroup;
+  basicBindGroup!: GPUBindGroup;
   private basicBindGroupLayout!: GPUBindGroupLayout;
   private basicUniformBuffer!: GPUBuffer;
 
@@ -98,12 +91,12 @@ export class ViewportRenderer {
   private lastFrameTime = 0;
 
   // Visibility flags for grid/axis
-  private showGrid = true;
-  private showAxis = true;
+  showGrid = true;
+  showAxis = true;
 
   // Theme colors
   private clearColor: { r: number; g: number; b: number; a: number } = { r: 0.10, g: 0.10, b: 0.12, a: 1.0 };
-  private gridColor: [number, number, number] = [0.50, 0.50, 0.50];
+  gridColor: [number, number, number] = [0.50, 0.50, 0.50];
 
   // Selection highlight mesh
   private highlightMeshes: RenderableMesh[] = [];
@@ -126,12 +119,12 @@ export class ViewportRenderer {
 
   // Pre-allocated uniform buffers (avoid per-frame GC)
   // 28 floats = 112 bytes: mat4x4(16) + vec3(3)+f32(1) + vec3(3)+f32(1) + f32 show_grid + f32 show_axis + 2 pad
-  private gridUniformData = new Float32Array(28);
-  private basicUniformData = new Float32Array(32);
+  gridUniformData = new Float32Array(28);
+  basicUniformData = new Float32Array(32);
 
   // Plugin viewport overlay renderers — called after main render pass
-  private overlayRenderers: Array<(ctx: { device?: GPUDevice; canvas?: HTMLCanvasElement }) => void> = [];
-  private overlayCanvas: HTMLCanvasElement | null = null;
+  overlayRenderers: Array<(ctx: { device?: GPUDevice; canvas?: HTMLCanvasElement }) => void> = [];
+  overlayCanvas: HTMLCanvasElement | null = null;
 
   constructor() {
     this.cameraController.setScaleMetricsChangedCallback(({ mpp }) => {
@@ -237,9 +230,9 @@ export class ViewportRenderer {
     this.markerRenderer.setDevice(this.device);
 
     const tConfigure = performance.now();
-    this.createDepthTexture();
+    this.depthTexture = createDepthTexture(this.device, this.width, this.height);
     const tDepth = performance.now();
-    this.createMsaaTexture();
+    this.msaaTexture = createMsaaTexture(this.device, this.format, this.width, this.height);
     const tMsaa = performance.now();
     this.createGridPipeline();
     const tGrid = performance.now();
@@ -261,48 +254,6 @@ export class ViewportRenderer {
   }
 
   /** Upload road vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
-  /**
-   * Reuse or allocate a GPU vertex buffer with smart grow/shrink strategy.
-   *
-   * Strategy:
-   * - **Grow:** If existing buffer is too small, allocate 2× required bytes for headroom.
-   * - **Reuse:** If buffer fits (>= requiredBytes and <= 4× requiredBytes), keep it.
-   * - **Shrink:** If buffer usage drops below 25% (requiredBytes < size × 0.25),
-   *   reallocate to 2× requiredBytes to release GPU memory.
-   *   The 25% threshold avoids thrashing when data oscillates near a power-of-two boundary.
-   */
-  private getOrCreateBuffer(existingBuffer: GPUBuffer | undefined, requiredBytes: number): GPUBuffer {
-    if (existingBuffer) {
-      const currentSize = existingBuffer.size;
-      if (currentSize >= requiredBytes && requiredBytes >= currentSize * GPU_BUFFER_SHRINK_THRESHOLD) {
-        // Buffer fits well — reuse
-        return existingBuffer;
-      }
-      // Too small or too large — destroy and reallocate
-      existingBuffer.destroy();
-    }
-    return this.device.createBuffer({
-      size: Math.ceil(requiredBytes * GPU_BUFFER_HEADROOM),
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-    });
-  }
-
-  /** Upload vertex data into a mesh array, reusing or reallocating the GPU buffer as needed. */
-  private uploadMeshData(meshes: RenderableMesh[], vertexData: Float32Array): void {
-    const requiredBytes = vertexData.byteLength;
-    const buffer = this.getOrCreateBuffer(meshes[0]?.vertexBuffer, requiredBytes);
-    this.device.queue.writeBuffer(buffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
-
-    // Destroy stale extra mesh entries
-    for (let i = (meshes[0]?.vertexBuffer === buffer ? 1 : 0); i < meshes.length; i++) {
-      meshes[i]!.vertexBuffer.destroy();
-    }
-    meshes.length = 0;
-    meshes.push({
-      vertexBuffer: buffer,
-      vertexCount: vertexData.length / 7,
-    });
-  }
 
   uploadRoadVertices(
     vertexData: Float32Array,
@@ -334,7 +285,7 @@ export class ViewportRenderer {
       return;
     }
 
-    this.uploadMeshData(this.meshes, vertexData);
+    uploadMeshData(this.device, this.meshes, vertexData);
     this.markSceneDirty();
 
     // Store for later zoomToFit calls
@@ -353,7 +304,7 @@ export class ViewportRenderer {
       this.clearHighlight();
       return;
     }
-    this.uploadMeshData(this.highlightMeshes, vertexData);
+    uploadMeshData(this.device, this.highlightMeshes, vertexData);
     this.markSceneDirty();
   }
 
@@ -373,7 +324,7 @@ export class ViewportRenderer {
       this.clearLinkHighlight();
       return;
     }
-    this.uploadMeshData(this.linkHighlightMeshes, vertexData);
+    uploadMeshData(this.device, this.linkHighlightMeshes, vertexData);
     this.markSceneDirty();
   }
 
@@ -393,7 +344,7 @@ export class ViewportRenderer {
       this.clearHover();
       return;
     }
-    this.uploadMeshData(this.hoverMeshes, vertexData);
+    uploadMeshData(this.device, this.hoverMeshes, vertexData);
     this.markSceneDirty();
   }
 
@@ -475,7 +426,7 @@ export class ViewportRenderer {
       this.markSceneDirty();
       return;
     }
-    this.uploadMeshData(this.overlayMeshes, vertexData);
+    uploadMeshData(this.device, this.overlayMeshes, vertexData);
     this.markSceneDirty();
   }
 
@@ -494,7 +445,7 @@ export class ViewportRenderer {
         this.device, this.format, this.basicShaderModule, this.basicBindGroupLayout,
       );
     }
-    this.uploadMeshData(this.pointCloudMeshes, vertexData);
+    uploadMeshData(this.device, this.pointCloudMeshes, vertexData);
     this.markSceneDirty();
   }
 
@@ -507,7 +458,7 @@ export class ViewportRenderer {
       this.markSceneDirty();
       return;
     }
-    this.uploadMeshData(this.laneLineMeshes, vertexData);
+    uploadMeshData(this.device, this.laneLineMeshes, vertexData);
     this.markSceneDirty();
   }
 
@@ -576,8 +527,8 @@ export class ViewportRenderer {
     this.depthTexture?.destroy();
     this.msaaTexture?.destroy();
     this.msaaTexture = null;
-    this.createDepthTexture();
-    this.createMsaaTexture();
+    this.depthTexture = createDepthTexture(this.device, this.width, this.height);
+    this.msaaTexture = createMsaaTexture(this.device, this.format, this.width, this.height);
   }
 
   /**
@@ -631,53 +582,7 @@ export class ViewportRenderer {
    *   all road content before rendering, then restores the original camera.
    */
   captureFrame(options?: { transparent?: boolean; fitToContent?: boolean }): string | null {
-    if (this.deviceLost || this.disposed) return null;
-
-    // Save state that we temporarily override for capture
-    const prevShowGrid = this.showGrid;
-    const prevShowAxis = this.showAxis;
-    const prevClearColor = this.clearColor;
-
-    // Save camera state if we need to fit to content
-    const savedCameraState = options?.fitToContent
-      ? this.cameraController.saveState()
-      : null;
-
-    // Always hide grid and axis for snapshot export
-    this.showGrid = false;
-    this.showAxis = false;
-
-    // When transparent, use a fully transparent clear color
-    if (options?.transparent) {
-      this.clearColor = { r: 0, g: 0, b: 0, a: 0 };
-    }
-
-    // Fit camera to show all content at appropriate zoom level
-    if (options?.fitToContent && this.lastVertexData) {
-      this.cameraController.fitToVertices(this.lastVertexData);
-    }
-
-    // Force a render
-    this.sceneDirty = true;
-    this.cameraController.isViewDirty = true;
-    this.renderFrame();
-
-    // Restore state
-    this.showGrid = prevShowGrid;
-    this.showAxis = prevShowAxis;
-    this.clearColor = prevClearColor;
-    if (savedCameraState) {
-      this.cameraController.restoreState(savedCameraState);
-    }
-
-    // Immediately read back — the texture is still valid in this microtask
-    try {
-      const canvas = this.context?.canvas as HTMLCanvasElement | undefined;
-      if (!canvas) return null;
-      return canvas.toDataURL('image/png');
-    } catch {
-      return null;
-    }
+    return captureFrameImpl(this as unknown as RendererFrameInternals, options);
   }
 
   /** Start the render loop (render-on-demand: stops when idle, wakes on events). */
@@ -732,14 +637,14 @@ export class ViewportRenderer {
     this.flyKeyboard.detach();
     this.mouseControlsCleanup?.();
     this.mouseControlsCleanup = null;
-    this.disposeMeshes(this.meshes);
-    this.disposeMeshes(this.laneLineMeshes);
-    this.disposeMeshes(this.overlayMeshes);
-    this.disposeMeshes(this.pointCloudMeshes);
+    disposeMeshes(this.meshes);
+    disposeMeshes(this.laneLineMeshes);
+    disposeMeshes(this.overlayMeshes);
+    disposeMeshes(this.pointCloudMeshes);
     this.markerRenderer.dispose();
-    this.disposeMeshes(this.highlightMeshes);
-    this.disposeMeshes(this.linkHighlightMeshes);
-    this.disposeMeshes(this.hoverMeshes);
+    disposeMeshes(this.highlightMeshes);
+    disposeMeshes(this.linkHighlightMeshes);
+    disposeMeshes(this.hoverMeshes);
     this.depthTexture?.destroy();
     this.msaaTexture?.destroy();
     this.gridUniformBuffer?.destroy();
@@ -752,242 +657,10 @@ export class ViewportRenderer {
     this.device?.destroy();
   }
 
-  /** Helper to destroy mesh buffers. */
-  private disposeMeshes(meshes: RenderableMesh[]): void {
-    for (const m of meshes) {
-      m.vertexBuffer.destroy();
-    }
-    meshes.length = 0;
-  }
-
   // --- Private ---
 
   private renderFrame(): void {
-    if (this.deviceLost || this.disposed) return;
-
-    let texture: GPUTexture;
-    try {
-      texture = this.context.getCurrentTexture();
-    } catch {
-      // Canvas/context may be in an invalid state (tab hidden, resize race)
-      return;
-    }
-
-    const camera = this.cameraController.state;
-    const wasDirty = this.cameraController.isViewDirty;
-    const viewProj = this.cameraController.computeViewProj();
-
-    // Only update uniforms when camera has changed (skip redundant GPU writes)
-    if (wasDirty) {
-      // Update grid uniforms (96 bytes: mat4x4 + vec3 + f32 + vec3 + f32)
-      const gridData = this.gridUniformData;
-      gridData.set(viewProj, 0);
-      gridData.set(camera.position, 16);
-      gridData[19] = this.cameraController.currentGridSpacing;
-      gridData.set(this.gridColor, 20);
-      gridData[23] = this.cameraController.getGridFadeDistance();
-      gridData[24] = this.showGrid ? 1.0 : 0.0;
-      gridData[25] = this.showAxis ? 1.0 : 0.0;
-      this.device.queue.writeBuffer(this.gridUniformBuffer, 0, gridData);
-
-      // Update basic uniforms (128 bytes: mat4x4 view_proj + mat4x4 model)
-      const basicData = this.basicUniformData;
-      basicData.set(viewProj, 0);
-      // Identity model matrix
-      basicData[16] = 1; basicData[21] = 1; basicData[26] = 1; basicData[31] = 1;
-      this.device.queue.writeBuffer(this.basicUniformBuffer, 0, basicData);
-    }
-
-    const encoder = this.device.createCommandEncoder();
-
-    const swapChainView = texture.createView();
-    const msaaView = this.msaaTexture?.createView() ?? swapChainView;
-    const pass = encoder.beginRenderPass({
-      colorAttachments: [{
-        view: msaaView,
-        resolveTarget: this.msaaTexture ? swapChainView : undefined,
-        clearValue: this.clearColor,
-        loadOp: 'clear',
-        storeOp: this.msaaTexture ? 'discard' : 'store',
-      }],
-      depthStencilAttachment: {
-        view: this.depthTexture.createView(),
-        depthClearValue: 1.0,
-        depthLoadOp: 'clear',
-        depthStoreOp: 'store',
-      },
-    });
-
-    // Draw grid
-    if (this.showGrid || this.showAxis) {
-      pass.setPipeline(this.gridPipeline);
-      pass.setBindGroup(0, this.gridBindGroup);
-      pass.draw(6);
-    }
-
-    // Draw point cloud (behind roads, on top of grid)
-    if (this.pointCloudMeshes.length > 0 && this.pointCloudPipeline) {
-      pass.setPipeline(this.pointCloudPipeline);
-      pass.setBindGroup(0, this.basicBindGroup);
-      for (const mesh of this.pointCloudMeshes) {
-        pass.setVertexBuffer(0, mesh.vertexBuffer);
-        pass.draw(mesh.vertexCount);
-      }
-    }
-
-    // Draw road meshes (render first - on bottom)
-    if (this.meshes.length > 0) {
-      pass.setPipeline(this.basicPipeline);
-      pass.setBindGroup(0, this.basicBindGroup);
-      const batches = batchMeshes(this.meshes, 'basic');
-      for (const batch of batches) {
-        for (const mesh of batch.meshes) {
-          pass.setVertexBuffer(0, mesh.vertexBuffer);
-          pass.draw(mesh.vertexCount);
-        }
-      }
-    }
-
-    // Draw hover highlight (above road surface, below selection so selection overrides)
-    if (this.hoverMeshes.length > 0) {
-      pass.setPipeline(this.highlightPipeline);
-      pass.setBindGroup(0, this.basicBindGroup);
-      const batches = batchMeshes(this.hoverMeshes, 'highlight');
-      for (const batch of batches) {
-        for (const mesh of batch.meshes) {
-          pass.setVertexBuffer(0, mesh.vertexBuffer);
-          pass.draw(mesh.vertexCount);
-        }
-      }
-    }
-
-    // Draw road link (predecessor/successor) highlight
-    if (this.linkHighlightMeshes.length > 0) {
-      pass.setPipeline(this.highlightPipeline);
-      pass.setBindGroup(0, this.basicBindGroup);
-      const batches = batchMeshes(this.linkHighlightMeshes, 'highlight');
-      for (const batch of batches) {
-        for (const mesh of batch.meshes) {
-          pass.setVertexBuffer(0, mesh.vertexBuffer);
-          pass.draw(mesh.vertexCount);
-        }
-      }
-    }
-
-    // Draw selection highlight (on top of road surface, below markings)
-    if (this.highlightMeshes.length > 0) {
-      pass.setPipeline(this.highlightPipeline);
-      pass.setBindGroup(0, this.basicBindGroup);
-      const batches = batchMeshes(this.highlightMeshes, 'highlight');
-      for (const batch of batches) {
-        for (const mesh of batch.meshes) {
-          pass.setVertexBuffer(0, mesh.vertexBuffer);
-          pass.draw(mesh.vertexCount);
-        }
-      }
-    }
-
-    // Draw bridge/tunnel overlays (above road surface, below lane lines)
-    if (this.overlayMeshes.length > 0) {
-      pass.setPipeline(this.basicPipeline);
-      pass.setBindGroup(0, this.basicBindGroup);
-      const batches = batchMeshes(this.overlayMeshes, 'basic');
-      for (const batch of batches) {
-        for (const mesh of batch.meshes) {
-          pass.setVertexBuffer(0, mesh.vertexBuffer);
-          pass.draw(mesh.vertexCount);
-        }
-      }
-    }
-
-    // Draw lane lines (between road surface and markings)
-    if (this.laneLineMeshes.length > 0) {
-      pass.setPipeline(this.highlightPipeline);
-      pass.setBindGroup(0, this.basicBindGroup);
-      const batches = batchMeshes(this.laneLineMeshes, 'highlight');
-      for (const batch of batches) {
-        for (const mesh of batch.meshes) {
-          pass.setVertexBuffer(0, mesh.vertexBuffer);
-          pass.draw(mesh.vertexCount);
-        }
-      }
-    }
-
-    // Draw road paint textured quads (arrows on road surface)
-    if (this.spriteRenderer?.hasContent()) {
-      // Refresh bind groups if textures finished loading since last frame
-      if (this.spriteRenderer.refreshBindGroups()) {
-        this.markSceneDirty();
-      }
-      this.spriteRenderer.updateUniforms(
-        this.cameraController.computeViewProj(),
-        this.width, this.height,
-        // Pass pixels-per-meter so billboard offsets (in world units) scale with zoom.
-        1.0 / this.cameraController.getMetersPerPixel(),
-      );
-      this.spriteRenderer.renderPaints(pass);
-      this.spriteRenderer.renderSprites(pass);
-    }
-
-    // Draw spline preview curve on top of road surface
-    if (this.markerRenderer.curveMeshes.length > 0) {
-      pass.setPipeline(this.basicPipeline);
-      pass.setBindGroup(0, this.basicBindGroup);
-      const batches = batchMeshes(this.markerRenderer.curveMeshes, 'basic');
-      for (const batch of batches) {
-        for (const mesh of batch.meshes) {
-          pass.setVertexBuffer(0, mesh.vertexBuffer);
-          pass.draw(mesh.vertexCount);
-        }
-      }
-    }
-
-    // Draw spline control point markers (screen-size constant squares)
-    if (this.markerRenderer.markerMeshes.length > 0) {
-      pass.setPipeline(this.basicPipeline);
-      pass.setBindGroup(0, this.basicBindGroup);
-      const batches = batchMeshes(this.markerRenderer.markerMeshes, 'basic');
-      for (const batch of batches) {
-        for (const mesh of batch.meshes) {
-          pass.setVertexBuffer(0, mesh.vertexBuffer);
-          pass.draw(mesh.vertexCount);
-        }
-      }
-    }
-
-    pass.end();
-    try {
-      this.device.queue.submit([encoder.finish()]);
-    } catch {
-      // Transient D3D swap-chain / device-context mismatch; skip frame.
-      // This can occur during resize or when the window moves between monitors.
-    }
-
-    // Invoke plugin overlay renderers after main render pass
-    if (this.overlayRenderers.length > 0) {
-      const ctx = { device: this.device, canvas: this.overlayCanvas ?? undefined };
-      for (const render of this.overlayRenderers) {
-        try { render(ctx); } catch { /* plugin errors must not crash the render loop */ }
-      }
-    }
-  }
-
-  private createDepthTexture(): void {
-    this.depthTexture = this.device.createTexture({
-      size: [this.width, this.height],
-      format: 'depth32float',
-      sampleCount: 4,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-  }
-
-  private createMsaaTexture(): void {
-    this.msaaTexture = this.device.createTexture({
-      size: [this.width, this.height],
-      format: this.format,
-      sampleCount: 4,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
-    });
+    renderFrameImpl(this as unknown as RendererFrameInternals);
   }
 
   private createGridPipeline(): void {
