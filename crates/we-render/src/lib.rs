@@ -10,6 +10,7 @@ pub mod gpu;
 pub mod instance_render;
 pub mod junction_render;
 pub mod mark_render;
+pub mod mesh_cache;
 pub mod object_instancing;
 pub mod object_render;
 pub mod pipeline;
@@ -34,6 +35,7 @@ pub use instance_render::{
     unit_box_vertices, unit_pole_vertices,
 };
 pub use object_instancing::collect_road_object_instances;
+pub use mesh_cache::{MeshUpdate, SceneMeshCache};
 pub use point_render::build_point_vertices;
 pub use renderer::{LaneLineMesh, RenderMesh, Renderer};
 pub use road_mesh::{generate_road_lane_lines, generate_road_mesh};
