@@ -204,19 +204,6 @@ export function useViewportMeshes({
         [...newJunctionRefs].some(([id, ref]) => prev.junctionRefs.get(id) !== ref);
       const colorModeChanged = surfaceColorModeRef.current !== display.colorMode;
 
-      // Granular invalidation:
-      // - viewMode change does NOT require WASM regeneration (surfaces cached from solid mode)
-      // - colorMode only affects road vertices
-      const needRoads = roadsChanged || colorModeChanged || cachedRoadVertsRef.current.length === 0;
-      const needJunctions = junctionsChanged || roadsChanged || cachedJunctionVertsRef.current.length === 0;
-      const needSignals = roadsChanged || junctionsChanged || cachedSignalVertsRef.current.length === 0;
-      const needObjects = roadsChanged || junctionsChanged || cachedObjectVertsRef.current.length === 0;
-
-      surfaceDepsRef.current = { roadRefs: newRoadRefs, junctionRefs: newJunctionRefs };
-      surfaceColorModeRef.current = display.colorMode;
-
-      // Per-road deltas for the incremental upload path.
-      const removedRoadIds = [...prev.roadRefs.keys()].filter((id) => !newRoadRefs.has(id));
       // The renderer's road registry is the single source of truth for whether
       // the incremental layer is live. Consult it (not just our own ref) so that
       // any out-of-band merged upload that disposed the registry — e.g. the
@@ -233,6 +220,23 @@ export function useViewportMeshes({
       // converges instead of leaving most roads permanently unbuilt.
       const registryMeshCount =
         typeof renderer.getRoadMeshCount === 'function' ? renderer.getRoadMeshCount() : 0;
+      const registryIncomplete = registryActive && registryMeshCount !== roadsTotal;
+
+      // Granular invalidation:
+      // - viewMode change does NOT require WASM regeneration (surfaces cached from solid mode)
+      // - colorMode only affects road vertices
+      // A partial registry seed (registryIncomplete) must also force a road regen so the
+      // WASM cache is pushed and the self-heal full rebuild can produce real per-road verts.
+      const needRoads = roadsChanged || colorModeChanged || registryIncomplete || cachedRoadVertsRef.current.length === 0;
+      const needJunctions = junctionsChanged || roadsChanged || cachedJunctionVertsRef.current.length === 0;
+      const needSignals = roadsChanged || junctionsChanged || cachedSignalVertsRef.current.length === 0;
+      const needObjects = roadsChanged || junctionsChanged || cachedObjectVertsRef.current.length === 0;
+
+      surfaceDepsRef.current = { roadRefs: newRoadRefs, junctionRefs: newJunctionRefs };
+      surfaceColorModeRef.current = display.colorMode;
+
+      // Per-road deltas for the incremental upload path.
+      const removedRoadIds = [...prev.roadRefs.keys()].filter((id) => !newRoadRefs.has(id));
       // Rebuild every road when the colour mode changed (palette affects all roads),
       // when the incremental layer is not yet live (first solid frame / after a
       // merged-path fallback or registry disposal), or when the registry is only
