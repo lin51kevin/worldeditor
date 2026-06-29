@@ -35,7 +35,7 @@ vi.mock('../../services/updateService', () => ({
 
 vi.mock('../../buildInfo', () => ({
   buildInfo: {
-    version: '0.3.2',
+    version: '0.3.3',
     buildTime: '2026-05-26T07:00:00.000Z',
     gitCommit: 'abc1234',
     gitBranch: 'main',
@@ -84,7 +84,7 @@ describe('menuDefinitions helpers', () => {
 
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('0.3.2'),
+      expect.stringContaining('0.3.3'),
       'About',
     );
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
@@ -94,7 +94,7 @@ describe('menuDefinitions helpers', () => {
     );
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining('0.3.2'),
+      expect.stringContaining('0.3.3'),
       'Version Info',
     );
     expect(openSpy).toHaveBeenCalledWith(
@@ -112,7 +112,7 @@ describe('menuDefinitions helpers', () => {
   it('installs a desktop update after the user confirms', async () => {
     const update = {
       version: '0.4.0',
-      currentVersion: '0.3.2',
+      currentVersion: '0.3.3',
       body: 'New stuff',
       downloadAndInstall: vi.fn(),
     } as unknown as DesktopUpdate;
@@ -127,7 +127,7 @@ describe('menuDefinitions helpers', () => {
   });
 
   it('skips installation when the user declines a desktop update', async () => {
-    const update = { version: '0.4.0', currentVersion: '0.3.2', downloadAndInstall: vi.fn() } as unknown as DesktopUpdate;
+    const update = { version: '0.4.0', currentVersion: '0.3.3', downloadAndInstall: vi.fn() } as unknown as DesktopUpdate;
     vi.mocked(isDesktopRuntime).mockReturnValue(true);
     vi.mocked(checkDesktopUpdate).mockResolvedValue(update);
     vi.mocked(showConfirm).mockResolvedValue(false);

@@ -6403,6 +6403,7 @@ name = "we-io"
 version = "0.3.2"
 dependencies = [
  "log",
+ "quick-xml 0.37.5",
  "serde",
  "serde_json",
  "tempfile",

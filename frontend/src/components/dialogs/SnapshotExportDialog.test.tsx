@@ -48,7 +48,7 @@ vi.mock('../../viewport/snapshotCapture', () => ({
 // Mock platform service
 vi.mock('../../services', () => ({
   getPlatformService: vi.fn(async () => ({
-    getPlatformInfo: () => ({ type: 'web', version: '0.3.2' }),
+    getPlatformInfo: () => ({ type: 'web', version: '0.3.3' }),
   })),
 }));
 

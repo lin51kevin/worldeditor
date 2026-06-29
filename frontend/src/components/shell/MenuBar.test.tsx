@@ -25,7 +25,7 @@ vi.mock('../../utils/dialog', () => ({
 
 vi.mock('../../buildInfo', () => ({
   buildInfo: {
-    version: '0.3.2',
+    version: '0.3.3',
     buildTime: '2026-05-26T07:00:00.000Z',
     gitCommit: 'abc1234',
     gitBranch: 'main',
@@ -291,7 +291,7 @@ describe('MenuBar', () => {
 
     await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalledTimes(1));
     expect(vi.mocked(showAlert)).toHaveBeenCalledWith(
-      expect.stringContaining('0.3.2'),
+      expect.stringContaining('0.3.3'),
       expect.any(String),
     );
   });

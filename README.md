@@ -223,7 +223,7 @@ sudo apt install -y \
 推送 `v*` 格式的 git tag 会触发 GitHub Actions 自动为三平台构建并上传 Release：
 
 ```bash
-git tag v0.3.2 && git push origin v0.3.2
+git tag v0.3.3 && git push origin v0.3.3
 ```
 
 详见 [`.github/workflows/release.yml`](.github/workflows/release.yml)。
@@ -258,7 +258,7 @@ WorldEditor 将逐步替代 `WorldEditor` (C# 版本)。迁移路径：
 
 1. **Phase 0** (已完成): 项目脚手架、核心领域模型、wgpu 渲染原型
 2. **Phase 1** (已完成 — v0.2.0): OpenDRIVE 完整解析、道路/车道/高程编辑、交叉口模板引擎、桥隧管理、插件系统、E2E 测试、REST API、性能优化
-3. **Phase 2** (当前 — v0.3.2): 点云可视化、3D 模型导入、协作编辑
+3. **Phase 2** (当前 — v0.3.3): 点云可视化、3D 模型导入、协作编辑
 4. **Phase 3**: SUMO 仿真集成、DXF/Shapefile 导入、高级 GIS
 
 ## 许可证

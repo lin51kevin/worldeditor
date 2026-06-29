@@ -5,6 +5,52 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ---
 
+<a name="0.3.3"></a>
+## [0.3.3] — 2026-06-29
+
+### Features
+
+- **we-server**: 实现真实房间级 WebSocket 协作编辑 Hub（按 project_id 分房广播）([`9512148`])
+- **frontend**: 外部插件静态沙箱守卫——注入前拦截禁用危险能力 ([`4fa36f9`])
+- **we-core**: 纯 Rust 投影引擎（UTM / TM / Web Mercator），移除 GDAL 运行时依赖 ([`4fa36f9`])
+- **viewport**: 3D 视图缩放朝向光标而非固定轨道中心点 ([`a71f9e7`])
+- **frontend**: Help 菜单"用户手册"直接在浏览器打开文档 URL ([`1480a40`])
+
+### Performance
+
+- **we-render**: 增量场景网格缓存——仅重建有变更的道路，按内容哈希标识 ([`585099d`])
+- **we-render**: 道路物体按类型批量实例化渲染，大幅降低 Draw Call ([`23fe45d`])
+- **we-core**: 新增 pick/snap 基准测试与大型项目回归守卫 ([`6a3ee2d`])
+
+### Fixes
+
+- **viewport**: 3D 视图右键飞行视角后滚轮缩放平滑度恢复 ([`136fbfc`])
+- **viewport**: 2D 切换 3D 时同步更新相机近/远裁剪平面 ([`6a2d9d8`])
+- **render**: 交叉口填充改用独立深度偏移管线渲染 ([`b66b4ad`])
+- **we-wasm/render**: 交叉口填充 Z 轴平坦化 + 凸包三角化 ([`b46c1cb`])
+- **we-core/picking**: laneOffset 与每物体类型朝向在命中测试中正确应用 ([`4db3b17`])
+- **we-core/geometry**: 新增 evaluate_lane_offset，高程反向外推加裁剪 ([`094083e`])
+- **viewport**: 固态路面渲染稳定化——合并回退确保完整路面几何 ([`0cd1bbb`])
+- **tauri/csp**: 恢复 unsafe-eval，修复 GeoZ protobufjs 运行时代码生成 ([`b7d7fe5`])
+- **frontend**: 修复通过最近文件/菜单打开 .geoz 报解析失败 ([`a906822`])
+- **frontend**: 菜单鼠标离开时关闭，非子菜单悬停时清除子菜单 ([`c087636`])
+
+### Refactor
+
+- **viewport**: viewportStore 按领域拆分为切片架构 ([`7398cce`])
+- **codebase**: 7 个超规格源文件拆分为聚焦模块，消除 unwrap/panic ([`9859652`], [`1985400`])
+- **we-io**: SUMO net.xml 导入导出（`sumo` feature）([`1557fdf`])
+
+### Tests
+
+- **we-core / we-render**: 提升单元测试覆盖率 ([`9859652`])
+
+### CI
+
+- **ci**: lint job 改用 windows-latest，修复 cargo fmt 格式 ([`dd572b2`])
+
+---
+
 <a name="0.3.2"></a>
 ## [0.3.2] — 2026-06-25
 
