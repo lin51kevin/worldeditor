@@ -29,6 +29,11 @@ if (import.meta.env.DEV) {
   import('./utils/geometryBuilder').then((mod) => {
     (window as unknown as Record<string, unknown>)['__geometryBuilder'] = mod;
   });
+  // Active ViewportRenderer accessor — lets E2E assert that road-surface
+  // buffers exist on the first solid frame (no wire→solid toggle needed).
+  import('./viewport/viewportRef').then(({ getViewportRenderer }) => {
+    (window as unknown as Record<string, unknown>)['__getViewportRenderer'] = getViewportRenderer;
+  });
 }
 
 const rootElement = document.getElementById('root');

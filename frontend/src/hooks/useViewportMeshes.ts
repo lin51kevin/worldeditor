@@ -29,6 +29,46 @@ import type { Project } from '../services/platform';
  */
 const TESS_MAX_STEP_M = 5.0;
 
+/**
+ * Decide whether the solid-mode road layer should use the incremental per-road
+ * upload path (vs the merged single-buffer fallback).
+ *
+ * Incremental upload must stay active even when the WASM project cache is not
+ * ready, as long as no road needs regenerating (`changedRoadCount === 0`).
+ * Otherwise a solid-mode re-render that does not push the cache would fall back
+ * to the merged path, upload an empty merged buffer and destroy every per-road
+ * GPU surface buffer — blanking out all road surfaces. The cache is only
+ * required to (re)generate the changed roads.
+ *
+ * `roadsUnique` guards the per-road registry's hard requirement that every road
+ * has a stable, unique id (the registry is keyed by id). Imported formats such
+ * as GeoZ may produce duplicate or empty ids; those collapse in the keyed map
+ * and would render only a subset of roads, so we fall back to the merged path
+ * (which iterates roads positionally) for them.
+ *
+ * `registryActive` gates incremental to live-edit deltas only. The first solid
+ * frame (registry not yet live) and any full rebuild render through the proven
+ * merged path — the per-road buffers can be empty on the very first frame
+ * (cache/tessellation race), so seeding the registry from there leaves the road
+ * layer blank until a wire→solid toggle. The merged path always renders, so we
+ * only switch to incremental once a merged frame has established the geometry.
+ */
+export function shouldUseIncrementalRoads(params: {
+  isSolid: boolean;
+  supported: boolean;
+  roadsUnique: boolean;
+  registryActive: boolean;
+  changedRoadCount: number;
+  cacheReady: boolean;
+}): boolean {
+  const { isSolid, supported, roadsUnique, registryActive, changedRoadCount, cacheReady } = params;
+  if (!isSolid || !supported || !roadsUnique) return false;
+  // Full rebuilds (first load, geoz, registry not yet live) go through merged.
+  if (!registryActive) return false;
+  if (changedRoadCount === 0) return true;
+  return cacheReady;
+}
+
 interface UseViewportMeshesParams {
   rendererRef: MutableRefObject<ViewportRenderer | null>;
   status: 'loading' | 'ready' | 'unsupported';
@@ -114,6 +154,10 @@ export function useViewportMeshes({
   const cachedObjectVertsRef = useRef<Float32Array>(new Float32Array(0));
   const cachedSpriteInstancesRef = useRef<Array<{ position: [number, number, number]; textureUrl: string; size: [number, number] }>>([]);
   const surfaceColorModeRef = useRef(display.colorMode);
+  // True once the road layer is being driven incrementally (per-road GPU buffers).
+  // Reset on file load and whenever we fall back to / leave the merged path, so the
+  // next incremental upload rebuilds every road buffer from scratch.
+  const incrementalRoadsActiveRef = useRef(false);
 
   const updateSurfaceMesh = useCallback(async () => {
     const renderer = rendererRef.current;
@@ -150,6 +194,30 @@ export function useViewportMeshes({
       surfaceDepsRef.current = { roadRefs: newRoadRefs, junctionRefs: newJunctionRefs };
       surfaceColorModeRef.current = display.colorMode;
 
+      // Per-road deltas for the incremental upload path.
+      const removedRoadIds = [...prev.roadRefs.keys()].filter((id) => !newRoadRefs.has(id));
+      // The renderer's road registry is the single source of truth for whether
+      // the incremental layer is live. Consult it (not just our own ref) so that
+      // any out-of-band merged upload that disposed the registry — e.g. the
+      // geometry-edit drag preview, the SDK bridge, or a renderer re-mount —
+      // forces a full rebuild here instead of leaving most roads unbuilt.
+      const registryActive =
+        typeof renderer.hasRoadRegistry === 'function'
+          ? renderer.hasRoadRegistry()
+          : incrementalRoadsActiveRef.current;
+      // Rebuild every road when the colour mode changed (palette affects all roads)
+      // or when the incremental layer is not live (first solid frame / after a
+      // merged-path fallback or registry disposal). Otherwise only roads whose
+      // object reference changed.
+      const rebuildAllRoads = colorModeChanged || !registryActive;
+      const changedRoadIds = rebuildAllRoads
+        ? [...newRoadRefs.keys()]
+        : [...newRoadRefs].filter(([id, ref]) => prev.roadRefs.get(id) !== ref).map(([id]) => id);
+      // The per-road registry requires stable, unique, non-empty road ids.
+      const roadsUnique =
+        newRoadRefs.size === visibleProject.roads.length &&
+        visibleProject.roads.every((r) => typeof r.id === 'string' && r.id.length > 0);
+
       // Only regenerate layers that actually need updating (always generate for solid cache)
       const empty = Promise.resolve(new Float32Array(0));
 
@@ -168,15 +236,46 @@ export function useViewportMeshes({
         }
       }
 
-      // For road vertices: prefer the cached WASM fn (no JSON serialization) once the
-      // cache is authoritative. Falls back to full-serialization path otherwise.
-      const roadProm = needRoads
-        ? ((cacheReady && service.generateRoadVerticesCached)
-            ? service.generateRoadVerticesCached(TESS_MAX_STEP_M, display.colorMode).catch(() =>
-                service.generateRoadVertices(visibleProject, TESS_MAX_STEP_M, display.colorMode))
-            : service.generateRoadVertices(visibleProject, TESS_MAX_STEP_M, display.colorMode)
-          ).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); })
-        : empty;
+      // Incremental road upload requires: solid mode, renderer + service support.
+      // The WASM cache (read by the per-road generator) is only needed when roads
+      // actually have to be regenerated — see shouldUseIncrementalRoads.
+      const useIncrementalRoads = shouldUseIncrementalRoads({
+        isSolid: viewMode === 'solid',
+        supported:
+          typeof renderer.uploadRoadVerticesIncremental === 'function' &&
+          typeof service.generateSingleRoadSurfaceVerticesCached === 'function',
+        roadsUnique,
+        registryActive,
+        changedRoadCount: changedRoadIds.length,
+        cacheReady,
+      });
+
+      // Road geometry — two strategies:
+      //  • incremental: generate only the changed roads' surfaces (one buffer each)
+      //  • merged: regenerate the whole road layer into a single array (fallback path)
+      let perRoadVerts: Map<string, Float32Array> | null = null;
+      let roadProm: Promise<Float32Array> = empty;
+      if (useIncrementalRoads) {
+        const singleGen = service.generateSingleRoadSurfaceVerticesCached;
+        const built = await Promise.all(
+          changedRoadIds.map((id) =>
+            singleGen(id, TESS_MAX_STEP_M, display.colorMode)
+              .catch(() => new Float32Array(0))
+              .then((v) => [id, v] as const),
+          ),
+        );
+        perRoadVerts = new Map(built);
+      } else {
+        // For road vertices: prefer the cached WASM fn (no JSON serialization) once the
+        // cache is authoritative. Falls back to full-serialization path otherwise.
+        roadProm = needRoads
+          ? ((cacheReady && service.generateRoadVerticesCached)
+              ? service.generateRoadVerticesCached(TESS_MAX_STEP_M, display.colorMode).catch(() =>
+                  service.generateRoadVertices(visibleProject, TESS_MAX_STEP_M, display.colorMode))
+              : service.generateRoadVertices(visibleProject, TESS_MAX_STEP_M, display.colorMode)
+            ).catch((e) => { console.warn('[Viewport] generateRoadVertices failed:', e); return new Float32Array(0); })
+          : empty;
+      }
       const junctionProm = needJunctions
         ? service.generateJunctionVertices(visibleProject).catch((e) => { console.warn('[Viewport] generateJunctionVertices failed:', e); return new Float32Array(0); })
         : empty;
@@ -199,7 +298,9 @@ export function useViewportMeshes({
         roadProm, junctionProm, signalProm, objectProm, spriteProm,
       ]);
 
-      if (needRoads) cachedRoadVertsRef.current = roadVerts;
+      // In incremental mode road geometry lives in per-road GPU buffers, not in this
+      // merged CPU cache — leave it untouched so a later merged-path fallback rebuilds.
+      if (needRoads && !useIncrementalRoads) cachedRoadVertsRef.current = roadVerts;
       if (needJunctions) cachedJunctionVertsRef.current = junctionVerts;
       if (needSignals) cachedSignalVertsRef.current = signalVerts;
       if (needObjects) cachedObjectVertsRef.current = objectVerts;
@@ -244,24 +345,45 @@ export function useViewportMeshes({
         // Wire/sketch: no surface polygons, just preserve last frame for smooth transition
         renderer.uploadRoadVertices(new Float32Array(0), { preserveLastVertexDataOnEmpty: true });
         renderer.uploadJunctionVertices(new Float32Array(0));
+        // Leaving solid mode disposes the incremental registry — force a full
+        // rebuild on the next solid frame.
+        incrementalRoadsActiveRef.current = false;
       } else {
         // Junction fill is uploaded to its OWN layer (not merged into the road
         // surface buffer) so it can be drawn with the depth-biased pipeline,
         // avoiding z-fighting against the coplanar connecting-road surfaces in 3D.
         renderer.uploadJunctionVertices(cachedJunctionVertsRef.current);
 
-        let surfaceVerts = cachedRoadVertsRef.current;
-        // Always include signal polygons (tessellated arrows + diamond markers).
-        // Billboard sprites render at z_offset=3.5+ above road, no z-fighting.
+        // Signals + objects share the "extras" buffer, drawn after the road segments.
+        // Always include signal polygons (tessellated arrows + diamond markers);
+        // billboard sprites render at z_offset=3.5+ above road, no z-fighting.
+        let extras: Float32Array = new Float32Array(0);
         if (display.showSignals && cachedSignalVertsRef.current.length > 0) {
-          surfaceVerts = mergeFloat32Arrays(surfaceVerts, cachedSignalVertsRef.current);
+          extras = mergeFloat32Arrays(extras, cachedSignalVertsRef.current);
         }
-        // Object vertices (crosswalks, parking spaces, guardrails, etc.) stay as-is
+        // Object vertices (crosswalks, parking spaces, guardrails, etc.)
         if (display.showObjects && cachedObjectVertsRef.current.length > 0) {
-          surfaceVerts = mergeFloat32Arrays(surfaceVerts, cachedObjectVertsRef.current);
+          extras = mergeFloat32Arrays(extras, cachedObjectVertsRef.current);
         }
-        uploadedVertCount = surfaceVerts.length / 7;
-        renderer.uploadRoadVertices(surfaceVerts);
+
+        if (useIncrementalRoads && perRoadVerts) {
+          const rebuilt = new Map<string, Float32Array>();
+          for (const id of changedRoadIds) {
+            rebuilt.set(id, perRoadVerts.get(id) ?? new Float32Array(0));
+            uploadedVertCount += (perRoadVerts.get(id)?.length ?? 0) / 7;
+          }
+          renderer.uploadRoadVerticesIncremental({ rebuilt, removed: removedRoadIds, extras });
+          incrementalRoadsActiveRef.current = true;
+          uploadedVertCount += extras.length / 7;
+        } else {
+          let surfaceVerts = cachedRoadVertsRef.current;
+          if (extras.length > 0) {
+            surfaceVerts = mergeFloat32Arrays(surfaceVerts, extras);
+          }
+          uploadedVertCount = surfaceVerts.length / 7;
+          renderer.uploadRoadVertices(surfaceVerts);
+          incrementalRoadsActiveRef.current = false;
+        }
       }
       const tDone = performance.now();
       const anyRegenerated = needRoads || needJunctions || needSignals || needObjects;
@@ -381,6 +503,7 @@ export function useViewportMeshes({
     visibleProjectKeyRef.current = '';
     surfaceDepsRef.current = { roadRefs: new Map(), junctionRefs: new Map() };
     cachedRoadVertsRef.current = new Float32Array(0);
+    incrementalRoadsActiveRef.current = false;
     cachedJunctionVertsRef.current = new Float32Array(0);
     cachedSignalVertsRef.current = new Float32Array(0);
     cachedObjectVertsRef.current = new Float32Array(0);

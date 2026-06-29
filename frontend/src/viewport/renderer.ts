@@ -35,6 +35,14 @@ import { setupRendererInput } from './rendererInputHandler';
 import { renderFrame as renderFrameImpl, captureFrame as captureFrameImpl } from './rendererFrame';
 import type { RendererFrameInternals } from './rendererFrame';
 import { uploadMeshData, disposeMeshes, createDepthTexture, createMsaaTexture } from './rendererResources';
+import {
+  createRoadMeshRegistry,
+  applyRoadMeshUpdate,
+  disposeRoadMeshRegistry,
+  combineRegistryVertices,
+  type RoadMeshRegistry,
+  type RoadMeshIncrementalUpdate,
+} from './roadMeshRegistry';
 import { SpriteRenderer } from './spriteRenderer';
 import type { SpriteInstance, PaintInstance } from './spriteRenderer';
 import { TextureManager } from './textureManager';
@@ -67,6 +75,10 @@ export class ViewportRenderer {
 
   // Road meshes
   private meshes: RenderableMesh[] = [];
+  // When non-null, the road layer is managed incrementally (one GPU buffer per
+  // road) and `this.meshes` is a derived draw-list view owned by this registry.
+  // When null, the merged single-buffer path (uploadRoadVertices) owns `this.meshes`.
+  private roadRegistry: RoadMeshRegistry | null = null;
   // Junction fill meshes (rendered just above road surface with a depth-biased,
   // non-depth-writing pipeline so the translucent fill never z-fights the road
   // surface and never occludes lane lines / objects / signals drawn afterwards).
@@ -265,6 +277,14 @@ export class ViewportRenderer {
   ): void {
     const preserveLastVertexDataOnEmpty = options?.preserveLastVertexDataOnEmpty === true;
 
+    // Leaving incremental mode: the registry owns the road buffers, so dispose
+    // them here and let the merged path rebuild `this.meshes` from scratch.
+    if (this.roadRegistry) {
+      disposeRoadMeshRegistry(this.roadRegistry);
+      this.roadRegistry = null;
+      this.meshes = [];
+    }
+
     if (vertexData.length === 0) {
       if (this.meshes.length > 0) this.markSceneDirty();
       for (const m of this.meshes) { m.vertexBuffer.destroy(); }
@@ -299,6 +319,32 @@ export class ViewportRenderer {
     if (this.pendingFitToVertices) {
       this.pendingFitToVertices = false;
       this.fitToVertices(vertexData);
+    }
+  }
+
+  /**
+   * Incrementally upload road-surface geometry, rebuilding only changed roads.
+   *
+   * Each road owns a dedicated GPU buffer; unchanged roads keep their buffer
+   * untouched (no re-upload, no re-tessellation). Signals + objects are merged
+   * into the `extras` buffer drawn after the roads. Switches the road layer into
+   * incremental mode; `uploadRoadVertices` switches it back to the merged path.
+   */
+  uploadRoadVerticesIncremental(update: RoadMeshIncrementalUpdate): void {
+    if (!this.roadRegistry) {
+      // Entering incremental mode: discard the merged single buffer (if any).
+      disposeMeshes(this.meshes);
+      this.roadRegistry = createRoadMeshRegistry();
+    }
+    this.meshes = applyRoadMeshUpdate(this.device, this.roadRegistry, update);
+    this.markSceneDirty();
+
+    // Auto-fit on file open: combine the freshly-built segments for the bounds.
+    if (this.pendingFitToVertices && this.meshes.length > 0) {
+      this.pendingFitToVertices = false;
+      const combined = combineRegistryVertices(this.roadRegistry);
+      this.lastVertexData = combined;
+      this.fitToVertices(combined);
     }
   }
 
@@ -386,6 +432,28 @@ export class ViewportRenderer {
   setViewMode(_mode: 'solid' | 'wire' | 'sketch'): void {
     this.markSceneDirty();
     this.cameraController.markDirty();
+  }
+
+  /**
+   * Whether the road layer is currently driven by the incremental per-road
+   * registry. The single source of truth for incremental mode lives here, so
+   * callers must consult this (not their own flag) to decide whether a full
+   * rebuild is required — any out-of-band merged `uploadRoadVertices` call
+   * disposes the registry, and the next incremental upload must repopulate
+   * every road rather than only the changed ones.
+   */
+  hasRoadRegistry(): boolean {
+    return this.roadRegistry !== null;
+  }
+
+  /**
+   * Total number of road-surface GPU buffers currently uploaded. Covers both
+   * the merged path and the incremental per-road registry (whose draw list is
+   * mirrored into `this.meshes`). Exposed for E2E verification that the road
+   * layer renders on the first solid frame without a wire→solid toggle.
+   */
+  getRoadMeshCount(): number {
+    return this.meshes.length;
   }
 
   /** Set the WebGPU clear (background) color. Pass `a = 0` for a transparent
@@ -523,8 +591,14 @@ export class ViewportRenderer {
 
   /** Compute bounding box of vertex data and move camera to see all geometry. */
   fitToVertices(vertexData?: Float32Array): void {
-    const data = vertexData ?? this.lastVertexData;
-    if (!data) return;
+    // In incremental mode `lastVertexData` may be stale, so recombine the
+    // registry's current road + extras geometry for an accurate bound.
+    let data = vertexData;
+    if (!data && this.roadRegistry) {
+      data = combineRegistryVertices(this.roadRegistry);
+    }
+    data = data ?? this.lastVertexData ?? undefined;
+    if (!data || data.length === 0) return;
     this.cameraController.fitToVertices(data);
   }
 
@@ -643,9 +717,18 @@ export class ViewportRenderer {
   }
 
   /** Clear the vertex data cache so the next uploadRoadVertices triggers auto-fit.
-   * Call this when switching to a completely new project. */
+   * Call this when switching to a completely new project. Also tears down the
+   * incremental per-road registry and road meshes so stale roads from the
+   * previous project cannot linger (the next upload rebuilds from scratch). */
   clearVertexCache(): void {
     this.lastVertexData = null;
+    if (this.roadRegistry) {
+      disposeRoadMeshRegistry(this.roadRegistry);
+      this.roadRegistry = null;
+    }
+    disposeMeshes(this.meshes);
+    this.meshes = [];
+    this.markSceneDirty();
   }
 
   /** Dispose all GPU resources. */
@@ -656,6 +739,11 @@ export class ViewportRenderer {
     this.flyKeyboard.detach();
     this.mouseControlsCleanup?.();
     this.mouseControlsCleanup = null;
+    if (this.roadRegistry) {
+      disposeRoadMeshRegistry(this.roadRegistry);
+      this.roadRegistry = null;
+      this.meshes = [];
+    }
     disposeMeshes(this.meshes);
     disposeMeshes(this.junctionMeshes);
     disposeMeshes(this.laneLineMeshes);
