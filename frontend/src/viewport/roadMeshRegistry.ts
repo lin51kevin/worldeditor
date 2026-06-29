@@ -32,6 +32,13 @@ export interface RoadMeshRegistry {
   extras: RoadMeshSegment | null;
 }
 
+export interface RoadMeshRegistryStats {
+  roadCount: number;
+  roadVertexCount: number;
+  extrasVertexCount: number;
+  totalVertexCount: number;
+}
+
 /** An incremental change to apply to a {@link RoadMeshRegistry}. */
 export interface RoadMeshIncrementalUpdate {
   /** road id → new vertices. An empty array drops that road. */
@@ -112,6 +119,22 @@ export function collectRoadMeshes(registry: RoadMeshRegistry): RenderableMesh[] 
     meshes.push({ vertexBuffer: registry.extras.vertexBuffer, vertexCount: registry.extras.vertexCount });
   }
   return meshes;
+}
+
+/** Return road/extras counts separately so diagnostics don't confuse extras
+ *  with road segments. */
+export function getRoadMeshRegistryStats(registry: RoadMeshRegistry): RoadMeshRegistryStats {
+  let roadVertexCount = 0;
+  for (const segment of registry.segments.values()) {
+    roadVertexCount += segment.vertexCount;
+  }
+  const extrasVertexCount = registry.extras?.vertexCount ?? 0;
+  return {
+    roadCount: registry.segments.size,
+    roadVertexCount,
+    extrasVertexCount,
+    totalVertexCount: roadVertexCount + extrasVertexCount,
+  };
 }
 
 /** Concatenate all CPU-side vertices (segments then extras) for zoom-to-fit bounds. */

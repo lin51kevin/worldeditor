@@ -1,11 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Project } from '../services/platform';
 import { getPlatformService } from '../services';
 import { showContextMenu } from '../services/contextMenu';
 import { useProjectStore } from '../stores/projectStore';
 import { DEFAULT_DISPLAY, useViewportStore } from '../stores/viewportStore';
-import { usePluginContribStore } from '../stores/pluginContribStore';
 import { Viewport } from './Viewport';
 import {
   createPlatformMock,
@@ -188,7 +186,10 @@ describe('Viewport', () => {
     await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
     await waitFor(() => expect(rendererMocks.start).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(platform.generateRoadVerticesCached).toHaveBeenCalledWith(5, 'byLaneType'));
-    await waitFor(() => expect(rendererMocks.uploadRoadVertices).toHaveBeenCalledWith(vertices));
+    await waitFor(() => expect(rendererMocks.uploadRoadVertices).toHaveBeenCalledWith(vertices, {
+      roadVertexCount: vertices.length / 7,
+      extrasVertexCount: 0,
+    }));
 
     const resizeObserver = resizeObservers[0]!;
 
@@ -241,7 +242,10 @@ describe('Viewport', () => {
 
     await waitFor(() => expect(platform.generateRoadVerticesCached).toHaveBeenCalled());
     // uploadRoadVertices is still called — but with an empty array; renderer is responsible for no-op
-    await waitFor(() => expect(rendererMocks.uploadRoadVertices).toHaveBeenCalledWith(new Float32Array([])));
+    await waitFor(() => expect(rendererMocks.uploadRoadVertices).toHaveBeenCalledWith(new Float32Array([]), {
+      roadVertexCount: 0,
+      extrasVertexCount: 0,
+    }));
   });
 
   it('selects a road on plain left click', async () => {

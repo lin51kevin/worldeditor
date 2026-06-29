@@ -40,6 +40,7 @@ import {
   applyRoadMeshUpdate,
   disposeRoadMeshRegistry,
   combineRegistryVertices,
+  getRoadMeshRegistryStats,
   type RoadMeshRegistry,
   type RoadMeshIncrementalUpdate,
 } from './roadMeshRegistry';
@@ -47,6 +48,20 @@ import { SpriteRenderer } from './spriteRenderer';
 import type { SpriteInstance, PaintInstance } from './spriteRenderer';
 import { TextureManager } from './textureManager';
 import { initAssetResolver } from '../utils/assetUrl';
+
+export interface RoadSurfaceDebugState {
+  mode: 'merged' | 'registry';
+  hasRoadRegistry: boolean;
+  meshCount: number;
+  mergedVertexCount: number;
+  mergedRoadVertexCount: number;
+  mergedExtrasVertexCount: number;
+  registryRoadCount: number;
+  registryRoadVertexCount: number;
+  registryExtrasVertexCount: number;
+  totalVertexCount: number;
+  lastVertexDataLength: number;
+}
 
 export class ViewportRenderer {
   private device!: GPUDevice;
@@ -75,6 +90,8 @@ export class ViewportRenderer {
 
   // Road meshes
   private meshes: RenderableMesh[] = [];
+  private mergedRoadVertexCount = 0;
+  private mergedExtrasVertexCount = 0;
   // When non-null, the road layer is managed incrementally (one GPU buffer per
   // road) and `this.meshes` is a derived draw-list view owned by this registry.
   // When null, the merged single-buffer path (uploadRoadVertices) owns `this.meshes`.
@@ -273,7 +290,11 @@ export class ViewportRenderer {
 
   uploadRoadVertices(
     vertexData: Float32Array,
-    options?: { preserveLastVertexDataOnEmpty?: boolean },
+    options?: {
+      preserveLastVertexDataOnEmpty?: boolean;
+      roadVertexCount?: number;
+      extrasVertexCount?: number;
+    },
   ): void {
     const preserveLastVertexDataOnEmpty = options?.preserveLastVertexDataOnEmpty === true;
 
@@ -289,6 +310,8 @@ export class ViewportRenderer {
       if (this.meshes.length > 0) this.markSceneDirty();
       for (const m of this.meshes) { m.vertexBuffer.destroy(); }
       this.meshes = [];
+      this.mergedRoadVertexCount = options?.roadVertexCount ?? 0;
+      this.mergedExtrasVertexCount = options?.extrasVertexCount ?? 0;
       if (preserveLastVertexDataOnEmpty) {
         // Keep last non-empty geometry so switching wire/sketch -> solid does not
         // trigger an unintended auto-fit reset.
@@ -310,6 +333,9 @@ export class ViewportRenderer {
     }
 
     uploadMeshData(this.device, this.meshes, vertexData);
+  const totalVertexCount = vertexData.length / 7;
+  this.mergedRoadVertexCount = options?.roadVertexCount ?? totalVertexCount;
+  this.mergedExtrasVertexCount = options?.extrasVertexCount ?? 0;
     this.markSceneDirty();
 
     // Store for later zoomToFit calls
@@ -335,6 +361,8 @@ export class ViewportRenderer {
       // Entering incremental mode: discard the merged single buffer (if any).
       disposeMeshes(this.meshes);
       this.roadRegistry = createRoadMeshRegistry();
+      this.mergedRoadVertexCount = 0;
+      this.mergedExtrasVertexCount = 0;
     }
     this.meshes = applyRoadMeshUpdate(this.device, this.roadRegistry, update);
     this.markSceneDirty();
@@ -454,6 +482,46 @@ export class ViewportRenderer {
    */
   getRoadMeshCount(): number {
     return this.meshes.length;
+  }
+
+  /** Detailed road-surface upload state for debugging solid-surface rendering.
+   *  In merged mode `meshCount === 1` is expected even for hundreds of roads;
+   *  use `totalVertexCount` / `mergedVertexCount` to tell whether surfaces were
+   *  actually uploaded. In registry mode, `registryRoadCount` excludes extras.
+   */
+  getRoadSurfaceDebugState(): RoadSurfaceDebugState {
+    const lastVertexDataLength = this.lastVertexData?.length ?? 0;
+    if (!this.roadRegistry) {
+      const mergedVertexCount = this.meshes.reduce((total, mesh) => total + mesh.vertexCount, 0);
+      return {
+        mode: 'merged',
+        hasRoadRegistry: false,
+        meshCount: this.meshes.length,
+        mergedVertexCount,
+        mergedRoadVertexCount: this.mergedRoadVertexCount,
+        mergedExtrasVertexCount: this.mergedExtrasVertexCount,
+        registryRoadCount: 0,
+        registryRoadVertexCount: 0,
+        registryExtrasVertexCount: 0,
+        totalVertexCount: mergedVertexCount,
+        lastVertexDataLength,
+      };
+    }
+
+    const registryStats = getRoadMeshRegistryStats(this.roadRegistry);
+    return {
+      mode: 'registry',
+      hasRoadRegistry: true,
+      meshCount: this.meshes.length,
+      mergedVertexCount: 0,
+      mergedRoadVertexCount: 0,
+      mergedExtrasVertexCount: 0,
+      registryRoadCount: registryStats.roadCount,
+      registryRoadVertexCount: registryStats.roadVertexCount,
+      registryExtrasVertexCount: registryStats.extrasVertexCount,
+      totalVertexCount: registryStats.totalVertexCount,
+      lastVertexDataLength,
+    };
   }
 
   /** Set the WebGPU clear (background) color. Pass `a = 0` for a transparent
@@ -728,6 +796,8 @@ export class ViewportRenderer {
     }
     disposeMeshes(this.meshes);
     this.meshes = [];
+    this.mergedRoadVertexCount = 0;
+    this.mergedExtrasVertexCount = 0;
     this.markSceneDirty();
   }
 
@@ -744,6 +814,8 @@ export class ViewportRenderer {
       this.roadRegistry = null;
       this.meshes = [];
     }
+    this.mergedRoadVertexCount = 0;
+    this.mergedExtrasVertexCount = 0;
     disposeMeshes(this.meshes);
     disposeMeshes(this.junctionMeshes);
     disposeMeshes(this.laneLineMeshes);
@@ -812,12 +884,13 @@ export class ViewportRenderer {
   private manifestReady: Promise<void> = Promise.resolve();
 
   private initSpriteRenderer(): void {
-    this.textureManager = new TextureManager(this.device);
-    this.spriteRenderer = new SpriteRenderer(this.device, this.textureManager);
+    const textureManager = new TextureManager(this.device);
+    this.textureManager = textureManager;
+    this.spriteRenderer = new SpriteRenderer(this.device, textureManager);
     this.spriteRenderer.init(this.format);
     // Ensure asset URL resolver is ready before loading manifest
     this.manifestReady = initAssetResolver().then(() =>
-      this.textureManager!.loadManifest()
+      textureManager.loadManifest()
     ).then(() => {
       console.info('[Renderer] Texture manifest loaded');
     });

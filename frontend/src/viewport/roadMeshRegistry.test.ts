@@ -5,6 +5,7 @@ import {
   combineRegistryVertices,
   createRoadMeshRegistry,
   disposeRoadMeshRegistry,
+  getRoadMeshRegistryStats,
 } from './roadMeshRegistry';
 
 interface MockBuffer {
@@ -194,6 +195,28 @@ describe('roadMeshRegistry', () => {
     expect(combined[0]).toBe(1);
     expect(combined[7]).toBe(2);
     expect(combined[14]).toBe(3);
+  });
+
+  it('reports road and extras counts separately for diagnostics', () => {
+    const { device } = makeMockDevice();
+    const registry = createRoadMeshRegistry();
+
+    const meshes = applyRoadMeshUpdate(device, registry, {
+      rebuilt: new Map([
+        ['road-0', verts(2, 1)],
+        ['road-1', verts(4, 2)],
+      ]),
+      removed: [],
+      extras: verts(3, 3),
+    });
+
+    expect(meshes).toHaveLength(3);
+    expect(getRoadMeshRegistryStats(registry)).toEqual({
+      roadCount: 2,
+      roadVertexCount: 6,
+      extrasVertexCount: 3,
+      totalVertexCount: 9,
+    });
   });
 
   it('disposes all buffers and clears the registry', () => {

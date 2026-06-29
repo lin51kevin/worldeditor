@@ -53,7 +53,7 @@ describe('shouldUseIncrementalRoads', () => {
 });
 
 describe('shouldRebuildAllRoads', () => {
-  const base = { colorModeChanged: false, registryActive: true, registryMeshCount: 598, roadsTotal: 598 };
+  const base = { colorModeChanged: false, registryActive: true, registryRoadCount: 598, roadsTotal: 598 };
 
   it('rebuilds all roads when the colour mode changed', () => {
     expect(shouldRebuildAllRoads({ ...base, colorModeChanged: true })).toBe(true);
@@ -68,7 +68,13 @@ describe('shouldRebuildAllRoads', () => {
   // registry covering fewer roads than exist. Force a full rebuild so it
   // converges instead of leaving most roads permanently unbuilt.
   it('rebuilds all roads when the registry only partially covers the roads', () => {
-    expect(shouldRebuildAllRoads({ ...base, registryMeshCount: 1, roadsTotal: 598 })).toBe(true);
+    expect(shouldRebuildAllRoads({ ...base, registryRoadCount: 1, roadsTotal: 598 })).toBe(true);
+  });
+
+  // Extras (signals/objects) are part of the draw list but not road buffers;
+  // they must not affect road-registry completeness.
+  it('uses registry road count rather than total draw-list mesh count', () => {
+    expect(shouldRebuildAllRoads({ ...base, registryRoadCount: 598, roadsTotal: 598 })).toBe(false);
   });
 
   it('rebuilds only changed roads when the registry is complete', () => {

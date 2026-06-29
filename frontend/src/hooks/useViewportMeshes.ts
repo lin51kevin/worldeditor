@@ -29,6 +29,31 @@ import type { Project } from '../services/platform';
  */
 const TESS_MAX_STEP_M = 5.0;
 
+type RoadSurfaceDebugState = ReturnType<ViewportRenderer['getRoadSurfaceDebugState']>;
+
+function readRoadSurfaceDebugState(renderer: ViewportRenderer): RoadSurfaceDebugState {
+  if (typeof renderer.getRoadSurfaceDebugState === 'function') {
+    return renderer.getRoadSurfaceDebugState();
+  }
+
+  const hasRoadRegistry =
+    typeof renderer.hasRoadRegistry === 'function' ? renderer.hasRoadRegistry() : false;
+  const meshCount = typeof renderer.getRoadMeshCount === 'function' ? renderer.getRoadMeshCount() : 0;
+  return {
+    mode: hasRoadRegistry ? 'registry' : 'merged',
+    hasRoadRegistry,
+    meshCount,
+    mergedVertexCount: 0,
+    mergedRoadVertexCount: 0,
+    mergedExtrasVertexCount: 0,
+    registryRoadCount: hasRoadRegistry ? meshCount : 0,
+    registryRoadVertexCount: 0,
+    registryExtrasVertexCount: 0,
+    totalVertexCount: 0,
+    lastVertexDataLength: 0,
+  };
+}
+
 /**
  * Decide whether the solid-mode road layer should use the incremental per-road
  * upload path (vs the merged single-buffer fallback).
@@ -81,13 +106,13 @@ export function shouldUseIncrementalRoads(params: {
 export function shouldRebuildAllRoads(params: {
   colorModeChanged: boolean;
   registryActive: boolean;
-  registryMeshCount: number;
+  registryRoadCount: number;
   roadsTotal: number;
 }): boolean {
-  const { colorModeChanged, registryActive, registryMeshCount, roadsTotal } = params;
+  const { colorModeChanged, registryActive, registryRoadCount, roadsTotal } = params;
   if (colorModeChanged) return true;
   if (!registryActive) return true;
-  return registryMeshCount !== roadsTotal;
+  return registryRoadCount !== roadsTotal;
 }
 
 interface UseViewportMeshesParams {
@@ -214,13 +239,12 @@ export function useViewportMeshes({
           ? renderer.hasRoadRegistry()
           : incrementalRoadsActiveRef.current;
       const roadsTotal = visibleProject.roads.length;
-      // Live registry buffer count — used to detect a partial seed (e.g. roads
-      // still streaming in when the registry first seeded). When the per-road
-      // buffers don't cover every road, force a full rebuild so a mid-load seed
-      // converges instead of leaving most roads permanently unbuilt.
-      const registryMeshCount =
-        typeof renderer.getRoadMeshCount === 'function' ? renderer.getRoadMeshCount() : 0;
-      const registryIncomplete = registryActive && registryMeshCount !== roadsTotal;
+      // Live registry road count — used to detect a partial seed (e.g. roads
+      // still streaming in when the registry first seeded). This deliberately
+      // excludes the extras mesh; signals/objects must not make the registry
+      // look more complete than its road buffers really are.
+      const registryRoadCount = readRoadSurfaceDebugState(renderer).registryRoadCount;
+      const registryIncomplete = registryActive && registryRoadCount !== roadsTotal;
 
       // Granular invalidation:
       // - viewMode change does NOT require WASM regeneration (surfaces cached from solid mode)
@@ -244,7 +268,7 @@ export function useViewportMeshes({
       const rebuildAllRoads = shouldRebuildAllRoads({
         colorModeChanged,
         registryActive,
-        registryMeshCount,
+        registryRoadCount,
         roadsTotal,
       });
       const changedRoadIds = rebuildAllRoads
@@ -345,6 +369,9 @@ export function useViewportMeshes({
       // Merge visible layers — in non-solid mode, surfaces are hidden (not cleared)
       const tWasm = performance.now();
       let uploadedVertCount = 0;
+      let roadSurfaceVertCount = 0;
+      let extrasVertCount = 0;
+      let roadUploadPath: 'hidden' | 'incremental' | 'incremental-empty-merged-fallback' | 'merged' = 'hidden';
 
       // Upload sprite data for textured billboard rendering
       if (spriteData && spriteData.sprites.length > 0 && display.showSignals) {
@@ -402,6 +429,7 @@ export function useViewportMeshes({
         if (display.showObjects && cachedObjectVertsRef.current.length > 0) {
           extras = mergeFloat32Arrays(extras, cachedObjectVertsRef.current);
         }
+        extrasVertCount = extras.length / 7;
 
         if (useIncrementalRoads && perRoadVerts) {
           const rebuilt = new Map<string, Float32Array>();
@@ -415,36 +443,55 @@ export function useViewportMeshes({
           // cached single-road generator returned empty) would leave the solid
           // view blank. Fall back to the merged path so roads always render.
           if (rebuildAllRoads && perRoadTotal === 0 && roadsTotal > 0) {
+            roadUploadPath = 'incremental-empty-merged-fallback';
             const merged = cacheReady && service.generateRoadVerticesCached
               ? await service.generateRoadVerticesCached(TESS_MAX_STEP_M, display.colorMode).catch(() => new Float32Array(0))
               : new Float32Array(0);
             let surfaceVerts = merged.length > 0 ? merged : cachedRoadVertsRef.current;
             if (extras.length > 0) surfaceVerts = mergeFloat32Arrays(surfaceVerts, extras);
             cachedRoadVertsRef.current = merged.length > 0 ? merged : cachedRoadVertsRef.current;
+            roadSurfaceVertCount = (merged.length > 0 ? merged.length : cachedRoadVertsRef.current.length) / 7;
             uploadedVertCount = surfaceVerts.length / 7;
-            renderer.uploadRoadVertices(surfaceVerts);
+            renderer.uploadRoadVertices(surfaceVerts, {
+              roadVertexCount: roadSurfaceVertCount,
+              extrasVertexCount: extrasVertCount,
+            });
             incrementalRoadsActiveRef.current = false;
           } else {
+            roadUploadPath = 'incremental';
+            roadSurfaceVertCount = perRoadTotal / 7;
             renderer.uploadRoadVerticesIncremental({ rebuilt, removed: removedRoadIds, extras });
             incrementalRoadsActiveRef.current = true;
             uploadedVertCount += perRoadTotal / 7 + extras.length / 7;
           }
         } else {
+          roadUploadPath = 'merged';
           let surfaceVerts = cachedRoadVertsRef.current;
           if (extras.length > 0) {
             surfaceVerts = mergeFloat32Arrays(surfaceVerts, extras);
           }
+          roadSurfaceVertCount = cachedRoadVertsRef.current.length / 7;
           uploadedVertCount = surfaceVerts.length / 7;
-          renderer.uploadRoadVertices(surfaceVerts);
+          renderer.uploadRoadVertices(surfaceVerts, {
+            roadVertexCount: roadSurfaceVertCount,
+            extrasVertexCount: extrasVertCount,
+          });
           incrementalRoadsActiveRef.current = false;
         }
       }
+      const roadDebug = readRoadSurfaceDebugState(renderer);
       const tDone = performance.now();
       const anyRegenerated = needRoads || needJunctions || needSignals || needObjects;
       console.info(
         `[Viewport:perf] updateSurfaceMesh total=${(tDone - tStart).toFixed(1)}ms | ` +
         `service=${(tService - tStart).toFixed(1)} wasm=${(tWasm - tService).toFixed(1)} ` +
-        `upload=${(tDone - tWasm).toFixed(1)} roads=${visibleProject.roads.length} verts=${uploadedVertCount}` +
+        `upload=${(tDone - tWasm).toFixed(1)} mode=${viewMode} path=${roadUploadPath} ` +
+        `roads=${visibleProject.roads.length} roadSurfaceVerts=${roadSurfaceVertCount} extras=${extrasVertCount} verts=${uploadedVertCount} ` +
+        `gpuMode=${roadDebug.mode} gpuRoadVerts=${roadDebug.mode === 'merged' ? roadDebug.mergedRoadVertexCount : roadDebug.registryRoadVertexCount} ` +
+        `gpuExtras=${roadDebug.mode === 'merged' ? roadDebug.mergedExtrasVertexCount : roadDebug.registryExtrasVertexCount} ` +
+        `gpuTotal=${roadDebug.totalVertexCount} mesh=${roadDebug.meshCount} registryRoads=${roadDebug.registryRoadCount} ` +
+        `inc=${useIncrementalRoads ? 1 : 0} unique=${roadsUnique ? 1 : 0} rebuildAll=${rebuildAllRoads ? 1 : 0} ` +
+        `changed=${changedRoadIds.length} cache=${cacheReady ? 1 : 0}` +
         (anyRegenerated ? ` [regen: R=${needRoads ? 1 : 0} J=${needJunctions ? 1 : 0} S=${needSignals ? 1 : 0} O=${needObjects ? 1 : 0}]` : ' [cached-merge]'),
       );
     } catch (err) {
