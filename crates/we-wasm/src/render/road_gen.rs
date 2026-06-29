@@ -89,11 +89,16 @@ pub(super) fn build_road_surface_vertices(
     }
 
     let mut road_verts: Vec<[f32; 7]> = Vec::new();
+    let mut visible_section_count = 0usize;
+    let mut surface_lane_count = 0usize;
+    let mut visible_surface_lane_count = 0usize;
 
     for section in &road.lane_sections {
         if section.render_hidden {
             continue;
         }
+        visible_section_count += 1;
+        surface_lane_count += section.left.len() + section.right.len();
 
         let section_end_s = road
             .lane_sections
@@ -117,6 +122,7 @@ pub(super) fn build_road_surface_vertices(
         let mut right_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
         for lane in &right_sorted {
             if !lane.render_hidden {
+                visible_surface_lane_count += 1;
                 let color = select_lane_color(color_mode, lane.lane_type, road_idx);
                 road_verts.extend(gen_lane_strip(
                     &section_pts,
@@ -142,6 +148,7 @@ pub(super) fn build_road_surface_vertices(
         let mut left_prev_widths: Vec<&[we_core::model::LaneWidth]> = Vec::new();
         for lane in &left_sorted {
             if !lane.render_hidden {
+                visible_surface_lane_count += 1;
                 let color = select_lane_color(color_mode, lane.lane_type, road_idx);
                 road_verts.extend(gen_lane_strip(
                     &section_pts,
@@ -163,10 +170,13 @@ pub(super) fn build_road_surface_vertices(
     }
 
     // Fall back to default gray ribbon when no surface was produced (no lane
-    // sections, or sections whose lanes all resolve to ~zero width). Without
-    // this, such roads render only their centerline and the solid surface is
-    // blank — so always seed a visible ribbon when the lane strips are empty.
-    if road_verts.is_empty() {
+    // sections, visible sections with no surface lanes, or visible lanes whose
+    // widths all resolve to ~zero). Do NOT fall back when lanes/sections are
+    // intentionally hidden by display filters; hidden lanes must stay hidden.
+    let should_fallback_to_ribbon = road.lane_sections.is_empty()
+        || (visible_section_count > 0 && surface_lane_count == 0)
+        || visible_surface_lane_count > 0;
+    if road_verts.is_empty() && should_fallback_to_ribbon {
         let ribbon_color = match color_mode {
             "single" => [0.45f32, 0.45, 0.45, 1.0],
             "byRoad" => road_hue_color(road_idx),
@@ -585,12 +595,131 @@ mod tests {
             right: Vec::new(),
         }];
 
-        let project = Project { roads: vec![road], ..Project::default() };
+        let project = Project {
+            roads: vec![road],
+            ..Project::default()
+        };
         let json = serde_json::to_string(&project).unwrap();
         crate::picking::set_project_cache(&json).unwrap();
 
         let verts =
             generate_single_road_surface_vertices_cached("road-0", 2.0, "byLaneType").unwrap();
-        assert!(!verts.is_empty(), "no-lane road should fall back to a visible ribbon");
+        assert!(
+            !verts.is_empty(),
+            "no-lane road should fall back to a visible ribbon"
+        );
+    }
+
+    #[test]
+    fn test_road_with_zero_width_lanes_gets_ribbon() {
+        use we_core::model::{
+            Geometry, GeometryType, Lane, LaneSection, LaneType, LaneWidth, Project, Road,
+        };
+
+        let zero_width = vec![LaneWidth {
+            s_offset: 0.0,
+            a: 0.0,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }];
+        let mut road = Road::from_centerline(
+            "road-0",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 20.0,
+                geo_type: GeometryType::Line,
+            }],
+        );
+        road.lane_sections = vec![LaneSection {
+            s: 0.0,
+            single_side: false,
+            render_hidden: false,
+            left: Vec::new(),
+            center: Vec::new(),
+            right: vec![Lane {
+                id: -1,
+                lane_type: LaneType::Driving,
+                level: 0,
+                render_hidden: false,
+                link: None,
+                width: zero_width,
+                borders: Vec::new(),
+                road_marks: Vec::new(),
+            }],
+        }];
+
+        let project = Project {
+            roads: vec![road],
+            ..Project::default()
+        };
+        let json = serde_json::to_string(&project).unwrap();
+        crate::picking::set_project_cache(&json).unwrap();
+
+        let verts =
+            generate_single_road_surface_vertices_cached("road-0", 2.0, "byLaneType").unwrap();
+        assert!(
+            !verts.is_empty(),
+            "zero-width lanes should fall back to a visible ribbon"
+        );
+    }
+
+    #[test]
+    fn test_hidden_lanes_do_not_get_fallback_ribbon() {
+        use we_core::model::{
+            Geometry, GeometryType, Lane, LaneSection, LaneType, LaneWidth, Project, Road,
+        };
+
+        let mut road = Road::from_centerline(
+            "road-0",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 20.0,
+                geo_type: GeometryType::Line,
+            }],
+        );
+        road.lane_sections = vec![LaneSection {
+            s: 0.0,
+            single_side: false,
+            render_hidden: false,
+            left: Vec::new(),
+            center: Vec::new(),
+            right: vec![Lane {
+                id: -1,
+                lane_type: LaneType::Driving,
+                level: 0,
+                render_hidden: true,
+                link: None,
+                width: vec![LaneWidth {
+                    s_offset: 0.0,
+                    a: 3.5,
+                    b: 0.0,
+                    c: 0.0,
+                    d: 0.0,
+                }],
+                borders: Vec::new(),
+                road_marks: Vec::new(),
+            }],
+        }];
+
+        let project = Project {
+            roads: vec![road],
+            ..Project::default()
+        };
+        let json = serde_json::to_string(&project).unwrap();
+        crate::picking::set_project_cache(&json).unwrap();
+
+        let verts =
+            generate_single_road_surface_vertices_cached("road-0", 2.0, "byLaneType").unwrap();
+        assert!(
+            verts.is_empty(),
+            "hidden lanes should stay hidden, not become fallback ribbons"
+        );
     }
 }

@@ -7,9 +7,10 @@
  *      buffers on the first frame).
  *   2. Some GeoZ projects rendered only junctions, no road surfaces.
  *
- * Both are checked directly against the live renderer's road-surface buffer
- * count (`getRoadMeshCount`) so a green result means real GPU buffers exist —
- * no manual eyeballing, no wire→solid toggle.
+ * Both are checked directly against the live renderer's road-surface vertex
+ * counts. In merged mode all roads are intentionally packed into one GPU
+ * buffer, so `getRoadMeshCount() === 1` can be healthy; the invariant is that
+ * actual road-surface vertices exist on the first solid frame.
  */
 import { test, expect, readXodrFixture, openXodrInBrowser, injectProject } from './fixtures';
 import type { Project } from '../src/services/platform';
@@ -22,19 +23,24 @@ async function isSolidMode(page: import('@playwright/test').Page): Promise<boole
   });
 }
 
-/** Returns the live renderer's road-surface mesh count, or -1 if no renderer. */
-async function roadMeshCount(page: import('@playwright/test').Page): Promise<number> {
+/** Returns the live renderer's road-surface vertex count, or -1 if no renderer. */
+async function roadSurfaceVertexCount(page: import('@playwright/test').Page): Promise<number> {
   return page.evaluate(() => {
     const get = (window as Record<string, any>).__getViewportRenderer;
     const r = get?.();
-    return r && typeof r.getRoadMeshCount === 'function' ? r.getRoadMeshCount() : -1;
+    if (!r) return -1;
+    if (typeof r.getRoadSurfaceDebugState === 'function') {
+      const state = r.getRoadSurfaceDebugState();
+      return state.mode === 'registry' ? state.registryRoadVertexCount : state.mergedRoadVertexCount;
+    }
+    return typeof r.getRoadMeshCount === 'function' ? r.getRoadMeshCount() : -1;
   });
 }
 
 /** Skip if WebGPU is unavailable (renderer never initializes). */
 async function skipIfNoRenderer(page: import('@playwright/test').Page): Promise<boolean> {
   await page.waitForFunction(() => !!(window as any).__getViewportRenderer, { timeout: 10000 });
-  return (await roadMeshCount(page)) === -1
+  return (await roadSurfaceVertexCount(page)) === -1
     ? ((await page.locator('.viewport-overlay').isVisible()) ? true : false)
     : false;
 }
@@ -69,7 +75,7 @@ test.describe('Solid-mode initial render', () => {
 
     expect(await isSolidMode(page)).toBe(true);
     // Surfaces must appear on the first solid frame — NO wire→solid toggle.
-    await expect.poll(() => roadMeshCount(page), { timeout: 8000 }).toBeGreaterThan(0);
+    await expect.poll(() => roadSurfaceVertexCount(page), { timeout: 8000 }).toBeGreaterThan(0);
   });
 
   test('geoz renders road surfaces, not only junctions (bug2)', async ({ editorPage: page }) => {
@@ -77,6 +83,6 @@ test.describe('Solid-mode initial render', () => {
     await injectProject(page, makeGeozProject());
 
     expect(await isSolidMode(page)).toBe(true);
-    await expect.poll(() => roadMeshCount(page), { timeout: 8000 }).toBeGreaterThan(0);
+    await expect.poll(() => roadSurfaceVertexCount(page), { timeout: 8000 }).toBeGreaterThan(0);
   });
 });

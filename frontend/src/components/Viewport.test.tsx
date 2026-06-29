@@ -17,6 +17,7 @@ const rendererMocks = vi.hoisted(() => ({
   init: vi.fn(),
   start: vi.fn(),
   uploadRoadVertices: vi.fn(),
+  uploadRoadVerticesIncremental: vi.fn(),
   uploadJunctionVertices: vi.fn(),
   uploadLaneLineVertices: vi.fn(),
   uploadOverlayVertices: vi.fn(),
@@ -74,6 +75,7 @@ vi.mock('../viewport/renderer', () => ({
       init: rendererMocks.init,
       start: rendererMocks.start,
       uploadRoadVertices: rendererMocks.uploadRoadVertices,
+      uploadRoadVerticesIncremental: rendererMocks.uploadRoadVerticesIncremental,
       uploadJunctionVertices: rendererMocks.uploadJunctionVertices,
       uploadLaneLineVertices: rendererMocks.uploadLaneLineVertices,
       uploadOverlayVertices: rendererMocks.uploadOverlayVertices,
@@ -175,7 +177,7 @@ describe('Viewport', () => {
   });
 
   it('initializes the renderer, uploads vertices, resizes, and disposes cleanly', async () => {
-    const vertices = new Float32Array([1, 2, 3]);
+    const vertices = new Float32Array([1, 2, 3, 0.3, 0.3, 0.3, 1]);
     const platform = createPlatformMock(vertices);
     rendererMocks.isSupported.mockReturnValue(true);
     rendererMocks.init.mockResolvedValue(true);
@@ -186,6 +188,7 @@ describe('Viewport', () => {
     await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
     await waitFor(() => expect(rendererMocks.start).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(platform.generateRoadVerticesCached).toHaveBeenCalledWith(5, 'byLaneType'));
+    expect(platform.generateSingleRoadSurfaceVerticesCached).not.toHaveBeenCalled();
     await waitFor(() => expect(rendererMocks.uploadRoadVertices).toHaveBeenCalledWith(vertices, {
       roadVertexCount: vertices.length / 7,
       extrasVertexCount: 0,

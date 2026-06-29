@@ -29,6 +29,14 @@ import type { Project } from '../services/platform';
  */
 const TESS_MAX_STEP_M = 5.0;
 
+// Keep open-file solid rendering on the proven merged path by default. The
+// per-road registry remains available for future re-enable, but it must be
+// guarded by fixture/E2E coverage that proves non-empty registry road vertices
+// on real projects. Merged upload intentionally creates one GPU buffer, so it
+// avoids the recent partial/empty registry regressions while still rendering
+// solid surfaces.
+const ENABLE_INCREMENTAL_ROAD_SURFACES = false;
+
 type RoadSurfaceDebugState = ReturnType<ViewportRenderer['getRoadSurfaceDebugState']>;
 
 function readRoadSurfaceDebugState(renderer: ViewportRenderer): RoadSurfaceDebugState {
@@ -80,6 +88,7 @@ function readRoadSurfaceDebugState(renderer: ViewportRenderer): RoadSurfaceDebug
  * roads permanently unbuilt.
  */
 export function shouldUseIncrementalRoads(params: {
+  enabled?: boolean;
   isSolid: boolean;
   supported: boolean;
   roadsUnique: boolean;
@@ -87,7 +96,8 @@ export function shouldUseIncrementalRoads(params: {
   changedRoadCount: number;
   cacheReady: boolean;
 }): boolean {
-  const { isSolid, supported, roadsUnique, changedRoadCount, cacheReady } = params;
+  const { enabled = true, isSolid, supported, roadsUnique, changedRoadCount, cacheReady } = params;
+  if (!enabled) return false;
   if (!isSolid || !supported || !roadsUnique) return false;
   // Unchanged frame: keep the live registry even when the cache is cold.
   if (changedRoadCount === 0) return true;
@@ -301,6 +311,7 @@ export function useViewportMeshes({
       // The WASM cache (read by the per-road generator) is only needed when roads
       // actually have to be regenerated — see shouldUseIncrementalRoads.
       const useIncrementalRoads = shouldUseIncrementalRoads({
+        enabled: ENABLE_INCREMENTAL_ROAD_SURFACES,
         isSolid: viewMode === 'solid',
         supported:
           typeof renderer.uploadRoadVerticesIncremental === 'function' &&

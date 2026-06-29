@@ -89,7 +89,7 @@ export function makeUtm(): UtmCoord {
   return { easting: 0, northing: 0, zone: 50, is_northern: true, alt: 0 };
 }
 
-export function createPlatformMock(vertices = new Float32Array([1, 2, 3])): PlatformService {
+export function createPlatformMock(vertices = new Float32Array([1, 2, 3, 0.3, 0.3, 0.3, 1])): PlatformService {
   return {
     parseOpenDrive: vi.fn().mockResolvedValue(makeProject()),
     writeOpenDrive: vi.fn().mockResolvedValue('<OpenDRIVE />'),

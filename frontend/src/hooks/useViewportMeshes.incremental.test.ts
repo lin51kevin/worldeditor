@@ -4,6 +4,11 @@ import { shouldUseIncrementalRoads, shouldRebuildAllRoads } from './useViewportM
 describe('shouldUseIncrementalRoads', () => {
   const base = { isSolid: true, supported: true, roadsUnique: true, registryActive: true, changedRoadCount: 1, cacheReady: true };
 
+  it('falls back to merged when incremental surfaces are disabled', () => {
+    expect(shouldUseIncrementalRoads({ ...base, enabled: false })).toBe(false);
+    expect(shouldUseIncrementalRoads({ ...base, enabled: false, changedRoadCount: 0, cacheReady: false })).toBe(false);
+  });
+
   it('returns false outside solid mode', () => {
     expect(shouldUseIncrementalRoads({ ...base, isSolid: false })).toBe(false);
   });
