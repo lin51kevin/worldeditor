@@ -162,8 +162,11 @@ pub(super) fn build_road_surface_vertices(
         }
     }
 
-    // Fall back to default gray ribbon when no lane sections are defined
-    if road_verts.is_empty() && road.lane_sections.is_empty() {
+    // Fall back to default gray ribbon when no surface was produced (no lane
+    // sections, or sections whose lanes all resolve to ~zero width). Without
+    // this, such roads render only their centerline and the solid surface is
+    // blank — so always seed a visible ribbon when the lane strips are empty.
+    if road_verts.is_empty() {
         let ribbon_color = match color_mode {
             "single" => [0.45f32, 0.45, 0.45, 1.0],
             "byRoad" => road_hue_color(road_idx),
@@ -551,5 +554,43 @@ mod tests {
         let verts =
             generate_single_road_surface_vertices_cached("nope", 2.0, "byLaneType").unwrap();
         assert!(verts.is_empty());
+    }
+
+    // Regression: a road that HAS lane sections but whose lanes produce no
+    // surface (empty section / all ~zero width) must still get a default ribbon
+    // so the solid view shows a road, not just its centerline. Previously the
+    // ribbon fallback only fired when `lane_sections` was completely empty.
+    #[test]
+    fn test_road_with_empty_lane_section_gets_ribbon() {
+        use we_core::model::{Geometry, GeometryType, LaneSection, Project, Road};
+
+        let mut road = Road::from_centerline(
+            "road-0",
+            vec![Geometry {
+                s: 0.0,
+                x: 0.0,
+                y: 0.0,
+                hdg: 0.0,
+                length: 20.0,
+                geo_type: GeometryType::Line,
+            }],
+        );
+        // A section with no lanes yields no lane strips -> empty surface.
+        road.lane_sections = vec![LaneSection {
+            s: 0.0,
+            single_side: false,
+            render_hidden: false,
+            left: Vec::new(),
+            center: Vec::new(),
+            right: Vec::new(),
+        }];
+
+        let project = Project { roads: vec![road], ..Project::default() };
+        let json = serde_json::to_string(&project).unwrap();
+        crate::picking::set_project_cache(&json).unwrap();
+
+        let verts =
+            generate_single_road_surface_vertices_cached("road-0", 2.0, "byLaneType").unwrap();
+        assert!(!verts.is_empty(), "no-lane road should fall back to a visible ribbon");
     }
 }
