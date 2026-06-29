@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shouldUseIncrementalRoads } from './useViewportMeshes';
+import { shouldUseIncrementalRoads, shouldRebuildAllRoads } from './useViewportMeshes';
 
 describe('shouldUseIncrementalRoads', () => {
   const base = { isSolid: true, supported: true, roadsUnique: true, registryActive: true, changedRoadCount: 1, cacheReady: true };
@@ -20,13 +20,15 @@ describe('shouldUseIncrementalRoads', () => {
     expect(shouldUseIncrementalRoads({ ...base, roadsUnique: false, changedRoadCount: 0 })).toBe(false);
   });
 
-  // Regression (first load / geoz): the per-road buffers can be empty on the
-  // first solid frame (cache/tessellation race) leaving roads blank until a
-  // wire→solid toggle. Until a merged frame has seeded the geometry, render
-  // every road through the proven merged path.
-  it('falls back to merged when the registry is not yet live', () => {
-    expect(shouldUseIncrementalRoads({ ...base, registryActive: false, changedRoadCount: 5 })).toBe(false);
-    expect(shouldUseIncrementalRoads({ ...base, registryActive: false, changedRoadCount: 0 })).toBe(false);
+  // The first solid frame seeds the registry incrementally (registry not yet
+  // live) as long as the WASM cache is ready, so per-road buffers carry real
+  // verts and render immediately — no wire→solid toggle needed. A cold cache
+  // still falls back to merged to avoid blank buffers. Completeness (registry
+  // covers every road) is enforced by the caller's self-heal rebuild, not here.
+  it('seeds incrementally on a cold registry once the cache is ready', () => {
+    expect(shouldUseIncrementalRoads({ ...base, registryActive: false, changedRoadCount: 5, cacheReady: true })).toBe(true);
+    expect(shouldUseIncrementalRoads({ ...base, registryActive: false, changedRoadCount: 5, cacheReady: false })).toBe(false);
+    expect(shouldUseIncrementalRoads({ ...base, registryActive: false, changedRoadCount: 0 })).toBe(true);
   });
 
   it('uses incremental when roads changed and the cache is ready', () => {
@@ -47,5 +49,29 @@ describe('shouldUseIncrementalRoads', () => {
 
   it('stays incremental when no road changed and the cache is ready', () => {
     expect(shouldUseIncrementalRoads({ ...base, changedRoadCount: 0, cacheReady: true })).toBe(true);
+  });
+});
+
+describe('shouldRebuildAllRoads', () => {
+  const base = { colorModeChanged: false, registryActive: true, registryMeshCount: 598, roadsTotal: 598 };
+
+  it('rebuilds all roads when the colour mode changed', () => {
+    expect(shouldRebuildAllRoads({ ...base, colorModeChanged: true })).toBe(true);
+  });
+
+  // First seed: registry not live yet, build every road in one pass.
+  it('rebuilds all roads when the registry is not yet live', () => {
+    expect(shouldRebuildAllRoads({ ...base, registryActive: false })).toBe(true);
+  });
+
+  // Self-heal: a seed that landed mid-load (roads still streaming) leaves the
+  // registry covering fewer roads than exist. Force a full rebuild so it
+  // converges instead of leaving most roads permanently unbuilt.
+  it('rebuilds all roads when the registry only partially covers the roads', () => {
+    expect(shouldRebuildAllRoads({ ...base, registryMeshCount: 1, roadsTotal: 598 })).toBe(true);
+  });
+
+  it('rebuilds only changed roads when the registry is complete', () => {
+    expect(shouldRebuildAllRoads(base)).toBe(false);
   });
 });

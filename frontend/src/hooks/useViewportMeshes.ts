@@ -46,12 +46,13 @@ const TESS_MAX_STEP_M = 5.0;
  * and would render only a subset of roads, so we fall back to the merged path
  * (which iterates roads positionally) for them.
  *
- * `registryActive` gates incremental to live-edit deltas only. The first solid
- * frame (registry not yet live) and any full rebuild render through the proven
- * merged path — the per-road buffers can be empty on the very first frame
- * (cache/tessellation race), so seeding the registry from there leaves the road
- * layer blank until a wire→solid toggle. The merged path always renders, so we
- * only switch to incremental once a merged frame has established the geometry.
+ * The first solid frame seeds the registry with ALL roads in one pass; later
+ * frames only rebuild changed roads. A (re)build always requires `cacheReady`
+ * so seeded per-road buffers carry real tessellated verts — a cold cache stays
+ * merged, so the earlier first-frame-blank regression cannot recur. Completeness
+ * (registry mesh count == road count) is enforced by the caller's self-heal
+ * rebuild, not here, so a seed that lands mid-load converges instead of leaving
+ * roads permanently unbuilt.
  */
 export function shouldUseIncrementalRoads(params: {
   isSolid: boolean;
@@ -61,12 +62,32 @@ export function shouldUseIncrementalRoads(params: {
   changedRoadCount: number;
   cacheReady: boolean;
 }): boolean {
-  const { isSolid, supported, roadsUnique, registryActive, changedRoadCount, cacheReady } = params;
+  const { isSolid, supported, roadsUnique, changedRoadCount, cacheReady } = params;
   if (!isSolid || !supported || !roadsUnique) return false;
-  // Full rebuilds (first load, geoz, registry not yet live) go through merged.
-  if (!registryActive) return false;
+  // Unchanged frame: keep the live registry even when the cache is cold.
   if (changedRoadCount === 0) return true;
+  // Any (re)build (seed or delta) needs a ready cache so buffers are non-empty.
   return cacheReady;
+}
+
+/**
+ * Decide whether the incremental path must rebuild ALL roads this frame (full
+ * seed) vs only reference-changed roads (delta). Rebuild everything when the
+ * palette changed, when the registry is not yet live (first seed), or when the
+ * registry only partially covers the roads — the last case self-heals a seed
+ * that landed mid-load (roads still streaming) so it converges to full coverage
+ * rather than leaving most roads unbuilt.
+ */
+export function shouldRebuildAllRoads(params: {
+  colorModeChanged: boolean;
+  registryActive: boolean;
+  registryMeshCount: number;
+  roadsTotal: number;
+}): boolean {
+  const { colorModeChanged, registryActive, registryMeshCount, roadsTotal } = params;
+  if (colorModeChanged) return true;
+  if (!registryActive) return true;
+  return registryMeshCount !== roadsTotal;
 }
 
 interface UseViewportMeshesParams {
@@ -205,11 +226,23 @@ export function useViewportMeshes({
         typeof renderer.hasRoadRegistry === 'function'
           ? renderer.hasRoadRegistry()
           : incrementalRoadsActiveRef.current;
-      // Rebuild every road when the colour mode changed (palette affects all roads)
-      // or when the incremental layer is not live (first solid frame / after a
-      // merged-path fallback or registry disposal). Otherwise only roads whose
-      // object reference changed.
-      const rebuildAllRoads = colorModeChanged || !registryActive;
+      const roadsTotal = visibleProject.roads.length;
+      // Live registry buffer count — used to detect a partial seed (e.g. roads
+      // still streaming in when the registry first seeded). When the per-road
+      // buffers don't cover every road, force a full rebuild so a mid-load seed
+      // converges instead of leaving most roads permanently unbuilt.
+      const registryMeshCount =
+        typeof renderer.getRoadMeshCount === 'function' ? renderer.getRoadMeshCount() : 0;
+      // Rebuild every road when the colour mode changed (palette affects all roads),
+      // when the incremental layer is not yet live (first solid frame / after a
+      // merged-path fallback or registry disposal), or when the registry is only
+      // partially seeded. Otherwise only roads whose object reference changed.
+      const rebuildAllRoads = shouldRebuildAllRoads({
+        colorModeChanged,
+        registryActive,
+        registryMeshCount,
+        roadsTotal,
+      });
       const changedRoadIds = rebuildAllRoads
         ? [...newRoadRefs.keys()]
         : [...newRoadRefs].filter(([id, ref]) => prev.roadRefs.get(id) !== ref).map(([id]) => id);
