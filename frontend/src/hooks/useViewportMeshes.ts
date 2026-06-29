@@ -405,13 +405,30 @@ export function useViewportMeshes({
 
         if (useIncrementalRoads && perRoadVerts) {
           const rebuilt = new Map<string, Float32Array>();
+          let perRoadTotal = 0;
           for (const id of changedRoadIds) {
-            rebuilt.set(id, perRoadVerts.get(id) ?? new Float32Array(0));
-            uploadedVertCount += (perRoadVerts.get(id)?.length ?? 0) / 7;
+            const v = perRoadVerts.get(id) ?? new Float32Array(0);
+            rebuilt.set(id, v);
+            perRoadTotal += v.length;
           }
-          renderer.uploadRoadVerticesIncremental({ rebuilt, removed: removedRoadIds, extras });
-          incrementalRoadsActiveRef.current = true;
-          uploadedVertCount += extras.length / 7;
+          // Self-heal: a full seed that produced no per-road geometry (e.g. the
+          // cached single-road generator returned empty) would leave the solid
+          // view blank. Fall back to the merged path so roads always render.
+          if (rebuildAllRoads && perRoadTotal === 0 && roadsTotal > 0) {
+            const merged = cacheReady && service.generateRoadVerticesCached
+              ? await service.generateRoadVerticesCached(TESS_MAX_STEP_M, display.colorMode).catch(() => new Float32Array(0))
+              : new Float32Array(0);
+            let surfaceVerts = merged.length > 0 ? merged : cachedRoadVertsRef.current;
+            if (extras.length > 0) surfaceVerts = mergeFloat32Arrays(surfaceVerts, extras);
+            cachedRoadVertsRef.current = merged.length > 0 ? merged : cachedRoadVertsRef.current;
+            uploadedVertCount = surfaceVerts.length / 7;
+            renderer.uploadRoadVertices(surfaceVerts);
+            incrementalRoadsActiveRef.current = false;
+          } else {
+            renderer.uploadRoadVerticesIncremental({ rebuilt, removed: removedRoadIds, extras });
+            incrementalRoadsActiveRef.current = true;
+            uploadedVertCount += perRoadTotal / 7 + extras.length / 7;
+          }
         } else {
           let surfaceVerts = cachedRoadVertsRef.current;
           if (extras.length > 0) {
