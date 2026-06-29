@@ -20,13 +20,14 @@ describe('shouldUseIncrementalRoads', () => {
     expect(shouldUseIncrementalRoads({ ...base, roadsUnique: false, changedRoadCount: 0 })).toBe(false);
   });
 
-  // Regression (first load / geoz): the per-road buffers can be empty on the
-  // first solid frame (cache/tessellation race) leaving roads blank until a
-  // wire→solid toggle. Until a merged frame has seeded the geometry, render
-  // every road through the proven merged path.
-  it('falls back to merged when the registry is not yet live', () => {
-    expect(shouldUseIncrementalRoads({ ...base, registryActive: false, changedRoadCount: 5 })).toBe(false);
-    expect(shouldUseIncrementalRoads({ ...base, registryActive: false, changedRoadCount: 0 })).toBe(false);
+  // The first solid frame seeds the registry incrementally (registry not yet
+  // live) as long as the WASM cache is ready, so per-road buffers carry real
+  // verts and render immediately — no wire→solid toggle needed. A cold cache
+  // still falls back to merged to avoid blank buffers.
+  it('seeds incrementally on a cold registry once the cache is ready', () => {
+    expect(shouldUseIncrementalRoads({ ...base, registryActive: false, changedRoadCount: 5, cacheReady: true })).toBe(true);
+    expect(shouldUseIncrementalRoads({ ...base, registryActive: false, changedRoadCount: 5, cacheReady: false })).toBe(false);
+    expect(shouldUseIncrementalRoads({ ...base, registryActive: false, changedRoadCount: 0 })).toBe(true);
   });
 
   it('uses incremental when roads changed and the cache is ready', () => {

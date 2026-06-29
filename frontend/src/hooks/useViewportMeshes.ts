@@ -46,12 +46,14 @@ const TESS_MAX_STEP_M = 5.0;
  * and would render only a subset of roads, so we fall back to the merged path
  * (which iterates roads positionally) for them.
  *
- * `registryActive` gates incremental to live-edit deltas only. The first solid
- * frame (registry not yet live) and any full rebuild render through the proven
- * merged path — the per-road buffers can be empty on the very first frame
- * (cache/tessellation race), so seeding the registry from there leaves the road
- * layer blank until a wire→solid toggle. The merged path always renders, so we
- * only switch to incremental once a merged frame has established the geometry.
+ * `registryActive` is informational only (kept for the call site that wants to
+ * distinguish a cold seed from a live delta) — it must NOT gate incremental,
+ * otherwise the registry never seeds (full rebuilds always force merged, so the
+ * registry stays null forever and the incremental path is dead code). The
+ * earlier first-frame-blank regression was caused by seeding empty per-road
+ * buffers while the cache was cold; `cacheReady` now guards that: a full rebuild
+ * only seeds incrementally once the WASM cache is authoritative, so every
+ * per-road buffer carries real tessellated verts and renders on the first frame.
  */
 export function shouldUseIncrementalRoads(params: {
   isSolid: boolean;
@@ -61,11 +63,11 @@ export function shouldUseIncrementalRoads(params: {
   changedRoadCount: number;
   cacheReady: boolean;
 }): boolean {
-  const { isSolid, supported, roadsUnique, registryActive, changedRoadCount, cacheReady } = params;
+  const { isSolid, supported, roadsUnique, changedRoadCount, cacheReady } = params;
   if (!isSolid || !supported || !roadsUnique) return false;
-  // Full rebuilds (first load, geoz, registry not yet live) go through merged.
-  if (!registryActive) return false;
+  // Unchanged frame: keep the live registry even if the cache is cold.
   if (changedRoadCount === 0) return true;
+  // Any (re)build of roads requires a ready cache so seeded buffers are non-empty.
   return cacheReady;
 }
 
