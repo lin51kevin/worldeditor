@@ -27,7 +27,10 @@ pub(super) fn append_junction_triangles(
     // Since every connecting road's interior elevation is bounded by its two arm
     // endpoints, the max boundary elevation is guaranteed to be at or above every
     // road surface inside the junction, keeping the fill on top of all of them.
-    let junction_z: f32 = points.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
+    let junction_z: f32 = points
+        .iter()
+        .map(|p| p[2])
+        .fold(f32::NEG_INFINITY, f32::max);
 
     // Build a simple convex ring before fanning so there are no self-intersecting
     // or sliver triangles: boundary points from both incoming and connecting
@@ -438,9 +441,15 @@ mod tests {
         assert!(points.len() >= 3, "expected a non-degenerate polygon");
 
         let min_x = points.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min);
-        let max_x = points.iter().map(|p| p[0]).fold(f32::NEG_INFINITY, f32::max);
+        let max_x = points
+            .iter()
+            .map(|p| p[0])
+            .fold(f32::NEG_INFINITY, f32::max);
         let min_y = points.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min);
-        let max_y = points.iter().map(|p| p[1]).fold(f32::NEG_INFINITY, f32::max);
+        let max_y = points
+            .iter()
+            .map(|p| p[1])
+            .fold(f32::NEG_INFINITY, f32::max);
 
         // Tight bounds around the connecting-road extent (with a generous margin
         // for lane widths). The pre-fix hull reached y ~= 81 and x ~= 8.
