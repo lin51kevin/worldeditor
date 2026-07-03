@@ -19,7 +19,15 @@ pub(super) fn append_junction_triangles(
     // raw polygon is non-planar; fanning a non-planar ring from an averaged
     // centroid yields twisted/overlapping faces (the "shattered" look) in 3D.
     // A single flat elevation keeps the whole surface coplanar.
-    let junction_z: f32 = points.iter().map(|p| p[2]).sum::<f32>() / points.len() as f32;
+    //
+    // Use the MAX boundary elevation (not the mean): when the junction arms sit
+    // at noticeably different heights (e.g. Waymo data with a ~0.2m spread across
+    // arms), a mean plane leaves the connecting-road surfaces on the higher arms
+    // poking ABOVE the fill, so they occlude it and show through as bare asphalt.
+    // Since every connecting road's interior elevation is bounded by its two arm
+    // endpoints, the max boundary elevation is guaranteed to be at or above every
+    // road surface inside the junction, keeping the fill on top of all of them.
+    let junction_z: f32 = points.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
 
     // Build a simple convex ring before fanning so there are no self-intersecting
     // or sliver triangles: boundary points from both incoming and connecting
@@ -60,45 +68,27 @@ pub(crate) fn build_junction_polygon_points(
         let Some(connecting) = project.roads.iter().find(|r| r.id == conn.connecting_road) else {
             continue;
         };
-        let connecting_s = if conn.contact_point == we_core::model::ContactPoint::Start {
-            0.0
-        } else {
-            connecting.length
-        };
-        let Some(connecting_pt) = road_point_at_s(&connecting.plan_view, connecting_s) else {
-            continue;
-        };
+        // A connecting road sweeps across the whole junction, so its two
+        // endpoints lie on opposite faces of the junction boundary. Sampling the
+        // boundary at BOTH ends of every connecting road yields a convex hull
+        // that hugs the actual junction area.
+        //
+        // The incoming approach roads are deliberately NOT sampled: they only
+        // meet the junction at a single face, and their far geometry can sit far
+        // outside it (long or curved approach roads). Including those endpoints
+        // balloons the convex hull well beyond the real junction, producing the
+        // wildly oversized junction bounding box seen with e.g. test-lane.xodr.
         append_road_boundary_points(
             connecting,
-            connecting_s,
+            0.0,
             &mut points,
             &evaluate_elevation,
             &evaluate_lane_width,
             &offset_point,
         );
-
-        // Incoming road endpoint is not described by connection.contactPoint.
-        // Choose start/end by nearest distance to connecting-road contact point.
-        let Some(incoming) = project.roads.iter().find(|r| r.id == conn.incoming_road) else {
-            continue;
-        };
-        let Some(in_start) = road_point_at_s(&incoming.plan_view, 0.0) else {
-            continue;
-        };
-        let Some(in_end) = road_point_at_s(&incoming.plan_view, incoming.length) else {
-            continue;
-        };
-        let ds_start =
-            (in_start.x - connecting_pt.x).powi(2) + (in_start.y - connecting_pt.y).powi(2);
-        let ds_end = (in_end.x - connecting_pt.x).powi(2) + (in_end.y - connecting_pt.y).powi(2);
-        let incoming_s = if ds_start <= ds_end {
-            0.0
-        } else {
-            incoming.length
-        };
         append_road_boundary_points(
-            incoming,
-            incoming_s,
+            connecting,
+            connecting.length,
             &mut points,
             &evaluate_elevation,
             &evaluate_lane_width,
@@ -261,17 +251,11 @@ mod tests {
         let (project, junction) = make_junction_project();
         let points = build_junction_polygon_points(&project, &junction);
 
+        // Both duplicate connections sample the SAME connecting road at both of
+        // its ends, so after dedup only the 4 unique endpoint boundary points
+        // remain: the connecting road runs along +y from (0,0) to (0,10) with a
+        // 3.5m half-width, giving (±3.5, 0) at the start and (±3.5, 10) at the end.
         assert_eq!(points.len(), 4);
-        assert!(
-            points
-                .iter()
-                .any(|p| p[0].abs() < 0.01 && (p[1] - 3.5).abs() < 0.01)
-        );
-        assert!(
-            points
-                .iter()
-                .any(|p| p[0].abs() < 0.01 && (p[1] + 3.5).abs() < 0.01)
-        );
         assert!(
             points
                 .iter()
@@ -281,6 +265,16 @@ mod tests {
             points
                 .iter()
                 .any(|p| (p[0] + 3.5).abs() < 0.01 && p[1].abs() < 0.01)
+        );
+        assert!(
+            points
+                .iter()
+                .any(|p| (p[0] - 3.5).abs() < 0.01 && (p[1] - 10.0).abs() < 0.01)
+        );
+        assert!(
+            points
+                .iter()
+                .any(|p| (p[0] + 3.5).abs() < 0.01 && (p[1] - 10.0).abs() < 0.01)
         );
     }
 
@@ -315,6 +309,46 @@ mod tests {
                 z0
             );
         }
+    }
+
+    #[test]
+    fn test_append_junction_triangles_uses_max_arm_elevation() {
+        // Regression guard: when a junction spans different elevations, the flat
+        // fill must be placed at the MAX sampled elevation (not the mean) so the
+        // higher connecting-road surfaces never poke above it and show through.
+        use we_core::model::Elevation;
+
+        let (mut project, junction) = make_junction_project();
+        // Connecting road (roads[1]) rises from 0.0 at its start to 2.0 at its
+        // end (length 10, slope b = 0.2). The two sampled endpoints therefore sit
+        // at z = 0.0 and z = 2.0; the fill must snap to the max (2.0), not the
+        // mean (1.0). The incoming road (roads[0]) is not sampled at all.
+        project.roads[0].elevation_profile = vec![Elevation {
+            s: 0.0,
+            a: 0.0,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }];
+        project.roads[1].elevation_profile = vec![Elevation {
+            s: 0.0,
+            a: 0.0,
+            b: 0.2,
+            c: 0.0,
+            d: 0.0,
+        }];
+
+        let mut out = Vec::new();
+        append_junction_triangles(&mut out, &project, &junction, [0.1, 0.2, 0.3, 0.4]);
+
+        assert!(!out.is_empty());
+        // Fill Z must equal the higher sampled elevation (2.0) + the 1cm lift,
+        // well above the mean of the two connecting-road ends (~1.0).
+        let z0 = out[2];
+        assert!(
+            (z0 - 2.01).abs() < 1e-4,
+            "junction fill Z {z0} should be at max sampled elevation + 0.01, not the mean"
+        );
     }
 
     #[test]
@@ -377,5 +411,55 @@ mod tests {
 
         assert!(point_in_polygon(0.0, 0.0, &poly));
         assert!(!point_in_polygon(2.0, 0.0, &poly));
+    }
+
+    #[test]
+    fn test_junction_polygon_hugs_connecting_roads_not_approach_stubs() {
+        // Regression guard for the oversized junction bounding box (test-lane.xodr,
+        // junction 62): the polygon must be built from the connecting roads that
+        // sweep the junction, NOT from the long/curved approach roads whose far
+        // ends sit tens of metres outside it. Junction 62's connecting roads span
+        // roughly x in [-27, -3], y in [9, 59]; the approach roads reach y ~= 78
+        // (road 16) and x > 0, which used to balloon the hull.
+        let xodr = std::fs::read_to_string("../../tests/fixtures/xodr/test-lane.xodr")
+            .or_else(|_| std::fs::read_to_string("tests/fixtures/xodr/test-lane.xodr"));
+        let Ok(xodr) = xodr else {
+            eprintln!("fixture not found, skipping");
+            return;
+        };
+        let project = we_core::opendrive::parse_xodr(&xodr).expect("parse");
+        let junction = project
+            .junctions
+            .iter()
+            .find(|j| j.id == "62")
+            .expect("junction 62 present");
+
+        let points = build_junction_polygon_points(&project, junction);
+        assert!(points.len() >= 3, "expected a non-degenerate polygon");
+
+        let min_x = points.iter().map(|p| p[0]).fold(f32::INFINITY, f32::min);
+        let max_x = points.iter().map(|p| p[0]).fold(f32::NEG_INFINITY, f32::max);
+        let min_y = points.iter().map(|p| p[1]).fold(f32::INFINITY, f32::min);
+        let max_y = points.iter().map(|p| p[1]).fold(f32::NEG_INFINITY, f32::max);
+
+        // Tight bounds around the connecting-road extent (with a generous margin
+        // for lane widths). The pre-fix hull reached y ~= 81 and x ~= 8.
+        assert!(
+            max_y < 66.0,
+            "junction 62 fill extends too far north (max_y = {max_y}); approach-road \
+             endpoints are still ballooning the hull"
+        );
+        assert!(
+            min_y > 3.0,
+            "junction 62 fill extends too far south (min_y = {min_y})"
+        );
+        assert!(
+            max_x < 2.0,
+            "junction 62 fill extends too far east (max_x = {max_x})"
+        );
+        assert!(
+            min_x > -32.0,
+            "junction 62 fill extends too far west (min_x = {min_x})"
+        );
     }
 }

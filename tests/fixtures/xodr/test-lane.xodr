@@ -1,0 +1,1710 @@
+<?xml version="1.0" encoding="utf-8"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="4" name="" version="2.00" date="2026-05-27T10:24:34" north="228.34960937499991" west="-118.22070296698932" east="152.77929711201529" south="-121.65039062499996" vendor="51World">
+    <geoReference />
+    <userData code="originLat" value="0" />
+    <userData code="originLong" value="0" />
+    <userData code="originAlt" value="0" />
+    <userData code="originHdg" value="0" />
+    <userData code="RnkMajorVersion" value="1" />
+    <userData code="RnkMinorVersion" value="1" />
+    <userData code="localEnuExt" value="6378137,0,0;0,1,0;0,0,1;1,0,0" />
+  </header>
+  <road id="16" junction="-1" length="149.99999999999997" name="Road(16)">
+    <link>
+      <successor contactPoint="start" elementId="62" elementType="junction" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="4.7123889803846906" length="149.99999999999997" s="0" x="2.7792968749997433" y="228.34960937499991">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="3.2680109143257141E-06" b="-6.8886826435724884E-09" c="-1.3777365287144974E-10" d="6.12327346095332E-13" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <left>
+          <lane id="4" level="false" type="sidewalk">
+            <width a="3" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="150.00000000000011" />
+          </lane>
+          <lane id="3" level="false" type="shoulder">
+            <width a="2" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="150.00000000000011" />
+          </lane>
+          <lane id="2" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="150.00000000000011" />
+          </lane>
+          <lane id="1" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="150.00000000000011" />
+          </lane>
+        </left>
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="yellow" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <roadMark color="white" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="140.00000000000011">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="150.00000000000011" />
+          </lane>
+          <lane id="-2" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <roadMark color="white" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="140.00000000000011">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="150.00000000000011" />
+          </lane>
+          <lane id="-3" level="false" type="shoulder">
+            <width a="2" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="150.00000000000011" />
+          </lane>
+          <lane id="-4" level="false" type="sidewalk">
+            <width a="3" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="150.00000000000011" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <object type="trashbin" name="Trash Bin" id="251" s="28.999999999999911" t="9.5999999999999943" zOffset="3.5483379434705985E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963267948934" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="248" s="28.999999999999968" t="-9.59999999999999" zOffset="-3.5576533008455026E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267948957" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="249" s="88.999999999999943" t="-9.5999999999999943" zOffset="-3.5576533008452443E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267948939" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="252" s="89.000000000000028" t="9.59999999999999" zOffset="3.5483400750993478E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963267948974" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="250" s="150.00000000000011" t="-9.5999999999999925" zOffset="-3.5576522350311279E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267948957" pitch="-1.2407709188295415E-23" roll="1.3969838619232176E-08" />
+      <object type="trashbin" name="Trash Bin" id="253" s="150.00000000000011" t="9.59999999999999" zOffset="3.5483390092849763E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963267948974" pitch="1.2407709188295415E-23" roll="-1.3969838619232176E-08" />
+      <object type="crosswalk" name="Zebra Strips Area" id="665" s="150.00000000000011" t="0" zOffset="0" validLength="0" orientation="none" length="4" width="24.2" radius="12.264175471673585" height="7.1059912443161011E-07" hdg="0" pitch="-1.3969838619232176E-08" roll="0">
+        <outline>
+          <cornerLocal height="0" u="1.0000000000000178" v="-12.1" z="0" />
+          <cornerLocal height="0" u="1.0000000000000249" v="12.1" z="0" />
+          <cornerLocal height="0" u="5.0000000000000249" v="12.1" z="0" />
+          <cornerLocal height="0" u="5.0000000000000178" v="-12.1" z="0" />
+          <cornerLocal height="0" u="1.0000000000000178" v="-12.1" z="0" />
+        </outline>
+        <userData code="Angle" value="0" />
+        <userData code="LineWidth" value="0.45" />
+        <userData code="LineGap" value="0.6" />
+      </object>
+      <object type="stopline" name="Stop Line" id="711" s="150.10000000000002" t="-8.8817841969931744E-17" zOffset="0" validLength="0" orientation="none" length="0" width="7" radius="3.5" height="0" hdg="0" pitch="-1.3969838619232176E-08" roll="0">
+        <outline>
+          <cornerLocal height="0" u="0" v="0" z="0" />
+          <cornerLocal height="0" u="-6.2172489379008766E-15" v="-7" z="0" />
+        </outline>
+      </object>
+    </objects>
+    <signals>
+      <signal s="4.0000000000000036" t="1.7499999999999947" id="697" name="Straight Left Turn Arrow Paint" dynamic="no" orientation="none" zOffset="0.010000137835727721" country="CHN" type="Graphics" subtype="StraightOrLeftTurnArrow" value="0" unit="m" height="0" width="3" text="" hOffset="3.1415926535897931" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="4.0000000000000133" t="5.249999999999992" id="698" name="Straight Right Turn Arrow Paint" dynamic="no" orientation="none" zOffset="0.010000275671428796" country="CHN" type="Graphics" subtype="StraightOrRightTurnArrow" value="0" unit="m" height="0" width="3" text="" hOffset="3.1415926535897931" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="146.00000000000054" t="-1.749999999999996" id="695" name="Straight Arrow Paint" dynamic="no" orientation="none" zOffset="0.00999986123292306" country="CHN" type="Graphics" subtype="StraightAheadArrow" value="0" unit="m" height="0" width="3" text="" hOffset="-1.7763568393993417E-15" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="146.00000000000054" t="-5.2499999999999929" id="696" name="Straight Arrow Paint" dynamic="no" orientation="none" zOffset="0.0099997233971420487" country="CHN" type="Graphics" subtype="StraightAheadArrow" value="0" unit="m" height="0" width="3" text="" hOffset="-1.7763568393993417E-15" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+    </signals>
+  </road>
+  <road id="25" junction="-1" length="149.99999999999991" name="Road(25)">
+    <link>
+      <predecessor contactPoint="start" elementId="62" elementType="junction" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="4.7123889803846906" length="149.99999999999991" s="0" x="2.7792968749999609" y="28.349609374999989">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="5.1222741603851318E-07" b="-6.8917870521545463E-09" c="-1.3783574104309102E-10" d="6.1260329352484947E-13" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <left>
+          <lane id="4" level="false" type="sidewalk">
+            <width a="2.9999999999999982" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="149.99999999999989" />
+          </lane>
+          <lane id="3" level="false" type="shoulder">
+            <width a="2" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="149.99999999999989" />
+          </lane>
+          <lane id="2" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="10">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="149.99999999999989" />
+          </lane>
+          <lane id="1" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="10">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="149.99999999999989" />
+          </lane>
+        </left>
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="yellow" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="149.99999999999989" />
+          </lane>
+          <lane id="-2" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="149.99999999999989" />
+          </lane>
+          <lane id="-3" level="false" type="shoulder">
+            <width a="2" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="149.99999999999989" />
+          </lane>
+          <lane id="-4" level="false" type="sidewalk">
+            <width a="3" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="149.99999999999989" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <object type="crosswalk" name="Zebra Strips Area" id="669" s="0" t="0" zOffset="0" validLength="0" orientation="none" length="4" width="24.2" radius="12.264175471673585" height="7.1059912443161011E-07" hdg="0" pitch="0" roll="0">
+        <outline>
+          <cornerLocal height="0" u="-4.9999999999999929" v="-12.100000000000001" z="0" />
+          <cornerLocal height="0" u="-4.9999999999999858" v="12.099999999999998" z="0" />
+          <cornerLocal height="0" u="-0.99999999999998923" v="12.099999999999998" z="0" />
+          <cornerLocal height="0" u="-0.99999999999999656" v="-12.100000000000001" z="0" />
+          <cornerLocal height="0" u="-4.9999999999999929" v="-12.100000000000001" z="0" />
+        </outline>
+        <userData code="Angle" value="0" />
+        <userData code="LineWidth" value="0.45" />
+        <userData code="LineGap" value="0.6" />
+      </object>
+      <object type="stopline" name="Stop Line" id="713" s="0" t="0" zOffset="0" validLength="0" orientation="none" length="0" width="7" radius="3.5" height="0" hdg="0" pitch="0" roll="0">
+        <outline>
+          <cornerLocal height="0" u="0" v="0" z="0" />
+          <cornerLocal height="0" u="-8.8817841970012523E-16" v="7" z="0" />
+        </outline>
+      </object>
+      <object type="trashbin" name="Trash Bin" id="254" s="29.000000000000004" t="-9.5999999999999925" zOffset="-3.557651204743619E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267948959" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="256" s="29.000000000000014" t="9.5999999999999925" zOffset="3.5483379789988194E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.570796326794897" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="255" s="89.000000000000014" t="-9.5999999999999925" zOffset="-3.5576511692170243E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267948966" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="257" s="89.000000000000043" t="9.5999999999999925" zOffset="3.5483379434708716E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963267948968" pitch="0" roll="0" />
+      <objectReference id="267" orientation="none" s="1.0999999163136291" t="1.0000002399009431" validLength="0" zOffset="-6.0730374428906613" />
+      <objectReference id="295" orientation="none" s="9.099999916398632" t="-13.499999760342707" validLength="0" zOffset="-6.0668674377169562" />
+    </objects>
+    <signals>
+      <signal s="4" t="1.7499999999999956" id="701" name="Straight Arrow Paint" dynamic="no" orientation="none" zOffset="0.010000137835728165" country="CHN" type="Graphics" subtype="StraightAheadArrow" value="0" unit="m" height="0" width="3" text="" hOffset="3.1415926535897931" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="4.00000000000001" t="5.2499999999999947" id="702" name="Straight Arrow Paint" dynamic="no" orientation="none" zOffset="0.010000275671430572" country="CHN" type="Graphics" subtype="StraightAheadArrow" value="0" unit="m" height="0" width="3" text="" hOffset="-3.1415926535897931" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="146.00000000000034" t="-1.749999999999996" id="699" name="Straight Left Turn Arrow Paint" dynamic="no" orientation="none" zOffset="0.0099998612329235039" country="CHN" type="Graphics" subtype="StraightOrLeftTurnArrow" value="0" unit="m" height="0" width="3" text="" hOffset="-1.7763568393994427E-15" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="146.00000000000034" t="-5.2499999999999929" id="700" name="Straight Right Turn Arrow Paint" dynamic="no" orientation="none" zOffset="0.0099997233971438251" country="CHN" type="Graphics" subtype="StraightOrRightTurnArrow" value="0" unit="m" height="0" width="3" text="" hOffset="-1.7763568393994427E-15" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+    </signals>
+  </road>
+  <road id="34" junction="-1" length="444.76055258893467" name="Road(34)">
+    <link>
+      <successor contactPoint="start" elementId="62" elementType="junction" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="3.1415926535897931" length="209.49999999999937" s="0" x="152.77929711201523" y="28.349609457679811">
+        <line />
+      </geometry>
+      <geometry hdg="3.1415926535899494" length="17.97908472668664" s="209.49999999999937" x="-56.720702887984181" y="28.349609457679925">
+        <paramPoly3 aU="0" aV="0" bU="17.882004560166116" bV="-6.6613381477509392E-16" cU="0.21783857971279375" cV="-3.6797982714170239" dU="-0.532594989774708" dV="0.33945704297004831" pRange="normalized" />
+      </geometry>
+      <geometry hdg="2.7790904754075747" length="19.066337008608354" s="227.479084726686" x="-74.287951038088892" y="31.68995068612417">
+        <paramPoly3 aU="0" aV="0" bU="18.956846671136436" bV="2.2204460492503131E-15" cU="0.37655915588949185" cV="-3.33943880604215" dU="-0.68799907569557206" dV="-0.08267206159797702" pRange="normalized" />
+      </geometry>
+      <geometry hdg="2.4050244791903466" length="15.08822360501941" s="246.54542173529435" x="-90.508106802503562" y="41.501606137224279">
+        <paramPoly3 aU="0" aV="0" bU="15.025942644064918" bV="-5.3290705182007514E-15" cU="0.14419997509770255" cV="-2.6652844661351169" dU="-0.3447740761425937" dV="0.21836805841667051" pRange="normalized" />
+      </geometry>
+      <geometry hdg="2.0886116261347767" length="19.170641254253646" s="261.63364534031376" x="-99.846702037663277" y="53.273164716128811">
+        <paramPoly3 aU="0" aV="0" bU="19.066220120193854" bV="-3.9968028886505635E-15" cU="0.32569786384889809" cV="-3.45374661361949" dU="-0.63407868835389536" dV="0.03845531875232755" pRange="normalized" />
+      </geometry>
+      <geometry hdg="1.7243721215526839" length="12.033581863607779" s="280.80428659456743" x="-106.16395850924364" y="71.262412069588635">
+        <paramPoly3 aU="0" aV="0" bU="11.999497406588835" bV="2.886579864025407E-15" cU="0.1064768865098813" cV="-1.549576390462029" dU="-0.20719754511062938" dV="-0.0018906289329159165" pRange="normalized" />
+      </geometry>
+      <geometry hdg="1.4626481208856337" length="19.135998130882868" s="292.83786845817519" x="-106.4509409782187" y="83.2584772191797">
+        <paramPoly3 aU="0" aV="0" bU="19.029927536389167" bV="-4.2188474935755949E-15" cU="0.271972652198297" cV="-3.7937576401610071" dU="-0.60477356817045447" dV="0.25036968788765357" pRange="normalized" />
+      </geometry>
+      <geometry hdg="1.0951893658672014" length="16.133208559408843" s="311.97386658905805" x="-100.9101333084952" y="101.46390477272416">
+        <paramPoly3 aU="0" aV="0" bU="16.059922331261053" bV="7.1054273576010019E-15" cU="0.26283994966921576" cV="-2.4354812373970143" dU="-0.46772851745531874" dV="-0.12166749609633953" pRange="normalized" />
+      </geometry>
+      <geometry hdg="0.76309170253166214" length="38.233182852098629" s="328.10707514846689" x="-91.3771166083723" y="114.38840468108872">
+        <paramPoly3 aU="0" aV="0" bU="37.362845693032732" bV="4.4408920985006262E-15" cU="2.3591662742364861" cV="-15.766220507884416" dU="-5.0263173839842565" dV="1.9029230767252479" pRange="normalized" />
+      </geometry>
+      <geometry hdg="6.283185307170406" length="17.979084695722516" s="366.34025800056554" x="-56.720703045994767" y="128.34960940255991">
+        <paramPoly3 aU="0" aV="0" bU="17.882004529333159" bV="1.1102230246251565E-15" cU="0.21783856962724002" cV="-3.6797983165865018" dU="-0.53259498244009507" dV="0.33945707657731639" pRange="normalized" />
+      </geometry>
+      <geometry hdg="5.9206831289610635" length="19.066336980827373" s="384.31934269628806" x="-39.153454929505138" y="125.00926816238947">
+        <paramPoly3 aU="0" aV="0" bU="18.956846643540857" bV="1.6653345369377348E-14" cU="0.37655913774271" cV="-3.339438897340357" dU="-0.68799906299300417" dV="-0.082671997451235768" pRange="normalized" />
+      </geometry>
+      <geometry hdg="5.5466171327302449" length="15.088223593810405" s="403.38567967711543" x="-22.933299205967636" y="115.19761269702991">
+        <paramPoly3 aU="0" aV="0" bU="15.025942632867071" bV="1.0658141036401503E-14" cU="0.14419995967830346" cV="-2.665284557027678" dU="-0.34477406568961122" dV="0.21836812013681062" pRange="normalized" />
+      </geometry>
+      <geometry hdg="5.2302042796670456" length="19.170641254146432" s="418.47390327092586" x="-13.594704002965907" y="103.42605410690747">
+        <paramPoly3 aU="0" aV="0" bU="19.066220120107566" bV="1.021405182655144E-14" cU="0.32569784203813157" cV="-3.4537467332170992" dU="-0.63407867379169147" dV="0.038455398546227038" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.865964775093695" length="7.1160080638623313" s="437.64454452507232" x="-7.27744757063654" y="85.4368067397554">
+        <paramPoly3 aU="0" aV="0" bU="7.1090316404376139" bV="2.2204460492503131E-16" cU="0.023427454099311795" cV="-0.51438161411952188" dU="-0.043508461279790467" dV="-0.019575110705949195" pRange="normalized" />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="-5.9999935626983643" b="-0.00028978297808710505" c="-8.4382231481677037E-06" d="5.8705566892195014E-08" s="0" />
+      <elevation a="-6.050415800884366" b="-0.000660277952983231" c="-1.1139357467646943E-06" d="9.6460318661948341E-08" s="86.999999998008" />
+      <elevation a="-6.0739446934312582" b="0.0001428699082030286" c="2.6495778000221046E-05" d="-2.7723184654029577E-07" s="142.99999999707813" />
+      <elevation a="-6.036700289696455" b="0.0019984555403973181" c="3.2451033717753997E-05" d="-1.797223070463258E-06" s="190.99999999854901" />
+      <elevation a="-6.0000018384307623" b="0.025620730785384696" c="-0.072259509447623535" d="0.061444431699246689" s="209.49999999999892" />
+      <elevation a="-5.9866080246865749" b="0.0099757903117785" c="0.00099030704776312869" d="5.2500238815203665E-05" s="210.47757291603875" />
+      <elevation a="-5.8817140581086278" b="0.017858409674366679" c="-0.0011424765867446896" d="0.00020279828676136036" s="216.40631523244807" />
+      <elevation a="-5.6634383425116539" b="0.019263500686404273" c="0.00043969858443690645" d="-6.7896385871594725E-07" s="225.45442444451265" />
+      <elevation a="-5.0313339419662952" b="0.020590105672341839" c="-0.00037460243645132558" d="1.2302272887037305E-05" s="247.52673959599784" />
+      <elevation a="-4.0000031245872378" b="0.017073308404799693" c="0.00024513633104312338" d="-1.4590171981484108E-06" s="287.92078235603248" />
+      <elevation a="-0.94775784760713577" b="0.52943059207342158" c="-0.364026259984514" d="0.065730240923151037" s="407.51026078457107" />
+      <elevation a="-0.86538840923458338" b="0.016702922861156478" c="0.0017430523880255118" d="-5.9159423301687966E-05" s="410.47062495910478" />
+      <elevation a="-0.34229597449302673" b="0.035437528150309185" c="-0.0013727415017266925" d="2.6347001343040852E-05" s="428.59505378353953" />
+      <elevation a="-0.08292525727301836" b="0.041323098671519537" c="-0.010784905716725928" d="0.0011628436626891141" s="439.63508948584257" />
+      <elevation a="-0.016371949575841427" b="0.035029768761130391" c="-0.029973741650028148" d="0.010193297300769063" s="443.57869530674168" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <left>
+          <lane id="2" level="false" type="sidewalk">
+            <width a="3" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="444.76234697211413" />
+          </lane>
+          <lane id="1" level="false" type="shoulder">
+            <width a="0.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="444.76234697211413" />
+          </lane>
+        </left>
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="yellow" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <roadMark color="white" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="434.76234697211413">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="444.76234697211413" />
+          </lane>
+          <lane id="-2" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <roadMark color="white" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="434.76234697211413">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="444.76234697211413" />
+          </lane>
+          <lane id="-3" level="false" type="shoulder">
+            <width a="0.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="444.76234697211413" />
+          </lane>
+          <lane id="-4" level="false" type="sidewalk">
+            <width a="3" b="-1.9969730480710241E-18" c="-1.3469933291337483E-20" d="2.0190458092265958E-23" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="444.76234697211413" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <object type="trashbin" name="Trash Bin" id="265" s="28.999999999999815" t="1.1000000000000014" zOffset="-7.949847891097761E-09" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963267948575" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="258" s="29.000000000000178" t="-8.0999999999999872" zOffset="9.9382600815545175E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267949285" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="266" s="88.999999999999687" t="1.100000000000005" zOffset="-8.15208345272822E-09" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963267948362" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="259" s="89.000000000000142" t="-8.0999999999999979" zOffset="1.0898899827083142E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267949439" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="260" s="148.99999999999949" t="-8.0999999999999872" zOffset="1.0510774473004858E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267948821" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="267" s="148.99999999999952" t="1.0999999999999979" zOffset="-7.6669479653901362E-09" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963267949099" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="268" s="209.49999997638582" t="1.0999999999999883" zOffset="-1.6614801090497622E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963267950464" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="261" s="209.49999999999827" t="-8.09999999999999" zOffset="1.2170609942074861E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267947476" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="269" s="265.676861604688" t="1.099999999999985" zOffset="-4.6673716447287454E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.570796327189798" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="262" s="285.75574092250554" t="-8.1000000000005112" zOffset="4.9538557256312277E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707962970925442" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="270" s="322.00391604905224" t="1.1" zOffset="-3.5497882855395346E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963272653256" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="263" s="361.21430851584665" t="-8.1000000000004668" zOffset="-2.6349400794600797E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963536954179" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="271" s="377.2518624074562" t="1.1000000000000172" zOffset="3.6406169190428272E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963263841551" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="264" s="437.64633770719536" t="-8.1000000000004828" zOffset="-4.6718384748289932E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963522659105" pitch="0" roll="0" />
+      <object type="crosswalk" name="Zebra Strips Area" id="673" s="444.76234697211413" t="0" zOffset="0" validLength="0" orientation="none" length="4" width="14.2" radius="7.37631344236401" height="3.1571835279464722E-07" hdg="0" pitch="0.00033320487162133287" roll="0">
+        <outline>
+          <cornerLocal height="0" u="0.999999944310724" v="-10.599999999999994" z="2.8189254914782635E-17" />
+          <cornerLocal height="0" u="0.99999994420552307" v="3.6000000000000041" z="2.81892549118171E-17" />
+          <cornerLocal height="0" u="4.9999997221547225" v="3.6000000000000041" z="1.4094627459085779E-16" />
+          <cornerLocal height="0" u="4.9999997222599228" v="-10.599999999999994" z="1.4094627459382334E-16" />
+          <cornerLocal height="0" u="0.999999944310724" v="-10.599999999999994" z="2.8189254914782635E-17" />
+        </outline>
+        <userData code="Angle" value="0" />
+        <userData code="LineWidth" value="0.45" />
+        <userData code="LineGap" value="0.6" />
+      </object>
+      <object type="stopline" name="Stop Line" id="715" s="444.86234690206936" t="-8.9739765400010655E-17" zOffset="1.7686047938669791E-18" validLength="0" orientation="none" length="0" width="7" radius="3.5" height="0" hdg="0" pitch="0.00033320487162133287" roll="0">
+        <outline>
+          <cornerLocal height="0" u="0" v="0" z="-1.7686047938669791E-18" />
+          <cornerLocal height="0" u="4.4460066732740982E-15" v="-7" z="-1.7686047938668539E-18" />
+        </outline>
+      </object>
+    </objects>
+    <signals>
+      <signal s="440.63071648778833" t="-1.7500071807383812" id="703" name="Straight Arrow Paint" dynamic="no" orientation="none" zOffset="0.009904242953367233" country="CHN" type="Graphics" subtype="StraightAheadArrow" value="0" unit="m" height="0" width="3" text="" hOffset="-0.0028086685241395944" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="440.63116240971613" t="-5.250007156429894" id="704" name="Straight Arrow Paint" dynamic="no" orientation="none" zOffset="0.0098960999648168083" country="CHN" type="Graphics" subtype="StraightAheadArrow" value="0" unit="m" height="0" width="3" text="" hOffset="-0.00279916439490532" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+    </signals>
+  </road>
+  <road id="41" junction="-1" length="239.4906126881209" name="Road(41)">
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="1.5707963267830216" length="49.950000020669954" s="0" x="12.2792968750001" y="-121.65039062499996">
+        <line />
+      </geometry>
+      <geometry hdg="1.5707963267592735" length="19.816682488426853" s="49.950000020669954" x="12.27929693425398" y="-71.700390604330025">
+        <paramPoly3 aU="0" aV="0" bU="19.74501042096783" bV="2.2204460492503131E-16" cU="0.14074876522135327" cV="-3.4319481390170932" dU="-0.37973596767500339" dV="0.36918880748063021" pRange="normalized" />
+      </geometry>
+      <geometry hdg="1.2749668536945282" length="57.623201241474476" s="69.76668250909681" x="15.342056266485304" y="-52.194367385924949">
+        <paramPoly3 aU="0" aV="0" bU="56.919266017944651" bV="-7.1054273576010019E-15" cU="1.0409656536920977" cV="-19.813266396377319" dU="-3.4909140065387234" dV="3.2936938498436881" pRange="normalized" />
+      </geometry>
+      <geometry hdg="0.72508065037396363" length="28.938474616360544" s="127.38988375057129" x="47.023654277482805" y="-4.9071683623931257">
+        <paramPoly3 aU="0" aV="0" bU="28.851826915759073" bV="-5.3290705182007514E-15" cU="0.31463884380058715" cV="-3.4972050816596081" dU="-0.55573528351755286" dV="-0.22489352049954725" pRange="normalized" />
+      </geometry>
+      <geometry hdg="0.456037079801211" length="23.370605580703852" s="156.32835836693184" x="70.9057194558013" y="11.281558554676858">
+        <paramPoly3 aU="0" aV="0" bU="23.286277453866472" bV="1.7763568394002505E-15" cU="0.33496170026800343" cV="-2.8996938499905287" dU="-0.55956625267229754" dV="-0.32675321209130459" pRange="normalized" />
+      </geometry>
+      <geometry hdg="0.16061522297208664" length="9.8416486812314066" s="179.69896394763569" x="93.0315065837323" y="18.541053139559015">
+        <paramPoly3 aU="0" aV="0" bU="9.8310966509920377" bV="-2.9420910152566648E-15" cU="0.036223397830367432" cV="-0.73405907711046692" dU="-0.066327350310887212" dV="-0.034708433174730269" pRange="normalized" />
+      </geometry>
+      <geometry hdg="1.7301715751992273E-12" length="49.950000059253789" s="189.54061262886711" x="102.82929705276149" y="19.349609437009867">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="-1.1799857020378113E-06" b="-0.0082590028624809578" c="-0.0012246464187292384" d="-8.5430830658751432E-05" s="0" />
+      <elevation a="-0.082591208629310131" b="-0.014951544085179517" c="-0.00080280791761280443" d="1.7906136064687564E-05" s="5.0000000011380621" />
+      <elevation a="-0.269128973595798" b="-0.022545805984344788" c="-0.00029902268179324965" d="-9.018026748129103E-06" s="14.000000003708521" />
+      <elevation a="-0.5335073284804821" b="-0.028392425132801567" c="-0.00049176805200355778" d="8.6894159379392146E-06" s="24.000000007351687" />
+      <elevation a="-0.8937623267993331" b="-0.0360570642901579" c="-0.0016746012560466719" d="0.00012490912309759446" s="35.00000001231605" />
+      <elevation a="-1.326762743294239" b="-0.076739008173747028" c="0.012144979455047812" d="-0.000967237205055731" s="46.000000018282748" />
+      <elevation a="-1.5000004917383194" b="-0.05585614377373236" c="0.079458584925237663" d="-0.031886198516697814" s="49.950000020669961" />
+      <elevation a="-1.5326969884335995" b="-0.01075964624349013" c="-0.00039278381910447404" d="-1.1753216148209153E-05" s="51.793434164401575" />
+      <elevation a="-1.8243511654436588" b="-0.015891045553469967" c="-3.0268799559769742E-06" d="-6.8304747769062592E-06" s="66.865987033023075" />
+      <elevation a="-2.4554539937525988" b="-0.016866875548352186" c="-0.00030990650216558189" d="3.6176762509263535E-06" s="95.899854005907883" />
+      <elevation a="-3.7603510143235326" b="-0.032791426001919741" c="0.000530417889230933" d="-4.2411569311960626E-06" s="153.29044313220911" />
+      <elevation a="-4.3713708966970444" b="-0.052625504265164241" c="0.0089188278469238685" d="-0.00057414800489843194" s="182.50413000926471" />
+      <elevation a="-4.4999956600368023" b="-0.086684583533075635" c="0.22966414282867711" d="-0.18772396299166597" s="189.53156524282011" />
+      <elevation a="-4.5447400640696287" b="-0.023816023506255238" c="-0.0043216039486817974" d="0.00025546654033007705" s="190.53156524458763" />
+      <elevation a="-4.8810520367696881" b="-0.035129688722474746" c="-0.00046375143673180126" d="3.1390228638142113E-05" s="198.53156525787284" />
+      <elevation a="-5.2473338395357132" b="-0.031806953509601874" c="-2.9438687033085047E-05" d="1.500179925560901E-05" s="208.53156527234194" />
+      <elevation a="-5.5808050148189068" b="-0.027008951489332429" c="0.00011856392896583669" d="1.6548815273302679E-05" s="219.5315652855148" />
+      <elevation a="-5.841530772857368" b="-0.025290822010208644" c="0.000814100406139654" d="1.22983510401991E-05" s="230.531565295814" />
+      <elevation a="-5.9854581672698259" b="-0.0834015334795427" c="0.13531757930546773" d="-0.066981399979784237" s="238.53156530149948" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <left>
+          <lane id="2" level="false" type="sidewalk">
+            <width a="3.0000000000000004" b="-9.271887162418763E-19" c="0" d="6.466718457799071E-23" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="239.48156511765228" />
+          </lane>
+          <lane id="1" level="false" type="shoulder">
+            <width a="0.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="239.48156511765228" />
+          </lane>
+        </left>
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="yellow" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="239.48156511765228" />
+          </lane>
+          <lane id="-2" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="239.48156511765228" />
+          </lane>
+          <lane id="-3" level="false" type="shoulder">
+            <width a="0.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="239.48156511765228" />
+          </lane>
+          <lane id="-4" level="false" type="sidewalk">
+            <width a="2.9999999999999982" b="3.7087548649675052E-18" c="4.6459795723467958E-20" d="-1.2933436915598142E-22" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="239.48156511765228" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <object type="trashbin" name="Trash Bin" id="276" s="28.999999999971614" t="1.0999999999999979" zOffset="-5.1450063653923905E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963267692389" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="272" s="29.000000000209955" t="-8.0999999999999943" zOffset="5.43733331692664E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963268205578" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="277" s="87.686987303635789" t="1.0999999999999917" zOffset="-3.6479030462999162E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963266842939" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="273" s="95.899854551108689" t="-8.1000000000002732" zOffset="3.7069473757256343E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963322442386" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="278" s="146.1433434745893" t="1.1000000000000107" zOffset="-2.6733576685700207E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963266957061" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="274" s="162.30820354934784" t="-8.100000000000307" zOffset="1.7979409827617587E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963349044969" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="279" s="203.53156511766383" t="1.1000000000000014" zOffset="4.1450612719984292E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.570796326805004" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="275" s="225.53156511759914" t="-8.0999999999999943" zOffset="-2.8193984480395784E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267884484" pitch="0" roll="0" />
+    </objects>
+    <signals>
+      <signal s="235.53156511749933" t="-5.2500000000000018" id="706" name="Straight Right Turn Arrow Paint" dynamic="no" orientation="none" zOffset="0.0099998367937690347" country="CHN" type="Graphics" subtype="StraightOrRightTurnArrow" value="0" unit="m" height="0" width="3" text="" hOffset="6.8091678964666128E-11" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="235.53156511751635" t="-1.75" id="705" name="Straight Left Turn Arrow Paint" dynamic="no" orientation="none" zOffset="0.0099999349749424482" country="CHN" type="Graphics" subtype="StraightOrLeftTurnArrow" value="0" unit="m" height="0" width="3" text="" hOffset="6.8091678989071058E-11" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+    </signals>
+  </road>
+  <road id="48" junction="-1" length="283.22649698734335" name="Road(48)">
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="3.1415926535939356" length="49.950000059253732" s="0" x="152.77929711201523" y="36.3496094576798">
+        <line />
+      </geometry>
+      <geometry hdg="3.1415926536022134" length="15.247386103974627" s="49.950000059253732" x="102.82929705276149" y="36.349609437009846">
+        <paramPoly3 aU="0" aV="0" bU="15.198136373307875" bV="-6.6613381477509392E-16" cU="0.14317727103249567" cV="-2.1754858773438261" dU="-0.29225454692547181" dV="0.05200536079141127" pRange="normalized" />
+      </geometry>
+      <geometry hdg="2.8619442087303009" length="16.95938038128817" s="65.197386163228359" x="87.780237955320217" y="38.473089953375357">
+        <paramPoly3 aU="0" aV="0" bU="16.90586601174822" bV="-1.3322676295501878E-15" cU="0.1221491469358007" cV="-2.6251188573886921" dU="-0.29511725779898512" dV="0.21297594169300371" pRange="normalized" />
+      </geometry>
+      <geometry hdg="2.5856795107661585" length="54.28736996206591" s="82.156766544516529" x="72.363165053145735" y="45.410104349801308">
+        <paramPoly3 aU="0" aV="0" bU="53.710824251046049" bV="7.1054273576010019E-15" cU="-0.017595885728582061" cV="-20.23743709083962" dU="-2.2594338620306971" dV="4.7643176664822988" pRange="normalized" />
+      </geometry>
+      <geometry hdg="2.0765002387274274" length="36.83640494153812" s="136.44413650658242" x="36.839788910478148" y="85.69586348567104">
+        <paramPoly3 aU="0" aV="0" bU="36.780415334179764" bV="-5.3290705182007514E-15" cU="0.12081799786805192" cV="-4.0105794100555769" dU="-0.304139577894901" dV="0.34292608612923381" pRange="normalized" />
+      </geometry>
+      <geometry hdg="1.8852245046897962" length="39.30564700264641" s="173.28054144812054" x="22.319888289115685" y="119.4889313857674">
+        <paramPoly3 aU="0" aV="0" bU="39.248140208165736" bV="-6.2172489379008766E-15" cU="0.19301731740480221" cV="-3.4774188307079106" dU="-0.35854201510441186" dV="-0.12336923038492387" pRange="normalized" />
+      </geometry>
+      <geometry hdg="1.6974920678251102" length="20.69030855724646" s="212.58618845076694" x="13.656954535028087" y="157.76908405751266">
+        <paramPoly3 aU="0" aV="0" bU="20.676472527810951" bV="-3.3306690738754696E-16" cU="0.054042459695661904" cV="-1.1079731525407648" dU="-0.091270156960327142" dV="-0.13222401649687621" pRange="normalized" />
+      </geometry>
+      <geometry hdg="1.570796326797776" length="49.949999979329981" s="233.27649700801339" x="12.279296934253724" y="178.39960939566996">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="-5.9999934528023005" b="0.00825899000672043" c="0.001224643344324114" d="8.54309311326982E-05" s="0" />
+      <elevation a="-5.9174035526812077" b="0.014951524053773091" c="0.00080280679572037488" d="-1.7906082379604275E-05" s="5.0000000032624143" />
+      <elevation a="-5.7308660196140409" b="0.022545781521795455" c="0.00029902256031462773" d="9.0180262640702922E-06" s="14.000000010631027" />
+      <elevation a="-5.4664879217743874" b="0.028392400555833426" c="0.000491767831813901" d="-8.6894057700904163E-06" s="24.00000002107447" />
+      <elevation a="-5.106233206577599" b="0.036057038557611991" c="0.0016746005176033357" d="-0.00012490905554538809" s="35.000000035305504" />
+      <elevation a="-4.6732330722734332" b="0.076738959399047277" c="-0.011892266950537557" d="0.00090326081785117971" s="46.000000052410215" />
+      <elevation a="-4.4999954262748361" b="0.054104642732333584" c="-0.0750658632744664" d="0.028909414295137704" s="49.950000059253476" />
+      <elevation a="-4.475184565410018" b="0.0084166693513208386" c="-9.4969770645221538E-05" d="3.5656218251904876E-05" s="51.780235847365049" />
+      <elevation a="-4.2443215660750866" b="0.011841526591311028" c="0.00030180201461284782" d="-3.8703075876677776E-06" s="66.96877715317423" />
+      <elevation a="-3.5575367975980043" b="0.017556340928071464" c="-2.2529356378450963E-06" d="1.0383722930378657E-07" s="105.71579852478341" />
+      <elevation a="-2.8651183331385255" b="0.016141517367219832" c="4.2339261470061479E-05" d="-8.6321871030920255E-07" s="144.99514604335727" />
+      <elevation a="-2.1544805159792304" b="0.01628836559817377" c="8.5935621968173223E-05" d="-3.1339447982574144E-06" s="188.4562485437981" />
+      <elevation a="-1.567350497469306" b="0.065756962997825907" c="-0.020531147390111359" d="0.0020169353456297293" s="228.29351238243405" />
+      <elevation a="-1.4999970449134707" b="0.0560489553372426" c="-0.16839296484641572" d="0.15708846767617957" s="233.27004597848378" />
+      <elevation a="-1.455252586863935" b="0.023816053536547761" c="0.0043216089375213646" d="-0.00025546680034328355" s="234.27004597786723" />
+      <elevation a="-1.118940188549459" b="0.035129736707582508" c="0.00046375223947938831" d="-3.1390255364624875E-05" s="242.2700459732327" />
+      <elevation a="-0.75265785306692123" b="0.031807004445058393" c="2.9439137395715567E-05" d="-1.5001819969940909E-05" s="252.27004596818517" />
+      <elevation a="-0.41918609105050564" b="0.027009004820493249" c="-0.00011856327887888094" d="-1.65488748118986E-05" s="263.27004596358978" />
+      <elevation a="-0.158459747210145" b="0.02529088530618076" c="-0.00081409995659113333" d="-1.2298562987833691E-05" s="274.270045959997" />
+      <elevation a="-0.01453192625194788" b="0.083401784514464061" c="-0.13531796856612421" d="0.066981590237152971" s="282.27004595801338" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <left>
+          <lane id="2" level="false" type="sidewalk">
+            <width a="3" b="1.5680006281084657E-18" c="1.6609000501804445E-20" d="-5.8643449652550751E-23" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="283.22004589104216" />
+          </lane>
+          <lane id="1" level="false" type="shoulder">
+            <width a="0.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="283.22004589104216" />
+          </lane>
+        </left>
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="yellow" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="283.22004589104216" />
+          </lane>
+          <lane id="-2" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="283.22004589104216" />
+          </lane>
+          <lane id="-3" level="false" type="shoulder">
+            <width a="0.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="283.22004589104216" />
+          </lane>
+          <lane id="-4" level="false" type="sidewalk">
+            <width a="3" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="283.22004589104216" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <object type="trashbin" name="Trash Bin" id="280" s="28.999999999925656" t="-8.1000000000000014" zOffset="3.5099053619092047E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267859386" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="285" s="29.000000000010079" t="1.0999999999999943" zOffset="-3.7465825108995432E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963268038494" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="286" s="87.648443946097984" t="1.0999999999999917" zOffset="-3.2601592980796574E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963269646277" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="281" s="97.019771818089382" t="-8.1000000000002643" zOffset="4.0735723638718468E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963195909023" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="287" s="144.99514594457608" t="1.0999999999999877" zOffset="-3.9870102330752395E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963268335001" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="282" s="162.35997118693277" t="-8.1000000000001666" zOffset="4.5126958170271791E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963251903641" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="288" s="204.35392903953436" t="1.0999999999999923" zOffset="-3.5339120296740134E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963268249339" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="283" s="225.43334478143905" t="-8.1000000000001577" zOffset="4.025728082002189E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963244417811" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="289" s="264.27004589106542" t="1.0999999999999996" zOffset="-4.5673539339485814E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.570796326815783" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="284" s="283.220045891035" t="-8.0999999999999961" zOffset="2.9616059426110596E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267830141" pitch="0" roll="0" />
+    </objects>
+    <signals>
+      <signal s="279.27004589060442" t="-5.2499999999999964" id="708" name="Straight Right Turn Arrow Paint" dynamic="no" orientation="none" zOffset="0.010000209334756559" country="CHN" type="Graphics" subtype="StraightOrRightTurnArrow" value="0" unit="m" height="0" width="3" text="" hOffset="1.9519959794824902E-10" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="279.27004589065245" t="-1.7499999999999964" id="707" name="Straight Left Turn Arrow Paint" dynamic="no" orientation="none" zOffset="0.010000121251558851" country="CHN" type="Graphics" subtype="StraightOrLeftTurnArrow" value="0" unit="m" height="0" width="3" text="" hOffset="1.9519959814563667E-10" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+    </signals>
+  </road>
+  <road id="55" junction="-1" length="476.4853345051614" name="Road(55)">
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="4.7123889803875132" length="16.103305972278303" s="0" x="-6.7207031250002327" y="228.34960937499991">
+        <paramPoly3 aU="0" aV="0" bU="16.062759299521758" bV="3.4416913763379853E-15" cU="0.11399814452336088" cV="-2.0554505188649648" dU="-0.23805413239734641" dV="0.062971395350523984" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.4657289512861915" length="19.708169673242036" s="16.103305972278303" x="-8.7131822484696677" y="212.41090606334652">
+        <paramPoly3 aU="0" aV="0" bU="19.656003331519905" bV="2.6645352591003757E-15" cU="0.10406836217608983" cV="-2.901752505057952" dU="-0.27754438811108173" dV="0.29606703749593954" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.212980227933194" length="28.52800135260491" s="35.811475645520339" x="-15.996981766371853" y="194.15427078869283">
+        <paramPoly3 aU="0" aV="0" bU="28.467876211158632" bV="4.4408920985006262E-15" cU="0.048145757839847647" cV="-4.3136762093668271" dU="-0.27063050971529634" dV="0.76151668511943615" pRange="normalized" />
+      </geometry>
+      <geometry hdg="3.9882887517336907" length="79.727419419379842" s="64.339476998125249" x="-32.642205371625892" y="171.05975829968486">
+        <paramPoly3 aU="0" aV="0" bU="79.685198326820839" bV="1.4210854715202004E-14" cU="-0.80289262598715538" cV="-16.201571543613397" dU="0.46525722579903572" dV="8.8738781828868341" pRange="normalized" />
+      </geometry>
+      <geometry hdg="3.9156705848205915" length="6.862748304146189" s="144.06689641750509" x="-90.696070721218732" y="116.47514920191706">
+        <paramPoly3 aU="0" aV="0" bU="6.8599211722769189" bV="-2.2204460492503131E-16" cU="0.020500847263849487" cV="0.028527641215964294" dU="-0.024376262634166146" dV="0.20202618992990318" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.0124896294988472" length="19.1100665288977" s="150.92964472165127" x="-95.437425087567263" y="111.51752101269585">
+        <paramPoly3 aU="0" aV="0" bU="19.0068508690901" bV="-3.1086244689504383E-15" cU="0.25688159220850082" cV="3.7795602547743758" dU="-0.58329167894595457" dV="-0.27220909801138671" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.3751257621552968" length="17.933454109367169" s="170.03971125054898" x="-104.78745981764496" y="94.969493018213484">
+        <paramPoly3 aU="0" aV="0" bU="17.838378181541358" bV="-1.1102230246251565E-15" cU="0.34211092592427406" cV="2.9259933538465024" dU="-0.60743136566248523" dV="0.1391946911098465" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.734261552910227" length="38.045459176193233" s="187.97316535991615" x="-107.70997832027963" y="77.3721460093758">
+        <paramPoly3 aU="0" aV="0" bU="37.224311947395762" bV="1.4210854715202004E-14" cU="2.1871028904225653" cV="15.325528553471788" dU="-4.7180026822462082" dV="-1.8341775106506333" pRange="normalized" />
+      </geometry>
+      <geometry hdg="5.4760317296908605" length="17.933635003456921" s="226.01862453610937" x="-93.463080674166335" y="42.9820993764007">
+        <paramPoly3 aU="0" aV="0" bU="17.8385671007593" bV="1.0658141036401503E-14" cU="0.21058696490058182" cV="3.6503149746708603" dU="-0.5197168255089224" dV="-0.34375993174462227" pRange="normalized" />
+      </geometry>
+      <geometry hdg="5.8351503338446546" length="19.109936295429428" s="243.95225953956628" x="-78.95207475371744" y="32.606879697522125">
+        <paramPoly3 aU="0" aV="0" bU="19.006714528385267" bV="7.1054273576010019E-15" cU="0.34487923472982374" cV="3.2997636669371264" dU="-0.64198089719870666" dV="0.047710540740697027" pRange="normalized" />
+      </geometry>
+      <geometry hdg="6.1977985148537087" length="3.9231386701663578" s="263.06219583499569" x="-60.6389890695592" y="27.519042250412561">
+        <paramPoly3 aU="0" aV="0" bU="3.9219477395772713" bV="-2.1649348980190553E-15" cU="0.0038274165895910706" cV="0.16156817233714793" dU="-0.0073144738158474887" dV="0.0037798026865250578" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.4124706153273744E-12" length="209.49999999999937" s="266.98533450516203" x="-56.720702887984139" y="27.349609457679932">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="2.8926879167556763E-06" b="-0.0065595682664707534" c="-0.00070790930101700055" d="1.4345011136772108E-05" s="0" />
+      <elevation a="-0.16219757776707411" b="-0.014461498482351459" c="4.3011398109485528E-06" d="-1.6447758522168114E-05" s="12.36365442555716" />
+      <elevation a="-0.43237702734768391" b="-0.017207232539835061" c="2.4754803258519833E-05" d="-1.1309289688141278E-05" s="27.313001499211698" />
+      <elevation a="-0.92043689824640751" b="-0.018005443711384527" c="-0.00040560475215831984" d="6.5458636910130036E-06" s="49.345577589643305" />
+      <elevation a="-1.8682912783697248" b="-0.028977038013735544" c="0.00039585100431230362" d="-4.8891749804759707E-06" s="89.220025396617856" />
+      <elevation a="-2.4459346132352948" b="-0.023416586007648107" c="0.00019645030121904971" d="1.4706970741862841E-06" s="115.54255212046345" />
+      <elevation a="-2.8317067138850689" b="-0.02544566095477983" c="0.0013305629543928302" d="-3.7951854549573996E-05" s="136.11377106759525" />
+      <elevation a="-3.000002077780664" b="-0.11102719987654366" c="0.18953349850280338" d="-0.1299119555431871" s="147.00103914701393" />
+      <elevation a="-3.0487741576507688" b="-0.028008492667108" c="-0.0079988275808472314" d="0.0010232356862097986" s="147.97858088456593" />
+      <elevation a="-3.2207314856350422" b="-0.034287360457636321" c="0.00018114761698923839" d="-2.8178422242787732E-05" s="151.91898229205748" />
+      <elevation a="-3.3906675055623055" b="-0.024428739317017441" c="0.001388910413025307" d="-0.00020384376563854179" s="156.90468756869961" />
+      <elevation a="-3.5655665751546621" b="-0.01374423881974216" c="2.5119083419613019E-05" d="-1.3849146438240043E-05" s="163.96266720990448" />
+      <elevation a="-3.8887691013514996" b="-0.018504941333680327" c="-0.00050812627439818085" d="1.0615426799767482E-05" s="182.08304485765473" />
+      <elevation a="-4.5250741466879845" b="-0.026533195179520495" c="-7.2966517219330911E-06" d="2.6828661428619746E-06" s="208.00875719122882" />
+      <elevation a="-5.1045176405459642" b="-0.032277647516766074" c="0.00012541827035619714" d="6.8164292190063543E-06" s="230.91871076012342" />
+      <elevation a="-5.5625785030424595" b="-0.033255533606858949" c="0.00094668968270425523" d="-2.0201463421506002E-05" s="246.99027167260257" />
+      <elevation a="-5.84266394469887" b="-0.024584104519460772" c="0.0006008642597309092" d="1.9622928131348106E-05" s="258.08836910323083" />
+      <elevation a="-6.0000018524006009" b="-0.027382350834682895" c="0.019155709172918704" d="-0.0036003899026289107" s="266.98483610718205" />
+      <elevation a="-6.0069580497220159" b="-0.0009054959227226629" c="-6.0940425547927621E-05" d="1.2324012314994421E-06" s="269.98483610745683" />
+      <elevation a="-6.0579535914584994" b="-0.00067983104962988656" c="-2.3463350467919404E-06" d="2.1493062157266488E-07" s="301.98483610947125" />
+      <elevation a="-6.0722218304872513" b="0.00024879481810360341" c="9.41889897084093E-06" d="-5.4107690952388729E-08" s="349.98483611003485" />
+      <elevation a="-6.0022235522046685" b="0.0024906294420512761" c="-0.0003170193340247029" d="1.0748833853105155E-05" s="461.984836107269" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <left>
+          <lane id="2" level="false" type="sidewalk">
+            <width a="3.0000000000000004" b="-4.6600560616430337E-19" c="0" d="8.210185404159246E-24" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="476.48483620762119" />
+          </lane>
+          <lane id="1" level="false" type="shoulder">
+            <width a="0.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="476.48483620762119" />
+          </lane>
+        </left>
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="yellow" height="0" laneChange="none" material="" type="solid" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="476.48483620762119" />
+          </lane>
+          <lane id="-2" level="false" type="driving">
+            <width a="3.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="broken" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="476.48483620762119" />
+          </lane>
+          <lane id="-3" level="false" type="shoulder">
+            <width a="0.5" b="0" c="0" d="0" sOffset="0" />
+            <roadMark color="white" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="476.48483620762119" />
+          </lane>
+          <lane id="-4" level="false" type="sidewalk">
+            <width a="2.9999999999999982" b="1.8640224246572135E-18" c="1.1736086542605063E-20" d="-1.6420370808318492E-23" sOffset="0" />
+            <roadMark color="green" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="476.48483620762119" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <object type="trashbin" name="Trash Bin" id="298" s="28.251580977897827" t="1.0999999999999934" zOffset="3.3196338178331786E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963269506429" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="290" s="34.861568322780784" t="-8.1000000000002856" zOffset="-3.7001208552656095E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963197640264" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="299" s="87.11834677777243" t="1.0999999999999823" zOffset="3.2630354640517118E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963268048644" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="291" s="98.7052769057929" t="-8.1000000000000085" zOffset="-3.0214133328598791E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963266593434" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="300" s="147.00103927364196" t="1.1000000000000023" zOffset="4.5886870747580133E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963273205534" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="292" s="155.90291003140746" t="-8.0999999999998451" zOffset="-3.0568668618613515E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963150243638" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="293" s="205.98258827374397" t="-8.0999999999997918" zOffset="-4.0830544456582629E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963163996741" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="301" s="211.0458839182547" t="1.1000000000000045" zOffset="4.433416833649062E-08" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963271791274" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="294" s="255.07725413977312" t="-8.0999999999998451" zOffset="-2.6431719390984654E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.570796315681352" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="302" s="274.98483620762141" t="1.1000000000000014" zOffset="8.4576434744576545E-09" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.570796326795028" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="295" s="312.9848362076209" t="-8.1000000000000014" zOffset="-1.0822682838806941E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267948539" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="303" s="334.98483620762124" t="1.1000000000000121" zOffset="6.4788849840624607E-09" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.570796326794893" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="296" s="372.98483620762158" t="-8.0999999999999979" zOffset="-1.0803553696092649E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267949347" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="304" s="394.984836207621" t="1.1000000000000014" zOffset="7.2567347686458561E-09" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963267948468" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="297" s="432.98483620762141" t="-8.0999999999999979" zOffset="-1.0858315846462574E-07" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="1.5707963267949427" pitch="0" roll="0" />
+      <object type="trashbin" name="Trash Bin" id="305" s="454.98483620762096" t="1.1000000000000014" zOffset="6.124021290077053E-09" validLength="0" orientation="none" length="0" width="0" radius="0" height="0" hdg="-1.5707963267948681" pitch="0" roll="0" />
+    </objects>
+    <signals>
+      <signal s="471.98483620762426" t="-1.75" id="709" name="Straight Left Turn Arrow Paint" dynamic="no" orientation="none" zOffset="0.0099999514766118125" country="CHN" type="Graphics" subtype="StraightOrLeftTurnArrow" value="0" unit="m" height="0" width="3" text="" hOffset="-1.8376411478441893E-12" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+      <signal s="471.98483620762426" t="-5.25" id="710" name="Straight Right Turn Arrow Paint" dynamic="no" orientation="none" zOffset="0.00999990276399565" country="CHN" type="Graphics" subtype="StraightOrRightTurnArrow" value="0" unit="m" height="0" width="3" text="" hOffset="-1.8376411478441893E-12" pitch="0" roll="0">
+        <userData code="AttachedPoleObjectId" value="-1" />
+        <userData code="Length" value="3" />
+        <userData code="Color" value="#FFFFFF" />
+      </signal>
+    </signals>
+  </road>
+  <road id="63" junction="62" length="51.072474507004394" name="Road(63)">
+    <link>
+      <predecessor contactPoint="end" elementId="34" elementType="road" />
+      <successor contactPoint="start" elementId="25" elementType="road" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="4.7123889803715269" length="42.001428056347955" s="0" x="-23.220703125000071" y="59.349609374999943">
+        <paramPoly3 aU="0" aV="0" bU="41.887807325148373" bV="7.1054273576010019E-15" cU="-2.1666357877859355" cV="19.193237584253332" dU="1.253748086286059" dV="-10.495860718536926" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.8778421319752416" length="9.07104645065644" s="42.001428056347955" x="-14.523326259822969" y="18.374689751236978">
+        <paramPoly3 aU="0" aV="0" bU="9.0606997353455476" bV="4.2188474935755949E-15" cU="0.043706586676684367" cV="-0.5919954449426732" dU="-0.070382564634986267" dV="-0.10276670504381902" pRange="normalized" />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="6.8731606006622314E-07" b="-3.0726515986360836E-09" c="-1.8048780283327944E-10" d="2.355970689293234E-12" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <link>
+              <predecessor id="-2" />
+              <successor id="-2" />
+            </link>
+            <width a="3.5000806955987018" b="-0.0031807670738536477" c="-0.00051404876768023115" d="1.7851325693801121E-05" sOffset="0" />
+            <width a="3.374156482079" b="-0.0033968843086543471" c="0.000527320742815756" d="-1.2447331726555226E-05" sOffset="19.794629816627658" />
+            <width a="3.3992205944691158" b="0.004401202248271216" c="0.000615706712767862" d="-3.1453581223108527E-05" sOffset="34.640602179098408" />
+            <width a="3.4938153216501742" b="0.017740106671601429" c="-0.010608804331348335" d="0.0018023534456549227" sOffset="48.234483216737154" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="51.072497772230989" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <objectReference id="669" orientation="none" s="51.072497772230982" t="3.4999999999999964" validLength="0" zOffset="1.387670636177063E-07" />
+      <objectReference id="673" orientation="none" s="-4.60840254845613E-11" t="3.4999999999999964" validLength="0" zOffset="1.387670636177063E-07" />
+    </objects>
+  </road>
+  <road id="66" junction="62" length="51.072474507004415" name="Road(66)">
+    <link>
+      <predecessor contactPoint="end" elementId="34" elementType="road" />
+      <successor contactPoint="start" elementId="25" elementType="road" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="4.7123889803715269" length="42.001428056347983" s="0" x="-19.720703125000071" y="59.349609374999957">
+        <paramPoly3 aU="0" aV="0" bU="41.887807325148387" bV="8.8817841970012523E-15" cU="-2.1666357877859" cV="19.1932375842533" dU="1.2537480862860377" dV="-10.495860718536889" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.8778421319752416" length="9.0710464506564339" s="42.001428056347983" x="-11.023326259822969" y="18.374689751236964">
+        <paramPoly3 aU="0" aV="0" bU="9.0606997353455441" bV="-1.9984014443252818E-15" cU="0.043706586676680814" cV="-0.59199544494269141" dU="-0.07038256463498449" dV="-0.10276670504380769" pRange="normalized" />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="8.2608312368392944E-07" b="-3.0726515986360828E-09" c="-1.8048780283327939E-10" d="2.3559706892932332E-12" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <link>
+              <predecessor id="-1" />
+              <successor id="-1" />
+            </link>
+            <width a="3.5000806955987018" b="-0.0031807670738535584" c="-0.00051404876768022052" d="1.7851325693800812E-05" sOffset="0" />
+            <width a="3.3741564820790035" b="-0.0033968843086541532" c="0.00052732074281576632" d="-1.2447331726555645E-05" sOffset="19.794629816627655" />
+            <width a="3.3992205944691216" b="0.0044012022482712481" c="0.00061570671276785238" d="-3.1453581223108527E-05" sOffset="34.6406021790984" />
+            <width a="3.4938153216501786" b="0.017740106671600368" c="-0.010608804331349054" d="0.0018023534456550838" sOffset="48.234483216737146" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="51.072497772230989" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <objectReference id="249" orientation="none" s="-60.999999999998614" t="-0.10000000080295646" validLength="0" zOffset="8.5961073637008667E-07" />
+      <objectReference id="250" orientation="none" s="1.2877698907233823E-12" t="-0.10000000000001297" validLength="0" zOffset="1.9557774066925155E-08" />
+      <objectReference id="669" orientation="none" s="51.072497772230989" t="0" validLength="0" zOffset="0" />
+      <objectReference id="713" orientation="none" s="51.072497772230989" t="0" validLength="0" zOffset="0" />
+      <objectReference id="673" orientation="none" s="0" t="0" validLength="0" zOffset="0" />
+      <objectReference id="715" orientation="none" s="0.09999992440396" t="-8.9812830698716248E-17" validLength="0" zOffset="3.3320463206305058E-05" />
+    </objects>
+  </road>
+  <road id="69" junction="62" length="49.999999999999936" name="Road(69)">
+    <link>
+      <predecessor contactPoint="end" elementId="16" elementType="road" />
+      <successor contactPoint="start" elementId="25" elementType="road" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="4.7123889803846915" length="49.999999999999936" s="0" x="-13.720703125000091" y="59.349609374999972">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="1.0617077350616455E-06" b="-6.8824738264083892E-09" c="-4.1294842958450355E-10" d="5.505979061126716E-12" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <link>
+              <predecessor id="-2" />
+              <successor id="-2" />
+            </link>
+            <width a="3.5000001428571368" b="-1.0714285370028171E-09" c="-6.428571204253338E-11" d="8.5714283315496821E-13" sOffset="0" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="49.999999999999972" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <objectReference id="665" orientation="none" s="-1.1102230246251524E-14" t="3.4999999999999969" validLength="0" zOffset="1.3969838619232178E-07" />
+      <objectReference id="669" orientation="none" s="49.999999999999993" t="3.4999999999999964" validLength="0" zOffset="1.3876706361770627E-07" />
+      <objectReference id="673" orientation="none" s="8.8817841970011924E-15" t="-5.9999999999999822" validLength="0" zOffset="-2.3562461137771606E-07" />
+    </objects>
+  </road>
+  <road id="72" junction="62" length="49.99999999999995" name="Road(72)">
+    <link>
+      <predecessor contactPoint="end" elementId="16" elementType="road" />
+      <successor contactPoint="start" elementId="25" elementType="road" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="4.71238898038469" length="49.99999999999995" s="0" x="-10.220703125000092" y="59.349609374999972">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="1.2023374438285828E-06" b="-6.9011002779007034E-09" c="-4.1406601667404267E-10" d="5.5208802223205753E-12" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <link>
+              <predecessor id="-1" />
+              <successor id="-1" />
+            </link>
+            <width a="3.5000001428571368" b="-1.0714285103574647E-09" c="-6.4285710443812252E-11" d="8.5714281539140057E-13" sOffset="0" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="49.999999999999957" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <objectReference id="665" orientation="none" s="0" t="0" validLength="0" zOffset="0" />
+      <objectReference id="711" orientation="none" s="0.09999999999989484" t="-5.32907051819983E-16" validLength="0" zOffset="-2.3283064365374257E-09" />
+      <objectReference id="669" orientation="none" s="49.999999999999957" t="0" validLength="0" zOffset="0" />
+      <objectReference id="713" orientation="none" s="49.999999999999957" t="0" validLength="0" zOffset="0" />
+    </objects>
+  </road>
+  <road id="75" junction="62" length="49.999999999999964" name="Road(75)">
+    <link>
+      <predecessor contactPoint="start" elementId="25" elementType="road" />
+      <successor contactPoint="end" elementId="16" elementType="road" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="1.5707963267949" length="49.999999999999964" s="0" x="-6.7207031250000426" y="9.3496093750000018">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="6.50063157081604E-07" b="6.8917870521545447E-09" c="4.1350722312927293E-10" d="-5.5134296417236416E-12" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <link>
+              <predecessor id="2" />
+              <successor id="2" />
+            </link>
+            <width a="3.5000000357142818" b="1.0714285503254931E-09" c="6.4285712930711764E-11" d="-8.5714284026039495E-13" sOffset="0" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="49.999999999999986" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <objectReference id="665" orientation="none" s="50" t="3.4999999999999956" validLength="0" zOffset="-1.3783574104309079E-07" />
+      <objectReference id="669" orientation="none" s="-7.1054273576010019E-15" t="3.4999999999999956" validLength="0" zOffset="-1.3783574104309082E-07" />
+    </objects>
+  </road>
+  <road id="78" junction="62" length="50" name="Road(78)">
+    <link>
+      <predecessor contactPoint="start" elementId="25" elementType="road" />
+      <successor contactPoint="end" elementId="16" elementType="road" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="1.5707963267948966" length="50" s="0" x="-10.220703125000041" y="9.3496093749999876">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="5.1222741603851318E-07" b="6.9011002779006968E-09" c="4.1406601667404195E-10" d="-5.5208802223205608E-12" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <link>
+              <predecessor id="1" />
+              <successor id="1" />
+            </link>
+            <width a="3.5000000357142818" b="1.0714285769708462E-09" c="6.428571452943297E-11" d="-8.5714285802396451E-13" sOffset="0" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="49.999999999999964" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <objectReference id="665" orientation="none" s="49.999999999999964" t="0" validLength="0" zOffset="0" />
+      <objectReference id="711" orientation="none" s="49.900000000000084" t="-3.1086244689520287E-16" validLength="0" zOffset="-2.4214386939988624E-09" />
+      <objectReference id="669" orientation="none" s="0" t="0" validLength="0" zOffset="0" />
+      <objectReference id="713" orientation="none" s="0" t="0" validLength="0" zOffset="0" />
+      <objectReference id="260" orientation="none" s="8.1000000836863659" t="-1.0000002399009515" validLength="0" zOffset="-6.0730373468250045" />
+      <objectReference id="267" orientation="none" s="-1.0999999163136254" t="-1.0000002399009431" validLength="0" zOffset="-6.07303745765239" />
+    </objects>
+  </road>
+  <road id="79" junction="62" length="51.066337683640072" name="Road(79)">
+    <link>
+      <predecessor contactPoint="end" elementId="34" elementType="road" />
+      <successor contactPoint="start" elementId="25" elementType="road" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="4.7123889803715269" length="18.002305918833876" s="0" x="-19.720703125000071" y="59.349609374999957">
+        <paramPoly3 aU="0" aV="0" bU="17.951461020584105" bV="3.1086244689504383E-15" cU="-0.077300736033656392" cV="3.8919123581289838" dU="-0.14578250047733121" dV="-1.0706406734565768" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.9699071747394008" length="25.554971820396148" s="18.002305918833876" x="-16.899431440561003" y="41.621231590889735">
+        <paramPoly3 aU="0" aV="0" bU="25.535144520923858" bV="4.8849813083506888E-15" cU="0.17000828616832919" cV="1.855892427124509" dU="-0.17293923049327731" dV="-2.2427717150232245" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.851498179304409" length="7.5090599444100476" s="43.557277739230024" x="-10.770974247478183" y="16.832411164394667">
+        <paramPoly3 aU="0" aV="0" bU="7.5030074588528608" bV="1.6653345369377348E-15" cU="0.023912469183432705" cV="-0.437477070463121" dU="-0.04010155905118129" dV="-0.055140060206230745" pRange="normalized" />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="8.2608312368392944E-07" b="-3.0730306577536841E-09" c="-1.80532337506438E-10" d="2.3568427331793403E-12" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <link>
+              <predecessor id="-1" />
+              <successor id="-1" />
+            </link>
+            <width a="3.49957710964585" b="-0.0030737612849606119" c="-0.00051078877689820666" d="1.7620228271363316E-05" sOffset="0" />
+            <width a="3.3737711706789453" b="-0.00220911653373415" c="0.00056619333383272946" d="-1.5447249418290932E-05" sOffset="20.464494035768453" />
+            <width a="3.4241854526974427" b="0.0053006165559705883" c="0.00042666816462078321" d="-2.9433320505916065E-05" sOffset="37.528251378838576" />
+            <width a="3.4973210957622012" b="0.020192036293187582" c="-0.019613867968503586" d="0.0051229327259353979" sOffset="49.182548928817916" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="51.059813914920426" />
+          </lane>
+          <lane id="-2" level="false" type="driving">
+            <link>
+              <predecessor id="-2" />
+              <successor id="-2" />
+            </link>
+            <width a="3.4995107754609913" b="-0.0032982808145688974" c="-0.0005602835976039717" d="2.0686364236084387E-05" sOffset="0" />
+            <width a="3.3778933069574948" b="-0.0037513044994121215" c="0.00047928462336290872" d="-9.36322630877381E-06" sOffset="18.436493940464036" />
+            <width a="3.3939265194169055" b="0.0037346044246489773" c="0.00054089715318415463" d="-2.3407694158070408E-05" sOffset="32.509499219112072" />
+            <width a="3.4954169552706773" b="0.018834752243613532" c="-0.011932472064763682" d="0.0020674541979807453" sOffset="48.243916435766657" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="51.059813914920426" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <objectReference id="250" orientation="none" s="-0.00135296704887935" t="-0.0999908469819475" validLength="0" zOffset="1.9557774066925155E-08" />
+      <objectReference id="669" orientation="none" s="51.059813914920426" t="0" validLength="0" zOffset="0" />
+      <objectReference id="713" orientation="none" s="51.059813914920426" t="0" validLength="0" zOffset="0" />
+      <objectReference id="673" orientation="none" s="0" t="0" validLength="0" zOffset="0" />
+      <objectReference id="715" orientation="none" s="0.099990771392796426" t="-0.0013529660273774039" validLength="0" zOffset="3.3320463206305058E-05" />
+    </objects>
+  </road>
+  <road id="80" junction="62" length="51.066337683640057" name="Road(80)">
+    <link>
+      <predecessor contactPoint="end" elementId="34" elementType="road" />
+      <successor contactPoint="start" elementId="25" elementType="road" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="4.7123889803715269" length="18.002305918833834" s="0" x="-26.72070312500006" y="59.349609374999957">
+        <paramPoly3 aU="0" aV="0" bU="17.951461020584091" bV="3.9968028886505635E-15" cU="-0.077300736033656392" cV="3.8919123581289137" dU="-0.14578250047735963" dV="-1.0706406734565164" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.9699071747394026" length="25.554971820396158" s="18.002305918833834" x="-23.89943144056101" y="41.621231590889742">
+        <paramPoly3 aU="0" aV="0" bU="25.535144520923865" bV="1.2878587085651816E-14" cU="0.17000828616831143" cV="1.8558924271243948" dU="-0.172939230493256" dV="-2.2427717150231574" pRange="normalized" />
+      </geometry>
+      <geometry hdg="4.8514981793044161" length="7.5090599444100716" s="43.557277739229988" x="-17.770974247478179" y="16.832411164394678">
+        <paramPoly3 aU="0" aV="0" bU="7.5030074588529043" bV="4.2743586448068527E-15" cU="0.023912469183423823" cV="-0.43747707046316897" dU="-0.04010155905119106" dV="-0.055140060206194774" pRange="normalized" />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="5.4948031902313232E-07" b="-3.0639118724191057E-09" c="-1.7999663324084058E-10" d="2.3498491345645711E-12" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="shoulder">
+            <link>
+              <predecessor id="-3" />
+              <successor id="-3" />
+            </link>
+            <width a="0.49992246388400768" b="0.0046976996158103442" c="-0.00056444441590126535" d="0.00021623269489764367" sOffset="0" />
+            <width a="0.55766187088467944" b="0.01669469286080414" c="4.5572786214727425E-06" d="0.00014314228842914563" sOffset="6.145497980154679" />
+            <width a="0.77351500056500655" b="0.028412570596826781" c="0.0022760000803592998" d="-0.00010368454158188018" sOffset="14.339495287027585" />
+            <width a="1.3049836097222078" b="0.050193699897555358" c="-0.0011012157090268095" d="1.6056952384593894E-05" sOffset="27.490747059385555" />
+            <width a="1.6803900637208777" b="0.038822038416957479" c="-0.00077509282120865144" d="-3.3687624669426928E-05" sOffset="36.524500946893255" />
+            <width a="1.9234097927517424" b="0.02432177050436515" c="-0.0029681376558560566" d="0.00015836747556326715" sOffset="44.489386463561615" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="51.059813914920419" />
+          </lane>
+          <lane id="-2" level="false" type="sidewalk">
+            <link>
+              <predecessor id="-4" />
+              <successor id="-4" />
+            </link>
+            <width a="2.9995673124802873" b="-0.0017857751107858411" c="-0.0003331980388658708" d="1.1645846104319438E-05" sOffset="0" />
+            <width a="2.9228923991948692" b="7.3103594700886971E-06" c="0.00021964694341805298" d="-4.4552410333991179E-06" sOffset="21.468244467713752" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="51.059813914920419" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <objectReference id="254" orientation="none" s="80.059813914920426" t="-2.5999999999999925" validLength="0" zOffset="-5.0663948059082052E-07" />
+      <objectReference id="264" orientation="none" s="-5.8687076803566" t="-1.4821446462906462" validLength="0" zOffset="-0.122651188634336" />
+    </objects>
+  </road>
+  <road id="82" junction="62" length="50" name="Road(82)">
+    <link>
+      <predecessor contactPoint="start" elementId="25" elementType="road" />
+      <successor contactPoint="end" elementId="16" elementType="road" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="1.5707963267948966" length="50" s="0" x="-10.220703125000041" y="9.3496093749999876">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="5.1222741603851318E-07" b="6.9011002779006968E-09" c="4.1406601667404195E-10" d="-5.5208802223205608E-12" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <link>
+              <predecessor id="1" />
+              <successor id="1" />
+            </link>
+            <width a="3.5000000357142818" b="1.0714285503254935E-09" c="6.4285712930711816E-11" d="-8.5714284026039616E-13" sOffset="0" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="49.999999999999964" />
+          </lane>
+          <lane id="-2" level="false" type="driving">
+            <link>
+              <predecessor id="2" />
+              <successor id="2" />
+            </link>
+            <width a="3.4999999821428536" b="-5.3571424185605606E-10" c="-3.2142854955452594E-11" d="4.2857140059027284E-13" sOffset="0" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="49.999999999999964" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <objectReference id="665" orientation="none" s="49.999999999999964" t="0" validLength="0" zOffset="0" />
+      <objectReference id="711" orientation="none" s="49.900000000000084" t="-2.2204460492529637E-16" validLength="0" zOffset="-2.4214386939988624E-09" />
+      <objectReference id="669" orientation="none" s="0" t="0" validLength="0" zOffset="0" />
+      <objectReference id="713" orientation="none" s="0" t="0" validLength="0" zOffset="0" />
+      <objectReference id="260" orientation="none" s="8.1000000836863659" t="-1.0000002399009515" validLength="0" zOffset="-6.0730373468250045" />
+      <objectReference id="267" orientation="none" s="-1.0999999163136254" t="-1.0000002399009431" validLength="0" zOffset="-6.07303745765239" />
+    </objects>
+  </road>
+  <road id="83" junction="62" length="49.999999999999972" name="Road(83)">
+    <link>
+      <predecessor contactPoint="start" elementId="25" elementType="road" />
+      <successor contactPoint="end" elementId="16" elementType="road" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="1.5707963267948966" length="49.999999999999972" s="0" x="-3.2207031250000462" y="9.3496093750000036">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="7.8696757555007935E-07" b="6.9011002779007017E-09" c="4.1406601667404221E-10" d="-5.5208802223205664E-12" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="shoulder">
+            <link>
+              <predecessor id="3" />
+              <successor id="3" />
+            </link>
+            <width a="2.0000000624999972" b="1.8749998798028859E-09" c="1.1249999296580888E-10" d="-1.4999999038423097E-12" sOffset="0" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="49.999999999999986" />
+          </lane>
+          <lane id="-2" level="false" type="sidewalk">
+            <link>
+              <predecessor id="4" />
+              <successor id="4" />
+            </link>
+            <width a="2.9999999625000013" b="-1.1249998443929602E-09" c="-6.7499990841213312E-11" d="8.999998684089413E-13" sOffset="0" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="49.999999999999986" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <objectReference id="252" orientation="none" s="110.99999999999989" t="-2.6000000000000405" validLength="0" zOffset="9.7602605819702148E-07" />
+      <objectReference id="253" orientation="none" s="49.999999999999993" t="-2.5999999999999996" validLength="0" zOffset="7.91624188423159E-08" />
+      <objectReference id="256" orientation="none" s="-29.000000000000025" t="-2.5999999999999286" validLength="0" zOffset="-3.1944364309310913E-07" />
+    </objects>
+  </road>
+  <road id="81" junction="62" length="49.99999999999995" name="Road(81)">
+    <link>
+      <predecessor contactPoint="end" elementId="16" elementType="road" />
+      <successor contactPoint="start" elementId="25" elementType="road" />
+    </link>
+    <type s="0" type="town">
+      <speed max="undefined" unit="km/h" />
+    </type>
+    <planView>
+      <geometry hdg="4.71238898038469" length="49.99999999999995" s="0" x="-10.220703125000092" y="59.349609374999972">
+        <line />
+      </geometry>
+    </planView>
+    <elevationProfile>
+      <elevation a="1.2023374438285828E-06" b="-6.9011002779007034E-09" c="-4.1406601667404267E-10" d="5.5208802223205753E-12" s="0" />
+    </elevationProfile>
+    <lateralProfile>
+      <superelevation a="0" b="0" c="0" d="0" s="0" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="left" />
+      <crossfall a="0" b="0" c="0" d="0" s="0" side="right" />
+    </lateralProfile>
+    <lanes>
+      <laneOffset a="0" b="0" c="0" d="0" s="0" />
+      <laneSection s="0" singleSide="false">
+        <center>
+          <lane id="0" level="false" type="none">
+            <roadMark color="standard" height="0" laneChange="both" material="" type="none" weight="standard" width="0.15" sOffset="0">
+              <userData code="brokenInVisibleSeglength" value="6" />
+              <userData code="brokenVisibleSeglength" value="4" />
+            </roadMark>
+          </lane>
+        </center>
+        <right>
+          <lane id="-1" level="false" type="driving">
+            <link>
+              <predecessor id="-1" />
+              <successor id="-1" />
+            </link>
+            <width a="3.5000001428571368" b="-1.0714285370028176E-09" c="-6.4285712042533431E-11" d="8.5714283315496942E-13" sOffset="0" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="49.99999999999995" />
+          </lane>
+          <lane id="-2" level="false" type="driving">
+            <link>
+              <predecessor id="-2" />
+              <successor id="-2" />
+            </link>
+            <width a="3.4999999285714276" b="5.3571429070586929E-10" c="3.214285761998787E-11" d="-4.2857142901198261E-13" sOffset="0" />
+            <height inner="0" outer="0" sOffset="0" />
+            <height inner="0" outer="0" sOffset="49.99999999999995" />
+          </lane>
+        </right>
+      </laneSection>
+    </lanes>
+    <objects>
+      <objectReference id="665" orientation="none" s="0" t="0" validLength="0" zOffset="0" />
+      <objectReference id="711" orientation="none" s="0.09999999999989484" t="-5.7731597280494317E-16" validLength="0" zOffset="-2.3283064365374257E-09" />
+      <objectReference id="669" orientation="none" s="49.99999999999995" t="0" validLength="0" zOffset="0" />
+      <objectReference id="713" orientation="none" s="49.99999999999995" t="0" validLength="0" zOffset="0" />
+      <objectReference id="673" orientation="none" s="1.5543122344750677E-15" t="-9.49999999999998" validLength="0" zOffset="-3.7625432014465332E-07" />
+    </objects>
+  </road>
+  <junction id="62" name="Junction(62)">
+    <connection connectingRoad="63" contactPoint="start" id="0" incomingRoad="34">
+      <laneLink from="-2" to="-1" />
+    </connection>
+    <connection connectingRoad="66" contactPoint="start" id="1" incomingRoad="34">
+      <laneLink from="-1" to="-1" />
+    </connection>
+    <connection connectingRoad="69" contactPoint="start" id="2" incomingRoad="16">
+      <laneLink from="-2" to="-1" />
+    </connection>
+    <connection connectingRoad="72" contactPoint="start" id="3" incomingRoad="16">
+      <laneLink from="-1" to="-1" />
+    </connection>
+    <connection connectingRoad="75" contactPoint="start" id="4" incomingRoad="25">
+      <laneLink from="2" to="-1" />
+    </connection>
+    <connection connectingRoad="78" contactPoint="start" id="5" incomingRoad="25">
+      <laneLink from="1" to="-1" />
+    </connection>
+    <connection connectingRoad="79" contactPoint="start" id="6" incomingRoad="34">
+      <laneLink from="-1" to="-1" />
+      <laneLink from="-2" to="-2" />
+    </connection>
+    <connection connectingRoad="80" contactPoint="start" id="7" incomingRoad="34">
+      <laneLink from="-3" to="-1" />
+      <laneLink from="-4" to="-2" />
+    </connection>
+    <connection connectingRoad="82" contactPoint="start" id="8" incomingRoad="25">
+      <laneLink from="1" to="-1" />
+      <laneLink from="2" to="-2" />
+    </connection>
+    <connection connectingRoad="83" contactPoint="start" id="9" incomingRoad="25">
+      <laneLink from="3" to="-1" />
+      <laneLink from="4" to="-2" />
+    </connection>
+    <connection connectingRoad="81" contactPoint="start" id="10" incomingRoad="16">
+      <laneLink from="-1" to="-1" />
+      <laneLink from="-2" to="-2" />
+    </connection>
+  </junction>
+</OpenDRIVE>
