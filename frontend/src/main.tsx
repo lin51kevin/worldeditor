@@ -34,6 +34,25 @@ if (import.meta.env.DEV) {
   import('./viewport/viewportRef').then(({ getViewportRenderer }) => {
     (window as unknown as Record<string, unknown>)['__getViewportRenderer'] = getViewportRenderer;
   });
+  // Case-actor manual verification: `__caseActors.spawn()` drops sample boxes +
+  // a trajectory at the viewport center (switching to 3D) so box rendering and
+  // its coexistence with the WASM road surface can be eyeballed; `.clear()`
+  // removes them.
+  Promise.all([
+    import('./viewport/viewportRef'),
+    import('./plugins/npc-actors'),
+  ]).then(([{ getViewportRenderer }, { spawnSampleActors, clearSampleActors }]) => {
+    (window as unknown as Record<string, unknown>)['__caseActors'] = {
+      spawn: () => {
+        const r = getViewportRenderer();
+        if (r) spawnSampleActors(r);
+      },
+      clear: () => {
+        const r = getViewportRenderer();
+        if (r) clearSampleActors(r);
+      },
+    };
+  });
 }
 
 const rootElement = document.getElementById('root');

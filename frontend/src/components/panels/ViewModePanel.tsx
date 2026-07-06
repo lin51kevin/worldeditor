@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useViewportStore } from '../../stores/viewportStore';
+import { getViewportRenderer } from '../../viewport/viewportRef';
+import { spawnSampleActors, clearSampleActors } from '../../plugins/npc-actors';
 
 type ViewMode = 'sketch' | 'wire' | 'solid';
 
@@ -37,6 +39,29 @@ export function ViewModePanel() {
           </label>
         ))}
       </div>
+      {import.meta.env.DEV && (
+        <div className="menubar-snap-settings-section">
+          <div className="menubar-snap-settings-header">Case actors (debug)</div>
+          <button
+            type="button"
+            onClick={() => {
+              const r = getViewportRenderer();
+              if (r) spawnSampleActors(r);
+            }}
+          >
+            Spawn sample boxes
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const r = getViewportRenderer();
+              if (r) clearSampleActors(r);
+            }}
+          >
+            Clear boxes
+          </button>
+        </div>
+      )}
     </div>
   );
 }

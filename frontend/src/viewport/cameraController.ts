@@ -127,10 +127,66 @@ export class CameraController {
     this.onViewBecameDirty?.();
   }
 
+  /**
+   * Frame the 3D perspective camera to fit a planar bounds (world meters),
+   * looking at its center from a tilted angle. Used by embedding hosts to give a
+   * sensible default 3D view independent of the prior 2D zoom.
+   */
+  frameBounds3D(minX: number, minY: number, maxX: number, maxY: number): void {
+    if (![minX, minY, maxX, maxY].every((v) => Number.isFinite(v))) return;
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const extent = Math.max(maxX - minX, maxY - minY, 10);
+    this.camera.fovY = Math.PI / 4;
+    // Distance so the extent fits the vertical FOV with margin.
+    const dist = (extent / 2) / Math.tan(this.camera.fovY / 2) * 1.3 + 20;
+    this.dimensionMode = '3d';
+    this._animatingDimension = false;
+    this.camera.target = [cx, cy, 0];
+    this.camera.position = [cx, cy - dist * 0.6, dist * 0.8];
+    this.camera.up = [0, 0, 1];
+    {
+      const clip = this.perspClipPlanes(dist);
+      this.camera.near = clip.near;
+      this.camera.far = clip.far;
+    }
+    this.cachedViewProj = null;
+    this.cachedInverseViewProj = null;
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+    this.reportScale();
+  }
+
+  /**
+   * Recenter the 3D camera so a ground point (world meters) sits at the exact
+   * viewport centre, preserving the current orientation, tilt, and zoom. Used to
+   * follow a moving entity during preview playback. No-op in 2D mode.
+   *
+   * The look-at target is anchored to (x, y, 0) — the ground — and the camera is
+   * placed at that target plus the current camera→target offset, so the followed
+   * point always projects to screen centre regardless of any prior target Z
+   * drift (e.g. after a 3D pan).
+   */
+  centerOnGround(x: number, y: number): void {
+    if (this.dimensionMode !== '3d') return;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const [px, py, pz] = this.camera.position;
+    const [tx, ty, tz] = this.camera.target;
+    const ox = px - tx;
+    const oy = py - ty;
+    const oz = pz - tz;
+    if (x === tx && y === ty && tz === 0) return;
+    this.camera.target = [x, y, 0];
+    this.camera.position = [x + ox, y + oy, oz];
+    this.cachedViewProj = null;
+    this.cachedInverseViewProj = null;
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+  }
+
   get isViewDirty(): boolean {
     return this.viewDirty;
-  }
-  set isViewDirty(v: boolean) {
+  }  set isViewDirty(v: boolean) {
     this.viewDirty = v;
   }
 
@@ -224,8 +280,11 @@ export class CameraController {
       // far plane keeps the small 2D value (~20100m); on a large map the
       // camera-to-target distance exceeds it, clipping everything beyond the
       // far plane — only the near half of the scene renders.
-      this.camera.near = Math.max(0.1, perspDist * 0.001);
-      this.camera.far = Math.max(100000, perspDist * 10);
+      {
+        const clip = this.perspClipPlanes(perspDist);
+        this.camera.near = clip.near;
+        this.camera.far = clip.far;
+      }
     }
 
     this._animStartPos = [...this.camera.position] as [number, number, number];
@@ -238,6 +297,11 @@ export class CameraController {
   private _startDimensionAnimation(): void {
     const startTime = performance.now();
     const step = () => {
+      // Bail if the animation was cancelled (e.g. frameBounds3D / fitToVertices /
+      // resetCamera set a camera directly and cleared the flag). Without this the
+      // in-flight animation keeps overriding that camera for the rest of its
+      // duration, so a host-requested fixed 3D framing would be undone.
+      if (!this._animatingDimension) return;
       const elapsed = performance.now() - startTime;
       const t = Math.min(elapsed / this._animDuration, 1);
       const ease = 1 - Math.pow(1 - t, 3);
@@ -335,8 +399,9 @@ export class CameraController {
       const dist = maxExtent * 0.8;
       this.camera.position = [cx, cy - dist * 0.6, cz + dist * 0.8];
       this.camera.up = [0, 0, 1];
-      this.camera.near = Math.max(0.1, maxExtent * 0.001);
-      this.camera.far = Math.max(100000, maxExtent * 10);
+      const clip = this.perspClipPlanes(dist);
+      this.camera.near = clip.near;
+      this.camera.far = clip.far;
     }
     this.viewDirty = true;
     this.onViewBecameDirty?.();
@@ -444,8 +509,11 @@ export class CameraController {
     this.camera.target = [cx, cy, cz];
     this.camera.position = [cx + offsetX, cy + offsetY, cz + offsetZ];
     const camDist = Math.sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ);
-    this.camera.near = Math.max(0.1, camDist * 0.001);
-    this.camera.far = Math.max(100000, camDist * 100);
+    {
+      const clip = this.perspClipPlanes(camDist);
+      this.camera.near = clip.near;
+      this.camera.far = clip.far;
+    }
     this.viewDirty = true;
     this.onViewBecameDirty?.();
     this.reportScale();
@@ -539,6 +607,24 @@ export class CameraController {
    */
   private getEffectiveCameraDistance(): number {
     return Math.max(1, Math.abs(this.camera.position[2]));
+  }
+
+  /**
+   * Perspective near/far clip planes tuned for a given camera-to-target
+   * distance. The road network draws many coplanar surfaces at z=0 (junction
+   * fills, lane markings, crosswalks); the previous fixed near=0.1 / far≥100000
+   * gave a ~1e6 depth ratio, so those surfaces z-fought at certain zoom levels.
+   * Scaling both planes with distance keeps the depth ratio ~1000 (high depth
+   * precision) while never clipping the visible frustum, whose ground extent
+   * also grows with distance. The near floor preserves the original behaviour at
+   * extreme close zoom; the scaling dominates at every normal zoom level.
+   */
+  private perspClipPlanes(dist: number): { near: number; far: number } {
+    const d = Math.max(1, dist);
+    return {
+      near: Math.max(0.1, d * 0.05),
+      far: Math.max(2000, d * 50),
+    };
   }
 
   /** Get the effective distance for grid fade calculation.
@@ -695,8 +781,9 @@ export class CameraController {
       ty - (dy / norm) * dist,
       tz - (dz / norm) * dist,
     ];
-    this.camera.near = Math.max(0.1, dist * 0.001);
-    this.camera.far = Math.max(100000, dist * 100);
+    const clip = this.perspClipPlanes(dist);
+    this.camera.near = clip.near;
+    this.camera.far = clip.far;
     this.viewDirty = true;
     this.onViewBecameDirty?.();
     this.reportScale();
@@ -764,8 +851,9 @@ export class CameraController {
       ay + (ty - ay) * eff,
       az + (tz - az) * eff,
     ];
-    this.camera.near = Math.max(0.1, clampedDist * 0.001);
-    this.camera.far = Math.max(100000, clampedDist * 100);
+    const clip = this.perspClipPlanes(clampedDist);
+    this.camera.near = clip.near;
+    this.camera.far = clip.far;
     this.viewDirty = true;
     this.onViewBecameDirty?.();
     this.reportScale();

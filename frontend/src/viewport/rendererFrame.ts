@@ -42,6 +42,8 @@ export interface RendererFrameInternals {
   linkHighlightMeshes: RenderableMesh[];
   highlightMeshes: RenderableMesh[];
   overlayMeshes: RenderableMesh[];
+  actorMeshes: RenderableMesh[];
+  pathMeshes: RenderableMesh[];
   laneLineMeshes: RenderableMesh[];
   spriteRenderer: SpriteRenderer | null;
   width: number;
@@ -125,7 +127,7 @@ export function renderFrame(r: RendererFrameInternals): void {
     }],
     depthStencilAttachment: {
       view: r.depthTexture.createView(),
-      depthClearValue: 1.0,
+      depthClearValue: 0.0,
       depthLoadOp: 'clear',
       depthStoreOp: 'store',
     },
@@ -168,6 +170,10 @@ export function renderFrame(r: RendererFrameInternals): void {
 
   // Draw bridge/tunnel overlays (above road surface, below lane lines)
   drawBatched(pass, r.overlayMeshes, r.basicPipeline, r.basicBindGroup, 'basic');
+
+  // Draw case-actor trajectory ribbons, then bounding boxes on top.
+  drawBatched(pass, r.pathMeshes, r.basicPipeline, r.basicBindGroup, 'basic');
+  drawBatched(pass, r.actorMeshes, r.basicPipeline, r.basicBindGroup, 'basic');
 
   // Draw lane lines (between road surface and markings)
   drawBatched(pass, r.laneLineMeshes, r.highlightPipeline, r.basicBindGroup, 'highlight');

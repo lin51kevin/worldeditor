@@ -24,6 +24,7 @@
 import { importGeoZ } from '../plugins/io/geoz/parser';
 import { ViewportRenderer } from '../viewport/renderer';
 import type { SpriteInstance, PaintInstance } from '../viewport/spriteRenderer';
+import { CaseActorLayer, type CaseActorBox } from '../plugins/npc-actors';
 
 type WasmModule = typeof import('../../wasm/pkg/we_wasm');
 
@@ -113,6 +114,31 @@ export interface WorldEditorRenderer {
   getTextureManager(): WorldEditorTextureManager | null;
   /** Resolves once the texture manifest has loaded (or failed gracefully). */
   waitForManifest(): Promise<void>;
+
+  // ── Case-actor plugin (dynamic scenario boxes + trajectories + 3D camera) ──
+  /** Replace the dynamic actor bounding boxes (opponents / ego / waypoints / triggers). */
+  uploadActorBoxes(boxes: CaseActorBox[]): void;
+  /** Remove all actor boxes and trajectory ribbons. */
+  clearActorBoxes(): void;
+  /** Upload trajectory segments (flat pairs: 14 floats per segment: 2 × xyz+rgba). */
+  uploadPathLines(segments: Float32Array): void;
+  /** Pick the top-most actor box under a page-space point, or null. */
+  pickActor(clientX: number, clientY: number): { id: string } | null;
+  /** Begin a 3D camera drag (orbit/pan/fly per button+modifiers). */
+  cameraBeginDrag(
+    button: number,
+    event: { clientX: number; clientY: number; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean },
+  ): boolean;
+  /** Update the active 3D camera drag with the current pointer position. */
+  cameraUpdateDrag(event: { clientX: number; clientY: number; buttons: number }): void;
+  /** End the active 3D camera drag. */
+  cameraEndDrag(): void;
+  /** Zoom the 3D camera by a wheel delta. */
+  cameraWheel(deltaY: number): void;
+  /** Frame the 3D camera to fit a planar bounds (world meters). */
+  frameScene3D(minX: number, minY: number, maxX: number, maxY: number): void;
+  /** Recenter the 3D camera on a ground point, preserving zoom/orientation. */
+  centerCamera3D(x: number, y: number): void;
 }
 
 /** WASM compute contract consumed by rnk-next. */
@@ -186,6 +212,16 @@ const ROAD_VERTEX_STRIDE = 7;
 /** Wrap a {@link ViewportRenderer} as the rnk-next renderer contract. */
 function adaptRenderer(): WorldEditorRenderer {
   const renderer = new ViewportRenderer();
+  // Independent npc-actors plugin: owns box/trajectory geometry + ground picking.
+  const actorLayer = new CaseActorLayer();
+  let canvasRef: HTMLCanvasElement | null = null;
+
+  /** Convert page-space client coordinates to canvas-relative pixels. */
+  const toCanvasXY = (clientX: number, clientY: number): [number, number] => {
+    if (!canvasRef) return [clientX, clientY];
+    const rect = canvasRef.getBoundingClientRect();
+    return [clientX - rect.left, clientY - rect.top];
+  };
 
   return {
     async init(canvas: HTMLCanvasElement): Promise<boolean> {
@@ -195,6 +231,7 @@ function adaptRenderer(): WorldEditorRenderer {
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
       }
+      canvasRef = canvas;
       const ok = await renderer.init(canvas);
       if (ok) renderer.setDimension('2d');
       return ok;
@@ -212,7 +249,10 @@ function adaptRenderer(): WorldEditorRenderer {
     uploadLaneLineVertices: (data) => renderer.uploadLaneLineVertices(data),
     uploadHighlightVertices: (data) => renderer.uploadHighlightVertices(data),
     clearHighlight: () => renderer.clearHighlight(),
-    unprojectToGround: (screenX, screenY) => renderer.unprojectToGround(screenX, screenY),
+    unprojectToGround: (screenX, screenY) => {
+      const [sx, sy] = toCanvasXY(screenX, screenY);
+      return renderer.unprojectToGround(sx, sy);
+    },
     fitToVertices: (data) => renderer.fitToVertices(data),
     toDataURL: () => renderer.toDataURL(),
 
@@ -224,6 +264,34 @@ function adaptRenderer(): WorldEditorRenderer {
     uploadOverlayVertices: (data) => renderer.uploadOverlayVertices(data),
     getTextureManager: () => renderer.getTextureManager(),
     waitForManifest: () => renderer.waitForManifest(),
+
+    // ── Case-actor plugin wiring ─────────────────────────────────────────────
+    uploadActorBoxes: (boxes: CaseActorBox[]) => {
+      actorLayer.setBoxes(boxes);
+      renderer.uploadActorVertices(actorLayer.boxVertices());
+    },
+    clearActorBoxes: () => {
+      actorLayer.clear();
+      renderer.uploadActorVertices(new Float32Array(0));
+      renderer.uploadPathVertices(new Float32Array(0));
+    },
+    uploadPathLines: (segments: Float32Array) => {
+      actorLayer.setPathSegments(segments);
+      renderer.uploadPathVertices(actorLayer.pathVertices());
+    },
+    pickActor: (clientX: number, clientY: number) => {
+      const [sx, sy] = toCanvasXY(clientX, clientY);
+      const world = renderer.unprojectToGround(sx, sy);
+      if (!world) return null;
+      const id = actorLayer.pickAt(world.x, world.y);
+      return id ? { id } : null;
+    },
+    cameraBeginDrag: (button, event) => renderer.cameraBeginDrag(button, event),
+    cameraUpdateDrag: (event) => renderer.cameraUpdateDrag(event),
+    cameraEndDrag: () => renderer.cameraEndDrag(),
+    cameraWheel: (deltaY) => renderer.cameraWheel(deltaY),
+    frameScene3D: (minX, minY, maxX, maxY) => renderer.frameScene3D(minX, minY, maxX, maxY),
+    centerCamera3D: (x, y) => renderer.centerCamera3D(x, y),
   };
 }
 

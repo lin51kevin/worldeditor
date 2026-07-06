@@ -131,7 +131,7 @@ export class SpriteRenderer {
           },
         }],
       },
-      depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'less-equal' },
+      depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'greater-equal' },
       multisample: { count: 4 },
       primitive: { topology: 'triangle-list' },
     });
@@ -165,9 +165,9 @@ export class SpriteRenderer {
       depthStencil: {
         format: 'depth32float',
         depthWriteEnabled: false,
-        depthCompare: 'less-equal',
-        depthBias: -4,
-        depthBiasSlopeScale: -2.0,
+        depthCompare: 'greater-equal',
+        depthBias: 4,
+        depthBiasSlopeScale: 2.0,
       },
       multisample: { count: 4 },
       primitive: { topology: 'triangle-list' },

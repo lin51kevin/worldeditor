@@ -105,6 +105,12 @@ export class ViewportRenderer {
   // Bridge/tunnel overlay meshes (rendered above road surface)
   private overlayMeshes: RenderableMesh[] = [];
 
+  // Case-actor plugin lanes: dynamic oriented bounding boxes (opponents / ego /
+  // waypoint handles / triggers) and trajectory ribbons. Feature-agnostic
+  // colored-triangle lanes; the case semantics live in the npc-actors plugin.
+  private actorMeshes: RenderableMesh[] = [];
+  private pathMeshes: RenderableMesh[] = [];
+
   // Callback for hover detection on spline control points
   private onControlPointHovered: ((ref: ControlPointRef | null) => void) | null = null;
   private width = 0;
@@ -556,6 +562,92 @@ export class ViewportRenderer {
     return this.cameraController.projectWorldToScreen(wx, wy);
   }
 
+  /** World-space ground point (Z=0) under the viewport center. Null if unavailable. */
+  getGroundCenter(): { x: number; y: number } | null {
+    return this.cameraController.unprojectToGround(this.width / 2, this.height / 2);
+  }
+
+  /** Frame the 3D camera to fit a planar bounds (world meters). */
+  frameScene3D(minX: number, minY: number, maxX: number, maxY: number): void {
+    this.cameraController.frameBounds3D(minX, minY, maxX, maxY);
+    this.markSceneDirty();
+    this.renderFrame();
+  }
+
+  /** Recenter the 3D camera on a ground point, preserving zoom/orientation. */
+  centerCamera3D(x: number, y: number): void {
+    this.cameraController.centerOnGround(x, y);
+    this.markSceneDirty();
+    this.renderFrame();
+  }
+
+  // ── Case-actor plugin: dynamic box + trajectory lanes ─────────────────────
+
+  /** Upload actor bounding-box triangle vertices (7 floats/vertex). Empty clears. */
+  uploadActorVertices(vertexData: Float32Array): void {
+    if (vertexData.length === 0) {
+      if (this.actorMeshes.length === 0) return;
+      for (const m of this.actorMeshes) { m.vertexBuffer.destroy(); }
+      this.actorMeshes = [];
+      this.markSceneDirty();
+      return;
+    }
+    uploadMeshData(this.device, this.actorMeshes, vertexData);
+    this.markSceneDirty();
+  }
+
+  /** Upload trajectory ribbon triangle vertices (7 floats/vertex). Empty clears. */
+  uploadPathVertices(vertexData: Float32Array): void {
+    if (vertexData.length === 0) {
+      if (this.pathMeshes.length === 0) return;
+      for (const m of this.pathMeshes) { m.vertexBuffer.destroy(); }
+      this.pathMeshes = [];
+      this.markSceneDirty();
+      return;
+    }
+    uploadMeshData(this.device, this.pathMeshes, vertexData);
+    this.markSceneDirty();
+  }
+
+  // ── Case-actor plugin: camera gesture passthrough ─────────────────────────
+  //
+  // The embedding host (rnk-next) is the sole pointer-input owner in 3D so it
+  // can arbitrate pick-vs-navigate. These forward navigation gestures to the
+  // proven CameraController drag/zoom handling.
+
+  /** Begin a camera drag (orbit/pan/fly per button+modifiers). Returns true if started. */
+  cameraBeginDrag(
+    button: number,
+    event: { clientX: number; clientY: number; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean },
+  ): boolean {
+    return this.cameraController.beginPointerDrag(button, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      ctrlKey: !!event.ctrlKey,
+      shiftKey: !!event.shiftKey,
+      altKey: !!event.altKey,
+    });
+  }
+
+  /** Update the active camera drag with the current pointer position. */
+  cameraUpdateDrag(event: { clientX: number; clientY: number; buttons: number }): void {
+    const canvas = this.context?.canvas as HTMLCanvasElement | undefined;
+    if (!canvas) return;
+    this.cameraController.updatePointerDrag(canvas, event as unknown as MouseEvent);
+    this.renderFrame();
+  }
+
+  /** End the active camera drag. */
+  cameraEndDrag(): void {
+    this.cameraController.endPointerDrag();
+  }
+
+  /** Zoom the camera by a wheel delta (positive deltaY = zoom out). */
+  cameraWheel(deltaY: number): void {
+    this.cameraController.handleWheel(deltaY);
+    this.renderFrame();
+  }
+
 
   /** Upload junction fill vertex data (7 floats per vertex: x,y,z,r,g,b,a).
    * Drawn as its own layer with the depth-biased highlight pipeline so the
@@ -820,6 +912,8 @@ export class ViewportRenderer {
     disposeMeshes(this.junctionMeshes);
     disposeMeshes(this.laneLineMeshes);
     disposeMeshes(this.overlayMeshes);
+    disposeMeshes(this.actorMeshes);
+    disposeMeshes(this.pathMeshes);
     disposeMeshes(this.pointCloudMeshes);
     this.markerRenderer.dispose();
     disposeMeshes(this.highlightMeshes);

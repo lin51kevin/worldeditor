@@ -13,10 +13,16 @@ import {
 } from './viewportMath';
 import type { CameraState } from './cameraController';
 
+// Reverse-Z depth remap. perspectiveMatrix/orthographicMatrix emit GL-style
+// clip depth in [-1, 1] (near → -1, far → +1). This matrix maps that to a
+// reversed WebGPU depth range [1, 0] (near → 1, far → 0). Combined with a
+// depth clear of 0 and 'greater' depth comparisons, reverse-Z spreads float32
+// depth precision uniformly across the whole view distance, which eliminates
+// the zoom-dependent z-fighting on coplanar road/junction surfaces.
 const DEPTH_CORRECTION = new Float32Array([
   1, 0, 0, 0,
   0, 1, 0, 0,
-  0, 0, 0.5, 0,
+  0, 0, -0.5, 0,
   0, 0, 0.5, 1,
 ]);
 

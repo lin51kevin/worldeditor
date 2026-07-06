@@ -49,7 +49,7 @@ export function createGridPipeline(device: GPUDevice, format: GPUTextureFormat):
     depthStencil: {
       format: 'depth32float',
       depthWriteEnabled: false,
-      depthCompare: 'less-equal',
+      depthCompare: 'greater-equal',
     },
     multisample: { count: 4 },
     primitive: { topology: 'triangle-list' },
@@ -113,7 +113,7 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
         },
       }],
     },
-    depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' },
+    depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' },
     multisample: { count: 4 },
     primitive: { topology: 'triangle-list' },
   });
@@ -135,9 +135,9 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
     depthStencil: {
       format: 'depth32float',
       depthWriteEnabled: false,
-      depthCompare: 'less-equal',
-      depthBias: -2,
-      depthBiasSlopeScale: -2.0,
+      depthCompare: 'greater-equal',
+      depthBias: 2,
+      depthBiasSlopeScale: 2.0,
     },
     multisample: { count: 4 },
     primitive: { topology: 'triangle-list' },
@@ -176,7 +176,7 @@ export function createLaneLinePipeline(
         alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
       }}],
     },
-    depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' },
+    depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' },
     multisample: { count: 4 },
     primitive: { topology: 'triangle-list' },
   });
@@ -212,7 +212,7 @@ export function createBillboardPipeline(
         alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
       }}],
     },
-    depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'less' },
+    depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'greater' },
     multisample: { count: 4 },
     primitive: { topology: 'triangle-list' },
   });
@@ -240,7 +240,7 @@ export function createPointCloudPipeline(
         },
       }],
     },
-    depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' },
+    depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' },
     multisample: { count: 4 },
     primitive: { topology: 'point-list' },
   });
