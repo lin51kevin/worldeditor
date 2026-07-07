@@ -139,6 +139,16 @@ export interface WorldEditorRenderer {
   frameScene3D(minX: number, minY: number, maxX: number, maxY: number): void;
   /** Recenter the 3D camera on a ground point, preserving zoom/orientation. */
   centerCamera3D(x: number, y: number): void;
+
+  // ── Point cloud (logsim scene mesh) ──────────────────────────────────
+  /**
+   * Upload an interleaved point-cloud buffer (6 floats/point: x,y,z,r,g,b, as
+   * produced by `point_cloud_render_buffer`). The adapter expands it to the
+   * renderer's 7-float (rgba) point layout.
+   */
+  uploadPointCloud(data: Float32Array): void;
+  /** Remove the uploaded point cloud. */
+  clearPointCloud(): void;
 }
 
 /** WASM compute contract consumed by rnk-next. */
@@ -178,6 +188,23 @@ export interface WorldEditorWasm {
   generate_object_vertices(projectJson: string): Float32Array;
   /** Sprite/paint metadata for textured billboard rendering (signs / lights). */
   generate_sprite_data(projectJson: string): SpriteDataResult;
+
+  // ── Point cloud parsing (logsim scene mesh) ─────────────────────────
+  /** Parse a point-cloud file (`pcd`/`ply`/`xyz`) and return an opaque handle. */
+  load_point_cloud(bytes: Uint8Array, format: string): number;
+  /** Free a registered cloud and its derived data. */
+  free_point_cloud(handle: number): void;
+  /** Summary `{ count, origin, min, max, has_intensity, has_rgb }` of a cloud. */
+  point_cloud_summary(handle: number): {
+    count: number;
+    origin: [number, number, number];
+    min: [number, number, number];
+    max: [number, number, number];
+    has_intensity: boolean;
+    has_rgb: boolean;
+  };
+  /** Interleaved render buffer `[x,y,z,r,g,b, ...]`, decimated to `maxPoints`. */
+  point_cloud_render_buffer(handle: number, colorMode: string, maxPoints: number): Float32Array;
 }
 
 /** GeoZ importer contract consumed by rnk-next. */
@@ -208,6 +235,28 @@ const HIGHLIGHT_RGBA: [number, number, number, number] = [0x52 / 255, 0xd8 / 255
 
 /** Road vertex layout: x, y, z, r, g, b, a. */
 const ROAD_VERTEX_STRIDE = 7;
+
+/**
+ * Expand an interleaved 6-float point buffer `[x,y,z,r,g,b, ...]` (as produced
+ * by we-wasm `point_cloud_render_buffer`) into the renderer's 7-float point
+ * layout `[x,y,z,r,g,b,a, ...]`, setting alpha to 1.
+ */
+function expandPointCloudTo7(src: Float32Array): Float32Array {
+  const pointCount = Math.floor(src.length / 6);
+  const dst = new Float32Array(pointCount * 7);
+  for (let i = 0; i < pointCount; i++) {
+    const s = i * 6;
+    const d = i * 7;
+    dst[d] = src[s]!;
+    dst[d + 1] = src[s + 1]!;
+    dst[d + 2] = src[s + 2]!;
+    dst[d + 3] = src[s + 3]!;
+    dst[d + 4] = src[s + 4]!;
+    dst[d + 5] = src[s + 5]!;
+    dst[d + 6] = 1;
+  }
+  return dst;
+}
 
 /** Wrap a {@link ViewportRenderer} as the rnk-next renderer contract. */
 function adaptRenderer(): WorldEditorRenderer {
@@ -292,6 +341,14 @@ function adaptRenderer(): WorldEditorRenderer {
     cameraWheel: (deltaY) => renderer.cameraWheel(deltaY),
     frameScene3D: (minX, minY, maxX, maxY) => renderer.frameScene3D(minX, minY, maxX, maxY),
     centerCamera3D: (x, y) => renderer.centerCamera3D(x, y),
+
+    // ── Point cloud wiring (6-float wasm buffer → 7-float renderer layout) ────
+    uploadPointCloud: (data: Float32Array) => {
+      renderer.uploadPointCloudVertices(expandPointCloudTo7(data));
+    },
+    clearPointCloud: () => {
+      renderer.uploadPointCloudVertices(new Float32Array(0));
+    },
   };
 }
 
@@ -439,6 +496,13 @@ function adaptWasm(wasm: WasmModule): WorldEditorWasm {
 
     generate_sprite_data: (projectJson) =>
       wasm.generate_sprite_data(projectJson) as SpriteDataResult,
+
+    // ── Point cloud parsing (WASM registry; JS loads once, reads buffer, frees) ──
+    load_point_cloud: (bytes, format) => wasm.load_point_cloud(bytes, format),
+    free_point_cloud: (handle) => wasm.free_point_cloud(handle),
+    point_cloud_summary: (handle) => wasm.point_cloud_summary(handle),
+    point_cloud_render_buffer: (handle, colorMode, maxPoints) =>
+      wasm.point_cloud_render_buffer(handle, colorMode, maxPoints),
   };
 }
 
