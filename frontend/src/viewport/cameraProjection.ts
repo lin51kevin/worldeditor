@@ -80,6 +80,37 @@ export function unprojectGround(
   };
 }
 
+/**
+ * Cast a ray from the given screen pixel and intersect it with the horizontal
+ * plane at the given world Z. Returns null if the ray is parallel to the plane
+ * or points away from it.
+ */
+export function unprojectPlane(
+  invViewProj: Float32Array,
+  width: number,
+  height: number,
+  screenX: number,
+  screenY: number,
+  worldZ: number,
+): { x: number; y: number } | null {
+  const ndcX = (screenX / width) * 2 - 1;
+  const ndcY = 1 - (screenY / height) * 2;
+
+  const nearPt = transformPoint(invViewProj, [ndcX, ndcY, 0]);
+  const farPt = transformPoint(invViewProj, [ndcX, ndcY, 1]);
+  const dx = farPt[0] - nearPt[0];
+  const dy = farPt[1] - nearPt[1];
+  const dz = farPt[2] - nearPt[2];
+  if (Math.abs(dz) < 1e-10) return null;
+
+  const t = (worldZ - nearPt[2]) / dz;
+  if (t < 0) return null;
+  return {
+    x: nearPt[0] + dx * t,
+    y: nearPt[1] + dy * t,
+  };
+}
+
 /** Project a world-space (wx, wy, 0) point to screen pixel coordinates. */
 export function projectToScreen(
   viewProj: Float32Array,

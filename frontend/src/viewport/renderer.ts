@@ -557,6 +557,11 @@ export class ViewportRenderer {
     return this.cameraController.unprojectToGround(screenX, screenY);
   }
 
+  /** Unproject a screen pixel to world-space coordinates on the plane z=worldZ. */
+  unprojectToPlane(screenX: number, screenY: number, worldZ: number): { x: number; y: number } | null {
+    return this.cameraController.unprojectToPlane(screenX, screenY, worldZ);
+  }
+
   /** Project a world-space XY point (Z=0) to canvas pixel coordinates. Returns null if off-screen. */
   projectWorldToScreen(wx: number, wy: number): { x: number; y: number } | null {
     return this.cameraController.projectWorldToScreen(wx, wy);

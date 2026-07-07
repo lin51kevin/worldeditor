@@ -92,6 +92,8 @@ export interface WorldEditorRenderer {
   uploadHighlightVertices(data: Float32Array): void;
   clearHighlight(): void;
   unprojectToGround(screenX: number, screenY: number): { x: number; y: number } | null;
+  /** Unproject a screen pixel to world-space XY on the horizontal plane at z = worldZ. */
+  unprojectToPlane(screenX: number, screenY: number, worldZ: number): { x: number; y: number } | null;
   fitToVertices(data: Float32Array): void;
   toDataURL(): string;
 
@@ -301,6 +303,10 @@ function adaptRenderer(): WorldEditorRenderer {
     unprojectToGround: (screenX, screenY) => {
       const [sx, sy] = toCanvasXY(screenX, screenY);
       return renderer.unprojectToGround(sx, sy);
+    },
+    unprojectToPlane: (screenX, screenY, worldZ) => {
+      const [sx, sy] = toCanvasXY(screenX, screenY);
+      return renderer.unprojectToPlane(sx, sy, worldZ);
     },
     fitToVertices: (data) => renderer.fitToVertices(data),
     toDataURL: () => renderer.toDataURL(),

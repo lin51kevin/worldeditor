@@ -6,7 +6,7 @@ import {
   niceNumber,
 } from './viewportMath';
 import { createFlyState, flyEnter, flyExit, flyLook, flyMove, flyAdjustSpeed, type FlyState } from './flyCamera';
-import { buildViewProjMatrix, unprojectGround, projectToScreen } from './cameraProjection';
+import { buildViewProjMatrix, unprojectGround, unprojectPlane, projectToScreen } from './cameraProjection';
 
 export interface CameraState {
   position: [number, number, number];
@@ -340,6 +340,23 @@ export class CameraController {
     if (!inv) return null;
 
     return unprojectGround(inv, this.width, this.height, screenX, screenY);
+  }
+
+  /** Unproject a screen pixel to world-space XY on the plane z = worldZ. */
+  unprojectToPlane(screenX: number, screenY: number, worldZ: number): { x: number; y: number } | null {
+    if (this.width === 0 || this.height === 0) return null;
+
+    const viewProj = this.computeViewProj();
+    if (!this.cachedViewProj || !arraysEqual(this.cachedViewProj, viewProj)) {
+      this.cachedViewProj = new Float32Array(viewProj);
+      const inv = invertMatrix4(viewProj);
+      if (!inv) return null;
+      this.cachedInverseViewProj = inv;
+    }
+    const inv = this.cachedInverseViewProj;
+    if (!inv) return null;
+
+    return unprojectPlane(inv, this.width, this.height, screenX, screenY, worldZ);
   }
 
   projectWorldToScreen(wx: number, wy: number): { x: number; y: number } | null {
