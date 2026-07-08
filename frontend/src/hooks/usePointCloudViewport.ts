@@ -30,17 +30,42 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
 
   const handle = usePointCloudStore((s) => s.handle);
   const colorMode = usePointCloudStore((s) => s.colorMode);
+  const isSplat = usePointCloudStore((s) => s.isSplat);
+  const splatBuffer = usePointCloudStore((s) => s.splatBuffer);
+  const splatShDegree = usePointCloudStore((s) => s.splatShDegree);
+  const splatDilation = usePointCloudStore((s) => s.splatDilation);
+
+  // Apply the live dilation (splat fullness) slider to the renderer.
+  useEffect(() => {
+    if (status !== 'ready' || !isSplat) return;
+    rendererRef.current?.setSplatDilation(splatDilation);
+  }, [splatDilation, isSplat, status, rendererRef]);
 
   useEffect(() => {
     if (status !== 'ready') return;
     const renderer = rendererRef.current;
     if (!renderer) return;
 
-    // Cloud unloaded — clear the render
+    // Cloud unloaded — clear both point-list and splat renders.
     if (handle === null) {
       if (prevHandleRef.current !== null) {
         renderer.uploadPointCloudVertices(new Float32Array(0));
+        renderer.clearGaussianSplats();
         prevHandleRef.current = null;
+        prevColorModeRef.current = null;
+      }
+      return;
+    }
+
+    // 3D Gaussian Splatting cloud — render as true splats (colorMode N/A).
+    if (isSplat) {
+      if (handle !== prevHandleRef.current) {
+        // Drop any stale point geometry, then upload the packed splat buffer.
+        renderer.uploadPointCloudVertices(new Float32Array(0));
+        if (splatBuffer) {
+          renderer.uploadGaussianSplats(splatBuffer, splatShDegree);
+        }
+        prevHandleRef.current = handle;
         prevColorModeRef.current = null;
       }
       return;
@@ -50,6 +75,9 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     if (handle === prevHandleRef.current && colorMode === prevColorModeRef.current) {
       return;
     }
+
+    // Leaving a splat cloud (or a fresh point cloud) — ensure no splats linger.
+    renderer.clearGaussianSplats();
 
     let cancelled = false;
 
@@ -88,5 +116,5 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     })();
 
     return () => { cancelled = true; };
-  }, [handle, colorMode, status, rendererRef]);
+  }, [handle, colorMode, isSplat, splatBuffer, splatShDegree, status, rendererRef]);
 }

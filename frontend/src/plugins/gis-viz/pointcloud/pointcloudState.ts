@@ -26,11 +26,28 @@ interface PointCloudState {
   /** Extracted candidate marking polylines (local coords). */
   markings: PointCloudPolyline[];
 
+  /** Whether the loaded cloud is a 3D Gaussian Splatting cloud (rendered as splats). */
+  isSplat: boolean;
+  /** Packed 3DGS SH instance buffer (`10 + (shDegree+1)²·3` floats/splat) when `isSplat`, else null. */
+  splatBuffer: Float32Array | null;
+  /** SH degree of the loaded splat cloud. */
+  splatShDegree: number;
+  /** 2D low-pass dilation (splat fullness); larger = fuller/blurrier. */
+  splatDilation: number;
+
   setColorMode: (mode: PointCloudColorMode) => void;
   setVoxelSize: (size: number) => void;
   setBusy: (busy: boolean) => void;
   setError: (error: string | null) => void;
+  setSplatDilation: (dilation: number) => void;
   setLoaded: (handle: number, fileName: string, summary: PointCloudSummary) => void;
+  setSplatLoaded: (
+    handle: number,
+    fileName: string,
+    buffer: Float32Array,
+    shDegree: number,
+    summary: PointCloudSummary,
+  ) => void;
   setGround: () => void;
   setMarkings: (markings: PointCloudPolyline[]) => void;
   setVectorized: () => void;
@@ -48,6 +65,10 @@ const INITIAL = {
   voxelSize: 0,
   hasGround: false,
   markings: [] as PointCloudPolyline[],
+  isSplat: false,
+  splatBuffer: null as Float32Array | null,
+  splatShDegree: 0,
+  splatDilation: 0.15,
 };
 
 export const usePointCloudStore = create<PointCloudState>((set) => ({
@@ -57,6 +78,7 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
   setVoxelSize: (voxelSize) => set(() => ({ voxelSize: Math.max(0, voxelSize) })),
   setBusy: (busy) => set(() => ({ busy })),
   setError: (error) => set(() => ({ error })),
+  setSplatDilation: (splatDilation) => set(() => ({ splatDilation: Math.max(0, splatDilation) })),
 
   setLoaded: (handle, fileName, summary) =>
     set(() => ({
@@ -67,6 +89,23 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
       hasGround: summary.has_heightmap,
       markings: [],
       error: null,
+      isSplat: false,
+      splatBuffer: null,
+      splatShDegree: 0,
+    })),
+
+  setSplatLoaded: (handle, fileName, buffer, shDegree, summary) =>
+    set(() => ({
+      handle,
+      fileName,
+      summary,
+      stage: 'loaded',
+      hasGround: false,
+      markings: [],
+      error: null,
+      isSplat: true,
+      splatBuffer: buffer,
+      splatShDegree: shDegree,
     })),
 
   setGround: () => set(() => ({ stage: 'ground', hasGround: true, error: null })),

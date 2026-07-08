@@ -1,7 +1,15 @@
 # 完整 3DGS 渲染管线实施计划
 
-> 状态：规划中 · 目标仓库：`worldeditor-next`（渲染引擎）+ `simone-web/WebPages`（宿主集成）
+> 状态：**里程碑 1 已实现**（Phase 1–6，band-0 splat 全链路）· 目标仓库：`worldeditor-next`（渲染引擎）+ `simone-web/WebPages`（宿主集成）
 > 背景：测试资产 `data-root/assets/20003/20003.ply` 是 3D Gaussian Splatting 文件；当前引擎仅把它当作按高度着色的点云渲染。本文档规划把它升级为完整的 3DGS 渲染管线。
+>
+> **实现进度（2026-07-08）**：Phase 1–6 完成并通过测试。真实文件 `E:/data-root/assets/20003/20003.ply`（76561 splats, SH degree 1）端到端验证通过（9/9 检查）。
+> - Phase 1 Rust：`crates/we-core/src/pointcloud/gaussian.rs`（`GaussianCloud` + PLY 解析 + 协方差/激活，12 单测）
+> - Phase 2 WASM：`crates/we-wasm/src/pointcloud.rs`（`load_gaussian_splats`/`gaussian_splat_buffer_sh`/`gaussian_splat_meta`/`free_gaussian_splats`）
+> - Phase 3–5 前端：`frontend/src/viewport/gaussian/`（排序 Worker + WGSL EWA 管线 + 渲染器集成，33 单测）
+> - Phase 6 SDK：`rnkNextSdk.ts` 新增 `uploadGaussianSplats`/`clearGaussianSplats`（可选方法，旧 bundle 降级）
+> - **待办**：Phase 7（视角相关高阶 SH，当前仅烘焙 band-0）、Phase 8（LOD/抽稀）；前端实时 GPU 像素级视觉验证需在浏览器 WebGPU 环境运行。
+
 
 ---
 
@@ -89,10 +97,10 @@ $$c = \text{SH}_0 f_{dc} + \sum_{l\ge1}\text{basis}_l(\hat d)\,f_{rest} + 0.5,\q
 文件：`crates/we-wasm/src/pointcloud.rs`
 
 - `load_gaussian_splats(bytes) -> handle`
-- `gaussian_splat_buffer(handle) -> Float32Array`（打包的实例数据，见 §5）
-- `gaussian_splat_meta(handle) -> {count, shDegree, aabb, origin}`
+- `gaussian_splat_buffer_sh(handle) -> Float32Array`（视角相关 SH 实例数据，`10 + (shDegree+1)²·3` floats/splat，见 §5）
+- `gaussian_splat_meta(handle) -> {count, shDegree, shStride, origin, min, max}`
 - `free_gaussian_splats(handle)`
-- 复用现有 origin 平移精度处理。
+- 复用现有 origin 平移精度处理；深度排序位置由前端从 SH buffer 首三分量抽取（无需单独 positions 导出）。
 - **测试**：`wasm-pack test` 往返一致性。
 
 ### Phase 3 — 深度排序（Worker）

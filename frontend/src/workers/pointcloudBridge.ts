@@ -67,6 +67,35 @@ export function workerFreePointCloud(handle: number): Promise<void> {
   return call('free', { handle });
 }
 
+/** Metadata for a loaded Gaussian splat cloud. */
+export interface GaussianSplatMeta {
+  count: number;
+  shDegree: number;
+  /** Floats per splat in the SH instance buffer: `10 + (shDegree+1)²·3`. */
+  shStride: number;
+  origin: [number, number, number];
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
+/** Result of loading a 3D Gaussian Splatting cloud in the worker. */
+export interface WorkerGaussianResult {
+  handle: number;
+  meta: GaussianSplatMeta;
+  /** Packed SH instance buffer (`meta.shStride` floats/splat), transferred zero-copy. */
+  buffer: Float32Array;
+}
+
+/** Load a 3D Gaussian Splatting PLY in the worker (bytes transferred). */
+export function workerLoadGaussianSplats(bytes: Uint8Array): Promise<WorkerGaussianResult> {
+  return call('loadGaussian', { bytes }, [bytes.buffer]);
+}
+
+/** Free a loaded Gaussian splat cloud handle. */
+export function workerFreeGaussianSplats(handle: number): Promise<void> {
+  return call('freeGaussian', { handle });
+}
+
 /** Get render buffer from the worker (returned buffer is transferred). */
 export function workerRenderBuffer(
   handle: number,

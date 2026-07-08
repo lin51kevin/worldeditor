@@ -14,7 +14,7 @@ use super::model::PointCloud;
 use super::{PointCloudError, PointCloudResult, RawRecord};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PlyScalar {
+pub(super) enum PlyScalar {
     Char,
     Uchar,
     Short,
@@ -40,7 +40,7 @@ impl PlyScalar {
         })
     }
 
-    fn size(self) -> usize {
+    pub(super) fn size(self) -> usize {
         match self {
             Self::Char | Self::Uchar => 1,
             Self::Short | Self::Ushort => 2,
@@ -51,20 +51,81 @@ impl PlyScalar {
 }
 
 #[derive(Debug, Clone)]
-struct Property {
-    name: String,
-    ty: PlyScalar,
+pub(super) struct Property {
+    pub(super) name: String,
+    pub(super) ty: PlyScalar,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Format {
+pub(super) enum Format {
     Ascii,
     BinaryLe,
 }
 
-/// Parse a PLY point cloud from raw bytes.
-pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
-    // --- Parse header (ASCII text up to and including "end_header") ---
+/// A parsed PLY header plus the byte offset where the vertex data begins.
+pub(super) struct PlyHeader {
+    pub(super) format: Format,
+    pub(super) vertex_count: usize,
+    pub(super) props: Vec<Property>,
+    /// Byte offset into the original buffer where the first vertex record starts.
+    pub(super) data_offset: usize,
+}
+
+impl PlyHeader {
+    /// Byte stride of one vertex record (sum of all property sizes).
+    pub(super) fn stride(&self) -> usize {
+        self.props.iter().map(|p| p.ty.size()).sum()
+    }
+
+    /// Byte offset of each property within a record (parallel to `props`).
+    pub(super) fn prop_offsets(&self) -> Vec<usize> {
+        let mut offsets = Vec::with_capacity(self.props.len());
+        let mut acc = 0usize;
+        for p in &self.props {
+            offsets.push(acc);
+            acc += p.ty.size();
+        }
+        offsets
+    }
+
+    /// Index of the first property whose name matches `name` (case-insensitive).
+    pub(super) fn find(&self, name: &str) -> Option<usize> {
+        self.props.iter().position(|p| p.name.eq_ignore_ascii_case(name))
+    }
+
+    /// The PLY body format (ASCII or binary little-endian).
+    pub(super) fn format(&self) -> Format {
+        self.format
+    }
+
+    /// Declared number of `vertex` records.
+    pub(super) fn vertex_count(&self) -> usize {
+        self.vertex_count
+    }
+
+    /// Byte offset where the vertex data begins.
+    pub(super) fn data_offset(&self) -> usize {
+        self.data_offset
+    }
+
+    /// Number of vertex properties.
+    pub(super) fn props_len(&self) -> usize {
+        self.props.len()
+    }
+
+    /// Scalar type of property `i`.
+    pub(super) fn prop_ty(&self, i: usize) -> PlyScalar {
+        self.props[i].ty
+    }
+
+    /// Iterator over property names in declaration order.
+    pub(super) fn props_iter(&self) -> impl Iterator<Item = &str> {
+        self.props.iter().map(|p| p.name.as_str())
+    }
+}
+
+/// Parse the ASCII PLY header (up to and including `end_header`).
+pub(super) fn parse_ply_header(bytes: &[u8]) -> PointCloudResult<PlyHeader> {
     let mut cursor = 0usize;
     let mut line_no = 0usize;
     let mut format: Option<Format> = None;
@@ -141,19 +202,44 @@ pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
     }
 
     let format = format.ok_or_else(|| PointCloudError::InvalidHeader("missing format".into()))?;
-    let find = |name: &str| props.iter().position(|p| p.name.eq_ignore_ascii_case(name));
-    let ix = find("x").ok_or_else(|| PointCloudError::InvalidHeader("missing x".into()))?;
-    let iy = find("y").ok_or_else(|| PointCloudError::InvalidHeader("missing y".into()))?;
-    let iz = find("z").ok_or_else(|| PointCloudError::InvalidHeader("missing z".into()))?;
-    let ii = find("intensity");
-    let ir = find("red").or_else(|| find("r"));
-    let ig = find("green").or_else(|| find("g"));
-    let ib = find("blue").or_else(|| find("b"));
+    Ok(PlyHeader {
+        format,
+        vertex_count,
+        props,
+        data_offset: cursor,
+    })
+}
+
+/// Parse a PLY point cloud from raw bytes.
+pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
+    let header = parse_ply_header(bytes)?;
+    let PlyHeader {
+        format,
+        vertex_count,
+        props,
+        data_offset,
+    } = &header;
+    let (format, vertex_count) = (*format, *vertex_count);
+    let cursor = *data_offset;
+
+    let ix = header
+        .find("x")
+        .ok_or_else(|| PointCloudError::InvalidHeader("missing x".into()))?;
+    let iy = header
+        .find("y")
+        .ok_or_else(|| PointCloudError::InvalidHeader("missing y".into()))?;
+    let iz = header
+        .find("z")
+        .ok_or_else(|| PointCloudError::InvalidHeader("missing z".into()))?;
+    let ii = header.find("intensity");
+    let ir = header.find("red").or_else(|| header.find("r"));
+    let ig = header.find("green").or_else(|| header.find("g"));
+    let ib = header.find("blue").or_else(|| header.find("b"));
     let has_rgb = ir.is_some() && ig.is_some() && ib.is_some();
     // 3D Gaussian Splatting: band-0 spherical-harmonic colour (view-independent).
-    let idc0 = find("f_dc_0");
-    let idc1 = find("f_dc_1");
-    let idc2 = find("f_dc_2");
+    let idc0 = header.find("f_dc_0");
+    let idc1 = header.find("f_dc_1");
+    let idc2 = header.find("f_dc_2");
     let has_sh = !has_rgb && idc0.is_some() && idc1.is_some() && idc2.is_some();
 
     let mut records: Vec<RawRecord> = Vec::with_capacity(vertex_count);
@@ -194,13 +280,8 @@ pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
             }
         }
         Format::BinaryLe => {
-            let stride: usize = props.iter().map(|p| p.ty.size()).sum();
-            let mut offsets = Vec::with_capacity(props.len());
-            let mut acc = 0usize;
-            for p in &props {
-                offsets.push(acc);
-                acc += p.ty.size();
-            }
+            let stride = header.stride();
+            let offsets = header.prop_offsets();
             let data = &bytes[cursor..];
             if stride == 0 {
                 return Err(PointCloudError::InvalidHeader("zero PLY stride".into()));
@@ -265,7 +346,8 @@ fn sh_dc_to_u8(c: f64) -> u8 {
     ((0.5 + SH_C0 * c).clamp(0.0, 1.0) * 255.0).round() as u8
 }
 
-fn read_scalar(s: &[u8], ty: PlyScalar) -> f64 {match ty {
+pub(super) fn read_scalar(s: &[u8], ty: PlyScalar) -> f64 {
+    match ty {
         PlyScalar::Char => (s[0] as i8) as f64,
         PlyScalar::Uchar => s[0] as f64,
         PlyScalar::Short => i16::from_le_bytes([s[0], s[1]]) as f64,

@@ -44,6 +44,21 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
         result = null;
         break;
       }
+      case 'loadGaussian': {
+        // Parse a 3D Gaussian Splatting PLY and return the view-dependent SH
+        // instance buffer + metadata, transferring the buffer.
+        const handle = w.load_gaussian_splats(params.bytes);
+        const meta = w.gaussian_splat_meta(handle);
+        const buffer: Float32Array = w.gaussian_splat_buffer_sh(handle);
+        result = { handle, meta, buffer };
+        transfer.push(buffer.buffer);
+        break;
+      }
+      case 'freeGaussian': {
+        w.free_gaussian_splats(params.handle);
+        result = null;
+        break;
+      }
       case 'renderBuffer': {
         const buf: Float32Array = w.point_cloud_render_buffer(
           params.handle, params.colorMode, params.maxPoints,

@@ -34,6 +34,7 @@ import type { RenderableMesh } from './markerRenderer';
 import { setupRendererInput } from './rendererInputHandler';
 import { renderFrame as renderFrameImpl, captureFrame as captureFrameImpl } from './rendererFrame';
 import type { RendererFrameInternals } from './rendererFrame';
+import { createSplatRenderer, type SplatRenderer } from './gaussian/splatRenderer';
 import { uploadMeshData, disposeMeshes, createDepthTexture, createMsaaTexture } from './rendererResources';
 import {
   createRoadMeshRegistry,
@@ -152,6 +153,11 @@ export class ViewportRenderer {
   // cloud so per-frame opponent updates never re-upload the (large) road mesh.
   private actorPointCloudMeshes: RenderableMesh[] = [];
   private pointCloudPipeline: GPURenderPipeline | null = null;
+
+  // 3D Gaussian Splatting renderer for NPC/actor `.ply` splat clouds. Lazily
+  // created on first upload so the (heavy) storage pipeline is only built when
+  // a splat cloud is actually used.
+  private splatRenderer: SplatRenderer | null = null;
 
   // Last uploaded vertex data (needed for zoomToFit re-trigger)
   private lastVertexData: Float32Array | null = null;
@@ -728,6 +734,40 @@ export class ViewportRenderer {
     this.markSceneDirty();
   }
 
+  /**
+   * Upload a 3D Gaussian Splatting cloud (packed 13 floats/splat, see the Rust
+   * `build_splat_buffer`) to be rendered as true anisotropic splats. Passing an
+   * empty buffer clears the current cloud. Lazily creates the splat pipeline.
+   */
+  uploadGaussianSplats(splatData: Float32Array, shDegree: number): void {
+    if (splatData.length === 0) {
+      this.splatRenderer?.clear();
+      this.markSceneDirty();
+      return;
+    }
+    if (!this.splatRenderer) {
+      this.splatRenderer = createSplatRenderer(this.device, this.format, 4, () =>
+        this.markSceneDirty(),
+      );
+    }
+    this.splatRenderer.upload(splatData, shDegree);
+    this.splatRenderer.invalidateSort();
+    this.markSceneDirty();
+  }
+
+  /** Remove the current Gaussian splat cloud. */
+  clearGaussianSplats(): void {
+    if (!this.splatRenderer) return;
+    this.splatRenderer.clear();
+    this.markSceneDirty();
+  }
+
+  /** Set the Gaussian splat 2D low-pass dilation (fullness). */
+  setSplatDilation(dilation: number): void {
+    this.splatRenderer?.setDilation(dilation);
+    this.markSceneDirty();
+  }
+
   /** Upload lane line vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
   uploadLaneLineVertices(vertexData: Float32Array): void {
     if (vertexData.length === 0) {
@@ -948,6 +988,8 @@ export class ViewportRenderer {
     disposeMeshes(this.pathMeshes);
     disposeMeshes(this.pointCloudMeshes);
     disposeMeshes(this.actorPointCloudMeshes);
+    this.splatRenderer?.dispose();
+    this.splatRenderer = null;
     this.markerRenderer.dispose();
     disposeMeshes(this.highlightMeshes);
     disposeMeshes(this.linkHighlightMeshes);

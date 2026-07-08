@@ -11,6 +11,7 @@ import type { RenderableMesh } from './markerRenderer';
 import type { CameraController } from './cameraController';
 import type { MarkerRenderer } from './markerRenderer';
 import type { SpriteRenderer } from './spriteRenderer';
+import type { SplatRenderer } from './gaussian/splatRenderer';
 
 /** Subset of ViewportRenderer state/methods needed for frame rendering + capture. */
 export interface RendererFrameInternals {
@@ -34,6 +35,7 @@ export interface RendererFrameInternals {
   pointCloudMeshes: RenderableMesh[];
   pointCloudPipeline: GPURenderPipeline | null;
   actorPointCloudMeshes: RenderableMesh[];
+  splatRenderer: SplatRenderer | null;
   basicBindGroup: GPUBindGroup;
   meshes: RenderableMesh[];
   junctionMeshes: RenderableMesh[];
@@ -112,6 +114,18 @@ export function renderFrame(r: RendererFrameInternals): void {
     // Identity model matrix
     basicData[16] = 1; basicData[21] = 1; basicData[26] = 1; basicData[31] = 1;
     r.device.queue.writeBuffer(r.basicUniformBuffer, 0, basicData);
+  }
+
+  // Refresh the Gaussian splat camera uniform + schedule a depth re-sort. The
+  // sort is internally thresholded, so a static camera costs almost nothing.
+  if (r.splatRenderer?.hasContent) {
+    r.splatRenderer.onCamera(
+      camera,
+      r.cameraController.dimension,
+      1 / r.cameraController.getMetersPerPixel(),
+      r.width,
+      r.height,
+    );
   }
 
   const encoder = r.device.createCommandEncoder();
@@ -205,6 +219,11 @@ export function renderFrame(r: RendererFrameInternals): void {
 
   // Draw spline control point markers (screen-size constant squares)
   drawBatched(pass, r.markerRenderer.markerMeshes, r.basicPipeline, r.basicBindGroup, 'basic');
+
+  // Draw 3D Gaussian splats last: translucent, back-to-front sorted, and still
+  // depth-tested (reverse-Z 'greater', no write) so opaque geometry occludes
+  // them correctly.
+  r.splatRenderer?.draw(pass);
 
   pass.end();
   try {

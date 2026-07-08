@@ -37,8 +37,12 @@ export default function PointCloudPanel() {
   const voxelSize = usePointCloudStore((s) => s.voxelSize);
   const hasGround = usePointCloudStore((s) => s.hasGround);
   const markings = usePointCloudStore((s) => s.markings);
+  const isSplat = usePointCloudStore((s) => s.isSplat);
+  const splatShDegree = usePointCloudStore((s) => s.splatShDegree);
+  const splatDilation = usePointCloudStore((s) => s.splatDilation);
   const setColorMode = usePointCloudStore((s) => s.setColorMode);
   const setVoxelSize = usePointCloudStore((s) => s.setVoxelSize);
+  const setSplatDilation = usePointCloudStore((s) => s.setSplatDilation);
 
   const isWeb = !(typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window);
   const loaded = handle !== null;
@@ -78,7 +82,10 @@ export default function PointCloudPanel() {
       {summary && (
         <div className="pc-card">
           <div className="pc-card-title">{fileName}</div>
-          <Row label={t('pointcloud.points')} value={fmt(summary.count)} />
+          {isSplat && (
+            <Row label={t('pointcloud.renderMode')} value={`3DGS · SH ${splatShDegree}`} />
+          )}
+          <Row label={isSplat ? t('pointcloud.splats') : t('pointcloud.points')} value={fmt(summary.count)} />
           <Row label={t('pointcloud.hasRgb')} value={summary.has_rgb ? t('pointcloud.yes') : t('pointcloud.no')} />
           <Row label={t('pointcloud.hasIntensity')} value={summary.has_intensity ? t('pointcloud.yes') : t('pointcloud.no')} />
           <Row
@@ -96,7 +103,7 @@ export default function PointCloudPanel() {
         <span>{t('pointcloud.colorMode')}</span>
         <select
           value={colorMode}
-          disabled={!loaded}
+          disabled={!loaded || isSplat}
           onChange={(e) => setColorMode(e.target.value as PointCloudColorMode)}
         >
           {COLOR_MODE_KEYS.map((m) => (
@@ -104,6 +111,20 @@ export default function PointCloudPanel() {
           ))}
         </select>
       </label>
+
+      {isSplat && (
+        <label className="pc-field">
+          <span>{t('pointcloud.splatSize')} ({splatDilation.toFixed(2)})</span>
+          <input
+            type="range"
+            min={0.1}
+            max={3}
+            step={0.05}
+            value={splatDilation}
+            onChange={(e) => setSplatDilation(Number(e.target.value))}
+          />
+        </label>
+      )}
 
       <label className="pc-field">
         <span>{t('pointcloud.voxelSize')}</span>
@@ -128,15 +149,15 @@ export default function PointCloudPanel() {
         </div>
       )}
 
-      <button type="button" disabled={!loaded || busy} onClick={() => void extractGround()} className="pc-btn">
+      <button type="button" disabled={!loaded || busy || isSplat} onClick={() => void extractGround()} className="pc-btn">
         {hasGround ? t('pointcloud.extractGroundDone') : t('pointcloud.extractGround')}
       </button>
-      <button type="button" disabled={!loaded || busy} onClick={() => void extractMarkings()} className="pc-btn">
+      <button type="button" disabled={!loaded || busy || isSplat} onClick={() => void extractMarkings()} className="pc-btn">
         {t('pointcloud.extractMarkings')}{markings.length > 0 ? ` (${markings.length})` : ''}
       </button>
       <button
         type="button"
-        disabled={!loaded || busy || markings.length === 0}
+        disabled={!loaded || busy || isSplat || markings.length === 0}
         onClick={() => void vectorizeToRoads()}
         className="pc-btn-primary"
       >

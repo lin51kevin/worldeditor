@@ -10,15 +10,18 @@
  * UI freezes. Tauri uses native IPC which is already async.
  */
 import { getPlatformService } from '../../../services';
-import type { PointCloudPolyline, PointCloudSource } from '../../../services/platform';
+import type { PointCloudPolyline, PointCloudSource, PointCloudSummary } from '../../../services/platform';
 import { useProjectStore } from '../../../stores/projectStore';
 import { usePointCloudStore } from './pointcloudState';
 import {
   workerLoadPointCloud,
   workerFreePointCloud,
+  workerLoadGaussianSplats,
+  workerFreeGaussianSplats,
   workerExtractGround,
   workerExtractMarkings,
   workerVectorize,
+  type GaussianSplatMeta,
 } from '../../../workers/pointcloudBridge';
 
 const NATIVE_EXTENSIONS = ['las', 'laz', 'pcd', 'ply', 'xyz', 'txt', 'asc'];
@@ -28,6 +31,36 @@ function extensionOf(name: string): string {
   const dot = name.lastIndexOf('.');
   return dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
 }
+
+/**
+ * Detect a 3D Gaussian Splatting PLY by scanning its ASCII header for the
+ * signature splat properties (`f_dc_0`, `scale_0`, `rot_0`, `opacity`). Only the
+ * header region (up to `end_header`, capped at 8 KiB) is decoded.
+ */
+export function isGaussianPly(bytes: Uint8Array): boolean {
+  const headerLen = Math.min(bytes.length, 8192);
+  let header = '';
+  for (let i = 0; i < headerLen; i++) header += String.fromCharCode(bytes[i]!);
+  const end = header.indexOf('end_header');
+  const scan = end >= 0 ? header.slice(0, end) : header;
+  const has = (name: string): boolean =>
+    new RegExp(`property\\s+\\S+\\s+${name}\\b`).test(scan);
+  return has('f_dc_0') && has('scale_0') && has('rot_0') && has('opacity');
+}
+
+/** Build a point-cloud summary shell from Gaussian splat metadata. */
+function gaussianMetaToSummary(meta: GaussianSplatMeta): PointCloudSummary {
+  return {
+    count: meta.count,
+    origin: meta.origin,
+    min: meta.min,
+    max: meta.max,
+    has_intensity: false,
+    has_rgb: true,
+    has_heightmap: false,
+  };
+}
+
 
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -56,10 +89,13 @@ async function readWebFile(file: File): Promise<PointCloudSource> {
 
 /** Free any currently-loaded cloud and reset the workflow store. */
 export async function freeCurrentCloud(): Promise<void> {
-  const { handle, reset } = usePointCloudStore.getState();
+  const { handle, isSplat, reset } = usePointCloudStore.getState();
   if (handle !== null) {
     try {
-      if (isTauri()) {
+      if (isSplat) {
+        // Splat clouds always live in the WASM worker registry (both platforms).
+        await workerFreeGaussianSplats(handle);
+      } else if (isTauri()) {
         const platform = await getPlatformService();
         await platform.freePointCloud(handle);
       } else {
@@ -83,7 +119,9 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
   try {
     // Release a previously-loaded cloud first.
     if (store.handle !== null) {
-      if (isTauri()) {
+      if (store.isSplat) {
+        await workerFreeGaussianSplats(store.handle).catch(() => undefined);
+      } else if (isTauri()) {
         const platform = await getPlatformService();
         await platform.freePointCloud(store.handle).catch(() => undefined);
       } else {
@@ -97,6 +135,19 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
       const path = await pickNativePath();
       if (!path) { usePointCloudStore.getState().setBusy(false); return; }
       fileName = path.split(/[/\\]/).pop() ?? path;
+      // 3D Gaussian Splatting PLYs are routed through the WASM splat pipeline
+      // (parsed off the native path). Read the bytes and detect the signature.
+      if (extensionOf(path) === 'ply') {
+        const { readFile } = await import('@tauri-apps/plugin-fs');
+        const bytes = await readFile(path);
+        if (isGaussianPly(bytes)) {
+          const { handle, meta, buffer } = await workerLoadGaussianSplats(bytes);
+          usePointCloudStore
+            .getState()
+            .setSplatLoaded(handle, fileName, buffer, meta.shDegree, gaussianMetaToSummary(meta));
+          return;
+        }
+      }
       const platform = await getPlatformService();
       const source: PointCloudSource = { path };
       const result = await platform.loadPointCloud(source, store.voxelSize);
@@ -106,8 +157,16 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
       if (!webFile) throw new Error('No file selected.');
       const source = await readWebFile(webFile);
       fileName = webFile.name;
-      const result = await workerLoadPointCloud(source.bytes!, source.format!);
-      usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary);
+      // Route 3DGS PLYs through the Gaussian splat pipeline.
+      if (source.format === 'ply' && source.bytes && isGaussianPly(source.bytes)) {
+        const { handle, meta, buffer } = await workerLoadGaussianSplats(source.bytes);
+        usePointCloudStore
+          .getState()
+          .setSplatLoaded(handle, fileName, buffer, meta.shDegree, gaussianMetaToSummary(meta));
+      } else {
+        const result = await workerLoadPointCloud(source.bytes!, source.format!);
+        usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary);
+      }
     }
   } catch (err) {
     usePointCloudStore.getState().setError(err instanceof Error ? err.message : String(err));
@@ -120,6 +179,10 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
 export async function extractGround(): Promise<void> {
   const store = usePointCloudStore.getState();
   if (store.handle === null) return;
+  if (store.isSplat) {
+    store.setError('Ground extraction is not available for 3DGS splat clouds.');
+    return;
+  }
   store.setBusy(true);
   store.setError(null);
   try {
@@ -141,6 +204,10 @@ export async function extractGround(): Promise<void> {
 export async function extractMarkings(): Promise<void> {
   const store = usePointCloudStore.getState();
   if (store.handle === null) return;
+  if (store.isSplat) {
+    store.setError('Marking extraction is not available for 3DGS splat clouds.');
+    return;
+  }
   store.setBusy(true);
   store.setError(null);
   try {
@@ -166,6 +233,10 @@ export async function extractMarkings(): Promise<void> {
 export async function vectorizeToRoads(polylines?: PointCloudPolyline[]): Promise<number> {
   const store = usePointCloudStore.getState();
   if (store.handle === null) return 0;
+  if (store.isSplat) {
+    store.setError('Vectorization is not available for 3DGS splat clouds.');
+    return 0;
+  }
   const lines = polylines ?? store.markings;
   if (lines.length === 0) {
     store.setError('No marking polylines to vectorize. Run "Extract Markings" first.');

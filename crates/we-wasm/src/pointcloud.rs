@@ -13,8 +13,10 @@ use wasm_bindgen::prelude::*;
 
 use we_core::pointcloud::{
     ColorMode, GroundConfig, Heightmap, MarkingConfig, PointCloud, VectorizeConfig,
-    build_render_buffer, extract_ground, extract_markings, pcd, ply, polylines_to_roads, xyz,
+    build_render_buffer, extract_ground, extract_markings, gaussian, pcd, ply, polylines_to_roads,
+    xyz,
 };
+use we_core::pointcloud::gaussian::GaussianCloud;
 
 /// A registered cloud plus any derived ground heightmap.
 struct Entry {
@@ -25,6 +27,8 @@ struct Entry {
 thread_local! {
     static REGISTRY: RefCell<HashMap<u32, Entry>> = RefCell::new(HashMap::new());
     static NEXT_HANDLE: RefCell<u32> = const { RefCell::new(1) };
+    static GAUSSIAN_REGISTRY: RefCell<HashMap<u32, GaussianCloud>> = RefCell::new(HashMap::new());
+    static NEXT_GAUSSIAN_HANDLE: RefCell<u32> = const { RefCell::new(1) };
 }
 
 fn store(cloud: PointCloud) -> u32 {
@@ -197,6 +201,98 @@ where
     }
 }
 
+// ---------------------------------------------------------------------------
+// 3D Gaussian Splatting bindings
+// ---------------------------------------------------------------------------
+
+fn store_gaussian(cloud: GaussianCloud) -> u32 {
+    let handle = NEXT_GAUSSIAN_HANDLE.with(|n| {
+        let mut n = n.borrow_mut();
+        let h = *n;
+        *n = n.wrapping_add(1).max(1);
+        h
+    });
+    GAUSSIAN_REGISTRY.with(|r| r.borrow_mut().insert(handle, cloud));
+    handle
+}
+
+/// Parse a 3D Gaussian Splatting PLY and register it, returning an opaque handle.
+///
+/// Native-testable error variant returns a plain `String`.
+fn parse_gaussian(bytes: &[u8]) -> Result<GaussianCloud, String> {
+    gaussian::parse_gaussian_ply(bytes).map_err(|e| e.to_string())
+}
+
+/// Load a 3D Gaussian Splatting PLY, returning an opaque handle.
+#[wasm_bindgen]
+pub fn load_gaussian_splats(bytes: &[u8]) -> Result<u32, JsError> {
+    let cloud = parse_gaussian(bytes).map_err(|e| JsError::new(&e))?;
+    Ok(store_gaussian(cloud))
+}
+
+/// Free a registered Gaussian splat cloud.
+#[wasm_bindgen]
+pub fn free_gaussian_splats(handle: u32) {
+    GAUSSIAN_REGISTRY.with(|r| r.borrow_mut().remove(&handle));
+}
+
+/// Build the view-dependent SH instance buffer (raw SH coefficients kept for
+/// per-frame view-dependent shading).
+///
+/// Layout is `sh_buffer_stride` `f32` per splat:
+/// `[x, y, z, σxx, σxy, σxz, σyy, σyz, σzz, opacity, sh0_r, sh0_g, sh0_b, …]`.
+#[wasm_bindgen]
+pub fn gaussian_splat_buffer_sh(handle: u32) -> Result<Vec<f32>, JsError> {
+    GAUSSIAN_REGISTRY.with(|r| {
+        let map = r.borrow();
+        let cloud = map
+            .get(&handle)
+            .ok_or_else(|| JsError::new("invalid gaussian splat handle"))?;
+        Ok(cloud.build_splat_buffer_sh())
+    })
+}
+
+/// Return a JSON summary `{ count, shDegree, shStride, origin, min, max }`.
+///
+/// The frontend uploads the view-dependent SH buffer
+/// ([`gaussian_splat_buffer_sh`]); local splat positions for the depth sort are
+/// extracted JS-side from that buffer's leading `xyz`, so no separate positions
+/// export is needed.
+///
+/// Uses a `#[derive(Serialize)]` struct (not a `serde_json` map) so
+/// `serde_wasm_bindgen` yields a plain JS **object** whose fields are directly
+/// accessible (`meta.shDegree`), rather than a `Map`.
+#[wasm_bindgen]
+pub fn gaussian_splat_meta(handle: u32) -> Result<JsValue, JsError> {
+    #[derive(serde::Serialize)]
+    struct GaussianMeta {
+        count: usize,
+        #[serde(rename = "shDegree")]
+        sh_degree: u32,
+        #[serde(rename = "shStride")]
+        sh_stride: usize,
+        origin: [f64; 3],
+        min: [f64; 3],
+        max: [f64; 3],
+    }
+    GAUSSIAN_REGISTRY.with(|r| {
+        let map = r.borrow();
+        let cloud = map
+            .get(&handle)
+            .ok_or_else(|| JsError::new("invalid gaussian splat handle"))?;
+        let b = cloud.bounds();
+        let meta = GaussianMeta {
+            count: cloud.len(),
+            sh_degree: cloud.sh_degree(),
+            sh_stride: cloud.sh_buffer_stride(),
+            origin: cloud.origin(),
+            min: b.min,
+            max: b.max,
+        };
+        serde_wasm_bindgen::to_value(&meta).map_err(|e| JsError::new(&e.to_string()))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,5 +323,54 @@ DATA ascii
     #[test]
     fn test_unsupported_format_errors() {
         assert!(parse_by_format(b"x", "las").is_err());
+    }
+
+    const GAUSSIAN_ASCII: &str = "\
+ply
+format ascii 1.0
+element vertex 2
+property float x
+property float y
+property float z
+property float f_dc_0
+property float f_dc_1
+property float f_dc_2
+property float opacity
+property float scale_0
+property float scale_1
+property float scale_2
+property float rot_0
+property float rot_1
+property float rot_2
+property float rot_3
+end_header
+0 0 0 0 0 0 0 0 0 0 1 0 0 0
+1 2 3 0 0 0 0 0 0 0 1 0 0 0
+";
+
+    #[test]
+    fn test_parse_gaussian_ok() {
+        let cloud = parse_gaussian(GAUSSIAN_ASCII.as_bytes()).unwrap();
+        assert_eq!(cloud.len(), 2);
+        assert_eq!(cloud.sh_degree(), 0);
+        // 13 floats/splat compact buffer.
+        assert_eq!(cloud.build_splat_buffer().len(), 26);
+        // positions: 3/splat.
+        assert_eq!(cloud.positions().len(), 6);
+    }
+
+    #[test]
+    fn test_parse_gaussian_rejects_plain_ply() {
+        let plain = "\
+ply
+format ascii 1.0
+element vertex 1
+property float x
+property float y
+property float z
+end_header
+0 0 0
+";
+        assert!(parse_gaussian(plain.as_bytes()).is_err());
     }
 }

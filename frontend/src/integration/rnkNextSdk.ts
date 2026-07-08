@@ -93,6 +93,18 @@ export interface PointCloudInfo {
   origin: [number, number, number];
 }
 
+/**
+ * Summary of a loaded 3D Gaussian Splatting cloud. Mirrors {@link PointCloudInfo}
+ * (origin-relative bounds + render origin) plus the cloud's SH degree.
+ */
+export interface GaussianSplatInfo {
+  count: number;
+  min: [number, number, number];
+  max: [number, number, number];
+  origin: [number, number, number];
+  shDegree: number;
+}
+
 /** Per-load overrides for {@link WorldEditorRenderer.loadPointCloud}. */
 export interface PointCloudLoadOptions {
   /** Point-cloud file format (default: inferred from the URL extension). */
@@ -191,6 +203,22 @@ export interface WorldEditorRenderer {
   uploadActorPointCloud(data: Float32Array): void;
   /** Remove the uploaded opponent model point clouds. */
   clearActorPointCloud(): void;
+  /**
+   * Fetch, parse and upload a 3D Gaussian Splatting `.ply` as true anisotropic
+   * splats (view-dependent SH). Resolves with the cloud's (origin-relative)
+   * bounds + origin + SH degree, or `undefined` when the running bundle lacks
+   * 3DGS support. Optional so hosts bundling an older SDK degrade gracefully.
+   */
+  loadGaussianSplats?(url: string): Promise<GaussianSplatInfo | undefined>;
+  /**
+   * Upload an already-parsed 3D Gaussian Splatting SH buffer (as produced by
+   * the Rust `gaussian_splat_buffer_sh`, `10 + (shDegree+1)²·3` floats/splat).
+   * Prefer {@link loadGaussianSplats} for the common fetch-and-render path.
+   * Optional so hosts bundling an older SDK degrade gracefully.
+   */
+  uploadGaussianSplats?(data: Float32Array, shDegree: number): void;
+  /** Remove the uploaded Gaussian splat cloud. */
+  clearGaussianSplats?(): void;
 }
 
 /** WASM compute contract consumed by rnk-next. */
@@ -480,6 +508,38 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     },
     clearActorPointCloud: () => {
       renderer.uploadActorPointCloudVertices(new Float32Array(0));
+    },
+    loadGaussianSplats: async (url: string): Promise<GaussianSplatInfo | undefined> => {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Gaussian splats (${response.status}): ${url}`);
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      // Parse in the WASM registry, read the view-dependent SH buffer + metadata,
+      // upload as splats, then free the handle (the GPU buffer is now owned by
+      // the renderer). Handle is freed even if the upload throws.
+      const handle = wasm.load_gaussian_splats(bytes);
+      try {
+        const meta = wasm.gaussian_splat_meta(handle);
+        const buffer = wasm.gaussian_splat_buffer_sh(handle);
+        renderer.uploadGaussianSplats(buffer, meta.shDegree);
+        renderer.render();
+        return {
+          count: meta.count,
+          min: asTriple(meta.min),
+          max: asTriple(meta.max),
+          origin: asTriple(meta.origin),
+          shDegree: meta.shDegree,
+        };
+      } finally {
+        wasm.free_gaussian_splats(handle);
+      }
+    },
+    uploadGaussianSplats: (data: Float32Array, shDegree: number) => {
+      renderer.uploadGaussianSplats(data, shDegree);
+    },
+    clearGaussianSplats: () => {
+      renderer.clearGaussianSplats();
     },
   };
 }

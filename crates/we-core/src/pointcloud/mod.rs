@@ -9,6 +9,7 @@
 //! desktop-only `we-native` crate, which produces a [`model::PointCloud`].
 
 pub mod ground;
+pub mod gaussian;
 pub mod heightmap;
 pub mod markings;
 pub mod model;
@@ -19,6 +20,7 @@ pub mod vectorize;
 pub mod xyz;
 
 pub use ground::{GroundConfig, GroundResult, extract_ground};
+pub use gaussian::{GaussianCloud, parse_gaussian_ply};
 pub use heightmap::Heightmap;
 pub use markings::{MarkingConfig, extract_markings};
 pub use model::{Aabb, PointCloud};
