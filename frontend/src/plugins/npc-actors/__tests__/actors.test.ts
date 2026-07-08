@@ -66,6 +66,35 @@ describe('npc-actors geometry', () => {
     const v = buildPathVertices(seg, 0.5);
     expect(v.length).toBe(6 * ACTOR_VERTEX_STRIDE);
   });
+
+  it('shifts box vertices into an origin-relative frame', () => {
+    const origin: [number, number, number] = [1000, 2000, 5];
+    const v = buildBoxVertices([box({ kind: 'waypoint', position: [1010, 2020, 5.8], size: [4, 2, 2] })], origin);
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i < v.length; i += ACTOR_VERTEX_STRIDE) {
+      minX = Math.min(minX, v[i]!); maxX = Math.max(maxX, v[i]!);
+      minY = Math.min(minY, v[i + 1]!); maxY = Math.max(maxY, v[i + 1]!);
+      minZ = Math.min(minZ, v[i + 2]!); maxZ = Math.max(maxZ, v[i + 2]!);
+    }
+    // Center moves to (position − origin).
+    expect((minX + maxX) / 2).toBeCloseTo(10, 5);
+    expect((minY + maxY) / 2).toBeCloseTo(20, 5);
+    expect((minZ + maxZ) / 2).toBeCloseTo(0.8, 5);
+  });
+
+  it('shifts path vertices into an origin-relative frame', () => {
+    const origin: [number, number, number] = [100, 200, 1];
+    const seg = new Float32Array([100, 200, 1, 1, 1, 1, 1, 110, 200, 1, 1, 1, 1, 1]);
+    const v = buildPathVertices(seg, 0.5, origin);
+    expect(v.length).toBe(6 * ACTOR_VERTEX_STRIDE);
+    // First segment start x was 100 → 0 after the shift; ribbon is within [0, 10].
+    let minX = Infinity, maxX = -Infinity;
+    for (let i = 0; i < v.length; i += ACTOR_VERTEX_STRIDE) {
+      minX = Math.min(minX, v[i]!); maxX = Math.max(maxX, v[i]!);
+    }
+    expect(minX).toBeCloseTo(0, 5);
+    expect(maxX).toBeCloseTo(10, 5);
+  });
 });
 
 describe('npc-actors picking', () => {
@@ -99,6 +128,50 @@ describe('CaseActorLayer facade', () => {
     expect(layer.boxCount).toBe(0);
     expect(layer.boxVertices().length).toBe(0);
     expect(layer.pickAt(3, 4)).toBeNull();
+  });
+
+  it('shifts boxes/paths and picking by the scene origin (road-mesh alignment)', () => {
+    const layer = new CaseActorLayer();
+    layer.setBoxes([box({ id: 'el:9', position: [1010, 2020, 0.8], size: [4, 2, 1.6] })]);
+    layer.setSceneOrigin([1000, 2000, 0]);
+    expect(layer.getSceneOrigin()).toEqual([1000, 2000, 0]);
+
+    // Box now renders around the origin-relative center (10, 20).
+    const v = layer.boxVertices();
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < v.length; i += ACTOR_VERTEX_STRIDE) {
+      minX = Math.min(minX, v[i]!); maxX = Math.max(maxX, v[i]!);
+      minY = Math.min(minY, v[i + 1]!); maxY = Math.max(maxY, v[i + 1]!);
+    }
+    expect((minX + maxX) / 2).toBeCloseTo(10, 5);
+    expect((minY + maxY) / 2).toBeCloseTo(20, 5);
+
+    // Ground picks arrive in the render frame: (10, 20) maps back to the
+    // absolute footprint and hits; the old absolute coords now miss.
+    expect(layer.pickAt(10, 20)).toBe('el:9');
+    expect(layer.pickAt(1010, 2020)).toBeNull();
+  });
+
+  it('pickAtScreen intersects the ray at each box centre height (not the ground)', () => {
+    // A grazing camera: the click ray's XY drifts by 5m per meter of height, so
+    // where the ray meets a horizontal plane depends on that plane's Z.
+    const unprojectAtZ = (worldZ: number) => ({ x: 10 - 5 * worldZ, y: 20 });
+
+    // Box sitting on the ground (centre Z = 0): no drift, ray meets render
+    // (10, 20) → absolute (1010, 2020), dead centre of the 4×2 footprint → hit.
+    const groundLayer = new CaseActorLayer();
+    groundLayer.setBoxes([box({ id: 'el:0', position: [1010, 2020, 0], size: [4, 2, 1.6] })]);
+    groundLayer.setSceneOrigin([1000, 2000, 0]);
+    expect(groundLayer.pickAtScreen(unprojectAtZ)).toBe('el:0');
+
+    // Same screen ray, box centre 0.8m up: the pick unprojects at z = 0.8 →
+    // render (10 - 4, 20) = (6, 20) → absolute (1006, 2020), outside the ±2 X
+    // extent → miss. Proves the pick honours each box's centre height instead
+    // of the flat ground plane (the old, parallax-prone behaviour).
+    const raisedLayer = new CaseActorLayer();
+    raisedLayer.setBoxes([box({ id: 'el:9', position: [1010, 2020, 0.8], size: [4, 2, 1.6] })]);
+    raisedLayer.setSceneOrigin([1000, 2000, 0]);
+    expect(raisedLayer.pickAtScreen(unprojectAtZ)).toBeNull();
   });
 });
 

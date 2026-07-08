@@ -18,3 +18,13 @@ export {
   buildSampleSegments,
 } from './actorDebug';
 export type { DebugActorTarget } from './actorDebug';
+export {
+  openTrajFile,
+  clearTraj,
+  playTraj,
+  parseTraj,
+  buildTrajBoxes,
+  buildTrajSegments,
+} from './trajViewer';
+export type { TrajViewerTarget, TrajData } from './trajViewer';
+export { parsePlyFirstVertex } from './plyOrigin';

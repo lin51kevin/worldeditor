@@ -148,6 +148,9 @@ export class ViewportRenderer {
 
   // Point cloud background mesh (rendered behind roads)
   private pointCloudMeshes: RenderableMesh[] = [];
+  // Opponent (NPC) model point clouds — a SEPARATE buffer from the static road
+  // cloud so per-frame opponent updates never re-upload the (large) road mesh.
+  private actorPointCloudMeshes: RenderableMesh[] = [];
   private pointCloudPipeline: GPURenderPipeline | null = null;
 
   // Last uploaded vertex data (needed for zoomToFit re-trigger)
@@ -557,7 +560,7 @@ export class ViewportRenderer {
     return this.cameraController.unprojectToGround(screenX, screenY);
   }
 
-  /** Unproject a screen pixel to world-space coordinates on the plane z=worldZ. */
+  /** Unproject a screen pixel to world-space XY on the horizontal plane at z = worldZ. */
   unprojectToPlane(screenX: number, screenY: number, worldZ: number): { x: number; y: number } | null {
     return this.cameraController.unprojectToPlane(screenX, screenY, worldZ);
   }
@@ -698,6 +701,30 @@ export class ViewportRenderer {
       );
     }
     uploadMeshData(this.device, this.pointCloudMeshes, vertexData);
+    this.markSceneDirty();
+  }
+
+  /**
+   * Upload opponent (NPC) model point-cloud vertex data (7 floats per vertex:
+   * x,y,z,r,g,b,a) into a SEPARATE buffer from the road cloud, so per-frame
+   * opponent updates never re-upload the (large) static road mesh. Rendered as
+   * point-list with the shared point-cloud pipeline.
+   */
+  uploadActorPointCloudVertices(vertexData: Float32Array): void {
+    if (vertexData.length === 0) {
+      if (this.actorPointCloudMeshes.length === 0) return;
+      for (const m of this.actorPointCloudMeshes) { m.vertexBuffer.destroy(); }
+      this.actorPointCloudMeshes = [];
+      this.markSceneDirty();
+      return;
+    }
+    // Lazy-create point cloud pipeline on first use
+    if (!this.pointCloudPipeline) {
+      this.pointCloudPipeline = createPointCloudPipelineFn(
+        this.device, this.format, this.basicShaderModule, this.basicBindGroupLayout,
+      );
+    }
+    uploadMeshData(this.device, this.actorPointCloudMeshes, vertexData);
     this.markSceneDirty();
   }
 
@@ -920,6 +947,7 @@ export class ViewportRenderer {
     disposeMeshes(this.actorMeshes);
     disposeMeshes(this.pathMeshes);
     disposeMeshes(this.pointCloudMeshes);
+    disposeMeshes(this.actorPointCloudMeshes);
     this.markerRenderer.dispose();
     disposeMeshes(this.highlightMeshes);
     disposeMeshes(this.linkHighlightMeshes);

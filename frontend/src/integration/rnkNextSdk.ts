@@ -24,7 +24,7 @@
 import { importGeoZ } from '../plugins/io/geoz/parser';
 import { ViewportRenderer } from '../viewport/renderer';
 import type { SpriteInstance, PaintInstance } from '../viewport/spriteRenderer';
-import { CaseActorLayer, type CaseActorBox } from '../plugins/npc-actors';
+import { CaseActorLayer, parsePlyFirstVertex, type CaseActorBox } from '../plugins/npc-actors';
 
 type WasmModule = typeof import('../../wasm/pkg/we_wasm');
 
@@ -78,6 +78,31 @@ export interface SpriteDataResult {
   paints: PaintMeta[];
 }
 
+/**
+ * Summary of a loaded point cloud (logsim road mesh).
+ *
+ * `origin` is the shift the WASM parser applied to keep the cloud near zero
+ * (absolute first-vertex − rendered first-vertex). Callers render trajectories
+ * in the same origin-relative frame so both align. `min`/`max` are the cloud's
+ * (origin-relative) planar bounds, suitable for camera framing.
+ */
+export interface PointCloudInfo {
+  count: number;
+  min: [number, number, number];
+  max: [number, number, number];
+  origin: [number, number, number];
+}
+
+/** Per-load overrides for {@link WorldEditorRenderer.loadPointCloud}. */
+export interface PointCloudLoadOptions {
+  /** Point-cloud file format (default: inferred from the URL extension). */
+  format?: string;
+  /** Color mode: `elevation` | `rgb` | `intensity` (default: `elevation`). */
+  colorMode?: string;
+  /** Max points uploaded after stride decimation (default: 2,000,000). */
+  maxPoints?: number;
+}
+
 /** Renderer contract consumed by rnk-next. */
 export interface WorldEditorRenderer {
   init(canvas: HTMLCanvasElement): Promise<boolean>;
@@ -92,8 +117,6 @@ export interface WorldEditorRenderer {
   uploadHighlightVertices(data: Float32Array): void;
   clearHighlight(): void;
   unprojectToGround(screenX: number, screenY: number): { x: number; y: number } | null;
-  /** Unproject a screen pixel to world-space XY on the horizontal plane at z = worldZ. */
-  unprojectToPlane(screenX: number, screenY: number, worldZ: number): { x: number; y: number } | null;
   fitToVertices(data: Float32Array): void;
   toDataURL(): string;
 
@@ -144,6 +167,15 @@ export interface WorldEditorRenderer {
 
   // ── Point cloud (logsim scene mesh) ──────────────────────────────────
   /**
+   * Fetch, parse, decimate and upload a point-cloud file (e.g. a logsim
+   * `road_mesh.ply`), adopting its render origin as the scene origin so
+   * subsequently uploaded actor boxes / trajectory ribbons align with it.
+   * Resolves with the cloud's (origin-relative) bounds + origin, or `undefined`
+   * when unsupported. The origin can be passed to the trajectory viewer
+   * (`playTraj`/`openTrajFile`) to align the self-contained playback path too.
+   */
+  loadPointCloud(url: string, options?: PointCloudLoadOptions): Promise<PointCloudInfo | undefined>;
+  /**
    * Upload an interleaved point-cloud buffer (6 floats/point: x,y,z,r,g,b, as
    * produced by `point_cloud_render_buffer`). The adapter expands it to the
    * renderer's 7-float (rgba) point layout.
@@ -151,6 +183,14 @@ export interface WorldEditorRenderer {
   uploadPointCloud(data: Float32Array): void;
   /** Remove the uploaded point cloud. */
   clearPointCloud(): void;
+  /**
+   * Upload opponent (NPC) model point clouds into a buffer separate from the
+   * road cloud (6 floats/point: x,y,z,r,g,b), so per-frame opponent updates
+   * never re-upload the (large) static road mesh. Expanded to 7-float (rgba).
+   */
+  uploadActorPointCloud(data: Float32Array): void;
+  /** Remove the uploaded opponent model point clouds. */
+  clearActorPointCloud(): void;
 }
 
 /** WASM compute contract consumed by rnk-next. */
@@ -238,6 +278,26 @@ const HIGHLIGHT_RGBA: [number, number, number, number] = [0x52 / 255, 0xd8 / 255
 /** Road vertex layout: x, y, z, r, g, b, a. */
 const ROAD_VERTEX_STRIDE = 7;
 
+/** Default color mode requested from the WASM point-cloud render buffer. */
+const DEFAULT_POINT_CLOUD_COLOR_MODE = 'elevation';
+/** Default point budget after WASM stride decimation. */
+const DEFAULT_POINT_CLOUD_MAX_POINTS = 2_000_000;
+
+/** Infer a point-cloud format string from a URL's file extension. */
+function inferPointCloudFormat(url: string): string {
+  const clean = url.split(/[?#]/)[0] ?? url;
+  const dot = clean.lastIndexOf('.');
+  const ext = dot >= 0 ? clean.slice(dot + 1).toLowerCase() : '';
+  return ext === 'pcd' || ext === 'xyz' ? ext : 'ply';
+}
+
+/** Coerce an unknown value to a finite `[x, y, z]` triple, defaulting to zero. */
+function asTriple(v: unknown): [number, number, number] {
+  return Array.isArray(v) && v.length === 3
+    ? [Number(v[0]) || 0, Number(v[1]) || 0, Number(v[2]) || 0]
+    : [0, 0, 0];
+}
+
 /**
  * Expand an interleaved 6-float point buffer `[x,y,z,r,g,b, ...]` (as produced
  * by we-wasm `point_cloud_render_buffer`) into the renderer's 7-float point
@@ -261,7 +321,7 @@ function expandPointCloudTo7(src: Float32Array): Float32Array {
 }
 
 /** Wrap a {@link ViewportRenderer} as the rnk-next renderer contract. */
-function adaptRenderer(): WorldEditorRenderer {
+function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
   const renderer = new ViewportRenderer();
   // Independent npc-actors plugin: owns box/trajectory geometry + ground picking.
   const actorLayer = new CaseActorLayer();
@@ -304,10 +364,6 @@ function adaptRenderer(): WorldEditorRenderer {
       const [sx, sy] = toCanvasXY(screenX, screenY);
       return renderer.unprojectToGround(sx, sy);
     },
-    unprojectToPlane: (screenX, screenY, worldZ) => {
-      const [sx, sy] = toCanvasXY(screenX, screenY);
-      return renderer.unprojectToPlane(sx, sy, worldZ);
-    },
     fitToVertices: (data) => renderer.fitToVertices(data),
     toDataURL: () => renderer.toDataURL(),
 
@@ -336,9 +392,10 @@ function adaptRenderer(): WorldEditorRenderer {
     },
     pickActor: (clientX: number, clientY: number) => {
       const [sx, sy] = toCanvasXY(clientX, clientY);
-      const world = renderer.unprojectToGround(sx, sy);
-      if (!world) return null;
-      const id = actorLayer.pickAt(world.x, world.y);
+      // Height-aware pick: intersect the click ray with each box's own centre
+      // height rather than the Z=0 ground, so elevated 3D boxes are hit where
+      // they visually appear instead of at their parallax-shifted ground shadow.
+      const id = actorLayer.pickAtScreen((worldZ) => renderer.unprojectToPlane(sx, sy, worldZ));
       return id ? { id } : null;
     },
     cameraBeginDrag: (button, event) => renderer.cameraBeginDrag(button, event),
@@ -349,11 +406,80 @@ function adaptRenderer(): WorldEditorRenderer {
     centerCamera3D: (x, y) => renderer.centerCamera3D(x, y),
 
     // ── Point cloud wiring (6-float wasm buffer → 7-float renderer layout) ────
+    loadPointCloud: async (
+      url: string,
+      options?: PointCloudLoadOptions,
+    ): Promise<PointCloudInfo | undefined> => {
+      const format = options?.format ?? inferPointCloudFormat(url);
+      const colorMode = options?.colorMode ?? DEFAULT_POINT_CLOUD_COLOR_MODE;
+      const maxPoints = options?.maxPoints ?? DEFAULT_POINT_CLOUD_MAX_POINTS;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch point cloud (${response.status}): ${url}`);
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      // The WASM parser subtracts the file's first vertex from every point (its
+      // `origin`), so the render buffer is origin-relative. Parse that first
+      // vertex directly (authoritative, independent of the WASM summary) so the
+      // trajectory can be shifted into the same render frame.
+      const parsedOrigin = format === 'ply' ? parsePlyFirstVertex(bytes) : undefined;
+
+      let handle: number | undefined;
+      try {
+        handle = wasm.load_point_cloud(bytes, format);
+        const buffer = wasm.point_cloud_render_buffer(handle, colorMode, maxPoints);
+        const summary = wasm.point_cloud_summary(handle);
+        renderer.uploadPointCloudVertices(expandPointCloudTo7(buffer));
+
+        // Scene render origin = the shift the WASM applied = absolute(point0) −
+        // rendered(point0). This auto-detects whether the WASM subtracted the
+        // origin (buffer starts near 0 → shift = firstVertex) or kept it
+        // absolute (shift = 0), independent of the summary's origin field.
+        let origin: [number, number, number];
+        if (parsedOrigin && buffer.length >= 3 && parsedOrigin.every((v) => Number.isFinite(v))) {
+          origin = [
+            parsedOrigin[0] - (buffer[0] ?? 0),
+            parsedOrigin[1] - (buffer[1] ?? 0),
+            parsedOrigin[2] - (buffer[2] ?? 0),
+          ];
+        } else {
+          origin = asTriple(summary?.origin);
+        }
+
+        // Adopt the origin so already-uploaded actor boxes / paths (absolute)
+        // re-render into the cloud's origin-relative frame and stay aligned.
+        actorLayer.setSceneOrigin(origin);
+        renderer.uploadActorVertices(actorLayer.boxVertices());
+        renderer.uploadPathVertices(actorLayer.pathVertices());
+        renderer.render();
+
+        return {
+          count: summary?.count ?? 0,
+          min: asTriple(summary?.min),
+          max: asTriple(summary?.max),
+          origin,
+        };
+      } finally {
+        if (handle !== undefined) wasm.free_point_cloud(handle);
+      }
+    },
     uploadPointCloud: (data: Float32Array) => {
       renderer.uploadPointCloudVertices(expandPointCloudTo7(data));
     },
     clearPointCloud: () => {
       renderer.uploadPointCloudVertices(new Float32Array(0));
+      // Drop the scene origin so actors return to their absolute frame.
+      actorLayer.setSceneOrigin([0, 0, 0]);
+      renderer.uploadActorVertices(actorLayer.boxVertices());
+      renderer.uploadPathVertices(actorLayer.pathVertices());
+      renderer.render();
+    },
+    uploadActorPointCloud: (data: Float32Array) => {
+      renderer.uploadActorPointCloudVertices(expandPointCloudTo7(data));
+    },
+    clearActorPointCloud: () => {
+      renderer.uploadActorPointCloudVertices(new Float32Array(0));
     },
   };
 }
@@ -537,7 +663,7 @@ export async function createWorldEditorSdk(
   await (wasm.default as unknown as (input?: unknown) => Promise<void>)(options?.wasmInput);
 
   return {
-    createRenderer: adaptRenderer,
+    createRenderer: () => adaptRenderer(wasm),
     wasm: adaptWasm(wasm),
     geoz: adaptGeoZ(),
   };

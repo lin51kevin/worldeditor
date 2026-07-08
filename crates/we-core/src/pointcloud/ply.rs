@@ -3,6 +3,12 @@
 //! Supports `ascii` and `binary_little_endian` formats. Only the `vertex`
 //! element is read; face data is ignored. Recognized vertex properties:
 //! `x`, `y`, `z`, `intensity`, and `red`/`green`/`blue` (uchar 0..=255).
+//!
+//! 3D Gaussian Splatting clouds store no `red`/`green`/`blue`; their base colour
+//! lives in the band-0 spherical-harmonic coefficients `f_dc_0/1/2`. When those
+//! are present (and RGB is not) they are decoded to RGB via `SH2RGB(c) = C0*c +
+//! 0.5`, so splat clouds render in their real albedo instead of falling back to
+//! the elevation ramp.
 
 use super::model::PointCloud;
 use super::{PointCloudError, PointCloudResult, RawRecord};
@@ -144,6 +150,11 @@ pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
     let ig = find("green").or_else(|| find("g"));
     let ib = find("blue").or_else(|| find("b"));
     let has_rgb = ir.is_some() && ig.is_some() && ib.is_some();
+    // 3D Gaussian Splatting: band-0 spherical-harmonic colour (view-independent).
+    let idc0 = find("f_dc_0");
+    let idc1 = find("f_dc_1");
+    let idc2 = find("f_dc_2");
+    let has_sh = !has_rgb && idc0.is_some() && idc1.is_some() && idc2.is_some();
 
     let mut records: Vec<RawRecord> = Vec::with_capacity(vertex_count);
 
@@ -169,6 +180,12 @@ pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
                         num(ir.unwrap()).clamp(0.0, 255.0) as u8,
                         num(ig.unwrap()).clamp(0.0, 255.0) as u8,
                         num(ib.unwrap()).clamp(0.0, 255.0) as u8,
+                    ])
+                } else if has_sh {
+                    Some([
+                        sh_dc_to_u8(num(idc0.unwrap())),
+                        sh_dc_to_u8(num(idc1.unwrap())),
+                        sh_dc_to_u8(num(idc2.unwrap())),
                     ])
                 } else {
                     None
@@ -204,6 +221,12 @@ pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
                         read(rec, ig.unwrap()).clamp(0.0, 255.0) as u8,
                         read(rec, ib.unwrap()).clamp(0.0, 255.0) as u8,
                     ])
+                } else if has_sh {
+                    Some([
+                        sh_dc_to_u8(read(rec, idc0.unwrap())),
+                        sh_dc_to_u8(read(rec, idc1.unwrap())),
+                        sh_dc_to_u8(read(rec, idc2.unwrap())),
+                    ])
                 } else {
                     None
                 };
@@ -232,8 +255,17 @@ pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
     Ok(cloud)
 }
 
-fn read_scalar(s: &[u8], ty: PlyScalar) -> f64 {
-    match ty {
+/// Decode a band-0 spherical-harmonic coefficient to an 8-bit colour channel.
+///
+/// 3D Gaussian Splatting stores view-independent colour as SH band-0
+/// coefficients; the reference decode is `rgb = C0 * c + 0.5` (clamped), where
+/// `C0 = 1 / (2*sqrt(pi))` is the band-0 basis constant.
+fn sh_dc_to_u8(c: f64) -> u8 {
+    const SH_C0: f64 = 0.282_094_791_773_878_14;
+    ((0.5 + SH_C0 * c).clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+fn read_scalar(s: &[u8], ty: PlyScalar) -> f64 {match ty {
         PlyScalar::Char => (s[0] as i8) as f64,
         PlyScalar::Uchar => s[0] as f64,
         PlyScalar::Short => i16::from_le_bytes([s[0], s[1]]) as f64,
@@ -270,6 +302,35 @@ end_header
         assert!(cloud.has_rgb());
         assert_eq!(cloud.point(1), Some([1.0, 2.0, 3.0]));
         assert_eq!(cloud.color(0), Some([255, 0, 0]));
+    }
+
+    #[test]
+    fn test_parse_ascii_ply_gaussian_splat_sh_color() {
+        // A 3DGS cloud carries colour in f_dc_* (SH band-0), not red/green/blue.
+        // f_dc = 0 → mid-grey (0.5 → 128); a large positive/negative coefficient
+        // saturates to white/black via `C0 * c + 0.5`.
+        let body = "\
+ply
+format ascii 1.0
+element vertex 2
+property float x
+property float y
+property float z
+property float f_dc_0
+property float f_dc_1
+property float f_dc_2
+property float opacity
+end_header
+0 0 0 0 0 0 1
+1 2 3 10 -10 0 1
+";
+        let cloud = parse_ply(body.as_bytes()).unwrap();
+        assert_eq!(cloud.len(), 2);
+        assert!(cloud.has_rgb(), "f_dc SH coefficients should decode to RGB");
+        // f_dc = 0 → 0.5 → round(127.5) = 128 on every channel.
+        assert_eq!(cloud.color(0), Some([128, 128, 128]));
+        // Large +/- coefficients saturate to white/black; blue stays mid-grey.
+        assert_eq!(cloud.color(1), Some([255, 0, 128]));
     }
 
     #[test]

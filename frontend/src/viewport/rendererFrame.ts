@@ -33,6 +33,7 @@ export interface RendererFrameInternals {
   gridBindGroup: GPUBindGroup;
   pointCloudMeshes: RenderableMesh[];
   pointCloudPipeline: GPURenderPipeline | null;
+  actorPointCloudMeshes: RenderableMesh[];
   basicBindGroup: GPUBindGroup;
   meshes: RenderableMesh[];
   junctionMeshes: RenderableMesh[];
@@ -141,10 +142,15 @@ export function renderFrame(r: RendererFrameInternals): void {
   }
 
   // Draw point cloud (behind roads, on top of grid)
-  if (r.pointCloudMeshes.length > 0 && r.pointCloudPipeline) {
+  if ((r.pointCloudMeshes.length > 0 || r.actorPointCloudMeshes.length > 0) && r.pointCloudPipeline) {
     pass.setPipeline(r.pointCloudPipeline);
     pass.setBindGroup(0, r.basicBindGroup);
     for (const mesh of r.pointCloudMeshes) {
+      pass.setVertexBuffer(0, mesh.vertexBuffer);
+      pass.draw(mesh.vertexCount);
+    }
+    // Opponent (NPC) model clouds share the pipeline but live in a separate buffer.
+    for (const mesh of r.actorPointCloudMeshes) {
       pass.setVertexBuffer(0, mesh.vertexBuffer);
       pass.draw(mesh.vertexCount);
     }

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useViewportStore } from '../../stores/viewportStore';
 import { getViewportRenderer } from '../../viewport/viewportRef';
-import { spawnSampleActors, clearSampleActors } from '../../plugins/npc-actors';
+import { openTrajFile, clearTraj } from '../../plugins/npc-actors';
 
 type ViewMode = 'sketch' | 'wire' | 'solid';
 
@@ -46,19 +46,19 @@ export function ViewModePanel() {
             type="button"
             onClick={() => {
               const r = getViewportRenderer();
-              if (r) spawnSampleActors(r);
+              if (r) openTrajFile(r);
             }}
           >
-            Spawn sample boxes
+            Open trajectory…
           </button>
           <button
             type="button"
             onClick={() => {
               const r = getViewportRenderer();
-              if (r) clearSampleActors(r);
+              if (r) clearTraj(r);
             }}
           >
-            Clear boxes
+            Clear trajectory
           </button>
         </div>
       )}

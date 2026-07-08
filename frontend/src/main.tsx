@@ -34,22 +34,22 @@ if (import.meta.env.DEV) {
   import('./viewport/viewportRef').then(({ getViewportRenderer }) => {
     (window as unknown as Record<string, unknown>)['__getViewportRenderer'] = getViewportRenderer;
   });
-  // Case-actor manual verification: `__caseActors.spawn()` drops sample boxes +
-  // a trajectory at the viewport center (switching to 3D) so box rendering and
-  // its coexistence with the WASM road surface can be eyeballed; `.clear()`
-  // removes them.
+  // Case-actor manual verification: `__caseActors.open()` opens a `.traj` file
+  // picker and loop-plays it in 3D (moving boxes + trajectory ribbons) so box/
+  // ribbon rendering and its coexistence with the WASM road surface can be
+  // eyeballed against real data; `.clear()` removes it.
   Promise.all([
     import('./viewport/viewportRef'),
     import('./plugins/npc-actors'),
-  ]).then(([{ getViewportRenderer }, { spawnSampleActors, clearSampleActors }]) => {
+  ]).then(([{ getViewportRenderer }, { openTrajFile, clearTraj }]) => {
     (window as unknown as Record<string, unknown>)['__caseActors'] = {
-      spawn: () => {
+      open: () => {
         const r = getViewportRenderer();
-        if (r) spawnSampleActors(r);
+        if (r) openTrajFile(r);
       },
       clear: () => {
         const r = getViewportRenderer();
-        if (r) clearSampleActors(r);
+        if (r) clearTraj(r);
       },
     };
   });

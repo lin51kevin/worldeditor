@@ -81,8 +81,15 @@ function emitBox(
  * "Boxed" actors (bodies / triggers) render as a translucent colored fill with
  * white wireframe edges — the classic bounding-box look. Waypoint handles stay
  * as small solid opaque cubes (no edges) so they remain crisp grab targets.
+ *
+ * `origin` shifts every box into an origin-relative render frame (subtracted
+ * from each center) so authored (absolute) boxes align with an origin-relative
+ * point cloud. Defaults to no shift.
  */
-export function buildBoxVertices(boxes: readonly CaseActorBox[]): Float32Array {
+export function buildBoxVertices(
+  boxes: readonly CaseActorBox[],
+  origin: readonly [number, number, number] = [0, 0, 0],
+): Float32Array {
   const out: number[] = [];
 
   for (const box of boxes) {
@@ -91,7 +98,9 @@ export function buildBoxVertices(boxes: readonly CaseActorBox[]): Float32Array {
     const hh = box.size[2] / 2;
     const cos = Math.cos(box.heading);
     const sin = Math.sin(box.heading);
-    const [cx, cy, cz] = box.position;
+    const cx = box.position[0] - origin[0];
+    const cy = box.position[1] - origin[1];
+    const cz = box.position[2] - origin[2];
     const withEdges = box.kind !== 'waypoint';
     // Selected actors render as a more opaque wine-red fill to stand out.
     const base = box.selected ? SELECTED_FILL : box.color;
@@ -130,8 +139,16 @@ export function buildBoxVertices(boxes: readonly CaseActorBox[]): Float32Array {
  * (rather than a strip) lets the host emit multiple disjoint trajectories in one
  * buffer without spurious joins between them. Each segment becomes a flat,
  * ground-parallel ribbon quad of half-width `halfWidth` meters (2 triangles).
+ *
+ * `origin` shifts every vertex into an origin-relative render frame (subtracted
+ * from each endpoint) so authored (absolute) polylines align with an
+ * origin-relative point cloud. Defaults to no shift.
  */
-export function buildPathVertices(segments: Float32Array, halfWidth: number): Float32Array {
+export function buildPathVertices(
+  segments: Float32Array,
+  halfWidth: number,
+  origin: readonly [number, number, number] = [0, 0, 0],
+): Float32Array {
   const stride = ACTOR_VERTEX_STRIDE * 2; // one segment = two vertices
   const segCount = Math.floor(segments.length / stride);
   const out = new Float32Array(segCount * 6 * ACTOR_VERTEX_STRIDE);
@@ -139,16 +156,16 @@ export function buildPathVertices(segments: Float32Array, halfWidth: number): Fl
 
   for (let s = 0; s < segCount; s++) {
     const b = s * stride;
-    const x0 = segments[b]!;
-    const y0 = segments[b + 1]!;
-    const z0 = segments[b + 2]!;
+    const x0 = segments[b]! - origin[0];
+    const y0 = segments[b + 1]! - origin[1];
+    const z0 = segments[b + 2]! - origin[2];
     const r = segments[b + 3]!;
     const g = segments[b + 4]!;
     const bl = segments[b + 5]!;
     const a = segments[b + 6]!;
-    const x1 = segments[b + 7]!;
-    const y1 = segments[b + 8]!;
-    const z1 = segments[b + 9]!;
+    const x1 = segments[b + 7]! - origin[0];
+    const y1 = segments[b + 8]! - origin[1];
+    const z1 = segments[b + 9]! - origin[2];
 
     const dx = x1 - x0;
     const dy = y1 - y0;
