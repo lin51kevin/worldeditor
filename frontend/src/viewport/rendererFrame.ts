@@ -40,6 +40,7 @@ export interface RendererFrameInternals {
   meshes: RenderableMesh[];
   junctionMeshes: RenderableMesh[];
   basicPipeline: GPURenderPipeline;
+  actorPipeline: GPURenderPipeline;
   hoverMeshes: RenderableMesh[];
   highlightPipeline: GPURenderPipeline;
   linkHighlightMeshes: RenderableMesh[];
@@ -191,9 +192,12 @@ export function renderFrame(r: RendererFrameInternals): void {
   // Draw bridge/tunnel overlays (above road surface, below lane lines)
   drawBatched(pass, r.overlayMeshes, r.basicPipeline, r.basicBindGroup, 'basic');
 
-  // Draw case-actor trajectory ribbons, then bounding boxes on top.
-  drawBatched(pass, r.pathMeshes, r.basicPipeline, r.basicBindGroup, 'basic');
-  drawBatched(pass, r.actorMeshes, r.basicPipeline, r.basicBindGroup, 'basic');
+  // Draw case-actor trajectory ribbons, then bounding boxes on top. These use a
+  // translucent, non-depth-writing pipeline so the box's own faces blend in a
+  // stable order (classic see-through bounding-box fill) instead of
+  // self-occluding under reverse-Z depth writes.
+  drawBatched(pass, r.pathMeshes, r.actorPipeline, r.basicBindGroup, 'basic');
+  drawBatched(pass, r.actorMeshes, r.actorPipeline, r.basicBindGroup, 'basic');
 
   // Draw lane lines (between road surface and markings)
   drawBatched(pass, r.laneLineMeshes, r.highlightPipeline, r.basicBindGroup, 'highlight');

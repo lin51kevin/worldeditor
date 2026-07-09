@@ -81,9 +81,11 @@ export function unprojectGround(
 }
 
 /**
- * Cast a ray from the given screen pixel and intersect it with the horizontal
- * plane at the given world Z. Returns null if the ray is parallel to the plane
- * or points away from it.
+ * Cast a screen-space ray through the inverse view-projection matrix and
+ * intersect it with the horizontal plane z = worldZ. Returns null if the ray is
+ * parallel to the plane or points away from it. Unlike {@link unprojectGround}
+ * (which always hits Z=0), this lets callers pick against a box's own centre
+ * height so elevated 3D boxes are hit where they visually appear.
  */
 export function unprojectPlane(
   invViewProj: Float32Array,

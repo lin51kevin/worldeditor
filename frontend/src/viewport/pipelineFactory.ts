@@ -62,6 +62,7 @@ export interface BasicPipelineResult {
   shaderModule: GPUShaderModule;
   pipeline: GPURenderPipeline;
   highlightPipeline: GPURenderPipeline;
+  actorPipeline: GPURenderPipeline;
   bindGroup: GPUBindGroup;
   bindGroupLayout: GPUBindGroupLayout;
   uniformBuffer: GPUBuffer;
@@ -143,7 +144,32 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
     primitive: { topology: 'triangle-list' },
   });
 
-  return { shaderModule, pipeline, highlightPipeline, bindGroup, bindGroupLayout, uniformBuffer };
+  // Translucent 3D actor geometry (NPC bounding boxes + trajectory ribbons).
+  // Depth-tested against opaque geometry (reverse-Z 'greater') but does NOT
+  // write depth, so a box's own faces (drawn with cullMode 'none') blend in a
+  // stable order instead of self-occluding — restoring the classic see-through
+  // bounding-box fill. No depth bias: unlike the coplanar junction/lane overlays
+  // these are volumetric and must not be nudged toward the camera.
+  const actorPipeline = device.createRenderPipeline({
+    layout: pipelineLayout,
+    vertex: { module: shaderModule, entryPoint: 'vs_main', buffers: [BASIC_VERTEX_LAYOUT] },
+    fragment: {
+      module: shaderModule,
+      entryPoint: 'fs_main',
+      targets: [{
+        format,
+        blend: {
+          color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+        },
+      }],
+    },
+    depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'greater' },
+    multisample: { count: 4 },
+    primitive: { topology: 'triangle-list' },
+  });
+
+  return { shaderModule, pipeline, highlightPipeline, actorPipeline, bindGroup, bindGroupLayout, uniformBuffer };
 }
 
 /** Create lane line pipeline (LineVertex: 10 floats, stride 40). */

@@ -78,6 +78,7 @@ export class ViewportRenderer {
   private gridUniformBuffer!: GPUBuffer;
   basicPipeline!: GPURenderPipeline;
   highlightPipeline!: GPURenderPipeline;
+  actorPipeline!: GPURenderPipeline;
   private basicShaderModule!: GPUShaderModule;
   basicBindGroup!: GPUBindGroup;
   private basicBindGroupLayout!: GPUBindGroupLayout;
@@ -1024,6 +1025,7 @@ export class ViewportRenderer {
     this.basicShaderModule = result.shaderModule;
     this.basicPipeline = result.pipeline;
     this.highlightPipeline = result.highlightPipeline;
+    this.actorPipeline = result.actorPipeline;
     this.basicBindGroup = result.bindGroup;
     this.basicBindGroupLayout = result.bindGroupLayout;
     this.basicUniformBuffer = result.uniformBuffer;

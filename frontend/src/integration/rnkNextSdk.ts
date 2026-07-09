@@ -129,6 +129,8 @@ export interface WorldEditorRenderer {
   uploadHighlightVertices(data: Float32Array): void;
   clearHighlight(): void;
   unprojectToGround(screenX: number, screenY: number): { x: number; y: number } | null;
+  /** Unproject a screen pixel to world XY on the horizontal plane at z = worldZ. */
+  unprojectToPlane(screenX: number, screenY: number, worldZ: number): { x: number; y: number } | null;
   fitToVertices(data: Float32Array): void;
   toDataURL(): string;
 
@@ -275,6 +277,23 @@ export interface WorldEditorWasm {
   };
   /** Interleaved render buffer `[x,y,z,r,g,b, ...]`, decimated to `maxPoints`. */
   point_cloud_render_buffer(handle: number, colorMode: string, maxPoints: number): Float32Array;
+
+  // ── 3D Gaussian Splatting parsing (WASM registry) ────────────────────
+  /** Parse a 3DGS `.ply` and return an opaque handle. */
+  load_gaussian_splats(bytes: Uint8Array): number;
+  /** Free a registered Gaussian splat cloud. */
+  free_gaussian_splats(handle: number): void;
+  /** View-dependent SH instance buffer (`10 + (shDegree+1)²·3` floats/splat). */
+  gaussian_splat_buffer_sh(handle: number): Float32Array;
+  /** Summary `{ count, shDegree, shStride, origin, min, max }` of a splat cloud. */
+  gaussian_splat_meta(handle: number): {
+    count: number;
+    shDegree: number;
+    shStride: number;
+    origin: [number, number, number];
+    min: [number, number, number];
+    max: [number, number, number];
+  };
 }
 
 /** GeoZ importer contract consumed by rnk-next. */
@@ -391,6 +410,10 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     unprojectToGround: (screenX, screenY) => {
       const [sx, sy] = toCanvasXY(screenX, screenY);
       return renderer.unprojectToGround(sx, sy);
+    },
+    unprojectToPlane: (screenX, screenY, worldZ) => {
+      const [sx, sy] = toCanvasXY(screenX, screenY);
+      return renderer.unprojectToPlane(sx, sy, worldZ);
     },
     fitToVertices: (data) => renderer.fitToVertices(data),
     toDataURL: () => renderer.toDataURL(),
@@ -695,6 +718,12 @@ function adaptWasm(wasm: WasmModule): WorldEditorWasm {
     point_cloud_summary: (handle) => wasm.point_cloud_summary(handle),
     point_cloud_render_buffer: (handle, colorMode, maxPoints) =>
       wasm.point_cloud_render_buffer(handle, colorMode, maxPoints),
+
+    // ── 3D Gaussian Splatting parsing ──
+    load_gaussian_splats: (bytes) => wasm.load_gaussian_splats(bytes),
+    free_gaussian_splats: (handle) => wasm.free_gaussian_splats(handle),
+    gaussian_splat_buffer_sh: (handle) => wasm.gaussian_splat_buffer_sh(handle),
+    gaussian_splat_meta: (handle) => wasm.gaussian_splat_meta(handle),
   };
 }
 
