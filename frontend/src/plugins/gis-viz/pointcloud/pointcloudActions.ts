@@ -21,6 +21,7 @@ import {
   workerExtractGround,
   workerExtractMarkings,
   workerVectorize,
+  DEFAULT_SPLAT_LOAD_BUDGET,
   type GaussianSplatMeta,
 } from '../../../workers/pointcloudBridge';
 
@@ -93,8 +94,9 @@ export async function freeCurrentCloud(): Promise<void> {
   if (handle !== null) {
     try {
       if (isSplat) {
-        // Splat clouds always live in the WASM worker registry (both platforms).
-        await workerFreeGaussianSplats(handle);
+        // Web splats live in the WASM worker registry; native (desktop) splats use
+        // handle 0 and are already freed on the Rust side, so skip the worker.
+        if (handle > 0) await workerFreeGaussianSplats(handle);
       } else if (isTauri()) {
         const platform = await getPlatformService();
         await platform.freePointCloud(handle);
@@ -120,7 +122,7 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
     // Release a previously-loaded cloud first.
     if (store.handle !== null) {
       if (store.isSplat) {
-        await workerFreeGaussianSplats(store.handle).catch(() => undefined);
+        if (store.handle > 0) await workerFreeGaussianSplats(store.handle).catch(() => undefined);
       } else if (isTauri()) {
         const platform = await getPlatformService();
         await platform.freePointCloud(store.handle).catch(() => undefined);
@@ -135,16 +137,21 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
       const path = await pickNativePath();
       if (!path) { usePointCloudStore.getState().setBusy(false); return; }
       fileName = path.split(/[/\\]/).pop() ?? path;
-      // 3D Gaussian Splatting PLYs are routed through the WASM splat pipeline
-      // (parsed off the native path). Read the bytes and detect the signature.
+      // 3D Gaussian Splatting PLYs are parsed natively (never loaded whole into
+      // JS/WASM — a multi-GB splat cloud would crash). Detect via a header-only
+      // native probe, then hand the path to the native splat loader.
       if (extensionOf(path) === 'ply') {
-        const { readFile } = await import('@tauri-apps/plugin-fs');
-        const bytes = await readFile(path);
-        if (isGaussianPly(bytes)) {
-          const { handle, meta, buffer } = await workerLoadGaussianSplats(bytes);
+        const { invoke } = await import('@tauri-apps/api/core');
+        const isSplat = await invoke<boolean>('ply_is_gaussian', { path });
+        if (isSplat) {
+          const platform = await getPlatformService();
+          const { meta, buffer } = await platform.loadGaussianSplatsNative(
+            path,
+            DEFAULT_SPLAT_LOAD_BUDGET,
+          );
           usePointCloudStore
             .getState()
-            .setSplatLoaded(handle, fileName, buffer, meta.shDegree, gaussianMetaToSummary(meta));
+            .setSplatLoaded(0, fileName, buffer, meta.shDegree, gaussianMetaToSummary(meta));
           return;
         }
       }

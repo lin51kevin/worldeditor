@@ -20,7 +20,7 @@ pub mod vectorize;
 pub mod xyz;
 
 pub use ground::{GroundConfig, GroundResult, extract_ground};
-pub use gaussian::{GaussianCloud, parse_gaussian_ply};
+pub use gaussian::{GaussianCloud, parse_gaussian_ply, parse_gaussian_ply_capped};
 pub use heightmap::Heightmap;
 pub use markings::{MarkingConfig, extract_markings};
 pub use model::{Aabb, PointCloud};

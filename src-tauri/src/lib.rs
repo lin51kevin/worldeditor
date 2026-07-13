@@ -1,4 +1,5 @@
 mod commands;
+mod gaussian;
 mod pointcloud;
 
 use tauri::Manager;
@@ -39,6 +40,11 @@ pub fn run() {
             pointcloud::point_cloud_extract_markings,
             pointcloud::point_cloud_vectorize,
             pointcloud::point_cloud_sample_ground,
+            // 3D Gaussian Splatting (native parse, raw-binary buffer)
+            gaussian::ply_is_gaussian,
+            gaussian::gaussian_splat_load,
+            gaussian::gaussian_splat_buffer,
+            gaussian::gaussian_splat_free,
         ])
         .setup(|app| {
             // Create the main window programmatically so we can call
@@ -126,6 +132,9 @@ pub fn run() {
 
             // Backend store for loaded point clouds (keyed by opaque handle).
             app.manage(pointcloud::PointCloudStore::default());
+
+            // Backend store for parsed 3D Gaussian Splatting clouds.
+            app.manage(gaussian::GaussianSplatStore::default());
 
             Ok(())
         })

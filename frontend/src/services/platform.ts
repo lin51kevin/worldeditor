@@ -439,6 +439,22 @@ export interface PointCloudSource {
 /** A polyline in local point-cloud coordinates: a list of `[x, y, z]` points. */
 export type PointCloudPolyline = Array<[number, number, number]>;
 
+/** Metadata for a natively-parsed 3D Gaussian Splatting cloud. */
+export interface GaussianSplatNativeMeta {
+  count: number;
+  shDegree: number;
+  shStride: number;
+  origin: [number, number, number];
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
+/** Result of natively loading a 3DGS cloud: metadata + packed SH buffer. */
+export interface GaussianSplatNativeResult {
+  meta: GaussianSplatNativeMeta;
+  buffer: Float32Array;
+}
+
 export interface PlatformService {
   /** Parse an OpenDRIVE XML string into a Project. */
   parseOpenDrive(xml: string): Promise<Project>;
@@ -721,4 +737,10 @@ export interface PlatformService {
 
   /** Sample the cached ground heightmap at local XY, or `null` when unavailable. */
   samplePointCloudGround(handle: number, x: number, y: number): Promise<number | null>;
+
+  /** Natively parse a 3D Gaussian Splatting `.ply` from a desktop path
+   *  (Tauri only), uniformly stride-sampling to at most `maxSplats`. Returns
+   *  metadata plus the packed SH instance buffer via raw binary transfer,
+   *  avoiding the whole-file JS/WASM copy that crashes on large clouds. */
+  loadGaussianSplatsNative(path: string, maxSplats: number): Promise<GaussianSplatNativeResult>;
 }

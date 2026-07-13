@@ -45,12 +45,48 @@ export function computeViewDir(position: Vec3, target: Vec3): Vec3 {
   return [dx / len, dy / len, dz / len];
 }
 
+/**
+ * Upper bound on splats kept for an editor preview, independent of GPU limits.
+ * Very large 3DGS clouds are decimated to this budget to keep sorting, upload
+ * and memory bounded; the GPU storage-buffer limit may lower it further.
+ */
+export const PREVIEW_SPLAT_BUDGET = 4_000_000;
+
+/** WebGPU spec default for `maxStorageBufferBindingSize` (128 MiB). */
+export const DEFAULT_MAX_STORAGE_BINDING_BYTES = 134_217_728;
+
+/**
+ * Decimate a packed splat buffer to at most `maxSplats` via uniform stride
+ * sampling (keeps the cloud's spatial spread). Returns the input unchanged when
+ * it already fits. `stride` is the per-splat float count.
+ */
+export function decimateSplatBuffer(
+  splatData: Float32Array,
+  stride: number,
+  maxSplats: number,
+): Float32Array {
+  const count = Math.floor(splatData.length / stride);
+  if (count <= maxSplats || maxSplats <= 0) return splatData;
+  const step = Math.ceil(count / maxSplats);
+  const kept = Math.ceil(count / step);
+  const out = new Float32Array(kept * stride);
+  let d = 0;
+  for (let i = 0; i < count; i += step) {
+    out.set(splatData.subarray(i * stride, i * stride + stride), d * stride);
+    d++;
+  }
+  // `kept` is an upper bound; trim if the final step landed short.
+  return d * stride === out.length ? out : out.subarray(0, d * stride);
+}
+
 /** Orchestrates upload, per-frame uniform/sort updates, and drawing of splats. */
 export class SplatRenderer {
   private readonly resources: GaussianSplatResources;
   private readonly sort: SplatSortController;
   /** 2D low-pass filter size (px²); larger = fuller/blurrier splats. */
   private dilation = 0.15;
+  /** Max bytes bindable as a single read-only-storage buffer on this device. */
+  private readonly maxStorageBytes: number;
 
   constructor(
     device: GPUDevice,
@@ -65,6 +101,8 @@ export class SplatRenderer {
      */
     private readonly onOrderChanged?: () => void,
   ) {
+    this.maxStorageBytes =
+      device.limits?.maxStorageBufferBindingSize ?? DEFAULT_MAX_STORAGE_BINDING_BYTES;
     this.resources = new GaussianSplatResources(device, bindGroupLayout);
     this.sort = new SplatSortController(sorter, (idx) => {
       this.resources.updateOrder(idx);
@@ -82,11 +120,20 @@ export class SplatRenderer {
     return this.resources.count;
   }
 
-  /** Upload a packed SH splat buffer (stride varies with degree) and prime the sorter. */
+  /**
+   * Upload a packed SH splat buffer (stride varies with degree) and prime the
+   * sorter. Clouds larger than the preview budget or the GPU storage-buffer
+   * binding limit are decimated to fit — binding an oversized storage buffer
+   * would otherwise crash the device.
+   */
   upload(splatData: Float32Array, shDegree: number): void {
-    this.resources.upload(splatData, shDegree);
     const stride = splatStrideForDegree(shDegree);
-    this.sort.setSplats(extractSplatPositions(splatData, stride));
+    const bytesPerSplat = stride * Float32Array.BYTES_PER_ELEMENT;
+    const maxByLimit = Math.floor(this.maxStorageBytes / bytesPerSplat);
+    const maxSplats = Math.min(PREVIEW_SPLAT_BUDGET, maxByLimit);
+    const data = decimateSplatBuffer(splatData, stride, maxSplats);
+    this.resources.upload(data, shDegree);
+    this.sort.setSplats(extractSplatPositions(data, stride));
   }
 
   /** Set the 2D low-pass dilation (splat fullness). Wakes a redraw. */

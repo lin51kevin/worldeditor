@@ -86,9 +86,21 @@ export interface WorkerGaussianResult {
   buffer: Float32Array;
 }
 
+/**
+ * Default cap on splats parsed from a 3DGS PLY. Very large clouds are uniformly
+ * stride-sampled to this budget during WASM parsing so the wasm32 heap (and the
+ * derived GPU buffer) stay bounded — without it, multi-million-splat files can
+ * exhaust memory and crash on load. The GPU-side renderer decimates further if
+ * the storage-buffer binding limit is smaller.
+ */
+export const DEFAULT_SPLAT_LOAD_BUDGET = 4_000_000;
+
 /** Load a 3D Gaussian Splatting PLY in the worker (bytes transferred). */
-export function workerLoadGaussianSplats(bytes: Uint8Array): Promise<WorkerGaussianResult> {
-  return call('loadGaussian', { bytes }, [bytes.buffer]);
+export function workerLoadGaussianSplats(
+  bytes: Uint8Array,
+  maxSplats: number = DEFAULT_SPLAT_LOAD_BUDGET,
+): Promise<WorkerGaussianResult> {
+  return call('loadGaussian', { bytes, maxSplats }, [bytes.buffer]);
 }
 
 /** Free a loaded Gaussian splat cloud handle. */

@@ -254,6 +254,20 @@ pub fn infer_sh_degree(n_rest: usize) -> Option<u32> {
 /// `f_rest_*` (channel-major), `opacity`, `scale_0..2`, `rot_0..3`. Returns
 /// [`PointCloudError::Unsupported`] if the required splat properties are absent.
 pub fn parse_gaussian_ply(bytes: &[u8]) -> PointCloudResult<GaussianCloud> {
+    parse_gaussian_ply_capped(bytes, None)
+}
+
+/// Parse a 3D Gaussian Splatting PLY, keeping at most `max_splats` splats.
+///
+/// When `max_splats` is `Some(budget)` smaller than the file's splat count, the
+/// splats are uniformly stride-sampled during parsing so both the intermediate
+/// [`GaussianCloud`] and the derived GPU buffer stay bounded — this is what
+/// keeps very large clouds from exhausting the wasm32 heap on load. `None`
+/// keeps every splat. See [`parse_gaussian_ply`] for the property contract.
+pub fn parse_gaussian_ply_capped(
+    bytes: &[u8],
+    max_splats: Option<usize>,
+) -> PointCloudResult<GaussianCloud> {
     let header = parse_ply_header(bytes)?;
 
     let ix = header
@@ -327,10 +341,6 @@ pub fn parse_gaussian_ply(bytes: &[u8]) -> PointCloudResult<GaussianCloud> {
         sh_degree,
         ..Default::default()
     };
-    cloud.positions.reserve(count * 3);
-    cloud.sh_coeffs.reserve(count * num_coeffs * 3);
-    cloud.opacity.reserve(count);
-    cloud.cov3d.reserve(count * 6);
 
     // `getter(record_index, prop_index) -> f64`
     let read_record = RecordReader::new(bytes, &header)?;
@@ -339,15 +349,29 @@ pub fn parse_gaussian_ply(bytes: &[u8]) -> PointCloudResult<GaussianCloud> {
         return Err(PointCloudError::InvalidData("no PLY vertices".into()));
     }
 
+    // Uniform stride sampling to honour the splat budget (LOD for large clouds).
+    let step = match max_splats {
+        Some(budget) if budget > 0 && budget < n => n.div_ceil(budget),
+        _ => 1,
+    };
+    let kept = n.div_ceil(step);
+    cloud.positions.reserve(kept * 3);
+    cloud.sh_coeffs.reserve(kept * num_coeffs * 3);
+    cloud.opacity.reserve(kept);
+    cloud.cov3d.reserve(kept * 6);
+
     let mut origin = [0.0f64; 3];
     let mut bounds = Aabb::empty();
-    for r in 0..n {
+    let mut r = 0usize;
+    let mut first = true;
+    while r < n {
         let get = |p: usize| read_record.value(r, p);
         let wx = get(ix);
         let wy = get(iy);
         let wz = get(iz);
-        if r == 0 {
+        if first {
             origin = [wx, wy, wz];
+            first = false;
         }
         let lx = (wx - origin[0]) as f32;
         let ly = (wy - origin[1]) as f32;
@@ -383,6 +407,8 @@ pub fn parse_gaussian_ply(bytes: &[u8]) -> PointCloudResult<GaussianCloud> {
             get(rot[3]) as f32,
         ];
         cloud.cov3d.extend_from_slice(&compute_cov3d(s, q));
+
+        r += step;
     }
 
     cloud.origin = origin;
@@ -587,6 +613,27 @@ end_header
         assert!((cloud.cov3d()[0] - 1.0).abs() < 1e-6);
         assert!((cloud.cov3d()[3] - 1.0).abs() < 1e-6);
         assert!((cloud.cov3d()[5] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_parse_gaussian_capped_stride_samples() {
+        // Budget of 1 stride-samples the 2-splat cloud down to the first splat.
+        let cloud = parse_gaussian_ply_capped(degree0_ascii().as_bytes(), Some(1)).unwrap();
+        assert_eq!(cloud.len(), 1);
+        // The kept splat is the first record (origin), position [0,0,0].
+        assert_eq!(&cloud.positions()[0..3], &[0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn test_parse_gaussian_capped_none_keeps_all() {
+        let cloud = parse_gaussian_ply_capped(degree0_ascii().as_bytes(), None).unwrap();
+        assert_eq!(cloud.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_gaussian_capped_budget_above_count_keeps_all() {
+        let cloud = parse_gaussian_ply_capped(degree0_ascii().as_bytes(), Some(999)).unwrap();
+        assert_eq!(cloud.len(), 2);
     }
 
     #[test]

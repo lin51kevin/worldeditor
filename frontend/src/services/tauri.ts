@@ -7,6 +7,7 @@
 import type {
   PlatformService, Project, Road,
   PointCloudColorMode, PointCloudLoadResult, PointCloudPolyline, PointCloudSource,
+  GaussianSplatNativeResult,
 } from './platform';
 import { APP_VERSION } from './index';
 import { BasePlatformService } from './basePlatformService';
@@ -173,5 +174,21 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
     const { invoke } = await import('@tauri-apps/api/core');
     const value = await invoke<number | null>('point_cloud_sample_ground', { handle, x, y });
     return value ?? null;
+  }
+
+  override async loadGaussianSplatsNative(path: string, maxSplats: number): Promise<GaussianSplatNativeResult> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    // Parse natively (bounded), then fetch the packed SH buffer as raw binary.
+    const { handle, meta } = await invoke<{ handle: number; meta: GaussianSplatNativeResult['meta'] }>(
+      'gaussian_splat_load',
+      { path, maxSplats },
+    );
+    try {
+      const raw = await invoke<ArrayBuffer>('gaussian_splat_buffer', { handle });
+      const buffer = new Float32Array(raw);
+      return { meta, buffer };
+    } finally {
+      await invoke('gaussian_splat_free', { handle }).catch(() => undefined);
+    }
   }
 }

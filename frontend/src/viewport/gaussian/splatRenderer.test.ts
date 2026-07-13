@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   extractSplatPositions,
   computeViewDir,
+  decimateSplatBuffer,
   SplatRenderer,
 } from "./splatRenderer";
 import { splatStrideForDegree } from "./splatPipeline";
@@ -37,6 +38,32 @@ describe("computeViewDir", () => {
   it("falls back to +Z for a degenerate (zero-length) direction", () => {
     const dir = computeViewDir([1, 1, 1], [1, 1, 1]);
     expect(dir).toEqual([0, 0, 1]);
+  });
+});
+
+describe("decimateSplatBuffer", () => {
+  it("returns the input unchanged when it already fits", () => {
+    const data = new Float32Array(3 * STRIDE0);
+    expect(decimateSplatBuffer(data, STRIDE0, 10)).toBe(data);
+  });
+
+  it("reduces the splat count to at most the budget via stride sampling", () => {
+    const count = 100;
+    const data = new Float32Array(count * STRIDE0);
+    for (let i = 0; i < count; i++) data[i * STRIDE0] = i; // tag x with index
+    const out = decimateSplatBuffer(data, STRIDE0, 10);
+    const keptCount = out.length / STRIDE0;
+    expect(keptCount).toBeLessThanOrEqual(10);
+    expect(keptCount).toBeGreaterThan(0);
+    // First kept splat is the original first splat (index 0).
+    expect(out[0]).toBe(0);
+    // Kept splats preserve full per-splat records (stride-aligned).
+    expect(out.length % STRIDE0).toBe(0);
+  });
+
+  it("keeps everything when the budget is non-positive is a no-op guard", () => {
+    const data = new Float32Array(5 * STRIDE0);
+    expect(decimateSplatBuffer(data, STRIDE0, 0)).toBe(data);
   });
 });
 
@@ -131,5 +158,25 @@ describe("SplatRenderer", () => {
     onOrderChanged.mockClear();
     r.onCamera(camera, "3d", 50, 800, 600);
     expect(onOrderChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("decimates a cloud that exceeds the device storage-buffer limit", () => {
+    // Limit fits only 2 degree-0 splats (13 floats * 4 bytes = 52 B each).
+    const device = {
+      createBuffer: () => ({ destroy() {} }),
+      createBindGroup: () => ({}),
+      queue: { writeBuffer: vi.fn() },
+      limits: { maxStorageBufferBindingSize: 2 * STRIDE0 * 4 },
+    } as unknown as GPUDevice;
+    const r = new SplatRenderer(
+      device,
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+    r.upload(new Float32Array(100 * STRIDE0), 0);
+    expect(r.hasContent).toBe(true);
+    expect(r.count).toBeLessThanOrEqual(2);
+    expect(r.count).toBeGreaterThan(0);
   });
 });

@@ -279,8 +279,12 @@ export interface WorldEditorWasm {
   point_cloud_render_buffer(handle: number, colorMode: string, maxPoints: number): Float32Array;
 
   // ── 3D Gaussian Splatting parsing (WASM registry) ────────────────────
-  /** Parse a 3DGS `.ply` and return an opaque handle. */
-  load_gaussian_splats(bytes: Uint8Array): number;
+  /**
+   * Parse a 3DGS `.ply` and return an opaque handle. `maxSplats` (optional)
+   * caps the parsed splat count via stride sampling to bound memory on large
+   * clouds; omit to keep every splat.
+   */
+  load_gaussian_splats(bytes: Uint8Array, maxSplats?: number): number;
   /** Free a registered Gaussian splat cloud. */
   free_gaussian_splats(handle: number): void;
   /** View-dependent SH instance buffer (`10 + (shDegree+1)²·3` floats/splat). */
@@ -329,6 +333,8 @@ const ROAD_VERTEX_STRIDE = 7;
 const DEFAULT_POINT_CLOUD_COLOR_MODE = 'elevation';
 /** Default point budget after WASM stride decimation. */
 const DEFAULT_POINT_CLOUD_MAX_POINTS = 2_000_000;
+/** Default splat budget: large 3DGS clouds are stride-sampled to this on parse. */
+const DEFAULT_SPLAT_LOAD_BUDGET = 4_000_000;
 
 /** Infer a point-cloud format string from a URL's file extension. */
 function inferPointCloudFormat(url: string): string {
@@ -540,8 +546,9 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
       const bytes = new Uint8Array(await response.arrayBuffer());
       // Parse in the WASM registry, read the view-dependent SH buffer + metadata,
       // upload as splats, then free the handle (the GPU buffer is now owned by
-      // the renderer). Handle is freed even if the upload throws.
-      const handle = wasm.load_gaussian_splats(bytes);
+      // the renderer). Handle is freed even if the upload throws. Large clouds
+      // are stride-sampled to the splat budget during parsing to bound memory.
+      const handle = wasm.load_gaussian_splats(bytes, DEFAULT_SPLAT_LOAD_BUDGET);
       try {
         const meta = wasm.gaussian_splat_meta(handle);
         const buffer = wasm.gaussian_splat_buffer_sh(handle);
@@ -720,7 +727,7 @@ function adaptWasm(wasm: WasmModule): WorldEditorWasm {
       wasm.point_cloud_render_buffer(handle, colorMode, maxPoints),
 
     // ── 3D Gaussian Splatting parsing ──
-    load_gaussian_splats: (bytes) => wasm.load_gaussian_splats(bytes),
+    load_gaussian_splats: (bytes, maxSplats) => wasm.load_gaussian_splats(bytes, maxSplats),
     free_gaussian_splats: (handle) => wasm.free_gaussian_splats(handle),
     gaussian_splat_buffer_sh: (handle) => wasm.gaussian_splat_buffer_sh(handle),
     gaussian_splat_meta: (handle) => wasm.gaussian_splat_meta(handle),

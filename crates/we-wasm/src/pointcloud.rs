@@ -219,14 +219,18 @@ fn store_gaussian(cloud: GaussianCloud) -> u32 {
 /// Parse a 3D Gaussian Splatting PLY and register it, returning an opaque handle.
 ///
 /// Native-testable error variant returns a plain `String`.
-fn parse_gaussian(bytes: &[u8]) -> Result<GaussianCloud, String> {
-    gaussian::parse_gaussian_ply(bytes).map_err(|e| e.to_string())
+fn parse_gaussian(bytes: &[u8], max_splats: Option<usize>) -> Result<GaussianCloud, String> {
+    gaussian::parse_gaussian_ply_capped(bytes, max_splats).map_err(|e| e.to_string())
 }
 
 /// Load a 3D Gaussian Splatting PLY, returning an opaque handle.
+///
+/// `max_splats` (when set) caps the parsed splat count via uniform stride
+/// sampling, bounding heap use for very large clouds. Pass `undefined`/`null`
+/// to keep every splat.
 #[wasm_bindgen]
-pub fn load_gaussian_splats(bytes: &[u8]) -> Result<u32, JsError> {
-    let cloud = parse_gaussian(bytes).map_err(|e| JsError::new(&e))?;
+pub fn load_gaussian_splats(bytes: &[u8], max_splats: Option<u32>) -> Result<u32, JsError> {
+    let cloud = parse_gaussian(bytes, max_splats.map(|m| m as usize)).map_err(|e| JsError::new(&e))?;
     Ok(store_gaussian(cloud))
 }
 
@@ -350,13 +354,20 @@ end_header
 
     #[test]
     fn test_parse_gaussian_ok() {
-        let cloud = parse_gaussian(GAUSSIAN_ASCII.as_bytes()).unwrap();
+        let cloud = parse_gaussian(GAUSSIAN_ASCII.as_bytes(), None).unwrap();
         assert_eq!(cloud.len(), 2);
         assert_eq!(cloud.sh_degree(), 0);
         // 13 floats/splat compact buffer.
         assert_eq!(cloud.build_splat_buffer().len(), 26);
         // positions: 3/splat.
         assert_eq!(cloud.positions().len(), 6);
+    }
+
+    #[test]
+    fn test_parse_gaussian_caps_splat_count() {
+        // A budget of 1 stride-samples the 2-splat cloud down to a single splat.
+        let cloud = parse_gaussian(GAUSSIAN_ASCII.as_bytes(), Some(1)).unwrap();
+        assert_eq!(cloud.len(), 1);
     }
 
     #[test]
@@ -371,6 +382,6 @@ property float z
 end_header
 0 0 0
 ";
-        assert!(parse_gaussian(plain.as_bytes()).is_err());
+        assert!(parse_gaussian(plain.as_bytes(), None).is_err());
     }
 }

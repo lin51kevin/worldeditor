@@ -1,7 +1,7 @@
 export { getSplineHandlePoints } from './splineUtils';
 export type { SignalData, ObjectData, MarkingData, MouseDragAction } from './viewportTypes';
 export { resolveMouseDragAction, computeGroundPanOffset } from './viewportTypes';
-import { takePrewarmedGPU, returnPrewarmedGPU } from './gpuDeviceCache';
+import { takePrewarmedGPU, returnPrewarmedGPU, buildRequiredLimits } from './gpuDeviceCache';
 import type { PrewarmedGPU } from './gpuDeviceCache';
 import { createRenderLoop } from './renderLoop';
 import type { RenderLoop } from './renderLoop';
@@ -249,7 +249,7 @@ export class ViewportRenderer {
       const adapter = await navigator.gpu.requestAdapter();
       if (this.disposed || !adapter) return false;
       device = await adapter.requestDevice({
-        requiredLimits: { maxBufferSize: adapter.limits.maxBufferSize },
+        requiredLimits: buildRequiredLimits(adapter),
       });
       if (this.disposed) {
         // Return fresh device to cache for next mount

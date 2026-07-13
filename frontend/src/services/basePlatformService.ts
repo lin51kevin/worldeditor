@@ -15,6 +15,7 @@ import type {
   DistanceMeasurement, AngleMeasurement, AreaMeasurement, EditableSpline,
   Geometry, LaneBoundaryPoint,
   PointCloudColorMode, PointCloudLoadResult, PointCloudPolyline, PointCloudSource, PointCloudSummary,
+  GaussianSplatNativeResult,
 } from './platform';
 
 type WasmModule = typeof import('../../wasm/pkg/we_wasm');
@@ -460,5 +461,11 @@ export abstract class BasePlatformService implements PlatformService {
     const wasm = await this.getWasm();
     const value = wasm.point_cloud_sample_ground(handle, x, y);
     return value ?? null;
+  }
+
+  async loadGaussianSplatsNative(_path: string, _maxSplats: number): Promise<GaussianSplatNativeResult> {
+    // Native parsing is desktop-only; the web build routes 3DGS PLYs through the
+    // WASM worker (see pointcloudActions). Tauri overrides this method.
+    throw new Error('Native Gaussian splat loading is only available in the desktop app.');
   }
 }
