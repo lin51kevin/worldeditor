@@ -12,11 +12,60 @@ import type { ViewportRenderer } from '../viewport/renderer';
 import { usePointCloudStore } from '../plugins/gis-viz/pointcloud/pointcloudState';
 import { getPlatformService } from '../services';
 import { workerRenderBuffer7 } from '../workers/pointcloudBridge';
+import { splatStrideForDegree } from '../viewport/gaussian/splatPipeline';
 
 const MAX_RENDER_POINTS = 2_000_000;
 
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+/**
+ * Shift an origin-relative point-cloud render buffer back into absolute world
+ * coordinates so it aligns with OpenDRIVE road geometry (which is rendered in
+ * raw planView coordinates, unshifted).
+ *
+ * The parser subtracts the cloud's first vertex (`summary.origin`) from every
+ * point to preserve f32 precision near large global coordinates, so the render
+ * buffer is origin-relative. Adding `origin` back places the cloud in the same
+ * frame as the road. Mutates `vertices` in place (7-float stride: x,y,z,r,g,b,a).
+ */
+export function applyOrigin(vertices: Float32Array, origin: readonly [number, number, number] | undefined): void {
+  if (!origin || (origin[0] === 0 && origin[1] === 0 && origin[2] === 0)) return;
+  const [ox, oy, oz] = origin;
+  for (let i = 0; i + 2 < vertices.length; i += 7) {
+    vertices[i] = vertices[i]! + ox;
+    vertices[i + 1] = vertices[i + 1]! + oy;
+    vertices[i + 2] = vertices[i + 2]! + oz;
+  }
+}
+
+/**
+ * Shift an origin-relative packed 3DGS splat buffer into absolute world
+ * coordinates so it aligns with OpenDRIVE road geometry, mirroring
+ * {@link applyOrigin} for point-list clouds.
+ *
+ * Positions occupy the first three floats of each
+ * `splatStrideForDegree(shDegree)`-float record. Returns a shifted copy (the
+ * store buffer stays origin-relative and immutable) or the input unchanged when
+ * `origin` is zero/undefined.
+ */
+export function applySplatOrigin(
+  splatData: Float32Array,
+  shDegree: number,
+  origin: readonly [number, number, number] | undefined,
+): Float32Array {
+  if (!origin || (origin[0] === 0 && origin[1] === 0 && origin[2] === 0)) return splatData;
+  const stride = splatStrideForDegree(shDegree);
+  if (stride < 3) return splatData;
+  const [ox, oy, oz] = origin;
+  const out = new Float32Array(splatData);
+  for (let i = 0; i + 2 < out.length; i += stride) {
+    out[i] = out[i]! + ox;
+    out[i + 1] = out[i + 1]! + oy;
+    out[i + 2] = out[i + 2]! + oz;
+  }
+  return out;
 }
 
 interface UsePointCloudViewportOptions {
@@ -60,10 +109,17 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     // 3D Gaussian Splatting cloud — render as true splats (colorMode N/A).
     if (isSplat) {
       if (handle !== prevHandleRef.current) {
-        // Drop any stale point geometry, then upload the packed splat buffer.
+        // Drop any stale point geometry, then upload the packed splat buffer,
+        // shifted into the road's absolute frame so it overlaps the OpenDRIVE
+        // geometry instead of rendering around the origin.
         renderer.uploadPointCloudVertices(new Float32Array(0));
         if (splatBuffer) {
-          renderer.uploadGaussianSplats(splatBuffer, splatShDegree);
+          const shifted = applySplatOrigin(
+            splatBuffer,
+            splatShDegree,
+            usePointCloudStore.getState().summary?.origin,
+          );
+          renderer.uploadGaussianSplats(shifted, splatShDegree);
         }
         prevHandleRef.current = handle;
         prevColorModeRef.current = null;
@@ -106,6 +162,10 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
           vertices = await workerRenderBuffer7(handle, colorMode, MAX_RENDER_POINTS);
           if (cancelled) return;
         }
+
+        // The render buffer is origin-relative; shift it back into absolute
+        // world coordinates so the cloud overlaps the OpenDRIVE road geometry.
+        applyOrigin(vertices, usePointCloudStore.getState().summary?.origin);
 
         renderer.uploadPointCloudVertices(vertices);
         prevHandleRef.current = handle;

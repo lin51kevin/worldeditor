@@ -155,6 +155,12 @@ export class ViewportRenderer {
   private actorPointCloudMeshes: RenderableMesh[] = [];
   private pointCloudPipeline: GPURenderPipeline | null = null;
 
+  // Ground surface triangle mesh (e.g. a logsim `road_mesh.glb`): an indexed,
+  // vertex-colored mesh drawn as the scene floor. Kept separate from the merged
+  // road meshes because it is indexed (drawn with drawIndexed) and owns its own
+  // vertex + index buffers.
+  private groundMesh: { vertexBuffer: GPUBuffer; indexBuffer: GPUBuffer; indexCount: number } | null = null;
+
   // 3D Gaussian Splatting renderer for NPC/actor `.ply` splat clouds. Lazily
   // created on first upload so the (heavy) storage pipeline is only built when
   // a splat cloud is actually used.
@@ -736,10 +742,48 @@ export class ViewportRenderer {
   }
 
   /**
-   * Upload a 3D Gaussian Splatting cloud (packed 13 floats/splat, see the Rust
-   * `build_splat_buffer`) to be rendered as true anisotropic splats. Passing an
-   * empty buffer clears the current cloud. Lazily creates the splat pipeline.
+   * Upload an indexed, vertex-colored ground surface mesh (7 floats per vertex:
+   * x,y,z,r,g,b,a + a 32-bit index buffer), e.g. a logsim `road_mesh.glb`.
+   * Rendered as an opaque triangle surface with the shared basic pipeline.
+   * Passing empty data clears the current ground mesh.
    */
+  uploadGroundMeshIndexed(vertexData: Float32Array, indices: Uint32Array): void {
+    // Replace any existing ground mesh buffers.
+    this.groundMesh?.vertexBuffer.destroy();
+    this.groundMesh?.indexBuffer.destroy();
+    this.groundMesh = null;
+
+    if (vertexData.length === 0 || indices.length === 0) {
+      this.markSceneDirty();
+      return;
+    }
+
+    const vertexBuffer = this.device.createBuffer({
+      size: vertexData.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+
+    // Index buffers must be 4-byte aligned; Uint32 data already satisfies this.
+    const indexBuffer = this.device.createBuffer({
+      size: indices.byteLength,
+      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(indexBuffer, 0, indices.buffer, indices.byteOffset, indices.byteLength);
+
+    this.groundMesh = { vertexBuffer, indexBuffer, indexCount: indices.length };
+    this.markSceneDirty();
+  }
+
+  /** Remove the uploaded ground surface mesh. */
+  clearGroundMesh(): void {
+    if (!this.groundMesh) return;
+    this.groundMesh.vertexBuffer.destroy();
+    this.groundMesh.indexBuffer.destroy();
+    this.groundMesh = null;
+    this.markSceneDirty();
+  }
+
   uploadGaussianSplats(splatData: Float32Array, shDegree: number): void {
     if (splatData.length === 0) {
       this.splatRenderer?.clear();
@@ -989,6 +1033,9 @@ export class ViewportRenderer {
     disposeMeshes(this.pathMeshes);
     disposeMeshes(this.pointCloudMeshes);
     disposeMeshes(this.actorPointCloudMeshes);
+    this.groundMesh?.vertexBuffer.destroy();
+    this.groundMesh?.indexBuffer.destroy();
+    this.groundMesh = null;
     this.splatRenderer?.dispose();
     this.splatRenderer = null;
     this.markerRenderer.dispose();

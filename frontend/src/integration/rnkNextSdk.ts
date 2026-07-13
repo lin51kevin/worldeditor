@@ -24,6 +24,7 @@
 import { importGeoZ } from '../plugins/io/geoz/parser';
 import { ViewportRenderer } from '../viewport/renderer';
 import type { SpriteInstance, PaintInstance } from '../viewport/spriteRenderer';
+import { parseGlbMesh, isGlb } from '../viewport/glbMesh';
 import { CaseActorLayer, parsePlyFirstVertex, type CaseActorBox } from '../plugins/npc-actors';
 
 type WasmModule = typeof import('../../wasm/pkg/we_wasm');
@@ -187,6 +188,10 @@ export interface WorldEditorRenderer {
    * Resolves with the cloud's (origin-relative) bounds + origin, or `undefined`
    * when unsupported. The origin can be passed to the trajectory viewer
    * (`playTraj`/`openTrajFile`) to align the self-contained playback path too.
+   *
+   * A `.glb`/`.gltf` binary glTF scene mesh (e.g. `road_mesh.glb`) is detected
+   * automatically and rendered as an opaque, vertex-colored triangle surface
+   * (its baked asphalt / lane paint / crosswalk colors) instead of points.
    */
   loadPointCloud(url: string, options?: PointCloudLoadOptions): Promise<PointCloudInfo | undefined>;
   /**
@@ -197,6 +202,15 @@ export interface WorldEditorRenderer {
   uploadPointCloud(data: Float32Array): void;
   /** Remove the uploaded point cloud. */
   clearPointCloud(): void;
+  /**
+   * Upload an indexed, vertex-colored ground surface mesh (7 floats/vertex:
+   * x,y,z,r,g,b,a + a 32-bit index buffer), e.g. a logsim `road_mesh.glb`,
+   * rendered as an opaque triangle surface beneath the roads. Passing empty
+   * data clears the current ground mesh.
+   */
+  uploadGroundMeshIndexed(vertexData: Float32Array, indices: Uint32Array): void;
+  /** Remove the uploaded ground surface mesh. */
+  clearGroundMesh(): void;
   /**
    * Upload opponent (NPC) model point clouds into a buffer separate from the
    * road cloud (6 floats/point: x,y,z,r,g,b), so per-frame opponent updates
@@ -341,6 +355,7 @@ function inferPointCloudFormat(url: string): string {
   const clean = url.split(/[?#]/)[0] ?? url;
   const dot = clean.lastIndexOf('.');
   const ext = dot >= 0 ? clean.slice(dot + 1).toLowerCase() : '';
+  if (ext === 'glb' || ext === 'gltf') return 'glb';
   return ext === 'pcd' || ext === 'xyz' ? ext : 'ply';
 }
 
@@ -482,6 +497,23 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
       // trajectory can be shifted into the same render frame.
       const parsedOrigin = format === 'ply' ? parsePlyFirstVertex(bytes) : undefined;
 
+      // A GLB scene mesh (e.g. `road_mesh.glb`) is an indexed, vertex-colored
+      // triangle surface — render it as an opaque ground surface rather than a
+      // point cloud so its baked colors (asphalt, lane paint, crosswalks) show.
+      // The exporter keeps coordinates origin-relative and Z-up, so no shift or
+      // axis swap is applied (scene origin stays at 0).
+      if (format === 'glb' || isGlb(bytes)) {
+        const mesh = parseGlbMesh(bytes);
+        renderer.uploadGroundMeshIndexed(mesh.vertices, mesh.indices);
+        renderer.uploadPointCloudVertices(new Float32Array(0));
+        const origin: [number, number, number] = [0, 0, 0];
+        actorLayer.setSceneOrigin(origin);
+        renderer.uploadActorVertices(actorLayer.boxVertices());
+        renderer.uploadPathVertices(actorLayer.pathVertices());
+        renderer.render();
+        return { count: mesh.vertexCount, min: mesh.min, max: mesh.max, origin };
+      }
+
       let handle: number | undefined;
       try {
         handle = wasm.load_point_cloud(bytes, format);
@@ -526,10 +558,19 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     },
     clearPointCloud: () => {
       renderer.uploadPointCloudVertices(new Float32Array(0));
+      renderer.clearGroundMesh();
       // Drop the scene origin so actors return to their absolute frame.
       actorLayer.setSceneOrigin([0, 0, 0]);
       renderer.uploadActorVertices(actorLayer.boxVertices());
       renderer.uploadPathVertices(actorLayer.pathVertices());
+      renderer.render();
+    },
+    uploadGroundMeshIndexed: (vertexData: Float32Array, indices: Uint32Array) => {
+      renderer.uploadGroundMeshIndexed(vertexData, indices);
+      renderer.render();
+    },
+    clearGroundMesh: () => {
+      renderer.clearGroundMesh();
       renderer.render();
     },
     uploadActorPointCloud: (data: Float32Array) => {
