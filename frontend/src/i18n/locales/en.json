@@ -33,6 +33,7 @@
     "saveAs": "Save As...",
     "importOpenDrive": "Import OpenDRIVE...",
     "importPointCloud": "Import Point Cloud...",
+    "importTrajectory": "Import Trajectory...",
     "exportOpenDrive": "Export OpenDRIVE...",
     "undo": "Undo",
     "redo": "Redo",
@@ -673,6 +674,18 @@
     "clickToMeasure": "Click in the viewport to add measurement points",
     "pointCount": "{{count}} point(s) added",
     "needMorePoints": "Need {{count}} more point(s)"
+  },
+  "trajectory": {
+    "title": "Trajectory Playback",
+    "play": "Play",
+    "pause": "Pause",
+    "prevFrame": "Previous Frame",
+    "nextFrame": "Next Frame",
+    "loop": "Loop",
+    "speed": "Playback Speed",
+    "timeline": "Timeline",
+    "import": "Import Trajectory...",
+    "clear": "Close Trajectory"
   },
   "commandPalette": {
     "placeholder": "Type a command...",

@@ -1,7 +1,5 @@
 import { useTranslation } from 'react-i18next';
 import { useViewportStore } from '../../stores/viewportStore';
-import { getViewportRenderer } from '../../viewport/viewportRef';
-import { openTrajFile, clearTraj } from '../../plugins/npc-actors';
 
 type ViewMode = 'sketch' | 'wire' | 'solid';
 
@@ -39,29 +37,6 @@ export function ViewModePanel() {
           </label>
         ))}
       </div>
-      {import.meta.env.DEV && (
-        <div className="menubar-snap-settings-section">
-          <div className="menubar-snap-settings-header">Case actors (debug)</div>
-          <button
-            type="button"
-            onClick={() => {
-              const r = getViewportRenderer();
-              if (r) openTrajFile(r);
-            }}
-          >
-            Open trajectory…
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const r = getViewportRenderer();
-              if (r) clearTraj(r);
-            }}
-          >
-            Clear trajectory
-          </button>
-        </div>
-      )}
     </div>
   );
 }

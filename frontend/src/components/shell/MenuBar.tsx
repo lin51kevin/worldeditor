@@ -78,6 +78,7 @@ export function MenuBar({
     handleClose,
     handleImportOpenDrive,
     handleImportPointCloud,
+    handleImportTrajectory,
     handleOpenRecentFile,
     handleExportOpenDrive,
     handleDelete,
@@ -288,6 +289,12 @@ export function MenuBar({
       } else if (isCtrl && event.altKey && (event.key === 'i' || event.key === 'I')) {
         event.preventDefault();
         toggleCopilotPanel();
+      } else if (isCtrl && event.altKey && (event.key === 't' || event.key === 'T')) {
+        event.preventDefault();
+        void handleImportTrajectory();
+      } else if (isCtrl && event.altKey && (event.key === 'p' || event.key === 'P')) {
+        event.preventDefault();
+        handleImportPointCloud();
       }
     };
 
@@ -299,6 +306,9 @@ export function MenuBar({
     handleOpen,
     handleSave,
     handleSaveAs,
+    handleClose,
+    handleImportTrajectory,
+    handleImportPointCloud,
     handleZoomToFit,
     handleZoomToSelected,
     toggleCopilotPanel,
@@ -346,6 +356,7 @@ export function MenuBar({
                 onExit={handleExit}
                 onImportOpenDrive={handleImportOpenDrive}
                 onImportPointCloud={handleImportPointCloud}
+                onImportTrajectory={handleImportTrajectory}
                 onOpenRecentFile={handleOpenRecentFile}
                 onExportOpenDrive={handleExportOpenDrive}
               />

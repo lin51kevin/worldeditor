@@ -16,9 +16,9 @@ import { buildBoxVertices, buildPathVertices } from './actorGeometry';
 import { CaseActorBox, Rgba } from './actorTypes';
 
 /** Trajectory ribbon half-width, meters. */
-const PATH_HALF_WIDTH = 0.25;
+export const PATH_HALF_WIDTH = 0.25;
 /** Ground-parallel lift for path ribbons, meters. */
-const PATH_Z = 0.15;
+export const PATH_Z = 0.15;
 /** Degrees→radians (trajectory yaw is stored in degrees). */
 const DEG_TO_RAD = Math.PI / 180;
 
@@ -149,7 +149,7 @@ export function parseTraj(text: string): TrajData {
 }
 
 /** Linear-interpolate a time-sorted entity's pose at absolute time `t`. */
-function interpPose(rows: TrajRow[], t: number): TrajRow {
+export function interpPose(rows: TrajRow[], t: number): TrajRow {
   const first = rows[0]!;
   if (t <= first.time) return first;
   const last = rows[rows.length - 1]!;
@@ -211,8 +211,17 @@ export function buildTrajSegments(data: TrajData): Float32Array {
   return new Float32Array(out);
 }
 
+/** Sorted, de-duplicated list of every distinct timestamp across all entities. */
+export function trajFrames(data: TrajData): number[] {
+  const set = new Set<number>();
+  for (const entity of data.entities) {
+    for (const r of entity.rows) set.add(r.time);
+  }
+  return Array.from(set).sort((a, b) => a - b);
+}
+
 /** Planar [minX, minY, maxX, maxY] extent of every trajectory vertex. */
-function trajBounds(data: TrajData): [number, number, number, number] | null {
+export function trajBounds(data: TrajData): [number, number, number, number] | null {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -229,7 +238,7 @@ function trajBounds(data: TrajData): [number, number, number, number] | null {
 }
 
 /** Absolute [tMin, tMax] time span across every entity row. */
-function trajTimeSpan(data: TrajData): [number, number] {
+export function trajTimeSpan(data: TrajData): [number, number] {
   let tMin = Infinity;
   let tMax = -Infinity;
   for (const entity of data.entities) {

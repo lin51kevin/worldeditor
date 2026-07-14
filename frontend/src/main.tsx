@@ -37,20 +37,33 @@ if (import.meta.env.DEV) {
   // Case-actor manual verification: `__caseActors.open()` opens a `.traj` file
   // picker and loop-plays it in 3D (moving boxes + trajectory ribbons) so box/
   // ribbon rendering and its coexistence with the WASM road surface can be
-  // eyeballed against real data; `.clear()` removes it.
+  // eyeballed against real data; `.clear()` removes it. Routes through the same
+  // store-driven playback controller as the File → Import → Trajectory feature.
   Promise.all([
-    import('./viewport/viewportRef'),
     import('./plugins/npc-actors'),
-  ]).then(([{ getViewportRenderer }, { openTrajFile, clearTraj }]) => {
+    import('./viewport/trajectoryPlayback'),
+  ]).then(([{ parseTraj }, { startTrajectory, stopTrajectory }]) => {
     (window as unknown as Record<string, unknown>)['__caseActors'] = {
       open: () => {
-        const r = getViewportRenderer();
-        if (r) openTrajFile(r);
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.traj,.csv,text/plain';
+        input.onchange = () => {
+          const file = input.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              startTrajectory(parseTraj(String(reader.result ?? '')));
+            } catch (err) {
+              console.error('[caseActors] failed to parse .traj file', err);
+            }
+          };
+          reader.readAsText(file);
+        };
+        input.click();
       },
-      clear: () => {
-        const r = getViewportRenderer();
-        if (r) clearTraj(r);
-      },
+      clear: () => stopTrajectory(),
     };
   });
 }

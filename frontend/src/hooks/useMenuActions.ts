@@ -9,6 +9,7 @@ import { useRecentFilesStore } from '../stores/recentFilesStore';
 import type { Project } from '../services/platform';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import { useFileLoader } from './useFileLoader';
+import { promptImportTrajectory, stopTrajectory } from '../viewport/trajectoryPlayback';
 
 function calculateTotalRoadLength(project: Project): number {
   return project.roads.reduce((sum, road) => sum + road.length, 0);
@@ -35,6 +36,7 @@ export function useMenuActions() {
     if (isDirty) {
       if (!await showConfirm(t('dialog.confirmNew'))) return;
     }
+    stopTrajectory();
     reset();
   }, [isDirty, reset, t]);
 
@@ -130,6 +132,10 @@ export function useMenuActions() {
   const handleImportPointCloud = useCallback(() => {
     const { showPanel } = usePluginContribStore.getState();
     showPanel('pointcloud-beta:panel');
+  }, []);
+
+  const handleImportTrajectory = useCallback(() => {
+    promptImportTrajectory();
   }, []);
 
   const handleOpenRecentFile = useCallback(async (recent: { name: string; path: string }) => {
@@ -230,6 +236,7 @@ export function useMenuActions() {
     if (isDirty) {
       if (!await showConfirm(t('dialog.confirmClose'))) return;
     }
+    stopTrajectory();
     reset();
   }, [isDirty, reset, t]);
 
@@ -246,7 +253,7 @@ export function useMenuActions() {
     undo, redo, canUndo, canRedo,
     toggleSnap, setMeasureMode,
     handleNew, handleOpen, handleSave, handleSaveAs,
-    handleClose, handleImportOpenDrive, handleImportPointCloud, handleOpenRecentFile, handleExportOpenDrive,
+    handleClose, handleImportOpenDrive, handleImportPointCloud, handleImportTrajectory, handleOpenRecentFile, handleExportOpenDrive,
     handleDelete, handleView3D, handleView2D,
     handleZoomToFit, handleZoomToSelected,
     handleToggleGrid, handleToggleAxis, handleToggleHoverHighlight,

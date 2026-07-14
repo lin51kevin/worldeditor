@@ -33,6 +33,7 @@
     "saveAs": "另存为...",
     "importOpenDrive": "导入 OpenDRIVE...",
     "importPointCloud": "导入点云...",
+    "importTrajectory": "导入轨迹文件...",
     "exportOpenDrive": "导出 OpenDRIVE...",
     "undo": "撤销",
     "redo": "重做",
@@ -673,6 +674,18 @@
     "clickToMeasure": "在视口中点击以添加测量点",
     "pointCount": "已添加 {{count}} 个点",
     "needMorePoints": "还需 {{count}} 个点"
+  },
+  "trajectory": {
+    "title": "轨迹播放",
+    "play": "播放",
+    "pause": "暂停",
+    "prevFrame": "上一帧",
+    "nextFrame": "下一帧",
+    "loop": "循环播放",
+    "speed": "播放倍速",
+    "timeline": "时间轴",
+    "import": "导入轨迹文件...",
+    "clear": "关闭轨迹"
   },
   "commandPalette": {
     "placeholder": "输入命令...",

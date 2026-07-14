@@ -25,6 +25,12 @@ export {
   parseTraj,
   buildTrajBoxes,
   buildTrajSegments,
+  trajFrames,
+  trajBounds,
+  trajTimeSpan,
+  interpPose,
+  PATH_HALF_WIDTH,
+  PATH_Z,
 } from './trajViewer';
 export type { TrajViewerTarget, TrajData } from './trajViewer';
 export { parsePlyFirstVertex } from './plyOrigin';

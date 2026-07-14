@@ -1,0 +1,94 @@
+/* ── Trajectory playback bar — bottom-center floating control strip ── */
+.traj-playback-bar {
+    position: absolute;
+    bottom: var(--space-6, 24px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--glass-bg, rgba(30, 30, 34, 0.82));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg, 10px);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.35));
+    color: var(--color-text-primary);
+    font-size: var(--font-size-base);
+    user-select: none;
+    max-width: min(720px, calc(100vw - 32px));
+}
+
+.traj-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: color var(--transition-fast), background var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.traj-btn:hover {
+    color: var(--color-text-primary);
+    background: var(--color-bg-hover);
+}
+
+.traj-btn.active {
+    color: var(--color-accent, #4c9aff);
+}
+
+.traj-btn-primary {
+    width: 36px;
+    height: 36px;
+    color: var(--color-text-primary);
+    background: var(--color-bg-hover);
+}
+
+.traj-btn-primary:hover {
+    background: var(--color-accent, #4c9aff);
+    color: #fff;
+}
+
+.traj-btn-close {
+    margin-left: var(--space-1);
+}
+
+.traj-speed {
+    height: 28px;
+    padding: 0 var(--space-2);
+    background: var(--color-bg-input, rgba(255, 255, 255, 0.06));
+    color: var(--color-text-primary);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm, 12px);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.traj-scrubber {
+    flex: 1 1 auto;
+    min-width: 160px;
+    height: 4px;
+    margin: 0 var(--space-2);
+    cursor: pointer;
+    accent-color: var(--color-accent, #4c9aff);
+}
+
+.traj-time {
+    font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 116px;
+    text-align: right;
+}

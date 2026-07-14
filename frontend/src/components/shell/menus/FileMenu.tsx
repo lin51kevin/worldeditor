@@ -26,6 +26,7 @@ interface FileMenuProps extends MenuSectionInteractionProps {
   onExit: MenuAction;
   onImportOpenDrive: MenuAction;
   onImportPointCloud: MenuAction;
+  onImportTrajectory: MenuAction;
   onOpenRecentFile: (file: RecentFile) => Promise<void>;
   onExportOpenDrive: MenuAction;
 }
@@ -46,6 +47,7 @@ export function FileMenu({
   onExit,
   onImportOpenDrive,
   onImportPointCloud,
+  onImportTrajectory,
   onOpenRecentFile,
   onExportOpenDrive,
   ...menuProps
@@ -75,8 +77,16 @@ export function FileMenu({
     },
     {
       label: t('menu.importPointCloud'),
+      shortcut: 'Ctrl+Alt+P',
       action: () => {
         void onImportPointCloud();
+      },
+    },
+    {
+      label: t('menu.importTrajectory'),
+      shortcut: 'Ctrl+Alt+T',
+      action: () => {
+        void onImportTrajectory();
       },
     },
     ...importers.filter((importer) => !importer.disabled).map((importer): MenuItem => ({

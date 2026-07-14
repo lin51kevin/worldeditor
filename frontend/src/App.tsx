@@ -14,6 +14,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { usePluginContribStore } from './stores/pluginContribStore';
 import { FloatingPanel } from './components/layout/FloatingPanel';
 import { MeasurementPanel } from './components/panels/MeasurementPanel';
+import { TrajectoryPlaybackBar } from './components/panels/TrajectoryPlaybackBar';
 // ValidationPanel is now rendered via PluginPanels
 import { SelectionDetailsPanel } from './components/panels/SelectionDetailsPanel';
 import { PluginManager } from './components/dialogs/PluginManager';
@@ -406,6 +407,7 @@ export function App() {
         {/* Floating status chips */}
         <StatusBar />
         <CommandPalette />
+        <TrajectoryPlaybackBar />
         {measureMode !== 'none' && (
           <FloatingPanel
             className="floating-measurement"
