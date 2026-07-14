@@ -42,18 +42,20 @@ function extensionOf(name: string): string {
 
 /**
  * Detect a 3D Gaussian Splatting PLY by scanning its ASCII header for the
- * signature splat properties (`f_dc_0`, `scale_0`, `rot_0`, `opacity`). Only the
- * header region (up to `end_header`, capped at 8 KiB) is decoded.
+ * signature splat properties (`f_dc_0`, `scale_0`, `rot_0`, `opacity`).
+ *
+ * Mirrors the native `ply_is_gaussian` probe (src-tauri/src/gaussian.rs) exactly
+ * so web and desktop agree on which PLYs are splats: scan up to 64 KiB, restrict
+ * to the region before `end_header`, and match each property name as a plain
+ * substring (not a strict `property <type> <name>` pattern). This keeps the web
+ * path from misclassifying a Gaussian cloud as plain points.
  */
 export function isGaussianPly(bytes: Uint8Array): boolean {
-  const headerLen = Math.min(bytes.length, 8192);
-  let header = '';
-  for (let i = 0; i < headerLen; i++) header += String.fromCharCode(bytes[i]!);
-  const end = header.indexOf('end_header');
-  const scan = end >= 0 ? header.slice(0, end) : header;
-  const has = (name: string): boolean =>
-    new RegExp(`property\\s+\\S+\\s+${name}\\b`).test(scan);
-  return has('f_dc_0') && has('scale_0') && has('rot_0') && has('opacity');
+  const headerLen = Math.min(bytes.length, 64 * 1024);
+  const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(0, headerLen));
+  const end = text.indexOf('end_header');
+  const scan = end >= 0 ? text.slice(0, end) : text;
+  return ['f_dc_0', 'scale_0', 'rot_0', 'opacity'].every((name) => scan.includes(name));
 }
 
 /** Build a point-cloud summary shell from Gaussian splat metadata. */
