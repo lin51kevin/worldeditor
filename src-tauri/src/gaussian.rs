@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use serde_json::Value;
 use tauri::State;
 use tauri::ipc::Response;
-use we_core::pointcloud::parse_gaussian_ply_capped;
+use we_core::pointcloud::parse_gaussian_ply_packed_f16;
 
 /// Backend store of parsed splat clouds' packed SH buffers, keyed by handle.
 #[derive(Default)]
@@ -55,15 +55,15 @@ fn header_has_gaussian_props(head: &[u8]) -> bool {
         .all(|name| scan.contains(name))
 }
 
-/// Reinterpret a `Vec<f32>` as `Vec<u8>` without copying (little-endian bytes).
-fn floats_to_bytes(floats: Vec<f32>) -> Vec<u8> {
-    // SAFETY: f32 is 4 bytes; u8 has alignment 1 so no alignment issue. The
+/// Reinterpret a `Vec<u32>` as `Vec<u8>` without copying (little-endian bytes).
+fn u32s_to_bytes(words: Vec<u32>) -> Vec<u8> {
+    // SAFETY: u32 is 4 bytes; u8 has alignment 1 so no alignment issue. The
     // original Vec is forgotten so its buffer is not double-freed.
     unsafe {
-        let len = floats.len() * 4;
-        let cap = floats.capacity() * 4;
-        let ptr = floats.as_ptr() as *mut u8;
-        std::mem::forget(floats);
+        let len = words.len() * 4;
+        let cap = words.capacity() * 4;
+        let ptr = words.as_ptr() as *mut u8;
+        std::mem::forget(words);
         Vec::from_raw_parts(ptr, len, cap)
     }
 }
@@ -91,39 +91,50 @@ pub fn gaussian_splat_load(
     max_splats: Option<u32>,
     store: State<'_, GaussianSplatStore>,
 ) -> Result<Value, String> {
-    let bytes = std::fs::read(Path::new(&path)).map_err(|e| e.to_string())?;
-    let cloud = parse_gaussian_ply_capped(&bytes, max_splats.map(|m| m as usize))
+    // Memory-map the (often > 1 GB) file instead of reading it into the heap:
+    // the binary PLY reader works directly on the byte slice, and the streaming
+    // parser writes each splat straight into the packed GPU buffer — so the peak
+    // resident memory is roughly just the output buffer, not file + full cloud.
+    let file = std::fs::File::open(Path::new(&path)).map_err(|e| e.to_string())?;
+    // SAFETY: the map is read-only and dropped before this function returns; the
+    // file is not mutated elsewhere for the lifetime of the mapping.
+    let mmap = unsafe { memmap2::Mmap::map(&file).map_err(|e| e.to_string())? };
+    let packed = parse_gaussian_ply_packed_f16(&mmap, max_splats.map(|m| m as usize))
         .map_err(|e| e.to_string())?;
-    // Release the (large) source bytes before building the output buffer.
-    drop(bytes);
+    // Release the mapping before publishing the buffer.
+    drop(mmap);
 
-    let b = cloud.bounds();
     let meta = serde_json::json!({
-        "count": cloud.len(),
-        "shDegree": cloud.sh_degree(),
-        "shStride": cloud.sh_buffer_stride(),
-        "origin": cloud.origin(),
-        "min": b.min,
-        "max": b.max,
+        "count": packed.count,
+        "shDegree": packed.sh_degree,
+        "shStride": packed.stride,
+        "origin": packed.origin,
+        "min": packed.bounds.min,
+        "max": packed.bounds.max,
     });
-    let buffer = floats_to_bytes(cloud.build_splat_buffer_sh());
+    let buffer = u32s_to_bytes(packed.buffer);
     let handle = store.insert(buffer);
     Ok(serde_json::json!({ "handle": handle, "meta": meta }))
 }
 
 /// Return the packed SH instance buffer for `handle` as a raw binary
 /// `ArrayBuffer` (avoids the JSON number-array blow-up for large buffers).
+///
+/// The buffer is **moved** out of the store (not cloned): a multi-hundred-MiB
+/// splat buffer is consumed by exactly one retrieval, so cloning it would double
+/// peak memory for no benefit. [`gaussian_splat_free`] afterwards is a harmless
+/// no-op. Returns an error if the handle was already retrieved or freed.
 #[tauri::command]
 pub fn gaussian_splat_buffer(
     handle: u32,
     store: State<'_, GaussianSplatStore>,
 ) -> Result<Response, String> {
-    let inner = store.inner.lock().expect("gaussian splat store poisoned");
+    let mut inner = store.inner.lock().expect("gaussian splat store poisoned");
     let buffer = inner
         .entries
-        .get(&handle)
+        .remove(&handle)
         .ok_or("invalid gaussian splat handle")?;
-    Ok(Response::new(buffer.clone()))
+    Ok(Response::new(buffer))
 }
 
 /// Free a parsed splat cloud and its buffer.
@@ -138,12 +149,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_floats_to_bytes_roundtrip() {
-        let floats = vec![1.0f32, 2.0, 3.0];
-        let bytes = floats_to_bytes(floats);
+    fn test_u32s_to_bytes_roundtrip() {
+        let words = vec![0x3f80_0000u32, 0x4000_0000, 0x4040_0000];
+        let bytes = u32s_to_bytes(words);
         assert_eq!(bytes.len(), 12);
-        let back = f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-        assert_eq!(back, 1.0);
+        let back = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        assert_eq!(back, 0x3f80_0000);
+        assert_eq!(f32::from_bits(back), 1.0);
     }
 
     #[test]

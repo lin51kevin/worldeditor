@@ -45,25 +45,27 @@ export function applyOrigin(vertices: Float32Array, origin: readonly [number, nu
  * coordinates so it aligns with OpenDRIVE road geometry, mirroring
  * {@link applyOrigin} for point-list clouds.
  *
- * Positions occupy the first three floats of each
- * `splatStrideForDegree(shDegree)`-float record. Returns a shifted copy (the
- * store buffer stays origin-relative and immutable) or the input unchanged when
- * `origin` is zero/undefined.
+ * The buffer is half-precision packed: the first 3 `u32` words of each
+ * `splatStrideForDegree(shDegree)`-word record hold the position as f32 bit
+ * patterns (a `Float32Array` view reads them directly). Returns a shifted copy
+ * (the store buffer stays origin-relative and immutable) or the input unchanged
+ * when `origin` is zero/undefined.
  */
 export function applySplatOrigin(
-  splatData: Float32Array,
+  splatData: Uint32Array,
   shDegree: number,
   origin: readonly [number, number, number] | undefined,
-): Float32Array {
+): Uint32Array {
   if (!origin || (origin[0] === 0 && origin[1] === 0 && origin[2] === 0)) return splatData;
   const stride = splatStrideForDegree(shDegree);
   if (stride < 3) return splatData;
   const [ox, oy, oz] = origin;
-  const out = new Float32Array(splatData);
-  for (let i = 0; i + 2 < out.length; i += stride) {
-    out[i] = out[i]! + ox;
-    out[i + 1] = out[i + 1]! + oy;
-    out[i + 2] = out[i + 2]! + oz;
+  const out = new Uint32Array(splatData);
+  const f32 = new Float32Array(out.buffer, out.byteOffset, out.length);
+  for (let i = 0; i + 2 < f32.length; i += stride) {
+    f32[i] = f32[i]! + ox;
+    f32[i + 1] = f32[i + 1]! + oy;
+    f32[i + 2] = f32[i + 2]! + oz;
   }
   return out;
 }

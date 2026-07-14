@@ -56,19 +56,26 @@ describe('applyOrigin', () => {
   });
 });
 
-/** Build a packed splat buffer (stride = splatStrideForDegree) from positions. */
-function buildSplats(positions: [number, number, number][], shDegree = 0): Float32Array {
+/** Build a packed splat buffer (Uint32Array) with f32-bit positions. */
+function buildSplats(positions: [number, number, number][], shDegree = 0): Uint32Array {
   const stride = splatStrideForDegree(shDegree);
-  const out = new Float32Array(positions.length * stride);
+  const out = new Uint32Array(positions.length * stride);
+  const f32 = new Float32Array(out.buffer);
   positions.forEach(([x, y, z], i) => {
     const d = i * stride;
-    out[d] = x;
-    out[d + 1] = y;
-    out[d + 2] = z;
-    // Fill a non-position field to assert it is left untouched.
-    out[d + 3] = 42;
+    f32[d] = x;
+    f32[d + 1] = y;
+    f32[d + 2] = z;
+    // A packed half-pair word right after the position words; must stay intact.
+    out[d + 3] = 0xabcd_1234;
   });
   return out;
+}
+
+/** Read splat position i as f32 values from the packed buffer. */
+function splatPos(buf: Uint32Array, stride: number, i: number): [number, number, number] {
+  const f32 = new Float32Array(buf.buffer, buf.byteOffset, buf.length);
+  return [f32[i * stride]!, f32[i * stride + 1]!, f32[i * stride + 2]!];
 }
 
 describe('applySplatOrigin', () => {
@@ -81,25 +88,26 @@ describe('applySplatOrigin', () => {
 
     const out = applySplatOrigin(buffer, 0, [100, 200, 5]);
 
-    expect([out[0], out[1], out[2]]).toEqual([100, 200, 5]);
-    expect([out[stride], out[stride + 1], out[stride + 2]]).toEqual([101, 202, 8]);
+    expect(splatPos(out, stride, 0)).toEqual([100, 200, 5]);
+    expect(splatPos(out, stride, 1)).toEqual([101, 202, 8]);
   });
 
   it('should return a new buffer and leave the input origin-relative', () => {
     const buffer = buildSplats([[1, 1, 1]]);
+    const stride = splatStrideForDegree(0);
 
     const out = applySplatOrigin(buffer, 0, [10, 20, 30]);
 
     expect(out).not.toBe(buffer);
-    expect([buffer[0], buffer[1], buffer[2]]).toEqual([1, 1, 1]);
+    expect(splatPos(buffer, stride, 0)).toEqual([1, 1, 1]);
   });
 
-  it('should not touch covariance/opacity/SH fields', () => {
+  it('should not touch the packed half-pair words after the position', () => {
     const buffer = buildSplats([[1, 1, 1]]);
 
     const out = applySplatOrigin(buffer, 0, [10, 20, 30]);
 
-    expect(out[3]).toBe(42);
+    expect(out[3]).toBe(0xabcd_1234);
   });
 
   it('should handle a higher SH degree stride correctly', () => {
@@ -108,8 +116,8 @@ describe('applySplatOrigin', () => {
 
     const out = applySplatOrigin(buffer, 2, [1, 1, 1]);
 
-    expect([out[0], out[1], out[2]]).toEqual([1, 1, 1]);
-    expect([out[stride], out[stride + 1], out[stride + 2]]).toEqual([6, 7, 8]);
+    expect(splatPos(out, stride, 0)).toEqual([1, 1, 1]);
+    expect(splatPos(out, stride, 1)).toEqual([6, 7, 8]);
   });
 
   it('should return the same reference when origin is zero', () => {

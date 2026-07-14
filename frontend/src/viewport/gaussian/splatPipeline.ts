@@ -10,12 +10,15 @@ import { GAUSSIAN_SPLAT_SHADER } from "./splatShader";
 import { SPLAT_UNIFORM_BYTES } from "./splatUniform";
 
 /**
- * Floats per splat in the view-dependent SH instance buffer:
- * `pos(3) + cov(6) + opacity(1) + (degree+1)²·3` SH coefficients.
+ * `u32` words per splat in the half-precision packed instance buffer:
+ * `pos(3 f32 words) + ceil((6 cov + 1 opacity + (deg+1)²·3 SH) / 2)` half-pairs.
+ * Positions are stored as f32 bit patterns; the rest are `f16` pairs decoded via
+ * `unpack2x16float`. Mirrors `GaussianCloud::sh_buffer_stride_f16` in Rust.
  */
 export function splatStrideForDegree(shDegree: number): number {
-  const n = shDegree + 1;
-  return 10 + n * n * 3;
+  const coeffs = (shDegree + 1) * (shDegree + 1);
+  const halfCount = 7 + coeffs * 3;
+  return 3 + Math.ceil(halfCount / 2);
 }
 
 /**
@@ -115,10 +118,11 @@ export class GaussianSplatResources {
   }
 
   /**
-   * Upload the packed splat buffer (13 floats/splat) and initialise the sorted
-   * index buffer to identity order. Replaces any previous cloud.
+   * Upload the packed half-precision splat buffer (`splatStrideForDegree`
+   * `u32` words/splat) and initialise the sorted index buffer to identity
+   * order. Replaces any previous cloud.
    */
-  upload(splatData: Float32Array, shDegree: number): void {
+  upload(splatData: Uint32Array, shDegree: number): void {
     this.releaseBuffers();
     const stride = splatStrideForDegree(shDegree);
     const count = Math.floor(splatData.length / stride);

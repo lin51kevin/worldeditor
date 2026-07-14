@@ -26,8 +26,8 @@ function fakeDevice() {
   return { device, writes, created };
 }
 
-function splats(count: number, degree = 0): Float32Array {
-  return new Float32Array(count * splatStrideForDegree(degree));
+function splats(count: number, degree = 0): Uint32Array {
+  return new Uint32Array(count * splatStrideForDegree(degree));
 }
 
 describe("GaussianSplatResources", () => {
@@ -45,8 +45,11 @@ describe("GaussianSplatResources", () => {
     expect(res.count).toBe(3);
     expect(res.shDegree).toBe(1);
     expect(res.hasContent).toBe(true);
-    // Two writes: splat data + identity order.
-    const orderWrite = writes.find((w) => w.data instanceof Uint32Array);
+    // Two writes: splat data + identity order. The order write is the Uint32Array
+    // whose length equals the splat count (the packed splat data is longer).
+    const orderWrite = writes.find(
+      (w) => w.data instanceof Uint32Array && w.data.length === 3,
+    );
     expect(orderWrite).toBeDefined();
     expect(Array.from(orderWrite!.data as Uint32Array)).toEqual([0, 1, 2]);
   });
@@ -54,7 +57,7 @@ describe("GaussianSplatResources", () => {
   it("treats a zero-length upload as empty", () => {
     const { device } = fakeDevice();
     const res = new GaussianSplatResources(device, {} as GPUBindGroupLayout);
-    res.upload(new Float32Array(0), 0);
+    res.upload(new Uint32Array(0), 0);
     expect(res.count).toBe(0);
     expect(res.hasContent).toBe(false);
   });

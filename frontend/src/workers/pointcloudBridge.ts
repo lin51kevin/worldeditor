@@ -71,7 +71,7 @@ export function workerFreePointCloud(handle: number): Promise<void> {
 export interface GaussianSplatMeta {
   count: number;
   shDegree: number;
-  /** Floats per splat in the SH instance buffer: `10 + (shDegree+1)²·3`. */
+  /** `u32` words per splat in the packed half-precision SH instance buffer. */
   shStride: number;
   origin: [number, number, number];
   min: [number, number, number];
@@ -82,16 +82,18 @@ export interface GaussianSplatMeta {
 export interface WorkerGaussianResult {
   handle: number;
   meta: GaussianSplatMeta;
-  /** Packed SH instance buffer (`meta.shStride` floats/splat), transferred zero-copy. */
-  buffer: Float32Array;
+  /** Packed half-precision SH instance buffer (`meta.shStride` u32 words/splat), transferred zero-copy. */
+  buffer: Uint32Array;
 }
 
 /**
- * Default cap on splats parsed from a 3DGS PLY. Very large clouds are uniformly
- * stride-sampled to this budget during WASM parsing so the wasm32 heap (and the
- * derived GPU buffer) stay bounded — without it, multi-million-splat files can
- * exhaust memory and crash on load. The GPU-side renderer decimates further if
- * the storage-buffer binding limit is smaller.
+ * Default cap on splats parsed from a 3DGS PLY on the **web/WASM** path. Very
+ * large clouds are uniformly stride-sampled to this budget during WASM parsing
+ * so the wasm32 heap (and the derived GPU buffer) stay bounded — without it,
+ * multi-million-splat files can exhaust the 4 GB address space and crash on
+ * load. The native (desktop) path uses a higher budget (no wasm32 limit); the
+ * GPU-side renderer decimates further if the storage-buffer binding limit is
+ * smaller.
  */
 export const DEFAULT_SPLAT_LOAD_BUDGET = 4_000_000;
 

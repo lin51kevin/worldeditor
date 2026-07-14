@@ -784,7 +784,7 @@ export class ViewportRenderer {
     this.markSceneDirty();
   }
 
-  uploadGaussianSplats(splatData: Float32Array, shDegree: number): void {
+  uploadGaussianSplats(splatData: Uint32Array, shDegree: number): void {
     if (splatData.length === 0) {
       this.splatRenderer?.clear();
       this.markSceneDirty();

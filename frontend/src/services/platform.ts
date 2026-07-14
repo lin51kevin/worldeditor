@@ -452,7 +452,7 @@ export interface GaussianSplatNativeMeta {
 /** Result of natively loading a 3DGS cloud: metadata + packed SH buffer. */
 export interface GaussianSplatNativeResult {
   meta: GaussianSplatNativeMeta;
-  buffer: Float32Array;
+  buffer: Uint32Array;
 }
 
 export interface PlatformService {

@@ -60,9 +60,9 @@ export function createWorkerSplatSorter(): SplatSorter {
 
   return {
     init(positions: Float32Array): void {
-      // Copy so the caller keeps ownership of its buffer.
-      const copy = positions.slice();
-      worker.postMessage({ type: "init", positions: copy }, [copy.buffer]);
+      // Transfer ownership of the positions buffer to the worker (zero-copy) —
+      // the caller relinquishes it, so no duplicate lives on the main thread.
+      worker.postMessage({ type: "init", positions }, [positions.buffer]);
     },
     sort(camPos, viewDir, generation, done): void {
       pending = done;

@@ -243,16 +243,22 @@ pub fn free_gaussian_splats(handle: u32) {
 /// Build the view-dependent SH instance buffer (raw SH coefficients kept for
 /// per-frame view-dependent shading).
 ///
-/// Layout is `sh_buffer_stride` `f32` per splat:
-/// `[x, y, z, σxx, σxy, σxz, σyy, σyz, σzz, opacity, sh0_r, sh0_g, sh0_b, …]`.
+/// Build the view-dependent SH instance buffer as a **half-precision** packed
+/// `u32` buffer (positions stay `f32`; covariance/opacity/SH are `f16` pairs).
+///
+/// Layout is `sh_buffer_stride_f16` `u32` words per splat:
+/// `[x_f32, y_f32, z_f32, pack(σxx,σxy), pack(σxz,σyy), pack(σyz,σzz),
+///   pack(opacity, sh0_r), …]` — the shader decodes the halves with
+/// `unpack2x16float`. Halving the per-splat bytes roughly doubles the splat
+/// count that fits within the GPU storage-buffer binding limit.
 #[wasm_bindgen]
-pub fn gaussian_splat_buffer_sh(handle: u32) -> Result<Vec<f32>, JsError> {
+pub fn gaussian_splat_buffer_sh(handle: u32) -> Result<Vec<u32>, JsError> {
     GAUSSIAN_REGISTRY.with(|r| {
         let map = r.borrow();
         let cloud = map
             .get(&handle)
             .ok_or_else(|| JsError::new("invalid gaussian splat handle"))?;
-        Ok(cloud.build_splat_buffer_sh())
+        Ok(cloud.build_splat_buffer_sh_f16())
     })
 }
 
@@ -288,7 +294,7 @@ pub fn gaussian_splat_meta(handle: u32) -> Result<JsValue, JsError> {
         let meta = GaussianMeta {
             count: cloud.len(),
             sh_degree: cloud.sh_degree(),
-            sh_stride: cloud.sh_buffer_stride(),
+            sh_stride: cloud.sh_buffer_stride_f16(),
             origin: cloud.origin(),
             min: b.min,
             max: b.max,

@@ -12,10 +12,12 @@
  * EWA projection ported from antimatter15/splat; SH evaluation follows the
  * reference 3DGS decode (Kerbl et al. / INRIA).
  *
- * Storage layout — `splats: array<f32>`, stride = 10 + (deg+1)²·3 floats/splat:
- *   [x, y, z, σxx, σxy, σxz, σyy, σyz, σzz, opacity, sh0_r, sh0_g, sh0_b, sh1_r, …]
- * SH block is coeff-major, RGB-interleaved. `order: array<u32>` holds the
- * back-to-front sorted splat indices.
+ * Storage layout — `splats: array<u32>`, stride = 3 + ceil((7 + (deg+1)²·3)/2)
+ * words/splat. The first 3 words are the f32 position (bit-cast); the remaining
+ * words pack the half-precision block `[σxx, σxy, σxz, σyy, σyz, σzz, opacity,
+ * sh0_r, sh0_g, sh0_b, …]` (SH coeff-major, RGB-interleaved) as `f16` pairs
+ * (low half = even element, high half = odd element), decoded with
+ * `unpack2x16float`. `order: array<u32>` holds the back-to-front sorted indices.
  */
 export const GAUSSIAN_SPLAT_SHADER = /* wgsl */ `
 struct SplatUniforms {
@@ -31,7 +33,7 @@ struct SplatUniforms {
 };
 
 @group(0) @binding(0) var<uniform> u : SplatUniforms;
-@group(0) @binding(1) var<storage, read> splats : array<f32>;
+@group(0) @binding(1) var<storage, read> splats : array<u32>;
 @group(0) @binding(2) var<storage, read> order  : array<u32>;
 
 // Spherical-harmonic basis constants (bands 0..3).
@@ -65,36 +67,45 @@ fn culled() -> VSOut {
   return out;
 }
 
-// Read SH coefficient k (a per-channel RGB triple) at storage offset shBase.
-fn shCoeff(shBase : u32, k : u32) -> vec3<f32> {
-  let o = shBase + k * 3u;
-  return vec3<f32>(splats[o], splats[o + 1u], splats[o + 2u]);
+// Decode half-precision element \`e\` of the packed block that starts right after
+// the 3 position words at \`base\`. Even elements live in the low 16 bits of a
+// word, odd elements in the high 16 bits (matches the Rust packer).
+fn halfAt(base : u32, e : u32) -> f32 {
+  let pair = unpack2x16float(splats[base + 3u + (e >> 1u)]);
+  return select(pair.x, pair.y, (e & 1u) == 1u);
+}
+
+// Read SH coefficient k (a per-channel RGB triple). The SH block begins at half
+// element 7 (after 6 covariance entries + 1 opacity).
+fn shCoeff(b : u32, k : u32) -> vec3<f32> {
+  let e = 7u + k * 3u;
+  return vec3<f32>(halfAt(b, e), halfAt(b, e + 1u), halfAt(b, e + 2u));
 }
 
 // Evaluate view-dependent SH colour for direction \`dir\` (normalized).
-fn evalSH(shBase : u32, degree : u32, dir : vec3<f32>) -> vec3<f32> {
-  var c = SH_C0 * shCoeff(shBase, 0u);
+fn evalSH(b : u32, degree : u32, dir : vec3<f32>) -> vec3<f32> {
+  var c = SH_C0 * shCoeff(b, 0u);
   if (degree >= 1u) {
     let x = dir.x; let y = dir.y; let z = dir.z;
-    c = c - SH_C1 * y * shCoeff(shBase, 1u)
-          + SH_C1 * z * shCoeff(shBase, 2u)
-          - SH_C1 * x * shCoeff(shBase, 3u);
+    c = c - SH_C1 * y * shCoeff(b, 1u)
+          + SH_C1 * z * shCoeff(b, 2u)
+          - SH_C1 * x * shCoeff(b, 3u);
     if (degree >= 2u) {
       let xx = x * x; let yy = y * y; let zz = z * z;
       let xy = x * y; let yz = y * z; let xz = x * z;
-      c = c + SH_C2_0 * xy * shCoeff(shBase, 4u)
-            + SH_C2_1 * yz * shCoeff(shBase, 5u)
-            + SH_C2_2 * (2.0 * zz - xx - yy) * shCoeff(shBase, 6u)
-            + SH_C2_3 * xz * shCoeff(shBase, 7u)
-            + SH_C2_4 * (xx - yy) * shCoeff(shBase, 8u);
+      c = c + SH_C2_0 * xy * shCoeff(b, 4u)
+            + SH_C2_1 * yz * shCoeff(b, 5u)
+            + SH_C2_2 * (2.0 * zz - xx - yy) * shCoeff(b, 6u)
+            + SH_C2_3 * xz * shCoeff(b, 7u)
+            + SH_C2_4 * (xx - yy) * shCoeff(b, 8u);
       if (degree >= 3u) {
-        c = c + SH_C3_0 * y * (3.0 * xx - yy) * shCoeff(shBase, 9u)
-              + SH_C3_1 * xy * z * shCoeff(shBase, 10u)
-              + SH_C3_2 * y * (4.0 * zz - xx - yy) * shCoeff(shBase, 11u)
-              + SH_C3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * shCoeff(shBase, 12u)
-              + SH_C3_4 * x * (4.0 * zz - xx - yy) * shCoeff(shBase, 13u)
-              + SH_C3_5 * z * (xx - yy) * shCoeff(shBase, 14u)
-              + SH_C3_6 * x * (xx - 3.0 * yy) * shCoeff(shBase, 15u);
+        c = c + SH_C3_0 * y * (3.0 * xx - yy) * shCoeff(b, 9u)
+              + SH_C3_1 * xy * z * shCoeff(b, 10u)
+              + SH_C3_2 * y * (4.0 * zz - xx - yy) * shCoeff(b, 11u)
+              + SH_C3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * shCoeff(b, 12u)
+              + SH_C3_4 * x * (4.0 * zz - xx - yy) * shCoeff(b, 13u)
+              + SH_C3_5 * z * (xx - yy) * shCoeff(b, 14u)
+              + SH_C3_6 * x * (xx - 3.0 * yy) * shCoeff(b, 15u);
       }
     }
   }
@@ -106,12 +117,17 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
            @builtin(instance_index) inst : u32) -> VSOut {
   let degree = u32(u.sh_degree);
   let coeffs = (degree + 1u) * (degree + 1u);
-  let stride = 10u + coeffs * 3u;
+  let halfCount = 7u + coeffs * 3u;
+  let stride = 3u + (halfCount + 1u) / 2u;
 
   let si = order[inst];
   let b = si * stride;
-  let center = vec3<f32>(splats[b], splats[b + 1u], splats[b + 2u]);
-  let opacityRaw = splats[b + 9u];
+  let center = vec3<f32>(
+    bitcast<f32>(splats[b]),
+    bitcast<f32>(splats[b + 1u]),
+    bitcast<f32>(splats[b + 2u]),
+  );
+  let opacityRaw = halfAt(b, 6u);
 
   let clip = u.view_proj * vec4<f32>(center, 1.0);
   if (clip.w <= 0.0) { return culled(); }
@@ -120,13 +136,19 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
 
   // View-dependent colour (dir points from camera to the splat mean).
   let dir = normalize(center - u.cam_pos);
-  let color = evalSH(b + 10u, degree, dir);
+  let color = evalSH(b, degree, dir);
 
-  // Symmetric 3D covariance.
+  // Symmetric 3D covariance (6 unique entries, half-decoded).
+  let sxx = halfAt(b, 0u);
+  let sxy = halfAt(b, 1u);
+  let sxz = halfAt(b, 2u);
+  let syy = halfAt(b, 3u);
+  let syz = halfAt(b, 4u);
+  let szz = halfAt(b, 5u);
   let Vrk = mat3x3<f32>(
-    vec3<f32>(splats[b + 3u], splats[b + 4u], splats[b + 5u]),
-    vec3<f32>(splats[b + 4u], splats[b + 6u], splats[b + 7u]),
-    vec3<f32>(splats[b + 5u], splats[b + 7u], splats[b + 8u]),
+    vec3<f32>(sxx, sxy, sxz),
+    vec3<f32>(sxy, syy, syz),
+    vec3<f32>(sxz, syz, szz),
   );
 
   // Perspective Jacobian at the splat mean. Perspective (J2) terms live in the

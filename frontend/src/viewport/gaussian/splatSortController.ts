@@ -17,7 +17,11 @@ export interface CameraPose {
 
 /** Backend that performs the actual sort (worker or synchronous fallback). */
 export interface SplatSorter {
-  /** Provide the splat positions (3 floats per splat). Called on splat change. */
+  /**
+   * Provide the splat positions (3 floats per splat). Called on splat change.
+   * The sorter takes ownership of `positions` (a worker backend transfers its
+   * buffer), so the caller must not reuse the array afterwards.
+   */
   init(positions: Float32Array): void;
   /** Sort for a camera pose; invoke `done(indices, generation)` when ready. */
   sort(

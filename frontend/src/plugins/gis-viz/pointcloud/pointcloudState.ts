@@ -28,8 +28,8 @@ interface PointCloudState {
 
   /** Whether the loaded cloud is a 3D Gaussian Splatting cloud (rendered as splats). */
   isSplat: boolean;
-  /** Packed 3DGS SH instance buffer (`10 + (shDegree+1)²·3` floats/splat) when `isSplat`, else null. */
-  splatBuffer: Float32Array | null;
+  /** Packed half-precision 3DGS SH instance buffer (`splatStrideForDegree` u32 words/splat) when `isSplat`, else null. */
+  splatBuffer: Uint32Array | null;
   /** SH degree of the loaded splat cloud. */
   splatShDegree: number;
   /** 2D low-pass dilation (splat fullness); larger = fuller/blurrier. */
@@ -44,7 +44,7 @@ interface PointCloudState {
   setSplatLoaded: (
     handle: number,
     fileName: string,
-    buffer: Float32Array,
+    buffer: Uint32Array,
     shDegree: number,
     summary: PointCloudSummary,
   ) => void;
@@ -66,7 +66,7 @@ const INITIAL = {
   hasGround: false,
   markings: [] as PointCloudPolyline[],
   isSplat: false,
-  splatBuffer: null as Float32Array | null,
+  splatBuffer: null as Uint32Array | null,
   splatShDegree: 0,
   splatDilation: 0.15,
 };

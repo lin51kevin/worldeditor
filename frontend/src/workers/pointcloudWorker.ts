@@ -50,7 +50,7 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
         // the parsed count (stride sampling) to bound heap use on large clouds.
         const handle = w.load_gaussian_splats(params.bytes, params.maxSplats);
         const meta = w.gaussian_splat_meta(handle);
-        const buffer: Float32Array = w.gaussian_splat_buffer_sh(handle);
+        const buffer: Uint32Array = w.gaussian_splat_buffer_sh(handle);
         result = { handle, meta, buffer };
         transfer.push(buffer.buffer);
         break;

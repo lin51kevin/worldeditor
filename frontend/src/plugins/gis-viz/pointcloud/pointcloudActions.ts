@@ -21,12 +21,19 @@ import {
   workerExtractGround,
   workerExtractMarkings,
   workerVectorize,
-  DEFAULT_SPLAT_LOAD_BUDGET,
   type GaussianSplatMeta,
 } from '../../../workers/pointcloudBridge';
 
 const NATIVE_EXTENSIONS = ['las', 'laz', 'pcd', 'ply', 'xyz', 'txt', 'asc'];
 const WEB_EXTENSIONS = ['pcd', 'ply', 'xyz', 'txt', 'asc'];
+
+/**
+ * Splat load budget for the **native** desktop path. The 64-bit backend has no
+ * wasm32 heap limit and hands the frontend only a compact half-precision buffer,
+ * so a large budget keeps most/all splats of multi-million-splat clouds; the
+ * GPU renderer decimates further only if the storage-buffer limit is smaller.
+ */
+const NATIVE_SPLAT_LOAD_BUDGET = 16_000_000;
 
 function extensionOf(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -147,7 +154,7 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
           const platform = await getPlatformService();
           const { meta, buffer } = await platform.loadGaussianSplatsNative(
             path,
-            DEFAULT_SPLAT_LOAD_BUDGET,
+            NATIVE_SPLAT_LOAD_BUDGET,
           );
           usePointCloudStore
             .getState()

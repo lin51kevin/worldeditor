@@ -228,11 +228,12 @@ export interface WorldEditorRenderer {
   loadGaussianSplats?(url: string): Promise<GaussianSplatInfo | undefined>;
   /**
    * Upload an already-parsed 3D Gaussian Splatting SH buffer (as produced by
-   * the Rust `gaussian_splat_buffer_sh`, `10 + (shDegree+1)²·3` floats/splat).
+   * the Rust `gaussian_splat_buffer_sh`, half-precision packed:
+   * `3 + ceil((7 + (shDegree+1)²·3)/2)` u32 words/splat).
    * Prefer {@link loadGaussianSplats} for the common fetch-and-render path.
    * Optional so hosts bundling an older SDK degrade gracefully.
    */
-  uploadGaussianSplats?(data: Float32Array, shDegree: number): void;
+  uploadGaussianSplats?(data: Uint32Array, shDegree: number): void;
   /** Remove the uploaded Gaussian splat cloud. */
   clearGaussianSplats?(): void;
 }
@@ -302,7 +303,7 @@ export interface WorldEditorWasm {
   /** Free a registered Gaussian splat cloud. */
   free_gaussian_splats(handle: number): void;
   /** View-dependent SH instance buffer (`10 + (shDegree+1)²·3` floats/splat). */
-  gaussian_splat_buffer_sh(handle: number): Float32Array;
+  gaussian_splat_buffer_sh(handle: number): Uint32Array;
   /** Summary `{ count, shDegree, shStride, origin, min, max }` of a splat cloud. */
   gaussian_splat_meta(handle: number): {
     count: number;
@@ -606,7 +607,7 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
         wasm.free_gaussian_splats(handle);
       }
     },
-    uploadGaussianSplats: (data: Float32Array, shDegree: number) => {
+    uploadGaussianSplats: (data: Uint32Array, shDegree: number) => {
       renderer.uploadGaussianSplats(data, shDegree);
     },
     clearGaussianSplats: () => {

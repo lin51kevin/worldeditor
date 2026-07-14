@@ -185,7 +185,7 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
     );
     try {
       const raw = await invoke<ArrayBuffer>('gaussian_splat_buffer', { handle });
-      const buffer = new Float32Array(raw);
+      const buffer = new Uint32Array(raw);
       return { meta, buffer };
     } finally {
       await invoke('gaussian_splat_free', { handle }).catch(() => undefined);

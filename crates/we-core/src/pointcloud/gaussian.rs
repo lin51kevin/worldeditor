@@ -167,10 +167,110 @@ impl GaussianCloud {
         }
         out
     }
+
+    /// Stride (u32 words per splat) of the half-precision SH instance buffer:
+    /// 3 `f32` position words plus `ceil((6 cov + 1 opacity + coeffs*3 sh) / 2)`
+    /// packed half-pairs.
+    pub fn sh_buffer_stride_f16(&self) -> usize {
+        let halves = 7 + self.coeffs_per_channel() * 3;
+        3 + halves.div_ceil(2)
+    }
+
+    /// Build a compact half-precision SH instance buffer for GPU upload.
+    ///
+    /// Positions stay full `f32` (precision is critical after the origin shift
+    /// into the road frame); covariance, opacity and SH coefficients are packed
+    /// as IEEE binary16 pairs into `u32` words so the WGSL shader decodes them
+    /// with `unpack2x16float` (low half = even element, high half = odd element).
+    ///
+    /// Layout per splat ([`sh_buffer_stride_f16`] `u32` words):
+    /// `[x_f32, y_f32, z_f32, pack(σxx,σxy), pack(σxz,σyy), pack(σyz,σzz),
+    ///   pack(opacity, sh0_r), pack(sh0_g, sh0_b), …]`
+    /// The half block is `[σxx, σxy, σxz, σyy, σyz, σzz, opacity, sh…]`
+    /// (SH coeff-major, RGB-interleaved), zero-padded to an even length.
+    pub fn build_splat_buffer_sh_f16(&self) -> Vec<u32> {
+        let n = self.len();
+        let sh_per_splat = self.coeffs_per_channel() * 3;
+        let stride = self.sh_buffer_stride_f16();
+        let mut out = Vec::with_capacity(n * stride);
+        let mut halves: Vec<f32> = Vec::with_capacity(7 + sh_per_splat);
+        for i in 0..n {
+            out.push(self.positions[i * 3].to_bits());
+            out.push(self.positions[i * 3 + 1].to_bits());
+            out.push(self.positions[i * 3 + 2].to_bits());
+
+            halves.clear();
+            halves.extend_from_slice(&self.cov3d[i * 6..i * 6 + 6]);
+            halves.push(self.opacity[i]);
+            let base = i * sh_per_splat;
+            halves.extend_from_slice(&self.sh_coeffs[base..base + sh_per_splat]);
+
+            let mut k = 0;
+            while k < halves.len() {
+                let lo = f32_to_f16_bits(halves[k]) as u32;
+                let hi = if k + 1 < halves.len() {
+                    f32_to_f16_bits(halves[k + 1]) as u32
+                } else {
+                    0
+                };
+                out.push((hi << 16) | lo);
+                k += 2;
+            }
+        }
+        out
+    }
 }
 
 /// Number of `f32` per splat in the compact GPU instance buffer.
 pub const SPLAT_BUFFER_STRIDE: usize = 13;
+
+/// Convert an `f32` to IEEE-754 binary16 (half) bits with round-to-nearest-even.
+///
+/// Handles zero, subnormals, overflow (→ ±inf) and NaN so the packed buffer
+/// decodes identically through the WGSL `unpack2x16float` builtin.
+pub fn f32_to_f16_bits(value: f32) -> u16 {
+    let bits = value.to_bits();
+    let sign = ((bits >> 16) & 0x8000) as u16;
+    let exp_field = (bits >> 23) & 0xff;
+    let mantissa = bits & 0x007f_ffff;
+
+    // Inf / NaN: preserve a NaN payload bit so NaN does not collapse to inf.
+    if exp_field == 0xff {
+        return sign | 0x7c00 | if mantissa != 0 { 0x0200 } else { 0 };
+    }
+
+    let exp = exp_field as i32 - 127 + 15;
+    if exp >= 0x1f {
+        // Overflow → inf.
+        return sign | 0x7c00;
+    }
+    if exp <= 0 {
+        // Subnormal or underflow to signed zero.
+        if exp < -10 {
+            return sign;
+        }
+        let mant = mantissa | 0x0080_0000; // restore implicit leading 1
+        let shift = (14 - exp) as u32; // in 14..=24
+        let half_mant = mant >> shift;
+        let round_bit = (mant >> (shift - 1)) & 1;
+        let sticky = (mant & ((1u32 << (shift - 1)) - 1)) != 0;
+        let mut result = half_mant;
+        if round_bit == 1 && (sticky || (half_mant & 1) == 1) {
+            result += 1;
+        }
+        return sign | result as u16;
+    }
+
+    // Normalized value.
+    let half_mant = mantissa >> 13;
+    let round_bit = (mantissa >> 12) & 1;
+    let sticky = (mantissa & 0x0fff) != 0;
+    let mut result = ((exp as u32) << 10) | half_mant;
+    if round_bit == 1 && (sticky || (half_mant & 1) == 1) {
+        result += 1; // carry into the exponent is correct
+    }
+    sign | result as u16
+}
 
 /// Sigmoid activation `1 / (1 + e^-x)`.
 pub fn sigmoid(x: f32) -> f32 {
@@ -257,6 +357,170 @@ pub fn parse_gaussian_ply(bytes: &[u8]) -> PointCloudResult<GaussianCloud> {
     parse_gaussian_ply_capped(bytes, None)
 }
 
+/// Resolved 3DGS PLY property indices and SH layout.
+///
+/// Both the full-cloud parser ([`parse_gaussian_ply_capped`]) and the
+/// streaming packed-buffer parser ([`parse_gaussian_ply_packed_f16`]) share
+/// this so the header-scanning and per-splat attribute reads live in one place.
+struct GaussianProps {
+    ix: usize,
+    iy: usize,
+    iz: usize,
+    dc: [usize; 3],
+    scale: [usize; 3],
+    rot: [usize; 4],
+    iopacity: usize,
+    /// Property indices of `f_rest_*`, ordered by trailing index.
+    rest_indices: Vec<usize>,
+    rest_per_channel: usize,
+    /// Coefficients per colour channel `(degree+1)²`.
+    num_coeffs: usize,
+    sh_degree: u32,
+}
+
+impl GaussianProps {
+    /// Resolve the splat property indices and SH degree from a parsed header.
+    ///
+    /// Returns [`PointCloudError::Unsupported`] if the required splat properties
+    /// (`f_dc_*`, `scale_*`, `rot_*`, `opacity`) are absent or the `f_rest_*`
+    /// count does not match a valid SH degree.
+    fn resolve(header: &PlyHeader) -> PointCloudResult<Self> {
+        let ix = header
+            .find("x")
+            .ok_or_else(|| PointCloudError::InvalidHeader("missing x".into()))?;
+        let iy = header
+            .find("y")
+            .ok_or_else(|| PointCloudError::InvalidHeader("missing y".into()))?;
+        let iz = header
+            .find("z")
+            .ok_or_else(|| PointCloudError::InvalidHeader("missing z".into()))?;
+
+        let dc = [
+            header.find("f_dc_0"),
+            header.find("f_dc_1"),
+            header.find("f_dc_2"),
+        ];
+        let scale = [
+            header.find("scale_0"),
+            header.find("scale_1"),
+            header.find("scale_2"),
+        ];
+        let rot = [
+            header.find("rot_0"),
+            header.find("rot_1"),
+            header.find("rot_2"),
+            header.find("rot_3"),
+        ];
+        let iopacity = header.find("opacity");
+
+        let has_all = dc.iter().all(Option::is_some)
+            && scale.iter().all(Option::is_some)
+            && rot.iter().all(Option::is_some)
+            && iopacity.is_some();
+        if !has_all {
+            return Err(PointCloudError::Unsupported(
+                "PLY is not a 3D Gaussian Splatting cloud (missing f_dc/scale/rot/opacity)".into(),
+            ));
+        }
+
+        // Collect f_rest_* properties, ordered by their trailing index.
+        let mut rest: Vec<(usize, usize)> = header
+            .props_iter()
+            .enumerate()
+            .filter_map(|(idx, name)| {
+                name.strip_prefix("f_rest_")
+                    .and_then(|k| k.parse::<usize>().ok())
+                    .map(|k| (k, idx))
+            })
+            .collect();
+        rest.sort_by_key(|(k, _)| *k);
+        let rest_indices: Vec<usize> = rest.iter().map(|(_, idx)| *idx).collect();
+        let n_rest = rest_indices.len();
+        let sh_degree = infer_sh_degree(n_rest).ok_or_else(|| {
+            PointCloudError::Unsupported(format!("unsupported SH: {n_rest} f_rest properties"))
+        })?;
+        let rest_per_channel = n_rest / 3;
+        let num_coeffs = rest_per_channel + 1; // (degree+1)²
+
+        Ok(Self {
+            ix,
+            iy,
+            iz,
+            dc: [dc[0].unwrap(), dc[1].unwrap(), dc[2].unwrap()],
+            scale: [scale[0].unwrap(), scale[1].unwrap(), scale[2].unwrap()],
+            rot: [
+                rot[0].unwrap(),
+                rot[1].unwrap(),
+                rot[2].unwrap(),
+                rot[3].unwrap(),
+            ],
+            iopacity: iopacity.unwrap(),
+            rest_indices,
+            rest_per_channel,
+            num_coeffs,
+            sh_degree,
+        })
+    }
+
+    /// World-space position `[x, y, z]` of record `r`.
+    fn read_world_pos(&self, reader: &RecordReader, r: usize) -> [f64; 3] {
+        [
+            reader.value(r, self.ix),
+            reader.value(r, self.iy),
+            reader.value(r, self.iz),
+        ]
+    }
+
+    /// Activated opacity `sigmoid(raw)` of record `r`.
+    fn read_opacity(&self, reader: &RecordReader, r: usize) -> f32 {
+        sigmoid(reader.value(r, self.iopacity) as f32)
+    }
+
+    /// Pre-computed covariance `[σxx, σxy, σxz, σyy, σyz, σzz]` of record `r`.
+    fn read_cov3d(&self, reader: &RecordReader, r: usize) -> [f32; 6] {
+        let s = [
+            (reader.value(r, self.scale[0]) as f32).exp(),
+            (reader.value(r, self.scale[1]) as f32).exp(),
+            (reader.value(r, self.scale[2]) as f32).exp(),
+        ];
+        let q = [
+            reader.value(r, self.rot[0]) as f32,
+            reader.value(r, self.rot[1]) as f32,
+            reader.value(r, self.rot[2]) as f32,
+            reader.value(r, self.rot[3]) as f32,
+        ];
+        compute_cov3d(s, q)
+    }
+
+    /// Append record `r`'s SH coefficients (coeff-major, RGB-interleaved) to
+    /// `out`, matching the layout of [`GaussianCloud::sh_coeffs`].
+    #[allow(clippy::needless_range_loop)]
+    fn read_sh(&self, reader: &RecordReader, r: usize, out: &mut Vec<f32>) {
+        for coeff in 0..self.num_coeffs {
+            for ch in 0..3 {
+                let v = if coeff == 0 {
+                    reader.value(r, self.dc[ch]) as f32
+                } else {
+                    let idx = ch * self.rest_per_channel + (coeff - 1);
+                    reader.value(r, self.rest_indices[idx]) as f32
+                };
+                out.push(v);
+            }
+        }
+    }
+}
+
+/// Uniform stride between kept records to honour a splat budget (LOD).
+///
+/// Returns `1` (keep every record) unless `max_splats` is a positive budget
+/// smaller than the record count `n`.
+fn sampling_step(max_splats: Option<usize>, n: usize) -> usize {
+    match max_splats {
+        Some(budget) if budget > 0 && budget < n => n.div_ceil(budget),
+        _ => 1,
+    }
+}
+
 /// Parse a 3D Gaussian Splatting PLY, keeping at most `max_splats` splats.
 ///
 /// When `max_splats` is `Some(budget)` smaller than the file's splat count, the
@@ -264,99 +528,30 @@ pub fn parse_gaussian_ply(bytes: &[u8]) -> PointCloudResult<GaussianCloud> {
 /// [`GaussianCloud`] and the derived GPU buffer stay bounded — this is what
 /// keeps very large clouds from exhausting the wasm32 heap on load. `None`
 /// keeps every splat. See [`parse_gaussian_ply`] for the property contract.
+///
+/// For the memory-critical desktop path prefer [`parse_gaussian_ply_packed_f16`],
+/// which streams straight into the GPU buffer without buffering the full
+/// per-splat f32 attribute arrays this function materializes.
 pub fn parse_gaussian_ply_capped(
     bytes: &[u8],
     max_splats: Option<usize>,
 ) -> PointCloudResult<GaussianCloud> {
     let header = parse_ply_header(bytes)?;
-
-    let ix = header
-        .find("x")
-        .ok_or_else(|| PointCloudError::InvalidHeader("missing x".into()))?;
-    let iy = header
-        .find("y")
-        .ok_or_else(|| PointCloudError::InvalidHeader("missing y".into()))?;
-    let iz = header
-        .find("z")
-        .ok_or_else(|| PointCloudError::InvalidHeader("missing z".into()))?;
-
-    let dc = [
-        header.find("f_dc_0"),
-        header.find("f_dc_1"),
-        header.find("f_dc_2"),
-    ];
-    let scale = [
-        header.find("scale_0"),
-        header.find("scale_1"),
-        header.find("scale_2"),
-    ];
-    let rot = [
-        header.find("rot_0"),
-        header.find("rot_1"),
-        header.find("rot_2"),
-        header.find("rot_3"),
-    ];
-    let iopacity = header.find("opacity");
-
-    let has_all = dc.iter().all(Option::is_some)
-        && scale.iter().all(Option::is_some)
-        && rot.iter().all(Option::is_some)
-        && iopacity.is_some();
-    if !has_all {
-        return Err(PointCloudError::Unsupported(
-            "PLY is not a 3D Gaussian Splatting cloud (missing f_dc/scale/rot/opacity)".into(),
-        ));
-    }
-    let dc = [dc[0].unwrap(), dc[1].unwrap(), dc[2].unwrap()];
-    let scale = [scale[0].unwrap(), scale[1].unwrap(), scale[2].unwrap()];
-    let rot = [
-        rot[0].unwrap(),
-        rot[1].unwrap(),
-        rot[2].unwrap(),
-        rot[3].unwrap(),
-    ];
-    let iopacity = iopacity.unwrap();
-
-    // Collect f_rest_* properties, ordered by their trailing index.
-    let mut rest: Vec<(usize, usize)> = header
-        .props_iter()
-        .enumerate()
-        .filter_map(|(idx, name)| {
-            name.strip_prefix("f_rest_")
-                .and_then(|k| k.parse::<usize>().ok())
-                .map(|k| (k, idx))
-        })
-        .collect();
-    rest.sort_by_key(|(k, _)| *k);
-    let rest_indices: Vec<usize> = rest.iter().map(|(_, idx)| *idx).collect();
-    let n_rest = rest_indices.len();
-    let sh_degree = infer_sh_degree(n_rest).ok_or_else(|| {
-        PointCloudError::Unsupported(format!("unsupported SH: {n_rest} f_rest properties"))
-    })?;
-    let rest_per_channel = n_rest / 3;
-    let num_coeffs = rest_per_channel + 1; // (degree+1)²
-
-    let count = header.vertex_count();
-    let mut cloud = GaussianCloud {
-        sh_degree,
-        ..Default::default()
-    };
-
-    // `getter(record_index, prop_index) -> f64`
-    let read_record = RecordReader::new(bytes, &header)?;
-    let n = read_record.count().min(count);
+    let props = GaussianProps::resolve(&header)?;
+    let reader = RecordReader::new(bytes, &header)?;
+    let n = reader.count().min(header.vertex_count());
     if n == 0 {
         return Err(PointCloudError::InvalidData("no PLY vertices".into()));
     }
-
-    // Uniform stride sampling to honour the splat budget (LOD for large clouds).
-    let step = match max_splats {
-        Some(budget) if budget > 0 && budget < n => n.div_ceil(budget),
-        _ => 1,
-    };
+    let step = sampling_step(max_splats, n);
     let kept = n.div_ceil(step);
+
+    let mut cloud = GaussianCloud {
+        sh_degree: props.sh_degree,
+        ..Default::default()
+    };
     cloud.positions.reserve(kept * 3);
-    cloud.sh_coeffs.reserve(kept * num_coeffs * 3);
+    cloud.sh_coeffs.reserve(kept * props.num_coeffs * 3);
     cloud.opacity.reserve(kept);
     cloud.cov3d.reserve(kept * 6);
 
@@ -365,55 +560,128 @@ pub fn parse_gaussian_ply_capped(
     let mut r = 0usize;
     let mut first = true;
     while r < n {
-        let get = |p: usize| read_record.value(r, p);
-        let wx = get(ix);
-        let wy = get(iy);
-        let wz = get(iz);
+        let w = props.read_world_pos(&reader, r);
         if first {
-            origin = [wx, wy, wz];
+            origin = w;
             first = false;
         }
-        let lx = (wx - origin[0]) as f32;
-        let ly = (wy - origin[1]) as f32;
-        let lz = (wz - origin[2]) as f32;
+        let lx = (w[0] - origin[0]) as f32;
+        let ly = (w[1] - origin[1]) as f32;
+        let lz = (w[2] - origin[2]) as f32;
         bounds.expand([lx as f64, ly as f64, lz as f64]);
         cloud.positions.extend_from_slice(&[lx, ly, lz]);
-
-        // SH coeffs: coeff-major, RGB-interleaved.
-        #[allow(clippy::needless_range_loop)]
-        for coeff in 0..num_coeffs {
-            for ch in 0..3 {
-                let v = if coeff == 0 {
-                    get(dc[ch]) as f32
-                } else {
-                    let idx = ch * rest_per_channel + (coeff - 1);
-                    get(rest_indices[idx]) as f32
-                };
-                cloud.sh_coeffs.push(v);
-            }
-        }
-
-        cloud.opacity.push(sigmoid(get(iopacity) as f32));
-
-        let s = [
-            (get(scale[0]) as f32).exp(),
-            (get(scale[1]) as f32).exp(),
-            (get(scale[2]) as f32).exp(),
-        ];
-        let q = [
-            get(rot[0]) as f32,
-            get(rot[1]) as f32,
-            get(rot[2]) as f32,
-            get(rot[3]) as f32,
-        ];
-        cloud.cov3d.extend_from_slice(&compute_cov3d(s, q));
-
+        props.read_sh(&reader, r, &mut cloud.sh_coeffs);
+        cloud.opacity.push(props.read_opacity(&reader, r));
+        cloud.cov3d.extend_from_slice(&props.read_cov3d(&reader, r));
         r += step;
     }
 
     cloud.origin = origin;
     cloud.bounds = bounds;
     Ok(cloud)
+}
+
+/// A packed half-precision splat buffer plus the metadata needed to render it,
+/// produced without ever materializing a full [`GaussianCloud`].
+#[derive(Debug, Clone, Default)]
+pub struct PackedGaussians {
+    /// Packed SH instance buffer, identical in layout to
+    /// [`GaussianCloud::build_splat_buffer_sh_f16`].
+    pub buffer: Vec<u32>,
+    /// Number of splats retained after budget sampling.
+    pub count: usize,
+    /// SH degree (0..=3).
+    pub sh_degree: u32,
+    /// `u32` words per splat (see [`GaussianCloud::sh_buffer_stride_f16`]).
+    pub stride: usize,
+    /// Global origin subtracted from stored positions.
+    pub origin: [f64; 3],
+    /// Axis-aligned bounds in local coordinates.
+    pub bounds: Aabb,
+}
+
+/// Parse a 3DGS PLY straight into the packed half-precision GPU buffer.
+///
+/// This is the memory-critical path for very large clouds (1 GB+ PLY): each
+/// kept splat is activated and written directly into the `u32` output buffer,
+/// so — unlike [`parse_gaussian_ply_capped`] followed by
+/// [`GaussianCloud::build_splat_buffer_sh_f16`] — the full per-splat f32
+/// attribute arrays (positions, covariance, opacity and, above all, the SH
+/// coefficients) are never buffered. This roughly halves peak memory and, for
+/// high SH degrees, saves several GiB. The `buffer` bytes are identical to the
+/// two-step path for the same `max_splats`; only the intermediate allocations
+/// differ. See [`parse_gaussian_ply`] for the property contract.
+pub fn parse_gaussian_ply_packed_f16(
+    bytes: &[u8],
+    max_splats: Option<usize>,
+) -> PointCloudResult<PackedGaussians> {
+    let header = parse_ply_header(bytes)?;
+    let props = GaussianProps::resolve(&header)?;
+    let reader = RecordReader::new(bytes, &header)?;
+    let n = reader.count().min(header.vertex_count());
+    if n == 0 {
+        return Err(PointCloudError::InvalidData("no PLY vertices".into()));
+    }
+    let step = sampling_step(max_splats, n);
+    let kept = n.div_ceil(step);
+
+    // Half-precision block per splat: cov(6) + opacity(1) + sh(coeffs*3),
+    // padded to an even length; stride matches `sh_buffer_stride_f16`.
+    let sh_per_splat = props.num_coeffs * 3;
+    let half_block = 7 + sh_per_splat;
+    let stride = 3 + half_block.div_ceil(2);
+    let mut buffer: Vec<u32> = Vec::with_capacity(kept * stride);
+    let mut halves: Vec<f32> = Vec::with_capacity(half_block);
+
+    let mut origin = [0.0f64; 3];
+    let mut bounds = Aabb::empty();
+    let mut r = 0usize;
+    let mut first = true;
+    let mut count = 0usize;
+    while r < n {
+        let w = props.read_world_pos(&reader, r);
+        if first {
+            origin = w;
+            first = false;
+        }
+        let lx = (w[0] - origin[0]) as f32;
+        let ly = (w[1] - origin[1]) as f32;
+        let lz = (w[2] - origin[2]) as f32;
+        bounds.expand([lx as f64, ly as f64, lz as f64]);
+        buffer.push(lx.to_bits());
+        buffer.push(ly.to_bits());
+        buffer.push(lz.to_bits());
+
+        // Half block: covariance, opacity, then SH coeffs (coeff-major, RGB).
+        halves.clear();
+        halves.extend_from_slice(&props.read_cov3d(&reader, r));
+        halves.push(props.read_opacity(&reader, r));
+        props.read_sh(&reader, r, &mut halves);
+
+        let mut k = 0;
+        while k < halves.len() {
+            let lo = f32_to_f16_bits(halves[k]) as u32;
+            let hi = if k + 1 < halves.len() {
+                f32_to_f16_bits(halves[k + 1]) as u32
+            } else {
+                0
+            };
+            buffer.push((hi << 16) | lo);
+            k += 2;
+        }
+
+        count += 1;
+        r += step;
+    }
+
+    Ok(PackedGaussians {
+        buffer,
+        count,
+        sh_degree: props.sh_degree,
+        stride,
+        origin,
+        bounds,
+    })
 }
 
 /// Reads scalar property values from a parsed PLY body (ASCII or binary).
@@ -497,6 +765,33 @@ impl<'a> RecordReader<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The streaming packed parser must be byte-identical to the two-step path
+    /// (`parse_gaussian_ply_capped` → `build_splat_buffer_sh_f16`) so switching
+    /// to it never changes the rendered result.
+    fn assert_packed_matches_two_step(bytes: &[u8], max_splats: Option<usize>) {
+        let cloud = parse_gaussian_ply_capped(bytes, max_splats).unwrap();
+        let expected = cloud.build_splat_buffer_sh_f16();
+        let packed = parse_gaussian_ply_packed_f16(bytes, max_splats).unwrap();
+        assert_eq!(packed.count, cloud.len());
+        assert_eq!(packed.sh_degree, cloud.sh_degree());
+        assert_eq!(packed.stride, cloud.sh_buffer_stride_f16());
+        assert_eq!(packed.origin, cloud.origin());
+        assert_eq!(packed.bounds.min, cloud.bounds().min);
+        assert_eq!(packed.bounds.max, cloud.bounds().max);
+        assert_eq!(packed.buffer, expected);
+    }
+
+    #[test]
+    fn test_packed_matches_two_step_degree0_ascii() {
+        assert_packed_matches_two_step(degree0_ascii().as_bytes(), None);
+    }
+
+    #[test]
+    fn test_packed_matches_two_step_degree0_capped() {
+        // Budget 1 stride-samples the 2-splat cloud to a single splat.
+        assert_packed_matches_two_step(degree0_ascii().as_bytes(), Some(1));
+    }
 
     #[test]
     fn test_infer_sh_degree() {
@@ -748,4 +1043,137 @@ end_header
         assert_eq!(cloud.origin(), [5.0, 6.0, 7.0]);
         assert!((cloud.opacity()[0] - 0.5).abs() < 1e-6);
     }
+
+    #[test]
+    fn test_packed_matches_two_step_binary() {
+        let mut bytes = b"ply\nformat binary_little_endian 1.0\nelement vertex 2\nproperty float x\nproperty float y\nproperty float z\nproperty float f_dc_0\nproperty float f_dc_1\nproperty float f_dc_2\nproperty float opacity\nproperty float scale_0\nproperty float scale_1\nproperty float scale_2\nproperty float rot_0\nproperty float rot_1\nproperty float rot_2\nproperty float rot_3\nend_header\n".to_vec();
+        // Two splats with distinct, non-trivial attributes to exercise the
+        // covariance, sigmoid and f16 packing paths.
+        let rows: [[f32; 14]; 2] = [
+            [
+                5.0, 6.0, 7.0, // pos
+                0.3, -0.2, 0.7, // dc
+                1.2, // opacity (raw)
+                -1.0, 0.5, 0.25, // scale (raw, exp-activated)
+                0.9, 0.1, -0.3, 0.2, // rot quaternion (unnormalized)
+            ],
+            [
+                8.5, -2.0, 3.1, // pos
+                -0.5, 0.4, 0.1,  // dc
+                -0.8, // opacity
+                0.2, -0.4, 0.6, // scale
+                0.1, 0.7, 0.7, -0.1, // rot
+            ],
+        ];
+        for row in rows {
+            for v in row {
+                bytes.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        assert_packed_matches_two_step(&bytes, None);
+    }
+
+    /// Decode IEEE binary16 bits back to `f32` (reference, for test assertions).
+    fn f16_bits_to_f32(h: u16) -> f32 {
+        let sign = ((h >> 15) & 1) as u32;
+        let exp = ((h >> 10) & 0x1f) as u32;
+        let mant = (h & 0x3ff) as u32;
+        let bits = if exp == 0 {
+            if mant == 0 {
+                sign << 31
+            } else {
+                // Subnormal → normalize into a float32 exponent.
+                let mut e = 0i32;
+                let mut m = mant;
+                while (m & 0x400) == 0 {
+                    m <<= 1;
+                    e -= 1;
+                }
+                m &= 0x3ff;
+                let real_exp = (127 - 15 + e) as u32;
+                (sign << 31) | (real_exp << 23) | (m << 13)
+            }
+        } else if exp == 0x1f {
+            (sign << 31) | (0xff << 23) | (mant << 13)
+        } else {
+            let real_exp = exp + (127 - 15);
+            (sign << 31) | (real_exp << 23) | (mant << 13)
+        };
+        f32::from_bits(bits)
+    }
+
+    #[test]
+    fn test_f32_to_f16_exact_values() {
+        assert_eq!(f32_to_f16_bits(0.0), 0x0000);
+        assert_eq!(f32_to_f16_bits(-0.0), 0x8000);
+        assert_eq!(f32_to_f16_bits(1.0), 0x3c00);
+        assert_eq!(f32_to_f16_bits(2.0), 0x4000);
+        assert_eq!(f32_to_f16_bits(0.5), 0x3800);
+        assert_eq!(f32_to_f16_bits(-1.0), 0xbc00);
+        // Overflow → inf.
+        assert_eq!(f32_to_f16_bits(70000.0), 0x7c00);
+        assert_eq!(f32_to_f16_bits(f32::INFINITY), 0x7c00);
+        // NaN stays NaN (exp all ones, non-zero mantissa).
+        let n = f32_to_f16_bits(f32::NAN);
+        assert_eq!(n & 0x7c00, 0x7c00);
+        assert_ne!(n & 0x03ff, 0);
+    }
+
+    #[test]
+    fn test_f32_to_f16_roundtrip_close() {
+        for &v in &[1.5f32, -3.25, 0.1, 100.0, -0.001, 65504.0, 12.34] {
+            let back = f16_bits_to_f32(f32_to_f16_bits(v));
+            let tol = v.abs() * 1e-2 + 1e-4;
+            assert!((back - v).abs() <= tol, "v={v} back={back}");
+        }
+    }
+
+    #[test]
+    fn test_build_splat_buffer_sh_f16_degree0_layout() {
+        let cloud = parse_gaussian_ply(degree0_ascii().as_bytes()).unwrap();
+        // degree 0 → coeffs=1 → halves = 7 + 3 = 10 → 5 pair words → stride = 3 + 5 = 8.
+        assert_eq!(cloud.sh_buffer_stride_f16(), 8);
+        let buf = cloud.build_splat_buffer_sh_f16();
+        assert_eq!(buf.len(), 8 * 2);
+
+        // Position stored as raw f32 bits in the first 3 words of each stride.
+        assert_eq!(f32::from_bits(buf[0]), 0.0); // splat 0 x = 0.0
+        assert_eq!(f32::from_bits(buf[8]), 1.0); // splat 1 x = 1.0 (stride 8)
+
+        // Word 3 of splat 0 packs (σxx, σxy) = (1.0, 0.0) → lo=0x3c00, hi=0x0000.
+        let w = buf[3];
+        let lo = (w & 0xffff) as u16;
+        let hi = ((w >> 16) & 0xffff) as u16;
+        assert!((f16_bits_to_f32(lo) - 1.0).abs() < 1e-3);
+        assert!(f16_bits_to_f32(hi).abs() < 1e-3);
+
+        // Opacity is half element 6 → word (3 + 6/2)=6, low lane. sigmoid(0)=0.5.
+        let wop = buf[6];
+        let op = f16_bits_to_f32((wop & 0xffff) as u16);
+        assert!((op - 0.5).abs() < 1e-2, "opacity {op}");
+    }
+
+    #[test]
+    fn test_build_splat_buffer_sh_f16_stride_matches_formula() {
+        // Degree 1 → coeffs=4 → halves = 7 + 12 = 19 → 10 pair words → stride 13.
+        let mut header = String::from(
+            "ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nproperty float f_dc_0\nproperty float f_dc_1\nproperty float f_dc_2\n",
+        );
+        for k in 0..9 {
+            header.push_str(&format!("property float f_rest_{k}\n"));
+        }
+        header.push_str(
+            "property float opacity\nproperty float scale_0\nproperty float scale_1\nproperty float scale_2\nproperty float rot_0\nproperty float rot_1\nproperty float rot_2\nproperty float rot_3\nend_header\n",
+        );
+        let mut row = String::from("0 0 0 1 2 3 ");
+        for k in 0..9 {
+            row.push_str(&format!("{} ", k + 4));
+        }
+        row.push_str("0 0 0 0 1 0 0 0\n");
+        header.push_str(&row);
+        let cloud = parse_gaussian_ply(header.as_bytes()).unwrap();
+        assert_eq!(cloud.sh_buffer_stride_f16(), 13);
+        assert_eq!(cloud.build_splat_buffer_sh_f16().len(), 13);
+    }
 }
+
