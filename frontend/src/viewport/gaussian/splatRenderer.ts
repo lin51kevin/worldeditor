@@ -200,6 +200,35 @@ export function importanceDecimateSplatBuffer(
   return d * stride === out.length ? out : out.subarray(0, d * stride);
 }
 
+/**
+ * Strategy for choosing which splats survive when a cloud exceeds the GPU/
+ * preview budget. Both strategies keep the *same* number of splats (so memory
+ * is identical) — they differ only in *which* splats are kept:
+ * - `uniform`: stride-sample evenly — preserves spatial spread and fine detail
+ *   across the whole cloud (generally the sharper-looking result).
+ * - `importance`: keep the highest `opacity × size` splats — favours large
+ *   opaque surfaces, which can look fuller but drops fine low-opacity detail.
+ */
+export type SplatSampleMode = "importance" | "uniform";
+
+/** Default splat sampling strategy (even coverage / fine detail). */
+export const DEFAULT_SPLAT_SAMPLE_MODE: SplatSampleMode = "uniform";
+
+/**
+ * Reduce a packed splat buffer to at most `maxSplats` using `mode`. Returns the
+ * input unchanged when it already fits (both strategies short-circuit).
+ */
+export function sampleSplatBuffer(
+  splatData: Uint32Array,
+  stride: number,
+  maxSplats: number,
+  mode: SplatSampleMode,
+): Uint32Array {
+  return mode === "uniform"
+    ? decimateSplatBuffer(splatData, stride, maxSplats)
+    : importanceDecimateSplatBuffer(splatData, stride, maxSplats);
+}
+
 
 /** Orchestrates upload, per-frame uniform/sort updates, and drawing of splats. */
 export class SplatRenderer {
@@ -248,14 +277,24 @@ export class SplatRenderer {
    * binding limit are decimated to fit — binding an oversized storage buffer
    * would otherwise crash the device.
    */
-  upload(splatData: Uint32Array, shDegree: number): void {
+  upload(
+    splatData: Uint32Array,
+    shDegree: number,
+    sampleMode: SplatSampleMode = DEFAULT_SPLAT_SAMPLE_MODE,
+    quality = 1,
+  ): void {
     const stride = splatStrideForDegree(shDegree);
     const bytesPerSplat = stride * Uint32Array.BYTES_PER_ELEMENT;
+    const count = Math.floor(splatData.length / stride);
     const maxByLimit = Math.floor(this.maxStorageBytes / bytesPerSplat);
-    const maxSplats = Math.min(PREVIEW_SPLAT_BUDGET, maxByLimit);
-    // Importance sampling (opacity × size) preserves surface coverage far
-    // better than uniform stride when the cloud exceeds the GPU budget.
-    const data = importanceDecimateSplatBuffer(splatData, stride, maxSplats);
+    // `quality` (0..1] caps how many of the cloud's splats to keep, letting the
+    // user trade fidelity for memory; the GPU storage limit and the preview
+    // budget lower it further. Below 1 the sampling strategy actually matters.
+    const q = Math.min(1, Math.max(0, quality));
+    const byQuality = q >= 1 ? count : Math.max(1, Math.floor(count * q));
+    const maxSplats = Math.min(byQuality, PREVIEW_SPLAT_BUDGET, maxByLimit);
+    // Reduce to fit using the caller-selected strategy (importance vs uniform).
+    const data = sampleSplatBuffer(splatData, stride, maxSplats, sampleMode);
     this.resources.upload(data, shDegree);
     // Hand the sorter ownership of the freshly-extracted positions (transferred
     // to the worker) so the main thread does not retain a second copy.

@@ -47,6 +47,13 @@
     font-size: var(--font-size-base);
 }
 
+/* Wrapper that stacks a pc-field row and a hint paragraph vertically. */
+.pc-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
 .pc-field select {
     background: var(--color-bg-input);
     color: var(--color-text-primary);

@@ -34,7 +34,7 @@ import type { RenderableMesh } from './markerRenderer';
 import { setupRendererInput } from './rendererInputHandler';
 import { renderFrame as renderFrameImpl, captureFrame as captureFrameImpl } from './rendererFrame';
 import type { RendererFrameInternals } from './rendererFrame';
-import { createSplatRenderer, type SplatRenderer } from './gaussian/splatRenderer';
+import { createSplatRenderer, type SplatRenderer, type SplatSampleMode } from './gaussian/splatRenderer';
 import { uploadMeshData, disposeMeshes, createDepthTexture, createMsaaTexture } from './rendererResources';
 import {
   createRoadMeshRegistry,
@@ -784,7 +784,7 @@ export class ViewportRenderer {
     this.markSceneDirty();
   }
 
-  uploadGaussianSplats(splatData: Uint32Array, shDegree: number): void {
+  uploadGaussianSplats(splatData: Uint32Array, shDegree: number, sampleMode?: SplatSampleMode, quality?: number): void {
     if (splatData.length === 0) {
       this.splatRenderer?.clear();
       this.markSceneDirty();
@@ -795,7 +795,7 @@ export class ViewportRenderer {
         this.markSceneDirty(),
       );
     }
-    this.splatRenderer.upload(splatData, shDegree);
+    this.splatRenderer.upload(splatData, shDegree, sampleMode, quality);
     this.splatRenderer.invalidateSort();
     this.markSceneDirty();
   }

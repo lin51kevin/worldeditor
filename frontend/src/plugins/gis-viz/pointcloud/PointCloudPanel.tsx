@@ -1,13 +1,11 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PointCloudColorMode } from '../../../services/platform';
+import type { SplatSampleMode } from '../../../viewport/gaussian/splatRenderer';
 import { usePointCloudStore } from './pointcloudState';
 import {
-  extractGround,
-  extractMarkings,
   freeCurrentCloud,
   loadPointCloud,
-  vectorizeToRoads,
 } from './pointcloudActions';
 import './PointCloudPanel.css';
 
@@ -30,19 +28,20 @@ export default function PointCloudPanel() {
   const handle = usePointCloudStore((s) => s.handle);
   const fileName = usePointCloudStore((s) => s.fileName);
   const summary = usePointCloudStore((s) => s.summary);
-  const stage = usePointCloudStore((s) => s.stage);
   const busy = usePointCloudStore((s) => s.busy);
   const error = usePointCloudStore((s) => s.error);
   const colorMode = usePointCloudStore((s) => s.colorMode);
   const voxelSize = usePointCloudStore((s) => s.voxelSize);
-  const hasGround = usePointCloudStore((s) => s.hasGround);
-  const markings = usePointCloudStore((s) => s.markings);
   const isSplat = usePointCloudStore((s) => s.isSplat);
   const splatShDegree = usePointCloudStore((s) => s.splatShDegree);
   const splatDilation = usePointCloudStore((s) => s.splatDilation);
+  const splatSampleMode = usePointCloudStore((s) => s.splatSampleMode);
+  const splatQuality = usePointCloudStore((s) => s.splatQuality);
   const setColorMode = usePointCloudStore((s) => s.setColorMode);
   const setVoxelSize = usePointCloudStore((s) => s.setVoxelSize);
   const setSplatDilation = usePointCloudStore((s) => s.setSplatDilation);
+  const setSplatSampleMode = usePointCloudStore((s) => s.setSplatSampleMode);
+  const setSplatQuality = usePointCloudStore((s) => s.setSplatQuality);
 
   const isWeb = !(typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window);
   const loaded = handle !== null;
@@ -126,6 +125,39 @@ export default function PointCloudPanel() {
         </label>
       )}
 
+      {isSplat && (
+        <div className="pc-field-group">
+          <label className="pc-field">
+            <span>{t('pointcloud.splatQuality')} ({Math.round(splatQuality * 100)}%)</span>
+            <input
+              type="range"
+              min={0.05}
+              max={1}
+              step={0.05}
+              value={splatQuality}
+              onChange={(e) => setSplatQuality(Number(e.target.value))}
+            />
+          </label>
+          <p className="pc-hint">{t('pointcloud.splatQualityHint')}</p>
+        </div>
+      )}
+
+      {isSplat && (
+        <div className="pc-field-group">
+          <label className="pc-field">
+            <span>{t('pointcloud.sampleMode')}</span>
+            <select
+              value={splatSampleMode}
+              onChange={(e) => setSplatSampleMode(e.target.value as SplatSampleMode)}
+            >
+              <option value="uniform">{t('pointcloud.sampleUniform')}</option>
+              <option value="importance">{t('pointcloud.sampleImportance')}</option>
+            </select>
+          </label>
+          <p className="pc-hint">{t('pointcloud.sampleModeHint')}</p>
+        </div>
+      )}
+
       <label className="pc-field">
         <span>{t('pointcloud.voxelSize')}</span>
         <input
@@ -138,35 +170,12 @@ export default function PointCloudPanel() {
         />
       </label>
 
-      <hr className="pc-divider" />
-
-      <div className="pc-section-title">{t('pointcloud.workflow')}</div>
-
       {busy && (
         <div className="pc-busy">
           <span className="pc-spinner" />
           <span className="pc-busy-text">{t('pointcloud.working')}</span>
         </div>
       )}
-
-      <button type="button" disabled={!loaded || busy || isSplat} onClick={() => void extractGround()} className="pc-btn">
-        {hasGround ? t('pointcloud.extractGroundDone') : t('pointcloud.extractGround')}
-      </button>
-      <button type="button" disabled={!loaded || busy || isSplat} onClick={() => void extractMarkings()} className="pc-btn">
-        {t('pointcloud.extractMarkings')}{markings.length > 0 ? ` (${markings.length})` : ''}
-      </button>
-      <button
-        type="button"
-        disabled={!loaded || busy || isSplat || markings.length === 0}
-        onClick={() => void vectorizeToRoads()}
-        className="pc-btn-primary"
-      >
-        {t('pointcloud.vectorize')}
-      </button>
-
-      <div className="pc-stage">
-        {t('pointcloud.stage')}: {stage}
-      </div>
 
       {error && (
         <div className="pc-error">{error}</div>

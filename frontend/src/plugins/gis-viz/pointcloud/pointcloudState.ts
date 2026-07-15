@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { PointCloudColorMode, PointCloudPolyline, PointCloudSummary } from '../../../services/platform';
+import type { SplatSampleMode } from '../../../viewport/gaussian/splatRenderer';
 
 /** Phase of the point-cloud → vector workflow. */
 export type PointCloudStage = 'idle' | 'loaded' | 'ground' | 'markings' | 'vectorized';
@@ -34,12 +35,18 @@ interface PointCloudState {
   splatShDegree: number;
   /** 2D low-pass dilation (splat fullness); larger = fuller/blurrier. */
   splatDilation: number;
+  /** How oversized splat clouds are reduced to fit the GPU budget. */
+  splatSampleMode: SplatSampleMode;
+  /** Fraction (0..1] of the cloud's splats to keep (fidelity vs memory). */
+  splatQuality: number;
 
   setColorMode: (mode: PointCloudColorMode) => void;
   setVoxelSize: (size: number) => void;
   setBusy: (busy: boolean) => void;
   setError: (error: string | null) => void;
   setSplatDilation: (dilation: number) => void;
+  setSplatSampleMode: (mode: SplatSampleMode) => void;
+  setSplatQuality: (quality: number) => void;
   setLoaded: (handle: number, fileName: string, summary: PointCloudSummary) => void;
   setSplatLoaded: (
     handle: number,
@@ -69,6 +76,8 @@ const INITIAL = {
   splatBuffer: null as Uint32Array | null,
   splatShDegree: 0,
   splatDilation: 0.15,
+  splatSampleMode: 'uniform' as SplatSampleMode,
+  splatQuality: 1,
 };
 
 export const usePointCloudStore = create<PointCloudState>((set) => ({
@@ -79,6 +88,8 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
   setBusy: (busy) => set(() => ({ busy })),
   setError: (error) => set(() => ({ error })),
   setSplatDilation: (splatDilation) => set(() => ({ splatDilation: Math.max(0, splatDilation) })),
+  setSplatSampleMode: (splatSampleMode) => set(() => ({ splatSampleMode })),
+  setSplatQuality: (splatQuality) => set(() => ({ splatQuality: Math.min(1, Math.max(0.05, splatQuality)) })),
 
   setLoaded: (handle, fileName, summary) =>
     set(() => ({

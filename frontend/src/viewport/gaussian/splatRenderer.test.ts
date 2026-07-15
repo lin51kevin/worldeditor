@@ -6,6 +6,7 @@ import {
   halfToFloat,
   computeSplatImportance,
   importanceDecimateSplatBuffer,
+  sampleSplatBuffer,
   SplatRenderer,
 } from "./splatRenderer";
 import { splatStrideForDegree } from "./splatPipeline";
@@ -162,6 +163,33 @@ describe("importanceDecimateSplatBuffer", () => {
   });
 });
 
+describe("sampleSplatBuffer", () => {
+  it("dispatches to uniform stride sampling", () => {
+    const count = 100;
+    const records: Uint32Array[] = [];
+    for (let i = 0; i < count; i++) records.push(packDeg0Splat(i, 1, i + 1));
+    const cloud = concatSplats(records);
+    const out = sampleSplatBuffer(cloud, STRIDE0, 10, "uniform");
+    // Uniform keeps the first splat (index 0) — importance would drop it.
+    expect(extractSplatPositions(out, STRIDE0)[0]).toBe(0);
+    expect(out.length / STRIDE0).toBeLessThanOrEqual(10);
+  });
+
+  it("dispatches to importance sampling", () => {
+    const count = 100;
+    const records: Uint32Array[] = [];
+    for (let i = 0; i < count; i++) records.push(packDeg0Splat(i, 1, i + 1));
+    const cloud = concatSplats(records);
+    const out = sampleSplatBuffer(cloud, STRIDE0, 10, "importance");
+    const tags = extractSplatPositions(out, STRIDE0);
+    const keptIdx: number[] = [];
+    for (let i = 0; i < out.length / STRIDE0; i++) keptIdx.push(tags[i * 3]!);
+    // Importance keeps high-index (large) splats and drops the low ones.
+    expect(keptIdx).toContain(count - 1);
+    expect(Math.min(...keptIdx)).toBeGreaterThan(count / 2);
+  });
+});
+
 describe("SplatRenderer", () => {
   function fakeDevice() {
     return {
@@ -273,5 +301,29 @@ describe("SplatRenderer", () => {
     expect(r.hasContent).toBe(true);
     expect(r.count).toBeLessThanOrEqual(2);
     expect(r.count).toBeGreaterThan(0);
+  });
+
+  it("caps the kept splat count to the quality fraction", () => {
+    const r = new SplatRenderer(
+      fakeDevice(),
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+    // 100 splats at 25% quality → ~25 kept (device limit is unbounded here).
+    r.upload(new Uint32Array(100 * STRIDE0), 0, "uniform", 0.25);
+    expect(r.count).toBeGreaterThan(0);
+    expect(r.count).toBeLessThanOrEqual(25);
+  });
+
+  it("keeps every splat at full quality when it fits", () => {
+    const r = new SplatRenderer(
+      fakeDevice(),
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+    r.upload(new Uint32Array(40 * STRIDE0), 0, "uniform", 1);
+    expect(r.count).toBe(40);
   });
 });

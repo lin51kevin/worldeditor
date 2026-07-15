@@ -78,6 +78,8 @@ interface UsePointCloudViewportOptions {
 export function usePointCloudViewport({ rendererRef, status }: UsePointCloudViewportOptions): void {
   const prevHandleRef = useRef<number | null>(null);
   const prevColorModeRef = useRef<string | null>(null);
+  const prevSampleModeRef = useRef<string | null>(null);
+  const prevQualityRef = useRef<number | null>(null);
 
   const handle = usePointCloudStore((s) => s.handle);
   const colorMode = usePointCloudStore((s) => s.colorMode);
@@ -85,6 +87,8 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
   const splatBuffer = usePointCloudStore((s) => s.splatBuffer);
   const splatShDegree = usePointCloudStore((s) => s.splatShDegree);
   const splatDilation = usePointCloudStore((s) => s.splatDilation);
+  const splatSampleMode = usePointCloudStore((s) => s.splatSampleMode);
+  const splatQuality = usePointCloudStore((s) => s.splatQuality);
 
   // Apply the live dilation (splat fullness) slider to the renderer.
   useEffect(() => {
@@ -110,7 +114,13 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
 
     // 3D Gaussian Splatting cloud — render as true splats (colorMode N/A).
     if (isSplat) {
-      if (handle !== prevHandleRef.current) {
+      // Re-upload on a new cloud or when the sampling strategy / quality budget
+      // changes (both decide which & how many splats survive the reduction).
+      if (
+        handle !== prevHandleRef.current ||
+        splatSampleMode !== prevSampleModeRef.current ||
+        splatQuality !== prevQualityRef.current
+      ) {
         // Drop any stale point geometry, then upload the packed splat buffer,
         // shifted into the road's absolute frame so it overlaps the OpenDRIVE
         // geometry instead of rendering around the origin.
@@ -121,9 +131,11 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
             splatShDegree,
             usePointCloudStore.getState().summary?.origin,
           );
-          renderer.uploadGaussianSplats(shifted, splatShDegree);
+          renderer.uploadGaussianSplats(shifted, splatShDegree, splatSampleMode, splatQuality);
         }
         prevHandleRef.current = handle;
+        prevSampleModeRef.current = splatSampleMode;
+        prevQualityRef.current = splatQuality;
         prevColorModeRef.current = null;
       }
       return;
@@ -178,5 +190,5 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     })();
 
     return () => { cancelled = true; };
-  }, [handle, colorMode, isSplat, splatBuffer, splatShDegree, status, rendererRef]);
+  }, [handle, colorMode, isSplat, splatBuffer, splatShDegree, splatSampleMode, splatQuality, status, rendererRef]);
 }

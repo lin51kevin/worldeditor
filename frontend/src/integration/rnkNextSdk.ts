@@ -24,6 +24,7 @@
 import { importGeoZ } from '../plugins/io/geoz/parser';
 import { ViewportRenderer } from '../viewport/renderer';
 import type { SpriteInstance, PaintInstance } from '../viewport/spriteRenderer';
+import type { SplatSampleMode } from '../viewport/gaussian/splatRenderer';
 import { parseGlbMesh, isGlb } from '../viewport/glbMesh';
 import { CaseActorLayer, parsePlyFirstVertex, type CaseActorBox } from '../plugins/npc-actors';
 
@@ -225,15 +226,18 @@ export interface WorldEditorRenderer {
    * bounds + origin + SH degree, or `undefined` when the running bundle lacks
    * 3DGS support. Optional so hosts bundling an older SDK degrade gracefully.
    */
-  loadGaussianSplats?(url: string): Promise<GaussianSplatInfo | undefined>;
+  loadGaussianSplats?(url: string, sampleMode?: SplatSampleMode, quality?: number): Promise<GaussianSplatInfo | undefined>;
   /**
    * Upload an already-parsed 3D Gaussian Splatting SH buffer (as produced by
    * the Rust `gaussian_splat_buffer_sh`, half-precision packed:
    * `3 + ceil((7 + (shDegree+1)²·3)/2)` u32 words/splat).
    * Prefer {@link loadGaussianSplats} for the common fetch-and-render path.
+   * `sampleMode` chooses how oversized clouds are reduced to fit the GPU budget
+   * (`uniform` = even detail, `importance` = keep the largest/most-opaque
+   * splats); `quality` (0..1] caps the kept fraction (fidelity vs memory).
    * Optional so hosts bundling an older SDK degrade gracefully.
    */
-  uploadGaussianSplats?(data: Uint32Array, shDegree: number): void;
+  uploadGaussianSplats?(data: Uint32Array, shDegree: number, sampleMode?: SplatSampleMode, quality?: number): void;
   /** Remove the uploaded Gaussian splat cloud. */
   clearGaussianSplats?(): void;
 }
@@ -580,7 +584,7 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     clearActorPointCloud: () => {
       renderer.uploadActorPointCloudVertices(new Float32Array(0));
     },
-    loadGaussianSplats: async (url: string): Promise<GaussianSplatInfo | undefined> => {
+    loadGaussianSplats: async (url: string, sampleMode?: SplatSampleMode, quality?: number): Promise<GaussianSplatInfo | undefined> => {
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch Gaussian splats (${response.status}): ${url}`);
@@ -594,7 +598,7 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
       try {
         const meta = wasm.gaussian_splat_meta(handle);
         const buffer = wasm.gaussian_splat_buffer_sh(handle);
-        renderer.uploadGaussianSplats(buffer, meta.shDegree);
+        renderer.uploadGaussianSplats(buffer, meta.shDegree, sampleMode, quality);
         renderer.render();
         return {
           count: meta.count,
@@ -607,8 +611,8 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
         wasm.free_gaussian_splats(handle);
       }
     },
-    uploadGaussianSplats: (data: Uint32Array, shDegree: number) => {
-      renderer.uploadGaussianSplats(data, shDegree);
+    uploadGaussianSplats: (data: Uint32Array, shDegree: number, sampleMode?: SplatSampleMode, quality?: number) => {
+      renderer.uploadGaussianSplats(data, shDegree, sampleMode, quality);
     },
     clearGaussianSplats: () => {
       renderer.clearGaussianSplats();
