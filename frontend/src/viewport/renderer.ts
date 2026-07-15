@@ -150,6 +150,11 @@ export class ViewportRenderer {
 
   // Point cloud background mesh (rendered behind roads)
   private pointCloudMeshes: RenderableMesh[] = [];
+  // Per-color-mode GPU buffers for the active point cloud, so switching the
+  // colour mode re-binds a cached buffer instead of re-uploading (~tens of MB)
+  // every time. `pointCloudMeshes` always aliases the active mode's array.
+  private pointCloudBuffersByMode = new Map<string, RenderableMesh[]>();
+  private activePointCloudMode: string | null = null;
   // Opponent (NPC) model point clouds — a SEPARATE buffer from the static road
   // cloud so per-frame opponent updates never re-upload the (large) road mesh.
   private actorPointCloudMeshes: RenderableMesh[] = [];
@@ -698,22 +703,65 @@ export class ViewportRenderer {
     this.markSceneDirty();
   }
 
-  /** Upload point cloud vertex data (7 floats per vertex: x,y,z,r,g,b,a). Rendered as point-list. */
+  /** Upload point cloud vertex data (7 floats per vertex: x,y,z,r,g,b,a). Rendered as point-list.
+   *  Passing empty data clears the active cloud AND every cached per-color-mode buffer. */
   uploadPointCloudVertices(vertexData: Float32Array): void {
     if (vertexData.length === 0) {
-      if (this.pointCloudMeshes.length === 0) return;
-      for (const m of this.pointCloudMeshes) { m.vertexBuffer.destroy(); }
-      this.pointCloudMeshes = [];
+      if (this.pointCloudBuffersByMode.size === 0 && this.pointCloudMeshes.length === 0) return;
+      this.clearPointCloudModeBuffers();
       this.markSceneDirty();
       return;
     }
+    // Legacy single-buffer callers route through the mode cache under a fixed key.
+    this.uploadPointCloudVerticesForMode('__single__', vertexData);
+  }
+
+  /** Dispose every cached per-color-mode point-cloud buffer and clear the active selection. */
+  private clearPointCloudModeBuffers(): void {
+    for (const meshes of this.pointCloudBuffersByMode.values()) {
+      for (const m of meshes) { m.vertexBuffer.destroy(); }
+    }
+    this.pointCloudBuffersByMode.clear();
+    this.pointCloudMeshes = [];
+    this.activePointCloudMode = null;
+  }
+
+  /** Whether a GPU buffer for `mode` is already uploaded for the current cloud. */
+  hasPointCloudColorMode(mode: string): boolean {
+    const meshes = this.pointCloudBuffersByMode.get(mode);
+    return !!meshes && meshes.length > 0;
+  }
+
+  /** Re-bind the cached buffer for `mode` as the drawn cloud (no upload). Returns
+   *  false if that mode has not been uploaded yet. */
+  showPointCloudColorMode(mode: string): boolean {
+    const meshes = this.pointCloudBuffersByMode.get(mode);
+    if (!meshes || meshes.length === 0) return false;
+    if (this.activePointCloudMode === mode && this.pointCloudMeshes === meshes) return true;
+    this.activePointCloudMode = mode;
+    this.pointCloudMeshes = meshes;
+    this.markSceneDirty();
+    return true;
+  }
+
+  /** Upload point-cloud vertices into the cache slot for `mode` and make it the
+   *  drawn cloud. Subsequent switches to this mode re-bind it for free. */
+  uploadPointCloudVerticesForMode(mode: string, vertexData: Float32Array): void {
+    if (vertexData.length === 0) return;
     // Lazy-create point cloud pipeline on first use
     if (!this.pointCloudPipeline) {
       this.pointCloudPipeline = createPointCloudPipelineFn(
         this.device, this.format, this.basicShaderModule, this.basicBindGroupLayout,
       );
     }
-    uploadMeshData(this.device, this.pointCloudMeshes, vertexData);
+    let meshes = this.pointCloudBuffersByMode.get(mode);
+    if (!meshes) {
+      meshes = [];
+      this.pointCloudBuffersByMode.set(mode, meshes);
+    }
+    uploadMeshData(this.device, meshes, vertexData);
+    this.activePointCloudMode = mode;
+    this.pointCloudMeshes = meshes;
     this.markSceneDirty();
   }
 
@@ -1031,7 +1079,7 @@ export class ViewportRenderer {
     disposeMeshes(this.overlayMeshes);
     disposeMeshes(this.actorMeshes);
     disposeMeshes(this.pathMeshes);
-    disposeMeshes(this.pointCloudMeshes);
+    this.clearPointCloudModeBuffers();
     disposeMeshes(this.actorPointCloudMeshes);
     this.groundMesh?.vertexBuffer.destroy();
     this.groundMesh?.indexBuffer.destroy();

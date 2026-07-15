@@ -82,7 +82,8 @@ export interface GaussianSplatMeta {
 export interface WorkerGaussianResult {
   handle: number;
   meta: GaussianSplatMeta;
-  /** Packed half-precision SH instance buffer (`meta.shStride` u32 words/splat), transferred zero-copy. */
+  /** Packed half-precision SH buffer, already origin-shifted in the worker
+   *  (`splatStrideForDegree(meta.shDegree)` u32 words/splat), transferred zero-copy. */
   buffer: Uint32Array;
 }
 
@@ -97,7 +98,9 @@ export interface WorkerGaussianResult {
  */
 export const DEFAULT_SPLAT_LOAD_BUDGET = 4_000_000;
 
-/** Load a 3D Gaussian Splatting PLY in the worker (bytes transferred). */
+/** Load a 3D Gaussian Splatting PLY in the worker (bytes transferred). The
+ *  returned buffer is already origin-shifted in the worker; quality/sample
+ *  reduction is applied later by the GPU renderer. */
 export function workerLoadGaussianSplats(
   bytes: Uint8Array,
   maxSplats: number = DEFAULT_SPLAT_LOAD_BUDGET,
@@ -120,13 +123,15 @@ export function workerRenderBuffer(
 }
 
 /** Get render buffer in 7-float format (x,y,z,r,g,b,a) ready for GPU upload.
- *  The 6→7 conversion happens in the worker to avoid blocking the main thread. */
+ *  The 6→7 conversion and the origin shift happen in the worker to avoid
+ *  blocking the main thread. */
 export function workerRenderBuffer7(
   handle: number,
   colorMode: PointCloudColorMode,
   maxPoints: number,
+  origin?: readonly [number, number, number],
 ): Promise<Float32Array> {
-  return call('renderBuffer7', { handle, colorMode, maxPoints });
+  return call('renderBuffer7', { handle, colorMode, maxPoints, origin });
 }
 
 /** Extract ground from the loaded cloud. */

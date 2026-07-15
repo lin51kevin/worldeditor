@@ -8,6 +8,12 @@
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import {
+  splatStrideForDegree,
+  shiftSplatOrigin,
+  shiftPointCloudOrigin,
+} from '../viewport/gaussian/splatSampling';
+
 let wasm: any = null;
 
 async function ensureWasm(): Promise<any> {
@@ -45,14 +51,20 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
         break;
       }
       case 'loadGaussian': {
-        // Parse a 3D Gaussian Splatting PLY and return the view-dependent SH
-        // instance buffer + metadata, transferring the buffer. `maxSplats` caps
-        // the parsed count (stride sampling) to bound heap use on large clouds.
+        // Parse a 3D Gaussian Splatting PLY, then shift it into the road's
+        // absolute frame IN THE WORKER (the ~hundreds-of-MB per-splat copy that
+        // used to freeze the main thread). Quality/sample reduction stays in the
+        // GPU renderer so the live quality slider keeps working on the full
+        // buffer. `maxSplats` bounds the parsed count on huge clouds.
         const handle = w.load_gaussian_splats(params.bytes, params.maxSplats);
         const meta = w.gaussian_splat_meta(handle);
-        const buffer: Uint32Array = w.gaussian_splat_buffer_sh(handle);
-        result = { handle, meta, buffer };
-        transfer.push(buffer.buffer);
+        const raw: Uint32Array = w.gaussian_splat_buffer_sh(handle);
+        const stride = splatStrideForDegree(meta.shDegree);
+        const shifted = shiftSplatOrigin(raw, stride, meta.origin);
+        // `shiftSplatOrigin` returns `raw` unchanged when the origin is zero;
+        // `raw` is a fresh copy out of WASM, so transferring it is safe.
+        result = { handle, meta, buffer: shifted };
+        transfer.push(shifted.buffer);
         break;
       }
       case 'freeGaussian': {
@@ -86,6 +98,11 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
           out[d + 4] = raw[s + 4]!;
           out[d + 5] = raw[s + 5]!;
           out[d + 6] = 1.0;
+        }
+        // Shift into the road's absolute frame here too, so the main thread never
+        // loops over the (up to millions of) points.
+        if (params.origin) {
+          shiftPointCloudOrigin(out, params.origin as [number, number, number]);
         }
         result = out;
         transfer.push(out.buffer);

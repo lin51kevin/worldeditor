@@ -31,6 +31,8 @@ interface PointCloudState {
   isSplat: boolean;
   /** Packed half-precision 3DGS SH instance buffer (`splatStrideForDegree` u32 words/splat) when `isSplat`, else null. */
   splatBuffer: Uint32Array | null;
+  /** Whether {@link splatBuffer} is already shifted into the absolute world frame (web worker did it). */
+  splatOriginShifted: boolean;
   /** SH degree of the loaded splat cloud. */
   splatShDegree: number;
   /** 2D low-pass dilation (splat fullness); larger = fuller/blurrier. */
@@ -51,9 +53,10 @@ interface PointCloudState {
   setSplatLoaded: (
     handle: number,
     fileName: string,
-    buffer: Uint32Array,
+    buffer: Uint32Array | null,
     shDegree: number,
     summary: PointCloudSummary,
+    originShifted?: boolean,
   ) => void;
   setGround: () => void;
   setMarkings: (markings: PointCloudPolyline[]) => void;
@@ -74,6 +77,7 @@ const INITIAL = {
   markings: [] as PointCloudPolyline[],
   isSplat: false,
   splatBuffer: null as Uint32Array | null,
+  splatOriginShifted: false,
   splatShDegree: 0,
   splatDilation: 0.15,
   splatSampleMode: 'uniform' as SplatSampleMode,
@@ -102,10 +106,11 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
       error: null,
       isSplat: false,
       splatBuffer: null,
+      splatOriginShifted: false,
       splatShDegree: 0,
     })),
 
-  setSplatLoaded: (handle, fileName, buffer, shDegree, summary) =>
+  setSplatLoaded: (handle, fileName, buffer, shDegree, summary, originShifted = false) =>
     set(() => ({
       handle,
       fileName,
@@ -116,6 +121,7 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
       error: null,
       isSplat: true,
       splatBuffer: buffer,
+      splatOriginShifted: originShifted,
       splatShDegree: shDegree,
     })),
 

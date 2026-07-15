@@ -177,10 +177,13 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
       fileName = webFile.name;
       // Route 3DGS PLYs through the Gaussian splat pipeline.
       if (source.format === 'ply' && source.bytes && isGaussianPly(source.bytes)) {
+        // The worker parses AND origin-shifts the splat buffer off the main
+        // thread; quality/sample reduction still happens in the GPU renderer, so
+        // the buffer is stored flagged as already-shifted.
         const { handle, meta, buffer } = await workerLoadGaussianSplats(source.bytes);
         usePointCloudStore
           .getState()
-          .setSplatLoaded(handle, fileName, buffer, meta.shDegree, gaussianMetaToSummary(meta));
+          .setSplatLoaded(handle, fileName, buffer, meta.shDegree, gaussianMetaToSummary(meta), true);
       } else {
         const result = await workerLoadPointCloud(source.bytes!, source.format!);
         usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary);

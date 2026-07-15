@@ -85,6 +85,7 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
   const colorMode = usePointCloudStore((s) => s.colorMode);
   const isSplat = usePointCloudStore((s) => s.isSplat);
   const splatBuffer = usePointCloudStore((s) => s.splatBuffer);
+  const splatOriginShifted = usePointCloudStore((s) => s.splatOriginShifted);
   const splatShDegree = usePointCloudStore((s) => s.splatShDegree);
   const splatDilation = usePointCloudStore((s) => s.splatDilation);
   const splatSampleMode = usePointCloudStore((s) => s.splatSampleMode);
@@ -116,28 +117,28 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     if (isSplat) {
       // Re-upload on a new cloud or when the sampling strategy / quality budget
       // changes (both decide which & how many splats survive the reduction).
-      if (
+      const changed =
         handle !== prevHandleRef.current ||
         splatSampleMode !== prevSampleModeRef.current ||
-        splatQuality !== prevQualityRef.current
-      ) {
-        // Drop any stale point geometry, then upload the packed splat buffer,
-        // shifted into the road's absolute frame so it overlaps the OpenDRIVE
-        // geometry instead of rendering around the origin.
-        renderer.uploadPointCloudVertices(new Float32Array(0));
-        if (splatBuffer) {
-          const shifted = applySplatOrigin(
-            splatBuffer,
-            splatShDegree,
-            usePointCloudStore.getState().summary?.origin,
-          );
-          renderer.uploadGaussianSplats(shifted, splatShDegree, splatSampleMode, splatQuality);
-        }
-        prevHandleRef.current = handle;
-        prevSampleModeRef.current = splatSampleMode;
-        prevQualityRef.current = splatQuality;
-        prevColorModeRef.current = null;
+        splatQuality !== prevQualityRef.current;
+      if (!changed) return;
+
+      // Drop any stale point geometry, then upload the packed splat buffer. The
+      // quality/sample reduction happens inside uploadGaussianSplats (on the full
+      // buffer) so the live quality slider keeps working. The origin shift was
+      // already done off the main thread (web worker) or is applied here (native).
+      renderer.uploadPointCloudVertices(new Float32Array(0));
+      if (splatBuffer) {
+        const origin = usePointCloudStore.getState().summary?.origin;
+        const shifted = splatOriginShifted
+          ? splatBuffer
+          : applySplatOrigin(splatBuffer, splatShDegree, origin);
+        renderer.uploadGaussianSplats(shifted, splatShDegree, splatSampleMode, splatQuality);
       }
+      prevHandleRef.current = handle;
+      prevSampleModeRef.current = splatSampleMode;
+      prevQualityRef.current = splatQuality;
+      prevColorModeRef.current = null;
       return;
     }
 
@@ -149,10 +150,23 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     // Leaving a splat cloud (or a fresh point cloud) — ensure no splats linger.
     renderer.clearGaussianSplats();
 
+    const handleChanged = handle !== prevHandleRef.current;
+    if (handleChanged) {
+      // New cloud → drop the previous cloud's cached per-color-mode buffers.
+      renderer.uploadPointCloudVertices(new Float32Array(0));
+    } else if (renderer.hasPointCloudColorMode(colorMode)) {
+      // Same cloud and this colour mode is already on the GPU → re-bind the
+      // cached buffer instead of re-fetching + re-uploading (fixes the switch jank).
+      renderer.showPointCloudColorMode(colorMode);
+      prevColorModeRef.current = colorMode;
+      return;
+    }
+
     let cancelled = false;
 
     (async () => {
       try {
+        const origin = usePointCloudStore.getState().summary?.origin;
         let vertices: Float32Array;
         if (isTauri()) {
           // Tauri: binary IPC returns 6-float format, convert here (fast after binary transfer)
@@ -171,17 +185,16 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
             vertices[d + 5] = raw[s + 5]!;
             vertices[d + 6] = 1.0;
           }
+          // The IPC buffer is origin-relative; shift here (small, post binary IPC).
+          applyOrigin(vertices, origin);
         } else {
-          // Web: worker returns 7-float format directly (zero main-thread conversion)
-          vertices = await workerRenderBuffer7(handle, colorMode, MAX_RENDER_POINTS);
+          // Web: the worker returns 7-float format already origin-shifted, so the
+          // main thread never loops over the (up to millions of) points.
+          vertices = await workerRenderBuffer7(handle, colorMode, MAX_RENDER_POINTS, origin);
           if (cancelled) return;
         }
 
-        // The render buffer is origin-relative; shift it back into absolute
-        // world coordinates so the cloud overlaps the OpenDRIVE road geometry.
-        applyOrigin(vertices, usePointCloudStore.getState().summary?.origin);
-
-        renderer.uploadPointCloudVertices(vertices);
+        renderer.uploadPointCloudVerticesForMode(colorMode, vertices);
         prevHandleRef.current = handle;
         prevColorModeRef.current = colorMode;
       } catch (err) {
@@ -190,5 +203,5 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     })();
 
     return () => { cancelled = true; };
-  }, [handle, colorMode, isSplat, splatBuffer, splatShDegree, splatSampleMode, splatQuality, status, rendererRef]);
+  }, [handle, colorMode, isSplat, splatBuffer, splatOriginShifted, splatShDegree, splatSampleMode, splatQuality, status, rendererRef]);
 }
