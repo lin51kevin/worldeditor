@@ -24,6 +24,7 @@ export {
   playTraj,
   parseTraj,
   buildTrajBoxes,
+  buildEgoBox,
   buildTrajSegments,
   trajFrames,
   trajBounds,
@@ -32,5 +33,5 @@ export {
   PATH_HALF_WIDTH,
   PATH_Z,
 } from './trajViewer';
-export type { TrajViewerTarget, TrajData } from './trajViewer';
+export type { TrajViewerTarget, TrajData, BuildTrajBoxesOptions } from './trajViewer';
 export { parsePlyFirstVertex } from './plyOrigin';

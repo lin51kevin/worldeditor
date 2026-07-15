@@ -98,7 +98,8 @@ interface GltfNode {
 interface GltfJson {
   accessors?: GltfAccessor[];
   bufferViews?: GltfBufferView[];
-  meshes?: Array<{ primitives: Array<{ attributes: Record<string, number>; indices?: number; mode?: number }> }>;
+  meshes?: Array<{ primitives: Array<{ attributes: Record<string, number>; indices?: number; mode?: number; material?: number }> }>;
+  materials?: Array<{ pbrMetallicRoughness?: { baseColorFactor?: number[] } }>;
   nodes?: GltfNode[];
   scenes?: Array<{ nodes?: number[] }>;
   scene?: number;
@@ -244,28 +245,47 @@ function nodeLocalMatrix(node: GltfNode): number[] {
 }
 
 /** Find the world matrix of the (first) node referencing the given mesh index. */
-function findMeshWorldMatrix(json: GltfJson, meshIndex: number): number[] | null {
+/** A mesh referenced by a scene node, paired with its composed world matrix. */
+interface MeshInstance {
+  meshIndex: number;
+  world: number[] | null;
+}
+
+/**
+ * Collect every (mesh, world-matrix) pair reachable from the scene graph.
+ *
+ * A single glTF mesh may be instanced by several nodes; each instance is
+ * emitted with its composed world transform so all geometry ends up in the
+ * correct place. Falls back to mesh 0 (identity) when no node references a mesh.
+ */
+function collectMeshInstances(json: GltfJson): MeshInstance[] {
   const nodes = json.nodes;
-  if (!nodes) return null;
+  const result: MeshInstance[] = [];
+  if (!nodes) {
+    return json.meshes && json.meshes.length > 0 ? [{ meshIndex: 0, world: null }] : result;
+  }
   const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-  let found: number[] | null = null;
   const walk = (nodeIndex: number, parent: number[]): void => {
-    if (found) return;
     const node = nodes[nodeIndex];
     if (!node) return;
     const world = mat4Multiply(parent, nodeLocalMatrix(node));
-    if (node.mesh === meshIndex) {
-      found = world;
-      return;
-    }
+    if (node.mesh !== undefined) result.push({ meshIndex: node.mesh, world });
     for (const child of node.children ?? []) walk(child, world);
   };
   const sceneNodes = json.scenes?.[json.scene ?? 0]?.nodes ?? nodes.map((_, i) => i);
-  for (const root of sceneNodes) {
-    walk(root, identity);
-    if (found) break;
+  for (const root of sceneNodes) walk(root, identity);
+  if (result.length === 0 && json.meshes && json.meshes.length > 0) {
+    result.push({ meshIndex: 0, world: null });
   }
-  return found;
+  return result;
+}
+
+/** Material base color (`baseColorFactor`) as RGBA in 0..1, or null when absent. */
+function materialBaseColor(json: GltfJson, materialIndex: number | undefined): [number, number, number, number] | null {
+  if (materialIndex === undefined) return null;
+  const factor = json.materials?.[materialIndex]?.pbrMetallicRoughness?.baseColorFactor;
+  if (!factor || factor.length < 3) return null;
+  return [factor[0] ?? 0.75, factor[1] ?? 0.75, factor[2] ?? 0.75, factor[3] ?? 1];
 }
 
 /** Transform a point by a column-major 4×4 matrix (w assumed 1, no perspective divide). */
@@ -290,76 +310,97 @@ function isNonIdentity(m: number[]): boolean {
  * Parse a GLB blob into an interleaved 7-float vertex buffer + 32-bit index
  * buffer suitable for the renderer's basic triangle pipeline.
  *
- * @throws if the blob is not a valid GLB or lacks a POSITION attribute.
+ * All triangle primitives of every mesh reachable from the scene graph are
+ * merged into a single buffer (a multi-material model such as a car GLB has one
+ * primitive per material). Per-vertex color comes from `COLOR_0` when present,
+ * otherwise from the primitive material's `baseColorFactor`, otherwise a light
+ * grey default. Each mesh instance is baked by its composed node world matrix.
+ *
+ * @throws if the blob is not a valid GLB or contains no usable triangle geometry.
  */
 export function parseGlbMesh(bytes: Uint8Array): GlbMeshResult {
   const { json, bin } = splitGlb(bytes);
-  const primitive = json.meshes?.[0]?.primitives?.[0];
-  if (!primitive) throw new Error('GLB has no mesh primitive');
+  const meshes = json.meshes;
+  if (!meshes || meshes.length === 0) throw new Error('GLB has no meshes');
 
-  const positionAccessor = primitive.attributes['POSITION'];
-  if (positionAccessor === undefined) throw new Error('GLB primitive has no POSITION');
-  const { data: positions } = readAccessorFloats(json, bin, positionAccessor);
-  const vertexCount = positions.length / 3;
+  const instances = collectMeshInstances(json);
 
-  // Optional per-vertex color (COLOR_0). Defaults to light grey when absent.
-  let colors: Float32Array | null = null;
-  let colorComponents = 0;
-  const colorAccessor = primitive.attributes['COLOR_0'];
-  if (colorAccessor !== undefined) {
-    const read = readAccessorFloats(json, bin, colorAccessor);
-    colors = read.data;
-    colorComponents = read.components;
-  }
-
-  // World transform of the node holding this mesh (identity for most exports).
-  const world = findMeshWorldMatrix(json, 0);
-  const applyTransform = world !== null && isNonIdentity(world);
-
-  const vertices = new Float32Array(vertexCount * 7);
+  const outVertices: number[] = [];
+  const outIndices: number[] = [];
+  let vertexBase = 0;
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-  for (let i = 0; i < vertexCount; i++) {
-    let px = positions[i * 3] ?? 0;
-    let py = positions[i * 3 + 1] ?? 0;
-    let pz = positions[i * 3 + 2] ?? 0;
-    if (applyTransform && world) [px, py, pz] = transformPoint(world, px, py, pz);
 
-    const o = i * 7;
-    vertices[o] = px;
-    vertices[o + 1] = py;
-    vertices[o + 2] = pz;
-    if (colors) {
-      const c = i * colorComponents;
-      vertices[o + 3] = colors[c] ?? 0.75;
-      vertices[o + 4] = colors[c + 1] ?? 0.75;
-      vertices[o + 5] = colors[c + 2] ?? 0.75;
-      vertices[o + 6] = colorComponents >= 4 ? (colors[c + 3] ?? 1) : 1;
-    } else {
-      vertices[o + 3] = 0.75;
-      vertices[o + 4] = 0.75;
-      vertices[o + 5] = 0.75;
-      vertices[o + 6] = 1;
+  for (const instance of instances) {
+    const mesh = meshes[instance.meshIndex];
+    if (!mesh) continue;
+    const world = instance.world;
+    const applyTransform = world !== null && isNonIdentity(world);
+
+    for (const primitive of mesh.primitives) {
+      // Only triangle lists are supported (mode 4, or unspecified = triangles).
+      if (primitive.mode !== undefined && primitive.mode !== 4) continue;
+      const positionAccessor = primitive.attributes['POSITION'];
+      if (positionAccessor === undefined) continue;
+
+      const { data: positions } = readAccessorFloats(json, bin, positionAccessor);
+      const vertexCount = positions.length / 3;
+      if (vertexCount === 0) continue;
+
+      // Color source priority: COLOR_0 → material baseColorFactor → grey.
+      let colors: Float32Array | null = null;
+      let colorComponents = 0;
+      const colorAccessor = primitive.attributes['COLOR_0'];
+      if (colorAccessor !== undefined) {
+        const read = readAccessorFloats(json, bin, colorAccessor);
+        colors = read.data;
+        colorComponents = read.components;
+      }
+      const matColor = colors ? null : materialBaseColor(json, primitive.material);
+      const [dr, dg, db, da] = matColor ?? [0.75, 0.75, 0.75, 1];
+
+      for (let i = 0; i < vertexCount; i++) {
+        let px = positions[i * 3] ?? 0;
+        let py = positions[i * 3 + 1] ?? 0;
+        let pz = positions[i * 3 + 2] ?? 0;
+        if (applyTransform && world) [px, py, pz] = transformPoint(world, px, py, pz);
+
+        if (colors) {
+          const c = i * colorComponents;
+          outVertices.push(
+            px, py, pz,
+            colors[c] ?? 0.75,
+            colors[c + 1] ?? 0.75,
+            colors[c + 2] ?? 0.75,
+            colorComponents >= 4 ? (colors[c + 3] ?? 1) : 1,
+          );
+        } else {
+          outVertices.push(px, py, pz, dr, dg, db, da);
+        }
+
+        if (px < minX) minX = px; if (px > maxX) maxX = px;
+        if (py < minY) minY = py; if (py > maxY) maxY = py;
+        if (pz < minZ) minZ = pz; if (pz > maxZ) maxZ = pz;
+      }
+
+      // Indices (widened to u32, offset into the merged buffer). Non-indexed
+      // primitives get a trivial 0..N range.
+      if (primitive.indices !== undefined) {
+        const primIndices = readIndices(json, bin, primitive.indices);
+        for (let i = 0; i < primIndices.length; i++) outIndices.push(primIndices[i]! + vertexBase);
+      } else {
+        for (let i = 0; i < vertexCount; i++) outIndices.push(i + vertexBase);
+      }
+      vertexBase += vertexCount;
     }
-
-    if (px < minX) minX = px; if (px > maxX) maxX = px;
-    if (py < minY) minY = py; if (py > maxY) maxY = py;
-    if (pz < minZ) minZ = pz; if (pz > maxZ) maxZ = pz;
   }
 
-  // Indices (widened to u32). Non-indexed primitives get a trivial 0..N range.
-  let indices: Uint32Array;
-  if (primitive.indices !== undefined) {
-    indices = readIndices(json, bin, primitive.indices);
-  } else {
-    indices = new Uint32Array(vertexCount);
-    for (let i = 0; i < vertexCount; i++) indices[i] = i;
-  }
+  if (vertexBase === 0) throw new Error('GLB has no usable triangle geometry');
 
   return {
-    vertices,
-    indices,
-    vertexCount,
+    vertices: new Float32Array(outVertices),
+    indices: new Uint32Array(outIndices),
+    vertexCount: vertexBase,
     min: [minX, minY, minZ],
     max: [maxX, maxY, maxZ],
   };

@@ -36,6 +36,7 @@ export interface RendererFrameInternals {
   pointCloudPipeline: GPURenderPipeline | null;
   actorPointCloudMeshes: RenderableMesh[];
   groundMesh: { vertexBuffer: GPUBuffer; indexBuffer: GPUBuffer; indexCount: number } | null;
+  egoMesh: { vertexBuffer: GPUBuffer; indexBuffer: GPUBuffer; indexCount: number } | null;
   splatRenderer: SplatRenderer | null;
   basicBindGroup: GPUBindGroup;
   meshes: RenderableMesh[];
@@ -181,6 +182,17 @@ export function renderFrame(r: RendererFrameInternals): void {
     pass.setVertexBuffer(0, r.groundMesh.vertexBuffer);
     pass.setIndexBuffer(r.groundMesh.indexBuffer, 'uint32');
     pass.drawIndexed(r.groundMesh.indexCount);
+  }
+
+  // Draw the ego vehicle model (transformed `ego.glb`) as an opaque, indexed,
+  // vertex-colored solid so the ego actor is clearly distinct from the
+  // translucent opponent bounding boxes drawn later.
+  if (r.egoMesh) {
+    pass.setPipeline(r.basicPipeline);
+    pass.setBindGroup(0, r.basicBindGroup);
+    pass.setVertexBuffer(0, r.egoMesh.vertexBuffer);
+    pass.setIndexBuffer(r.egoMesh.indexBuffer, 'uint32');
+    pass.drawIndexed(r.egoMesh.indexCount);
   }
 
   // Draw road meshes (render first - on bottom)

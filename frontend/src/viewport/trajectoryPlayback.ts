@@ -12,15 +12,15 @@
 
 import {
   buildBoxVertices,
-  buildPathVertices,
+  buildEgoBox,
   buildTrajBoxes,
-  buildTrajSegments,
   parseTraj,
   trajBounds,
-  PATH_HALF_WIDTH,
 } from '../plugins/npc-actors';
 import type { TrajData } from '../plugins/npc-actors';
 import { getViewportRenderer } from './viewportRef';
+import { loadEgoModelTemplate, buildEgoMeshVertices } from './egoModel';
+import type { EgoModelTemplate } from './egoModel';
 import { useTrajectoryStore } from '../stores/trajectoryStore';
 import { showAlert } from '../utils/dialog';
 import i18n from '../i18n';
@@ -35,23 +35,37 @@ let rafId = 0;
 let lastPerf = 0;
 let unsub: (() => void) | null = null;
 
+// Loaded ego car model (`ego.glb`). Null until the async load resolves (or if
+// it fails, in which case the ego falls back to a bounding box).
+let egoTemplate: EgoModelTemplate | null = null;
+
 /** Rebuild + upload the actor boxes for time `t` and render one frame. */
 function renderActorsAt(t: number): void {
   const { data } = useTrajectoryStore.getState();
   const renderer = getViewportRenderer();
   if (!renderer || !data) return;
-  renderer.uploadActorVertices(buildBoxVertices(buildTrajBoxes(data, t), sceneOrigin));
-  renderer.render();
-}
 
-/** Upload the (static) trajectory ribbon geometry for the loaded dataset. */
-function uploadPath(): void {
-  const { data } = useTrajectoryStore.getState();
-  const renderer = getViewportRenderer();
-  if (!renderer || !data) return;
-  renderer.uploadPathVertices(
-    buildPathVertices(buildTrajSegments(data), PATH_HALF_WIDTH, sceneOrigin),
+  // When the ego model is loaded, draw the ego as a solid model and exclude it
+  // from the (translucent) box set so it is not drawn twice.
+  renderer.uploadActorVertices(
+    buildBoxVertices(buildTrajBoxes(data, t, { includeEgo: egoTemplate === null }), sceneOrigin),
   );
+
+  if (egoTemplate) {
+    const egoBox = buildEgoBox(data, t);
+    if (egoBox) {
+      renderer.uploadEgoMeshIndexed(
+        buildEgoMeshVertices(egoTemplate, egoBox, sceneOrigin),
+        egoTemplate.indices,
+      );
+    } else {
+      renderer.clearEgoMesh();
+    }
+  } else {
+    renderer.clearEgoMesh();
+  }
+
+  renderer.render();
 }
 
 /** Clear both actor and ribbon buffers from the renderer. */
@@ -60,6 +74,7 @@ function clearRenderer(): void {
   if (!renderer) return;
   renderer.uploadActorVertices(new Float32Array(0));
   renderer.uploadPathVertices(new Float32Array(0));
+  renderer.clearEgoMesh();
   renderer.render();
 }
 
@@ -99,7 +114,9 @@ function ensureSubscribed(): void {
         clearRenderer();
         return;
       }
-      uploadPath();
+      // Trajectory ribbons are intentionally not drawn (ego/opponent paths are
+      // hidden); clear any stale ribbons from a previous dataset.
+      getViewportRenderer()?.uploadPathVertices(new Float32Array(0));
       renderActorsAt(state.currentTime);
     } else if (state.currentTime !== prev.currentTime) {
       renderActorsAt(state.currentTime);
@@ -131,6 +148,17 @@ export function startTrajectory(
 
   const renderer = getViewportRenderer();
   renderer?.setDimension('3d');
+
+  // Kick off the (cached) ego model load. When it resolves, redraw the current
+  // frame so the ego switches from its fallback box to the solid model. A load
+  // failure leaves `egoTemplate` null and the ego stays a bounding box.
+  void loadEgoModelTemplate().then((template) => {
+    if (!template) return;
+    egoTemplate = template;
+    if (useTrajectoryStore.getState().data) {
+      renderActorsAt(useTrajectoryStore.getState().currentTime);
+    }
+  });
 
   // loadData triggers the subscription → uploads ribbons + renders first frame.
   useTrajectoryStore.getState().loadData(data);

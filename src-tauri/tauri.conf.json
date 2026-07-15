@@ -24,7 +24,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": []
+    "resources": {
+      "../frontend/public/assets/ego.glb": "ego.glb"
+    }
   },
   "plugins": {
     "fs": {

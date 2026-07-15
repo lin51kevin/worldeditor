@@ -166,6 +166,12 @@ export class ViewportRenderer {
   // vertex + index buffers.
   private groundMesh: { vertexBuffer: GPUBuffer; indexBuffer: GPUBuffer; indexCount: number } | null = null;
 
+  // Ego vehicle triangle mesh (`ego.glb`): an indexed, vertex-colored model
+  // rebuilt per trajectory frame so the ego actor is drawn as an opaque solid
+  // car instead of a translucent bounding box. Owns its own vertex + index
+  // buffers and is drawn with the opaque basic pipeline.
+  private egoMesh: { vertexBuffer: GPUBuffer; indexBuffer: GPUBuffer; indexCount: number } | null = null;
+
   // 3D Gaussian Splatting renderer for NPC/actor `.ply` splat clouds. Lazily
   // created on first upload so the (heavy) storage pipeline is only built when
   // a splat cloud is actually used.
@@ -832,6 +838,50 @@ export class ViewportRenderer {
     this.markSceneDirty();
   }
 
+  /**
+   * Upload an indexed, vertex-colored ego vehicle mesh (7 floats per vertex:
+   * x,y,z,r,g,b,a + a 32-bit index buffer), e.g. a transformed `ego.glb`.
+   * Rendered as an opaque triangle model with the shared basic pipeline so the
+   * ego actor is visually distinct from the translucent opponent boxes.
+   * Passing empty data clears the current ego mesh.
+   */
+  uploadEgoMeshIndexed(vertexData: Float32Array, indices: Uint32Array): void {
+    // Replace any existing ego mesh buffers.
+    this.egoMesh?.vertexBuffer.destroy();
+    this.egoMesh?.indexBuffer.destroy();
+    this.egoMesh = null;
+
+    if (vertexData.length === 0 || indices.length === 0) {
+      this.markSceneDirty();
+      return;
+    }
+
+    const vertexBuffer = this.device.createBuffer({
+      size: vertexData.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
+
+    // Index buffers must be 4-byte aligned; Uint32 data already satisfies this.
+    const indexBuffer = this.device.createBuffer({
+      size: indices.byteLength,
+      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(indexBuffer, 0, indices.buffer, indices.byteOffset, indices.byteLength);
+
+    this.egoMesh = { vertexBuffer, indexBuffer, indexCount: indices.length };
+    this.markSceneDirty();
+  }
+
+  /** Remove the uploaded ego vehicle mesh. */
+  clearEgoMesh(): void {
+    if (!this.egoMesh) return;
+    this.egoMesh.vertexBuffer.destroy();
+    this.egoMesh.indexBuffer.destroy();
+    this.egoMesh = null;
+    this.markSceneDirty();
+  }
+
   uploadGaussianSplats(splatData: Uint32Array, shDegree: number, sampleMode?: SplatSampleMode, quality?: number): void {
     if (splatData.length === 0) {
       this.splatRenderer?.clear();
@@ -1084,6 +1134,9 @@ export class ViewportRenderer {
     this.groundMesh?.vertexBuffer.destroy();
     this.groundMesh?.indexBuffer.destroy();
     this.groundMesh = null;
+    this.egoMesh?.vertexBuffer.destroy();
+    this.egoMesh?.indexBuffer.destroy();
+    this.egoMesh = null;
     this.splatRenderer?.dispose();
     this.splatRenderer = null;
     this.markerRenderer.dispose();

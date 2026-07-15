@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { parseTraj, buildTrajBoxes, buildTrajSegments, playTraj } from '../trajViewer';
+import { parseTraj, buildTrajBoxes, buildEgoBox, buildTrajSegments, playTraj } from '../trajViewer';
 import type { TrajViewerTarget } from '../trajViewer';
 import { ACTOR_VERTEX_STRIDE } from '../actorTypes';
 
@@ -60,6 +60,40 @@ describe('npc-actors/trajViewer.buildTrajBoxes', () => {
     const boxes = buildTrajBoxes(data, 100);
     const ego = boxes.find((b) => b.id === 'traj:ego')!;
     expect(ego.position[0]).toBeCloseTo(10, 5);
+  });
+
+  it('includes the ego box by default', () => {
+    const data = parseTraj(CSV);
+    const boxes = buildTrajBoxes(data, 0);
+    expect(boxes.some((b) => b.id === 'traj:ego')).toBe(true);
+    expect(boxes.length).toBe(2);
+  });
+
+  it('excludes the ego box when includeEgo is false', () => {
+    const data = parseTraj(CSV);
+    const boxes = buildTrajBoxes(data, 0, { includeEgo: false });
+    expect(boxes.some((b) => b.id === 'traj:ego')).toBe(false);
+    expect(boxes.every((b) => b.id === 'traj:npc1')).toBe(true);
+    expect(boxes.length).toBe(1);
+  });
+});
+
+describe('npc-actors/trajViewer.buildEgoBox', () => {
+  it('returns the ego box with the interpolated pose and size', () => {
+    const data = parseTraj(CSV);
+    const ego = buildEgoBox(data, 0.5)!;
+    expect(ego).not.toBeNull();
+    expect(ego.id).toBe('traj:ego');
+    // Halfway between x=0 and x=10 at t=0.5s.
+    expect(ego.position[0]).toBeCloseTo(5, 5);
+    // Yaw 45° (halfway 0→90) in radians.
+    expect(ego.heading).toBeCloseTo((45 * Math.PI) / 180, 5);
+    expect(ego.size).toEqual([4.5, 2, 1.6]);
+  });
+
+  it('returns null when the trajectory has no ego entity', () => {
+    const data = parseTraj('ID,Time,PositionX,PositionY,PositionZ,Yaw,Ego\nnpc,0,0,0,0,0,N');
+    expect(buildEgoBox(data, 0)).toBeNull();
   });
 });
 

@@ -172,25 +172,59 @@ export function interpPose(rows: TrajRow[], t: number): TrajRow {
   return last;
 }
 
+/** Build the oriented bounding box for a single entity at absolute time `t`. */
+function entityBox(entity: TrajEntity, t: number): CaseActorBox | null {
+  if (entity.rows.length === 0) return null;
+  const pose = interpPose(entity.rows, t);
+  const l = entity.length || 4.5;
+  const w = entity.width || 2;
+  const h = entity.height || 1.6;
+  return {
+    id: `traj:${entity.id}`,
+    kind: 'element',
+    position: [pose.x, pose.y, pose.z + h / 2],
+    heading: pose.yaw * DEG_TO_RAD,
+    size: [l, w, h],
+    color: entity.ego ? EGO_BODY_COLOR : OPPONENT_BODY_COLOR,
+  };
+}
+
+/** Options controlling which actors {@link buildTrajBoxes} emits. */
+export interface BuildTrajBoxesOptions {
+  /**
+   * Whether the ego entity is included in the box set. Defaults to `true`.
+   * Set to `false` when the ego is rendered as a solid model (`ego.glb`)
+   * instead, so it is not drawn twice.
+   */
+  includeEgo?: boolean;
+}
+
 /** Build the actor boxes for a trajectory sampled at absolute time `t`. */
-export function buildTrajBoxes(data: TrajData, t: number): CaseActorBox[] {
+export function buildTrajBoxes(
+  data: TrajData,
+  t: number,
+  options: BuildTrajBoxesOptions = {},
+): CaseActorBox[] {
+  const includeEgo = options.includeEgo ?? true;
   const boxes: CaseActorBox[] = [];
   for (const entity of data.entities) {
-    if (entity.rows.length === 0) continue;
-    const pose = interpPose(entity.rows, t);
-    const l = entity.length || 4.5;
-    const w = entity.width || 2;
-    const h = entity.height || 1.6;
-    boxes.push({
-      id: `traj:${entity.id}`,
-      kind: 'element',
-      position: [pose.x, pose.y, pose.z + h / 2],
-      heading: pose.yaw * DEG_TO_RAD,
-      size: [l, w, h],
-      color: entity.ego ? EGO_BODY_COLOR : OPPONENT_BODY_COLOR,
-    });
+    if (!includeEgo && entity.ego) continue;
+    const box = entityBox(entity, t);
+    if (box) boxes.push(box);
   }
   return boxes;
+}
+
+/**
+ * Build the oriented bounding box for the (first) ego entity at time `t`.
+ *
+ * Returns `null` when the trajectory has no ego entity (or the ego has no
+ * rows). Used to drive the solid ego-model rendering, so it shares the exact
+ * pose/heading/size conventions of the opponent boxes.
+ */
+export function buildEgoBox(data: TrajData, t: number): CaseActorBox | null {
+  const ego = data.entities.find((entity) => entity.ego);
+  return ego ? entityBox(ego, t) : null;
 }
 
 /** Build flat path segment pairs (14 floats/segment) for every entity polyline. */
@@ -339,13 +373,13 @@ export function openTrajFile(
       try {
         const data = parseTraj(String(reader.result ?? ''));
         if (data.entities.length === 0) {
-          // eslint-disable-next-line no-console
+           
           console.warn('[npc-actors] .traj file contained no entities');
           return;
         }
         playTraj(target, data, sceneOrigin);
       } catch (err) {
-        // eslint-disable-next-line no-console
+         
         console.error('[npc-actors] failed to parse .traj file', err);
       }
     };
