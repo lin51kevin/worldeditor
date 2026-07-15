@@ -9,6 +9,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use we_core::pointcloud::{
@@ -97,7 +98,11 @@ pub fn point_cloud_summary(handle: u32) -> Result<JsValue, JsError> {
             "has_rgb": entry.cloud.has_rgb(),
             "has_heightmap": entry.heightmap.is_some(),
         });
-        serde_wasm_bindgen::to_value(&summary).map_err(|e| JsError::new(&e.to_string()))
+        // Serialize maps as plain JS objects (not ES `Map`s) so callers can read
+        // fields via property access (`summary.count`) rather than `.get()`.
+        summary
+            .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+            .map_err(|e| JsError::new(&e.to_string()))
     })
 }
 

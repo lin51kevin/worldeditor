@@ -17,8 +17,13 @@ const COLOR_MODE_KEYS: Array<{ value: PointCloudColorMode; key: string }> = [
 
 const WEB_ACCEPT = '.pcd,.ply,.xyz,.txt,.asc';
 
-function fmt(n: number): string {
-  return n.toLocaleString();
+function fmt(n: number | undefined | null): string {
+  return typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString() : '—';
+}
+
+/** Format a numeric bound to 1 decimal, tolerating missing values. */
+function fmtBound(n: number | undefined | null): string {
+  return typeof n === 'number' && Number.isFinite(n) ? n.toFixed(1) : '—';
 }
 
 export default function PointCloudPanel() {
@@ -89,11 +94,11 @@ export default function PointCloudPanel() {
           <Row label={t('pointcloud.hasIntensity')} value={summary.has_intensity ? t('pointcloud.yes') : t('pointcloud.no')} />
           <Row
             label={t('pointcloud.boundsX')}
-            value={`${summary.min[0].toFixed(1)} … ${summary.max[0].toFixed(1)}`}
+            value={`${fmtBound(summary.min?.[0])} … ${fmtBound(summary.max?.[0])}`}
           />
           <Row
             label={t('pointcloud.boundsY')}
-            value={`${summary.min[1].toFixed(1)} … ${summary.max[1].toFixed(1)}`}
+            value={`${fmtBound(summary.min?.[1])} … ${fmtBound(summary.max?.[1])}`}
           />
         </div>
       )}
