@@ -21,6 +21,8 @@
     "test:visual": "playwright test e2e/visual-regression.spec.ts e2e/theme-visual.spec.ts",
     "test:visual:update": "playwright test e2e/visual-regression.spec.ts e2e/theme-visual.spec.ts --update-snapshots",
     "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -56,6 +58,7 @@
     "eslint": "^10.4.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^26.0.0",
+    "prettier": "^3.4.2",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.59.4",
     "vite": "^6.3.0",

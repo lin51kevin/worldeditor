@@ -616,8 +616,8 @@ describe('MenuBar', () => {
       render(<MenuBar />);
 
       // Windows delivers Ctrl+Alt as AltGr; `event.key` may be a composed char
-      // while `event.code` stays 'KeyC'. The picker must still open.
-      dispatchWindowKey({ key: 'ç', code: 'KeyC', ctrlKey: true, altKey: true });
+      // while `event.code` stays the physical key ('KeyG'). The picker must still open.
+      dispatchWindowKey({ key: 'ç', code: 'KeyG', ctrlKey: true, altKey: true });
 
       expect(clicked.length).toBe(1);
       expect(clicked[0]!.accept).toContain('.ply');

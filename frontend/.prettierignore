@@ -1,0 +1,19 @@
+# Build output
+dist
+dist-rnk
+coverage
+playwright-report
+test-results
+
+# Dependencies
+node_modules
+
+# Generated / vendored
+wasm
+public
+tmp
+*.min.js
+
+# Lockfiles
+yarn.lock
+package-lock.json

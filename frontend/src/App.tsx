@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 // Eagerly pre-warm WebGPU adapter+device so the viewport mounts faster.
 import './viewport/gpuDeviceCache';
@@ -10,20 +10,32 @@ import { Viewport } from './components/Viewport';
 import { PropertyPanel } from './components/panels/PropertyPanel';
 import { TemplatePanel } from './plugins/editing/templates/TemplatePanel';
 import { StatusBar } from './components/shell/StatusBar';
-import { CommandPalette } from './components/CommandPalette';
 import { usePluginContribStore } from './stores/pluginContribStore';
 import { FloatingPanel } from './components/layout/FloatingPanel';
-import { MeasurementPanel } from './components/panels/MeasurementPanel';
 import { TrajectoryPlaybackBar } from './components/panels/TrajectoryPlaybackBar';
 // ValidationPanel is now rendered via PluginPanels
 import { SelectionDetailsPanel } from './components/panels/SelectionDetailsPanel';
-import { PluginManager } from './components/dialogs/PluginManager';
 import { PluginPanels } from './components/layout/PluginPanel';
-import { SettingsDialog } from './components/dialogs/SettingsDialog';
 import { DialogHost } from './components/common/Dialog';
 import { TextContextMenu } from './components/common/TextContextMenu';
 import { WelcomePage } from './components/shell/WelcomePage';
 import { ShortcutHelpOverlay } from './components/dialogs/ShortcutHelpOverlay';
+
+// ── Code-split non-critical UI ────────────────────────────────────────────
+// Heavy dialogs / panels that are opened rarely are lazy-loaded so they stay
+// out of the initial bundle and only download when first rendered.
+const CommandPalette = lazy(() =>
+  import('./components/CommandPalette').then((m) => ({ default: m.CommandPalette })),
+);
+const MeasurementPanel = lazy(() =>
+  import('./components/panels/MeasurementPanel').then((m) => ({ default: m.MeasurementPanel })),
+);
+const PluginManager = lazy(() =>
+  import('./components/dialogs/PluginManager').then((m) => ({ default: m.PluginManager })),
+);
+const SettingsDialog = lazy(() =>
+  import('./components/dialogs/SettingsDialog').then((m) => ({ default: m.SettingsDialog })),
+);
 import { useProjectStore } from './stores/projectStore';
 import { useThemeStore } from './stores/themeStore';
 import { isDrawMode, useViewportStore } from './stores/viewportStore';
@@ -406,7 +418,9 @@ export function App() {
 
         {/* Floating status chips */}
         <StatusBar />
-        <CommandPalette />
+        <Suspense fallback={null}>
+          <CommandPalette />
+        </Suspense>
         <TrajectoryPlaybackBar />
         {measureMode !== 'none' && (
           <FloatingPanel
@@ -419,7 +433,9 @@ export function App() {
             resizeEdges={['top', 'right', 'bottom', 'left']}
             storageKey="we-panel-measurement"
           >
-            <MeasurementPanel />
+            <Suspense fallback={null}>
+              <MeasurementPanel />
+            </Suspense>
           </FloatingPanel>
         )}
 
@@ -429,10 +445,18 @@ export function App() {
 
 
         {/* Plugin Manager dialog */}
-        <PluginManager open={showPluginManager} onClose={() => setShowPluginManager(false)} />
+        <Suspense fallback={null}>
+          {showPluginManager && (
+            <PluginManager open={showPluginManager} onClose={() => setShowPluginManager(false)} />
+          )}
+        </Suspense>
 
         {/* Settings dialog */}
-        <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
+        <Suspense fallback={null}>
+          {showSettings && (
+            <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
+          )}
+        </Suspense>
 
         {/* Plugin-contributed floating panels */}
         <PluginPanels />
