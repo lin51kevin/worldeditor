@@ -144,6 +144,8 @@
     "toggleInspector": "Toggle Inspector",
     "toggleLeftPanel": "Toggle Left Panel",
     "toggleOutputPanel": "Toggle Output Panel",
+    "toggleToolbar": "Toggle Toolbar",
+    "toggleToolbarDesc": "Show or hide the floating road-drawing toolbar",
     "zoomToFit": "Zoom to Fit",
     "selectionModeTitle": "Selection Mode",
     "viewModeTitle": "View Mode",
@@ -944,6 +946,7 @@
       "inspector": "Toggle inspector panel",
       "leftPanel": "Toggle layer panel",
       "outputPanel": "Toggle output panel",
+      "toggleToolbar": "Toggle drawing toolbar",
       "validationPanel": "Toggle validation panel",
       "help": "Show this shortcut help"
     }

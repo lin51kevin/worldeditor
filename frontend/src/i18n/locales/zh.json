@@ -144,6 +144,8 @@
     "toggleInspector": "切换检查器",
     "toggleLeftPanel": "切换左面板",
     "toggleOutputPanel": "切换输出面板",
+    "toggleToolbar": "切换工具栏",
+    "toggleToolbarDesc": "显示或隐藏浮动的道路绘制工具栏",
     "zoomToFit": "适应视图",
     "selectionModeTitle": "选择模式",
     "viewModeTitle": "查看模式",
@@ -944,6 +946,7 @@
       "inspector": "切换检查器面板",
       "leftPanel": "切换图层面板",
       "outputPanel": "切换输出面板",
+      "toggleToolbar": "切换绘制工具栏",
       "validationPanel": "切换校验面板",
       "help": "显示快捷键帮助"
     }

@@ -59,6 +59,8 @@ export interface PanelLayout {
   rightCollapsed: boolean;
   outputCollapsed: boolean;
   templatePanelCollapsed: boolean;
+  /** Whether the floating road-drawing edit toolbar is hidden. */
+  toolbarCollapsed: boolean;
 }
 
 export const DEFAULT_LAYOUT: PanelLayout = {
@@ -69,6 +71,7 @@ export const DEFAULT_LAYOUT: PanelLayout = {
   rightCollapsed: false,
   outputCollapsed: true,
   templatePanelCollapsed: false,
+  toolbarCollapsed: false,
 };
 
 export type ColorMode = 'single' | 'byRoad' | 'byLaneType';

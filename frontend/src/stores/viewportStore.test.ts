@@ -35,6 +35,7 @@ describe('viewportStore', () => {
         rightCollapsed: false,
         outputCollapsed: true,
         templatePanelCollapsed: false,
+        toolbarCollapsed: false,
       },
       snapEnabled: false,
       snapMode: 'Grid',
@@ -226,6 +227,20 @@ describe('viewportStore', () => {
       useViewportStore.getState().toggleOutputPanel();
     });
     expect(useViewportStore.getState().layout.outputCollapsed).toBe(false);
+  });
+
+  it('toggleToolbar flips toolbarCollapsed', () => {
+    expect(useViewportStore.getState().layout.toolbarCollapsed).toBe(false);
+
+    act(() => {
+      useViewportStore.getState().toggleToolbar();
+    });
+    expect(useViewportStore.getState().layout.toolbarCollapsed).toBe(true);
+
+    act(() => {
+      useViewportStore.getState().toggleToolbar();
+    });
+    expect(useViewportStore.getState().layout.toolbarCollapsed).toBe(false);
   });
 
   it('toggles lane section visibility', () => {

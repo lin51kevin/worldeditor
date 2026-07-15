@@ -289,6 +289,45 @@ describe('useKeyboardShortcuts — Ctrl+V/C/A pass through in editable targets',
     document.body.removeChild(input);
   });
 
+  it('Ctrl+T toggles the floating toolbar (not the left panel)', () => {
+    const toggleToolbar = vi.fn();
+    const cfg = makeConfig({ toggleToolbar });
+    renderHook(() => useKeyboardShortcuts(cfg));
+
+    press('t', { ctrlKey: true, code: 'KeyT' });
+
+    expect(toggleToolbar).toHaveBeenCalledTimes(1);
+    expect(cfg.toggleLeftPanel).not.toHaveBeenCalled();
+  });
+
+  it('Ctrl+Alt+T does NOT toggle the toolbar (reserved for import trajectory)', () => {
+    const toggleToolbar = vi.fn();
+    const cfg = makeConfig({ toggleToolbar });
+    renderHook(() => useKeyboardShortcuts(cfg));
+
+    press('t', { ctrlKey: true, altKey: true, code: 'KeyT' });
+
+    expect(toggleToolbar).not.toHaveBeenCalled();
+  });
+
+  it('Ctrl+T toggles the toolbar even when focused on an input', () => {
+    const toggleToolbar = vi.fn();
+    const cfg = makeConfig({ toggleToolbar });
+    renderHook(() => useKeyboardShortcuts(cfg));
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true, cancelable: true, key: 't', code: 'KeyT', ctrlKey: true,
+    });
+    act(() => { input.dispatchEvent(event); });
+
+    expect(toggleToolbar).toHaveBeenCalledTimes(1);
+    expect(cfg.toggleLeftPanel).not.toHaveBeenCalled();
+    document.body.removeChild(input);
+  });
+
   it('Ctrl+J still toggles output panel when focused on an input', () => {
     const input = document.createElement('input');
     document.body.appendChild(input);

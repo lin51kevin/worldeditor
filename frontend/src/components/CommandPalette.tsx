@@ -24,7 +24,7 @@ export function CommandPalette() {
   const { t } = useTranslation();
 
   const commands = useMemo<Command[]>(() => {
-    const { toggleGrid, toggleAxis, setEditMode, clearSplineKnots, toggleLeftPanel, toggleRightPanel, toggleOutputPanel, toggleSnap, setMeasureMode, setDimension } =
+    const { toggleGrid, toggleAxis, setEditMode, clearSplineKnots, toggleLeftPanel, toggleRightPanel, toggleOutputPanel, toggleToolbar, toggleSnap, setMeasureMode, setDimension } =
       useViewportStore.getState();
     const { toggleTheme } = useThemeStore.getState();
 
@@ -35,6 +35,7 @@ export function CommandPalette() {
       { id: 'toggle-left', label: t('commandPalette.toggleLeft'), shortcut: 'Ctrl+B', category: t('commandPalette.categoryView'), description: t('commandPalette.descToggleLeft'), action: toggleLeftPanel },
       { id: 'toggle-right', label: t('commandPalette.toggleRight'), shortcut: 'I', category: t('commandPalette.categoryView'), description: t('commandPalette.descToggleRight'), action: toggleRightPanel },
       { id: 'toggle-output', label: t('commandPalette.toggleOutput'), shortcut: 'Ctrl+J', category: t('commandPalette.categoryView'), description: t('commandPalette.descToggleOutput'), action: toggleOutputPanel },
+      { id: 'toggle-toolbar', label: t('toolbar.toggleToolbar'), shortcut: 'Ctrl+T', category: t('commandPalette.categoryView'), description: t('toolbar.toggleToolbarDesc'), action: toggleToolbar },
       { id: 'toggle-theme', label: t('commandPalette.toggleTheme'), category: t('commandPalette.categoryView'), description: t('commandPalette.descToggleTheme'), action: toggleTheme },
       { id: 'view-3d', label: t('commandPalette.view3D'), category: t('commandPalette.categoryView'), description: t('commandPalette.descView3D'), action: () => { setDimension('3d'); emitViewportEvent({ type: 'set-dimension', dimension: '3d' }); } },
       { id: 'view-2d', label: t('commandPalette.view2D'), category: t('commandPalette.categoryView'), description: t('commandPalette.descView2D'), action: () => { setDimension('2d'); emitViewportEvent({ type: 'set-dimension', dimension: '2d' }); } },

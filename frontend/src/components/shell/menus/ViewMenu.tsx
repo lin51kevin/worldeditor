@@ -110,6 +110,7 @@ export function ViewMenu({
         { separator: true, label: '' },
         {
           label: t('menu.showLayerPanel'),
+          shortcut: 'Ctrl+B',
           action: () => {
             void onToggleLeftPanel();
           },
@@ -117,6 +118,7 @@ export function ViewMenu({
         },
         {
           label: t('menu.showPropertyPanel'),
+          shortcut: 'I',
           action: () => {
             void onToggleRightPanel();
           },

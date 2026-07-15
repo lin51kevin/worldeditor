@@ -66,6 +66,7 @@ export function App() {
     toggleRightPanel,
     toggleOutputPanel,
     toggleTemplatePanel,
+    toggleToolbar,
     setEditMode,
     clearSplineKnots,
     measureMode,
@@ -177,6 +178,7 @@ export function App() {
     toggleLeftPanel,
     toggleRightPanel,
     toggleOutputPanel,
+    toggleToolbar,
     toggleValidationPanel: () => {
       const store = usePluginContribStore.getState();
       const vis = store.panelTabVisibility['core:validation'] !== false;
@@ -361,7 +363,7 @@ export function App() {
           onOpenSettings={() => setShowSettings(true)}
           onOpenWelcome={() => setIsEditorOpen(false)}
         />
-        <Toolbar />
+        {!layout.toolbarCollapsed && <Toolbar />}
 
         {/* Floating left panel */}
         {!layout.leftCollapsed && (

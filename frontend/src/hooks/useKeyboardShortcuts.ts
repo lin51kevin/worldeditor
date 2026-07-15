@@ -34,6 +34,8 @@ export interface ShortcutsConfig {
   toggleRightPanel: () => void;
   toggleOutputPanel: () => void;
   toggleValidationPanel?: () => void;
+  /** Toggle the floating road-drawing edit toolbar (Ctrl+Shift+B). Optional. */
+  toggleToolbar?: () => void;
   onShowShortcutHelp: (show: boolean) => void;
   /** Called when a shortcut should change the active edit/draw mode. */
   onSetEditMode: (mode: ActiveMode) => void;
@@ -53,6 +55,7 @@ export function useKeyboardShortcuts({
   toggleRightPanel,
   toggleOutputPanel,
   toggleValidationPanel,
+  toggleToolbar,
   onShowShortcutHelp,
   onSetEditMode,
   onEscape,
@@ -72,6 +75,12 @@ export function useKeyboardShortcuts({
         if (e.shiftKey && (e.key === 'v' || e.key === 'V')) {
           e.preventDefault();
           toggleValidationPanel?.();
+          return;
+        }
+        // Ctrl+T (toggle floating toolbar) is not a text shortcut — still handle it.
+        if (!e.altKey && !e.shiftKey && (e.code === 'KeyT' || e.key === 't' || e.key === 'T')) {
+          e.preventDefault();
+          toggleToolbar?.();
           return;
         }
         // Ctrl+B (toggle left panel) is not a text shortcut — still handle it.
@@ -108,6 +117,11 @@ export function useKeyboardShortcuts({
         e.preventDefault();
         const { canRedo, redo } = useProjectStore.getState();
         if (canRedo()) redo();
+        return;
+      }
+      if (mod && !e.altKey && !e.shiftKey && (e.code === 'KeyT' || e.key === 't' || e.key === 'T')) {
+        e.preventDefault();
+        toggleToolbar?.();
         return;
       }
       if (mod && e.key === 'b') {
@@ -249,6 +263,6 @@ export function useKeyboardShortcuts({
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [toggleLeftPanel, toggleRightPanel, toggleOutputPanel, onShowShortcutHelp,
+  }, [toggleLeftPanel, toggleRightPanel, toggleOutputPanel, toggleValidationPanel, toggleToolbar, onShowShortcutHelp,
       onSetEditMode, onEscape, onDeleteSelected, onZoomToFit]);
 }

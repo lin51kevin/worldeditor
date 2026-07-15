@@ -64,6 +64,7 @@ export const SHORTCUT_HELP_SECTIONS: readonly ShortcutHelpSection[] = [
       { keys: ['I'], descKey: 'shortcutHelp.keys.inspector' },
       { keys: ['Ctrl+B'], descKey: 'shortcutHelp.keys.leftPanel' },
       { keys: ['Ctrl+J'], descKey: 'shortcutHelp.keys.outputPanel' },
+      { keys: ['Ctrl+T'], descKey: 'shortcutHelp.keys.toggleToolbar' },
       { keys: ['Ctrl+Shift+V'], descKey: 'shortcutHelp.keys.validationPanel' },
       { keys: ['/', '?'], descKey: 'shortcutHelp.keys.help' },
     ],

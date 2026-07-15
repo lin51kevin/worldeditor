@@ -13,6 +13,7 @@ export interface LayoutSlice {
   toggleRightPanel: () => void;
   toggleOutputPanel: () => void;
   toggleTemplatePanel: () => void;
+  toggleToolbar: () => void;
   initLayout: () => void;
 }
 
@@ -64,6 +65,13 @@ export const createLayoutSlice: StateCreator<EditorViewState, [], [], LayoutSlic
   toggleTemplatePanel: () =>
     set((state) => {
       const layout = { ...state.layout, templatePanelCollapsed: !state.layout.templatePanelCollapsed };
+      saveLayout(layout);
+      return { layout };
+    }),
+
+  toggleToolbar: () =>
+    set((state) => {
+      const layout = { ...state.layout, toolbarCollapsed: !state.layout.toolbarCollapsed };
       saveLayout(layout);
       return { layout };
     }),
