@@ -242,12 +242,30 @@ export function MenuBar({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // TEMP DIAGNOSTIC: log every Ctrl+Alt combo to compare P vs T. Remove after debugging.
+      if ((event.ctrlKey || event.metaKey) && event.altKey) {
+        // eslint-disable-next-line no-console
+        console.log('[shortcut-diag] Ctrl+Alt keydown', {
+          key: event.key,
+          code: event.code,
+          ctrlKey: event.ctrlKey,
+          altKey: event.altKey,
+          metaKey: event.metaKey,
+          defaultPrevented: event.defaultPrevented,
+        });
+      }
       const activeElement = document.activeElement as HTMLElement | null;
       const tag = activeElement?.tagName;
       if (activeElement?.closest('.menubar, .toolbar, .road-edit-toolbar') && tag !== 'INPUT' && tag !== 'TEXTAREA') {
         activeElement.blur();
       }
       const isCtrl = event.ctrlKey || event.metaKey;
+      // Match a physical letter key regardless of keyboard layout. On Windows
+      // Ctrl+Alt is delivered as AltGr, under which `event.key` for a letter can
+      // become a composed/dead character — so prefer `event.code` (e.g. 'KeyP')
+      // and fall back to `event.key` (which unit tests dispatch without a code).
+      const isLetter = (ch: string): boolean =>
+        event.code === `Key${ch.toUpperCase()}` || event.key.toLowerCase() === ch;
       if (isCtrl && event.key === 'n') {
         event.preventDefault();
         void handleNew();
@@ -286,13 +304,13 @@ export function MenuBar({
       } else if (event.key === 'f' || event.key === 'F') {
         event.preventDefault();
         handleZoomToSelected();
-      } else if (isCtrl && event.altKey && (event.key === 'i' || event.key === 'I')) {
+      } else if (isCtrl && event.altKey && isLetter('i')) {
         event.preventDefault();
         toggleCopilotPanel();
-      } else if (isCtrl && event.altKey && (event.key === 't' || event.key === 'T')) {
+      } else if (isCtrl && event.altKey && isLetter('t')) {
         event.preventDefault();
         void handleImportTrajectory();
-      } else if (isCtrl && event.altKey && (event.key === 'p' || event.key === 'P')) {
+      } else if (isCtrl && event.altKey && isLetter('g')) {
         event.preventDefault();
         handleImportPointCloud();
       }

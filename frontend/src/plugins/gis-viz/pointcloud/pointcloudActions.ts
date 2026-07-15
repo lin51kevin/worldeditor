@@ -141,8 +141,9 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
     }
 
     let fileName: string;
-    if (isTauri()) {
-      // Desktop: use native file dialog + IPC
+    if (!webFile && isTauri()) {
+      // Desktop with no pre-selected file (panel "Load" button): use the native
+      // file dialog + IPC so LAS/LAZ and large path-based clouds are supported.
       const path = await pickNativePath();
       if (!path) { usePointCloudStore.getState().setBusy(false); return; }
       fileName = path.split(/[/\\]/).pop() ?? path;
@@ -169,7 +170,8 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
       const result = await platform.loadPointCloud(source, store.voxelSize);
       usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary);
     } else {
-      // Web: offload to worker to avoid UI freeze
+      // A file was chosen via an <input type="file"> (works on both web and the
+      // desktop webview): read its bytes and load through the WASM worker.
       if (!webFile) throw new Error('No file selected.');
       const source = await readWebFile(webFile);
       fileName = webFile.name;
@@ -189,6 +191,27 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
   } finally {
     usePointCloudStore.getState().setBusy(false);
   }
+}
+
+/**
+ * Open the point-cloud file dialog and load the chosen file.
+ *
+ * Always uses an `<input type="file">` (works identically on web and inside the
+ * desktop webview — the same mechanism as the trajectory importer), then routes
+ * the bytes through {@link loadPointCloud}, which handles Gaussian-splat
+ * detection. Native path-based loading (LAS/LAZ, huge clouds) stays available
+ * via the point-cloud panel's own Load button. Used by the File → Import menu
+ * action and the Ctrl+Alt+P shortcut.
+ */
+export function promptImportPointCloud(): void {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = WEB_EXTENSIONS.map((ext) => `.${ext}`).join(',');
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (file) void loadPointCloud(file);
+  };
+  input.click();
 }
 
 /** Run ground extraction, caching a heightmap on the active handle. */

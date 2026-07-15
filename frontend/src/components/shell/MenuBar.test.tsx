@@ -601,5 +601,28 @@ describe('MenuBar', () => {
       dispatchWindowKey({ key: 'I', ctrlKey: true, altKey: true });
       expect(usePluginContribStore.getState().panelTabVisibility['ai-copilot:panel']).toBe(false);
     });
+
+    it('opens the point cloud file dialog with Ctrl+Alt+G, even when AltGr composes the key', () => {
+      const clicked: HTMLInputElement[] = [];
+      const orig = document.createElement.bind(document);
+      const spy = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        const el = orig(tag);
+        if (tag === 'input') {
+          (el as HTMLInputElement).click = () => { clicked.push(el as HTMLInputElement); };
+        }
+        return el;
+      });
+
+      render(<MenuBar />);
+
+      // Windows delivers Ctrl+Alt as AltGr; `event.key` may be a composed char
+      // while `event.code` stays 'KeyC'. The picker must still open.
+      dispatchWindowKey({ key: 'ç', code: 'KeyC', ctrlKey: true, altKey: true });
+
+      expect(clicked.length).toBe(1);
+      expect(clicked[0]!.accept).toContain('.ply');
+      expect(usePluginContribStore.getState().panelTabVisibility['pointcloud-beta:panel']).toBe(true);
+      spy.mockRestore();
+    });
   });
 });

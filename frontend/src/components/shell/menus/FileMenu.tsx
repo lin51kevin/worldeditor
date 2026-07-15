@@ -77,7 +77,7 @@ export function FileMenu({
     },
     {
       label: t('menu.importPointCloud'),
-      shortcut: 'Ctrl+Alt+P',
+      shortcut: 'Ctrl+Alt+G',
       action: () => {
         void onImportPointCloud();
       },

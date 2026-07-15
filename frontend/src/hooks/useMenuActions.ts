@@ -10,6 +10,7 @@ import type { Project } from '../services/platform';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import { useFileLoader } from './useFileLoader';
 import { promptImportTrajectory, stopTrajectory } from '../viewport/trajectoryPlayback';
+import { promptImportPointCloud } from '../plugins/gis-viz/pointcloud/pointcloudActions';
 
 function calculateTotalRoadLength(project: Project): number {
   return project.roads.reduce((sum, road) => sum + road.length, 0);
@@ -130,8 +131,13 @@ export function useMenuActions() {
   }, [loadFile, pushRecentFile, t]);
 
   const handleImportPointCloud = useCallback(() => {
-    const { showPanel } = usePluginContribStore.getState();
-    showPanel('pointcloud-beta:panel');
+    // Open the file dialog FIRST, within the same synchronous gesture, so the
+    // browser doesn't suppress the picker. Showing the panel first would run a
+    // Zustand/useSyncExternalStore update that forces a synchronous React
+    // re-render on this discrete event, breaking the user-gesture chain (this is
+    // why Ctrl+Alt+T worked but Ctrl+Alt+P did not).
+    promptImportPointCloud();
+    usePluginContribStore.getState().showPanel('pointcloud-beta:panel');
   }, []);
 
   const handleImportTrajectory = useCallback(() => {
