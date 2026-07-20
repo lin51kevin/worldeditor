@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project } from '../../../services/platform';
 
-const { registerImporter, registerExporter, unregisterPlugin, downloadBlob, wasm } = vi.hoisted(() => ({
+const { registerImporter, registerExporter, unregisterPlugin, saveExport, wasm } = vi.hoisted(() => ({
   registerImporter: vi.fn(),
   registerExporter: vi.fn(),
   unregisterPlugin: vi.fn(),
-  downloadBlob: vi.fn(),
+  saveExport: vi.fn(),
   wasm: {
     import_from_dxf: vi.fn(),
     export_to_dxf: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock('../../../stores/pluginContribStore', () => ({
 }));
 
 vi.mock('../../../utils/download', () => ({
-  downloadBlob,
+  saveExport,
 }));
 
 vi.mock('../../../../wasm/pkg/we_wasm', () => wasm);
@@ -87,8 +87,8 @@ describe('io-dxf.plugin', () => {
     const exporter = registerExporter.mock.calls[0]?.[0];
     await exporter.onExport(project);
     expect(wasm.export_to_dxf).toHaveBeenCalledWith(JSON.stringify(project));
-    expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'roadnet.dxf');
-    const blob = downloadBlob.mock.calls[0]?.[0] as Blob;
+    expect(saveExport).toHaveBeenCalledWith(expect.any(Blob), 'roadnet.dxf', expect.anything());
+    const blob = saveExport.mock.calls[0]?.[0] as Blob;
     expect(blob.type).toBe('application/dxf');
   });
 });

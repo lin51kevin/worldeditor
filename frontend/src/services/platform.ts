@@ -191,6 +191,9 @@ export interface RoadSignal {
   value: string | null;
   orientation: string;
   is_dynamic: boolean;
+  country?: string;
+  unit?: string;
+  validities?: RoadObjectValidity[];
 }
 
 /** Project-level road object reference (simplified, for project.objects array). */
@@ -232,6 +235,11 @@ export interface RoadObjectItem {
   length: number;
   corners: RoadObjectPosition[];
   validity: RoadObjectValidity | null;
+  /** Coordinate frame of `corners`: 'Local' (u,v) or 'Road' (s,t). */
+  corner_type?: 'Local' | 'Road';
+  pitch?: number;
+  roll?: number;
+  from_object_ref?: boolean;
 }
 
 export interface LaneSection {

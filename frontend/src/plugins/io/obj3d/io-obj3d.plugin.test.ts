@@ -12,7 +12,7 @@ vi.mock('../../../stores/pluginContribStore', () => ({
   },
 }));
 
-vi.mock('../../../utils/download', () => ({ downloadBlob: vi.fn() }));
+vi.mock('../../../utils/download', () => ({ saveExport: vi.fn() }));
 
 import { mountIoObj3dPlugin, generateObjContent } from './io-obj3d.plugin';
 import type { Project } from '../../../services/platform';

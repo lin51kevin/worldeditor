@@ -4,7 +4,9 @@ import { useProjectStore } from '../stores/projectStore';
 import { useViewportStore } from '../stores/viewportStore';
 import { emitViewportEvent } from '../viewport/viewportEvents';
 import { getPlatformService } from '../services';
-import { showAlert, showConfirm, showPrompt } from '../utils/dialog';
+import { showAlert, showConfirm } from '../utils/dialog';
+import { saveExport } from '../utils/download';
+import { isExportCancelled } from '../utils/exportErrors';
 import { useRecentFilesStore } from '../stores/recentFilesStore';
 import type { Project } from '../services/platform';
 import { usePluginContribStore } from '../stores/pluginContribStore';
@@ -173,10 +175,16 @@ export function useMenuActions() {
   const handleExportOpenDrive = useCallback(async () => {
     const platform = await getPlatformService();
     const xml = await platform.writeOpenDrive(project);
-    const name = await showPrompt(t('dialog.fileName'), project.name + '.xodr');
-    if (!name) return;
-    await platform.saveFile(name, xml);
-  }, [project, t]);
+    const blob = new Blob([xml], { type: 'application/xml' });
+    try {
+      await saveExport(blob, `${project.name || 'export'}.xodr`, [
+        { name: 'OpenDRIVE', extensions: ['xodr'] },
+      ]);
+    } catch (err) {
+      if (isExportCancelled(err)) return; // User cancelled the save dialog.
+      throw err;
+    }
+  }, [project]);
 
   const handleDelete = useCallback(() => {
     const { selectedRoadId, removeRoad } = useProjectStore.getState();

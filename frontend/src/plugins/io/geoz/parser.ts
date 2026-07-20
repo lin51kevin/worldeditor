@@ -17,7 +17,7 @@ import type {
   Project,
   Road,
   RoadLink,
-  RoadObject,
+  RoadObjectItem,
   RoadMark,
   RoadSignal,
 } from '../../../services/platform';
@@ -39,7 +39,9 @@ import type {
   ProtoLaneGeometry,
   ProtoLaneTopo,
   ProtoObject,
+  ProtoParkingSpace,
   ProtoPoint3D,
+  ProtoPropertie,
   ProtoRoadGeometry,
   ProtoRoadMark,
   ProtoRoadSection,
@@ -239,24 +241,67 @@ function mapLaneType(laneType: ProtoEnum): string {
     case 'city_driving':
       return 'Driving';
     case '2':
-    case 'shoulder':
     case 'stop':
-      return 'Shoulder';
+      return 'Stop';
     case '3':
+    case 'shoulder':
+      return 'Shoulder';
+    case '4':
     case 'biking':
       return 'Biking';
-    case '4':
+    case '5':
     case 'sidewalk':
       return 'Sidewalk';
-    case '5':
+    case '6':
+    case 'border':
+      return 'Border';
+    case '7':
+    case 'restricted':
+      return 'Restricted';
     case '8':
     case 'parking':
       return 'Parking';
+    case '9':
+    case 'bidirectional':
+      return 'Bidirectional';
+    case '10':
+    case 'median':
+      return 'Median';
+    case '11':
+    case 'special1':
+      return 'Special1';
+    case '12':
+    case 'special2':
+      return 'Special2';
+    case '13':
+    case 'special3':
+      return 'Special3';
+    case '14':
+    case 'roadworks':
+      return 'RoadWorks';
+    case '15':
+    case 'tram':
+      return 'Tram';
+    case '16':
+    case 'rail':
+      return 'Rail';
+    case '17':
+    case 'entry':
+      return 'Entry';
+    case '18':
+    case 'exit':
+      return 'Exit';
+    case '19':
+    case 'offramp':
+    case 'mwyexit':
+      return 'OffRamp';
+    case '20':
+    case 'onramp':
+    case 'mwyentry':
+      return 'OnRamp';
     case '0':
-    case '6':
     case 'none':
     case 'unknown':
-    case 'border':
     default:
       return 'None';
   }
@@ -424,6 +469,9 @@ function buildSectionKey(section: ProtoRoadSection): string {
 
 function distributeUnknownSectionLanes(section: ProtoRoadSection, target: SectionAccumulator): void {
   for (const lane of section.lanes ?? []) {
+    if (isVirtualCenterLane(lane)) {
+      continue; // virtual centre-line lane carries no surface
+    }
     const laneId = parseNumericLaneId(lane.header?.id);
     if (laneId !== null && laneId > 0) {
       target.leftLanes.push(lane);
@@ -432,6 +480,11 @@ function distributeUnknownSectionLanes(section: ProtoRoadSection, target: Sectio
 
     target.rightLanes.push(lane);
   }
+}
+
+/** True for the virtual CENTER_LINE lane emitted per section by the exporter. */
+function isVirtualCenterLane(lane: ProtoLaneTopo): boolean {
+  return normalizeEnum(lane.header?.virtual_type) === 'center_line';
 }
 
 function buildLaneSections(
@@ -457,10 +510,11 @@ function buildLaneSections(
     };
 
     const direction = normalizeEnum(section.section_direction_type);
+    const surfaceLanes = (section.lanes ?? []).filter((lane) => !isVirtualCenterLane(lane));
     if (direction === LEFT_SECTION) {
-      entry.leftLanes.push(...(section.lanes ?? []));
+      entry.leftLanes.push(...surfaceLanes);
     } else if (direction === RIGHT_SECTION) {
-      entry.rightLanes.push(...(section.lanes ?? []));
+      entry.rightLanes.push(...surfaceLanes);
     } else {
       distributeUnknownSectionLanes(section, entry);
     }
@@ -480,25 +534,81 @@ function buildLaneSections(
     }));
 }
 
+/** Build a lookup map from a proto `userDataList` (key → value). */
+function userDataMap(list: readonly ProtoPropertie[] | null | undefined): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const entry of list ?? []) {
+    const name = normalizeOptionalString(entry.name);
+    if (name) {
+      map.set(name, entry.value ?? '');
+    }
+  }
+  return map;
+}
+
+function userNumber(map: Map<string, string>, key: string, fallback = 0): number {
+  const raw = map.get(key);
+  if (raw === undefined) {
+    return fallback;
+  }
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/** Known built-in ObjectType variant names (PascalCase). */
+const OBJECT_TYPE_NAMES = new Set([
+  'Sign', 'Guardrail', 'Barrier', 'Curb', 'Wall', 'Pillar', 'TrafficCone',
+  'ParkingSpace', 'Crosswalk', 'StopLine', 'CrossHatchArea', 'WovenArea',
+  'ForwardWaitingArea', 'TurnLeftWaitingArea', 'SlowDownToYieldLine',
+  'StopToYieldLine', 'SimpleSignalPole', 'TrafficLightPole', 'StreetLightPole',
+  'SignGantry', 'LTypeSignalPole',
+]);
+
+/**
+ * Map a proto object `type` string to the serialized Rust `ObjectType`:
+ * a known built-in name stays a plain string; anything else becomes `{ Custom }`.
+ */
+function mapObjectType(type: string | null | undefined): RoadObjectItem['object_type'] {
+  const name = normalizeOptionalString(type);
+  if (!name) {
+    return { Custom: 'object' };
+  }
+  return OBJECT_TYPE_NAMES.has(name) ? name : { Custom: name };
+}
+
 function protoSignalToSignal(
   signal: ProtoSignal,
   roadId: string,
   signalIndex: number,
 ): RoadSignal {
+  const ud = userDataMap(signal.userDataList);
+  const pt = signal.pt;
+  // Prefer road-frame values from userDataList (our exporter); fall back to `pt`
+  // (world) only for foreign GeoZ files that lack these hints.
+  const hasRoadFrame = ud.has('s') || ud.has('t');
+  const validities = (signal.validities ?? [])
+    .map((v) => ({
+      from_lane: parseNumericLaneId(v.from_lane_id) ?? 0,
+      to_lane: parseNumericLaneId(v.to_lane_id) ?? 0,
+    }));
   return {
     id: normalizeOptionalString(signal.id) ?? `${roadId}:signal:${signalIndex}`,
-    name: normalizeOptionalString(signal.type) ?? 'signal',
-    s: 0,
-    t: 0,
-    z_offset: 0,
-    h_offset: 0,
-    width: 1.0,
-    height: 2.0,
+    name: ud.get('name') ?? normalizeOptionalString(signal.type) ?? 'signal',
+    s: hasRoadFrame ? userNumber(ud, 's', 0) : (pt?.x ?? 0),
+    t: hasRoadFrame ? userNumber(ud, 't', 0) : (pt?.y ?? 0),
+    z_offset: ud.has('zOffset') ? userNumber(ud, 'zOffset', 0) : (pt?.z ?? 0),
+    h_offset: userNumber(ud, 'h_offset', 0),
+    width: signal.width ?? 1.0,
+    height: signal.height ?? 2.0,
     signal_type: normalizeOptionalString(signal.type) ?? '-1',
-    signal_subtype: '-1',
-    value: null,
-    orientation: '+',
-    is_dynamic: false,
+    signal_subtype:
+      ud.get('subtype') ?? normalizeOptionalString(signal.sub_type) ?? '-1',
+    value: normalizeOptionalString(signal.value),
+    orientation: ud.get('orientation') ?? '+',
+    is_dynamic: signal.dynamic ?? false,
+    country: ud.get('country') ?? '',
+    unit: normalizeOptionalString(signal.unit) ?? '',
+    validities,
   };
 }
 
@@ -506,14 +616,56 @@ function protoObjectToRoadObject(
   object: ProtoObject,
   roadId: string,
   objectIndex: number,
-): RoadObject {
+): RoadObjectItem {
+  const ud = userDataMap(object.userDataList);
+  const pt = object.pt;
+  // Prefer road-frame corners stored by our exporter; otherwise fall back to the
+  // (world) boundary_knots for foreign GeoZ files.
+  const cornersRf = ud.get('cornersRoadFrame');
+  const corners = cornersRf
+    ? cornersRf
+        .split(';')
+        .filter((tok) => tok.length > 0)
+        .map((tok) => {
+          const [x, y, z] = tok.split(',').map((n) => Number.parseFloat(n));
+          return { x: x || 0, y: y || 0, z: z || 0, id: null };
+        })
+    : (object.boundary_knots ?? []).map((knot) => ({
+        x: knot.x ?? 0,
+        y: knot.y ?? 0,
+        z: knot.z ?? 0,
+        id: null,
+      }));
+  const cornerType = ud.get('cornerType') === 'Local' ? 'Local' : 'Road';
+  const hasValidity = ud.has('validityFromLane') || ud.has('validityToLane');
+  const hasRoadFrame = ud.has('s') || ud.has('t');
+
   return {
     id: normalizeOptionalString(object.id) ?? `${roadId}:object:${objectIndex}`,
-    roadId: normalizeOptionalString(object.road_id) ?? roadId,
-    sPosition: 0,
-    laneId: 0,
-    type: normalizeOptionalString(object.type) ?? 'object',
-    validity: null,
+    object_type: mapObjectType(object.type),
+    name: ud.get('name') ?? '',
+    position: {
+      x: hasRoadFrame ? userNumber(ud, 's', 0) : (pt?.x ?? 0),
+      y: hasRoadFrame ? userNumber(ud, 't', 0) : (pt?.y ?? 0),
+      z: ud.has('zOffset') ? userNumber(ud, 'zOffset', 0) : (pt?.z ?? 0),
+      id: null,
+    },
+    orientation: userNumber(ud, 'orientation', 0),
+    hdg: userNumber(ud, 'hdg', 0),
+    pitch: userNumber(ud, 'pitch', 0),
+    roll: userNumber(ud, 'roll', 0),
+    width: userNumber(ud, 'width', 0),
+    height: userNumber(ud, 'height', 0),
+    length: userNumber(ud, 'length', 0),
+    corners,
+    corner_type: cornerType,
+    from_object_ref: ud.get('fromObjectRef') === 'true',
+    validity: hasValidity
+      ? {
+          from_lane: Math.trunc(userNumber(ud, 'validityFromLane', 0)),
+          to_lane: Math.trunc(userNumber(ud, 'validityToLane', 0)),
+        }
+      : null,
   };
 }
 
@@ -637,7 +789,15 @@ function convertRoad(
     ? roadTopo.header.length
     : computedLength;
   const signals = (roadTopo.road_signal ?? []).map((signal, index) => protoSignalToSignal(signal, roadId, index));
-  const objects = (roadTopo.road_objects ?? []).map((object, index) => protoObjectToRoadObject(object, roadId, index));
+  const pointObjects = (roadTopo.road_objects ?? []).map((object, index) =>
+    protoObjectToRoadObject(object, roadId, index),
+  );
+  const parkingObjects = (roadTopo.road_parking_space ?? [])
+    .map((space: ProtoParkingSpace, index) =>
+      space.obj ? protoObjectToRoadObject(space.obj, roadId, index) : null,
+    )
+    .filter((obj): obj is RoadObjectItem => obj !== null);
+  const objects = [...pointObjects, ...parkingObjects];
 
   const road: Road = {
     id: roadId,
@@ -653,8 +813,8 @@ function convertRoad(
     lateral_profile: { superelevations: [], crossfalls: [] },
     bridges: [],
     tunnels: [],
-    signals: [],
-    objects: [],
+    signals,
+    objects,
   };
 
   return { road, signals, objects };
@@ -747,11 +907,10 @@ export function geoToProject(
     },
     roads,
     junctions,
-    signals: convertedRoads.flatMap((entry) => entry.signals),
-    // GeoZ proto objects lack the geometry fields required by the Rust RoadObject
-    // struct (position, corners, object_type enum). Passing them would cause WASM
-    // deserialization to fail. Project-level objects are omitted; road-level objects
-    // are already empty in convertRoad().
+    // Objects and signals are carried at the road level (road.objects /
+    // road.signals) with full geometry, so the project-level reference arrays
+    // stay empty to avoid duplicate rendering.
+    signals: [],
     objects: [],
   };
 }

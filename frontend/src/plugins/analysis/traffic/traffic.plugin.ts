@@ -1,7 +1,8 @@
 /** plugin-traffic: Traffic signal phasing, timing editor, and SUMO I/O. */
 import TrafficPanel from './TrafficPanel';
 import { usePluginContribStore } from '../../../stores/pluginContribStore';
-import { downloadBlob } from '../../../utils/download';
+import { saveExport } from '../../../utils/download';
+import { isExportCancelled } from '../../../utils/exportErrors';
 import { showAlert } from '../../../utils/dialog';
 import { exportSumoNetwork, importSumoNetwork } from './trafficUtils';
 import { useProjectStore } from '../../../stores/projectStore';
@@ -59,7 +60,15 @@ export function mountTrafficPlugin(): () => void {
       const project = useProjectStore.getState().project;
       const xml = exportSumoNetwork(project);
       const blob = new Blob([xml], { type: 'application/xml' });
-      downloadBlob(blob, `${project.name || 'export'}.net.xml`);
+      try {
+        await saveExport(blob, `${project.name || 'export'}.net.xml`, [
+          { name: 'SUMO Network', extensions: ['xml'] },
+        ]);
+      } catch (err) {
+        if (isExportCancelled(err)) return; // User cancelled the save dialog.
+        await showAlert(err instanceof Error ? err.message : String(err), 'Export Error');
+        return;
+      }
       await showAlert(`Exported ${project.roads.length} road(s) to SUMO.`, 'Traffic');
     },
   });
@@ -83,8 +92,9 @@ export function mountTrafficPlugin(): () => void {
     onExport: async (project) => {
       const xml = exportSumoNetwork(project);
       const blob = new Blob([xml], { type: 'application/xml' });
-      downloadBlob(blob, `${project.name || 'export'}.net.xml`);
-      await showAlert(`Exported ${project.roads.length} road(s) to SUMO.`, 'Traffic');
+      await saveExport(blob, `${project.name || 'export'}.net.xml`, [
+        { name: 'SUMO Network', extensions: ['xml'] },
+      ]);
     },
   });
 

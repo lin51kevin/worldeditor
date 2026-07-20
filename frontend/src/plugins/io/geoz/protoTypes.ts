@@ -6,7 +6,7 @@
  * They are the input shape consumed by the GeoZ parser conversion functions.
  */
 
-import type { Road, RoadObject, RoadSignal } from '../../../services/platform';
+import type { Road, RoadObjectItem, RoadSignal } from '../../../services/platform';
 
 export type ProtoEnum = number | string | null | undefined;
 
@@ -60,6 +60,7 @@ export interface ProtoLaneHeader {
   id?: string | null;
   length?: number | null;
   lane_type?: ProtoEnum;
+  virtual_type?: ProtoEnum;
   name?: string | null;
 }
 
@@ -91,17 +92,42 @@ export interface ProtoSignalValidity {
   to_lane_id?: string | null;
 }
 
+export interface ProtoPropertie {
+  name?: string | null;
+  value?: string | null;
+}
+
 export interface ProtoSignal {
   id?: string | null;
   type?: string | null;
+  sub_type?: string | null;
   road_id?: string | null;
+  pt?: ProtoPoint3D | null;
+  heading?: ProtoPoint3D | null;
+  value?: string | null;
+  unit?: string | null;
+  dynamic?: boolean | null;
+  width?: number | null;
+  length?: number | null;
+  height?: number | null;
   validities?: ProtoSignalValidity[] | null;
+  userDataList?: ProtoPropertie[] | null;
 }
 
 export interface ProtoObject {
   id?: string | null;
   type?: string | null;
+  sub_type?: string | null;
   road_id?: string | null;
+  pt?: ProtoPoint3D | null;
+  heading?: ProtoPoint3D | null;
+  up?: ProtoPoint3D | null;
+  boundary_knots?: ProtoPoint3D[] | null;
+  userDataList?: ProtoPropertie[] | null;
+}
+
+export interface ProtoParkingSpace {
+  obj?: ProtoObject | null;
 }
 
 export interface ProtoRoadHeader {
@@ -118,6 +144,7 @@ export interface ProtoRoadTopo {
   road_sections?: ProtoRoadSection[] | null;
   road_signal?: ProtoSignal[] | null;
   road_objects?: ProtoObject[] | null;
+  road_parking_space?: ProtoParkingSpace[] | null;
 }
 
 export interface ProtoTopoHeader {
@@ -160,7 +187,7 @@ export interface GeoRoadFile {
 export interface ConvertedRoad {
   road: Road;
   signals: RoadSignal[];
-  objects: RoadObject[];
+  objects: RoadObjectItem[];
 }
 
 export interface SectionAccumulator {

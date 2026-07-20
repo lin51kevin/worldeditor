@@ -2,7 +2,7 @@
  * plugin-io-signals: JSON signal import + HD Map XML export plugin.
  */
 import type { Project } from '../../../services/platform';
-import { downloadBlob } from '../../../utils/download';
+import { saveExport } from '../../../utils/download';
 import { createIOPlugin } from '../../core/ioPluginFactory';
 
 async function importSignals(content: string | ArrayBuffer): Promise<Project> {
@@ -113,8 +113,7 @@ export function generateHdMapXml(project: Project): string {
 function exportHdMapXml(project: Project): Promise<void> {
   const xml = generateHdMapXml(project);
   const blob = new Blob([xml], { type: 'application/xml' });
-  downloadBlob(blob, `${project.name || 'export'}_hdmap.xml`);
-  return Promise.resolve();
+  return saveExport(blob, `${project.name || 'export'}_hdmap.xml`, [{ name: 'HD Map XML', extensions: ['xml'] }]);
 }
 
 export const mountIoSignalsPlugin = createIOPlugin({

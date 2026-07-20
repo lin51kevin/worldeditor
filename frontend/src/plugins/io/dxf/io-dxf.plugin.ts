@@ -1,5 +1,5 @@
 import type { Project } from '../../../services/platform';
-import { downloadBlob } from '../../../utils/download';
+import { saveExport } from '../../../utils/download';
 import { createIOPlugin } from '../../core/ioPluginFactory';
 
 async function importDxf(content: string | ArrayBuffer): Promise<Project> {
@@ -12,7 +12,7 @@ async function exportDxf(project: Project): Promise<void> {
   const wasm = await import('../../../../wasm/pkg/we_wasm');
   const dxf = wasm.export_to_dxf(JSON.stringify(project));
   const blob = new Blob([dxf], { type: 'application/dxf' });
-  downloadBlob(blob, `${project.name || 'export'}.dxf`);
+  await saveExport(blob, `${project.name || 'export'}.dxf`, [{ name: 'DXF CAD', extensions: ['dxf'] }]);
 }
 
 export const mountIoDxfPlugin = createIOPlugin({

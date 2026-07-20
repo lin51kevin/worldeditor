@@ -7,7 +7,7 @@
  */
 
 import type { Project } from '../../../services/platform';
-import { downloadBlob } from '../../../utils/download';
+import { saveExport } from '../../../utils/download';
 import { createIOPlugin } from '../../core/ioPluginFactory';
 
 function parseCsvToProject(content: string | ArrayBuffer): Promise<Project> {
@@ -70,8 +70,7 @@ function exportProjectToCsv(project: Project): Promise<void> {
     });
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-  downloadBlob(blob, `${project.name || 'export'}.csv`);
-  return Promise.resolve();
+  return saveExport(blob, `${project.name || 'export'}.csv`, [{ name: 'CSV', extensions: ['csv'] }]);
 }
 
 export const mountIoCsvPlugin = createIOPlugin({

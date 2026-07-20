@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package rt.hdmap;
+import "map_geometry.proto";
+
+message JunctionHeader {
+  string id = 1;
+  string name = 2;
+  Point3D center = 3;
+}
+message JunctionLaneLink{
+  string from = 1;
+  string to = 2;
+}
+message Junctionlink{
+  enum JunctionLinkContactPoint {
+    start = 0;
+    end = 1;
+  };
+  string connecting_road = 1;
+  string incoming_road = 2;
+  JunctionLinkContactPoint contact_point = 3;
+  repeated JunctionLaneLink junction_lane_link = 4;
+}
+message JunctionTopo {
+  JunctionHeader header = 1;
+  repeated Junctionlink junction_links = 2;
+}
+

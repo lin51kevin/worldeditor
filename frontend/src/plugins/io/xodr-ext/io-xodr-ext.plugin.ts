@@ -7,7 +7,7 @@
  */
 
 import type { Project } from '../../../services/platform';
-import { downloadBlob } from '../../../utils/download';
+import { saveExport } from '../../../utils/download';
 import { createIOPlugin } from '../../core/ioPluginFactory';
 
 async function importXodrExt(content: string | ArrayBuffer): Promise<Project> {
@@ -28,7 +28,7 @@ async function exportXodrExt(project: Project): Promise<void> {
   const wasm = await import('../../../../wasm/pkg/we_wasm');
   const xml = wasm.write_opendrive(JSON.stringify(project));
   const blob = new Blob([xml], { type: 'application/xml' });
-  downloadBlob(blob, `${project.name || 'export'}_v1.6.xodr`);
+  await saveExport(blob, `${project.name || 'export'}_v1.6.xodr`, [{ name: 'OpenDRIVE', extensions: ['xodr'] }]);
 }
 
 export const mountIoXodrExtPlugin = createIOPlugin({

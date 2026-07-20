@@ -14,11 +14,11 @@ vi.mock('../../../stores/pluginContribStore', () => ({
   },
 }));
 
-vi.mock('../../../utils/download', () => ({ downloadBlob: vi.fn() }));
+vi.mock('../../../utils/download', () => ({ saveExport: vi.fn() }));
 
 import { mountIoCsvPlugin } from './io-csv.plugin';
-import { downloadBlob } from '../../../utils/download';
-const mockDownloadBlob = downloadBlob as unknown as ReturnType<typeof vi.fn>;
+import { saveExport } from '../../../utils/download';
+const mockDownloadBlob = saveExport as unknown as ReturnType<typeof vi.fn>;
 
 /** Helper: get the registered importer's onImport callback */
 function getImporter() {
@@ -166,7 +166,7 @@ describe('exportProjectToCsv (via exporter)', () => {
     // Verify blob was passed to downloadBlob
     const blob = mockDownloadBlob.mock.calls[0]![0] as Blob;
     expect(blob).toBeInstanceOf(Blob);
-    expect(mockDownloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'Multi.csv');
+    expect(mockDownloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'Multi.csv', expect.anything());
   });
 
   it('should serialize CSV rows and skip roads without geometry', async () => {

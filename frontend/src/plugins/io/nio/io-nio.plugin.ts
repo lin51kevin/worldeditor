@@ -3,7 +3,7 @@
  */
 
 import type { Project } from '../../../services/platform';
-import { downloadBlob } from '../../../utils/download';
+import { saveExport } from '../../../utils/download';
 import { createIOPlugin } from '../../core/ioPluginFactory';
 
 async function importNio(content: string | ArrayBuffer): Promise<Project> {
@@ -17,7 +17,7 @@ async function exportNio(project: Project): Promise<void> {
   const bytes = wasm.export_to_nio(JSON.stringify(project)) as Uint8Array;
   const payload = bytes.slice().buffer;
   const blob = new Blob([payload], { type: 'application/octet-stream' });
-  downloadBlob(blob, `${project.name || 'export'}.bin`);
+  await saveExport(blob, `${project.name || 'export'}.bin`, [{ name: 'NIO Binary', extensions: ['bin', 'pb'] }]);
 }
 
 export const mountIoNioPlugin = createIOPlugin({

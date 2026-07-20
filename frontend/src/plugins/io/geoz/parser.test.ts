@@ -260,12 +260,16 @@ describe('geoz parser', () => {
       id: 'junction-1',
       name: 'Junction 1',
     });
-    expect(project.signals[0]).toMatchObject({
+    expect(project.roads[0]?.signals?.[0]).toMatchObject({
       id: 'signal-1',
       name: 'traffic_light',
     });
-    // GeoZ proto objects lack geometry fields required by Rust RoadObject;
-    // they are omitted to prevent WASM deserialization failures.
+    // Road objects are carried at the road level with full geometry.
+    expect(project.roads[0]?.objects?.[0]).toMatchObject({
+      id: 'object-1',
+    });
+    // Project-level reference arrays stay empty (data lives on roads).
+    expect(project.signals).toEqual([]);
     expect(project.objects).toEqual([]);
   });
 
@@ -509,5 +513,161 @@ describe('geoz parser', () => {
     );
 
     expect(project.roads[0]?.plan_view).toEqual([]);
+  });
+
+  it('reconstructs objects, parking spaces and signal validities from exporter wire format', () => {
+    const project = geoToProject(
+      [
+        {
+          header: { name: 'Traffic Elements' },
+          roads: [
+            {
+              header: { id: 'road-1', length: 20, name: 'Road 1', junction_id: '' },
+              road_predecessors: [],
+              road_successors: [],
+              road_sections: [],
+              road_signal: [
+                {
+                  id: 'sig-1',
+                  type: '1000001',
+                  sub_type: '-1',
+                  road_id: 'road-1',
+                  pt: { x: 5, y: -2, z: 2 },
+                  dynamic: true,
+                  width: 0.3,
+                  height: 1,
+                  validities: [{ road_id: 'road-1', from_lane_id: '-1', to_lane_id: '-1' }],
+                  userDataList: [
+                    { name: 'orientation', value: '+' },
+                    { name: 'name', value: 'light' },
+                    { name: 'h_offset', value: '0' },
+                  ],
+                },
+              ],
+              road_objects: [
+                {
+                  id: 'cw-1',
+                  type: 'Crosswalk',
+                  road_id: 'road-1',
+                  pt: { x: 5, y: 0, z: 0 },
+                  boundary_knots: [
+                    { x: 4, y: -1.75, z: 0 },
+                    { x: 6, y: -1.75, z: 0 },
+                    { x: 6, y: 1.75, z: 0 },
+                    { x: 4, y: 1.75, z: 0 },
+                  ],
+                  userDataList: [
+                    { name: 'cornerType', value: 'Road' },
+                    { name: 'width', value: '4' },
+                    { name: 'name', value: 'crosswalk' },
+                  ],
+                },
+              ],
+              road_parking_space: [
+                {
+                  obj: {
+                    id: 'ps-1',
+                    type: 'ParkingSpace',
+                    road_id: 'road-1',
+                    pt: { x: 8, y: -3, z: 0 },
+                    boundary_knots: [
+                      { x: 6, y: -4, z: 0 },
+                      { x: 11, y: -4, z: 0 },
+                      { x: 11, y: -2, z: 0 },
+                      { x: 6, y: -2, z: 0 },
+                    ],
+                    userDataList: [
+                      { name: 'cornerType', value: 'Road' },
+                      { name: 'validityFromLane', value: '-1' },
+                      { name: 'validityToLane', value: '-1' },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+          junctions: [],
+        },
+      ],
+      [],
+      'traffic.geoz',
+    );
+
+    const road = project.roads[0];
+    expect(road?.signals).toHaveLength(1);
+    expect(road?.signals?.[0]).toMatchObject({
+      id: 'sig-1',
+      s: 5,
+      t: -2,
+      z_offset: 2,
+      is_dynamic: true,
+      orientation: '+',
+      name: 'light',
+    });
+    expect(road?.signals?.[0]?.validities).toEqual([{ from_lane: -1, to_lane: -1 }]);
+
+    expect(road?.objects).toHaveLength(2);
+    const crosswalk = road?.objects?.find((o) => o.id === 'cw-1');
+    expect(crosswalk).toMatchObject({
+      object_type: 'Crosswalk',
+      corner_type: 'Road',
+      width: 4,
+      name: 'crosswalk',
+    });
+    expect(crosswalk?.corners).toHaveLength(4);
+
+    const parking = road?.objects?.find((o) => o.id === 'ps-1');
+    expect(parking).toMatchObject({ object_type: 'ParkingSpace' });
+    expect(parking?.validity).toEqual({ from_lane: -1, to_lane: -1 });
+    expect(parking?.corners).toHaveLength(4);
+  });
+
+  it('prefers road-frame userData over world pt/boundary_knots for objects', () => {
+    const project = geoToProject(
+      [
+        {
+          header: { name: 'World Coords' },
+          roads: [
+            {
+              header: { id: 'road-1', length: 20, name: 'Road 1', junction_id: '' },
+              road_predecessors: [],
+              road_successors: [],
+              road_sections: [],
+              road_signal: [],
+              road_objects: [
+                {
+                  id: 'cw-1',
+                  type: 'Crosswalk',
+                  road_id: 'road-1',
+                  // World coords that must be ignored in favour of userData.
+                  pt: { x: 999, y: 888, z: 7 },
+                  boundary_knots: [
+                    { x: 999, y: 888, z: 7 },
+                    { x: 1000, y: 888, z: 7 },
+                  ],
+                  userDataList: [
+                    { name: 's', value: '5' },
+                    { name: 't', value: '0' },
+                    { name: 'zOffset', value: '0' },
+                    { name: 'cornerType', value: 'Road' },
+                    { name: 'cornersRoadFrame', value: '4,-1.75,0;6,-1.75,0;6,1.75,0;4,1.75,0' },
+                  ],
+                },
+              ],
+            },
+          ],
+          junctions: [],
+        },
+      ],
+      [],
+      'world.geoz',
+    );
+
+    const obj = project.roads[0]?.objects?.[0];
+    // Position comes from userData (5,0,0), not world pt (999,888,7).
+    expect(obj?.position).toMatchObject({ x: 5, y: 0, z: 0 });
+    // Corners come from cornersRoadFrame (4 pts), not boundary_knots (2 pts).
+    expect(obj?.corners).toHaveLength(4);
+    expect(obj?.corners?.[0]).toMatchObject({ x: 4, y: -1.75, z: 0 });
   });
 });

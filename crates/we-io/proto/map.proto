@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package rt.hdmap;
+
+// Build: For arena allocate
+option cc_enable_arenas = true;
+
+// import "map_clear_area.proto";
+// import "map_crosswalk.proto";
+// import "map_stopline.proto";
+import "map_junction_geo.proto";
+import "map_junction_topo.proto";
+// import "map_overlap.proto";
+// import "map_signal.proto";
+// import "map_speed_bump.proto";
+// import "map_stop_sign.proto";
+// import "map_yield_sign.proto";
+import "map_road_geo.proto";
+import "map_road_topo.proto";
+// import "map_parking_space.proto";
+// import "map_pnc_junction.proto";
+
+message TileHeader {
+  string version = 1;
+  string name = 2;
+  uint32 totalTile = 3;
+}
+
+message TileRoadFile {
+  TileHeader header = 1;
+  RoadGeometry road_geometry = 2;
+}
+
+message TileJunctionFile {
+  TileHeader header = 1;
+  JunctionGeometry junction_geometry = 2;
+}
+
+message TopoHeader {
+  string version = 1;
+  string major = 2;
+  string minor = 3;
+  string proj = 4;
+  string vender = 5;
+  string type = 6;
+  string name = 7;
+  string md5 = 8;
+}
+
+message TopoMapFile {
+  TopoHeader header = 1;
+  repeated RoadTopo roads = 2;
+  repeated JunctionTopo junctions = 3;
+}

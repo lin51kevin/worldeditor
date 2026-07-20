@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package rt.hdmap;
+import "map_geometry.proto";
+// import "map_geometry.proto";
+// A junction is the junction at-grade of two or more roads crossing.
+message RoadMark{
+  enum LaneMarkType{
+    type_none = 0;
+    type_solid = 1;
+    type_broken = 2;
+    type_solid_solid = 3;
+    type_solid_broken = 4;
+    type_broken_solid = 5;
+    type_broken_broken = 6;
+    type_botts_dots = 7;
+    type_grass = 8;
+    type_curb = 9;
+    custom = 10;
+    edge = 11;
+  };
+  enum LaneMarkColor{
+    color_none = 0;
+    color_standard = 1;
+    color_blue = 2;
+    color_green = 3;
+    color_red = 4;
+    color_white = 5;
+    color_yellow = 6;
+    color_orange = 7;
+  };
+
+  enum LaneMarkWeight{
+    weight_none = 0;
+    weight_standard = 1;
+    weight_bold = 2;
+  };
+  double offset = 1;
+  double length = 2;
+  LaneMarkType mark_type = 3;
+  LaneMarkColor mark_color = 4;
+  LaneMarkWeight mark_weight = 5;
+  double width = 6;
+  repeated Propertie userDataList = 7;
+
+}
+message RoadMarkRange {
+  int32 index = 1;
+  double length = 2;
+  uint32 has_after_point = 3;
+  Point3D end_after_point = 4;
+}
+
+message LaneBoundary {
+  repeated Point3D point = 1;
+  repeated RoadMark road_mark = 2;
+  repeated RoadMarkRange road_mark_range = 3;
+  bool bVirtual = 4;
+}
+// message LaneWidths {
+//   repeated double v = 1;
+// }
+message LaneGeometry{
+  string id = 1;
+  LaneBoundary left_boundary = 2;
+  LaneBoundary right_boundary = 3;
+  LaneBoundary center_boundary = 4;
+  // LaneWidths   widths = 5;
+  
+}

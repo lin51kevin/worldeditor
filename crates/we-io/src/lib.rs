@@ -6,6 +6,7 @@
 
 pub mod csv_io;
 pub mod dxf_io;
+pub mod geoz_export;
 pub mod mif_io;
 pub mod nio_proto;
 pub mod obj_export;

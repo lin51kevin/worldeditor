@@ -6,6 +6,8 @@
 
 import { importGeoZ } from './parser';
 import { createIOPlugin } from '../../core/ioPluginFactory';
+import { saveExport } from '../../../utils/download';
+import type { Project } from '../../../services/platform';
 
 export { buildGeoZProtoRoot, geoToProject, importGeoZ } from './parser';
 
@@ -64,11 +66,32 @@ async function importGeoZWithWorker(
   }
 }
 
+/**
+ * Export the current project to a GeoZ (`.geoz`) archive.
+ *
+ * Delegates the protobuf encoding + ZIP packaging to the Rust/WASM
+ * `export_to_geoz` implementation, then saves via the platform-aware helper
+ * (native "Save As" dialog on desktop, browser download on web).
+ */
+async function exportGeoZ(project: Project): Promise<void> {
+  const wasm = await import('../../../../wasm/pkg/we_wasm');
+  const bytes = wasm.export_to_geoz(JSON.stringify(project)) as Uint8Array;
+  const payload = bytes.slice().buffer;
+  const blob = new Blob([payload], { type: 'application/zip' });
+  await saveExport(blob, `${project.name || 'worldeditor'}.geoz`, [
+    { name: 'GeoZ Map', extensions: ['geoz', 'zip'] },
+  ]);
+}
+
 export const mountIoGeoZPlugin = createIOPlugin({
   pluginId: 'io-geoz-import',
   importer: {
     formatName: 'GeoZ Map',
     extensions: ['.geoz', '.zip'],
     onImport: importGeoZWithWorker,
+  },
+  exporter: {
+    formatName: 'GeoZ Map',
+    onExport: exportGeoZ,
   },
 });

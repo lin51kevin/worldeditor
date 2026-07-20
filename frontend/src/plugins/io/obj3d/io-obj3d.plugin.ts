@@ -3,7 +3,7 @@
  * Export only — roads are tessellated into triangulated quad-strips.
  */
 import type { Project, Road } from '../../../services/platform';
-import { downloadBlob } from '../../../utils/download';
+import { saveExport } from '../../../utils/download';
 import { createIOPlugin } from '../../core/ioPluginFactory';
 
 function computeRoadWidth(road: Road): number {
@@ -85,8 +85,7 @@ export function generateObjContent(project: Project): string {
 function exportToObj(project: Project): Promise<void> {
   const content = generateObjContent(project);
   const blob = new Blob([content], { type: 'model/obj' });
-  downloadBlob(blob, `${project.name || 'export'}.obj`);
-  return Promise.resolve();
+  return saveExport(blob, `${project.name || 'export'}.obj`, [{ name: 'Wavefront OBJ', extensions: ['obj'] }]);
 }
 
 export const mountIoObj3dPlugin = createIOPlugin({

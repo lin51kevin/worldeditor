@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 const e = vi.fn(), u = vi.fn();
 vi.mock('../../../stores/pluginContribStore', () => ({ usePluginContribStore: { getState: vi.fn(() => ({ registerExporter: e, unregisterPlugin: u })) } }));
-vi.mock('../../../utils/download', () => ({ downloadBlob: vi.fn() }));
+vi.mock('../../../utils/download', () => ({ saveExport: vi.fn() }));
 import { mountIoOsmPlugin } from './io-osm.plugin';
 import type { Project } from '../../../services/platform';
 
@@ -107,10 +107,10 @@ describe('io-osm.plugin', () => {
 });
 
 async function captureXml(project: Project): Promise<string> {
-  const { downloadBlob } = await import('../../../utils/download');
+  const { saveExport } = await import('../../../utils/download');
   const exporter = getExporter();
   await exporter(project);
-  const call = (downloadBlob as ReturnType<typeof vi.fn>).mock.calls[0]!;
+  const call = (saveExport as ReturnType<typeof vi.fn>).mock.calls[0]!;
   const blob = call[0] as Blob;
   // Use FileReader polyfill since Blob.text() may not be available in test env
   return new Promise<string>((resolve, reject) => {

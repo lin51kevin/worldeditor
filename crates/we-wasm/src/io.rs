@@ -38,6 +38,19 @@ pub fn export_project_to_obj(project_json: &str) -> Result<String, JsError> {
     Ok(we_io::obj_export::export_project_to_obj(&project))
 }
 
+// ── GeoZ ──────────────────────────────────────────────────────────────────────
+
+/// Export the project to a GeoZ (`.geoz`) archive.
+///
+/// Returns the raw ZIP bytes (protobuf-encoded `.topo` + `.geo` entries) that
+/// the GeoZ importer can read back.
+#[wasm_bindgen]
+pub fn export_to_geoz(project_json: &str) -> Result<Vec<u8>, JsError> {
+    let project: we_core::model::Project =
+        serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
+    we_io::geoz_export::export_to_geoz(&project).map_err(|e| JsError::new(&e.to_string()))
+}
+
 // ── Signal JSON ───────────────────────────────────────────────────────────────
 
 /// Import signals from a JSON string.

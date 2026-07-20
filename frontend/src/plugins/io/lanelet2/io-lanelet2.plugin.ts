@@ -5,7 +5,7 @@
  */
 
 import type { Project } from '../../../services/platform';
-import { downloadBlob } from '../../../utils/download';
+import { saveExport } from '../../../utils/download';
 import { createIOPlugin } from '../../core/ioPluginFactory';
 
 async function importLanelet2(content: string | ArrayBuffer): Promise<Project> {
@@ -19,7 +19,7 @@ async function exportLanelet2(project: Project): Promise<void> {
   const wasm = await import('../../../../wasm/pkg/we_wasm');
   const xml = wasm.export_to_lanelet2(JSON.stringify(project));
   const blob = new Blob([xml], { type: 'application/xml' });
-  downloadBlob(blob, `${project.name || 'export'}_lanelet2.osm`);
+  await saveExport(blob, `${project.name || 'export'}_lanelet2.osm`, [{ name: 'Lanelet2 OSM-XML', extensions: ['osm', 'xml'] }]);
 }
 
 export const mountIoLanelet2Plugin = createIOPlugin({

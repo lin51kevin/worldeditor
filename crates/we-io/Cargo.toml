@@ -16,6 +16,18 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }
 quick-xml = { workspace = true, optional = true }
+# GeoZ export: protobuf runtime + in-memory ZIP writer (STORED, no compression
+# backend → wasm32 compatible).
+prost = "0.14"
+zip = { version = "8", default-features = false, features = ["deflate-flate2"] }
+# Pure-Rust DEFLATE backend (miniz_oxide) for the zip writer — wasm32 safe.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
+[build-dependencies]
+# Pure-Rust protobuf compiler (no external protoc) + prost codegen for the
+# GeoZ (rt.hdmap) schema copied into crates/we-io/proto/.
+protox = "0.9"
+prost-build = "0.14"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["fs", "io-util"] }

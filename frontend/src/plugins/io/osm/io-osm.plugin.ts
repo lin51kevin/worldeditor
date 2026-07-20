@@ -3,7 +3,7 @@
  * Export only — generates OSM XML from road network data.
  */
 import type { Project } from '../../../services/platform';
-import { downloadBlob } from '../../../utils/download';
+import { saveExport } from '../../../utils/download';
 import { createIOPlugin } from '../../core/ioPluginFactory';
 
 function escapeXml(str: string): string {
@@ -75,8 +75,7 @@ function exportToOsm(project: Project): Promise<void> {
   xml += '</osm>\n';
 
   const blob = new Blob([xml], { type: 'application/xml' });
-  downloadBlob(blob, `${project.name || 'export'}.osm`);
-  return Promise.resolve();
+  return saveExport(blob, `${project.name || 'export'}.osm`, [{ name: 'OpenStreetMap XML', extensions: ['osm', 'xml'] }]);
 }
 
 export const mountIoOsmPlugin = createIOPlugin({

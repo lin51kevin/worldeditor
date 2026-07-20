@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
 
 const mockRegisterImporter = vi.fn();
+const mockRegisterExporter = vi.fn();
 const mockUnregisterPlugin = vi.fn();
 
 vi.mock('../../../stores/pluginContribStore', () => ({
   usePluginContribStore: {
     getState: vi.fn(() => ({
       registerImporter: mockRegisterImporter,
+      registerExporter: mockRegisterExporter,
       unregisterPlugin: mockUnregisterPlugin,
     })),
   },
@@ -30,6 +32,20 @@ describe('io-geoz.plugin', () => {
       pluginId: 'io-geoz-import',
       formatName: 'GeoZ Map',
       extensions: ['.geoz', '.zip'],
+      disabled: false,
+    });
+
+    cleanup();
+  });
+
+  it('registers exporter with correct format name', () => {
+    const cleanup = mountIoGeoZPlugin();
+    const exporter = mockRegisterExporter.mock.calls[0]?.[0];
+
+    expect(exporter).toMatchObject({
+      id: 'io-geoz-import:exporter',
+      pluginId: 'io-geoz-import',
+      formatName: 'GeoZ Map',
       disabled: false,
     });
 

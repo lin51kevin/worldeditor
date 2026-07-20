@@ -21,7 +21,7 @@ const { mockShowAlert, mockDownloadBlob, registered, mockUnregister } = vi.hoist
 });
 
 vi.mock('../../utils/dialog', () => ({ showAlert: mockShowAlert }));
-vi.mock('../../utils/download', () => ({ downloadBlob: mockDownloadBlob }));
+vi.mock('../../utils/download', () => ({ downloadBlob: mockDownloadBlob, saveExport: mockDownloadBlob }));
 vi.mock('../../stores/pluginContribStore', () => ({
   usePluginContribStore: {
     getState: vi.fn(() => {
@@ -99,11 +99,13 @@ describe('stub plugins — mount, register, and showAlert on click', () => {
     expect(mockShowAlert).toHaveBeenCalled();
   });
 
-  it('traffic SUMO exporter calls showAlert', async () => {
+  it('traffic SUMO exporter saves via saveExport', async () => {
     mountTrafficPlugin();
     const exp = reg().find(r => r.type === 'exporter')!.data as { onExport: (project: ReturnType<typeof createEmptyProject>) => Promise<unknown> };
     await expect(exp.onExport(createEmptyProject('Traffic Export'))).resolves.toBeUndefined();
-    expect(mockShowAlert).toHaveBeenCalled();
+    // The registered exporter delegates saving to the shared helper; success is
+    // reported by the File menu, so it no longer shows its own alert.
+    expect(mockDownloadBlob).toHaveBeenCalled();
   });
 
   it('pointcloud plugin registers a panel', () => {

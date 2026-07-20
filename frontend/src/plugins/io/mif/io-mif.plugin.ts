@@ -5,7 +5,7 @@
  */
 
 import type { Project } from '../../../services/platform';
-import { downloadBlob } from '../../../utils/download';
+import { saveExport } from '../../../utils/download';
 import { createIOPlugin } from '../../core/ioPluginFactory';
 
 async function importMif(content: string | ArrayBuffer): Promise<Project> {
@@ -18,7 +18,7 @@ async function exportMif(project: Project): Promise<void> {
   const wasm = await import('../../../../wasm/pkg/we_wasm');
   const mif = wasm.export_to_mif(JSON.stringify(project));
   const blob = new Blob([mif], { type: 'text/plain;charset=utf-8' });
-  downloadBlob(blob, `${project.name || 'export'}.mif`);
+  await saveExport(blob, `${project.name || 'export'}.mif`, [{ name: 'MapInfo MIF', extensions: ['mif'] }]);
 }
 
 export const mountIoMifPlugin = createIOPlugin({

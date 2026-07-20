@@ -3,6 +3,7 @@ import { useProjectStore } from '../../../stores/projectStore';
 import type { ExporterContrib, ImporterContrib } from '../../../stores/pluginContribStore';
 import type { RecentFile } from '../../../stores/recentFilesStore';
 import { showAlert, showConfirm } from '../../../utils/dialog';
+import { isExportCancelled } from '../../../utils/exportErrors';
 import type { MenuItem, TranslateFn } from '../menuDefinitions';
 import { MenuSection, type MenuSectionInteractionProps } from './MenuSection';
 
@@ -140,6 +141,9 @@ export function FileMenu({
           await exporter.onExport(project);
           await showAlert(`${t('dialog.exportSuccess')}: ${exporter.formatName}`, t('dialog.successTitle'));
         } catch (err) {
+          if (isExportCancelled(err)) {
+            return; // User cancelled the save dialog — no success, no error.
+          }
           console.error('[FileMenu] Export failed:', err);
           await showAlert(`${t('dialog.exportError')}: ${exporter.formatName}: ${err instanceof Error ? err.message : String(err)}`, t('dialog.errorTitle') || 'Error');
         }
