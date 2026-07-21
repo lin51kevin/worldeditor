@@ -5,12 +5,12 @@ import type { TemplateCatalog } from './schema';
 // ── loadCatalog ──────────────────────────────────────────────────────────────
 
 describe('loadCatalog', () => {
-  it('should return a catalog with all four sections', () => {
+  it('should return a catalog with all sections', () => {
     const catalog = loadCatalog();
     expect(catalog.roads.length).toBeGreaterThan(0);
     expect(catalog.junctions.length).toBeGreaterThan(0);
     expect(catalog.signals.length).toBeGreaterThan(0);
-    expect(catalog.markings.length).toBeGreaterThan(0);
+    expect(catalog.paints.length).toBeGreaterThan(0);
   });
 
   it('should contain 7 road templates', () => {
@@ -23,14 +23,19 @@ describe('loadCatalog', () => {
     expect(catalog.junctions).toHaveLength(8);
   });
 
-  it('should contain 13 signal templates', () => {
+  it('should contain 7 signal templates', () => {
     const catalog = loadCatalog();
-    expect(catalog.signals).toHaveLength(13);
+    expect(catalog.signals).toHaveLength(7);
   });
 
-  it('should contain 8 marking templates', () => {
+  it('should contain 0 marking templates (moved to paints)', () => {
     const catalog = loadCatalog();
-    expect(catalog.markings).toHaveLength(8);
+    expect(catalog.markings).toHaveLength(0);
+  });
+
+  it('should contain 15 paint templates', () => {
+    const catalog = loadCatalog();
+    expect(catalog.paints).toHaveLength(15);
   });
 
   it('should have version string', () => {

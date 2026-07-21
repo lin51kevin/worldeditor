@@ -6,8 +6,9 @@ describe('defaultCatalog', () => {
     expect(catalog.version).toBe('1.0.0');
     expect(catalog.roads).toHaveLength(7);
     expect(catalog.junctions).toHaveLength(8);
-    expect(catalog.signals).toHaveLength(13);
-    expect(catalog.markings).toHaveLength(8);
+    expect(catalog.signals).toHaveLength(7);
+    expect(catalog.markings).toHaveLength(0);
+    expect(catalog.paints).toHaveLength(15);
     expect(catalog.objects).toHaveLength(13);
     expect(catalog.signs).toHaveLength(5);
   });
@@ -18,6 +19,7 @@ describe('defaultCatalog', () => {
       ...catalog.junctions,
       ...catalog.signals,
       ...catalog.markings,
+      ...catalog.paints,
       ...catalog.objects,
       ...catalog.signs,
     ];

@@ -115,8 +115,10 @@ export function mergeCatalogs(base: TemplateCatalog, extra: TemplateCatalog): Te
     ...base.junctions.map((j) => j.id),
     ...base.signals.map((s) => s.id),
     ...base.markings.map((m) => m.id),
+    ...(base.paints ?? []).map((p) => p.id),
     ...(base.objects ?? []).map((o) => o.id),
     ...(base.signs ?? []).map((s) => s.id),
+    ...(base.roadSigns ?? []).map((s) => s.id),
   ]);
 
   return {
@@ -125,8 +127,10 @@ export function mergeCatalogs(base: TemplateCatalog, extra: TemplateCatalog): Te
     junctions: [...base.junctions, ...extra.junctions.filter((j) => !existingIds.has(j.id))],
     signals: [...base.signals, ...extra.signals.filter((s) => !existingIds.has(s.id))],
     markings: [...base.markings, ...extra.markings.filter((m) => !existingIds.has(m.id))],
+    paints: [...(base.paints ?? []), ...(extra.paints ?? []).filter((p) => !existingIds.has(p.id))],
     objects: [...(base.objects ?? []), ...(extra.objects ?? []).filter((o) => !existingIds.has(o.id))],
     signs: [...(base.signs ?? []), ...(extra.signs ?? []).filter((s) => !existingIds.has(s.id))],
+    roadSigns: [...(base.roadSigns ?? []), ...(extra.roadSigns ?? []).filter((s) => !existingIds.has(s.id))],
   };
 }
 
@@ -157,8 +161,10 @@ export function parseExternalCatalog(raw: unknown): TemplateCatalog {
     junctions: Array.isArray(obj.junctions) ? obj.junctions : [],
     signals: Array.isArray(obj.signals) ? obj.signals : [],
     markings: Array.isArray(obj.markings) ? obj.markings : [],
+    paints: Array.isArray(obj.paints) ? obj.paints : [],
     objects: Array.isArray(obj.objects) ? obj.objects : [],
     signs: Array.isArray(obj.signs) ? obj.signs : [],
+    roadSigns: Array.isArray(obj.roadSigns) ? obj.roadSigns : [],
   };
   const errors = validateCatalog(catalog);
   if (errors.length > 0) {

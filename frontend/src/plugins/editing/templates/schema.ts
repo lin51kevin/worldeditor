@@ -104,10 +104,12 @@ export interface SignalTemplateConfig {
   signalType: string;
   /** Signal subtype. Defaults to '-1' */
   signalSubtype?: string;
-  /** Signal width. Defaults to 1.0 */
+  /** Signal width. Defaults to 0.8 */
   width?: number;
-  /** Signal height. Defaults to 2.0 */
+  /** Signal height. Defaults to 0.8 */
   height?: number;
+  /** GB 5768 subcategory for UI grouping */
+  subcategory?: string;
 }
 
 // ── Marking Template ─────────────────────────────────────────────────────────
@@ -118,6 +120,8 @@ export interface MarkingTemplateConfig {
   icon: string;
   /** Mark applied to all driving lanes */
   mark: MarkConfig;
+  /** GB 5768 subcategory for UI grouping */
+  subcategory?: string;
 }
 
 // ── Road Object Template ─────────────────────────────────────────────────────
@@ -152,6 +156,8 @@ export interface RoadObjectTemplateConfig {
   defaultLength?: number;
   /** Default object height in metres */
   defaultHeight?: number;
+  /** GB 5768 subcategory for UI grouping */
+  subcategory?: string;
 }
 
 // ── Sign Template ─────────────────────────────────────────────────────────────
@@ -177,6 +183,26 @@ export interface SignTemplateConfig {
   defaultHeight?: number;
 }
 
+// ── Road Sign Template (标志牌 — GB 5768) ────────────────────────────────────
+
+export interface RoadSignTemplateConfig {
+  id: string;
+  labelKey: string;
+  icon: string;
+  /** PNG thumbnail URL */
+  thumbnailUrl?: string;
+  /** Chinese GB/T sign code (filename without extension in RoadSigns/) */
+  signCode: string;
+  /** OpenDRIVE signal type used when placing this sign */
+  signalType?: string;
+  /** GB 5768 subcategory: 'warning' | 'prohibitory' | 'mandatory' | 'guide' | 'supplementary' */
+  subcategory: string;
+  /** Default sign width */
+  defaultWidth?: number;
+  /** Default sign height */
+  defaultHeight?: number;
+}
+
 // ── Catalog ──────────────────────────────────────────────────────────────────
 
 export interface TemplateCatalog {
@@ -185,9 +211,18 @@ export interface TemplateCatalog {
   roads: RoadTemplateConfig[];
   junctions: JunctionTemplateConfig[];
   signals: SignalTemplateConfig[];
+  /**
+   * @deprecated Use `paints` for road-surface arrows. Kept for backward
+   * compatibility with external catalogs that predate the paints category.
+   * Internal catalog always emits an empty array here.
+   */
   markings: MarkingTemplateConfig[];
   /** Road surface and roadside accessories (人行横道, 护栏, 停车位…) */
   objects: RoadObjectTemplateConfig[];
   /** Sign structures (标志牌, 信号灯杆…) */
   signs: SignTemplateConfig[];
+  /** Road paint arrows (道路喷漆) — placed as OpenDRIVE Graphics signals */
+  paints: SignalTemplateConfig[];
+  /** Road signs by GB 5768 categories (标志牌分类) */
+  roadSigns: RoadSignTemplateConfig[];
 }

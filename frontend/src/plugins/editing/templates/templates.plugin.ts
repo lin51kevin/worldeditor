@@ -1,11 +1,14 @@
 /**
  * Built-in Templates Plugin
  *
- * Registers four template sections into the TemplatePanel:
+ * Registers template sections into the TemplatePanel:
  *  - Roads (道路): predefined road cross-section types
  *  - Junctions (交汇处): intersection / fork patterns
- *  - Signals (信号): traffic signs and lights
- *  - Markings (喷漆): road surface paint/mark presets
+ *  - Signals (信号): traffic lights only
+ *  - Paints (喷漆): road surface paint arrows
+ *  - Objects (附属物): road accessories
+ *  - Signs (信号灯杆): poles and gantries
+ *  - Road Signs (标志牌): GB 5768 warning/prohibitory/mandatory/supplementary
  *
  * All template definitions are loaded from the declarative catalog
  * (templates/defaultCatalog.ts). The template engine (templates/engine.ts)
@@ -19,13 +22,11 @@
 import { useProjectStore } from '../../../stores/projectStore';
 import { usePluginContribStore } from '../../../stores/pluginContribStore';
 import type { TemplateSectionContrib, TemplateItemDef } from '../../../stores/pluginContribStore';
-import type { Lane, LaneSection, RoadMark } from '../../../services/platform';
 import {
   loadCatalog,
   buildRoadFromConfig,
   buildJunctionFromConfig,
   buildSignalFromConfig,
-  buildMarkFromConfig,
   buildRoadObjectFromConfig,
   buildSignFromConfig,
 } from './index';
@@ -33,9 +34,9 @@ import type {
   RoadTemplateConfig,
   JunctionTemplateConfig,
   SignalTemplateConfig,
-  MarkingTemplateConfig,
   RoadObjectTemplateConfig,
   SignTemplateConfig,
+  RoadSignTemplateConfig,
 } from './index';
 
 const PLUGIN_ID = 'builtin-templates';
@@ -81,6 +82,30 @@ function junctionConfigToItem(config: JunctionTemplateConfig): TemplateItemDef {
   };
 }
 
+// ── Signal / road-sign naming convention ─────────────────────────────────────
+//
+// Names follow the pattern: <PascalCaseKey>_<NNN> where:
+//   - PascalCaseKey is derived from the template id
+//       e.g. 'tpl:sig:traffic-light'  → 'TrafficLight'
+//            'tpl:sig:arrow-straight' → 'ArrowStraight'
+//   - For numeric GB codes (road signs) a 'Sign_' prefix is added
+//       e.g. 'tpl:rsign:1010200100001914' → 'Sign_1010200100001914'
+//            'tpl:rsign:1010203800001413_30' → 'Sign_1010203800001413_30'
+//   - NNN is 1-based serial of signals already on the road, zero-padded to 3 digits
+
+function deriveSignalName(templateId: string, existingSignalCount: number): string {
+  const serial = String(existingSignalCount + 1).padStart(3, '0');
+  // Strip template type prefix
+  const key = templateId.replace(/^tpl:(?:sig|rsign):/, '');
+  if (/^\d/.test(key)) {
+    // Numeric code — GB road sign or speed-limit variant
+    return `Sign_${key}_${serial}`;
+  }
+  // Named key: kebab-case → PascalCase (e.g. 'arrow-straight' → 'ArrowStraight')
+  const pascal = key.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+  return `${pascal}_${serial}`;
+}
+
 // ── Signal config → TemplateItemDef ──────────────────────────────────────────
 
 function signalConfigToItem(config: SignalTemplateConfig): TemplateItemDef {
@@ -93,8 +118,10 @@ function signalConfigToItem(config: SignalTemplateConfig): TemplateItemDef {
       const store = useProjectStore.getState();
       const targetRoadId = opts?.roadId ?? store.selectedRoadId;
       if (!targetRoadId) return;
+      const road = store.project.roads.find((r) => r.id === targetRoadId);
       const signal = {
         ...buildSignalFromConfig(config),
+        name: deriveSignalName(config.id, road?.signals?.length ?? 0),
         s: opts?.x ?? 0,
         t: opts?.y ?? 0,
       };
@@ -103,43 +130,38 @@ function signalConfigToItem(config: SignalTemplateConfig): TemplateItemDef {
   };
 }
 
-// ── Marking config → TemplateItemDef ─────────────────────────────────────────
+// ── Road sign config → TemplateItemDef ───────────────────────────────────────
 
-function markingConfigToItem(config: MarkingTemplateConfig): TemplateItemDef {
+function roadSignConfigToItem(config: RoadSignTemplateConfig): TemplateItemDef {
   return {
     id: config.id,
     labelKey: config.labelKey,
     icon: config.icon,
+    thumbnailUrl: config.thumbnailUrl,
     onApply: (opts) => {
-      const mark: RoadMark = buildMarkFromConfig(config);
-      const { selectedRoadId, project } = useProjectStore.getState();
-      const targetRoadId = opts?.roadId ?? selectedRoadId;
+      const store = useProjectStore.getState();
+      const targetRoadId = opts?.roadId ?? store.selectedRoadId;
       if (!targetRoadId) return;
-      const road = project.roads.find((r) => r.id === targetRoadId);
-      if (!road || road.lane_sections.length === 0) return;
-
-      const section = road.lane_sections[0]!;
-      const applyMark = (lanes: Lane[]): Lane[] =>
-        lanes.map((lane) =>
-          lane.lane_type === 'Driving' ? { ...lane, road_marks: [mark] } : lane,
-        );
-
-      const updatedSection: LaneSection = {
-        ...section,
-        left: applyMark(section.left),
-        right: applyMark(section.right),
+      const road = store.project.roads.find((r) => r.id === targetRoadId);
+      const signal = {
+        id: crypto.randomUUID(),
+        name: deriveSignalName(config.id, road?.signals?.length ?? 0),
+        s: opts?.x ?? 0,
+        t: opts?.y ?? 0,
+        z_offset: 3.5,
+        signal_type: config.signalType ?? config.signCode,
+        signal_subtype: '-1',
+        value: null as string | null,
+        width: config.defaultWidth ?? 0.8,
+        height: config.defaultHeight ?? 0.8,
+        h_offset: 0,
+        orientation: '+' as const,
+        is_dynamic: false,
+        country: 'CN',
+        unit: '',
+        validities: [] as Array<{ from_lane: number; to_lane: number }>,
       };
-      const updatedRoad = {
-        ...road,
-        lane_sections: road.lane_sections.map((s, i) => (i === 0 ? updatedSection : s)),
-      };
-
-      const { project: proj } = useProjectStore.getState();
-      useProjectStore.getState().setProject({
-        ...proj,
-        roads: proj.roads.map((r) => (r.id === targetRoadId ? updatedRoad : r)),
-      });
-      useProjectStore.getState().markDirty();
+      store.addRoadSignalItem(targetRoadId, signal);
     },
   };
 }
@@ -173,12 +195,12 @@ function buildSections(): TemplateSectionContrib[] {
     items: catalog.signals.map(signalConfigToItem),
   };
 
-  const markingSection: TemplateSectionContrib = {
-    id: `${PLUGIN_ID}:markings`,
+  const paintSection: TemplateSectionContrib = {
+    id: `${PLUGIN_ID}:paints`,
     pluginId: PLUGIN_ID,
-    categoryKey: 'templatePanel.categories.markings',
+    categoryKey: 'templatePanel.categories.paints',
     order: 3,
-    items: catalog.markings.map(markingConfigToItem),
+    items: (catalog.paints ?? []).map(signalConfigToItem),
   };
 
   const objectSection: TemplateSectionContrib = {
@@ -197,7 +219,32 @@ function buildSections(): TemplateSectionContrib[] {
     items: catalog.signs.map(signConfigToItem),
   };
 
-  return [roadSection, junctionSection, signalSection, markingSection, objectSection, signSection];
+  // Road signs split into sub-sections by GB 5768 category
+  const roadSignsByCategory = new Map<string, RoadSignTemplateConfig[]>();
+  for (const rs of catalog.roadSigns ?? []) {
+    const cat = rs.subcategory;
+    if (!roadSignsByCategory.has(cat)) roadSignsByCategory.set(cat, []);
+    roadSignsByCategory.get(cat)!.push(rs);
+  }
+
+  const subcategoryOrder: Record<string, number> = {
+    warning: 6,
+    prohibitory: 7,
+    mandatory: 8,
+    supplementary: 9,
+  };
+
+  const roadSignSections: TemplateSectionContrib[] = [...roadSignsByCategory.entries()].map(
+    ([cat, items]) => ({
+      id: `${PLUGIN_ID}:roadSigns:${cat}`,
+      pluginId: PLUGIN_ID,
+      categoryKey: `templatePanel.categories.roadSigns.${cat}`,
+      order: subcategoryOrder[cat] ?? 10,
+      items: items.map(roadSignConfigToItem),
+    }),
+  );
+
+  return [roadSection, junctionSection, signalSection, paintSection, objectSection, signSection, ...roadSignSections];
 }
 
 // ── Road-object config → TemplateItemDef ─────────────────────────────────────

@@ -9,6 +9,7 @@
  * The template engine + plugin wiring will pick it up automatically.
  */
 import type { TemplateCatalog } from './schema';
+import { roadSignEntries } from './roadSignEntries';
 
 const W = 3.5;   // standard driving lane width (m)
 const SW = 2.0;  // shoulder width (m) — matching C# reference
@@ -285,58 +286,70 @@ const catalog: TemplateCatalog = {
   ],
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Signals
+  // Signals — Traffic Lights only (交通信号灯)
   // ═══════════════════════════════════════════════════════════════════════════
 
   signals: [
-    { id: 'tpl:sig:traffic-light', labelKey: 'templatePanel.signals.trafficLight', icon: '🚦', signalType: '1000001', thumbnailUrl: '/assets/textures/TrafficLights/StandardTrafficLight.png' },
-    { id: 'tpl:sig:stop', labelKey: 'templatePanel.signals.stopSign', icon: '🛑', signalType: '206' },
-    { id: 'tpl:sig:warning', labelKey: 'templatePanel.signals.warningSign', icon: '⚠', signalType: '101' },
-    { id: 'tpl:sig:give-way', labelKey: 'templatePanel.signals.giveWay', icon: '⬡', signalType: '002' },
-    { id: 'tpl:sig:no-entry', labelKey: 'templatePanel.signals.noEntry', icon: '⛔', signalType: '267' },
-    { id: 'tpl:sig:no-parking', labelKey: 'templatePanel.signals.noParking', icon: '🚫', signalType: '283' },
-    { id: 'tpl:sig:speed30', labelKey: 'templatePanel.signals.speedLimit30', icon: '㉚', signalType: '274' },
-    { id: 'tpl:sig:speed60', labelKey: 'templatePanel.signals.speedLimit60', icon: '㊿', signalType: '274.1' },
-    { id: 'tpl:sig:speed80', labelKey: 'templatePanel.signals.speedLimit80', icon: '🔢', signalType: '274.2' },
-    { id: 'tpl:sig:speed120', labelKey: 'templatePanel.signals.speedLimit120', icon: '🏎', signalType: '274.3' },
-    { id: 'tpl:sig:arrow-straight', labelKey: 'templatePanel.signals.arrowStraight', icon: '⬆', signalType: 'Graphics', signalSubtype: 'straight', thumbnailUrl: '/assets/textures/RoadPaints/StraightArrowPaint.png' },
-    { id: 'tpl:sig:arrow-left', labelKey: 'templatePanel.signals.arrowLeft', icon: '⬅', signalType: 'Graphics', signalSubtype: 'left', thumbnailUrl: '/assets/textures/RoadPaints/LeftTurnArrowPaint.png' },
-    { id: 'tpl:sig:arrow-right', labelKey: 'templatePanel.signals.arrowRight', icon: '➡', signalType: 'Graphics', signalSubtype: 'right', thumbnailUrl: '/assets/textures/RoadPaints/RightTurnArrowPaint.png' },
+    { id: 'tpl:sig:traffic-light', labelKey: 'templatePanel.signals.trafficLight', icon: '🚦', signalType: '1000001', subcategory: 'trafficLights', width: 0.6, height: 0.9, thumbnailUrl: '/assets/textures/TrafficLights/StandardTrafficLight.png' },
+    { id: 'tpl:sig:walking-light', labelKey: 'templatePanel.signals.walkingLight', icon: '🚶', signalType: '1000002', subcategory: 'trafficLights', width: 0.6, height: 0.9, thumbnailUrl: '/assets/textures/TrafficLights/WalkingTrafficLight.png' },
+    { id: 'tpl:sig:forward-light', labelKey: 'templatePanel.signals.forwardLight', icon: '⬆', signalType: '1000011', signalSubtype: '30', subcategory: 'trafficLights', width: 0.6, height: 0.9, thumbnailUrl: '/assets/textures/TrafficLights/ForwardTrafficLight.png' },
+    { id: 'tpl:sig:left-turn-light', labelKey: 'templatePanel.signals.leftTurnLight', icon: '⬅', signalType: '1000011', signalSubtype: '10', subcategory: 'trafficLights', width: 0.6, height: 0.9, thumbnailUrl: '/assets/textures/TrafficLights/TurnLeftTrafficLight.png' },
+    { id: 'tpl:sig:right-turn-light', labelKey: 'templatePanel.signals.rightTurnLight', icon: '➡', signalType: '1000011', signalSubtype: '20', subcategory: 'trafficLights', width: 0.6, height: 0.9, thumbnailUrl: '/assets/textures/TrafficLights/TurnRightTrafficLight.png' },
+    { id: 'tpl:sig:uturn-light', labelKey: 'templatePanel.signals.uturnLight', icon: '↩', signalType: '2000011', signalSubtype: '60', subcategory: 'trafficLights', width: 0.6, height: 0.9, thumbnailUrl: '/assets/textures/TrafficLights/TurnUTrafficLight.png' },
+    { id: 'tpl:sig:biking-light', labelKey: 'templatePanel.signals.bikingLight', icon: '🚲', signalType: '1000013', subcategory: 'trafficLights', width: 0.6, height: 0.9, thumbnailUrl: '/assets/textures/TrafficLights/BikingTrafficLight.png' },
   ],
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Markings
+  // Markings — kept empty (lane markings removed per C# alignment)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  markings: [
-    { id: 'tpl:mark:solid-white', labelKey: 'templatePanel.markings.solidWhite', icon: '━', mark: { type: 'Solid' } },
-    { id: 'tpl:mark:dashed-white', labelKey: 'templatePanel.markings.dashedWhite', icon: '╌', mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
-    { id: 'tpl:mark:solid-yellow', labelKey: 'templatePanel.markings.solidYellow', icon: '🟡', mark: { type: 'Solid', color: 'Yellow' } },
-    { id: 'tpl:mark:double-yellow', labelKey: 'templatePanel.markings.doubleYellow', icon: '〓', mark: { type: 'SolidSolid', color: 'Yellow', width: 0.3 } },
-    { id: 'tpl:mark:zebra', labelKey: 'templatePanel.markings.zebraCrossing', icon: '🦓', mark: { type: 'Curb', weight: 'Bold', width: 3.0 } },
-    { id: 'tpl:mark:no-mark', labelKey: 'templatePanel.markings.noMarking', icon: '✕', mark: { type: 'None', width: 0 } },
-    { id: 'tpl:mark:broken-yellow', labelKey: 'templatePanel.markings.brokenYellow', icon: '╌', mark: { type: 'Broken', color: 'Yellow', width: 0.12, laneChange: 'Both' } },
-    { id: 'tpl:mark:double-broken', labelKey: 'templatePanel.markings.doubleBroken', icon: '╞', mark: { type: 'BrokenBroken', color: 'Standard', width: 0.12, laneChange: 'Both' } },
+  markings: [],
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Paints — Road surface paint arrows (道路喷漆)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  paints: [
+    { id: 'tpl:sig:arrow-straight', labelKey: 'templatePanel.paints.arrowStraight', icon: '⬆', signalType: 'Graphics', signalSubtype: 'straight', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/StraightArrowPaint.png' },
+    { id: 'tpl:sig:arrow-left', labelKey: 'templatePanel.paints.arrowLeft', icon: '⬅', signalType: 'Graphics', signalSubtype: 'left', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/LeftTurnArrowPaint.png' },
+    { id: 'tpl:sig:arrow-right', labelKey: 'templatePanel.paints.arrowRight', icon: '➡', signalType: 'Graphics', signalSubtype: 'right', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/RightTurnArrowPaint.png' },
+    { id: 'tpl:sig:arrow-uturn', labelKey: 'templatePanel.paints.arrowUturn', icon: '↩', signalType: 'Graphics', signalSubtype: 'uturn', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/UTurnArrowPaint.png' },
+    { id: 'tpl:sig:arrow-straight-left', labelKey: 'templatePanel.paints.arrowStraightLeft', icon: '↖', signalType: 'Graphics', signalSubtype: 'straight_left', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/StraightLeftTurnArrowPaint.png' },
+    { id: 'tpl:sig:arrow-straight-right', labelKey: 'templatePanel.paints.arrowStraightRight', icon: '↗', signalType: 'Graphics', signalSubtype: 'straight_right', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/StraightRightTurnArrowPaint.png' },
+    { id: 'tpl:sig:arrow-left-right', labelKey: 'templatePanel.paints.arrowLeftRight', icon: '↔', signalType: 'Graphics', signalSubtype: 'left_right', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/LeftOrRightTurnArrowPaint.png' },
+    { id: 'tpl:sig:arrow-all', labelKey: 'templatePanel.paints.arrowAll', icon: '✦', signalType: 'Graphics', signalSubtype: 'straight_left_right', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/StraightOrLeftOrRightTurnArrowPaint.png' },
+    { id: 'tpl:sig:arrow-straight-uturn', labelKey: 'templatePanel.paints.arrowStraightUturn', icon: '⤴', signalType: 'Graphics', signalSubtype: 'straight_uturn', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/StraightUTurnArrowPaint.png' },
+    { id: 'tpl:sig:arrow-left-uturn', labelKey: 'templatePanel.paints.arrowLeftUturn', icon: '↶', signalType: 'Graphics', signalSubtype: 'left_uturn', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/LeftOrUTurnArrowPaint.png' },
+    { id: 'tpl:sig:merge-left', labelKey: 'templatePanel.paints.mergeLeft', icon: '⇐', signalType: 'Graphics', signalSubtype: 'merge_left', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/MergeToLeftLaneArrowPaint.png' },
+    { id: 'tpl:sig:merge-right', labelKey: 'templatePanel.paints.mergeRight', icon: '⇒', signalType: 'Graphics', signalSubtype: 'merge_right', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/MergeToRightLaneArrowPaint.png' },
+    { id: 'tpl:sig:bicycle-paint', labelKey: 'templatePanel.paints.bicyclePaint', icon: '🚲', signalType: 'Graphics', signalSubtype: 'bicycle', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/BycyclePaint.png' },
+    { id: 'tpl:sig:pedestrian-paint', labelKey: 'templatePanel.paints.pedestrianPaint', icon: '🚶', signalType: 'Graphics', signalSubtype: 'pedestrian', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/PedestrianPaint.png' },
+    { id: 'tpl:sig:disabled-paint', labelKey: 'templatePanel.paints.disabledPaint', icon: '♿', signalType: 'Graphics', signalSubtype: 'disabled', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/DisabledPaint.png' },
   ],
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Road Objects (附属物)
+  // Road Objects (附属物) — grouped by subcategory
   // ═══════════════════════════════════════════════════════════════════════════
 
   objects: [
-    { id: 'tpl:obj:crosswalk', labelKey: 'templatePanel.objects.crosswalk', icon: '🚶', objectType: 'Crosswalk', defaultWidth: 3.0, defaultLength: 5.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/ZebraStripsArea.png' },
-    { id: 'tpl:obj:stop-line', labelKey: 'templatePanel.objects.stopLine', icon: '⛔', objectType: 'StopLine', defaultWidth: 6.0, defaultLength: 0.4, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/StopLine.png' },
-    { id: 'tpl:obj:yield-slow', labelKey: 'templatePanel.objects.yieldSlowLine', icon: '🔽', objectType: 'SlowDownToYieldLine', defaultWidth: 6.0, defaultLength: 0.6, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/SlowDownToYieldLine.png' },
-    { id: 'tpl:obj:yield-stop', labelKey: 'templatePanel.objects.yieldStopLine', icon: '✋', objectType: 'StopToYieldLine', defaultWidth: 6.0, defaultLength: 0.6, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/StopToYieldLine.png' },
-    { id: 'tpl:obj:cross-hatch', labelKey: 'templatePanel.objects.crossHatch', icon: '▦', objectType: 'CrossHatchArea', defaultWidth: 4.0, defaultLength: 4.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/CrossHatchArea.png' },
-    { id: 'tpl:obj:woven', labelKey: 'templatePanel.objects.wovenArea', icon: '▥', objectType: 'WovenArea', defaultWidth: 4.0, defaultLength: 6.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/WovenArea.png' },
-    { id: 'tpl:obj:forward-wait', labelKey: 'templatePanel.objects.forwardWaiting', icon: '🚗', objectType: 'ForwardWaitingArea', defaultWidth: 3.5, defaultLength: 5.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/ForwardWaitingArea.png' },
-    { id: 'tpl:obj:turn-left-wait', labelKey: 'templatePanel.objects.turnLeftWaiting', icon: '↰', objectType: 'TurnLeftWaitingArea', defaultWidth: 3.5, defaultLength: 5.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/TurnLeftWaitingArea.png' },
-    { id: 'tpl:obj:parking', labelKey: 'templatePanel.objects.parkingSpace', icon: '🅿', objectType: 'ParkingSpace', defaultWidth: 2.5, defaultLength: 5.0, defaultHeight: 0.0, thumbnailUrl: '/assets/textures/Objects/ParkingSpace.png' },
-    { id: 'tpl:obj:guardrail', labelKey: 'templatePanel.objects.guardrail', icon: '|', objectType: 'Guardrail', defaultWidth: 0.3, defaultLength: 10.0, defaultHeight: 0.9, thumbnailUrl: '/assets/textures/Objects/RoadGuardrail.png' },
-    { id: 'tpl:obj:barrier', labelKey: 'templatePanel.objects.barrier', icon: '▌', objectType: 'Barrier', defaultWidth: 0.5, defaultLength: 5.0, defaultHeight: 1.0, thumbnailUrl: '/assets/textures/Objects/SidewalkRail.png' },
-    { id: 'tpl:obj:cone', labelKey: 'templatePanel.objects.trafficCone', icon: '🔸', objectType: 'TrafficCone', defaultWidth: 0.4, defaultLength: 0.4, defaultHeight: 0.7 },
-    { id: 'tpl:obj:street-light', labelKey: 'templatePanel.objects.streetLight', icon: '💡', objectType: 'StreetLightPole', defaultWidth: 0.2, defaultLength: 0.2, defaultHeight: 8.0, thumbnailUrl: '/assets/textures/Objects/StreetLightPole.png' },
+    // ── Surface Markings (路面标记) ──
+    { id: 'tpl:obj:crosswalk', labelKey: 'templatePanel.objects.crosswalk', icon: '🚶', objectType: 'Crosswalk', defaultWidth: 3.0, defaultLength: 5.0, defaultHeight: 0.0, subcategory: 'surfaceMarkings', thumbnailUrl: '/assets/textures/Objects/ZebraStripsArea.png' },
+    { id: 'tpl:obj:stop-line', labelKey: 'templatePanel.objects.stopLine', icon: '⛔', objectType: 'StopLine', defaultWidth: 6.0, defaultLength: 0.4, defaultHeight: 0.0, subcategory: 'surfaceMarkings', thumbnailUrl: '/assets/textures/Objects/StopLine.png' },
+    { id: 'tpl:obj:yield-slow', labelKey: 'templatePanel.objects.yieldSlowLine', icon: '🔽', objectType: 'SlowDownToYieldLine', defaultWidth: 6.0, defaultLength: 0.6, defaultHeight: 0.0, subcategory: 'surfaceMarkings', thumbnailUrl: '/assets/textures/Objects/SlowDownToYieldLine.png' },
+    { id: 'tpl:obj:yield-stop', labelKey: 'templatePanel.objects.yieldStopLine', icon: '✋', objectType: 'StopToYieldLine', defaultWidth: 6.0, defaultLength: 0.6, defaultHeight: 0.0, subcategory: 'surfaceMarkings', thumbnailUrl: '/assets/textures/Objects/StopToYieldLine.png' },
+    { id: 'tpl:obj:forward-wait', labelKey: 'templatePanel.objects.forwardWaiting', icon: '🚗', objectType: 'ForwardWaitingArea', defaultWidth: 3.5, defaultLength: 5.0, defaultHeight: 0.0, subcategory: 'surfaceMarkings', thumbnailUrl: '/assets/textures/Objects/ForwardWaitingArea.png' },
+    { id: 'tpl:obj:turn-left-wait', labelKey: 'templatePanel.objects.turnLeftWaiting', icon: '↰', objectType: 'TurnLeftWaitingArea', defaultWidth: 3.5, defaultLength: 5.0, defaultHeight: 0.0, subcategory: 'surfaceMarkings', thumbnailUrl: '/assets/textures/Objects/TurnLeftWaitingArea.png' },
+
+    // ── Area Markings (区域标记) ──
+    { id: 'tpl:obj:cross-hatch', labelKey: 'templatePanel.objects.crossHatch', icon: '▦', objectType: 'CrossHatchArea', defaultWidth: 4.0, defaultLength: 4.0, defaultHeight: 0.0, subcategory: 'areaMarkings', thumbnailUrl: '/assets/textures/Objects/CrossHatchArea.png' },
+    { id: 'tpl:obj:woven', labelKey: 'templatePanel.objects.wovenArea', icon: '▥', objectType: 'WovenArea', defaultWidth: 4.0, defaultLength: 6.0, defaultHeight: 0.0, subcategory: 'areaMarkings', thumbnailUrl: '/assets/textures/Objects/WovenArea.png' },
+    { id: 'tpl:obj:parking', labelKey: 'templatePanel.objects.parkingSpace', icon: '🅿', objectType: 'ParkingSpace', defaultWidth: 2.5, defaultLength: 5.0, defaultHeight: 0.0, subcategory: 'areaMarkings', thumbnailUrl: '/assets/textures/Objects/ParkingSpace.png' },
+
+    // ── Road Furniture (道路设施) ──
+    { id: 'tpl:obj:guardrail', labelKey: 'templatePanel.objects.guardrail', icon: '|', objectType: 'Guardrail', defaultWidth: 0.3, defaultLength: 10.0, defaultHeight: 0.9, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/RoadGuardrail.png' },
+    { id: 'tpl:obj:barrier', labelKey: 'templatePanel.objects.barrier', icon: '▌', objectType: 'Barrier', defaultWidth: 0.5, defaultLength: 5.0, defaultHeight: 1.0, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/SidewalkRail.png' },
+    { id: 'tpl:obj:cone', labelKey: 'templatePanel.objects.trafficCone', icon: '🔸', objectType: 'TrafficCone', defaultWidth: 0.4, defaultLength: 0.4, defaultHeight: 0.7, subcategory: 'roadFurniture' },
+    { id: 'tpl:obj:street-light', labelKey: 'templatePanel.objects.streetLight', icon: '💡', objectType: 'StreetLightPole', defaultWidth: 0.2, defaultLength: 0.2, defaultHeight: 8.0, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/StreetLightPole.png' },
   ],
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -350,6 +363,12 @@ const catalog: TemplateCatalog = {
     { id: 'tpl:sign:traffic-light-pole', labelKey: 'templatePanel.signs.trafficLightPole', icon: '🚦', objectType: 'TrafficLightPole', defaultWidth: 0.2, defaultHeight: 6.0, thumbnailUrl: '/assets/textures/Objects/TrafficLightPole.png' },
     { id: 'tpl:sign:l-pole', labelKey: 'templatePanel.signs.lTypePole', icon: '⌐', objectType: 'LTypeSignalPole', defaultWidth: 0.2, defaultHeight: 5.5, thumbnailUrl: '/assets/textures/Objects/LTypeSignalPole.png' },
   ],
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Road Signs — GB 5768 Categories (标志牌 — 中国国标分类)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  roadSigns: roadSignEntries,
 };
 
 export default catalog;

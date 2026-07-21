@@ -68,8 +68,9 @@ const mockCatalog = {
   version: '1.0.0',
   roads: [{ id: 'tpl:road:test', labelKey: 'roads.test', icon: 'R', left: [], right: [] }],
   junctions: [{ id: 'tpl:jct:test', labelKey: 'junctions.test', icon: 'J', topology: 'T', armLength: 100 }],
-  signals: [{ id: 'tpl:sig:test', labelKey: 'signals.test', icon: 'S', signalType: '206' }],
-  markings: [{ id: 'tpl:mark:test', labelKey: 'markings.test', icon: 'M', mark: { type: 'Solid' } }],
+  signals: [{ id: 'tpl:sig:test', labelKey: 'signals.test', icon: 'S', signalType: '1000001' }],
+  markings: [],
+  paints: [{ id: 'tpl:sig:paint-test', labelKey: 'paints.test', icon: 'P', signalType: 'Graphics', signalSubtype: 'straight' }],
   objects: [{ id: 'tpl:obj:test', labelKey: 'objects.test', icon: 'O', objectType: 'Crosswalk' }],
   signs: [{ id: 'tpl:sign:test', labelKey: 'signs.test', icon: 'P', objectType: 'Sign' }],
 };
@@ -157,7 +158,7 @@ describe('templates.plugin', () => {
       ['builtin-templates:roads', 'templatePanel.categories.roads', 0],
       ['builtin-templates:junctions', 'templatePanel.categories.junctions', 1],
       ['builtin-templates:signals', 'templatePanel.categories.signals', 2],
-      ['builtin-templates:markings', 'templatePanel.categories.markings', 3],
+      ['builtin-templates:paints', 'templatePanel.categories.paints', 3],
       ['builtin-templates:objects', 'templatePanel.categories.objects', 4],
       ['builtin-templates:signs', 'templatePanel.categories.signs', 5],
     ]);
@@ -169,7 +170,7 @@ describe('templates.plugin', () => {
 
   it('wires template items to the build helpers and project actions', () => {
     mountTemplatesPlugin();
-    const [roadSection, junctionSection, signalSection, markingSection, objectSection, signSection] =
+    const [roadSection, junctionSection, signalSection, paintSection, objectSection, signSection] =
       getRegisteredSections();
 
     roadSection.items[0].onApply({ x: 10, y: 20, hdg: 0.5 });
@@ -200,14 +201,10 @@ describe('templates.plugin', () => {
       expect.objectContaining({ id: 'signal-built', s: 3, t: 4 }),
     );
 
-    markingSection.items[0].onApply({ roadId: 'road-1' });
-    const markedProject = projectState.setProject.mock.calls[0]?.[0];
-    const markedSection = markedProject.roads[0].lane_sections[0];
-    expect(buildMarkFromConfig).toHaveBeenCalledWith(mockCatalog.markings[0]);
-    expect(markedSection.left[0].road_marks).toEqual([builtMark]);
-    expect(markedSection.left[1].road_marks).toEqual([{ type: 'Existing' }]);
-    expect(markedSection.right[0].road_marks).toEqual([builtMark]);
-    expect(projectState.markDirty).toHaveBeenCalledOnce();
+    // Paint items create signals via the same mechanism as signal templates
+    paintSection.items[0].onApply({ x: 5, y: 6 });
+    expect(buildSignalFromConfig).toHaveBeenCalledWith(mockCatalog.paints[0]);
+    expect(projectState.addRoadSignalItem).toHaveBeenCalledTimes(2);
 
     objectSection.items[0].onApply({ roadId: 'road-1', x: 7, y: 8, hdg: 0.25 });
     expect(buildRoadObjectFromConfig).toHaveBeenCalledWith(mockCatalog.objects[0], 7, 8, 0.25);

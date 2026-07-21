@@ -117,8 +117,8 @@ export const TemplatePanel = memo(function TemplatePanel() {
       // Road-object / sign templates: click-to-place on road.
       viewStore.clearPendingTemplate();
       viewStore.setPendingObjectTemplate(itemId);
-    } else if (itemId.startsWith('tpl:sig:') || itemId.startsWith('tpl:mark:')) {
-      // Signal / marking templates: enter click-to-place road-pick mode.
+    } else if (itemId.startsWith('tpl:sig:') || itemId.startsWith('tpl:mark:') || itemId.startsWith('tpl:rsign:')) {
+      // Signal / marking / road sign templates: enter click-to-place road-pick mode.
       // The viewport pendingObjectTemplateId handler picks the road then calls onApply({roadId, x, y}).
       viewStore.clearPendingTemplate();
       viewStore.setPendingObjectTemplate(itemId);
