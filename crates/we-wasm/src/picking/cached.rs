@@ -329,31 +329,89 @@ pub fn snap_point_on_road(road_json: &str, world_x: f64, world_y: f64) -> Result
             t: 0.0,
             hdg: 0.0,
         }
-    } else {
-        // Find the closest reference-line sample
-        let mut best_idx = 0usize;
-        let mut best_dist_sq = f64::MAX;
-        for (i, pt) in samples.iter().enumerate() {
-            let dx = pt.x - world_x;
-            let dy = pt.y - world_y;
-            let d = dx * dx + dy * dy;
-            if d < best_dist_sq {
-                best_dist_sq = d;
-                best_idx = i;
-            }
-        }
-        let pt = &samples[best_idx];
-        // Decompose world offset into road-local axes
+    } else if samples.len() == 1 {
+        // Single-point road: project onto that point
+        let pt = &samples[0];
         let dx = world_x - pt.x;
         let dy = world_y - pt.y;
         let cos_h = pt.hdg.cos();
         let sin_h = pt.hdg.sin();
-        // t = perpendicular component (positive = left of heading direction)
         let t = -dx * sin_h + dy * cos_h;
         RoadLocalPos {
             s: pt.s,
             t,
             hdg: pt.hdg,
+        }
+    } else {
+        // Project query point onto each segment between consecutive samples
+        // (same approach as picking::distance_to_road for sub-meter accuracy).
+        let mut best_dist_sq = f64::MAX;
+        let mut best_s = samples[0].s;
+        let mut best_t = 0.0;
+        let mut best_hdg = samples[0].hdg;
+        let mut any_valid_segment = false;
+
+        for i in 0..samples.len() - 1 {
+            let p0 = &samples[i];
+            let p1 = &samples[i + 1];
+
+            let seg_dx = p1.x - p0.x;
+            let seg_dy = p1.y - p0.y;
+            let seg_len_sq = seg_dx * seg_dx + seg_dy * seg_dy;
+
+            if seg_len_sq < 1e-12 {
+                continue;
+            }
+            any_valid_segment = true;
+
+            // Parameter along segment [0, 1]
+            let qx = world_x - p0.x;
+            let qy = world_y - p0.y;
+            let param = ((qx * seg_dx + qy * seg_dy) / seg_len_sq).clamp(0.0, 1.0);
+
+            // Closest point on segment
+            let cx = p0.x + param * seg_dx;
+            let cy = p0.y + param * seg_dy;
+
+            let dx = world_x - cx;
+            let dy = world_y - cy;
+            let dist_sq = dx * dx + dy * dy;
+
+            if dist_sq < best_dist_sq {
+                best_dist_sq = dist_sq;
+                // Interpolate s along this segment
+                best_s = p0.s + param * (p1.s - p0.s);
+                // Interpolate heading
+                best_hdg = p0.hdg + param * (p1.hdg - p0.hdg);
+                // Signed perpendicular offset (positive = left of travel direction)
+                let seg_len = seg_len_sq.sqrt();
+                let nx = -seg_dy / seg_len; // left normal
+                let ny = seg_dx / seg_len;
+                best_t = dx * nx + dy * ny;
+            }
+        }
+
+        // All segments degenerate (coincident points): fall back to nearest sample point.
+        if !any_valid_segment {
+            for pt in &samples {
+                let dx = world_x - pt.x;
+                let dy = world_y - pt.y;
+                let d = dx * dx + dy * dy;
+                if d < best_dist_sq {
+                    best_dist_sq = d;
+                    best_s = pt.s;
+                    best_hdg = pt.hdg;
+                    let sin_h = pt.hdg.sin();
+                    let cos_h = pt.hdg.cos();
+                    best_t = -dx * sin_h + dy * cos_h;
+                }
+            }
+        }
+
+        RoadLocalPos {
+            s: best_s,
+            t: best_t,
+            hdg: best_hdg,
         }
     };
 
