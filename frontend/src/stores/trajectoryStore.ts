@@ -23,6 +23,8 @@ interface TrajectoryState {
   loop: boolean;
   /** Playback rate multiplier. */
   speed: TrajectorySpeed;
+  /** Whether the camera tracks the ego vehicle during playback. */
+  followEgo: boolean;
 
   /** Replace the loaded trajectory, reset the clock to its start, and pause. */
   loadData: (data: TrajData) => void;
@@ -42,6 +44,8 @@ interface TrajectoryState {
   setSpeed: (speed: TrajectorySpeed) => void;
   /** Toggle loop-at-end behavior. */
   toggleLoop: () => void;
+  /** Toggle follow-ego camera mode. */
+  toggleFollowEgo: () => void;
 }
 
 const EMPTY = {
@@ -61,6 +65,7 @@ export const useTrajectoryStore = create<TrajectoryState>((set, get) => ({
   ...EMPTY,
   loop: true,
   speed: 1,
+  followEgo: false,
 
   loadData: (data) => {
     const frames = trajFrames(data);
@@ -70,7 +75,7 @@ export const useTrajectoryStore = create<TrajectoryState>((set, get) => ({
     set({ data, frames, tMin, tMax, currentTime: tMin, isPlaying: false });
   },
 
-  clear: () => set({ ...EMPTY }),
+  clear: () => set({ ...EMPTY, followEgo: false }),
 
   play: () => {
     const { data, currentTime, tMin, tMax } = get();
@@ -108,4 +113,6 @@ export const useTrajectoryStore = create<TrajectoryState>((set, get) => ({
   setSpeed: (speed) => set({ speed }),
 
   toggleLoop: () => set((s) => ({ loop: !s.loop })),
+
+  toggleFollowEgo: () => set((s) => ({ followEgo: !s.followEgo })),
 }));

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Play, Pause, SkipBack, SkipForward, Repeat, FolderOpen, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Repeat, Crosshair, FolderOpen, X } from 'lucide-react';
 import {
   useTrajectoryStore,
   TRAJECTORY_SPEEDS,
@@ -31,6 +31,8 @@ export function TrajectoryPlaybackBar() {
   const stepFrame = useTrajectoryStore((s) => s.stepFrame);
   const setSpeed = useTrajectoryStore((s) => s.setSpeed);
   const toggleLoop = useTrajectoryStore((s) => s.toggleLoop);
+  const followEgo = useTrajectoryStore((s) => s.followEgo);
+  const toggleFollowEgo = useTrajectoryStore((s) => s.toggleFollowEgo);
 
   if (!data) return null;
 
@@ -79,6 +81,17 @@ export function TrajectoryPlaybackBar() {
         aria-pressed={loop}
       >
         <Repeat size={15} />
+      </button>
+
+      <button
+        type="button"
+        className={`traj-btn ${followEgo ? 'active' : ''}`}
+        onClick={toggleFollowEgo}
+        title={t('trajectory.followEgo')}
+        aria-label={t('trajectory.followEgo')}
+        aria-pressed={followEgo}
+      >
+        <Crosshair size={15} />
       </button>
 
       <select

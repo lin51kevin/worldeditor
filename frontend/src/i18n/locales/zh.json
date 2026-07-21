@@ -830,7 +830,8 @@
     "speed": "播放倍速",
     "timeline": "时间轴",
     "import": "导入轨迹文件...",
-    "clear": "关闭轨迹"
+    "clear": "关闭轨迹",
+    "followEgo": "跟车视角"
   },
   "commandPalette": {
     "placeholder": "输入命令...",

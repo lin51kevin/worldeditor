@@ -14,6 +14,7 @@ import {
   buildBoxVertices,
   buildEgoBox,
   buildTrajBoxes,
+  interpPose,
   parseTraj,
   trajBounds,
 } from '../plugins/npc-actors';
@@ -120,6 +121,26 @@ function ensureSubscribed(): void {
       renderActorsAt(state.currentTime);
     } else if (state.currentTime !== prev.currentTime) {
       renderActorsAt(state.currentTime);
+    }
+
+    // Follow-ego camera: chase-cam behind the ego whenever the playhead moves
+    // or when followEgo is first toggled on.
+    const followJustEnabled = state.followEgo && !prev.followEgo;
+    if (
+      state.followEgo &&
+      state.data &&
+      (state.currentTime !== prev.currentTime || followJustEnabled)
+    ) {
+      const ego = state.data.entities.find((e) => e.ego);
+      if (ego && ego.rows.length > 0) {
+        const pose = interpPose(ego.rows, state.currentTime);
+        const DEG_TO_RAD = Math.PI / 180;
+        getViewportRenderer()?.setChaseCam3D(
+          pose.x - sceneOrigin[0],
+          pose.y - sceneOrigin[1],
+          pose.yaw * DEG_TO_RAD,
+        );
+      }
     }
 
     if (state.isPlaying && !prev.isPlaying) {

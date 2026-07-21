@@ -830,7 +830,8 @@
     "speed": "Playback Speed",
     "timeline": "Timeline",
     "import": "Import Trajectory...",
-    "clear": "Close Trajectory"
+    "clear": "Close Trajectory",
+    "followEgo": "Follow Ego"
   },
   "commandPalette": {
     "placeholder": "Type a command...",

@@ -613,6 +613,13 @@ export class ViewportRenderer {
     this.renderFrame();
   }
 
+  /** Position the camera in a chase-cam view behind a moving entity. */
+  setChaseCam3D(x: number, y: number, yaw: number): void {
+    this.cameraController.setChaseCam(x, y, yaw);
+    this.markSceneDirty();
+    this.renderFrame();
+  }
+
   // ── Case-actor plugin: dynamic box + trajectory lanes ─────────────────────
 
   /** Upload actor bounding-box triangle vertices (7 floats/vertex). Empty clears. */

@@ -184,6 +184,48 @@ export class CameraController {
     this.onViewBecameDirty?.();
   }
 
+  /**
+   * Position the camera in a racing-game-style chase view behind a moving
+   * entity. The camera sits `behindDist` metres behind and `height` metres
+   * above the entity, offset along the entity's heading (`yaw`, radians,
+   * 0 = +X axis, counter-clockwise). The look-at target is placed slightly
+   * ahead of the entity so the road ahead is visible. No-op in 2D mode.
+   */
+  setChaseCam(
+    x: number,
+    y: number,
+    yaw: number,
+    behindDist = 18,
+    height = 8,
+    lookAheadDist = 10,
+  ): void {
+    if (this.dimensionMode !== '3d') return;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(yaw)) return;
+    const cosY = Math.cos(yaw);
+    const sinY = Math.sin(yaw);
+    // Camera behind the entity
+    const camX = x - cosY * behindDist;
+    const camY = y - sinY * behindDist;
+    const camZ = height;
+    // Look-at point slightly ahead of the entity
+    const targetX = x + cosY * lookAheadDist;
+    const targetY = y + sinY * lookAheadDist;
+    this.dimensionMode = '3d';
+    this.camera.target = [targetX, targetY, 0];
+    this.camera.position = [camX, camY, camZ];
+    this.camera.up = [0, 0, 1];
+    const dist = Math.sqrt(
+      (camX - targetX) ** 2 + (camY - targetY) ** 2 + camZ ** 2,
+    );
+    const clip = this.perspClipPlanes(dist);
+    this.camera.near = clip.near;
+    this.camera.far = clip.far;
+    this.cachedViewProj = null;
+    this.cachedInverseViewProj = null;
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+  }
+
   get isViewDirty(): boolean {
     return this.viewDirty;
   }  set isViewDirty(v: boolean) {
