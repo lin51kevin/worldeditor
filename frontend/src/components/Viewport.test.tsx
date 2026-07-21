@@ -52,6 +52,7 @@ const rendererMocks = vi.hoisted(() => ({
   clearLinkHighlight: vi.fn(),
   uploadLinkHighlightVertices: vi.fn(),
   uploadSpriteData: vi.fn(),
+  uploadPaintData: vi.fn(),
   getTextureManager: vi.fn().mockReturnValue(null),
   waitForManifest: vi.fn().mockResolvedValue(undefined),
 }));
@@ -110,6 +111,7 @@ vi.mock('../viewport/renderer', () => ({
       clearLinkHighlight: rendererMocks.clearLinkHighlight,
       uploadLinkHighlightVertices: rendererMocks.uploadLinkHighlightVertices,
       uploadSpriteData: rendererMocks.uploadSpriteData,
+      uploadPaintData: rendererMocks.uploadPaintData,
       getTextureManager: rendererMocks.getTextureManager,
       waitForManifest: rendererMocks.waitForManifest,
     })),

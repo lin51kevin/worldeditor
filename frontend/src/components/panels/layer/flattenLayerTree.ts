@@ -76,7 +76,9 @@ export function flattenLayerTree(
 
         if (expandedRoadSignals.has(road.id)) {
           for (const signal of visibleSignals) {
-            const sigType = signal.signal_subtype || signal.signal_type;
+            const sigType = (signal.signal_subtype && signal.signal_subtype !== '-1')
+              ? signal.signal_subtype
+              : signal.signal_type;
             items.push({
               type: 'signal',
               roadId: road.id,

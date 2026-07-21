@@ -254,7 +254,9 @@ export const RoadLayerItem = memo(function RoadLayerItem({
                     const isSignalSelected = selectedSceneNode?.type === 'signal'
                       && selectedSceneNode.roadId === road.id
                       && selectedSceneNode.signalId === signal.id;
-                    const sigType = signal.signal_subtype || signal.signal_type;
+                    const sigType = (signal.signal_subtype && signal.signal_subtype !== '-1')
+                      ? signal.signal_subtype
+                      : signal.signal_type;
                     const sigLabel = signal.name
                       ? `${signal.name} (${signal.id})`
                       : `(${signal.id})`;
