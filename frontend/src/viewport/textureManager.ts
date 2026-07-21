@@ -12,7 +12,7 @@ export interface TextureManifest {
   basePath: string;
   trafficLights: Record<string, string>;
   roadPaints: Record<string, string>;
-  roadSigns: { _prefix: string; _suffix: string; _speedLimitBase: string };
+  roadSigns: Record<string, string> & { _prefix: string; _suffix: string; _speedLimitBase: string };
   objects: Record<string, string>;
 }
 
@@ -76,6 +76,14 @@ export class TextureManager {
     // Try road sign lookup by type code
     const { _prefix, _suffix, _speedLimitBase } = this.manifest.roadSigns;
     const cleanType = signalType.replace(/,/g, '');
+
+    // Check explicit mapping first (e.g. "206" → specific PNG path)
+    const dotType = `${signalType}`;
+    const explicitPath = this.manifest.roadSigns[dotType];
+    if (explicitPath && !explicitPath.startsWith('_')) {
+      return `${this.manifest.basePath}/${explicitPath}`;
+    }
+
     // Speed limit signs: use value (speed number) as suffix
     if (cleanType === _speedLimitBase) {
       const speed = value || signalSubtype || '';

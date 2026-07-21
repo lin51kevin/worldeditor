@@ -12,13 +12,12 @@ use super::{arrow_triangles, road_point_at_s, sign_marker_color};
 /// polygon is triangulated and placed on the road surface using the signal's
 /// s/t position and h_offset heading.
 ///
-/// For other signal types (vertical signs), a small colored diamond marker is
-/// placed at the signal position slightly above the road surface.
-///
-/// # TODO: [Phase 3] Rendering enhancement — replace flat diamond markers with sprite-based
-/// traffic sign icons (similar to worldeditoronline SpriteSignalRenderer). Currently rendered
-/// as colored point markers; sign types are color-coded (green=traffic lights, red=speed limit,
-/// yellow=generic). Lane colors already match the reference (verified against RoadTessellator.ts).
+/// For other signal types (vertical signs) that are NOT covered by the sprite
+/// billboard pipeline (i.e. have no matching texture), a small colored diamond
+/// marker is placed at the signal position slightly above the road surface.
+/// Signals that DO have sprite textures (traffic lights, Chinese GB/T signs,
+/// and standard OpenDRIVE codes) are rendered by `generate_sprite_data` as
+/// textured billboards and are skipped here to avoid duplicate markers.
 #[wasm_bindgen]
 pub fn generate_signal_paint_vertices(
     project_json: &str,
@@ -71,8 +70,10 @@ pub fn generate_signal_paint_vertices(
                     scale as f32,
                 );
                 all_floats.extend(tris);
-            } else {
-                // Vertical sign: render as a small diamond marker above the road
+            } else if !is_sprite_covered_signal(&signal.signal_type) {
+                // Vertical sign without sprite texture: render as a small diamond
+                // marker above the road. Signals with known textures are rendered
+                // as textured billboard sprites by generate_sprite_data() instead.
                 let (mx, my, _) = offset_point(&ref_pt, signal.t, 0.0);
                 let z = z_road + 0.5; // 50 cm above road (approximate pole height)
                 let sz = 0.4f32; // marker half-size
@@ -91,10 +92,42 @@ pub fn generate_signal_paint_vertices(
                     all_floats.extend_from_slice(&[p[0], p[1], p[2], r, g, b, a]);
                 }
             }
+            // else: sprite-covered signal — diamond marker suppressed, rendered by
+            // generate_sprite_data() as a textured billboard.
         }
     }
 
     Ok(all_floats)
+}
+
+/// Check whether a signal type has a corresponding sprite texture and should
+/// be rendered as a billboard rather than a diamond marker.
+///
+/// Includes:
+/// - Traffic lights: types containing commas (e.g. "1,000,001", "1,000,011")
+/// - Chinese GB/T road signs: 10+ digit numeric codes (e.g. "1010203800001413")
+/// - Standard OpenDRIVE signal codes: 1-5 digit numeric codes that may have
+///   a dot-separated subtype (e.g. "206", "267", "274", "274.1", "101", "002")
+fn is_sprite_covered_signal(signal_type: &str) -> bool {
+    // Traffic lights with comma-separated codes
+    if signal_type.contains(',') {
+        return true;
+    }
+    // Chinese GB/T road signs (10+ digit codes)
+    if signal_type.len() >= 10 && signal_type.chars().all(|c| c.is_ascii_digit()) {
+        return true;
+    }
+    // Standard OpenDRIVE codes: 1-7 digit codes, optionally with dot-separated subtype
+    // (e.g. "206", "267", "274", "274.1"). Reject all-zero strings (not valid sign codes).
+    let base = signal_type.split('.').next().unwrap_or("");
+    if !base.is_empty()
+        && base.len() <= 7
+        && base.chars().all(|c| c.is_ascii_digit())
+        && base.chars().any(|c| c != '0')
+    {
+        return true;
+    }
+    false
 }
 
 /// Generate sprite instance data for billboard rendering of traffic lights and road signs.
@@ -122,21 +155,10 @@ pub fn generate_sprite_data(project_json: &str) -> Result<JsValue, JsError> {
         }
 
         for signal in &road.signals {
-            // Road paint arrows (Graphics type) are rendered by generate_signal_paint_vertices
-            // as tessellated white polygons — skip them here (PNGs have gray backgrounds).
             if signal.signal_type == "Graphics" {
-                continue;
-            }
-
-            // Only generate sprites for signals that have matching PNG textures:
-            // - Traffic lights: types with commas (e.g. "1,000,011")
-            // - Chinese GB/T road signs: 10+ digit numeric codes (e.g. "1010203800001413")
-            let type_str = &signal.signal_type;
-            let is_traffic_light = type_str.contains(',');
-            let is_chinese_sign =
-                type_str.len() >= 10 && type_str.chars().all(|c| c.is_ascii_digit());
-
-            if !is_traffic_light && !is_chinese_sign {
+                // Road paint arrows are rendered by generate_signal_paint_vertices()
+                // as flat white arrow geometry. Skip them here to avoid duplicate
+                // textured quads overlaying the correct flat arrow rendering.
                 continue;
             }
 
@@ -144,6 +166,14 @@ pub fn generate_sprite_data(project_json: &str) -> Result<JsValue, JsError> {
                 continue;
             };
             let z_road = evaluate_elevation(&road.elevation_profile, signal.s) as f32;
+
+            // All non-Graphics signals that pass is_sprite_covered_signal()
+            // are emitted as billboard sprites. The frontend resolves the
+            // texture URL via the manifest; if no texture exists the frontend
+            // filters them out (textureUrl === '').
+            if !is_sprite_covered_signal(&signal.signal_type) {
+                continue;
+            }
 
             // Vertical signal — billboard sprite
             let (mx, my, _) = offset_point(&ref_pt, signal.t, 0.0);

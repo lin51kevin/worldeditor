@@ -416,6 +416,28 @@ export function useViewportMeshes({
         renderer.uploadSpriteData([]);
       }
 
+      // Upload road paint textured quads (arrows, markings on road surface)
+      if (spriteData && spriteData.paints && spriteData.paints.length > 0 && display.showSignals) {
+        const texMgr = renderer.getTextureManager();
+        if (texMgr) {
+          await renderer.waitForManifest();
+          const paintInstances = spriteData.paints.map((p: { pos: number[]; subtype: string; w: number; h: number; rot: number }) => ({
+            position: p.pos as [number, number, number],
+            rotation: p.rot,
+            textureUrl: texMgr.resolveSignalTexture('Graphics', p.subtype) ?? '',
+            size: [p.w, p.h] as [number, number],
+          })).filter((p: { textureUrl: string }) => p.textureUrl !== '');
+
+          if (paintInstances.length > 0) {
+            renderer.uploadPaintData(paintInstances);
+          } else {
+            renderer.uploadPaintData([]);
+          }
+        }
+      } else {
+        renderer.uploadPaintData([]);
+      }
+
       if (viewMode !== 'solid') {
         // Wire/sketch: no surface polygons, just preserve last frame for smooth transition
         renderer.uploadRoadVertices(new Float32Array(0), { preserveLastVertexDataOnEmpty: true });
