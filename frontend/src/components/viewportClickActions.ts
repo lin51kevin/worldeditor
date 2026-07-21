@@ -114,12 +114,78 @@ export async function handlePlaceObjectClick(
   const viewState = useViewportStore.getState();
   if (!viewState.pendingObjectTemplateId) return false;
   const templateId = viewState.pendingObjectTemplateId;
-  viewState.clearPendingObjectTemplate();
+  // Keep template selected for multi-placement (C# behaviour).
+  // User cancels via right-click or ESC.
   try {
     const service = await getPlatformService();
     const visibleProject = getVisibleProject();
     if (visibleProject) {
-      const roadId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 10.0);
+      const { selectedRoadId } = useProjectStore.getState();
+      let roadId: string | null = null;
+
+      // Step 1: Pick the nearest road via spatial index (ground truth).
+      const pickedId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 10.0);
+
+      if (pickedId) {
+        const pickedRoad = visibleProject.roads.find((r) => r.id === pickedId);
+
+        if (pickedRoad?.junction_id) {
+          // Picked a junction connector — try to find the closest incoming
+          // main road instead, since users usually intend to place on the
+          // approach road rather than inside the junction.
+          const junction = visibleProject.junctions.find((j) => j.id === pickedRoad.junction_id);
+          if (junction) {
+            const incomingIds = new Set(junction.connections.map((c) => c.incoming_road));
+            let bestIncId: string | null = null;
+            let bestAbsT = Infinity;
+            const snapResults: Array<{ id: string; t: number; s: number; len: number }> = [];
+            for (const incId of incomingIds) {
+              const incRoad = visibleProject.roads.find((r) => r.id === incId);
+              if (!incRoad) continue;
+              try {
+                const snap = await service.snapPointOnRoad(incRoad, worldPos.x, worldPos.y);
+                snapResults.push({ id: incId, t: snap.t, s: snap.s, len: incRoad.length });
+                // Reject if snap.s is clamped to road boundary — this means
+                // the click is beyond the road's extent (projected to the endpoint).
+                // A 2m tolerance accounts for segment projection rounding.
+                const margin = 2.0;
+                if (snap.s <= margin || snap.s >= incRoad.length - margin) {
+                  continue; // click is outside this road's range
+                }
+                const absT = Math.abs(snap.t);
+                if (absT < 10.0 && absT < bestAbsT) {
+                  bestAbsT = absT;
+                  bestIncId = incId;
+                }
+              } catch { /* skip */ }
+            }
+            console.debug('[PlaceObject] connector picked — junction=%s, chosen=%s',
+              pickedRoad.junction_id, bestIncId ?? pickedId);
+            roadId = bestIncId ?? pickedId;
+          } else {
+            roadId = pickedId;
+          }
+        } else {
+          // Picked a normal (non-connector) road — use it directly.
+          roadId = pickedId;
+        }
+      }
+
+      // Step 2: If spatial index found nothing but a road is selected, use it
+      // as a fallback (generous threshold for cases where the spatial index
+      // has no nearby candidate but the user clearly intends the selected road).
+      if (!roadId && selectedRoadId) {
+        const selectedRoad = visibleProject.roads.find((r) => r.id === selectedRoadId);
+        if (selectedRoad && !selectedRoad.junction_id) {
+          try {
+            const snap = await service.snapPointOnRoad(selectedRoad, worldPos.x, worldPos.y);
+            if (Math.abs(snap.t) < 15.0) {
+              roadId = selectedRoadId;
+            }
+          } catch { /* snap failed */ }
+        }
+      }
+
       if (roadId) {
         const allItems = usePluginContribStore.getState().templateSections.flatMap((s) => s.items);
         const item = allItems.find((i) => i.id === templateId);
@@ -140,6 +206,8 @@ export async function handlePlaceObjectClick(
           }
           item.onApply({ roadId, x: s, y: t, hdg });
         }
+      } else {
+        // No road found within pickup threshold — placement silently skipped.
       }
     }
   } catch (err) {
