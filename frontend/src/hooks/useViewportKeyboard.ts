@@ -55,6 +55,11 @@ export function useViewportKeyboard(): void {
           viewState.clearPendingTemplate();
           return;
         }
+        // Cancel polygon drawing in progress
+        if (viewState.objectDrawTemplateId) {
+          viewState.clearObjectDraw();
+          return;
+        }
         if (viewState.pendingObjectTemplateId) {
           viewState.clearPendingObjectTemplate();
           return;
@@ -84,6 +89,16 @@ export function useViewportKeyboard(): void {
           editorState.selectedJunctionIds.length > 0
         ) {
           editorState.selectRoad(null);
+        }
+        return;
+      }
+
+      // Backspace: undo last polygon vertex
+      if (event.key === 'Backspace' && viewState.objectDrawTemplateId) {
+        if (viewState.objectDrawVertices.length > 0) {
+          viewState.popObjectDrawVertex();
+        } else {
+          viewState.clearObjectDraw();
         }
         return;
       }

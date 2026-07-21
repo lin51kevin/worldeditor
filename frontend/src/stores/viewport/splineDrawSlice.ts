@@ -20,6 +20,10 @@ export interface SplineDrawSlice {
   tangentCoupling: TangentCoupling;
   draggingKnot: DraggingKnot | null;
   cursorPreviewPos: [number, number, number] | null;
+  /** Polygon-draw state for area-type road objects */
+  objectDrawVertices: Array<[number, number, number]>;
+  objectDrawRoadId: string | null;
+  objectDrawTemplateId: string | null;
   setSplineTemplateId: (templateId: string) => void;
   setPendingTemplate: (id: string | null) => void;
   clearPendingTemplate: () => void;
@@ -40,6 +44,11 @@ export interface SplineDrawSlice {
   setSplineTangentInOverrides: (overrides: Record<number, [number, number, number]>) => void;
   clearSplineTangentOverrides: () => void;
   setTangentCoupling: (coupling: TangentCoupling) => void;
+  appendObjectDrawVertex: (vertex: [number, number, number]) => void;
+  popObjectDrawVertex: () => void;
+  clearObjectDraw: () => void;
+  setObjectDrawRoadId: (id: string | null) => void;
+  setObjectDrawTemplateId: (id: string | null) => void;
   /** @deprecated Use appendSplineKnot instead */
   appendDrawPoint: (point: [number, number, number]) => void;
   /** @deprecated Use clearSplineKnots instead */
@@ -59,6 +68,9 @@ export const createSplineDrawSlice: StateCreator<EditorViewState, [], [], Spline
   tangentCoupling: 'mirror',
   draggingKnot: null,
   cursorPreviewPos: null,
+  objectDrawVertices: [],
+  objectDrawRoadId: null,
+  objectDrawTemplateId: null,
 
   setSplineTemplateId: (splineTemplateId) => set({ splineTemplateId }),
   setPendingTemplate: (pendingTemplateId) => set({ pendingTemplateId }),
@@ -82,6 +94,12 @@ export const createSplineDrawSlice: StateCreator<EditorViewState, [], [], Spline
   setSplineTangentInOverrides: (overrides) => set({ splineTangentInOverrides: overrides }),
   clearSplineTangentOverrides: () => set({ splineTangentOverrides: {}, splineTangentInOverrides: {} }),
   setTangentCoupling: (tangentCoupling) => set({ tangentCoupling }),
+
+  appendObjectDrawVertex: (vertex) => set((state) => ({ objectDrawVertices: [...state.objectDrawVertices, vertex] })),
+  popObjectDrawVertex: () => set((state) => ({ objectDrawVertices: state.objectDrawVertices.slice(0, -1) })),
+  clearObjectDraw: () => set({ objectDrawVertices: [], objectDrawRoadId: null, objectDrawTemplateId: null }),
+  setObjectDrawRoadId: (objectDrawRoadId) => set({ objectDrawRoadId }),
+  setObjectDrawTemplateId: (objectDrawTemplateId) => set({ objectDrawTemplateId }),
 
   appendDrawPoint: (point) => set((state) => ({ splineKnots: [...state.splineKnots, point] })),
   clearDrawPoints: () => set({ splineKnots: [], splineTangentOverrides: {}, splineTangentInOverrides: {}, draggingKnot: null }),

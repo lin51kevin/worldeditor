@@ -20,6 +20,7 @@ import { useViewportMeshes } from '../hooks/useViewportMeshes';
 import { useSelectionHighlight } from '../hooks/useSelectionHighlight';
 import { useRoadLinkHighlight } from '../hooks/useRoadLinkHighlight';
 import { useMeasureOverlay } from '../hooks/useMeasureOverlay';
+import { useObjectDrawOverlay } from '../hooks/useObjectDrawOverlay';
 import { useViewportTouch } from '../hooks/useViewportTouch';
 import { useViewportHoverPick } from '../hooks/useViewportHoverPick';
 import { useSignalPlacement } from '../hooks/useSignalPlacement';
@@ -51,6 +52,7 @@ export function Viewport() {
   const moveRotate = useMoveRotateMode(rendererRef, canvasRef, isPreviewingRoadRef, pendingCursorRef);
   const adjustEdge = useAdjustEdgeMode(rendererRef, canvasRef, isPreviewingRoadRef, pendingCursorRef);
   useMeasureOverlay({ rendererRef, canvasRef, status });
+  useObjectDrawOverlay({ rendererRef, canvasRef, status });
   const snapIndicatorDomRef = useRef<HTMLDivElement | null>(null);
   const splitIndicatorDomRef = useRef<HTMLDivElement | null>(null);
 

@@ -215,3 +215,157 @@ export async function handlePlaceObjectClick(
   }
   return true;
 }
+
+// ── Polygon-draw mode for area-type road objects ────────────────────────────
+
+/**
+ * Handle left-click in line/polygon draw mode (C# style object creation).
+ *
+ * When the pending template has `drawMode === 'line'` or `'polygon'`, each
+ * click adds a vertex. The first click also picks the target road. Returns
+ * true when the click was consumed by multi-click drawing.
+ */
+export async function handleObjectDrawClick(
+  worldPos: { x: number; y: number },
+  getVisibleProject: () => Project | null,
+): Promise<boolean> {
+  const viewState = useViewportStore.getState();
+  const templateId = viewState.pendingObjectTemplateId;
+  if (!templateId) return false;
+
+  // Check if the template uses a multi-click draw mode
+  const allItems = usePluginContribStore.getState().templateSections.flatMap((s) => s.items);
+  const item = allItems.find((i) => i.id === templateId);
+  if (!item || (item.drawMode !== 'polygon' && item.drawMode !== 'line')) return false;
+
+  // If we're already in polygon draw for a DIFFERENT template, cancel the old one
+  if (viewState.objectDrawTemplateId && viewState.objectDrawTemplateId !== templateId) {
+    viewState.clearObjectDraw();
+  }
+
+  const visibleProject = getVisibleProject();
+  if (!visibleProject) return true;
+
+  try {
+    const service = await getPlatformService();
+    let roadId = viewState.objectDrawRoadId;
+
+    // First click: pick the target road
+    if (!roadId) {
+      const pickedId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 10.0);
+      if (!pickedId) return true; // no road nearby — ignore click
+
+      const pickedRoad = visibleProject.roads.find((r) => r.id === pickedId);
+      // If junction connector, find incoming main road (same logic as handlePlaceObjectClick)
+      if (pickedRoad?.junction_id) {
+        const junction = visibleProject.junctions.find((j) => j.id === pickedRoad.junction_id);
+        if (junction) {
+          const incomingIds = new Set(junction.connections.map((c) => c.incoming_road));
+          let bestIncId: string | null = null;
+          let bestAbsT = Infinity;
+          for (const incId of incomingIds) {
+            const incRoad = visibleProject.roads.find((r) => r.id === incId);
+            if (!incRoad) continue;
+            try {
+              const snap = await service.snapPointOnRoad(incRoad, worldPos.x, worldPos.y);
+              const margin = 2.0;
+              if (snap.s <= margin || snap.s >= incRoad.length - margin) continue;
+              const absT = Math.abs(snap.t);
+              if (absT < 10.0 && absT < bestAbsT) {
+                bestAbsT = absT;
+                bestIncId = incId;
+              }
+            } catch { /* skip */ }
+          }
+          roadId = bestIncId ?? pickedId;
+        } else {
+          roadId = pickedId;
+        }
+      } else {
+        roadId = pickedId;
+      }
+
+      viewState.setObjectDrawRoadId(roadId);
+      viewState.setObjectDrawTemplateId(templateId);
+    }
+
+    // Snap clicked world position to road-local (s, t)
+    const road = visibleProject.roads.find((r) => r.id === roadId);
+    if (road) {
+      const snap = await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
+      viewState.appendObjectDrawVertex([snap.s, snap.t, 0]);
+
+      // Line mode auto-finalizes after 2 points (start + end)
+      if (item.drawMode === 'line' && useViewportStore.getState().objectDrawVertices.length >= 2) {
+        finalizeObjectDraw();
+      }
+    }
+  } catch (err) {
+    console.error('[Viewport] Object draw click failed:', err);
+  }
+  return true;
+}
+
+/**
+ * Finalize line/polygon drawing: create the road object with accumulated corners.
+ *
+ * - **line** mode: requires ≥2 vertices (open polyline)
+ * - **polygon** mode: requires ≥3 vertices (closed outline)
+ *
+ * Called on right-click. Returns true if drawing was finalized (or cancelled).
+ */
+export function finalizeObjectDraw(): boolean {
+  const viewState = useViewportStore.getState();
+  const { objectDrawVertices, objectDrawRoadId, objectDrawTemplateId } = viewState;
+
+  if (!objectDrawTemplateId) return false;
+
+  // Look up the template to determine the draw mode
+  const allItems = usePluginContribStore.getState().templateSections.flatMap((s) => s.items);
+  const item = allItems.find((i) => i.id === objectDrawTemplateId);
+  const drawMode = item?.drawMode ?? 'polygon';
+  const minVertices = drawMode === 'line' ? 2 : 3;
+
+  if (objectDrawVertices.length >= minVertices && objectDrawRoadId && item) {
+    // Compute centroid in road-frame for the object position
+    let sumS = 0;
+    let sumT = 0;
+    for (const v of objectDrawVertices) {
+      sumS += v[0];
+      sumT += v[1];
+    }
+    const centroidS = sumS / objectDrawVertices.length;
+    const centroidT = sumT / objectDrawVertices.length;
+
+    const corners = objectDrawVertices.map((v) => ({
+      x: v[0],
+      y: v[1],
+      z: v[2],
+    }));
+
+    item.onApply({
+      roadId: objectDrawRoadId,
+      x: centroidS,
+      y: centroidT,
+      hdg: 0,
+      corners,
+    });
+  }
+
+  // Clear draw state but keep template pending for next drawing
+  viewState.clearObjectDraw();
+  return true;
+}
+
+/**
+ * Cancel line/polygon drawing without creating an object.
+ * Returns true if there was a drawing in progress.
+ */
+export function cancelObjectDraw(): boolean {
+  const viewState = useViewportStore.getState();
+  if (viewState.objectDrawTemplateId) {
+    viewState.clearObjectDraw();
+    return true;
+  }
+  return false;
+}

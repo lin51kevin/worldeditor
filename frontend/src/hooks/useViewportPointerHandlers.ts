@@ -12,6 +12,8 @@ import {
   handleEditJunctionClick,
   handlePlaceTemplateClick,
   handlePlaceObjectClick,
+  handleObjectDrawClick,
+  finalizeObjectDraw,
 } from '../components/viewportClickActions';
 import type { useRubberBandSelect } from './useRubberBandSelect';
 import type { useMoveRotateMode } from './useMoveRotateMode';
@@ -349,6 +351,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
       viewState0.editMode === 'placeObject' ||
       !!viewState0.pendingTemplateId ||
       !!viewState0.pendingObjectTemplateId ||
+      !!viewState0.objectDrawTemplateId ||
       viewState0.measureMode !== 'none';
     if (!isClickToPlace && (gesture.dragged || exceededDragThreshold(gesture.startX, gesture.startY, e.clientX, e.clientY))) {
       return;
@@ -384,6 +387,13 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
     // Click-to-place mode: instantiate the pending template at the clicked world position.
     // Handled before selection mode so templates work in any selection mode.
     if (handlePlaceTemplateClick(worldPos)) {
+      return;
+    }
+
+    // Polygon-draw mode for area-type road objects (crosswalk, parking, etc.)
+    // Must be checked BEFORE single-click placement so polygon templates
+    // accumulate vertices instead of placing immediately.
+    if (await handleObjectDrawClick(worldPos, getVisibleProject)) {
       return;
     }
 
@@ -567,6 +577,13 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
     const viewState = useViewportStore.getState();
     if (viewState.pendingTemplateId) {
       viewState.clearPendingTemplate();
+      return;
+    }
+    // Polygon-draw mode: right-click finalizes the polygon (≥3 vertices)
+    // or cancels if insufficient vertices. Must be checked BEFORE the
+    // generic pendingObjectTemplate cancel so it can close the polygon.
+    if (viewState.objectDrawTemplateId) {
+      finalizeObjectDraw();
       return;
     }
     if (viewState.pendingObjectTemplateId) {

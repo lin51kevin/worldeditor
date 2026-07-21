@@ -65,10 +65,17 @@ export interface TemplateItemDef {
   /** Optional PNG thumbnail URL (overrides icon when provided) */
   thumbnailUrl?: string;
   /**
+   * Drawing interaction mode for road objects:
+   * - undefined or 'point': single click placement
+   * - 'line': multi-click polyline; right-click finalizes
+   * - 'polygon': multi-click closed polygon; right-click closes
+   */
+  drawMode?: 'point' | 'line' | 'polygon';
+  /**
    * Called when the user clicks or activates the item.
    * @param opts optional drop position in world coordinates, or roadId for road-object placement
    */
-  onApply: (opts?: { x?: number; y?: number; hdg?: number; roadId?: string }) => void;
+  onApply: (opts?: { x?: number; y?: number; hdg?: number; roadId?: string; corners?: Array<{ x: number; y: number; z: number }> }) => void;
 }
 
 /** A category of templates contributed by a plugin */

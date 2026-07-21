@@ -158,6 +158,13 @@ export interface RoadObjectTemplateConfig {
   defaultHeight?: number;
   /** GB 5768 subcategory for UI grouping */
   subcategory?: string;
+  /**
+   * Drawing interaction mode:
+   * - 'point' (default): single click places object at road-local s/t
+   * - 'line': multi-click polyline drawing; right-click finalizes the line
+   * - 'polygon': multi-click polygon drawing; right-click closes the outline
+   */
+  drawMode?: 'point' | 'line' | 'polygon';
 }
 
 // ── Sign Template ─────────────────────────────────────────────────────────────

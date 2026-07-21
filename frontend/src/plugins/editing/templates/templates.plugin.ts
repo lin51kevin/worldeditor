@@ -255,11 +255,17 @@ function objectConfigToItem(config: RoadObjectTemplateConfig): TemplateItemDef {
     labelKey: config.labelKey,
     icon: config.icon,
     thumbnailUrl: config.thumbnailUrl,
+    drawMode: config.drawMode,
     onApply: (opts) => {
       if (opts?.roadId === undefined) return;
       const s = opts.x ?? 0;
       const t = opts.y ?? 0;
       const obj = buildRoadObjectFromConfig(config, s, t, opts.hdg ?? 0);
+      // If polygon corners were provided, attach them as Road-frame corners
+      if (opts.corners && opts.corners.length >= 3) {
+        obj.corners = opts.corners.map((c) => ({ x: c.x, y: c.y, z: c.z, id: null }));
+        obj.corner_type = 'Road';
+      }
       const store = useProjectStore.getState();
       store.addRoadObjectItem(opts.roadId, obj);
     },
