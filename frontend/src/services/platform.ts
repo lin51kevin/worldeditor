@@ -450,8 +450,11 @@ export type PointCloudPolyline = Array<[number, number, number]>;
 /** Metadata for a natively-parsed 3D Gaussian Splatting cloud. */
 export interface GaussianSplatNativeMeta {
   count: number;
+  sourceCount: number;
   shDegree: number;
   shStride: number;
+  layoutVersion: number;
+  layoutName: string;
   origin: [number, number, number];
   min: [number, number, number];
   max: [number, number, number];
@@ -747,8 +750,8 @@ export interface PlatformService {
   samplePointCloudGround(handle: number, x: number, y: number): Promise<number | null>;
 
   /** Natively parse a 3D Gaussian Splatting `.ply` from a desktop path
-   *  (Tauri only), uniformly stride-sampling to at most `maxSplats`. Returns
+   *  (Tauri only), sampling only when explicit `maxSplats` is supplied. Returns
    *  metadata plus the packed SH instance buffer via raw binary transfer,
    *  avoiding the whole-file JS/WASM copy that crashes on large clouds. */
-  loadGaussianSplatsNative(path: string, maxSplats: number): Promise<GaussianSplatNativeResult>;
+  loadGaussianSplatsNative(path: string, maxSplats?: number): Promise<GaussianSplatNativeResult>;
 }

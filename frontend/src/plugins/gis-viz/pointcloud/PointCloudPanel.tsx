@@ -52,6 +52,7 @@ export default function PointCloudPanel() {
   const splatRenderMode = usePointCloudStore((s) => s.splatRenderMode);
   const splatQuality = usePointCloudStore((s) => s.splatQuality);
   const splatRefreshFps = usePointCloudStore((s) => s.splatRefreshFps);
+  const splatUploadStatus = usePointCloudStore((s) => s.splatUploadStatus);
   const setColorMode = usePointCloudStore((s) => s.setColorMode);
   const setSplatRefreshFps = usePointCloudStore((s) => s.setSplatRefreshFps);
   const setSplatDilation = usePointCloudStore((s) => s.setSplatDilation);
@@ -100,6 +101,32 @@ export default function PointCloudPanel() {
           <div className="pc-card-title">{fileName}</div>
           {isSplat && (
             <Row label={t('pointcloud.renderMode')} value={`3DGS · SH ${splatShDegree}`} />
+          )}
+
+          {isSplat && splatUploadStatus && (
+            <div className="pc-card" data-testid="splat-fidelity-status">
+              <div className="pc-card-title">{t('pointcloud.fidelityStatus')}</div>
+              <Row
+                label={t('pointcloud.uploadedSplats')}
+                value={`${fmt(splatUploadStatus.uploadedCount)} / ${fmt(splatUploadStatus.sourceCount)}`}
+              />
+              <Row
+                label={t('pointcloud.shFidelity')}
+                value={`${splatUploadStatus.requestedShDegree} → ${splatUploadStatus.effectiveShDegree}`}
+              />
+              <Row
+                label={t('pointcloud.resourceMode')}
+                value={t(`pointcloud.resource.${splatUploadStatus.resourceMode}`)}
+              />
+              {splatUploadStatus.fallbackReason && (
+                <div
+                  className={splatUploadStatus.outcome === 'failed' ? 'pc-error' : 'pc-warning'}
+                  role="status"
+                >
+                  {t(`pointcloud.fallback.${splatUploadStatus.fallbackReason}`)}
+                </div>
+              )}
+            </div>
           )}
           <Row label={isSplat ? t('pointcloud.splats') : t('pointcloud.points')} value={fmt(summary.count)} />
           <Row label={t('pointcloud.hasRgb')} value={summary.has_rgb ? t('pointcloud.yes') : t('pointcloud.no')} />

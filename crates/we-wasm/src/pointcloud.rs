@@ -13,11 +13,10 @@ use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use we_core::pointcloud::{
-    ColorMode, GroundConfig, Heightmap, MarkingConfig, PointCloud, VectorizeConfig,
-    build_render_buffer, extract_ground, extract_markings, gaussian, pcd, ply, polylines_to_roads,
-    xyz,
+    ColorMode, GroundConfig, Heightmap, MarkingConfig, PACKED_GAUSSIAN_LAYOUT_NAME,
+    PackedGaussians, PointCloud, VectorizeConfig, build_render_buffer, extract_ground,
+    extract_markings, gaussian, pcd, ply, polylines_to_roads, xyz,
 };
-use we_core::pointcloud::gaussian::GaussianCloud;
 
 /// A registered cloud plus any derived ground heightmap.
 struct Entry {
@@ -28,7 +27,7 @@ struct Entry {
 thread_local! {
     static REGISTRY: RefCell<HashMap<u32, Entry>> = RefCell::new(HashMap::new());
     static NEXT_HANDLE: RefCell<u32> = const { RefCell::new(1) };
-    static GAUSSIAN_REGISTRY: RefCell<HashMap<u32, GaussianCloud>> = RefCell::new(HashMap::new());
+    static GAUSSIAN_REGISTRY: RefCell<HashMap<u32, PackedGaussians>> = RefCell::new(HashMap::new());
     static NEXT_GAUSSIAN_HANDLE: RefCell<u32> = const { RefCell::new(1) };
 }
 
@@ -210,7 +209,7 @@ where
 // 3D Gaussian Splatting bindings
 // ---------------------------------------------------------------------------
 
-fn store_gaussian(cloud: GaussianCloud) -> u32 {
+fn store_gaussian(cloud: PackedGaussians) -> u32 {
     let handle = NEXT_GAUSSIAN_HANDLE.with(|n| {
         let mut n = n.borrow_mut();
         let h = *n;
@@ -224,8 +223,8 @@ fn store_gaussian(cloud: GaussianCloud) -> u32 {
 /// Parse a 3D Gaussian Splatting PLY and register it, returning an opaque handle.
 ///
 /// Native-testable error variant returns a plain `String`.
-fn parse_gaussian(bytes: &[u8], max_splats: Option<usize>) -> Result<GaussianCloud, String> {
-    gaussian::parse_gaussian_ply_capped(bytes, max_splats).map_err(|e| e.to_string())
+fn parse_gaussian(bytes: &[u8], max_splats: Option<usize>) -> Result<PackedGaussians, String> {
+    gaussian::parse_gaussian_ply_packed(bytes, max_splats).map_err(|e| e.to_string())
 }
 
 /// Load a 3D Gaussian Splatting PLY, returning an opaque handle.
@@ -235,7 +234,8 @@ fn parse_gaussian(bytes: &[u8], max_splats: Option<usize>) -> Result<GaussianClo
 /// to keep every splat.
 #[wasm_bindgen]
 pub fn load_gaussian_splats(bytes: &[u8], max_splats: Option<u32>) -> Result<u32, JsError> {
-    let cloud = parse_gaussian(bytes, max_splats.map(|m| m as usize)).map_err(|e| JsError::new(&e))?;
+    let cloud =
+        parse_gaussian(bytes, max_splats.map(|m| m as usize)).map_err(|e| JsError::new(&e))?;
     Ok(store_gaussian(cloud))
 }
 
@@ -245,17 +245,10 @@ pub fn free_gaussian_splats(handle: u32) {
     GAUSSIAN_REGISTRY.with(|r| r.borrow_mut().remove(&handle));
 }
 
-/// Build the view-dependent SH instance buffer (raw SH coefficients kept for
-/// per-frame view-dependent shading).
+/// Return packed layout version 2 for view-dependent SH rendering.
 ///
-/// Build the view-dependent SH instance buffer as a **half-precision** packed
-/// `u32` buffer (positions stay `f32`; covariance/opacity/SH are `f16` pairs).
-///
-/// Layout is `sh_buffer_stride_f16` `u32` words per splat:
-/// `[x_f32, y_f32, z_f32, pack(σxx,σxy), pack(σxz,σyy), pack(σyz,σzz),
-///   pack(opacity, sh0_r), …]` — the shader decodes the halves with
-/// `unpack2x16float`. Halving the per-splat bytes roughly doubles the splat
-/// count that fits within the GPU storage-buffer binding limit.
+/// Each record is `position_f32[3], activated_scale_f32[3],
+/// normalized_quaternion_f32[4]`, followed by packed `f16` opacity and SH.
 #[wasm_bindgen]
 pub fn gaussian_splat_buffer_sh(handle: u32) -> Result<Vec<u32>, JsError> {
     GAUSSIAN_REGISTRY.with(|r| {
@@ -263,11 +256,11 @@ pub fn gaussian_splat_buffer_sh(handle: u32) -> Result<Vec<u32>, JsError> {
         let cloud = map
             .get(&handle)
             .ok_or_else(|| JsError::new("invalid gaussian splat handle"))?;
-        Ok(cloud.build_splat_buffer_sh_f16())
+        Ok(cloud.buffer.clone())
     })
 }
 
-/// Return a JSON summary `{ count, shDegree, shStride, origin, min, max }`.
+/// Return `{ count, sourceCount, shDegree, shStride, layoutVersion, ... }`.
 ///
 /// The frontend uploads the view-dependent SH buffer
 /// ([`gaussian_splat_buffer_sh`]); local splat positions for the depth sort are
@@ -282,10 +275,16 @@ pub fn gaussian_splat_meta(handle: u32) -> Result<JsValue, JsError> {
     #[derive(serde::Serialize)]
     struct GaussianMeta {
         count: usize,
+        #[serde(rename = "sourceCount")]
+        source_count: usize,
         #[serde(rename = "shDegree")]
         sh_degree: u32,
         #[serde(rename = "shStride")]
         sh_stride: usize,
+        #[serde(rename = "layoutVersion")]
+        layout_version: u32,
+        #[serde(rename = "layoutName")]
+        layout_name: &'static str,
         origin: [f64; 3],
         min: [f64; 3],
         max: [f64; 3],
@@ -295,14 +294,16 @@ pub fn gaussian_splat_meta(handle: u32) -> Result<JsValue, JsError> {
         let cloud = map
             .get(&handle)
             .ok_or_else(|| JsError::new("invalid gaussian splat handle"))?;
-        let b = cloud.bounds();
         let meta = GaussianMeta {
-            count: cloud.len(),
-            sh_degree: cloud.sh_degree(),
-            sh_stride: cloud.sh_buffer_stride_f16(),
-            origin: cloud.origin(),
-            min: b.min,
-            max: b.max,
+            count: cloud.count,
+            source_count: cloud.source_count,
+            sh_degree: cloud.sh_degree,
+            sh_stride: cloud.stride,
+            layout_version: cloud.layout_version,
+            layout_name: PACKED_GAUSSIAN_LAYOUT_NAME,
+            origin: cloud.origin,
+            min: cloud.bounds.min,
+            max: cloud.bounds.max,
         };
         serde_wasm_bindgen::to_value(&meta).map_err(|e| JsError::new(&e.to_string()))
     })
@@ -366,19 +367,19 @@ end_header
     #[test]
     fn test_parse_gaussian_ok() {
         let cloud = parse_gaussian(GAUSSIAN_ASCII.as_bytes(), None).unwrap();
-        assert_eq!(cloud.len(), 2);
-        assert_eq!(cloud.sh_degree(), 0);
-        // 13 floats/splat compact buffer.
-        assert_eq!(cloud.build_splat_buffer().len(), 26);
-        // positions: 3/splat.
-        assert_eq!(cloud.positions().len(), 6);
+        assert_eq!(cloud.count, 2);
+        assert_eq!(cloud.sh_degree, 0);
+        assert_eq!(cloud.stride, 12);
+        assert_eq!(cloud.layout_version, 2);
+        assert_eq!(cloud.buffer.len(), cloud.count * cloud.stride);
     }
 
     #[test]
     fn test_parse_gaussian_caps_splat_count() {
         // A budget of 1 stride-samples the 2-splat cloud down to a single splat.
         let cloud = parse_gaussian(GAUSSIAN_ASCII.as_bytes(), Some(1)).unwrap();
-        assert_eq!(cloud.len(), 1);
+        assert_eq!(cloud.count, 1);
+        assert_eq!(cloud.source_count, 2);
     }
 
     #[test]

@@ -21,8 +21,9 @@ pub mod xyz;
 
 pub use ground::{GroundConfig, GroundResult, extract_ground};
 pub use gaussian::{
-    GaussianCloud, PackedGaussians, parse_gaussian_ply, parse_gaussian_ply_capped,
-    parse_gaussian_ply_packed_f16,
+    GaussianCloud, PACKED_GAUSSIAN_LAYOUT_NAME, PACKED_GAUSSIAN_LAYOUT_VERSION, PackedGaussians,
+    packed_gaussian_stride, parse_gaussian_ply, parse_gaussian_ply_capped,
+    parse_gaussian_ply_packed, parse_gaussian_ply_packed_f16,
 };
 pub use heightmap::Heightmap;
 pub use markings::{MarkingConfig, extract_markings};

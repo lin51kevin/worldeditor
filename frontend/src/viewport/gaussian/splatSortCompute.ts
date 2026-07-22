@@ -1,5 +1,10 @@
 /**
- * GPU Compute Sort for 3D Gaussian Splatting.
+ * Deprecated GPU Compute Sort for 3D Gaussian Splatting.
+ *
+ * @deprecated Disabled: its depth pass reads the legacy packed splat storage
+ * buffer. The active texture-array renderer sorts positions in a worker and
+ * uploads one global order buffer. Do not reconnect this implementation without
+ * replacing its packed attribute binding with the texture addressing contract.
  *
  * Replaces the CPU 16-bit counting sort with a per-frame GPU sort that runs
  * inside the same command encoder as the render pass. This eliminates the async
@@ -254,6 +259,7 @@ const SORT_PARAMS_SIZE = 48; // 3+1+3+1+1+1+2 = 12 floats × 4 bytes
  * render pipeline's `orderBuffer`), so there is zero CPU↔GPU round-trip and the
  * result is available in the same frame.
  */
+/** @deprecated See the module note; not used by `SplatRenderer`. */
 export class GpuSplatSorter {
   private depthPipeline!: GPUComputePipeline;
   private scanBlocksPipeline!: GPUComputePipeline;

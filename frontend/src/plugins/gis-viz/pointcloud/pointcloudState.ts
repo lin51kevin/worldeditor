@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import type { PointCloudColorMode, PointCloudPolyline, PointCloudSummary } from '../../../services/platform';
-import type { SplatSampleMode, SplatRenderMode } from '../../../viewport/gaussian/splatRenderer';
+import type {
+  SplatSampleMode,
+  SplatRenderMode,
+  SplatUploadStatus,
+} from '../../../viewport/gaussian/splatRenderer';
 import { DEFAULT_SPLAT_DILATION } from '../../../viewport/gaussian/splatUniform';
 
 /** Phase of the point-cloud → vector workflow. */
@@ -28,12 +32,14 @@ interface PointCloudState {
 
   /** Whether the loaded cloud is a 3D Gaussian Splatting cloud (rendered as splats). */
   isSplat: boolean;
-  /** Packed half-precision 3DGS SH instance buffer (`splatStrideForDegree` u32 words/splat) when `isSplat`, else null. */
+  /** Versioned f32-transform/f16-opacity-SH instance buffer when `isSplat`. */
   splatBuffer: Uint32Array | null;
   /** Whether {@link splatBuffer} is already shifted into the absolute world frame (web worker did it). */
   splatOriginShifted: boolean;
   /** SH degree of the loaded splat cloud. */
   splatShDegree: number;
+  /** Version of the packed transform/SH buffer layout. */
+  splatLayoutVersion: number;
   /** 2D low-pass dilation (splat fullness); larger = fuller/blurrier. */
   splatDilation: number;
   /** Diagnostic encoding for inputs whose decoded SH colour is linear. */
@@ -46,6 +52,8 @@ interface PointCloudState {
   splatQuality: number;
   /** Splat depth re-sort (refresh) rate cap in FPS; 0 = realtime (no cap). */
   splatRefreshFps: number;
+  /** Fidelity/resource result from the most recent GPU upload attempt. */
+  splatUploadStatus: SplatUploadStatus | null;
 
   setColorMode: (mode: PointCloudColorMode) => void;
   setBusy: (busy: boolean) => void;
@@ -56,12 +64,14 @@ interface PointCloudState {
   setSplatRenderMode: (mode: SplatRenderMode) => void;
   setSplatQuality: (quality: number) => void;
   setSplatRefreshFps: (fps: number) => void;
+  setSplatUploadStatus: (status: SplatUploadStatus | null) => void;
   setLoaded: (handle: number, fileName: string, summary: PointCloudSummary) => void;
   setSplatLoaded: (
     handle: number,
     fileName: string,
     buffer: Uint32Array | null,
     shDegree: number,
+    layoutVersion: number,
     summary: PointCloudSummary,
     originShifted?: boolean,
   ) => void;
@@ -85,12 +95,14 @@ const INITIAL = {
   splatBuffer: null as Uint32Array | null,
   splatOriginShifted: false,
   splatShDegree: 0,
+  splatLayoutVersion: 0,
   splatDilation: DEFAULT_SPLAT_DILATION,
   splatEncodeLinearToSrgb: false,
   splatSampleMode: 'importance' as SplatSampleMode,
   splatRenderMode: 'full' as SplatRenderMode,
   splatQuality: 1,
-  splatRefreshFps: 0,
+  splatRefreshFps: 30,
+  splatUploadStatus: null as SplatUploadStatus | null,
 };
 
 export const usePointCloudStore = create<PointCloudState>((set) => ({
@@ -105,6 +117,7 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
   setSplatRenderMode: (splatRenderMode) => set(() => ({ splatRenderMode })),
   setSplatQuality: (splatQuality) => set(() => ({ splatQuality: Math.min(1, Math.max(0.05, splatQuality)) })),
   setSplatRefreshFps: (splatRefreshFps) => set(() => ({ splatRefreshFps: Math.max(0, splatRefreshFps) })),
+  setSplatUploadStatus: (splatUploadStatus) => set(() => ({ splatUploadStatus })),
 
   setLoaded: (handle, fileName, summary) =>
     set(() => ({
@@ -119,9 +132,11 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
       splatBuffer: null,
       splatOriginShifted: false,
       splatShDegree: 0,
+      splatLayoutVersion: 0,
+      splatUploadStatus: null,
     })),
 
-  setSplatLoaded: (handle, fileName, buffer, shDegree, summary, originShifted = false) =>
+  setSplatLoaded: (handle, fileName, buffer, shDegree, layoutVersion, summary, originShifted = false) =>
     set(() => ({
       handle,
       fileName,
@@ -134,6 +149,8 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
       splatBuffer: buffer,
       splatOriginShifted: originShifted,
       splatShDegree: shDegree,
+      splatLayoutVersion: layoutVersion,
+      splatUploadStatus: null,
     })),
 
   setGround: () => set(() => ({ stage: 'ground', hasGround: true, error: null })),

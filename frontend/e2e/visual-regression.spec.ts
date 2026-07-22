@@ -11,7 +11,16 @@
  * these tests work in headless CI environments without a real GPU.
  */
 
-import { test, expect, injectProject, openXodrInBrowser, readXodrFixture, makeTestProject, makeTestRoad } from './fixtures';
+import {
+  test,
+  expect,
+  injectProject,
+  openXodrInBrowser,
+  readXodrFixture,
+  readGaussianFixture,
+  makeTestProject,
+  makeTestRoad,
+} from './fixtures';
 
 // Wait for the WebGPU canvas to emit at least two animation frames so the
 // rendered scene is stable before taking a screenshot.
@@ -172,5 +181,46 @@ test.describe('Visual regression — rendering', () => {
     });
     await waitForRender(page, 600);
     await canvasScreenshot(page, 'parkinglot.png');
+  });
+
+  test('Gaussian splats render stable anisotropic coverage and SH0 colour', async ({
+    editorPage: page,
+  }) => {
+    const fixture = readGaussianFixture('anisotropic-sh0.ply');
+    await page.waitForFunction(
+      () =>
+        typeof (window as Record<string, unknown>).__loadPointCloud ===
+        'function',
+    );
+    await page.evaluate(async (base64) => {
+      const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+      const file = new File([bytes], 'anisotropic-sh0.ply', {
+        type: 'application/octet-stream',
+      });
+      const load = (window as Record<string, unknown>).__loadPointCloud as (
+        input: File,
+      ) => Promise<void>;
+      await load(file);
+    }, fixture);
+    await page.waitForFunction(() => {
+      const store = (
+        window as Record<string, unknown>
+      ).__pointCloudStore as {
+        getState(): {
+          isSplat: boolean;
+          busy: boolean;
+          splatUploadStatus: { outcome: string; uploadedCount: number } | null;
+        };
+      };
+      const state = store?.getState();
+      return (
+        state?.isSplat &&
+        !state.busy &&
+        state.splatUploadStatus?.outcome === 'uploaded' &&
+        state.splatUploadStatus.uploadedCount === 25
+      );
+    });
+    await waitForRender(page, 800);
+    await canvasScreenshot(page, 'gaussian-anisotropic-sh0.png');
   });
 });

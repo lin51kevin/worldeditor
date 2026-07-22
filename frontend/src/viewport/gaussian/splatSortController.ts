@@ -7,7 +7,7 @@
  * nothing per frame. Results are tagged with a monotonic `generation` so that
  * out-of-order worker replies are discarded.
  */
-import type { Vec3 } from "./splatSort";
+import type { Vec3 } from './splatSort';
 
 /** A camera pose relevant to depth sorting. */
 export interface CameraPose {
@@ -23,21 +23,23 @@ export interface SplatSorter {
    * buffer), so the caller must not reuse the array afterwards.
    */
   init(positions: Float32Array): void;
-  /** Sort for a camera pose; invoke `done(indices, generation)` when ready. */
+  /** Sort and return the order, drawable front count, and request generation. */
   sort(
     camPos: Vec3,
     viewDir: Vec3,
     generation: number,
-    done: (indices: Uint32Array, generation: number) => void,
+    done: (indices: Uint32Array, visibleCount: number, generation: number) => void,
   ): void;
   /** Release any held resources (terminate the worker). */
   dispose(): void;
 }
 
-/** Default position move (world units) that triggers a re-sort. */
-const DEFAULT_POS_THRESHOLD = 0.05;
-/** Default view-direction change (1 - cos θ) that triggers a re-sort. */
-const DEFAULT_DIR_THRESHOLD = 0.001;
+/** Fraction of the cloud diagonal that triggers a positional re-sort. */
+const DEFAULT_POS_THRESHOLD_RATIO = 1e-4;
+/** Avoid zero/noisy thresholds for degenerate and extremely small clouds. */
+const MIN_POS_THRESHOLD = 1e-5;
+/** Strict angular movement threshold in radians. */
+const DEFAULT_ANGLE_THRESHOLD = 0.001;
 
 function dist2(a: Vec3, b: Vec3): number {
   const dx = a[0] - b[0];
@@ -50,9 +52,38 @@ function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
+function length(v: Vec3): number {
+  return Math.sqrt(dot(v, v));
+}
+
+function cloudExtent(positions: Float32Array): number {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let z0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  let z1 = -Infinity;
+  for (let i = 0; i < positions.length / 3; i++) {
+    const x = positions[i * 3]!;
+    const y = positions[i * 3 + 1]!;
+    const z = positions[i * 3 + 2]!;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+      continue;
+    }
+    x0 = Math.min(x0, x);
+    y0 = Math.min(y0, y);
+    z0 = Math.min(z0, z);
+    x1 = Math.max(x1, x);
+    y1 = Math.max(y1, y);
+    z1 = Math.max(z1, z);
+  }
+  if (!(x1 >= x0)) return 0;
+  return Math.hypot(x1 - x0, y1 - y0, z1 - z0);
+}
+
 /** Monotonic millisecond clock (falls back to `Date.now` where unavailable). */
 function nowMs(): number {
-  return typeof performance !== "undefined" ? performance.now() : Date.now();
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }
 
 type TimerHandle = ReturnType<typeof setTimeout>;
@@ -65,13 +96,14 @@ export function shouldResort(
   prev: CameraPose | null,
   next: CameraPose,
   posThreshold: number,
-  dirThreshold: number,
+  angleThreshold: number,
 ): boolean {
   if (!prev) return true;
   if (dist2(prev.camPos, next.camPos) > posThreshold * posThreshold) return true;
-  // 1 - cos(angle) between view directions (assumes roughly unit vectors).
-  const cos = dot(prev.viewDir, next.viewDir);
-  return 1 - cos > dirThreshold;
+  const magnitude = length(prev.viewDir) * length(next.viewDir);
+  if (!(magnitude > 0)) return true;
+  const cosine = Math.max(-1, Math.min(1, dot(prev.viewDir, next.viewDir) / magnitude));
+  return cosine < Math.cos(angleThreshold);
 }
 
 /**
@@ -80,8 +112,10 @@ export function shouldResort(
 export class SplatSortController {
   private lastPose: CameraPose | null = null;
   private generation = 0;
+  private latestRequested = -1;
   private latestDelivered = -1;
   private splatCount = 0;
+  private positionThreshold = MIN_POS_THRESHOLD;
   /**
    * Minimum interval (ms) between re-sorts. `0` = re-sort every qualifying
    * frame (realtime). A positive value caps the splat *refresh rate*: the
@@ -99,16 +133,19 @@ export class SplatSortController {
 
   constructor(
     private readonly sorter: SplatSorter,
-    private readonly onSorted: (indices: Uint32Array) => void,
-    private readonly posThreshold = DEFAULT_POS_THRESHOLD,
-    private readonly dirThreshold = DEFAULT_DIR_THRESHOLD,
+    private readonly onSorted: (indices: Uint32Array, visibleCount: number) => void,
+    private readonly positionThresholdOverride?: number,
+    private readonly angleThreshold = DEFAULT_ANGLE_THRESHOLD,
   ) {}
 
   /** Replace the splat set; resets sort state so the next frame re-sorts. */
   setSplats(positions: Float32Array): void {
     this.splatCount = positions.length / 3;
+    this.positionThreshold =
+      this.positionThresholdOverride ??
+      Math.max(MIN_POS_THRESHOLD, cloudExtent(positions) * DEFAULT_POS_THRESHOLD_RATIO);
     this.lastPose = null;
-    this.generation = 0;
+    this.latestRequested = -1;
     this.latestDelivered = -1;
     this.lastSortTime = Number.NEGATIVE_INFINITY;
     this.clearPendingRefresh();
@@ -119,7 +156,7 @@ export class SplatSortController {
   onCamera(camPos: Vec3, viewDir: Vec3): void {
     if (this.splatCount === 0) return;
     const next: CameraPose = { camPos, viewDir };
-    if (!shouldResort(this.lastPose, next, this.posThreshold, this.dirThreshold)) {
+    if (!shouldResort(this.lastPose, next, this.positionThreshold, this.angleThreshold)) {
       return;
     }
     // Refresh-rate gate: skip (without committing the pose) until the interval
@@ -152,10 +189,10 @@ export class SplatSortController {
   }
 
   /** Deliver a sort result, ignoring any that are older than the newest seen. */
-  deliver(indices: Uint32Array, generation: number): void {
-    if (generation < this.latestDelivered) return;
+  deliver(indices: Uint32Array, visibleCount: number, generation: number): void {
+    if (generation !== this.latestRequested || generation <= this.latestDelivered) return;
     this.latestDelivered = generation;
-    this.onSorted(indices);
+    this.onSorted(indices, visibleCount);
   }
 
   /** Force a re-sort on the next `onCamera` call. */
@@ -172,21 +209,25 @@ export class SplatSortController {
   private dispatchSort(next: CameraPose): void {
     this.lastPose = next;
     const generation = this.generation++;
-    this.sorter.sort(next.camPos, next.viewDir, generation, (idx, gen) =>
-      this.deliver(idx, gen),
+    this.latestRequested = generation;
+    this.sorter.sort(next.camPos, next.viewDir, generation, (idx, count, gen) =>
+      this.deliver(idx, count, gen),
     );
   }
 
   private schedulePendingRefresh(delayMs: number): void {
     if (this.refreshTimer !== null) return;
-    this.refreshTimer = setTimeout(() => {
-      this.refreshTimer = null;
-      const next = this.pendingPose;
-      this.pendingPose = null;
-      if (!next || this.splatCount === 0) return;
-      this.lastSortTime = nowMs();
-      this.dispatchSort(next);
-    }, Math.max(0, delayMs));
+    this.refreshTimer = setTimeout(
+      () => {
+        this.refreshTimer = null;
+        const next = this.pendingPose;
+        this.pendingPose = null;
+        if (!next || this.splatCount === 0) return;
+        this.lastSortTime = nowMs();
+        this.dispatchSort(next);
+      },
+      Math.max(0, delayMs),
+    );
   }
 
   private clearPendingRefresh(): void {

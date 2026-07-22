@@ -12,7 +12,9 @@ import type { ViewportRenderer } from '../viewport/renderer';
 import { usePointCloudStore } from '../plugins/gis-viz/pointcloud/pointcloudState';
 import { getPlatformService } from '../services';
 import { workerRenderBuffer7 } from '../workers/pointcloudBridge';
-import { splatStrideForDegree } from '../viewport/gaussian/splatPipeline';
+import {
+  assertGaussianSplatBuffer,
+} from '../viewport/gaussian/splatLayout';
 
 const MAX_RENDER_POINTS = 2_000_000;
 
@@ -45,20 +47,19 @@ export function applyOrigin(vertices: Float32Array, origin: readonly [number, nu
  * coordinates so it aligns with OpenDRIVE road geometry, mirroring
  * {@link applyOrigin} for point-list clouds.
  *
- * The buffer is half-precision packed: the first 3 `u32` words of each
- * `splatStrideForDegree(shDegree)`-word record hold the position as f32 bit
- * patterns (a `Float32Array` view reads them directly). Returns a shifted copy
- * (the store buffer stays origin-relative and immutable) or the input unchanged
- * when `origin` is zero/undefined.
+ * The versioned buffer keeps position in the first 3 `u32` words as f32 bit
+ * patterns. The declared layout is validated before any stride-based access.
+ * Returns a shifted copy (the store buffer stays origin-relative and immutable)
+ * or the input unchanged when `origin` is zero/undefined.
  */
 export function applySplatOrigin(
   splatData: Uint32Array,
   shDegree: number,
+  layoutVersion: number,
   origin: readonly [number, number, number] | undefined,
 ): Uint32Array {
+  const stride = assertGaussianSplatBuffer(splatData, shDegree, layoutVersion);
   if (!origin || (origin[0] === 0 && origin[1] === 0 && origin[2] === 0)) return splatData;
-  const stride = splatStrideForDegree(shDegree);
-  if (stride < 3) return splatData;
   const [ox, oy, oz] = origin;
   const out = new Uint32Array(splatData);
   const f32 = new Float32Array(out.buffer, out.byteOffset, out.length);
@@ -88,6 +89,7 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
   const splatBuffer = usePointCloudStore((s) => s.splatBuffer);
   const splatOriginShifted = usePointCloudStore((s) => s.splatOriginShifted);
   const splatShDegree = usePointCloudStore((s) => s.splatShDegree);
+  const splatLayoutVersion = usePointCloudStore((s) => s.splatLayoutVersion);
   const splatDilation = usePointCloudStore((s) => s.splatDilation);
   const splatEncodeLinearToSrgb = usePointCloudStore((s) => s.splatEncodeLinearToSrgb);
   const splatSampleMode = usePointCloudStore((s) => s.splatSampleMode);
@@ -123,6 +125,7 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
       if (prevHandleRef.current !== null) {
         renderer.uploadPointCloudVertices(new Float32Array(0));
         renderer.clearGaussianSplats();
+        usePointCloudStore.getState().setSplatUploadStatus(null);
         prevHandleRef.current = null;
         prevColorModeRef.current = null;
       }
@@ -150,8 +153,17 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
         const origin = usePointCloudStore.getState().summary?.origin;
         const shifted = splatOriginShifted
           ? splatBuffer
-          : applySplatOrigin(splatBuffer, splatShDegree, origin);
-        renderer.uploadGaussianSplats(shifted, splatShDegree, splatSampleMode, splatQuality, splatRenderMode);
+          : applySplatOrigin(splatBuffer, splatShDegree, splatLayoutVersion, origin);
+        const uploadStatus = renderer.uploadGaussianSplats(
+          shifted,
+          splatShDegree,
+          splatLayoutVersion,
+          splatSampleMode,
+          splatQuality,
+          splatRenderMode,
+          usePointCloudStore.getState().summary?.count,
+        );
+        usePointCloudStore.getState().setSplatUploadStatus(uploadStatus);
 
         // Start 3DGS in perspective for useful initial framing. The splat shader
         // also has an orthographic Jacobian for later dimension-mode switches.
@@ -196,6 +208,7 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
 
     // Leaving a splat cloud (or a fresh point cloud) — ensure no splats linger.
     renderer.clearGaussianSplats();
+    usePointCloudStore.getState().setSplatUploadStatus(null);
 
     const handleChanged = handle !== prevHandleRef.current;
     if (handleChanged) {
@@ -250,5 +263,5 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     })();
 
     return () => { cancelled = true; };
-  }, [handle, colorMode, isSplat, splatBuffer, splatOriginShifted, splatShDegree, splatSampleMode, splatRenderMode, splatQuality, status, rendererRef]);
+  }, [handle, colorMode, isSplat, splatBuffer, splatOriginShifted, splatShDegree, splatLayoutVersion, splatSampleMode, splatRenderMode, splatQuality, status, rendererRef]);
 }

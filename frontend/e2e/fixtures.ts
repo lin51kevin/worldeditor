@@ -92,6 +92,16 @@ export function readXodrFixture(filename: string): string {
   return fs.readFileSync(fixturePath, 'utf-8');
 }
 
+/** Read a Gaussian PLY fixture as base64 for browser File construction. */
+export function readGaussianFixture(filename: string): string {
+  const fixturePath = path.resolve(
+    __dirname,
+    '../../tests/fixtures/gaussian',
+    filename,
+  );
+  return fs.readFileSync(fixturePath).toString('base64');
+}
+
 /** Parse xodr XML in the browser via WASM and load it into the store. */
 export async function openXodrInBrowser(page: Page, xml: string, filename = 'test.xodr'): Promise<void> {
   await page.evaluate(

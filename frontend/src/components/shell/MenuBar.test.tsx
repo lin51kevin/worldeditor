@@ -154,7 +154,7 @@ function createPlatformMock() {
     vectorizePointCloud: vi.fn<PlatformService['vectorizePointCloud']>().mockResolvedValue([]),
     samplePointCloudGround: vi.fn<PlatformService['samplePointCloudGround']>().mockResolvedValue(null),
     loadGaussianSplatsNative: vi.fn<PlatformService['loadGaussianSplatsNative']>().mockResolvedValue({
-      meta: { count: 0, shDegree: 0, shStride: 8, origin: [0, 0, 0], min: [0, 0, 0], max: [0, 0, 0] },
+      meta: { count: 0, shDegree: 0, shStride: 12, layoutVersion: 2, layoutName: 'transform-f32-opacity-sh-f16', origin: [0, 0, 0], min: [0, 0, 0], max: [0, 0, 0] },
       buffer: new Uint32Array(0),
     }),
   };

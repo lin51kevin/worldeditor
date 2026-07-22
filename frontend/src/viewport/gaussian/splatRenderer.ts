@@ -10,10 +10,13 @@ import {
   GaussianSplatResources,
   splatStrideForDegree,
   createGaussianSplatPipeline,
+  type GaussianResourceMode,
 } from "./splatPipeline";
+import {
+  assertGaussianSplatBuffer,
+} from "./splatLayout";
 import { SplatSortController, type SplatSorter } from "./splatSortController";
 import { createWorkerSplatSorter } from "./splatSorterBackends";
-import { GpuSplatSorter } from "./splatSortCompute";
 import { buildSplatUniform, DEFAULT_SPLAT_DILATION } from "./splatUniform";
 import type { Vec3 } from "./splatSort";
 import type { CameraState } from "../cameraController";
@@ -52,9 +55,8 @@ export function computeViewDir(position: Vec3, target: Vec3): Vec3 {
 /**
  * Upper bound on splats kept for an editor preview, independent of GPU limits.
  * Very large 3DGS clouds are decimated to this budget to keep sorting, upload
- * and memory bounded; the GPU storage-buffer limit may lower it further. Raised
- * to 16M now that half-precision packing (~2× density) lets far more splats fit
- * — the per-device storage limit is usually the real cap.
+ * and memory bounded. Texture-array and global-order capacity may lower it
+ * further, but only when the caller explicitly selected `decimated`.
  */
 export const PREVIEW_SPLAT_BUDGET = 16_000_000;
 
@@ -62,58 +64,36 @@ export const PREVIEW_SPLAT_BUDGET = 16_000_000;
 export const DEFAULT_MAX_STORAGE_BINDING_BYTES = 134_217_728;
 
 /**
- * Safety ceiling for the splat storage buffer (2 GiB). The effective budget is
+ * Safety ceiling for the explicit packed fallback buffer (2 GiB). Its budget is
  * `min(device.maxStorageBufferBindingSize, this)`, so the renderer uses the
- * GPU's *real* binding limit — desktop GPUs commonly report 2 GiB+, which lets
- * a full multi-million-splat cloud (e.g. 12.4M deg-3 ≈ 1.5 GiB in f16) render
- * in its entirety, matching dedicated splat viewers' coverage. The ceiling only
- * guards against pathological uploads on GPUs that advertise absurd limits; it
- * is intentionally high so it is not the binding cap on normal hardware.
- *
- * Note: the CPU counting sort is O(n) and stays responsive at these counts;
- * VRAM (not sort time) is the practical constraint, and it is device-bounded.
+ * the minimum of the device's buffer limits and this guard. The normal full
+ * path stores attributes in texture arrays and is not bounded by this value.
  */
 export const GPU_SPLAT_MEMORY_BUDGET = 2_147_483_648;
 
-/** GPU compute sort is not wired into the frame pass yet; avoid its scratch allocations. */
-const ENABLE_GPU_SPLAT_SORT = false;
-
 /**
- * When the fraction of splats that fit the GPU at the original SH degree drops
- * below this threshold, auto-downgrade to band-0 (degree 0) to trade view-
- * dependent colour for drastically better surface coverage. Degree 3 → 0 is
- * ~3.9× more splats in the same memory.
- */
-const AUTO_DOWNGRADE_THRESHOLD = 0.5;
-
-/**
- * Repack a higher-degree packed splat buffer into band-0 (degree 0) layout.
- * Strips higher SH bands, keeping only `pos(3 f32) + cov6 + opacity + dc3`
- * (8 u32 words = 32 B/splat). The packed half-precision block is ordered
- * `[σxx|σxy, σxz|σyy, σyz|σzz, opacity|sh0_r, sh0_g|sh0_b, ...]`, so the
- * first 5 u32 words after position contain exactly what degree-0 needs.
+ * Repack a higher-degree version-2 buffer into band-0. The f32
+ * position/scale/quaternion prefix and first two opacity/DC half-pairs are the
+ * degree-0 record, so repacking preserves the first 12 words per splat.
+ *
+ * @deprecated Explicit offline preprocessing only. `SplatRenderer` never calls
+ * this helper because render-time SH reduction is a fidelity loss.
  */
 export function repackAsBand0(
   splatData: Uint32Array,
   srcDegree: number,
+  layoutVersion: number,
 ): Uint32Array {
+  assertGaussianSplatBuffer(splatData, srcDegree, layoutVersion);
   if (srcDegree === 0) return splatData;
   const srcStride = splatStrideForDegree(srcDegree);
-  const dstStride = splatStrideForDegree(0); // 8 words
+  const dstStride = splatStrideForDegree(0); // 12 words
   const n = Math.floor(splatData.length / srcStride);
   const out = new Uint32Array(n * dstStride);
   for (let i = 0; i < n; i++) {
     const sb = i * srcStride;
     const db = i * dstStride;
-    // position (3 f32 words) + first 5 half-pair words (cov6 + opacity + dc3)
-    out[db] = splatData[sb]!;
-    out[db + 1] = splatData[sb + 1]!;
-    out[db + 2] = splatData[sb + 2]!;
-    out[db + 3] = splatData[sb + 3]!;
-    out[db + 4] = splatData[sb + 4]!;
-    out[db + 5] = splatData[sb + 5]!;
-    out[db + 6] = splatData[sb + 6]!;
-    out[db + 7] = splatData[sb + 7]!;
+    out.set(splatData.subarray(sb, sb + dstStride), db);
   }
   return out;
 }
@@ -155,24 +135,29 @@ export function halfToFloat(h: number): number {
 /**
  * Per-splat rendering importance ≈ `opacity × splat size`, used to keep the most
  * visually significant splats when a cloud must be decimated to fit the GPU.
- * Size is the covariance trace `σxx + σyy + σzz` (sum of squared axis extents);
- * opacity and covariance are decoded from the packed half-precision record
- * (position occupies words `0..2`; the half block starts at word `3`, holding
- * `σxx|σxy, σxz|σyy, σyz|σzz, opacity|sh…`).
+ * Size is `sqrt(trace(Σ)) = length(scale)`, which is rotation-invariant.
+ * Activated scale is f32 at words 3..5; opacity is the low half of word 10.
  */
 export function computeSplatImportance(
   splatData: Uint32Array,
   stride: number,
 ): Float32Array {
-  const n = stride >= 7 ? Math.floor(splatData.length / stride) : 0;
+  const n = stride >= splatStrideForDegree(0)
+    ? Math.floor(splatData.length / stride)
+    : 0;
   const out = new Float32Array(n);
+  const f32 = new Float32Array(
+    splatData.buffer,
+    splatData.byteOffset,
+    splatData.length,
+  );
   for (let i = 0; i < n; i++) {
     const b = i * stride;
-    const sxx = halfToFloat(splatData[b + 3]! & 0xffff);
-    const syy = halfToFloat((splatData[b + 4]! >>> 16) & 0xffff);
-    const szz = halfToFloat((splatData[b + 5]! >>> 16) & 0xffff);
-    const opacity = halfToFloat(splatData[b + 6]! & 0xffff);
-    const trace = sxx + syy + szz;
+    const sx = f32[b + 3]!;
+    const sy = f32[b + 4]!;
+    const sz = f32[b + 5]!;
+    const opacity = halfToFloat(splatData[b + 10]! & 0xffff);
+    const trace = sx * sx + sy * sy + sz * sz;
     out[i] = opacity * Math.sqrt(trace > 0 ? trace : 0);
   }
   return out;
@@ -281,10 +266,9 @@ export const DEFAULT_SPLAT_SAMPLE_MODE: SplatSampleMode = "importance";
 
 /**
  * Splat rendering mode (user-selectable):
- * - `full`: keep every splat the GPU can physically hold. Ignores the quality
- *   fraction and the {@link PREVIEW_SPLAT_BUDGET} soft cap; only the device
- *   storage-buffer limit (and, if needed, auto band-0 downgrade) bounds it.
- *   Matches dedicated splat viewers' full-cloud coverage.
+ * - `full`: preserve every source splat and its requested SH degree. If neither
+ *   texture arrays nor the explicit packed fallback can hold it, reject the
+ *   upload with structured status instead of silently reducing fidelity.
  * - `decimated`: reduce to the quality fraction / preview budget for lighter
  *   VRAM and faster per-frame sorting on very large clouds.
  */
@@ -292,6 +276,49 @@ export type SplatRenderMode = "full" | "decimated";
 
 /** Default rendering mode: show the whole cloud (device-limited). */
 export const DEFAULT_SPLAT_RENDER_MODE: SplatRenderMode = "full";
+
+/** Why the renderer used an explicit fallback or could not upload a cloud. */
+export type SplatFallbackReason =
+  | "source-data-decimated"
+  | "texture-arrays-unavailable"
+  | "texture-array-capacity-exceeded"
+  | "order-buffer-capacity-exceeded"
+  | "texture-array-capacity-decimation"
+  | "order-buffer-capacity-decimation"
+  | "packed-storage-capacity-exceeded"
+  | "texture-upload-failed";
+
+/** Structured result for every Gaussian upload attempt. */
+export interface SplatUploadStatus {
+  outcome: "empty" | "uploaded" | "fallback" | "failed";
+  sourceCount: number;
+  uploadedCount: number;
+  requestedShDegree: number;
+  effectiveShDegree: number;
+  renderMode: SplatRenderMode;
+  resourceMode: GaussianResourceMode;
+  fallbackReason: SplatFallbackReason | null;
+}
+
+const DEFAULT_MAX_BUFFER_BYTES = 268_435_456;
+const MAX_U32_SPLAT_COUNT = 0xffff_ffff;
+
+function textureArrayCapacity(device: GPUDevice, shDegree: number): number {
+  if (
+    typeof device.createTexture !== "function" ||
+    typeof device.queue.writeTexture !== "function"
+  ) {
+    return 0;
+  }
+  const dimension = Math.floor(device.limits?.maxTextureDimension2D ?? 0);
+  const layers = Math.floor(device.limits?.maxTextureArrayLayers ?? 0);
+  if (dimension <= 0 || layers <= 0) return 0;
+  const featureLayers = Math.ceil(
+    (1 + (shDegree + 1) * (shDegree + 1) * 3) / 4,
+  );
+  const pages = Math.min(Math.floor(layers / 3), Math.floor(layers / featureLayers));
+  return Math.min(MAX_U32_SPLAT_COUNT, dimension * dimension * pages);
+}
 
 /**
  * Reduce a packed splat buffer to at most `maxSplats` using `mode`. Returns the
@@ -313,19 +340,24 @@ export function sampleSplatBuffer(
 export class SplatRenderer {
   private readonly resources: GaussianSplatResources;
   private readonly sort: SplatSortController;
-  private gpuSort: GpuSplatSorter | null = null;
   /** 2D low-pass filter size (px²); larger = fuller/blurrier splats. */
   private dilation = DEFAULT_SPLAT_DILATION;
   /** Diagnostic encoding for inputs whose decoded SH is known to be linear. */
   private encodeLinearToSrgb = false;
-  /** Max bytes bindable as a single read-only-storage buffer on this device. */
+  /** Max bytes bindable by the explicit packed compatibility path. */
   private readonly maxStorageBytes: number;
-  /** CPU-side positions for GPU sort depth range computation. */
-  private positions: Float32Array = new Float32Array(0);
-  /** Last camera pose used for GPU sort (avoids redundant sorts). */
-  private lastSortCamPos: Vec3 = [0, 0, 0];
-  private lastSortViewDir: Vec3 = [0, 0, 1];
-  private gpuSortDirty = true;
+  /** Max splats addressable by the one global order storage buffer. */
+  private readonly maxOrderCount: number;
+  private _uploadStatus: SplatUploadStatus = {
+    outcome: "empty",
+    sourceCount: 0,
+    uploadedCount: 0,
+    requestedShDegree: 0,
+    effectiveShDegree: 0,
+    renderMode: DEFAULT_SPLAT_RENDER_MODE,
+    resourceMode: "none",
+    fallbackReason: null,
+  };
 
   constructor(
     private readonly device: GPUDevice,
@@ -339,14 +371,27 @@ export class SplatRenderer {
      * would otherwise keep showing the initial identity order.
      */
     private readonly onOrderChanged?: () => void,
+    packedFallbackBindGroupLayout: GPUBindGroupLayout = bindGroupLayout,
+    private readonly packedFallbackPipeline: GPURenderPipeline = pipeline,
   ) {
+    const maxBufferBytes =
+      this.device.limits?.maxBufferSize ?? DEFAULT_MAX_BUFFER_BYTES;
     this.maxStorageBytes = Math.min(
       this.device.limits?.maxStorageBufferBindingSize ?? DEFAULT_MAX_STORAGE_BINDING_BYTES,
+      maxBufferBytes,
       GPU_SPLAT_MEMORY_BUDGET,
     );
-    this.resources = new GaussianSplatResources(this.device, bindGroupLayout);
-    this.sort = new SplatSortController(sorter, (idx) => {
-      this.resources.updateOrder(idx);
+    this.maxOrderCount = Math.min(
+      MAX_U32_SPLAT_COUNT,
+      Math.floor(this.maxStorageBytes / Uint32Array.BYTES_PER_ELEMENT),
+    );
+    this.resources = new GaussianSplatResources(
+      this.device,
+      bindGroupLayout,
+      packedFallbackBindGroupLayout,
+    );
+    this.sort = new SplatSortController(sorter, (idx, visibleCount) => {
+      this.resources.updateOrder(idx, visibleCount);
       this.onOrderChanged?.();
     });
   }
@@ -361,85 +406,205 @@ export class SplatRenderer {
     return this.resources.count;
   }
 
+  /** Result of the most recent upload attempt. */
+  get uploadStatus(): Readonly<SplatUploadStatus> {
+    return this._uploadStatus;
+  }
+
   /**
-   * Upload a packed SH splat buffer (stride varies with degree) and prime the
-   * sorter. Clouds larger than the preview budget or the GPU storage-buffer
-   * binding limit are decimated to fit — binding an oversized storage buffer
-   * would otherwise crash the device.
-   *
-   * When the GPU can hold less than {@link AUTO_DOWNGRADE_THRESHOLD} of the
-   * splats at the original SH degree, the buffer is repacked to band-0 (degree
-   * 0) automatically: the ~3.9× memory saving (degree-3 → 0) lets far more
-   * splats survive, which matters much more for visual quality than view-
-   * dependent SH highlights.
+   * Upload a packed SH splat buffer and prime the sorter. Full mode is atomic:
+   * it preserves both source count and SH degree or returns `failed`. Decimated
+   * mode alone may apply quality/sampling and hardware capacity bounds.
    */
   upload(
     splatData: Uint32Array,
     shDegree: number,
+    layoutVersion: number,
     sampleMode: SplatSampleMode = DEFAULT_SPLAT_SAMPLE_MODE,
     quality = 1,
     renderMode: SplatRenderMode = DEFAULT_SPLAT_RENDER_MODE,
-  ): void {
-    let stride = splatStrideForDegree(shDegree);
-    let bytesPerSplat = stride * Uint32Array.BYTES_PER_ELEMENT;
-    let count = Math.floor(splatData.length / stride);
-    let maxByLimit = Math.floor(this.maxStorageBytes / bytesPerSplat);
-    let effectiveDegree = shDegree;
-
-    // Auto-downgrade: if less than half the splats fit at the full degree,
-    // repack to band-0 for ~3.9× more coverage (degree 3) or ~1.6× (degree 1).
-    if (shDegree > 0 && maxByLimit < count * AUTO_DOWNGRADE_THRESHOLD) {
-      const band0Data = repackAsBand0(splatData, shDegree);
-      const band0Stride = splatStrideForDegree(0);
-      const band0Bps = band0Stride * Uint32Array.BYTES_PER_ELEMENT;
-      const band0Max = Math.floor(this.maxStorageBytes / band0Bps);
-       
-      console.info(
-        `[Splat] Auto-downgrade SH deg ${shDegree}→0: ` +
-          `${maxByLimit.toLocaleString()} → ${band0Max.toLocaleString()} max splats ` +
-          `(${(band0Max / maxByLimit).toFixed(1)}× gain, ` +
-          `GPU limit ${(this.maxStorageBytes / 1048576).toFixed(0)} MiB)`,
-      );
-      splatData = band0Data;
-      shDegree = 0;
-      stride = band0Stride;
-      bytesPerSplat = band0Bps;
-      count = Math.floor(splatData.length / stride);
-      maxByLimit = band0Max;
-      effectiveDegree = 0;
-    }
-
-    // In `full` mode keep every splat the device can hold (quality fraction and
-    // the preview soft-cap are bypassed); in `decimated` mode honour both so a
-    // huge cloud stays light. The hardware storage limit (`maxByLimit`) always
-    // applies — binding an oversized buffer would crash the device.
-    const full = renderMode === "full";
-    const q = full ? 1 : Math.min(1, Math.max(0, quality));
-    const byQuality = q >= 1 ? count : Math.max(1, Math.floor(count * q));
-    const softBudget = full ? maxByLimit : PREVIEW_SPLAT_BUDGET;
-    const maxSplats = Math.min(byQuality, softBudget, maxByLimit);
-    // Reduce to fit using the caller-selected strategy (importance vs uniform).
-    const data = sampleSplatBuffer(splatData, stride, maxSplats, sampleMode);
-    const kept = Math.floor(data.length / stride);
-     
-    console.info(
-      `[Splat] Upload: ${count.toLocaleString()} → ${kept.toLocaleString()} splats ` +
-        `(deg ${effectiveDegree}, ${(kept * bytesPerSplat / 1048576).toFixed(1)} MiB, ` +
-        `${((kept / count) * 100).toFixed(1)}% kept, mode=${sampleMode})`,
+    sourceCount?: number,
+  ): SplatUploadStatus {
+    const stride = assertGaussianSplatBuffer(
+      splatData,
+      shDegree,
+      layoutVersion,
     );
-    this.resources.upload(data, shDegree);
-    const positions = extractSplatPositions(data, stride);
-    if (ENABLE_GPU_SPLAT_SORT) {
-      this.positions = positions;
-      this.gpuSort ??= new GpuSplatSorter(this.device);
-      this.gpuSort.resize(kept, stride);
-      this.gpuSortDirty = true;
-      this.sort.setSplats(positions.slice()); // clone because GPU sort retains positions
-    } else {
-      this.positions = new Float32Array(0);
-      this.gpuSortDirty = false;
-      this.sort.setSplats(positions);
+    const inputCount = Math.floor(splatData.length / stride);
+    const reportedSourceCount = Math.max(
+      inputCount,
+      Number.isFinite(sourceCount) ? Math.floor(sourceCount!) : inputCount,
+    );
+    const emptyStatus: SplatUploadStatus = {
+      outcome: "empty",
+      sourceCount: reportedSourceCount,
+      uploadedCount: 0,
+      requestedShDegree: shDegree,
+      effectiveShDegree: shDegree,
+      renderMode,
+      resourceMode: "none",
+      fallbackReason: null,
+    };
+    if (inputCount === 0) {
+      this.clear();
+      this._uploadStatus = emptyStatus;
+      return this._uploadStatus;
     }
+
+    const bytesPerSplat = stride * Uint32Array.BYTES_PER_ELEMENT;
+    const packedCapacity = Math.floor(this.maxStorageBytes / bytesPerSplat);
+    const textureCapacity = textureArrayCapacity(this.device, shDegree);
+    const textureAvailable = textureCapacity > 0;
+    const full = renderMode === "full";
+    let resourceMode: Exclude<GaussianResourceMode, "none">;
+    let fallbackReason: SplatFallbackReason | null = null;
+    let maxSplats = inputCount;
+
+    if (full) {
+      if (reportedSourceCount > inputCount) {
+        return this.failUpload(
+          reportedSourceCount,
+          shDegree,
+          renderMode,
+          "source-data-decimated",
+        );
+      }
+      if (inputCount > this.maxOrderCount) {
+        return this.failUpload(
+          reportedSourceCount,
+          shDegree,
+          renderMode,
+          "order-buffer-capacity-exceeded",
+        );
+      }
+      if (textureAvailable && inputCount <= textureCapacity) {
+        resourceMode = "texture-array";
+      } else if (inputCount <= packedCapacity) {
+        resourceMode = "packed-storage-fallback";
+        fallbackReason = textureAvailable
+          ? "texture-array-capacity-exceeded"
+          : "texture-arrays-unavailable";
+      } else {
+        return this.failUpload(
+          reportedSourceCount,
+          shDegree,
+          renderMode,
+          textureAvailable
+            ? "texture-array-capacity-exceeded"
+            : "packed-storage-capacity-exceeded",
+        );
+      }
+    } else {
+      const q = Math.min(1, Math.max(0, quality));
+      const byQuality =
+        q >= 1 ? inputCount : Math.max(1, Math.floor(inputCount * q));
+      const requested = Math.min(byQuality, PREVIEW_SPLAT_BUDGET);
+      if (textureAvailable) {
+        resourceMode = "texture-array";
+        maxSplats = Math.min(requested, textureCapacity, this.maxOrderCount);
+        if (maxSplats < requested) {
+          fallbackReason =
+            this.maxOrderCount <= textureCapacity
+              ? "order-buffer-capacity-decimation"
+              : "texture-array-capacity-decimation";
+        }
+      } else {
+        resourceMode = "packed-storage-fallback";
+        fallbackReason = "texture-arrays-unavailable";
+        maxSplats = Math.min(requested, packedCapacity, this.maxOrderCount);
+      }
+      if (maxSplats <= 0) {
+        return this.failUpload(
+          reportedSourceCount,
+          shDegree,
+          renderMode,
+          this.maxOrderCount <= 0
+            ? "order-buffer-capacity-exceeded"
+            : "packed-storage-capacity-exceeded",
+        );
+      }
+    }
+
+    const data =
+      maxSplats < inputCount
+        ? sampleSplatBuffer(splatData, stride, maxSplats, sampleMode)
+        : splatData;
+    const kept = Math.floor(data.length / stride);
+    try {
+      this.resources.upload(data, shDegree, layoutVersion, resourceMode);
+    } catch (error) {
+      if (
+        resourceMode === "texture-array" &&
+        kept <= packedCapacity &&
+        kept <= this.maxOrderCount
+      ) {
+        console.warn("[Splat] Texture upload failed; using explicit packed fallback", error);
+        resourceMode = "packed-storage-fallback";
+        fallbackReason = "texture-upload-failed";
+        try {
+          this.resources.upload(data, shDegree, layoutVersion, resourceMode);
+        } catch (fallbackError) {
+          console.error("[Splat] Packed fallback upload failed", fallbackError);
+          return this.failUpload(
+            reportedSourceCount,
+            shDegree,
+            renderMode,
+            "texture-upload-failed",
+          );
+        }
+      } else {
+        console.error("[Splat] Texture upload failed", error);
+        return this.failUpload(
+          reportedSourceCount,
+          shDegree,
+          renderMode,
+          "texture-upload-failed",
+        );
+      }
+    }
+
+    const positions = extractSplatPositions(data, stride);
+    this.sort.setSplats(positions);
+    this._uploadStatus = {
+      outcome:
+        fallbackReason !== null || resourceMode === "packed-storage-fallback"
+          ? "fallback"
+          : "uploaded",
+      sourceCount: reportedSourceCount,
+      uploadedCount: kept,
+      requestedShDegree: shDegree,
+      effectiveShDegree: shDegree,
+      renderMode,
+      resourceMode,
+      fallbackReason,
+    };
+    console.info(
+      `[Splat] Upload ${this._uploadStatus.outcome}: ` +
+        `${reportedSourceCount.toLocaleString()} → ${kept.toLocaleString()}, ` +
+        `SH ${shDegree}, resource=${resourceMode}`,
+    );
+    return this._uploadStatus;
+  }
+
+  private failUpload(
+    sourceCount: number,
+    shDegree: number,
+    renderMode: SplatRenderMode,
+    fallbackReason: SplatFallbackReason,
+  ): SplatUploadStatus {
+    this.resources.clear();
+    this.sort.setSplats(new Float32Array(0));
+    this._uploadStatus = {
+      outcome: "failed",
+      sourceCount,
+      uploadedCount: 0,
+      requestedShDegree: shDegree,
+      effectiveShDegree: shDegree,
+      renderMode,
+      resourceMode: "none",
+      fallbackReason,
+    };
+    return this._uploadStatus;
   }
 
   /** Set the 2D low-pass dilation (splat fullness). Wakes a redraw. */
@@ -480,50 +645,37 @@ export class SplatRenderer {
     );
     this.resources.updateUniform(uniform);
     const viewDir = computeViewDir(camera.position, camera.target);
-    // Track camera for GPU sort (currently disabled pending further debugging).
-    this.lastSortCamPos = camera.position;
-    this.lastSortViewDir = viewDir;
-    this.gpuSortDirty = true;
-    // CPU sort — proven stable, runs thresholded in a worker.
     this.sort.onCamera(camera.position, viewDir);
   }
 
   /**
-   * Encode the GPU depth sort into the command encoder. Call this BEFORE
-   * beginning the render pass so the sorted order is ready for drawing.
-   * Returns true if a sort was dispatched.
+   * @deprecated GPU sorting is disabled. Its old shader depended on packed
+   * splat storage and must be redesigned for texture-array transforms before it
+   * can return. Worker sorting owns the one global order buffer.
    */
-  sortGpu(encoder: GPUCommandEncoder): boolean {
-    if (!ENABLE_GPU_SPLAT_SORT) return false;
-    if (!this.resources.hasContent || !this.gpuSortDirty) return false;
-    const splatBuf = this.resources.gpuSplatBuffer;
-    const orderBuf = this.resources.gpuOrderBuffer;
-    if (!splatBuf || !orderBuf) return false;
-    this.gpuSort ??= new GpuSplatSorter(this.device);
-    this.gpuSort.sort(
-      encoder,
-      splatBuf,
-      orderBuf,
-      this.lastSortCamPos,
-      this.lastSortViewDir,
-      this.positions,
-    );
-    this.gpuSortDirty = false;
-    return true;
+  sortGpu(_encoder: GPUCommandEncoder): boolean {
+    return false;
   }
 
   /** Draw the splats into the active render pass (after opaque geometry). */
   draw(pass: GPURenderPassEncoder): void {
-    this.resources.draw(pass, this.pipeline);
+    this.resources.draw(pass, this.pipeline, this.packedFallbackPipeline);
   }
 
   /** Remove the current cloud. */
   clear(): void {
     this.resources.clear();
-    this.positions = new Float32Array(0);
-    this.gpuSortDirty = false;
-    this.gpuSort?.resize(0, 0);
     this.sort.setSplats(new Float32Array(0));
+    this._uploadStatus = {
+      outcome: "empty",
+      sourceCount: 0,
+      uploadedCount: 0,
+      requestedShDegree: 0,
+      effectiveShDegree: 0,
+      renderMode: DEFAULT_SPLAT_RENDER_MODE,
+      resourceMode: "none",
+      fallbackReason: null,
+    };
   }
 
   /** Force a re-sort next frame (e.g. after a projection change). */
@@ -534,9 +686,6 @@ export class SplatRenderer {
   /** Release all GPU + worker resources. */
   dispose(): void {
     this.resources.dispose();
-    this.positions = new Float32Array(0);
-    this.gpuSort?.dispose();
-    this.gpuSort = null;
     this.sort.dispose();
   }
 }
@@ -551,7 +700,12 @@ export function createSplatRenderer(
   sampleCount = 4,
   onOrderChanged?: () => void,
 ): SplatRenderer {
-  const { pipeline, bindGroupLayout } = createGaussianSplatPipeline(
+  const {
+    pipeline,
+    bindGroupLayout,
+    packedFallbackPipeline,
+    packedFallbackBindGroupLayout,
+  } = createGaussianSplatPipeline(
     device,
     format,
     sampleCount,
@@ -562,5 +716,7 @@ export function createSplatRenderer(
     pipeline,
     createWorkerSplatSorter(),
     onOrderChanged,
+    packedFallbackBindGroupLayout,
+    packedFallbackPipeline,
   );
 }

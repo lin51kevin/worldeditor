@@ -11,6 +11,7 @@ import {
   SplatRenderer,
 } from "./splatRenderer";
 import { splatStrideForDegree } from "./splatPipeline";
+import { GAUSSIAN_SPLAT_LAYOUT_VERSION } from "./splatLayout";
 import type { SplatSorter } from "./splatSortController";
 import type { CameraState } from "../cameraController";
 
@@ -86,17 +87,18 @@ function floatToHalf(v: number): number {
 }
 
 /**
- * Build one degree-0 packed splat record (stride 8 `u32`) with a position tag
- * in `x` and the given activated opacity + isotropic covariance size.
+ * Build one degree-0 layout-v2 record with a position tag in `x` and the given
+ * activated opacity + isotropic scale.
  */
 function packDeg0Splat(tag: number, opacity: number, size: number): Uint32Array {
   const words = new Uint32Array(STRIDE0);
   new Float32Array(words.buffer)[0] = tag; // pos.x carries the identifying tag
-  const hSize = floatToHalf(size);
-  words[3] = hSize & 0xffff; // σxx (low half)
-  words[4] = (hSize << 16) >>> 0; // σyy (high half)
-  words[5] = (hSize << 16) >>> 0; // σzz (high half)
-  words[6] = floatToHalf(opacity) & 0xffff; // opacity (low half)
+  const f32 = new Float32Array(words.buffer);
+  f32[3] = size;
+  f32[4] = size;
+  f32[5] = size;
+  f32[6] = 1; // identity (w,x,y,z) quaternion
+  words[10] = floatToHalf(opacity) & 0xffff; // opacity (low half)
   return words;
 }
 
@@ -124,6 +126,11 @@ describe("computeSplatImportance", () => {
     const imp = computeSplatImportance(cloud, STRIDE0);
     expect(imp[0]).toBeCloseTo(0, 5);
     expect(imp[2]).toBeGreaterThan(imp[1]!);
+  });
+
+  it("preserves tiny f32 scales whose squared covariance would underflow f16", () => {
+    const cloud = concatSplats([packDeg0Splat(0, 1, 1e-4)]);
+    expect(computeSplatImportance(cloud, STRIDE0)[0]).toBeGreaterThan(0);
   });
 });
 
@@ -167,12 +174,12 @@ describe("importanceDecimateSplatBuffer", () => {
 describe("repackAsBand0", () => {
   it("returns the input unchanged for degree 0", () => {
     const data = new Uint32Array(STRIDE0 * 2);
-    expect(repackAsBand0(data, 0)).toBe(data);
+    expect(repackAsBand0(data, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION)).toBe(data);
   });
 
-  it("strips higher SH bands keeping position + cov + opacity + dc", () => {
-    const deg1Stride = splatStrideForDegree(1); // 13 words
-    const deg0Stride = splatStrideForDegree(0); // 8 words
+  it("strips higher SH bands keeping position + transform + opacity + dc", () => {
+    const deg1Stride = splatStrideForDegree(1); // 17 words
+    const deg0Stride = splatStrideForDegree(0); // 12 words
     const n = 3;
     const src = new Uint32Array(n * deg1Stride);
     // Fill each record with a recognisable pattern.
@@ -181,10 +188,10 @@ describe("repackAsBand0", () => {
         src[i * deg1Stride + w] = i * 100 + w;
       }
     }
-    const out = repackAsBand0(src, 1);
+    const out = repackAsBand0(src, 1, GAUSSIAN_SPLAT_LAYOUT_VERSION);
     expect(out.length).toBe(n * deg0Stride);
     for (let i = 0; i < n; i++) {
-      // First 8 words (pos + cov/opacity/dc) must match the source.
+      // First 12 words (transform + opacity/DC) must match the source.
       for (let w = 0; w < deg0Stride; w++) {
         expect(out[i * deg0Stride + w]).toBe(i * 100 + w);
       }
@@ -220,11 +227,32 @@ describe("sampleSplatBuffer", () => {
 });
 
 describe("SplatRenderer", () => {
-  function fakeDevice() {
+  function fakeDevice(overrides: Partial<GPUSupportedLimits> = {}) {
+    const textures: Array<{ destroyed: boolean; descriptor: GPUTextureDescriptor }> = [];
     return {
       createBuffer: () => ({ destroy() {} }),
+      createTexture: (descriptor: GPUTextureDescriptor) => {
+        const texture = {
+          descriptor,
+          destroyed: false,
+          createView: () => ({}),
+          destroy() {
+            this.destroyed = true;
+          },
+        };
+        textures.push(texture);
+        return texture;
+      },
       createBindGroup: () => ({}),
-      queue: { writeBuffer: vi.fn() },
+      queue: { writeBuffer: vi.fn(), writeTexture: vi.fn() },
+      limits: {
+        maxTextureDimension2D: 64,
+        maxTextureArrayLayers: 256,
+        maxBufferSize: 1_073_741_824,
+        maxStorageBufferBindingSize: 1_073_741_824,
+        ...overrides,
+      },
+      __textures: textures,
     } as unknown as GPUDevice;
   }
 
@@ -238,7 +266,7 @@ describe("SplatRenderer", () => {
         const n = positions.length / 3;
         const idx = new Uint32Array(n);
         for (let i = 0; i < n; i++) idx[i] = i;
-        done(idx, generation);
+        done(idx, Math.min(2, n), generation);
       },
       dispose() {},
     };
@@ -261,7 +289,11 @@ describe("SplatRenderer", () => {
       syncSorter(),
     );
     expect(r.hasContent).toBe(false);
-    r.upload(new Uint32Array(2 * STRIDE0), 1);
+    r.upload(
+      new Uint32Array(2 * splatStrideForDegree(1)),
+      1,
+      GAUSSIAN_SPLAT_LAYOUT_VERSION,
+    );
     expect(r.hasContent).toBe(true);
     r.clear();
     expect(r.hasContent).toBe(false);
@@ -276,7 +308,7 @@ describe("SplatRenderer", () => {
       {} as GPURenderPipeline,
       syncSorter(),
     );
-    r.upload(new Uint32Array(3 * STRIDE0), 0);
+    r.upload(new Uint32Array(3 * STRIDE0), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
     writeSpy.mockClear();
     r.onCamera(camera, "3d", 50, 800, 600);
     // At least the uniform write plus the sorted-order write occurred.
@@ -292,7 +324,7 @@ describe("SplatRenderer", () => {
       {} as GPURenderPipeline,
       syncSorter(),
     );
-    r.upload(new Uint32Array(STRIDE0), 0);
+    r.upload(new Uint32Array(STRIDE0), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
     writeSpy.mockClear();
     r.onCamera(camera, "3d", 50, 800, 600);
     const uniform = writeSpy.mock.calls
@@ -325,19 +357,71 @@ describe("SplatRenderer", () => {
       syncSorter(),
       onOrderChanged,
     );
-    r.upload(new Uint32Array(3 * STRIDE0), 0);
+    r.upload(new Uint32Array(3 * STRIDE0), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
     onOrderChanged.mockClear();
     r.onCamera(camera, "3d", 50, 800, 600);
     expect(onOrderChanged).toHaveBeenCalledTimes(1);
   });
 
-  it("decimates a cloud that exceeds the device storage-buffer limit", () => {
-    // Limit fits only 2 degree-0 splats (STRIDE0 u32 words * 4 bytes each).
+  it("threads the visible count from the sorter into the draw call", () => {
+    const r = new SplatRenderer(
+      fakeDevice(),
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+    r.upload(new Uint32Array(3 * STRIDE0), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+    r.onCamera(camera, "3d", 50, 800, 600);
+    const pass = {
+      setPipeline: vi.fn(),
+      setBindGroup: vi.fn(),
+      draw: vi.fn(),
+    } as unknown as GPURenderPassEncoder;
+
+    r.draw(pass);
+
+    expect(pass.draw).toHaveBeenCalledWith(4, 2);
+  });
+
+  it("keeps full count and SH when textures fit but one storage binding would not", () => {
+    const degree = 3;
+    const stride = splatStrideForDegree(degree);
+    const device = fakeDevice({
+      maxTextureDimension2D: 4,
+      maxTextureArrayLayers: 64,
+      // Enough for the 10-entry global order, not the 1,400-byte packed cloud.
+      maxStorageBufferBindingSize: 64,
+    });
+
+    const r = new SplatRenderer(
+      device,
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+    const status = r.upload(
+      new Uint32Array(10 * stride),
+      degree,
+      GAUSSIAN_SPLAT_LAYOUT_VERSION,
+    );
+    expect(r.hasContent).toBe(true);
+    expect(r.count).toBe(10);
+    expect(status.uploadedCount).toBe(10);
+    expect(status.requestedShDegree).toBe(3);
+    expect(status.effectiveShDegree).toBe(3);
+    expect(status.resourceMode).toBe("texture-array");
+    expect(status.fallbackReason).toBeNull();
+  });
+
+  it("reports the packed compatibility fallback when texture arrays are unavailable", () => {
     const device = {
       createBuffer: () => ({ destroy() {} }),
       createBindGroup: () => ({}),
       queue: { writeBuffer: vi.fn() },
-      limits: { maxStorageBufferBindingSize: 2 * STRIDE0 * 4 },
+      limits: {
+        maxBufferSize: 1_048_576,
+        maxStorageBufferBindingSize: 1_048_576,
+      },
     } as unknown as GPUDevice;
     const r = new SplatRenderer(
       device,
@@ -345,10 +429,131 @@ describe("SplatRenderer", () => {
       {} as GPURenderPipeline,
       syncSorter(),
     );
-    r.upload(new Uint32Array(100 * STRIDE0), 0);
-    expect(r.hasContent).toBe(true);
-    expect(r.count).toBeLessThanOrEqual(2);
-    expect(r.count).toBeGreaterThan(0);
+
+    const status = r.upload(
+      new Uint32Array(3 * splatStrideForDegree(2)),
+      2,
+      GAUSSIAN_SPLAT_LAYOUT_VERSION,
+    );
+
+    expect(status.outcome).toBe("fallback");
+    expect(status.uploadedCount).toBe(3);
+    expect(status.effectiveShDegree).toBe(2);
+    expect(status.resourceMode).toBe("packed-storage-fallback");
+    expect(status.fallbackReason).toBe("texture-arrays-unavailable");
+  });
+
+  it("fails explicitly instead of reducing count or SH when full texture/order capacity is exceeded", () => {
+    const degree = 3;
+    const stride = splatStrideForDegree(degree);
+    const r = new SplatRenderer(
+      fakeDevice({
+        maxTextureDimension2D: 2,
+        maxTextureArrayLayers: 13,
+        maxStorageBufferBindingSize: 32,
+      }),
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+
+    const status = r.upload(
+      new Uint32Array(5 * stride),
+      degree,
+      GAUSSIAN_SPLAT_LAYOUT_VERSION,
+      "uniform",
+      1,
+      "full",
+    );
+
+    expect(status.outcome).toBe("failed");
+    expect(status.sourceCount).toBe(5);
+    expect(status.uploadedCount).toBe(0);
+    expect(status.effectiveShDegree).toBe(3);
+    expect(status.fallbackReason).toMatch(/capacity/);
+    expect(r.hasContent).toBe(false);
+  });
+
+  it("reports full-mode order-buffer exhaustion without drawing a partial cloud", () => {
+    const r = new SplatRenderer(
+      fakeDevice({
+        maxTextureDimension2D: 8,
+        maxTextureArrayLayers: 64,
+        maxStorageBufferBindingSize: 16,
+      }),
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+
+    const status = r.upload(
+      new Uint32Array(5 * STRIDE0),
+      0,
+      GAUSSIAN_SPLAT_LAYOUT_VERSION,
+    );
+
+    expect(status).toMatchObject({
+      outcome: "failed",
+      sourceCount: 5,
+      uploadedCount: 0,
+      effectiveShDegree: 0,
+      resourceMode: "none",
+      fallbackReason: "order-buffer-capacity-exceeded",
+    });
+
+  });
+
+  it("rejects a pre-decimated source when switched to full mode", () => {
+    const r = new SplatRenderer(
+      fakeDevice(),
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+    const status = r.upload(
+      new Uint32Array(5 * STRIDE0),
+      0,
+      GAUSSIAN_SPLAT_LAYOUT_VERSION,
+      "uniform",
+      1,
+      "full",
+      10,
+    );
+    expect(status).toMatchObject({
+      outcome: "failed",
+      sourceCount: 10,
+      uploadedCount: 0,
+      fallbackReason: "source-data-decimated",
+    });
+  });
+
+  it("keeps explicit decimated mode bounded by texture capacity", () => {
+    const degree = 3;
+    const stride = splatStrideForDegree(degree);
+    const r = new SplatRenderer(
+      fakeDevice({
+        maxTextureDimension2D: 2,
+        maxTextureArrayLayers: 13,
+        maxStorageBufferBindingSize: 1_024,
+      }),
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+
+    const status = r.upload(
+      new Uint32Array(20 * stride),
+      degree,
+      GAUSSIAN_SPLAT_LAYOUT_VERSION,
+      "uniform",
+      1,
+      "decimated",
+    );
+
+    expect(status.outcome).toBe("fallback");
+    expect(status.uploadedCount).toBeLessThanOrEqual(4);
+    expect(status.uploadedCount).toBeGreaterThan(0);
+    expect(status.effectiveShDegree).toBe(3);
   });
 
   it("caps the kept splat count to the quality fraction", () => {
@@ -360,7 +565,14 @@ describe("SplatRenderer", () => {
     );
     // 100 splats at 25% quality → ~25 kept (device limit is unbounded here).
     // Quality only applies in "decimated" mode.
-    r.upload(new Uint32Array(100 * STRIDE0), 0, "uniform", 0.25, "decimated");
+    r.upload(
+      new Uint32Array(100 * STRIDE0),
+      0,
+      GAUSSIAN_SPLAT_LAYOUT_VERSION,
+      "uniform",
+      0.25,
+      "decimated",
+    );
     expect(r.count).toBeGreaterThan(0);
     expect(r.count).toBeLessThanOrEqual(25);
   });
@@ -373,7 +585,14 @@ describe("SplatRenderer", () => {
       syncSorter(),
     );
     // Same 25% quality, but full mode keeps all 100 (device limit unbounded).
-    r.upload(new Uint32Array(100 * STRIDE0), 0, "uniform", 0.25, "full");
+    r.upload(
+      new Uint32Array(100 * STRIDE0),
+      0,
+      GAUSSIAN_SPLAT_LAYOUT_VERSION,
+      "uniform",
+      0.25,
+      "full",
+    );
     expect(r.count).toBe(100);
   });
 
@@ -384,7 +603,13 @@ describe("SplatRenderer", () => {
       {} as GPURenderPipeline,
       syncSorter(),
     );
-    r.upload(new Uint32Array(40 * STRIDE0), 0, "uniform", 1);
+    r.upload(
+      new Uint32Array(40 * STRIDE0),
+      0,
+      GAUSSIAN_SPLAT_LAYOUT_VERSION,
+      "uniform",
+      1,
+    );
     expect(r.count).toBe(40);
   });
 });

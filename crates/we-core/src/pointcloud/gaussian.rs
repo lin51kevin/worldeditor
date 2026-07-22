@@ -2,17 +2,16 @@
 //!
 //! A [`GaussianCloud`] stores the full per-splat attributes required for true
 //! anisotropic Gaussian rendering: position, spherical-harmonic colour
-//! coefficients (any degree), opacity, and a pre-computed 3D covariance derived
-//! from the per-splat scale and rotation.
+//! coefficients (any degree), opacity, activated scale, normalized rotation, and
+//! a pre-computed 3D covariance retained for domain callers.
 //!
 //! Activation follows the reference 3DGS convention (Kerbl et al. 2023):
 //! - `opacity = sigmoid(raw)`
 //! - `scale   = exp(raw)`
 //! - `rotation = normalize(quaternion)` with component order `(w, x, y, z)`
 //!
-//! The 3D covariance is `Σ = R S Sᵀ Rᵀ` with `S = diag(scale)` and `R` the
-//! rotation matrix of the normalized quaternion. Only the 6 unique entries of
-//! the symmetric matrix are stored: `[σxx, σxy, σxz, σyy, σyz, σzz]`.
+//! The primary GPU layout stores scale and rotation as `f32` and reconstructs
+//! `Σ = R S Sᵀ Rᵀ` in WGSL. This avoids quantizing squared scales to `f16`.
 
 use super::model::Aabb;
 use super::ply::{Format, PlyHeader, parse_ply_header, read_scalar};
@@ -20,6 +19,27 @@ use super::{PointCloudError, PointCloudResult};
 
 /// Band-0 spherical-harmonic basis constant `C0 = 1 / (2*sqrt(pi))`.
 pub const SH_C0: f32 = 0.282_094_79;
+
+/// Version 2 of the packed Gaussian GPU layout.
+///
+/// Version 1 was the former implicit layout with six `f16` covariance elements.
+/// Version 2 is `transform-f32-opacity-sh-f16`: ten full-precision words
+/// (`position[3]`, activated `scale[3]`, normalized `(w,x,y,z)` quaternion[4])
+/// followed by packed `f16` opacity and SH coefficients.
+pub const PACKED_GAUSSIAN_LAYOUT_VERSION: u32 = 2;
+
+/// Stable name of [`PACKED_GAUSSIAN_LAYOUT_VERSION`].
+pub const PACKED_GAUSSIAN_LAYOUT_NAME: &str = "transform-f32-opacity-sh-f16";
+
+/// Full-precision `u32` words before the packed opacity/SH half block.
+pub const PACKED_GAUSSIAN_TRANSFORM_WORDS: usize = 10;
+
+/// `u32` words per packed Gaussian for an SH degree in `0..=3`.
+pub fn packed_gaussian_stride(sh_degree: u32) -> usize {
+    let d = sh_degree as usize + 1;
+    let half_count = 1 + d * d * 3;
+    PACKED_GAUSSIAN_TRANSFORM_WORDS + half_count.div_ceil(2)
+}
 
 /// A 3D Gaussian Splatting cloud.
 ///
@@ -36,6 +56,10 @@ pub struct GaussianCloud {
     sh_degree: u32,
     /// Activated opacity (sigmoid), one value per splat.
     opacity: Vec<f32>,
+    /// Activated scale (`exp(raw)`), 3 values per splat.
+    scales: Vec<f32>,
+    /// Normalized quaternion `(w, x, y, z)`, 4 values per splat.
+    rotations: Vec<f32>,
     /// Pre-computed 3D covariance, 6 unique entries per splat
     /// `[σxx, σxy, σxz, σyy, σyz, σzz]`.
     cov3d: Vec<f32>,
@@ -85,6 +109,16 @@ impl GaussianCloud {
     /// Activated opacity per splat.
     pub fn opacity(&self) -> &[f32] {
         &self.opacity
+    }
+
+    /// Activated scale, 3 values per splat.
+    pub fn scales(&self) -> &[f32] {
+        &self.scales
+    }
+
+    /// Normalized `(w, x, y, z)` quaternion, 4 values per splat.
+    pub fn rotations(&self) -> &[f32] {
+        &self.rotations
     }
 
     /// Pre-computed covariance, 6 per splat.
@@ -168,39 +202,34 @@ impl GaussianCloud {
         out
     }
 
-    /// Stride (u32 words per splat) of the half-precision SH instance buffer:
-    /// 3 `f32` position words plus `ceil((6 cov + 1 opacity + coeffs*3 sh) / 2)`
-    /// packed half-pairs.
-    pub fn sh_buffer_stride_f16(&self) -> usize {
-        let halves = 7 + self.coeffs_per_channel() * 3;
-        3 + halves.div_ceil(2)
+    /// Stride in `u32` words of packed layout version 2.
+    pub fn packed_buffer_stride(&self) -> usize {
+        packed_gaussian_stride(self.sh_degree)
     }
 
-    /// Build a compact half-precision SH instance buffer for GPU upload.
+    /// Build the version-2 packed transform/SH instance buffer for GPU upload.
     ///
-    /// Positions stay full `f32` (precision is critical after the origin shift
-    /// into the road frame); covariance, opacity and SH coefficients are packed
-    /// as IEEE binary16 pairs into `u32` words so the WGSL shader decodes them
-    /// with `unpack2x16float` (low half = even element, high half = odd element).
+    /// Position, activated scale, and normalized quaternion stay `f32`. Opacity
+    /// and SH coefficients are IEEE binary16 pairs decoded by WGSL with
+    /// `unpack2x16float` (low half = even element, high half = odd element).
     ///
-    /// Layout per splat ([`sh_buffer_stride_f16`] `u32` words):
-    /// `[x_f32, y_f32, z_f32, pack(σxx,σxy), pack(σxz,σyy), pack(σyz,σzz),
-    ///   pack(opacity, sh0_r), pack(sh0_g, sh0_b), …]`
-    /// The half block is `[σxx, σxy, σxz, σyy, σyz, σzz, opacity, sh…]`
-    /// (SH coeff-major, RGB-interleaved), zero-padded to an even length.
-    pub fn build_splat_buffer_sh_f16(&self) -> Vec<u32> {
+    /// Layout per splat ([`packed_buffer_stride`](Self::packed_buffer_stride)
+    /// words): `[position_f32[3], scale_f32[3], quaternion_f32[4],
+    /// pack(opacity, sh0_r), pack(sh0_g, sh0_b), …]`.
+    pub fn build_packed_splat_buffer(&self) -> Vec<u32> {
         let n = self.len();
         let sh_per_splat = self.coeffs_per_channel() * 3;
-        let stride = self.sh_buffer_stride_f16();
+        let stride = self.packed_buffer_stride();
         let mut out = Vec::with_capacity(n * stride);
-        let mut halves: Vec<f32> = Vec::with_capacity(7 + sh_per_splat);
+        let mut halves: Vec<f32> = Vec::with_capacity(1 + sh_per_splat);
         for i in 0..n {
             out.push(self.positions[i * 3].to_bits());
             out.push(self.positions[i * 3 + 1].to_bits());
             out.push(self.positions[i * 3 + 2].to_bits());
+            out.extend(self.scales[i * 3..i * 3 + 3].iter().map(|v| v.to_bits()));
+            out.extend(self.rotations[i * 4..i * 4 + 4].iter().map(|v| v.to_bits()));
 
             halves.clear();
-            halves.extend_from_slice(&self.cov3d[i * 6..i * 6 + 6]);
             halves.push(self.opacity[i]);
             let base = i * sh_per_splat;
             halves.extend_from_slice(&self.sh_coeffs[base..base + sh_per_splat]);
@@ -218,6 +247,20 @@ impl GaussianCloud {
             }
         }
         out
+    }
+
+    /// Legacy method name for the current packed buffer.
+    ///
+    /// Only opacity and SH are `f16` in layout version 2; transform attributes
+    /// remain `f32`. New render-path code should use
+    /// [`build_packed_splat_buffer`](Self::build_packed_splat_buffer).
+    pub fn build_splat_buffer_sh_f16(&self) -> Vec<u32> {
+        self.build_packed_splat_buffer()
+    }
+
+    /// Legacy stride method name for packed layout version 2.
+    pub fn sh_buffer_stride_f16(&self) -> usize {
+        self.packed_buffer_stride()
     }
 }
 
@@ -277,16 +320,21 @@ pub fn sigmoid(x: f32) -> f32 {
     1.0 / (1.0 + (-x).exp())
 }
 
+/// Normalize a quaternion `(w, x, y, z)`; zero and non-finite input is identity.
+pub fn normalize_quaternion(q: [f32; 4]) -> [f32; 4] {
+    let n = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]).sqrt();
+    if n.is_finite() && n > 0.0 {
+        [q[0] / n, q[1] / n, q[2] / n, q[3] / n]
+    } else {
+        [1.0, 0.0, 0.0, 0.0]
+    }
+}
+
 /// Convert a quaternion `(w, x, y, z)` to a 3×3 rotation matrix (row-major).
 ///
 /// The quaternion is normalized first; a zero quaternion yields the identity.
 pub fn quat_to_rotmat(q: [f32; 4]) -> [[f32; 3]; 3] {
-    let n = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]).sqrt();
-    let (w, x, y, z) = if n > 0.0 {
-        (q[0] / n, q[1] / n, q[2] / n, q[3] / n)
-    } else {
-        (1.0, 0.0, 0.0, 0.0)
-    };
+    let [w, x, y, z] = normalize_quaternion(q);
     [
         [
             1.0 - 2.0 * (y * y + z * z),
@@ -313,11 +361,13 @@ pub fn quat_to_rotmat(q: [f32; 4]) -> [[f32; 3]; 3] {
 /// `[σxx, σxy, σxz, σyy, σyz, σzz]`.
 pub fn compute_cov3d(scale: [f32; 3], rot: [f32; 4]) -> [f32; 6] {
     let r = quat_to_rotmat(rot);
-    let s2 = [scale[0] * scale[0], scale[1] * scale[1], scale[2] * scale[2]];
+    let s2 = [
+        scale[0] * scale[0],
+        scale[1] * scale[1],
+        scale[2] * scale[2],
+    ];
     // Σ[i][k] = Σ_j R[i][j] R[k][j] s_j²
-    let sigma = |i: usize, k: usize| -> f32 {
-        (0..3).map(|j| r[i][j] * r[k][j] * s2[j]).sum()
-    };
+    let sigma = |i: usize, k: usize| -> f32 { (0..3).map(|j| r[i][j] * r[k][j] * s2[j]).sum() };
     [
         sigma(0, 0),
         sigma(0, 1),
@@ -360,7 +410,7 @@ pub fn parse_gaussian_ply(bytes: &[u8]) -> PointCloudResult<GaussianCloud> {
 /// Resolved 3DGS PLY property indices and SH layout.
 ///
 /// Both the full-cloud parser ([`parse_gaussian_ply_capped`]) and the
-/// streaming packed-buffer parser ([`parse_gaussian_ply_packed_f16`]) share
+/// streaming packed-buffer parser ([`parse_gaussian_ply_packed`]) share
 /// this so the header-scanning and per-splat attribute reads live in one place.
 struct GaussianProps {
     ix: usize,
@@ -395,33 +445,30 @@ impl GaussianProps {
             .find("z")
             .ok_or_else(|| PointCloudError::InvalidHeader("missing z".into()))?;
 
+        let required = |name: &str| {
+            header.find(name).ok_or_else(|| {
+                PointCloudError::Unsupported(format!(
+                    "PLY is not a 3D Gaussian Splatting cloud (missing {name})"
+                ))
+            })
+        };
         let dc = [
-            header.find("f_dc_0"),
-            header.find("f_dc_1"),
-            header.find("f_dc_2"),
+            required("f_dc_0")?,
+            required("f_dc_1")?,
+            required("f_dc_2")?,
         ];
         let scale = [
-            header.find("scale_0"),
-            header.find("scale_1"),
-            header.find("scale_2"),
+            required("scale_0")?,
+            required("scale_1")?,
+            required("scale_2")?,
         ];
         let rot = [
-            header.find("rot_0"),
-            header.find("rot_1"),
-            header.find("rot_2"),
-            header.find("rot_3"),
+            required("rot_0")?,
+            required("rot_1")?,
+            required("rot_2")?,
+            required("rot_3")?,
         ];
-        let iopacity = header.find("opacity");
-
-        let has_all = dc.iter().all(Option::is_some)
-            && scale.iter().all(Option::is_some)
-            && rot.iter().all(Option::is_some)
-            && iopacity.is_some();
-        if !has_all {
-            return Err(PointCloudError::Unsupported(
-                "PLY is not a 3D Gaussian Splatting cloud (missing f_dc/scale/rot/opacity)".into(),
-            ));
-        }
+        let iopacity = required("opacity")?;
 
         // Collect f_rest_* properties, ordered by their trailing index.
         let mut rest: Vec<(usize, usize)> = header
@@ -446,15 +493,10 @@ impl GaussianProps {
             ix,
             iy,
             iz,
-            dc: [dc[0].unwrap(), dc[1].unwrap(), dc[2].unwrap()],
-            scale: [scale[0].unwrap(), scale[1].unwrap(), scale[2].unwrap()],
-            rot: [
-                rot[0].unwrap(),
-                rot[1].unwrap(),
-                rot[2].unwrap(),
-                rot[3].unwrap(),
-            ],
-            iopacity: iopacity.unwrap(),
+            dc,
+            scale,
+            rot,
+            iopacity,
             rest_indices,
             rest_per_channel,
             num_coeffs,
@@ -476,20 +518,20 @@ impl GaussianProps {
         sigmoid(reader.value(r, self.iopacity) as f32)
     }
 
-    /// Pre-computed covariance `[σxx, σxy, σxz, σyy, σyz, σzz]` of record `r`.
-    fn read_cov3d(&self, reader: &RecordReader, r: usize) -> [f32; 6] {
-        let s = [
+    /// Activated scale and normalized `(w, x, y, z)` quaternion of record `r`.
+    fn read_transform(&self, reader: &RecordReader, r: usize) -> ([f32; 3], [f32; 4]) {
+        let scale = [
             (reader.value(r, self.scale[0]) as f32).exp(),
             (reader.value(r, self.scale[1]) as f32).exp(),
             (reader.value(r, self.scale[2]) as f32).exp(),
         ];
-        let q = [
+        let rotation = normalize_quaternion([
             reader.value(r, self.rot[0]) as f32,
             reader.value(r, self.rot[1]) as f32,
             reader.value(r, self.rot[2]) as f32,
             reader.value(r, self.rot[3]) as f32,
-        ];
-        compute_cov3d(s, q)
+        ]);
+        (scale, rotation)
     }
 
     /// Append record `r`'s SH coefficients (coeff-major, RGB-interleaved) to
@@ -529,7 +571,7 @@ fn sampling_step(max_splats: Option<usize>, n: usize) -> usize {
 /// keeps very large clouds from exhausting the wasm32 heap on load. `None`
 /// keeps every splat. See [`parse_gaussian_ply`] for the property contract.
 ///
-/// For the memory-critical desktop path prefer [`parse_gaussian_ply_packed_f16`],
+/// For memory-critical paths prefer [`parse_gaussian_ply_packed`],
 /// which streams straight into the GPU buffer without buffering the full
 /// per-splat f32 attribute arrays this function materializes.
 pub fn parse_gaussian_ply_capped(
@@ -553,6 +595,8 @@ pub fn parse_gaussian_ply_capped(
     cloud.positions.reserve(kept * 3);
     cloud.sh_coeffs.reserve(kept * props.num_coeffs * 3);
     cloud.opacity.reserve(kept);
+    cloud.scales.reserve(kept * 3);
+    cloud.rotations.reserve(kept * 4);
     cloud.cov3d.reserve(kept * 6);
 
     let mut origin = [0.0f64; 3];
@@ -572,7 +616,12 @@ pub fn parse_gaussian_ply_capped(
         cloud.positions.extend_from_slice(&[lx, ly, lz]);
         props.read_sh(&reader, r, &mut cloud.sh_coeffs);
         cloud.opacity.push(props.read_opacity(&reader, r));
-        cloud.cov3d.extend_from_slice(&props.read_cov3d(&reader, r));
+        let (scale, rotation) = props.read_transform(&reader, r);
+        cloud.scales.extend_from_slice(&scale);
+        cloud.rotations.extend_from_slice(&rotation);
+        cloud
+            .cov3d
+            .extend_from_slice(&compute_cov3d(scale, rotation));
         r += step;
     }
 
@@ -581,37 +630,41 @@ pub fn parse_gaussian_ply_capped(
     Ok(cloud)
 }
 
-/// A packed half-precision splat buffer plus the metadata needed to render it,
+/// A packed transform/SH splat buffer plus the metadata needed to render it,
 /// produced without ever materializing a full [`GaussianCloud`].
 #[derive(Debug, Clone, Default)]
 pub struct PackedGaussians {
     /// Packed SH instance buffer, identical in layout to
-    /// [`GaussianCloud::build_splat_buffer_sh_f16`].
+    /// [`GaussianCloud::build_packed_splat_buffer`].
     pub buffer: Vec<u32>,
     /// Number of splats retained after budget sampling.
     pub count: usize,
+    /// Number of source PLY splats before explicit budget sampling.
+    pub source_count: usize,
     /// SH degree (0..=3).
     pub sh_degree: u32,
-    /// `u32` words per splat (see [`GaussianCloud::sh_buffer_stride_f16`]).
+    /// `u32` words per splat (see [`GaussianCloud::packed_buffer_stride`]).
     pub stride: usize,
+    /// Packed layout version. Consumers must reject unknown versions.
+    pub layout_version: u32,
     /// Global origin subtracted from stored positions.
     pub origin: [f64; 3],
     /// Axis-aligned bounds in local coordinates.
     pub bounds: Aabb,
 }
 
-/// Parse a 3DGS PLY straight into the packed half-precision GPU buffer.
+/// Parse a 3DGS PLY straight into packed GPU layout version 2.
 ///
 /// This is the memory-critical path for very large clouds (1 GB+ PLY): each
 /// kept splat is activated and written directly into the `u32` output buffer,
 /// so — unlike [`parse_gaussian_ply_capped`] followed by
-/// [`GaussianCloud::build_splat_buffer_sh_f16`] — the full per-splat f32
-/// attribute arrays (positions, covariance, opacity and, above all, the SH
+/// [`GaussianCloud::build_packed_splat_buffer`] — the full per-splat f32
+/// attribute arrays (positions, transforms, opacity and, above all, the SH
 /// coefficients) are never buffered. This roughly halves peak memory and, for
 /// high SH degrees, saves several GiB. The `buffer` bytes are identical to the
 /// two-step path for the same `max_splats`; only the intermediate allocations
 /// differ. See [`parse_gaussian_ply`] for the property contract.
-pub fn parse_gaussian_ply_packed_f16(
+pub fn parse_gaussian_ply_packed(
     bytes: &[u8],
     max_splats: Option<usize>,
 ) -> PointCloudResult<PackedGaussians> {
@@ -625,11 +678,10 @@ pub fn parse_gaussian_ply_packed_f16(
     let step = sampling_step(max_splats, n);
     let kept = n.div_ceil(step);
 
-    // Half-precision block per splat: cov(6) + opacity(1) + sh(coeffs*3),
-    // padded to an even length; stride matches `sh_buffer_stride_f16`.
+    // Full-precision transform followed by opacity + SH half-pairs.
     let sh_per_splat = props.num_coeffs * 3;
-    let half_block = 7 + sh_per_splat;
-    let stride = 3 + half_block.div_ceil(2);
+    let half_block = 1 + sh_per_splat;
+    let stride = packed_gaussian_stride(props.sh_degree);
     let mut buffer: Vec<u32> = Vec::with_capacity(kept * stride);
     let mut halves: Vec<f32> = Vec::with_capacity(half_block);
 
@@ -651,10 +703,12 @@ pub fn parse_gaussian_ply_packed_f16(
         buffer.push(lx.to_bits());
         buffer.push(ly.to_bits());
         buffer.push(lz.to_bits());
+        let (scale, rotation) = props.read_transform(&reader, r);
+        buffer.extend(scale.iter().map(|v| v.to_bits()));
+        buffer.extend(rotation.iter().map(|v| v.to_bits()));
 
-        // Half block: covariance, opacity, then SH coeffs (coeff-major, RGB).
+        // Half block: activated opacity then SH coeffs (coeff-major, RGB).
         halves.clear();
-        halves.extend_from_slice(&props.read_cov3d(&reader, r));
         halves.push(props.read_opacity(&reader, r));
         props.read_sh(&reader, r, &mut halves);
 
@@ -677,11 +731,23 @@ pub fn parse_gaussian_ply_packed_f16(
     Ok(PackedGaussians {
         buffer,
         count,
+        source_count: n,
         sh_degree: props.sh_degree,
         stride,
+        layout_version: PACKED_GAUSSIAN_LAYOUT_VERSION,
         origin,
         bounds,
     })
+}
+
+/// Legacy name for [`parse_gaussian_ply_packed`].
+///
+/// Layout version 2 keeps transforms in `f32`; only opacity and SH remain `f16`.
+pub fn parse_gaussian_ply_packed_f16(
+    bytes: &[u8],
+    max_splats: Option<usize>,
+) -> PointCloudResult<PackedGaussians> {
+    parse_gaussian_ply_packed(bytes, max_splats)
 }
 
 /// Reads scalar property values from a parsed PLY body (ASCII or binary).
@@ -767,15 +833,17 @@ mod tests {
     use super::*;
 
     /// The streaming packed parser must be byte-identical to the two-step path
-    /// (`parse_gaussian_ply_capped` → `build_splat_buffer_sh_f16`) so switching
+    /// (`parse_gaussian_ply_capped` → `build_packed_splat_buffer`) so switching
     /// to it never changes the rendered result.
     fn assert_packed_matches_two_step(bytes: &[u8], max_splats: Option<usize>) {
         let cloud = parse_gaussian_ply_capped(bytes, max_splats).unwrap();
-        let expected = cloud.build_splat_buffer_sh_f16();
-        let packed = parse_gaussian_ply_packed_f16(bytes, max_splats).unwrap();
+        let expected = cloud.build_packed_splat_buffer();
+        let packed = parse_gaussian_ply_packed(bytes, max_splats).unwrap();
         assert_eq!(packed.count, cloud.len());
+        assert!(packed.source_count >= packed.count);
         assert_eq!(packed.sh_degree, cloud.sh_degree());
-        assert_eq!(packed.stride, cloud.sh_buffer_stride_f16());
+        assert_eq!(packed.stride, cloud.packed_buffer_stride());
+        assert_eq!(packed.layout_version, PACKED_GAUSSIAN_LAYOUT_VERSION);
         assert_eq!(packed.origin, cloud.origin());
         assert_eq!(packed.bounds.min, cloud.bounds().min);
         assert_eq!(packed.bounds.max, cloud.bounds().max);
@@ -888,6 +956,99 @@ end_header
 0 0 0 0 0 0 0 0 0 0 1 0 0 0
 1 2 3 0 0 0 0 0 0 0 1 0 0 0
 "
+    }
+
+    fn single_transform_ascii(raw_scale: [f32; 3], rot: [f32; 4]) -> String {
+        format!(
+            "ply\n\
+             format ascii 1.0\n\
+             element vertex 1\n\
+             property float x\n\
+             property float y\n\
+             property float z\n\
+             property float f_dc_0\n\
+             property float f_dc_1\n\
+             property float f_dc_2\n\
+             property float opacity\n\
+             property float scale_0\n\
+             property float scale_1\n\
+             property float scale_2\n\
+             property float rot_0\n\
+             property float rot_1\n\
+             property float rot_2\n\
+             property float rot_3\n\
+             end_header\n\
+             0 0 0 0 0 0 0 {} {} {} {} {} {} {}\n",
+            raw_scale[0], raw_scale[1], raw_scale[2], rot[0], rot[1], rot[2], rot[3],
+        )
+    }
+
+    fn single_splat_ascii_for_degree(degree: u32) -> String {
+        let coeffs = (degree as usize + 1).pow(2);
+        let rest = 3 * (coeffs - 1);
+        let mut ply = String::from(
+            "ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nproperty float f_dc_0\nproperty float f_dc_1\nproperty float f_dc_2\n",
+        );
+        for k in 0..rest {
+            ply.push_str(&format!("property float f_rest_{k}\n"));
+        }
+        ply.push_str(
+            "property float opacity\nproperty float scale_0\nproperty float scale_1\nproperty float scale_2\nproperty float rot_0\nproperty float rot_1\nproperty float rot_2\nproperty float rot_3\nend_header\n0 0 0 0 0 0 ",
+        );
+        for _ in 0..rest {
+            ply.push_str("0 ");
+        }
+        ply.push_str("0 0 0 0 1 0 0 0\n");
+        ply
+    }
+
+    #[test]
+    fn test_packed_transform_layout_degree0_to3_strides() {
+        let expected = [12usize, 17, 24, 35];
+        for degree in 0..=3 {
+            let ply = single_splat_ascii_for_degree(degree);
+            let cloud = parse_gaussian_ply(ply.as_bytes()).unwrap();
+            assert_eq!(cloud.packed_buffer_stride(), expected[degree as usize]);
+            assert_eq!(packed_gaussian_stride(degree), expected[degree as usize]);
+            assert_eq!(
+                cloud.build_packed_splat_buffer().len(),
+                expected[degree as usize]
+            );
+            assert_packed_matches_two_step(ply.as_bytes(), None);
+        }
+    }
+
+    #[test]
+    fn test_packed_transform_preserves_scale_that_f16_covariance_loses() {
+        let raw = 1.0e-4f32.ln();
+        let cloud =
+            parse_gaussian_ply(single_transform_ascii([raw; 3], [1.0, 0.0, 0.0, 0.0]).as_bytes())
+                .unwrap();
+        assert_eq!(f32_to_f16_bits(cloud.cov3d()[0]), 0);
+
+        let packed = cloud.build_packed_splat_buffer();
+        let stored_scale = f32::from_bits(packed[3]);
+        assert!(stored_scale > 0.0);
+        assert!((stored_scale - 1.0e-4).abs() < 1.0e-9);
+    }
+
+    #[test]
+    fn test_packed_transform_normalizes_non_unit_and_zero_quaternions() {
+        for (input, expected) in [
+            ([2.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
+            ([0.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
+        ] {
+            let cloud =
+                parse_gaussian_ply(single_transform_ascii([0.0; 3], input).as_bytes()).unwrap();
+            let packed = cloud.build_packed_splat_buffer();
+            let stored = [
+                f32::from_bits(packed[6]),
+                f32::from_bits(packed[7]),
+                f32::from_bits(packed[8]),
+                f32::from_bits(packed[9]),
+            ];
+            assert_eq!(stored, expected);
+        }
     }
 
     #[test]
@@ -1129,33 +1290,31 @@ end_header
     }
 
     #[test]
-    fn test_build_splat_buffer_sh_f16_degree0_layout() {
+    fn test_build_packed_splat_buffer_degree0_layout() {
         let cloud = parse_gaussian_ply(degree0_ascii().as_bytes()).unwrap();
-        // degree 0 → coeffs=1 → halves = 7 + 3 = 10 → 5 pair words → stride = 3 + 5 = 8.
-        assert_eq!(cloud.sh_buffer_stride_f16(), 8);
-        let buf = cloud.build_splat_buffer_sh_f16();
-        assert_eq!(buf.len(), 8 * 2);
+        // degree 0 → pos3 + scale3 + quaternion4 + ceil((opacity1 + SH3)/2) = 12.
+        assert_eq!(cloud.packed_buffer_stride(), 12);
+        let buf = cloud.build_packed_splat_buffer();
+        assert_eq!(buf.len(), 12 * 2);
 
         // Position stored as raw f32 bits in the first 3 words of each stride.
         assert_eq!(f32::from_bits(buf[0]), 0.0); // splat 0 x = 0.0
-        assert_eq!(f32::from_bits(buf[8]), 1.0); // splat 1 x = 1.0 (stride 8)
+        assert_eq!(f32::from_bits(buf[12]), 1.0); // splat 1 x = 1.0 (stride 12)
 
-        // Word 3 of splat 0 packs (σxx, σxy) = (1.0, 0.0) → lo=0x3c00, hi=0x0000.
-        let w = buf[3];
-        let lo = (w & 0xffff) as u16;
-        let hi = ((w >> 16) & 0xffff) as u16;
-        assert!((f16_bits_to_f32(lo) - 1.0).abs() < 1e-3);
-        assert!(f16_bits_to_f32(hi).abs() < 1e-3);
+        // Activated scale and normalized quaternion remain precision-safe f32.
+        assert_eq!(&buf[3..6], &[1.0f32.to_bits(); 3]);
+        assert_eq!(f32::from_bits(buf[6]), 1.0);
+        assert_eq!(&buf[7..10], &[0.0f32.to_bits(); 3]);
 
-        // Opacity is half element 6 → word (3 + 6/2)=6, low lane. sigmoid(0)=0.5.
-        let wop = buf[6];
+        // Opacity is half element 0 at word 10, low lane. sigmoid(0)=0.5.
+        let wop = buf[10];
         let op = f16_bits_to_f32((wop & 0xffff) as u16);
         assert!((op - 0.5).abs() < 1e-2, "opacity {op}");
     }
 
     #[test]
-    fn test_build_splat_buffer_sh_f16_stride_matches_formula() {
-        // Degree 1 → coeffs=4 → halves = 7 + 12 = 19 → 10 pair words → stride 13.
+    fn test_build_packed_splat_buffer_degree1_stride_matches_formula() {
+        // Degree 1 → transform=10 words, halves=1 + 12 → 7 pair words → stride 17.
         let mut header = String::from(
             "ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nproperty float f_dc_0\nproperty float f_dc_1\nproperty float f_dc_2\n",
         );
@@ -1172,8 +1331,7 @@ end_header
         row.push_str("0 0 0 0 1 0 0 0\n");
         header.push_str(&row);
         let cloud = parse_gaussian_ply(header.as_bytes()).unwrap();
-        assert_eq!(cloud.sh_buffer_stride_f16(), 13);
-        assert_eq!(cloud.build_splat_buffer_sh_f16().len(), 13);
+        assert_eq!(cloud.packed_buffer_stride(), 17);
+        assert_eq!(cloud.build_packed_splat_buffer().len(), 17);
     }
 }
-

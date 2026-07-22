@@ -61,22 +61,35 @@ await init({ module_or_path: wasmBytes });
 const ply = readFileSync(plyPath);
 const handle = load_gaussian_splats(new Uint8Array(ply));
 const meta = gaussian_splat_meta(handle);
-// View-dependent SH buffer: `shStride` floats/splat
-// `[x,y,z, cov6, opacity, sh0_r,sh0_g,sh0_b, ...]`.
+// Packed layout v2: f32 position/scale/quaternion followed by f16 opacity/SH.
 const STRIDE = meta.shStride;
 const buffer = gaussian_splat_buffer_sh(handle);
+const bufferF32 = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.length);
+const halfToFloat = (h) => {
+    const sign = h & 0x8000 ? -1 : 1;
+    const exp = (h >>> 10) & 0x1f;
+    const frac = h & 0x3ff;
+    if (exp === 0) return sign * frac * 2 ** -24;
+    if (exp === 0x1f) return frac ? NaN : sign * Infinity;
+    return sign * (1 + frac / 1024) * 2 ** (exp - 15);
+};
+const halfAt = (base, element) => {
+    const word = buffer[base + 10 + (element >>> 1)];
+    const bits = element & 1 ? word >>> 16 : word & 0xffff;
+    return halfToFloat(bits);
+};
 // Depth-sort positions are the leading xyz of every splat record (extracted
 // JS-side, mirroring the frontend `extractSplatPositions`).
 const count = meta.count;
 const positions = new Float32Array(count * 3);
 for (let i = 0; i < count; i++) {
-    positions[i * 3] = buffer[i * STRIDE];
-    positions[i * 3 + 1] = buffer[i * STRIDE + 1];
-    positions[i * 3 + 2] = buffer[i * STRIDE + 2];
+    positions[i * 3] = bufferF32[i * STRIDE];
+    positions[i * 3 + 1] = bufferF32[i * STRIDE + 1];
+    positions[i * 3 + 2] = bufferF32[i * STRIDE + 2];
 }
 
 console.log("meta:", meta);
-console.log("buffer floats:", buffer.length, "expected:", count * STRIDE);
+console.log("buffer words:", buffer.length, "expected:", count * STRIDE);
 
 const checks = [];
 const ok = (name, cond) => {
@@ -85,6 +98,7 @@ const ok = (name, cond) => {
 };
 
 ok("buffer length = count*shStride", buffer.length === count * STRIDE);
+ok("packed layout version = 2", meta.layoutVersion === 2);
 ok("positions length = count*3", positions.length === count * 3);
 
 let allFinite = true;
@@ -92,16 +106,18 @@ let colorInRange = true;
 let opacityInRange = true;
 for (let i = 0; i < count; i++) {
     const b = i * STRIDE;
-    for (let k = 0; k < STRIDE; k++) {
-        if (!Number.isFinite(buffer[b + k])) allFinite = false;
+    for (let k = 0; k < 10; k++) {
+        if (!Number.isFinite(bufferF32[b + k])) allFinite = false;
     }
-    // opacity is the 10th float (index 9); band-0 raw SH triple follows it.
-    const op = buffer[b + 9];
-    if (op < 0 || op > 1.0001) opacityInRange = false;
+    const op = halfAt(b, 0);
+    if (!Number.isFinite(op)) allFinite = false;
+    if (!Number.isFinite(op) || op < 0 || op > 1.0001) opacityInRange = false;
     // Decode band-0 colour: rgb = 0.5 + C0 * f_dc.
-    const r = 0.5 + SH_C0 * buffer[b + 10];
-    const g = 0.5 + SH_C0 * buffer[b + 11];
-    const bl = 0.5 + SH_C0 * buffer[b + 12];
+    const dc = [halfAt(b, 1), halfAt(b, 2), halfAt(b, 3)];
+    if (!dc.every(Number.isFinite)) allFinite = false;
+    const r = 0.5 + SH_C0 * dc[0];
+    const g = 0.5 + SH_C0 * dc[1];
+    const bl = 0.5 + SH_C0 * dc[2];
     if (r < -0.01 || g < -0.01 || bl < -0.01 || r > 4 || g > 4 || bl > 4)
         colorInRange = false;
 }
@@ -113,9 +129,9 @@ ok("opacity in [0,1] (sigmoid)", opacityInRange);
 let posMatches = true;
 for (let i = 0; i < Math.min(count, 1000); i++) {
     if (
-        positions[i * 3] !== buffer[i * STRIDE] ||
-        positions[i * 3 + 1] !== buffer[i * STRIDE + 1] ||
-        positions[i * 3 + 2] !== buffer[i * STRIDE + 2]
+        positions[i * 3] !== bufferF32[i * STRIDE] ||
+        positions[i * 3 + 1] !== bufferF32[i * STRIDE + 1] ||
+        positions[i * 3 + 2] !== bufferF32[i * STRIDE + 2]
     ) {
         posMatches = false;
         break;

@@ -34,7 +34,13 @@ import type { RenderableMesh } from './markerRenderer';
 import { setupRendererInput } from './rendererInputHandler';
 import { renderFrame as renderFrameImpl, captureFrame as captureFrameImpl } from './rendererFrame';
 import type { RendererFrameInternals } from './rendererFrame';
-import { createSplatRenderer, type SplatRenderer, type SplatSampleMode, type SplatRenderMode } from './gaussian/splatRenderer';
+import {
+  createSplatRenderer,
+  type SplatRenderer,
+  type SplatSampleMode,
+  type SplatRenderMode,
+  type SplatUploadStatus,
+} from './gaussian/splatRenderer';
 import { uploadMeshData, disposeMeshes, createDepthTexture, createMsaaTexture } from './rendererResources';
 import {
   createRoadMeshRegistry,
@@ -889,20 +895,51 @@ export class ViewportRenderer {
     this.markSceneDirty();
   }
 
-  uploadGaussianSplats(splatData: Uint32Array, shDegree: number, sampleMode?: SplatSampleMode, quality?: number, renderMode?: SplatRenderMode): void {
+  uploadGaussianSplats(
+    splatData: Uint32Array,
+    shDegree: number,
+    layoutVersion: number,
+    sampleMode?: SplatSampleMode,
+    quality?: number,
+    renderMode?: SplatRenderMode,
+    sourceCount?: number,
+  ): SplatUploadStatus {
     if (splatData.length === 0) {
       this.splatRenderer?.clear();
       this.markSceneDirty();
-      return;
+      return {
+        outcome: 'empty',
+        sourceCount: sourceCount ?? 0,
+        uploadedCount: 0,
+        requestedShDegree: shDegree,
+        effectiveShDegree: shDegree,
+        renderMode: renderMode ?? 'full',
+        resourceMode: 'none',
+        fallbackReason: null,
+      };
     }
     if (!this.splatRenderer) {
       this.splatRenderer = createSplatRenderer(this.device, this.format, 4, () =>
         this.markSceneDirty(),
       );
     }
-    this.splatRenderer.upload(splatData, shDegree, sampleMode, quality, renderMode);
+    const uploadStatus = this.splatRenderer.upload(
+      splatData,
+      shDegree,
+      layoutVersion,
+      sampleMode,
+      quality,
+      renderMode,
+      sourceCount,
+    );
     this.splatRenderer.invalidateSort();
     this.markSceneDirty();
+    return uploadStatus;
+  }
+
+  /** Structured status of the latest Gaussian upload, if initialized. */
+  getGaussianSplatUploadStatus(): Readonly<SplatUploadStatus> | null {
+    return this.splatRenderer?.uploadStatus ?? null;
   }
 
   /** Remove the current Gaussian splat cloud. */

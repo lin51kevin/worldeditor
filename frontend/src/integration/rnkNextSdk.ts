@@ -24,7 +24,12 @@
 import { importGeoZ } from '../plugins/io/geoz/parser';
 import { ViewportRenderer } from '../viewport/renderer';
 import type { SpriteInstance, PaintInstance } from '../viewport/spriteRenderer';
-import type { SplatSampleMode } from '../viewport/gaussian/splatRenderer';
+import type {
+  SplatRenderMode,
+  SplatSampleMode,
+  SplatUploadStatus,
+} from '../viewport/gaussian/splatRenderer';
+import { assertGaussianSplatLayout } from '../viewport/gaussian/splatLayout';
 import { parseGlbMesh, isGlb } from '../viewport/glbMesh';
 import { CaseActorLayer, parsePlyFirstVertex, type CaseActorBox } from '../plugins/npc-actors';
 
@@ -105,6 +110,8 @@ export interface GaussianSplatInfo {
   max: [number, number, number];
   origin: [number, number, number];
   shDegree: number;
+  layoutVersion: number;
+  uploadStatus: SplatUploadStatus;
 }
 
 /** Per-load overrides for {@link WorldEditorRenderer.loadPointCloud}. */
@@ -224,20 +231,34 @@ export interface WorldEditorRenderer {
    * Fetch, parse and upload a 3D Gaussian Splatting `.ply` as true anisotropic
    * splats (view-dependent SH). Resolves with the cloud's (origin-relative)
    * bounds + origin + SH degree, or `undefined` when the running bundle lacks
-   * 3DGS support. Optional so hosts bundling an older SDK degrade gracefully.
+   * 3DGS support. `full` (default) does not parse-decimate; callers must select
+   * `decimated` explicitly to apply the load/quality budgets.
    */
-  loadGaussianSplats?(url: string, sampleMode?: SplatSampleMode, quality?: number): Promise<GaussianSplatInfo | undefined>;
+  loadGaussianSplats?(
+    url: string,
+    sampleMode?: SplatSampleMode,
+    quality?: number,
+    renderMode?: SplatRenderMode,
+  ): Promise<GaussianSplatInfo | undefined>;
   /**
    * Upload an already-parsed 3D Gaussian Splatting SH buffer (as produced by
-   * the Rust `gaussian_splat_buffer_sh`, half-precision packed:
-   * `3 + ceil((7 + (shDegree+1)²·3)/2)` u32 words/splat).
+   * Rust `gaussian_splat_buffer_sh` layout identified by `layoutVersion`.
    * Prefer {@link loadGaussianSplats} for the common fetch-and-render path.
    * `sampleMode` chooses how oversized clouds are reduced to fit the GPU budget
    * (`uniform` = even detail, `importance` = keep the largest/most-opaque
    * splats); `quality` (0..1] caps the kept fraction (fidelity vs memory).
    * Optional so hosts bundling an older SDK degrade gracefully.
    */
-  uploadGaussianSplats?(data: Uint32Array, shDegree: number, sampleMode?: SplatSampleMode, quality?: number): void;
+  uploadGaussianSplats?(
+    data: Uint32Array,
+    shDegree: number,
+    layoutVersion: number,
+    sampleMode?: SplatSampleMode,
+    quality?: number,
+    renderMode?: SplatRenderMode,
+  ): SplatUploadStatus;
+  /** Latest structured Gaussian upload/fidelity status. */
+  getGaussianSplatUploadStatus?(): Readonly<SplatUploadStatus> | null;
   /** Remove the uploaded Gaussian splat cloud. */
   clearGaussianSplats?(): void;
 }
@@ -306,13 +327,16 @@ export interface WorldEditorWasm {
   load_gaussian_splats(bytes: Uint8Array, maxSplats?: number): number;
   /** Free a registered Gaussian splat cloud. */
   free_gaussian_splats(handle: number): void;
-  /** View-dependent SH instance buffer (`10 + (shDegree+1)²·3` floats/splat). */
+  /** Versioned f32-transform/f16-opacity-SH instance buffer. */
   gaussian_splat_buffer_sh(handle: number): Uint32Array;
-  /** Summary `{ count, shDegree, shStride, origin, min, max }` of a splat cloud. */
+  /** Versioned packed-layout metadata for a splat cloud. */
   gaussian_splat_meta(handle: number): {
     count: number;
+    sourceCount: number;
     shDegree: number;
     shStride: number;
+    layoutVersion: number;
+    layoutName: string;
     origin: [number, number, number];
     min: [number, number, number];
     max: [number, number, number];
@@ -352,7 +376,7 @@ const ROAD_VERTEX_STRIDE = 7;
 const DEFAULT_POINT_CLOUD_COLOR_MODE = 'elevation';
 /** Default point budget after WASM stride decimation. */
 const DEFAULT_POINT_CLOUD_MAX_POINTS = 2_000_000;
-/** Default splat budget: large 3DGS clouds are stride-sampled to this on parse. */
+/** Explicit parse cap used only when the SDK caller selects decimated mode. */
 const DEFAULT_SPLAT_LOAD_BUDGET = 4_000_000;
 
 /** Infer a point-cloud format string from a URL's file extension. */
@@ -584,7 +608,12 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     clearActorPointCloud: () => {
       renderer.uploadActorPointCloudVertices(new Float32Array(0));
     },
-    loadGaussianSplats: async (url: string, sampleMode?: SplatSampleMode, quality?: number): Promise<GaussianSplatInfo | undefined> => {
+    loadGaussianSplats: async (
+      url: string,
+      sampleMode?: SplatSampleMode,
+      quality?: number,
+      renderMode: SplatRenderMode = 'full',
+    ): Promise<GaussianSplatInfo | undefined> => {
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch Gaussian splats (${response.status}): ${url}`);
@@ -593,12 +622,25 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
       // Parse in the WASM registry, read the view-dependent SH buffer + metadata,
       // upload as splats, then free the handle (the GPU buffer is now owned by
       // the renderer). Handle is freed even if the upload throws. Large clouds
-      // are stride-sampled to the splat budget during parsing to bound memory.
-      const handle = wasm.load_gaussian_splats(bytes, DEFAULT_SPLAT_LOAD_BUDGET);
+      // Full mode does not silently parse-decimate. The cap is passed only when
+      // the host explicitly requests decimated mode.
+      const handle = wasm.load_gaussian_splats(
+        bytes,
+        renderMode === 'decimated' ? DEFAULT_SPLAT_LOAD_BUDGET : undefined,
+      );
       try {
         const meta = wasm.gaussian_splat_meta(handle);
         const buffer = wasm.gaussian_splat_buffer_sh(handle);
-        renderer.uploadGaussianSplats(buffer, meta.shDegree, sampleMode, quality);
+        assertGaussianSplatLayout(meta, buffer);
+        const uploadStatus = renderer.uploadGaussianSplats(
+          buffer,
+          meta.shDegree,
+          meta.layoutVersion,
+          sampleMode,
+          quality,
+          renderMode,
+          meta.sourceCount,
+        );
         renderer.render();
         return {
           count: meta.count,
@@ -606,14 +648,31 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
           max: asTriple(meta.max),
           origin: asTriple(meta.origin),
           shDegree: meta.shDegree,
+          layoutVersion: meta.layoutVersion,
+          uploadStatus,
         };
       } finally {
         wasm.free_gaussian_splats(handle);
       }
     },
-    uploadGaussianSplats: (data: Uint32Array, shDegree: number, sampleMode?: SplatSampleMode, quality?: number) => {
-      renderer.uploadGaussianSplats(data, shDegree, sampleMode, quality);
+    uploadGaussianSplats: (
+      data: Uint32Array,
+      shDegree: number,
+      layoutVersion: number,
+      sampleMode?: SplatSampleMode,
+      quality?: number,
+      renderMode?: SplatRenderMode,
+    ) => {
+      return renderer.uploadGaussianSplats(
+        data,
+        shDegree,
+        layoutVersion,
+        sampleMode,
+        quality,
+        renderMode,
+      );
     },
+    getGaussianSplatUploadStatus: () => renderer.getGaussianSplatUploadStatus(),
     clearGaussianSplats: () => {
       renderer.clearGaussianSplats();
     },

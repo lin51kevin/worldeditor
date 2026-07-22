@@ -2,6 +2,25 @@ import { describe, expect, it } from "vitest";
 import { GAUSSIAN_SPLAT_SHADER } from "./splatShader";
 
 describe("GAUSSIAN_SPLAT_SHADER", () => {
+  it("addresses each splat through 2D texels and array-page layers", () => {
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("texture_2d_array<f32>");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("fn splatAddress");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("page * 3u + chunk");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("page * featureLayers + chunk");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("@binding(3) var<storage, read> order");
+    expect(GAUSSIAN_SPLAT_SHADER).not.toContain(
+      "@binding(1) var<storage, read> splats",
+    );
+  });
+
+  it("reconstructs covariance from f32 scale and normalized quaternion", () => {
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("fn covarianceFromTransform");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("let scale = vec3<f32>");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("let quaternion = vec4<f32>");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("let s2 = scale * scale");
+    expect(GAUSSIAN_SPLAT_SHADER).not.toContain("let sxx = halfAt");
+  });
+
   it("has explicit perspective and orthographic EWA projection paths", () => {
     expect(GAUSSIAN_SPLAT_SHADER).toContain("u.projection_kind");
     expect(GAUSSIAN_SPLAT_SHADER).toContain("if (u.projection_kind < 0.5)");

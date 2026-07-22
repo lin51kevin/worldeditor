@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { computeDepths, sortSplatsByDepth, depthBucketCount } from "./splatSort";
+import { describe, it, expect } from 'vitest';
+import { computeDepths, sortSplatsByDepth, depthBucketCount } from './splatSort';
 
 /** Build a flat positions array from `[x,y,z]` tuples. */
 function positions(...pts: Array<[number, number, number]>): Float32Array {
@@ -12,79 +12,95 @@ function positions(...pts: Array<[number, number, number]>): Float32Array {
   return out;
 }
 
-describe("computeDepths", () => {
-  it("returns dot(viewDir, p - camPos) per splat", () => {
+describe('computeDepths', () => {
+  it('returns dot(viewDir, p - camPos) per splat', () => {
     const p = positions([0, 0, 0], [0, 0, 5], [0, 0, 10]);
     const depths = computeDepths(p, [0, 0, 0], [0, 0, 1]);
     expect(Array.from(depths)).toEqual([0, 5, 10]);
   });
 
-  it("accounts for camera position", () => {
+  it('accounts for camera position', () => {
     const p = positions([0, 0, 10]);
     const depths = computeDepths(p, [0, 0, 4], [0, 0, 1]);
     expect(depths[0]).toBeCloseTo(6, 5);
   });
 });
 
-describe("sortSplatsByDepth", () => {
-  it("orders splats back-to-front (farthest first)", () => {
+describe('sortSplatsByDepth', () => {
+  it('orders splats back-to-front (farthest first)', () => {
     // Three splats at increasing distance along +Z.
     const p = positions([0, 0, 1], [0, 0, 3], [0, 0, 2]);
-    const idx = sortSplatsByDepth(p, [0, 0, 0], [0, 0, 1]);
+    const { indices: idx } = sortSplatsByDepth(p, [0, 0, 0], [0, 0, 1]);
     // Farthest (index 1, z=3) first; nearest (index 0, z=1) last.
     expect(Array.from(idx)).toEqual([1, 2, 0]);
   });
 
-  it("returns a full permutation of indices", () => {
+  it('returns a full permutation of indices', () => {
     const p = positions([1, 0, 0], [0, 1, 0], [0, 0, 1], [2, 2, 2], [3, 1, 0]);
-    const idx = sortSplatsByDepth(p, [0, 0, 0], [1, 1, 1]);
+    const { indices: idx } = sortSplatsByDepth(p, [0, 0, 0], [1, 1, 1]);
     expect(idx.length).toBe(5);
     expect(Array.from(idx).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4]);
   });
 
-  it("handles zero splats", () => {
-    const idx = sortSplatsByDepth(new Float32Array(0), [0, 0, 0], [0, 0, 1]);
+  it('handles zero splats', () => {
+    const { indices: idx, visibleCount } = sortSplatsByDepth(
+      new Float32Array(0),
+      [0, 0, 0],
+      [0, 0, 1],
+    );
     expect(idx.length).toBe(0);
+    expect(visibleCount).toBe(0);
   });
 
-  it("handles a single splat", () => {
-    const idx = sortSplatsByDepth(positions([5, 5, 5]), [0, 0, 0], [0, 0, 1]);
+  it('handles a single splat', () => {
+    const { indices: idx, visibleCount } = sortSplatsByDepth(
+      positions([5, 5, 5]),
+      [0, 0, 0],
+      [0, 0, 1],
+    );
     expect(Array.from(idx)).toEqual([0]);
+    expect(visibleCount).toBe(1);
   });
 
-  it("is stable when all depths are equal", () => {
+  it('is stable when all depths are equal', () => {
     const p = positions([1, 0, 0], [2, 0, 0], [3, 0, 0]);
     // viewDir is +Z, all splats have z=0 → equal depth.
-    const idx = sortSplatsByDepth(p, [0, 0, 0], [0, 0, 1]);
+    const { indices: idx } = sortSplatsByDepth(p, [0, 0, 0], [0, 0, 1]);
     expect(idx.length).toBe(3);
     expect(Array.from(idx).sort((a, b) => a - b)).toEqual([0, 1, 2]);
   });
 
-  it("produces a monotonic non-increasing depth sequence", () => {
-    const p = positions(
-      [0, 0, 7],
+  it('draws every entry for a degenerate depth range that straddles the camera', () => {
+    const p = positions([0, 0, -0.0000001], [0, 0, 0.0000001]);
+    const { indices, visibleCount } = sortSplatsByDepth(
+      p,
+      [0, 0, 0],
       [0, 0, 1],
-      [0, 0, 4],
-      [0, 0, 9],
-      [0, 0, 2],
     );
+
+    expect(Array.from(indices)).toEqual([0, 1]);
+    expect(visibleCount).toBe(2);
+  });
+
+  it('produces a monotonic non-increasing depth sequence', () => {
+    const p = positions([0, 0, 7], [0, 0, 1], [0, 0, 4], [0, 0, 9], [0, 0, 2]);
     const camPos: [number, number, number] = [0, 0, 0];
     const viewDir: [number, number, number] = [0, 0, 1];
-    const idx = sortSplatsByDepth(p, camPos, viewDir);
+    const { indices: idx } = sortSplatsByDepth(p, camPos, viewDir);
     const depths = computeDepths(p, camPos, viewDir);
     for (let i = 1; i < idx.length; i++) {
       expect(depths[idx[i - 1]]).toBeGreaterThanOrEqual(depths[idx[i]]);
     }
   });
 
-  it("orders a large cloud whose bucket count exceeds 16 bits", () => {
+  it('orders a large cloud whose bucket count exceeds 16 bits', () => {
     // n large enough that depthBucketCount > 65536 (needs Uint32 bucket
     // indices — a Uint16 store would truncate and scramble the order).
     const n = 500_000;
     expect(depthBucketCount(n)).toBeGreaterThan(65536);
     const p = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) p[i * 3 + 2] = i * 0.001; // strictly increasing z
-    const idx = sortSplatsByDepth(p, [0, 0, 0], [0, 0, 1]);
+    const { indices: idx } = sortSplatsByDepth(p, [0, 0, 0], [0, 0, 1]);
     expect(idx.length).toBe(n);
     expect(new Set(idx).size).toBe(n); // a full permutation (no truncation)
     // Coarse-block monotonicity: sampling every 1% the depth must be strictly
@@ -96,16 +112,50 @@ describe("sortSplatsByDepth", () => {
       expect(depths[idx[k - step]]).toBeGreaterThan(depths[idx[k]]);
     }
   });
+
+  it('strictly orders dense thin depth layers despite huge outlier ranges', () => {
+    const denseCount = 8_192;
+    const p = new Float32Array((denseCount + 2) * 3);
+    p[2] = -1e9;
+    for (let i = 0; i < denseCount; i++) {
+      // Scramble a 0.125-wide layer so a uniform global bucket map collapses it.
+      const rank = (i * 4051) % denseCount;
+      p[(i + 1) * 3 + 2] = 100 + rank / 65_536;
+    }
+    p[(denseCount + 1) * 3 + 2] = 1e9;
+
+    const camPos: [number, number, number] = [0, 0, 0];
+    const viewDir: [number, number, number] = [0, 0, 1];
+    const { indices } = sortSplatsByDepth(p, camPos, viewDir);
+    const depths = computeDepths(p, camPos, viewDir);
+
+    expect(new Set(indices).size).toBe(denseCount + 2);
+    for (let i = 1; i < indices.length; i++) {
+      expect(depths[indices[i - 1]]).toBeGreaterThanOrEqual(depths[indices[i]]);
+    }
+  });
+
+  it('returns only the sorted prefix in front as the camera crosses the cloud', () => {
+    const p = positions([0, 0, -2], [0, 0, 0], [0, 0, 2]);
+    const before = sortSplatsByDepth(p, [0, 0, -3], [0, 0, 1]);
+    const inside = sortSplatsByDepth(p, [0, 0, 1], [0, 0, 1]);
+    const after = sortSplatsByDepth(p, [0, 0, 3], [0, 0, 1]);
+
+    expect(before.visibleCount).toBe(3);
+    expect(inside.visibleCount).toBe(1);
+    expect(Array.from(inside.indices.slice(0, inside.visibleCount))).toEqual([2]);
+    expect(after.visibleCount).toBe(0);
+  });
 });
 
-describe("depthBucketCount", () => {
-  it("scales with splat count and clamps to [2^12, 2^20]", () => {
-    expect(depthBucketCount(1)).toBe(2 ** 12); // tiny → floor
-    expect(depthBucketCount(100)).toBe(2 ** 12); // still floor
+describe('depthBucketCount', () => {
+  it('scales with splat count and clamps to [2^10, 2^20]', () => {
+    expect(depthBucketCount(1)).toBe(2 ** 10); // tiny → floor
+    expect(depthBucketCount(100)).toBe(2 ** 10); // still floor
     expect(depthBucketCount(12_436_553)).toBe(2 ** 20); // huge → ceiling
     // Mid-range is a power of two within the clamp window.
     const mid = depthBucketCount(1_000_000);
-    expect(mid).toBeGreaterThanOrEqual(2 ** 12);
+    expect(mid).toBeGreaterThanOrEqual(2 ** 10);
     expect(mid).toBeLessThanOrEqual(2 ** 20);
     expect(Math.log2(mid) % 1).toBe(0);
   });

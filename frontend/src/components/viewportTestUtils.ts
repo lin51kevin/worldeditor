@@ -169,7 +169,7 @@ export function createPlatformMock(vertices = new Float32Array([1, 2, 3, 0.3, 0.
     samplePointCloudGround: vi.fn().mockResolvedValue(null),
     loadGaussianSplatsNative: vi
       .fn()
-      .mockResolvedValue({ meta: { count: 0, shDegree: 0, shStride: 8, origin: [0, 0, 0], min: [0, 0, 0], max: [0, 0, 0] }, buffer: new Uint32Array(0) }),
+      .mockResolvedValue({ meta: { count: 0, shDegree: 0, shStride: 12, layoutVersion: 2, layoutName: 'transform-f32-opacity-sh-f16', origin: [0, 0, 0], min: [0, 0, 0], max: [0, 0, 0] }, buffer: new Uint32Array(0) }),
   };
 }
 

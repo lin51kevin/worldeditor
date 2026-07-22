@@ -1,5 +1,6 @@
 /**
- * Pure (GPU-free) origin-shift helpers for point clouds and Gaussian splats.
+ * Pure (GPU-free) origin-shift helpers for point clouds and version-2 Gaussian
+ * transform buffers.
  *
  * These run on either the main thread or inside a Web Worker (they touch no
  * WebGPU objects), which lets the heavy per-point/per-splat origin shift — a
@@ -8,16 +9,7 @@
  * the live quality slider keeps operating on the full source buffer.
  */
 
-/**
- * `u32` words per splat in the half-precision packed instance buffer:
- * `pos(3 f32 words) + ceil((6 cov + 1 opacity + (deg+1)²·3 SH) / 2)` half-pairs.
- * Mirrors `GaussianCloud::sh_buffer_stride_f16` in Rust.
- */
-export function splatStrideForDegree(shDegree: number): number {
-  const coeffs = (shDegree + 1) * (shDegree + 1);
-  const halfCount = 7 + coeffs * 3;
-  return 3 + Math.ceil(halfCount / 2);
-}
+export { splatStrideForDegree } from './splatLayout';
 
 /**
  * Shift a packed splat buffer's positions by `origin` (added to x/y/z), moving

@@ -1,5 +1,5 @@
 /**
- * WGSL shader for 3D Gaussian Splatting (EWA splatting) with view-dependent SH.
+ * Explicit compatibility WGSL for devices without usable texture arrays.
  *
  * Each splat is drawn as one instanced screen-space quad (triangle-strip, 4
  * vertices). The vertex stage evaluates the spherical-harmonic colour for the
@@ -12,11 +12,16 @@
  * EWA projection ported from antimatter15/splat; SH evaluation follows the
  * reference 3DGS decode (Kerbl et al. / INRIA).
  *
- * The upload transposes packed layout v2 into paged texture arrays: three
- * RGBA32F transform layers and `ceil((1 + SH_RGB_values) / 4)` RGBA16F feature
- * layers per page. The only storage buffer is the single global sorted order.
+ * Storage layout v2 — `splats: array<u32>`, stride =
+ * `10 + ceil((1 + (deg+1)²·3)/2)` words/splat. The full-precision prefix is
+ * position(3), activated scale(3), normalized `(w,x,y,z)` quaternion(4). The
+ * remaining words pack `[opacity, sh0_r, sh0_g, sh0_b, …]` as `f16` pairs.
+ * Covariance is reconstructed from scale/rotation here, before EWA projection.
+ *
+ * This legacy packed-storage path is never selected silently: callers receive
+ * `resourceMode: "packed-storage-fallback"` and a fallback reason.
  */
-export const GAUSSIAN_SPLAT_SHADER = /* wgsl */ `
+export const GAUSSIAN_SPLAT_PACKED_SHADER = /* wgsl */ `
 struct SplatUniforms {
   view_proj : mat4x4<f32>,
   view      : mat4x4<f32>,
@@ -31,9 +36,8 @@ struct SplatUniforms {
 };
 
 @group(0) @binding(0) var<uniform> u : SplatUniforms;
-@group(0) @binding(1) var transforms : texture_2d_array<f32>;
-@group(0) @binding(2) var features   : texture_2d_array<f32>;
-@group(0) @binding(3) var<storage, read> order : array<u32>;
+@group(0) @binding(1) var<storage, read> splats : array<u32>;
+@group(0) @binding(2) var<storage, read> order  : array<u32>;
 
 // Spherical-harmonic basis constants (bands 0..3).
 const SH_C0 : f32 = 0.28209479177387814;
@@ -68,54 +72,18 @@ fn culled() -> VSOut {
   return out;
 }
 
-// Map a global splat index to its 2D texel and array page.
-fn splatAddress(si : u32) -> vec3<u32> {
-  let dimensions = textureDimensions(transforms, 0);
-  let splatsPerPage = dimensions.x * dimensions.y;
-  let page = si / splatsPerPage;
-  let local = si - page * splatsPerPage;
-  return vec3<u32>(local % dimensions.x, local / dimensions.x, page);
+// Decode half-precision element \`e\` of the packed block that starts after the
+// ten f32 transform words. Even elements live in the low 16 bits of a
+// word, odd elements in the high 16 bits (matches the Rust packer).
+fn halfAt(base : u32, e : u32) -> f32 {
+  let pair = unpack2x16float(splats[base + 10u + (e >> 1u)]);
+  return select(pair.x, pair.y, (e & 1u) == 1u);
 }
 
-fn transformAt(si : u32, chunk : u32) -> vec4<f32> {
-  let address = splatAddress(si);
-  let page = address.z;
-  return textureLoad(
-    transforms,
-    vec2<i32>(address.xy),
-    i32(page * 3u + chunk),
-    0,
-  );
-}
-
-// Read one opacity/SH half element from a four-half RGBA16F layer.
-fn featureAt(si : u32, e : u32) -> f32 {
-  let address = splatAddress(si);
-  let page = address.z;
-  let coeffs = (u32(u.sh_degree) + 1u) * (u32(u.sh_degree) + 1u);
-  let featureLayers = (1u + coeffs * 3u + 3u) / 4u;
-  let chunk = e >> 2u;
-  let value = textureLoad(
-    features,
-    vec2<i32>(address.xy),
-    i32(page * featureLayers + chunk),
-    0,
-  );
-  let lane = e & 3u;
-  if (lane == 0u) { return value.x; }
-  if (lane == 1u) { return value.y; }
-  if (lane == 2u) { return value.z; }
-  return value.w;
-}
-
-// Read SH coefficient k (a per-channel RGB triple) after opacity element 0.
-fn shCoeff(si : u32, k : u32) -> vec3<f32> {
+// Read SH coefficient k (a per-channel RGB triple) after opacity half element 0.
+fn shCoeff(b : u32, k : u32) -> vec3<f32> {
   let e = 1u + k * 3u;
-  return vec3<f32>(
-    featureAt(si, e),
-    featureAt(si, e + 1u),
-    featureAt(si, e + 2u),
-  );
+  return vec3<f32>(halfAt(b, e), halfAt(b, e + 1u), halfAt(b, e + 2u));
 }
 
 // Reconstruct Σ = R·diag(scale²)·Rᵀ. Rust normalizes the quaternion before
@@ -146,29 +114,29 @@ fn covarianceFromTransform(
 }
 
 // Evaluate view-dependent SH colour for direction \`dir\` (normalized).
-fn evalSH(si : u32, degree : u32, dir : vec3<f32>) -> vec3<f32> {
-  var c = SH_C0 * shCoeff(si, 0u);
+fn evalSH(b : u32, degree : u32, dir : vec3<f32>) -> vec3<f32> {
+  var c = SH_C0 * shCoeff(b, 0u);
   if (degree >= 1u) {
     let x = dir.x; let y = dir.y; let z = dir.z;
-    c = c - SH_C1 * y * shCoeff(si, 1u)
-          + SH_C1 * z * shCoeff(si, 2u)
-          - SH_C1 * x * shCoeff(si, 3u);
+    c = c - SH_C1 * y * shCoeff(b, 1u)
+          + SH_C1 * z * shCoeff(b, 2u)
+          - SH_C1 * x * shCoeff(b, 3u);
     if (degree >= 2u) {
       let xx = x * x; let yy = y * y; let zz = z * z;
       let xy = x * y; let yz = y * z; let xz = x * z;
-      c = c + SH_C2_0 * xy * shCoeff(si, 4u)
-            + SH_C2_1 * yz * shCoeff(si, 5u)
-            + SH_C2_2 * (2.0 * zz - xx - yy) * shCoeff(si, 6u)
-            + SH_C2_3 * xz * shCoeff(si, 7u)
-            + SH_C2_4 * (xx - yy) * shCoeff(si, 8u);
+      c = c + SH_C2_0 * xy * shCoeff(b, 4u)
+            + SH_C2_1 * yz * shCoeff(b, 5u)
+            + SH_C2_2 * (2.0 * zz - xx - yy) * shCoeff(b, 6u)
+            + SH_C2_3 * xz * shCoeff(b, 7u)
+            + SH_C2_4 * (xx - yy) * shCoeff(b, 8u);
       if (degree >= 3u) {
-        c = c + SH_C3_0 * y * (3.0 * xx - yy) * shCoeff(si, 9u)
-              + SH_C3_1 * xy * z * shCoeff(si, 10u)
-              + SH_C3_2 * y * (4.0 * zz - xx - yy) * shCoeff(si, 11u)
-              + SH_C3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * shCoeff(si, 12u)
-              + SH_C3_4 * x * (4.0 * zz - xx - yy) * shCoeff(si, 13u)
-              + SH_C3_5 * z * (xx - yy) * shCoeff(si, 14u)
-              + SH_C3_6 * x * (xx - 3.0 * yy) * shCoeff(si, 15u);
+        c = c + SH_C3_0 * y * (3.0 * xx - yy) * shCoeff(b, 9u)
+              + SH_C3_1 * xy * z * shCoeff(b, 10u)
+              + SH_C3_2 * y * (4.0 * zz - xx - yy) * shCoeff(b, 11u)
+              + SH_C3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * shCoeff(b, 12u)
+              + SH_C3_4 * x * (4.0 * zz - xx - yy) * shCoeff(b, 13u)
+              + SH_C3_5 * z * (xx - yy) * shCoeff(b, 14u)
+              + SH_C3_6 * x * (xx - 3.0 * yy) * shCoeff(b, 15u);
       }
     }
   }
@@ -179,14 +147,29 @@ fn evalSH(si : u32, degree : u32, dir : vec3<f32>) -> vec3<f32> {
 fn vs_main(@builtin(vertex_index) vtx : u32,
            @builtin(instance_index) inst : u32) -> VSOut {
   let degree = u32(u.sh_degree);
+  let coeffs = (degree + 1u) * (degree + 1u);
+  let halfCount = 1u + coeffs * 3u;
+  let stride = 10u + (halfCount + 1u) / 2u;
+
   let si = order[inst];
-  let t0 = transformAt(si, 0u);
-  let t1 = transformAt(si, 1u);
-  let t2 = transformAt(si, 2u);
-  let center = t0.xyz;
-  let scale = vec3<f32>(t0.w, t1.x, t1.y);
-  let quaternion = vec4<f32>(t1.z, t1.w, t2.x, t2.y);
-  let opacityRaw = featureAt(si, 0u);
+  let b = si * stride;
+  let center = vec3<f32>(
+    bitcast<f32>(splats[b]),
+    bitcast<f32>(splats[b + 1u]),
+    bitcast<f32>(splats[b + 2u]),
+  );
+  let scale = vec3<f32>(
+    bitcast<f32>(splats[b + 3u]),
+    bitcast<f32>(splats[b + 4u]),
+    bitcast<f32>(splats[b + 5u]),
+  );
+  let quaternion = vec4<f32>(
+    bitcast<f32>(splats[b + 6u]),
+    bitcast<f32>(splats[b + 7u]),
+    bitcast<f32>(splats[b + 8u]),
+    bitcast<f32>(splats[b + 9u]),
+  );
+  let opacityRaw = halfAt(b, 0u);
 
   let cam = u.view * vec4<f32>(center, 1.0);
   let clip = u.view_proj * vec4<f32>(center, 1.0);
@@ -199,7 +182,7 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
 
   // View-dependent colour (dir points from camera to the splat mean).
   let dir = normalize(center - u.cam_pos);
-  let color = evalSH(si, degree, dir);
+  let color = evalSH(b, degree, dir);
 
   let Vrk = covarianceFromTransform(scale, quaternion);
 

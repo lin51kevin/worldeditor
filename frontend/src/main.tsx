@@ -34,6 +34,13 @@ if (import.meta.env.DEV) {
   import('./viewport/viewportRef').then(({ getViewportRenderer }) => {
     (window as unknown as Record<string, unknown>)['__getViewportRenderer'] = getViewportRenderer;
   });
+  Promise.all([
+    import('./plugins/gis-viz/pointcloud/pointcloudState'),
+    import('./plugins/gis-viz/pointcloud/pointcloudActions'),
+  ]).then(([{ usePointCloudStore }, { loadPointCloud }]) => {
+    (window as unknown as Record<string, unknown>)['__pointCloudStore'] = usePointCloudStore;
+    (window as unknown as Record<string, unknown>)['__loadPointCloud'] = loadPointCloud;
+  });
   // Case-actor manual verification: `__caseActors.open()` opens a `.traj` file
   // picker and loop-plays it in 3D (moving boxes + trajectory ribbons) so box/
   // ribbon rendering and its coexistence with the WASM road surface can be

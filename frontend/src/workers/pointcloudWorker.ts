@@ -9,10 +9,10 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
-  splatStrideForDegree,
   shiftSplatOrigin,
   shiftPointCloudOrigin,
 } from '../viewport/gaussian/splatSampling';
+import { assertGaussianSplatLayout } from '../viewport/gaussian/splatLayout';
 
 let wasm: any = null;
 
@@ -57,14 +57,19 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
         // GPU renderer so the live quality slider keeps working on the full
         // buffer. `maxSplats` bounds the parsed count on huge clouds.
         const handle = w.load_gaussian_splats(params.bytes, params.maxSplats);
-        const meta = w.gaussian_splat_meta(handle);
-        const raw: Uint32Array = w.gaussian_splat_buffer_sh(handle);
-        const stride = splatStrideForDegree(meta.shDegree);
-        const shifted = shiftSplatOrigin(raw, stride, meta.origin);
-        // `shiftSplatOrigin` returns `raw` unchanged when the origin is zero;
-        // `raw` is a fresh copy out of WASM, so transferring it is safe.
-        result = { handle, meta, buffer: shifted };
-        transfer.push(shifted.buffer);
+        try {
+          const meta = w.gaussian_splat_meta(handle);
+          const raw: Uint32Array = w.gaussian_splat_buffer_sh(handle);
+          assertGaussianSplatLayout(meta, raw);
+          const shifted = shiftSplatOrigin(raw, meta.shStride, meta.origin);
+          // `shiftSplatOrigin` returns `raw` unchanged when the origin is zero;
+          // `raw` is a fresh copy out of WASM, so transferring it is safe.
+          result = { handle, meta, buffer: shifted };
+          transfer.push(shifted.buffer);
+        } catch (error) {
+          w.free_gaussian_splats(handle);
+          throw error;
+        }
         break;
       }
       case 'freeGaussian': {

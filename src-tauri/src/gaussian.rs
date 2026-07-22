@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use serde_json::Value;
 use tauri::State;
 use tauri::ipc::Response;
-use we_core::pointcloud::parse_gaussian_ply_packed_f16;
+use we_core::pointcloud::{PACKED_GAUSSIAN_LAYOUT_NAME, parse_gaussian_ply_packed};
 
 /// Backend store of parsed splat clouds' packed SH buffers, keyed by handle.
 #[derive(Default)]
@@ -28,18 +28,21 @@ pub struct GaussianSplatStore {
 
 #[derive(Default)]
 struct StoreInner {
-    /// Packed SH instance buffers as raw bytes (`Vec<f32>` reinterpreted).
+    /// Packed transform/SH instance buffers as raw bytes (`Vec<u32>` reinterpreted).
     entries: HashMap<u32, Vec<u8>>,
     next_handle: u32,
 }
 
 impl GaussianSplatStore {
-    fn insert(&self, buffer: Vec<u8>) -> u32 {
-        let mut inner = self.inner.lock().expect("gaussian splat store poisoned");
+    fn insert(&self, buffer: Vec<u8>) -> Result<u32, String> {
+        let mut inner = self
+            .inner
+            .lock()
+            .map_err(|_| "gaussian splat store poisoned".to_string())?;
         inner.next_handle = inner.next_handle.wrapping_add(1).max(1);
         let handle = inner.next_handle;
         inner.entries.insert(handle, buffer);
-        handle
+        Ok(handle)
     }
 }
 
@@ -99,21 +102,24 @@ pub fn gaussian_splat_load(
     // SAFETY: the map is read-only and dropped before this function returns; the
     // file is not mutated elsewhere for the lifetime of the mapping.
     let mmap = unsafe { memmap2::Mmap::map(&file).map_err(|e| e.to_string())? };
-    let packed = parse_gaussian_ply_packed_f16(&mmap, max_splats.map(|m| m as usize))
+    let packed = parse_gaussian_ply_packed(&mmap, max_splats.map(|m| m as usize))
         .map_err(|e| e.to_string())?;
     // Release the mapping before publishing the buffer.
     drop(mmap);
 
     let meta = serde_json::json!({
         "count": packed.count,
+        "sourceCount": packed.source_count,
         "shDegree": packed.sh_degree,
         "shStride": packed.stride,
+        "layoutVersion": packed.layout_version,
+        "layoutName": PACKED_GAUSSIAN_LAYOUT_NAME,
         "origin": packed.origin,
         "min": packed.bounds.min,
         "max": packed.bounds.max,
     });
     let buffer = u32s_to_bytes(packed.buffer);
-    let handle = store.insert(buffer);
+    let handle = store.insert(buffer)?;
     Ok(serde_json::json!({ "handle": handle, "meta": meta }))
 }
 
@@ -129,7 +135,10 @@ pub fn gaussian_splat_buffer(
     handle: u32,
     store: State<'_, GaussianSplatStore>,
 ) -> Result<Response, String> {
-    let mut inner = store.inner.lock().expect("gaussian splat store poisoned");
+    let mut inner = store
+        .inner
+        .lock()
+        .map_err(|_| "gaussian splat store poisoned".to_string())?;
     let buffer = inner
         .entries
         .remove(&handle)
@@ -140,8 +149,9 @@ pub fn gaussian_splat_buffer(
 /// Free a parsed splat cloud and its buffer.
 #[tauri::command]
 pub fn gaussian_splat_free(handle: u32, store: State<'_, GaussianSplatStore>) {
-    let mut inner = store.inner.lock().expect("gaussian splat store poisoned");
-    inner.entries.remove(&handle);
+    if let Ok(mut inner) = store.inner.lock() {
+        inner.entries.remove(&handle);
+    }
 }
 
 #[cfg(test)]
@@ -161,8 +171,8 @@ mod tests {
     #[test]
     fn test_store_insert_unique_handles() {
         let store = GaussianSplatStore::default();
-        let h1 = store.insert(vec![]);
-        let h2 = store.insert(vec![]);
+        let h1 = store.insert(vec![]).unwrap();
+        let h2 = store.insert(vec![]).unwrap();
         assert_ne!(h1, h2);
         assert!(h1 >= 1 && h2 >= 1);
     }

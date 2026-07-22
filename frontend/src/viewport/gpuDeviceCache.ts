@@ -18,15 +18,16 @@ let prewarmPending: Promise<void> | null = null;
 
 /**
  * Build the device `requiredLimits` we depend on, raised to the adapter's
- * maximum. Beyond `maxBufferSize`, large 3D Gaussian Splatting clouds bind a
- * single big read-only-storage buffer, so `maxStorageBufferBindingSize` must
- * also be raised — otherwise it stays at the 128 MiB default and binding the
- * splat buffer triggers a device-lost crash.
+ * maximum. Gaussian attributes use texture arrays; `maxTextureDimension2D` and
+ * `maxTextureArrayLayers` maximize their page capacity. Buffer limits still
+ * bound the one global sorted-order storage buffer and explicit packed fallback.
  */
 export function buildRequiredLimits(adapter: GPUAdapter): Record<string, number> {
   return {
     maxBufferSize: adapter.limits.maxBufferSize,
     maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
+    maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
+    maxTextureArrayLayers: adapter.limits.maxTextureArrayLayers,
   };
 }
 

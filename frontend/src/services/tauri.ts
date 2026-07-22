@@ -176,12 +176,12 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
     return value ?? null;
   }
 
-  override async loadGaussianSplatsNative(path: string, maxSplats: number): Promise<GaussianSplatNativeResult> {
+  override async loadGaussianSplatsNative(path: string, maxSplats?: number): Promise<GaussianSplatNativeResult> {
     const { invoke } = await import('@tauri-apps/api/core');
-    // Parse natively (bounded), then fetch the packed SH buffer as raw binary.
+    // Parse natively (bounded only for explicit decimation), then fetch raw bytes.
     const { handle, meta } = await invoke<{ handle: number; meta: GaussianSplatNativeResult['meta'] }>(
       'gaussian_splat_load',
-      { path, maxSplats },
+      { path, maxSplats: maxSplats ?? null },
     );
     try {
       const raw = await invoke<ArrayBuffer>('gaussian_splat_buffer', { handle });

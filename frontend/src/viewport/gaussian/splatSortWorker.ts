@@ -7,11 +7,16 @@
  *   camera; replies `{ type: "sorted", indices, generation }` (indices buffer
  *   is transferred back).
  */
-import { sortSplatsByDepth, type Vec3 } from "./splatSort";
+import {
+  prepareSplatSort,
+  sortSplatsByDepth,
+  type PreparedSplatSort,
+  type Vec3,
+} from './splatSort';
 
-type InitMessage = { type: "init"; positions: Float32Array };
+type InitMessage = { type: 'init'; positions: Float32Array };
 type SortMessage = {
-  type: "sort";
+  type: 'sort';
   camPos: Vec3;
   viewDir: Vec3;
   generation: number;
@@ -19,20 +24,26 @@ type SortMessage = {
 type InMessage = InitMessage | SortMessage;
 
 let positions: Float32Array = new Float32Array(0);
+let prepared: PreparedSplatSort = prepareSplatSort(positions);
 
 const ctx = self as unknown as Worker;
 
 ctx.onmessage = (ev: MessageEvent<InMessage>) => {
   const msg = ev.data;
-  if (msg.type === "init") {
+  if (msg.type === 'init') {
     positions = msg.positions;
+    prepared = prepareSplatSort(positions);
     return;
   }
-  if (msg.type === "sort") {
-    const indices = sortSplatsByDepth(positions, msg.camPos, msg.viewDir);
-    ctx.postMessage(
-      { type: "sorted", indices, generation: msg.generation },
-      [indices.buffer],
+  if (msg.type === 'sort') {
+    const { indices, visibleCount } = sortSplatsByDepth(
+      positions,
+      msg.camPos,
+      msg.viewDir,
+      prepared,
     );
+    ctx.postMessage({ type: 'sorted', indices, visibleCount, generation: msg.generation }, [
+      indices.buffer,
+    ]);
   }
 };

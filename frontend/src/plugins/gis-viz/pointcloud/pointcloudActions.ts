@@ -21,17 +21,17 @@ import {
   workerExtractGround,
   workerExtractMarkings,
   workerVectorize,
+  DEFAULT_SPLAT_LOAD_BUDGET,
   type GaussianSplatMeta,
 } from '../../../workers/pointcloudBridge';
+import { assertGaussianSplatLayout } from '../../../viewport/gaussian/splatLayout';
 
 const NATIVE_EXTENSIONS = ['las', 'laz', 'pcd', 'ply', 'xyz', 'txt', 'asc'];
 const WEB_EXTENSIONS = ['pcd', 'ply', 'xyz', 'txt', 'asc'];
 
 /**
- * Splat load budget for the **native** desktop path. The 64-bit backend has no
- * wasm32 heap limit and hands the frontend only a compact half-precision buffer,
- * so a large budget keeps most/all splats of multi-million-splat clouds; the
- * GPU renderer decimates further only if the storage-buffer limit is smaller.
+ * Explicit native parse budget for `decimated` mode. Full mode passes no cap
+ * and either preserves the source cloud or reports a later upload failure.
  */
 const NATIVE_SPLAT_LOAD_BUDGET = 16_000_000;
 
@@ -61,7 +61,7 @@ export function isGaussianPly(bytes: Uint8Array): boolean {
 /** Build a point-cloud summary shell from Gaussian splat metadata. */
 function gaussianMetaToSummary(meta: GaussianSplatMeta): PointCloudSummary {
   return {
-    count: meta.count,
+    count: meta.sourceCount ?? meta.count,
     origin: meta.origin,
     min: meta.min,
     max: meta.max,
@@ -157,11 +157,21 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
           const platform = await getPlatformService();
           const { meta, buffer } = await platform.loadGaussianSplatsNative(
             path,
-            NATIVE_SPLAT_LOAD_BUDGET,
+            store.splatRenderMode === 'decimated'
+              ? NATIVE_SPLAT_LOAD_BUDGET
+              : undefined,
           );
+          assertGaussianSplatLayout(meta, buffer);
           usePointCloudStore
             .getState()
-            .setSplatLoaded(0, fileName, buffer, meta.shDegree, gaussianMetaToSummary(meta));
+            .setSplatLoaded(
+              0,
+              fileName,
+              buffer,
+              meta.shDegree,
+              meta.layoutVersion,
+              gaussianMetaToSummary(meta),
+            );
           return;
         }
       }
@@ -180,10 +190,24 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
         // The worker parses AND origin-shifts the splat buffer off the main
         // thread; quality/sample reduction still happens in the GPU renderer, so
         // the buffer is stored flagged as already-shifted.
-        const { handle, meta, buffer } = await workerLoadGaussianSplats(source.bytes);
+        const { handle, meta, buffer } = await workerLoadGaussianSplats(
+          source.bytes,
+          store.splatRenderMode === 'decimated'
+            ? DEFAULT_SPLAT_LOAD_BUDGET
+            : undefined,
+        );
+        assertGaussianSplatLayout(meta, buffer);
         usePointCloudStore
           .getState()
-          .setSplatLoaded(handle, fileName, buffer, meta.shDegree, gaussianMetaToSummary(meta), true);
+          .setSplatLoaded(
+            handle,
+            fileName,
+            buffer,
+            meta.shDegree,
+            meta.layoutVersion,
+            gaussianMetaToSummary(meta),
+            true,
+          );
       } else {
         const result = await workerLoadPointCloud(source.bytes!, source.format!);
         usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary);

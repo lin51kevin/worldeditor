@@ -70,9 +70,15 @@ export function workerFreePointCloud(handle: number): Promise<void> {
 /** Metadata for a loaded Gaussian splat cloud. */
 export interface GaussianSplatMeta {
   count: number;
+  /** Source PLY count before an explicitly requested parse budget. */
+  sourceCount: number;
   shDegree: number;
-  /** `u32` words per splat in the packed half-precision SH instance buffer. */
+  /** `u32` words per splat in the versioned transform/SH instance buffer. */
   shStride: number;
+  /** Must match the renderer's supported packed layout version. */
+  layoutVersion: number;
+  /** Stable diagnostic layout name. */
+  layoutName: string;
   origin: [number, number, number];
   min: [number, number, number];
   max: [number, number, number];
@@ -82,28 +88,23 @@ export interface GaussianSplatMeta {
 export interface WorkerGaussianResult {
   handle: number;
   meta: GaussianSplatMeta;
-  /** Packed half-precision SH buffer, already origin-shifted in the worker
-   *  (`splatStrideForDegree(meta.shDegree)` u32 words/splat), transferred zero-copy. */
+  /** Versioned packed transform/SH buffer, already origin-shifted in the worker
+   *  (`meta.shStride` u32 words/splat), transferred zero-copy. */
   buffer: Uint32Array;
 }
 
 /**
- * Default cap on splats parsed from a 3DGS PLY on the **web/WASM** path. Very
- * large clouds are uniformly stride-sampled to this budget during WASM parsing
- * so the wasm32 heap (and the derived GPU buffer) stay bounded — without it,
- * multi-million-splat files can exhaust the 4 GB address space and crash on
- * load. The native (desktop) path uses a higher budget (no wasm32 limit); the
- * GPU-side renderer decimates further if the storage-buffer binding limit is
- * smaller.
+ * Explicit cap used by the **web/WASM** path only in `decimated` mode. Full
+ * mode passes no parse cap so it cannot silently lose source splats; a wasm32
+ * allocation failure is surfaced instead.
  */
 export const DEFAULT_SPLAT_LOAD_BUDGET = 4_000_000;
 
-/** Load a 3D Gaussian Splatting PLY in the worker (bytes transferred). The
- *  returned buffer is already origin-shifted in the worker; quality/sample
- *  reduction is applied later by the GPU renderer. */
+/** Load a 3D Gaussian Splatting PLY in the worker (bytes transferred).
+ * `maxSplats` must only be supplied for an explicitly decimated load. */
 export function workerLoadGaussianSplats(
   bytes: Uint8Array,
-  maxSplats: number = DEFAULT_SPLAT_LOAD_BUDGET,
+  maxSplats?: number,
 ): Promise<WorkerGaussianResult> {
   return call('loadGaussian', { bytes, maxSplats }, [bytes.buffer]);
 }

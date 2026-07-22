@@ -165,6 +165,12 @@
     white-space: pre-wrap;
 }
 
+.pc-warning {
+    font-size: var(--font-size-sm);
+    color: var(--color-warning, #d99a2b);
+    white-space: pre-wrap;
+}
+
 .pc-spinner {
     display: inline-block;
     width: 14px;

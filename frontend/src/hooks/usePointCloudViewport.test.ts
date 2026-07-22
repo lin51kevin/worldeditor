@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { applyOrigin, applySplatOrigin } from './usePointCloudViewport';
 import { splatStrideForDegree } from '../viewport/gaussian/splatPipeline';
+import { GAUSSIAN_SPLAT_LAYOUT_VERSION } from '../viewport/gaussian/splatLayout';
 
 /** Build a 7-float vertex buffer (x,y,z,r,g,b,a) from position triples. */
 function buildBuffer(positions: [number, number, number][]): Float32Array {
@@ -66,7 +67,7 @@ function buildSplats(positions: [number, number, number][], shDegree = 0): Uint3
     f32[d] = x;
     f32[d + 1] = y;
     f32[d + 2] = z;
-    // A packed half-pair word right after the position words; must stay intact.
+    // First scale word immediately after position; must stay intact.
     out[d + 3] = 0xabcd_1234;
   });
   return out;
@@ -86,7 +87,7 @@ describe('applySplatOrigin', () => {
     ]);
     const stride = splatStrideForDegree(0);
 
-    const out = applySplatOrigin(buffer, 0, [100, 200, 5]);
+    const out = applySplatOrigin(buffer, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, [100, 200, 5]);
 
     expect(splatPos(out, stride, 0)).toEqual([100, 200, 5]);
     expect(splatPos(out, stride, 1)).toEqual([101, 202, 8]);
@@ -96,16 +97,16 @@ describe('applySplatOrigin', () => {
     const buffer = buildSplats([[1, 1, 1]]);
     const stride = splatStrideForDegree(0);
 
-    const out = applySplatOrigin(buffer, 0, [10, 20, 30]);
+    const out = applySplatOrigin(buffer, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, [10, 20, 30]);
 
     expect(out).not.toBe(buffer);
     expect(splatPos(buffer, stride, 0)).toEqual([1, 1, 1]);
   });
 
-  it('should not touch the packed half-pair words after the position', () => {
+  it('should not touch transform words after the position', () => {
     const buffer = buildSplats([[1, 1, 1]]);
 
-    const out = applySplatOrigin(buffer, 0, [10, 20, 30]);
+    const out = applySplatOrigin(buffer, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, [10, 20, 30]);
 
     expect(out[3]).toBe(0xabcd_1234);
   });
@@ -114,7 +115,7 @@ describe('applySplatOrigin', () => {
     const buffer = buildSplats([[0, 0, 0], [5, 6, 7]], 2);
     const stride = splatStrideForDegree(2);
 
-    const out = applySplatOrigin(buffer, 2, [1, 1, 1]);
+    const out = applySplatOrigin(buffer, 2, GAUSSIAN_SPLAT_LAYOUT_VERSION, [1, 1, 1]);
 
     expect(splatPos(out, stride, 0)).toEqual([1, 1, 1]);
     expect(splatPos(out, stride, 1)).toEqual([6, 7, 8]);
@@ -123,7 +124,7 @@ describe('applySplatOrigin', () => {
   it('should return the same reference when origin is zero', () => {
     const buffer = buildSplats([[1, 2, 3]]);
 
-    const out = applySplatOrigin(buffer, 0, [0, 0, 0]);
+    const out = applySplatOrigin(buffer, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, [0, 0, 0]);
 
     expect(out).toBe(buffer);
   });
@@ -131,7 +132,7 @@ describe('applySplatOrigin', () => {
   it('should return the same reference when origin is undefined', () => {
     const buffer = buildSplats([[1, 2, 3]]);
 
-    const out = applySplatOrigin(buffer, 0, undefined);
+    const out = applySplatOrigin(buffer, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, undefined);
 
     expect(out).toBe(buffer);
   });
