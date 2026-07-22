@@ -56,8 +56,10 @@ export function createWorkerSplatSorter(): SplatSorter {
 
   const worker = new SplatSortWorker();
 
-  let pending: ((indices: Uint32Array, visibleCount: number, generation: number) => void) | null =
-    null;
+  const pending = new Map<
+    number,
+    (indices: Uint32Array, visibleCount: number, generation: number) => void
+  >();
 
   worker.onmessage = (
     ev: MessageEvent<{
@@ -67,19 +69,23 @@ export function createWorkerSplatSorter(): SplatSorter {
       generation: number;
     }>,
   ) => {
-    if (ev.data.type === 'sorted' && pending) {
-      pending(ev.data.indices, ev.data.visibleCount, ev.data.generation);
+    if (ev.data.type === 'sorted') {
+      const done = pending.get(ev.data.generation);
+      if (!done) return;
+      pending.delete(ev.data.generation);
+      done(ev.data.indices, ev.data.visibleCount, ev.data.generation);
     }
   };
 
   return {
     init(positions: Float32Array): void {
+      pending.clear();
       // Transfer ownership of the positions buffer to the worker (zero-copy) —
       // the caller relinquishes it, so no duplicate lives on the main thread.
       worker.postMessage({ type: 'init', positions }, [positions.buffer]);
     },
     sort(camPos, viewDir, generation, done): void {
-      pending = done;
+      pending.set(generation, done);
       worker.postMessage({
         type: 'sort',
         camPos,
@@ -88,6 +94,7 @@ export function createWorkerSplatSorter(): SplatSorter {
       });
     },
     dispose(): void {
+      pending.clear();
       worker.terminate();
     },
   };

@@ -24,7 +24,7 @@ import type { CameraState } from "../cameraController";
  * [40]     dilation  : f32  (2D low-pass filter, px²)
  * [41]     linear_to_srgb : f32 (diagnostic; default 0 = direct gamma-space SH)
  * [42]     projection_kind : f32 (0 = perspective, 1 = orthographic)
- * [43]     _pad
+ * [43]     clamp_anisotropy : f32 (1 = cap splat aspect ratio; decimated preview)
  * ```
  */
 export const SPLAT_UNIFORM_FLOATS = 44;
@@ -48,6 +48,7 @@ export function buildSplatUniform(
   shDegree: number,
   dilation = DEFAULT_SPLAT_DILATION,
   encodeLinearToSrgb = false,
+  clampAnisotropy = false,
 ): Float32Array<ArrayBuffer> {
   const out = new Float32Array(SPLAT_UNIFORM_FLOATS);
   const viewProj = buildViewProjMatrix(
@@ -78,5 +79,6 @@ export function buildSplatUniform(
   out[40] = dilation;
   out[41] = encodeLinearToSrgb ? 1 : 0;
   out[42] = dimensionMode === "2d" ? 1 : 0;
+  out[43] = clampAnisotropy ? 1 : 0;
   return out;
 }

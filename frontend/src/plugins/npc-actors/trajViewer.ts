@@ -154,22 +154,29 @@ export function interpPose(rows: TrajRow[], t: number): TrajRow {
   if (t <= first.time) return first;
   const last = rows[rows.length - 1]!;
   if (t >= last.time) return last;
-  for (let i = 1; i < rows.length; i++) {
-    const b = rows[i]!;
-    if (t <= b.time) {
-      const a = rows[i - 1]!;
-      const span = b.time - a.time || 1;
-      const f = (t - a.time) / span;
-      return {
-        time: t,
-        x: a.x + (b.x - a.x) * f,
-        y: a.y + (b.y - a.y) * f,
-        z: a.z + (b.z - a.z) * f,
-        yaw: a.yaw + (b.yaw - a.yaw) * f,
-      };
-    }
+  // Lower-bound search avoids scanning from the start on every playback frame.
+  let low = 1;
+  let high = rows.length - 1;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (rows[mid]!.time < t) low = mid + 1;
+    else high = mid;
   }
-  return last;
+  const b = rows[low]!;
+  const a = rows[low - 1]!;
+  const span = b.time - a.time;
+  if (!(span > 0)) return b;
+  const f = (t - a.time) / span;
+  // Trajectory headings are degrees. Interpolate the signed shortest arc so
+  // 179° → -179° crosses ±180° instead of rotating through 0°.
+  const yawDelta = ((b.yaw - a.yaw + 540) % 360) - 180;
+  return {
+    time: t,
+    x: a.x + (b.x - a.x) * f,
+    y: a.y + (b.y - a.y) * f,
+    z: a.z + (b.z - a.z) * f,
+    yaw: a.yaw + yawDelta * f,
+  };
 }
 
 /** Build the oriented bounding box for a single entity at absolute time `t`. */

@@ -18,6 +18,13 @@ const COLOR_MODE_KEYS: Array<{ value: PointCloudColorMode; key: string }> = [
 const WEB_ACCEPT = '.pcd,.ply,.xyz,.txt,.asc';
 
 /**
+ * Temporarily hide the splat-coverage controls (render mode / quality / sample
+ * mode). Clouds always load at full coverage; flip to `true` to restore the
+ * decimated-preview options.
+ */
+const SHOW_SPLAT_COVERAGE_CONTROLS = false;
+
+/**
  * Splat depth re-sort (refresh) rate options in FPS. `0` = realtime (re-sort
  * every qualifying frame); the others cap the re-sort rate to trade slightly
  * staler ordering during fast camera motion for lower worker load on very
@@ -183,7 +190,7 @@ export default function PointCloudPanel() {
         </div>
       )}
 
-      {isSplat && (
+      {isSplat && SHOW_SPLAT_COVERAGE_CONTROLS && (
         <div className="pc-field-group">
           <label className="pc-field">
             <span>{t('pointcloud.splatRenderMode')}</span>
@@ -199,7 +206,7 @@ export default function PointCloudPanel() {
         </div>
       )}
 
-      {isSplat && (
+      {isSplat && SHOW_SPLAT_COVERAGE_CONTROLS && (
         <div className="pc-field-group">
           <label className="pc-field">
             <span>{t('pointcloud.splatQuality')} ({Math.round(splatQuality * 100)}%)</span>
@@ -217,7 +224,7 @@ export default function PointCloudPanel() {
         </div>
       )}
 
-      {isSplat && (
+      {isSplat && SHOW_SPLAT_COVERAGE_CONTROLS && (
         <div className="pc-field-group">
           <label className="pc-field">
             <span>{t('pointcloud.sampleMode')}</span>

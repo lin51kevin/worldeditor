@@ -41,7 +41,13 @@ import {
   type SplatRenderMode,
   type SplatUploadStatus,
 } from './gaussian/splatRenderer';
-import { uploadMeshData, disposeMeshes, createDepthTexture, createMsaaTexture } from './rendererResources';
+import {
+  getOrCreateBuffer,
+  uploadMeshData,
+  disposeMeshes,
+  createDepthTexture,
+  createMsaaTexture,
+} from './rendererResources';
 import {
   createRoadMeshRegistry,
   applyRoadMeshUpdate,
@@ -620,10 +626,14 @@ export class ViewportRenderer {
   }
 
   /** Position the camera in a chase-cam view behind a moving entity. */
-  setChaseCam3D(x: number, y: number, yaw: number): void {
-    this.cameraController.setChaseCam(x, y, yaw);
+  setChaseCam3D(x: number, y: number, z: number, yaw: number): void {
+    this.cameraController.setChaseCam(x, y, z, yaw);
     this.markSceneDirty();
-    this.renderFrame();
+  }
+
+  /** Give or release exclusive camera navigation ownership to chase mode. */
+  setChaseCameraActive(active: boolean): void {
+    this.cameraController.setChaseCameraActive(active);
   }
 
   // ── Case-actor plugin: dynamic box + trajectory lanes ─────────────────────
@@ -859,27 +869,29 @@ export class ViewportRenderer {
    * Passing empty data clears the current ego mesh.
    */
   uploadEgoMeshIndexed(vertexData: Float32Array, indices: Uint32Array): void {
-    // Replace any existing ego mesh buffers.
-    this.egoMesh?.vertexBuffer.destroy();
-    this.egoMesh?.indexBuffer.destroy();
-    this.egoMesh = null;
-
     if (vertexData.length === 0 || indices.length === 0) {
+      this.egoMesh?.vertexBuffer.destroy();
+      this.egoMesh?.indexBuffer.destroy();
+      this.egoMesh = null;
       this.markSceneDirty();
       return;
     }
 
-    const vertexBuffer = this.device.createBuffer({
-      size: vertexData.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-    });
+    // Playback changes only transformed vertices; keep compatible buffers alive
+    // instead of allocating and destroying GPU resources on every frame.
+    const vertexBuffer = getOrCreateBuffer(
+      this.device,
+      this.egoMesh?.vertexBuffer,
+      vertexData.byteLength,
+    );
     this.device.queue.writeBuffer(vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
 
-    // Index buffers must be 4-byte aligned; Uint32 data already satisfies this.
-    const indexBuffer = this.device.createBuffer({
-      size: indices.byteLength,
-      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-    });
+    const indexBuffer = getOrCreateBuffer(
+      this.device,
+      this.egoMesh?.indexBuffer,
+      indices.byteLength,
+      GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+    );
     this.device.queue.writeBuffer(indexBuffer, 0, indices.buffer, indices.byteOffset, indices.byteLength);
 
     this.egoMesh = { vertexBuffer, indexBuffer, indexCount: indices.length };

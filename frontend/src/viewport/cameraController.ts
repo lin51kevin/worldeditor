@@ -68,6 +68,7 @@ export class CameraController {
   private activeDragAction: MouseDragAction | null = null;
   private lastMouse: [number, number] = [0, 0];
   private cameraLocked = false;
+  private chaseCameraActive = false;
   private dimensionMode: '3d' | '2d' = '3d';
   private cachedViewProj: Float32Array | null = null;
   private cachedInverseViewProj: Float32Array | null = null;
@@ -194,28 +195,36 @@ export class CameraController {
   setChaseCam(
     x: number,
     y: number,
+    z: number,
     yaw: number,
     behindDist = 18,
     height = 8,
     lookAheadDist = 10,
   ): void {
     if (this.dimensionMode !== '3d') return;
-    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(yaw)) return;
+    if (
+      !Number.isFinite(x) ||
+      !Number.isFinite(y) ||
+      !Number.isFinite(z) ||
+      !Number.isFinite(yaw)
+    ) return;
     const cosY = Math.cos(yaw);
     const sinY = Math.sin(yaw);
     // Camera behind the entity
     const camX = x - cosY * behindDist;
     const camY = y - sinY * behindDist;
-    const camZ = height;
+    const camZ = z + height;
     // Look-at point slightly ahead of the entity
     const targetX = x + cosY * lookAheadDist;
     const targetY = y + sinY * lookAheadDist;
     this.dimensionMode = '3d';
-    this.camera.target = [targetX, targetY, 0];
+    this.camera.target = [targetX, targetY, z];
     this.camera.position = [camX, camY, camZ];
     this.camera.up = [0, 0, 1];
     const dist = Math.sqrt(
-      (camX - targetX) ** 2 + (camY - targetY) ** 2 + camZ ** 2,
+      (camX - targetX) ** 2 +
+      (camY - targetY) ** 2 +
+      (camZ - z) ** 2,
     );
     const clip = this.perspClipPlanes(dist);
     this.camera.near = clip.near;
@@ -237,7 +246,7 @@ export class CameraController {
   }
 
   get locked(): boolean {
-    return this.cameraLocked;
+    return this.cameraLocked || this.chaseCameraActive;
   }
 
   get dimension(): '3d' | '2d' {
@@ -579,7 +588,7 @@ export class CameraController {
   }
 
   beginPointerDrag(button: number, event: Pick<MouseEvent, 'clientX' | 'clientY' | 'ctrlKey' | 'shiftKey' | 'altKey'>): boolean {
-    if (this.cameraLocked) return false;
+    if (this.locked) return false;
     const action = resolveMouseDragAction(button, event, this.dimensionMode);
     if (!action) return false;
 
@@ -605,6 +614,10 @@ export class CameraController {
     canvas: HTMLCanvasElement,
     event: Pick<MouseEvent, 'buttons' | 'clientX' | 'clientY' | 'ctrlKey' | 'shiftKey' | 'altKey'>,
   ): boolean {
+    if (this.locked) {
+      this.stopDragging();
+      return false;
+    }
     if (!this.isDragging || this.activeMouseButton === null) return false;
     const requiredMask = mouseButtonMask(this.activeMouseButton);
     if (requiredMask !== 0 && (event.buttons & requiredMask) === 0) {
@@ -650,6 +663,15 @@ export class CameraController {
 
   unlock(): void {
     this.cameraLocked = false;
+  }
+
+  /** Disable manual camera navigation while an external chase camera owns it. */
+  setChaseCameraActive(active: boolean): void {
+    this.chaseCameraActive = active;
+    if (active) {
+      if (this._flyState.mode) this.exitFlyMode();
+      this.stopDragging();
+    }
   }
 
   getCameraDistance(): number {
@@ -699,7 +721,7 @@ export class CameraController {
   }
 
   applyPan(canvas: HTMLCanvasElement, prevClientXY: [number, number], currClientXY: [number, number]): void {
-    if (this.cameraLocked) return;
+    if (this.locked) return;
     if (this.dimensionMode === '2d') {
       // For touch pan in 2D: compute incremental offset directly
       const dx = (prevClientXY[0] - currClientXY[0]) / this.numPixelsPerMeter;
@@ -717,7 +739,7 @@ export class CameraController {
   }
 
   applyZoomFactor(factor: number): void {
-    if (this.cameraLocked) return;
+    if (this.locked) return;
     if (this.dimensionMode === '2d') {
       // For touch pinch in 2D: factor > 1 zooms out, < 1 zooms in
       this.numPixelsPerMeter /= factor;
@@ -731,7 +753,7 @@ export class CameraController {
   }
 
   handleWheel(deltaY: number, cursorX?: number, cursorY?: number): void {
-    if (this.cameraLocked) return;
+    if (this.locked) return;
     if (this._flyState.mode) {
       this.adjustFlySpeed(deltaY);
       return;
@@ -758,7 +780,7 @@ export class CameraController {
   }
 
   enterFlyMode(): void {
-    flyEnter(this._flyState, this.camera, this.cameraLocked, this.dimensionMode === '2d');
+    flyEnter(this._flyState, this.camera, this.locked, this.dimensionMode === '2d');
   }
 
   exitFlyMode(): void {

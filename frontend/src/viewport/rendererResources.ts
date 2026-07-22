@@ -23,6 +23,7 @@ export function getOrCreateBuffer(
   device: GPUDevice,
   existingBuffer: GPUBuffer | undefined,
   requiredBytes: number,
+  usage: GPUBufferUsageFlags = GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 ): GPUBuffer {
   if (existingBuffer) {
     const currentSize = existingBuffer.size;
@@ -35,7 +36,7 @@ export function getOrCreateBuffer(
   }
   return device.createBuffer({
     size: Math.ceil(requiredBytes * GPU_BUFFER_HEADROOM),
-    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    usage,
   });
 }
 

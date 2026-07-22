@@ -19,12 +19,14 @@ import {
   trajBounds,
 } from '../plugins/npc-actors';
 import type { TrajData } from '../plugins/npc-actors';
+import type { CaseActorBox } from '../plugins/npc-actors';
 import { getViewportRenderer } from './viewportRef';
 import { loadEgoModelTemplate, buildEgoMeshVertices } from './egoModel';
 import type { EgoModelTemplate } from './egoModel';
 import { useTrajectoryStore } from '../stores/trajectoryStore';
 import { showAlert } from '../utils/dialog';
 import i18n from '../i18n';
+import { smoothFollowPose, type FollowPose } from './trajectoryFollow';
 
 /** Max size (bytes) accepted for a trajectory import (guards runaway files). */
 const MAX_TRAJECTORY_SIZE_BYTES = 100 * 1024 * 1024;
@@ -35,25 +37,56 @@ let sceneOrigin: [number, number, number] = [0, 0, 0];
 let rafId = 0;
 let lastPerf = 0;
 let unsub: (() => void) | null = null;
+let followPose: FollowPose | null = null;
+let followPerf = 0;
+/**
+ * Previous raw ego ground position (world metres), used to derive a stable
+ * chase-camera heading from the direction of travel. Reset to null on any
+ * snap (enable / seek / loop) so a teleport cannot fabricate a bogus heading.
+ */
+let followPrevGround: [number, number] | null = null;
+/** Minimum travel between frames (m) before the heading tracks motion. */
+const FOLLOW_HEADING_MIN_MOVE = 0.01;
 
 // Loaded ego car model (`ego.glb`). Null until the async load resolves (or if
 // it fails, in which case the ego falls back to a bounding box).
 let egoTemplate: EgoModelTemplate | null = null;
 
-/** Rebuild + upload the actor boxes for time `t` and render one frame. */
+/** Rebuild and upload actor geometry for time `t`; uploads wake the render loop. */
 function renderActorsAt(t: number): void {
-  const { data } = useTrajectoryStore.getState();
+  const { data, followEgo } = useTrajectoryStore.getState();
   const renderer = getViewportRenderer();
   if (!renderer || !data) return;
 
+  const rawEgoBox = buildEgoBox(data, t);
+  const filteredEgoBox: CaseActorBox | null =
+    followEgo && followPose && rawEgoBox
+      ? {
+          ...rawEgoBox,
+          position: [
+            followPose.x + sceneOrigin[0],
+            followPose.y + sceneOrigin[1],
+            followPose.z + sceneOrigin[2] + rawEgoBox.size[2] / 2,
+          ],
+          // Match the (smoothed, travel-derived) chase heading so the body and
+          // camera stay aligned and the car does not counter-rotate on noisy
+          // recorded yaw.
+          heading: followPose.yaw,
+        }
+      : null;
+
   // When the ego model is loaded, draw the ego as a solid model and exclude it
   // from the (translucent) box set so it is not drawn twice.
+  const boxes = buildTrajBoxes(data, t, {
+    includeEgo: egoTemplate === null && filteredEgoBox === null,
+  });
+  if (egoTemplate === null && filteredEgoBox) boxes.push(filteredEgoBox);
   renderer.uploadActorVertices(
-    buildBoxVertices(buildTrajBoxes(data, t, { includeEgo: egoTemplate === null }), sceneOrigin),
+    buildBoxVertices(boxes, sceneOrigin),
   );
 
   if (egoTemplate) {
-    const egoBox = buildEgoBox(data, t);
+    const egoBox = filteredEgoBox ?? rawEgoBox;
     if (egoBox) {
       renderer.uploadEgoMeshIndexed(
         buildEgoMeshVertices(egoTemplate, egoBox, sceneOrigin),
@@ -65,8 +98,6 @@ function renderActorsAt(t: number): void {
   } else {
     renderer.clearEgoMesh();
   }
-
-  renderer.render();
 }
 
 /** Clear both actor and ribbon buffers from the renderer. */
@@ -76,7 +107,6 @@ function clearRenderer(): void {
   renderer.uploadActorVertices(new Float32Array(0));
   renderer.uploadPathVertices(new Float32Array(0));
   renderer.clearEgoMesh();
-  renderer.render();
 }
 
 /** The RAF clock: advance the playhead by real elapsed time × speed. */
@@ -87,7 +117,7 @@ function tick(): void {
     return;
   }
   const now = performance.now();
-  const dt = (now - lastPerf) / 1000;
+  const dt = Math.min((now - lastPerf) / 1000, 0.1);
   lastPerf = now;
 
   const span = s.tMax - s.tMin;
@@ -110,7 +140,78 @@ function tick(): void {
 function ensureSubscribed(): void {
   if (unsub) return;
   unsub = useTrajectoryStore.subscribe((state, prev) => {
-    if (state.data !== prev.data) {
+    const timeChanged = state.currentTime !== prev.currentTime;
+    const followJustEnabled = state.followEgo && !prev.followEgo;
+    const dataChanged = state.data !== prev.data;
+    const ego = state.data?.entities.find((entity) => entity.ego);
+
+    if (state.followEgo !== prev.followEgo || dataChanged) {
+      getViewportRenderer()?.setChaseCameraActive(
+        Boolean(state.followEgo && ego && ego.rows.length > 0),
+      );
+    }
+
+    // Update the camera before actor buffers are submitted so both use the same
+    // playhead in the one frame rendered below.
+    if (
+      state.followEgo &&
+      state.data &&
+      (timeChanged || followJustEnabled || dataChanged)
+    ) {
+      if (ego && ego.rows.length > 0) {
+        const pose = interpPose(ego.rows, state.currentTime);
+        const now = performance.now();
+        const shouldSnap =
+          followJustEnabled ||
+          dataChanged ||
+          !state.isPlaying ||
+          state.currentTime < prev.currentTime ||
+          Math.abs(state.currentTime - prev.currentTime) > 0.25;
+        if (shouldSnap) followPrevGround = null;
+        // Derive the chase heading from the direction of travel between the
+        // previous and current raw sample. interpPose is piecewise-linear, so
+        // this is constant within a segment (only real turns move it) — far
+        // steadier than the per-sample recorded yaw, which jitters and, through
+        // the ~18 m chase offset, makes the camera stutter/reverse. Fall back to
+        // the recorded yaw while parked (no measurable travel) or on a snap.
+        let headingRad = pose.yaw * (Math.PI / 180);
+        if (followPrevGround) {
+          const dx = pose.x - followPrevGround[0];
+          const dy = pose.y - followPrevGround[1];
+          if (Math.hypot(dx, dy) > FOLLOW_HEADING_MIN_MOVE) {
+            headingRad = Math.atan2(dy, dx);
+          } else if (followPose) {
+            headingRad = followPose.yaw;
+          }
+        }
+        followPrevGround = [pose.x, pose.y];
+        const rawPose: FollowPose = {
+          x: pose.x - sceneOrigin[0],
+          y: pose.y - sceneOrigin[1],
+          z: pose.z - sceneOrigin[2],
+          yaw: headingRad,
+        };
+        followPose = smoothFollowPose(
+          shouldSnap ? null : followPose,
+          rawPose,
+          followPerf > 0 ? (now - followPerf) / 1000 : 0,
+        );
+        followPerf = now;
+        getViewportRenderer()?.setChaseCam3D(
+          followPose.x,
+          followPose.y,
+          followPose.z,
+          followPose.yaw,
+        );
+      }
+    } else if (!state.followEgo) {
+      followPose = null;
+      followPerf = 0;
+      followPrevGround = null;
+    }
+
+    const followChanged = state.followEgo !== prev.followEgo;
+    if (dataChanged) {
       if (!state.data) {
         clearRenderer();
         return;
@@ -119,28 +220,8 @@ function ensureSubscribed(): void {
       // hidden); clear any stale ribbons from a previous dataset.
       getViewportRenderer()?.uploadPathVertices(new Float32Array(0));
       renderActorsAt(state.currentTime);
-    } else if (state.currentTime !== prev.currentTime) {
+    } else if (timeChanged || followChanged) {
       renderActorsAt(state.currentTime);
-    }
-
-    // Follow-ego camera: chase-cam behind the ego whenever the playhead moves
-    // or when followEgo is first toggled on.
-    const followJustEnabled = state.followEgo && !prev.followEgo;
-    if (
-      state.followEgo &&
-      state.data &&
-      (state.currentTime !== prev.currentTime || followJustEnabled)
-    ) {
-      const ego = state.data.entities.find((e) => e.ego);
-      if (ego && ego.rows.length > 0) {
-        const pose = interpPose(ego.rows, state.currentTime);
-        const DEG_TO_RAD = Math.PI / 180;
-        getViewportRenderer()?.setChaseCam3D(
-          pose.x - sceneOrigin[0],
-          pose.y - sceneOrigin[1],
-          pose.yaw * DEG_TO_RAD,
-        );
-      }
     }
 
     if (state.isPlaying && !prev.isPlaying) {
@@ -203,6 +284,8 @@ export function stopTrajectory(): void {
     cancelAnimationFrame(rafId);
     rafId = 0;
   }
+  followPose = null;
+  followPerf = 0;
   // clear() sets data → null, which the subscription turns into a buffer clear.
   useTrajectoryStore.getState().clear();
 }

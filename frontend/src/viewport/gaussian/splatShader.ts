@@ -27,7 +27,7 @@ struct SplatUniforms {
   dilation  : f32,
   linear_to_srgb : f32,
   projection_kind : f32,
-  _pad1     : f32,
+  clamp_anisotropy : f32,
 };
 
 @group(0) @binding(0) var<uniform> u : SplatUniforms;
@@ -52,6 +52,10 @@ const SH_C3_5 : f32 = 1.445305721320277;
 const SH_C3_6 : f32 = -0.5900435899266435;
 const ALPHA_CUTOFF : f32 = 0.00392156862745;
 const EXP4 : f32 = 0.01831563889;
+// Minor/major eigenvalue floor ratio (=1/aspect²) used only for decimated
+// previews: caps a splat's screen-space aspect ratio at ~8:1 so large splats
+// left without their small neighbours cannot project into long bright needles.
+const ANISO_MIN_RATIO : f32 = 0.015625;
 
 struct VSOut {
   @builtin(position) pos : vec4<f32>,
@@ -246,8 +250,13 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
   // Floor the minor eigenvalue at 0.1 px² (matches PlayCanvas/SuperSplat). Without
   // it, edge-on / highly anisotropic splats collapse to zero-width needles that
   // render as bright hairy spikes; 0.1 keeps a ~0.45px minimum thickness.
-  let lambda2 = max(0.1, mid - disc);
+  var lambda2 = max(0.1, mid - disc);
   if (lambda1 <= 0.0) { return culled(); }
+  // Decimated preview only: cap anisotropy so exposed large splats round out
+  // into ellipses instead of bright needles/spikes. Full mode is untouched.
+  if (u.clamp_anisotropy > 0.5) {
+    lambda2 = max(lambda2, lambda1 * ANISO_MIN_RATIO);
+  }
 
   // Principal eigenvector (major axis). Fall back to the X axis for near-
   // isotropic splats so normalize never sees a zero vector.

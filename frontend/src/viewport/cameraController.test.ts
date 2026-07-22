@@ -183,6 +183,45 @@ describe('CameraController', () => {
   });
 
   describe('3D perspective mode', () => {
+    it('ignores pointer and wheel navigation while chase-camera input is active', () => {
+      const before = [...cam.state.position];
+      cam.setChaseCameraActive(true);
+
+      expect(
+        cam.beginPointerDrag(0, {
+          clientX: 100,
+          clientY: 100,
+          ctrlKey: false,
+          shiftKey: false,
+          altKey: false,
+        }),
+      ).toBe(false);
+      cam.handleWheel(-120);
+      expect(cam.state.position).toEqual(before);
+
+      cam.setChaseCameraActive(false);
+      cam.handleWheel(-120);
+      expect(cam.state.position).not.toEqual(before);
+    });
+
+    it('positions a chase camera relative to the followed elevation', () => {
+      cam.setChaseCam(10, 20, 5, 0);
+
+      expect(cam.state.position).toEqual([-8, 20, 13]);
+      expect(cam.state.target).toEqual([20, 20, 5]);
+    });
+
+    it('keeps chase-camera clip planes independent of absolute elevation', () => {
+      cam.setChaseCam(10, 20, 0, 0);
+      const groundNear = cam.state.near;
+      const groundFar = cam.state.far;
+
+      cam.setChaseCam(10, 20, 10_000, 0);
+
+      expect(cam.state.near).toBeCloseTo(groundNear, 10);
+      expect(cam.state.far).toBeCloseTo(groundFar, 10);
+    });
+
     it('handleWheel with negative deltaY moves camera closer', () => {
       const distBefore = cam.getCameraDistance();
       cam.handleWheel(-120);

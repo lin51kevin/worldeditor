@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 
-import { parseTraj, buildTrajBoxes, buildEgoBox, buildTrajSegments, playTraj } from '../trajViewer';
+import {
+  parseTraj,
+  buildTrajBoxes,
+  buildEgoBox,
+  buildTrajSegments,
+  interpPose,
+  playTraj,
+} from '../trajViewer';
 import type { TrajViewerTarget } from '../trajViewer';
 import { ACTOR_VERTEX_STRIDE } from '../actorTypes';
 
@@ -53,6 +60,16 @@ describe('npc-actors/trajViewer.buildTrajBoxes', () => {
     expect(ego.position[2]).toBeCloseTo(0.8, 5);
     // Yaw 45° (halfway 0→90) in radians.
     expect(ego.heading).toBeCloseTo((45 * Math.PI) / 180, 5);
+  });
+
+  it('interpolates yaw across the ±180° boundary by the shortest arc', () => {
+    const data = parseTraj([
+      'ID,Time,PositionX,PositionY,PositionZ,Yaw,Ego',
+      'ego,0,0,0,0,179,Y',
+      'ego,1,1,0,0,-179,Y',
+    ].join('\n'));
+    const pose = interpPose(data.entities[0]!.rows, 0.5);
+    expect(Math.abs(pose.yaw)).toBeCloseTo(180, 5);
   });
 
   it('clamps to the last pose past the end time', () => {

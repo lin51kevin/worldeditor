@@ -49,6 +49,13 @@ describe("buildSplatUniform", () => {
     expect(diagnosticEncoding[41]).toBe(1);
   });
 
+  it("packs the decimated-preview anisotropy-clamp flag at index 43", () => {
+    const off = buildSplatUniform(camera, "3d", 50, 800, 600, 1);
+    expect(off[43]).toBe(0);
+    const on = buildSplatUniform(camera, "3d", 50, 800, 600, 1, 0.3, false, true);
+    expect(on[43]).toBe(1);
+  });
+
   it("packs camera position, sh degree, projection-derived scale and viewport", () => {
     const u = buildSplatUniform(camera, "3d", 50, 800, 600, 2);
     // cam_pos at [32..35)

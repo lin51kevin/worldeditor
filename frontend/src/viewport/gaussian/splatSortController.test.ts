@@ -110,6 +110,35 @@ describe('SplatSortController', () => {
     expect(onSorted).toHaveBeenLastCalledWith(newIndices, 1);
   });
 
+  it('ignores stale results from the previous splat set after re-upload', () => {
+    const pending: Record<
+      number,
+      (indices: Uint32Array, visibleCount: number, generation: number) => void
+    > = {};
+    const sorter: SplatSorter = {
+      init() {},
+      sort(_camPos, _viewDir, generation, done) {
+        pending[generation] = done;
+      },
+      dispose() {},
+    };
+    const onSorted = vi.fn();
+    const ctrl = new SplatSortController(sorter, onSorted);
+    ctrl.setSplats(new Float32Array([0, 0, 0, 0, 0, 1]));
+    ctrl.onCamera([0, 0, 0], [0, 0, 1]); // generation 0
+
+    ctrl.setSplats(new Float32Array([0, 0, 0]));
+    ctrl.onCamera([0, 0, 0], [0, 0, 1]); // generation 1
+
+    const staleFullOrder = new Uint32Array([1, 0]);
+    const currentDecimatedOrder = new Uint32Array([0]);
+    pending[0]!(staleFullOrder, 2, 0);
+    pending[1]!(currentDecimatedOrder, 1, 1);
+
+    expect(onSorted).toHaveBeenCalledTimes(1);
+    expect(onSorted).toHaveBeenLastCalledWith(currentDecimatedOrder, 1);
+  });
+
   it('clears state and skips sorting when no splats', () => {
     const sorter = fakeSorter();
     const ctrl = new SplatSortController(sorter, vi.fn());

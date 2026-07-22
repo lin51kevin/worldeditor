@@ -2,6 +2,7 @@ import { useCallback, type RefObject } from 'react';
 import { emitCursorMove } from '../viewport/cursorEvents';
 import { useProjectStore } from '../stores/projectStore';
 import { isDrawMode, useViewportStore } from '../stores/viewportStore';
+import { useTrajectoryStore } from '../stores/trajectoryStore';
 import { getPlatformService } from '../services';
 import { buildSnapConfig } from '../services/snapService';
 import { showContextMenu } from '../services/contextMenu';
@@ -130,6 +131,9 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
   const { getVisibleProject } = deps;
 
   const handleMouseMove = useCallback(async (e: React.MouseEvent) => {
+    // The follow-ego chase camera owns the viewport: suppress hover picking,
+    // snapping and cursor tracking so it behaves like the (locked) camera nav.
+    if (useTrajectoryStore.getState().followEgo) return;
     const gesture = mouseGestureRef.current;
     if (gesture && !gesture.dragged && exceededDragThreshold(gesture.startX, gesture.startY, e.clientX, e.clientY)) {
       gesture.dragged = true;
@@ -297,6 +301,11 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
   }, [getVisibleProject, handleArcDrawMouseMove, handleGeometryEditMouseMove, handleLaneLineMouseMove, handleSpiralDrawMouseMove, handleSplitModeMouseMove, handleSplineDrawMouseMove, updatePlacementPreview, updateSignalDrag]);
 
   const handleMouseDown = useCallback(async (e: React.MouseEvent) => {
+    // Chase camera owns the view — ignore edit/selection gestures entirely.
+    if (useTrajectoryStore.getState().followEgo) {
+      mouseGestureRef.current = null;
+      return;
+    }
     mouseGestureRef.current = {
       button: e.button,
       startX: e.clientX,
@@ -337,6 +346,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
   }, [handleArcDrawMouseDown, handleGeometryEditMouseDown, handleLaneLineMouseDown, handleSpiralDrawMouseDown, handleSplineDrawMouseDown, startMoveRotateDrag, startAdjustEdgeDrag, startRubberBand, startSignalDrag]);
 
   const handleClick = useCallback(async (e: React.MouseEvent) => {
+    if (useTrajectoryStore.getState().followEgo) return;
     const gesture = mouseGestureRef.current;
     mouseGestureRef.current = null;
     if (!gesture || gesture.button !== 0) return;
@@ -564,6 +574,11 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    // Chase camera owns the view — no context menu / placement cancels.
+    if (useTrajectoryStore.getState().followEgo) {
+      mouseGestureRef.current = null;
+      return;
+    }
     const gesture = mouseGestureRef.current;
     mouseGestureRef.current = null;
     if (

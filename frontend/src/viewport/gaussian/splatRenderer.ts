@@ -344,6 +344,13 @@ export class SplatRenderer {
   private dilation = DEFAULT_SPLAT_DILATION;
   /** Diagnostic encoding for inputs whose decoded SH is known to be linear. */
   private encodeLinearToSrgb = false;
+  /**
+   * Cap screen-space splat anisotropy while a decimated preview is active. Full
+   * mode leaves this off so its (dense) render is bit-for-bit unchanged; when a
+   * cloud is reduced to a budget the surviving large splats would otherwise
+   * project into bright needles once their small neighbours are gone.
+   */
+  private clampAnisotropy = false;
   /** Max bytes bindable by the explicit packed compatibility path. */
   private readonly maxStorageBytes: number;
   /** Max splats addressable by the one global order storage buffer. */
@@ -456,6 +463,8 @@ export class SplatRenderer {
     const textureCapacity = textureArrayCapacity(this.device, shDegree);
     const textureAvailable = textureCapacity > 0;
     const full = renderMode === "full";
+    // Only decimated previews need needle suppression; full mode stays exact.
+    this.clampAnisotropy = !full;
     let resourceMode: Exclude<GaussianResourceMode, "none">;
     let fallbackReason: SplatFallbackReason | null = null;
     let maxSplats = inputCount;
@@ -642,6 +651,7 @@ export class SplatRenderer {
       this.resources.shDegree,
       this.dilation,
       this.encodeLinearToSrgb,
+      this.clampAnisotropy,
     );
     this.resources.updateUniform(uniform);
     const viewDir = computeViewDir(camera.position, camera.target);
