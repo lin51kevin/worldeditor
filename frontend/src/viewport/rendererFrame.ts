@@ -133,6 +133,11 @@ export function renderFrame(r: RendererFrameInternals): void {
 
   const encoder = r.device.createCommandEncoder();
 
+  // GPU compute sort disabled — CPU worker sort handles ordering.
+  // if (r.splatRenderer?.hasContent) {
+  //   r.splatRenderer.sortGpu(encoder);
+  // }
+
   const swapChainView = texture.createView();
   const msaaView = r.msaaTexture?.createView() ?? swapChainView;
   const pass = encoder.beginRenderPass({

@@ -117,6 +117,16 @@ export class GaussianSplatResources {
     return this._count > 0 && this.bindGroup !== null;
   }
 
+  /** The underlying splat storage buffer (for GPU compute sort access). */
+  get gpuSplatBuffer(): GPUBuffer | null {
+    return this.splatBuffer;
+  }
+
+  /** The sorted index buffer (for GPU compute sort write). */
+  get gpuOrderBuffer(): GPUBuffer | null {
+    return this.orderBuffer;
+  }
+
   /**
    * Upload the packed half-precision splat buffer (`splatStrideForDegree`
    * `u32` words/splat) and initialise the sorted index buffer to identity

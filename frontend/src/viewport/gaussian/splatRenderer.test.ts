@@ -7,6 +7,7 @@ import {
   computeSplatImportance,
   importanceDecimateSplatBuffer,
   sampleSplatBuffer,
+  repackAsBand0,
   SplatRenderer,
 } from "./splatRenderer";
 import { splatStrideForDegree } from "./splatPipeline";
@@ -163,6 +164,34 @@ describe("importanceDecimateSplatBuffer", () => {
   });
 });
 
+describe("repackAsBand0", () => {
+  it("returns the input unchanged for degree 0", () => {
+    const data = new Uint32Array(STRIDE0 * 2);
+    expect(repackAsBand0(data, 0)).toBe(data);
+  });
+
+  it("strips higher SH bands keeping position + cov + opacity + dc", () => {
+    const deg1Stride = splatStrideForDegree(1); // 13 words
+    const deg0Stride = splatStrideForDegree(0); // 8 words
+    const n = 3;
+    const src = new Uint32Array(n * deg1Stride);
+    // Fill each record with a recognisable pattern.
+    for (let i = 0; i < n; i++) {
+      for (let w = 0; w < deg1Stride; w++) {
+        src[i * deg1Stride + w] = i * 100 + w;
+      }
+    }
+    const out = repackAsBand0(src, 1);
+    expect(out.length).toBe(n * deg0Stride);
+    for (let i = 0; i < n; i++) {
+      // First 8 words (pos + cov/opacity/dc) must match the source.
+      for (let w = 0; w < deg0Stride; w++) {
+        expect(out[i * deg0Stride + w]).toBe(i * 100 + w);
+      }
+    }
+  });
+});
+
 describe("sampleSplatBuffer", () => {
   it("dispatches to uniform stride sampling", () => {
     const count = 100;
@@ -200,7 +229,7 @@ describe("SplatRenderer", () => {
   }
 
   function syncSorter(): SplatSorter {
-    let positions = new Float32Array(0);
+    let positions: Float32Array<ArrayBufferLike> = new Float32Array(0);
     return {
       init(p) {
         positions = p;
@@ -252,6 +281,25 @@ describe("SplatRenderer", () => {
     r.onCamera(camera, "3d", 50, 800, 600);
     // At least the uniform write plus the sorted-order write occurred.
     expect(writeSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("uses 0.3 px² low-pass and direct gamma-space SH output by default", () => {
+    const device = fakeDevice();
+    const writeSpy = device.queue.writeBuffer as ReturnType<typeof vi.fn>;
+    const r = new SplatRenderer(
+      device,
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+    r.upload(new Uint32Array(STRIDE0), 0);
+    writeSpy.mockClear();
+    r.onCamera(camera, "3d", 50, 800, 600);
+    const uniform = writeSpy.mock.calls
+      .map((call) => call[2])
+      .find((data): data is Float32Array => data instanceof Float32Array);
+    expect(uniform?.[40]).toBeCloseTo(0.3, 5);
+    expect(uniform?.[41]).toBe(0);
   });
 
   it("does nothing on camera changes when empty", () => {
@@ -311,9 +359,22 @@ describe("SplatRenderer", () => {
       syncSorter(),
     );
     // 100 splats at 25% quality → ~25 kept (device limit is unbounded here).
-    r.upload(new Uint32Array(100 * STRIDE0), 0, "uniform", 0.25);
+    // Quality only applies in "decimated" mode.
+    r.upload(new Uint32Array(100 * STRIDE0), 0, "uniform", 0.25, "decimated");
     expect(r.count).toBeGreaterThan(0);
     expect(r.count).toBeLessThanOrEqual(25);
+  });
+
+  it("ignores the quality fraction in full mode (keeps every splat)", () => {
+    const r = new SplatRenderer(
+      fakeDevice(),
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+    // Same 25% quality, but full mode keeps all 100 (device limit unbounded).
+    r.upload(new Uint32Array(100 * STRIDE0), 0, "uniform", 0.25, "full");
+    expect(r.count).toBe(100);
   });
 
   it("keeps every splat at full quality when it fits", () => {

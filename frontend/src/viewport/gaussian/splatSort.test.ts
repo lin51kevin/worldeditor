@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeDepths, sortSplatsByDepth } from "./splatSort";
+import { computeDepths, sortSplatsByDepth, depthBucketCount } from "./splatSort";
 
 /** Build a flat positions array from `[x,y,z]` tuples. */
 function positions(...pts: Array<[number, number, number]>): Float32Array {
@@ -75,5 +75,38 @@ describe("sortSplatsByDepth", () => {
     for (let i = 1; i < idx.length; i++) {
       expect(depths[idx[i - 1]]).toBeGreaterThanOrEqual(depths[idx[i]]);
     }
+  });
+
+  it("orders a large cloud whose bucket count exceeds 16 bits", () => {
+    // n large enough that depthBucketCount > 65536 (needs Uint32 bucket
+    // indices — a Uint16 store would truncate and scramble the order).
+    const n = 500_000;
+    expect(depthBucketCount(n)).toBeGreaterThan(65536);
+    const p = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) p[i * 3 + 2] = i * 0.001; // strictly increasing z
+    const idx = sortSplatsByDepth(p, [0, 0, 0], [0, 0, 1]);
+    expect(idx.length).toBe(n);
+    expect(new Set(idx).size).toBe(n); // a full permutation (no truncation)
+    // Coarse-block monotonicity: sampling every 1% the depth must be strictly
+    // decreasing (blocks are far wider than one bucket, so no ties). A Uint16
+    // bucket store would wrap indices >65535 and scramble this ordering.
+    const depths = computeDepths(p, [0, 0, 0], [0, 0, 1]);
+    const step = Math.floor(n / 100);
+    for (let k = step; k < n; k += step) {
+      expect(depths[idx[k - step]]).toBeGreaterThan(depths[idx[k]]);
+    }
+  });
+});
+
+describe("depthBucketCount", () => {
+  it("scales with splat count and clamps to [2^12, 2^20]", () => {
+    expect(depthBucketCount(1)).toBe(2 ** 12); // tiny → floor
+    expect(depthBucketCount(100)).toBe(2 ** 12); // still floor
+    expect(depthBucketCount(12_436_553)).toBe(2 ** 20); // huge → ceiling
+    // Mid-range is a power of two within the clamp window.
+    const mid = depthBucketCount(1_000_000);
+    expect(mid).toBeGreaterThanOrEqual(2 ** 12);
+    expect(mid).toBeLessThanOrEqual(2 ** 20);
+    expect(Math.log2(mid) % 1).toBe(0);
   });
 });

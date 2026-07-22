@@ -167,7 +167,7 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
       }
       const platform = await getPlatformService();
       const source: PointCloudSource = { path };
-      const result = await platform.loadPointCloud(source, store.voxelSize);
+      const result = await platform.loadPointCloud(source);
       usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary);
     } else {
       // A file was chosen via an <input type="file"> (works on both web and the

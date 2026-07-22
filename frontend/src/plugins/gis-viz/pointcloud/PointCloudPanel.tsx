@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PointCloudColorMode } from '../../../services/platform';
-import type { SplatSampleMode } from '../../../viewport/gaussian/splatRenderer';
+import type { SplatSampleMode, SplatRenderMode } from '../../../viewport/gaussian/splatRenderer';
 import { usePointCloudStore } from './pointcloudState';
 import {
   freeCurrentCloud,
@@ -16,6 +16,14 @@ const COLOR_MODE_KEYS: Array<{ value: PointCloudColorMode; key: string }> = [
 ];
 
 const WEB_ACCEPT = '.pcd,.ply,.xyz,.txt,.asc';
+
+/**
+ * Splat depth re-sort (refresh) rate options in FPS. `0` = realtime (re-sort
+ * every qualifying frame); the others cap the re-sort rate to trade slightly
+ * staler ordering during fast camera motion for lower worker load on very
+ * large clouds. Rendering itself always runs at the display rate.
+ */
+const REFRESH_FPS_OPTIONS = [0, 60, 30, 15, 5] as const;
 
 function fmt(n: number | undefined | null): string {
   return typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString() : '—';
@@ -36,16 +44,20 @@ export default function PointCloudPanel() {
   const busy = usePointCloudStore((s) => s.busy);
   const error = usePointCloudStore((s) => s.error);
   const colorMode = usePointCloudStore((s) => s.colorMode);
-  const voxelSize = usePointCloudStore((s) => s.voxelSize);
   const isSplat = usePointCloudStore((s) => s.isSplat);
   const splatShDegree = usePointCloudStore((s) => s.splatShDegree);
   const splatDilation = usePointCloudStore((s) => s.splatDilation);
+  const splatEncodeLinearToSrgb = usePointCloudStore((s) => s.splatEncodeLinearToSrgb);
   const splatSampleMode = usePointCloudStore((s) => s.splatSampleMode);
+  const splatRenderMode = usePointCloudStore((s) => s.splatRenderMode);
   const splatQuality = usePointCloudStore((s) => s.splatQuality);
+  const splatRefreshFps = usePointCloudStore((s) => s.splatRefreshFps);
   const setColorMode = usePointCloudStore((s) => s.setColorMode);
-  const setVoxelSize = usePointCloudStore((s) => s.setVoxelSize);
+  const setSplatRefreshFps = usePointCloudStore((s) => s.setSplatRefreshFps);
   const setSplatDilation = usePointCloudStore((s) => s.setSplatDilation);
+  const setSplatEncodeLinearToSrgb = usePointCloudStore((s) => s.setSplatEncodeLinearToSrgb);
   const setSplatSampleMode = usePointCloudStore((s) => s.setSplatSampleMode);
+  const setSplatRenderMode = usePointCloudStore((s) => s.setSplatRenderMode);
   const setSplatQuality = usePointCloudStore((s) => s.setSplatQuality);
 
   const isWeb = !(typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window);
@@ -133,6 +145,36 @@ export default function PointCloudPanel() {
       {isSplat && (
         <div className="pc-field-group">
           <label className="pc-field">
+            <span>{t('pointcloud.splatLinearColor')}</span>
+            <input
+              type="checkbox"
+              checked={splatEncodeLinearToSrgb}
+              onChange={(e) => setSplatEncodeLinearToSrgb(e.target.checked)}
+            />
+          </label>
+          <p className="pc-hint">{t('pointcloud.splatLinearColorHint')}</p>
+        </div>
+      )}
+
+      {isSplat && (
+        <div className="pc-field-group">
+          <label className="pc-field">
+            <span>{t('pointcloud.splatRenderMode')}</span>
+            <select
+              value={splatRenderMode}
+              onChange={(e) => setSplatRenderMode(e.target.value as SplatRenderMode)}
+            >
+              <option value="full">{t('pointcloud.renderModeFull')}</option>
+              <option value="decimated">{t('pointcloud.renderModeDecimated')}</option>
+            </select>
+          </label>
+          <p className="pc-hint">{t('pointcloud.splatRenderModeHint')}</p>
+        </div>
+      )}
+
+      {isSplat && (
+        <div className="pc-field-group">
+          <label className="pc-field">
             <span>{t('pointcloud.splatQuality')} ({Math.round(splatQuality * 100)}%)</span>
             <input
               type="range"
@@ -140,6 +182,7 @@ export default function PointCloudPanel() {
               max={1}
               step={0.05}
               value={splatQuality}
+              disabled={splatRenderMode === 'full'}
               onChange={(e) => setSplatQuality(Number(e.target.value))}
             />
           </label>
@@ -153,6 +196,7 @@ export default function PointCloudPanel() {
             <span>{t('pointcloud.sampleMode')}</span>
             <select
               value={splatSampleMode}
+              disabled={splatRenderMode === 'full'}
               onChange={(e) => setSplatSampleMode(e.target.value as SplatSampleMode)}
             >
               <option value="uniform">{t('pointcloud.sampleUniform')}</option>
@@ -163,17 +207,24 @@ export default function PointCloudPanel() {
         </div>
       )}
 
-      <label className="pc-field">
-        <span>{t('pointcloud.voxelSize')}</span>
-        <input
-          type="number"
-          min={0}
-          step={0.05}
-          value={voxelSize}
-          disabled={busy}
-          onChange={(e) => setVoxelSize(Number(e.target.value))}
-        />
-      </label>
+      {isSplat && (
+        <div className="pc-field-group">
+          <label className="pc-field">
+            <span>{t('pointcloud.splatRefreshRate')}</span>
+            <select
+              value={splatRefreshFps}
+              onChange={(e) => setSplatRefreshFps(Number(e.target.value))}
+            >
+              {REFRESH_FPS_OPTIONS.map((fps) => (
+                <option key={fps} value={fps}>
+                  {fps === 0 ? t('pointcloud.refreshRealtime') : t('pointcloud.refreshFps', { fps })}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="pc-hint">{t('pointcloud.splatRefreshRateHint')}</p>
+        </div>
+      )}
 
       {busy && (
         <div className="pc-busy">

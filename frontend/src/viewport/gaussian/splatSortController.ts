@@ -50,6 +50,13 @@ function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
+/** Monotonic millisecond clock (falls back to `Date.now` where unavailable). */
+function nowMs(): number {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+type TimerHandle = ReturnType<typeof setTimeout>;
+
 /**
  * Whether the camera moved enough since `prev` to warrant a re-sort.
  * Resorts unconditionally when `prev` is `null` (first frame).
@@ -75,6 +82,20 @@ export class SplatSortController {
   private generation = 0;
   private latestDelivered = -1;
   private splatCount = 0;
+  /**
+   * Minimum interval (ms) between re-sorts. `0` = re-sort every qualifying
+   * frame (realtime). A positive value caps the splat *refresh rate*: the
+   * camera still renders every frame, but the (expensive) depth re-sort runs at
+   * most once per interval, trading slightly staler ordering during fast motion
+   * for lower worker load on very large clouds.
+   */
+  private minIntervalMs = 0;
+  /** Timestamp (ms) of the last dispatched sort, for the refresh-rate gate. */
+  private lastSortTime = Number.NEGATIVE_INFINITY;
+  /** Latest camera pose skipped by the refresh-rate gate. */
+  private pendingPose: CameraPose | null = null;
+  /** Timer that guarantees a final resting sort when render-on-demand goes idle. */
+  private refreshTimer: TimerHandle | null = null;
 
   constructor(
     private readonly sorter: SplatSorter,
@@ -89,6 +110,8 @@ export class SplatSortController {
     this.lastPose = null;
     this.generation = 0;
     this.latestDelivered = -1;
+    this.lastSortTime = Number.NEGATIVE_INFINITY;
+    this.clearPendingRefresh();
     this.sorter.init(positions);
   }
 
@@ -99,11 +122,33 @@ export class SplatSortController {
     if (!shouldResort(this.lastPose, next, this.posThreshold, this.dirThreshold)) {
       return;
     }
-    this.lastPose = next;
-    const generation = this.generation++;
-    this.sorter.sort(camPos, viewDir, generation, (idx, gen) =>
-      this.deliver(idx, gen),
-    );
+    // Refresh-rate gate: skip (without committing the pose) until the interval
+    // has elapsed, so a later frame within the same motion still re-sorts. The
+    // final frame after the camera settles always passes, guaranteeing a
+    // correct resting order.
+    if (this.minIntervalMs > 0) {
+      const now = nowMs();
+      const elapsed = now - this.lastSortTime;
+      if (elapsed < this.minIntervalMs) {
+        this.pendingPose = next;
+        this.schedulePendingRefresh(this.minIntervalMs - elapsed);
+        return;
+      }
+      this.lastSortTime = now;
+    }
+    this.clearPendingRefresh();
+    this.dispatchSort(next);
+  }
+
+  /**
+   * Cap the re-sort (refresh) rate. `fps <= 0` means realtime (no cap). Also
+   * clears the last-sort timestamp so the next `onCamera` isn't gated by a
+   * stale timer after switching modes.
+   */
+  setRefreshFps(fps: number): void {
+    this.minIntervalMs = fps > 0 ? 1000 / fps : 0;
+    this.lastSortTime = Number.NEGATIVE_INFINITY;
+    this.clearPendingRefresh();
   }
 
   /** Deliver a sort result, ignoring any that are older than the newest seen. */
@@ -116,9 +161,39 @@ export class SplatSortController {
   /** Force a re-sort on the next `onCamera` call. */
   invalidate(): void {
     this.lastPose = null;
+    this.clearPendingRefresh();
   }
 
   dispose(): void {
+    this.clearPendingRefresh();
     this.sorter.dispose();
+  }
+
+  private dispatchSort(next: CameraPose): void {
+    this.lastPose = next;
+    const generation = this.generation++;
+    this.sorter.sort(next.camPos, next.viewDir, generation, (idx, gen) =>
+      this.deliver(idx, gen),
+    );
+  }
+
+  private schedulePendingRefresh(delayMs: number): void {
+    if (this.refreshTimer !== null) return;
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      const next = this.pendingPose;
+      this.pendingPose = null;
+      if (!next || this.splatCount === 0) return;
+      this.lastSortTime = nowMs();
+      this.dispatchSort(next);
+    }, Math.max(0, delayMs));
+  }
+
+  private clearPendingRefresh(): void {
+    if (this.refreshTimer !== null) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+    this.pendingPose = null;
   }
 }

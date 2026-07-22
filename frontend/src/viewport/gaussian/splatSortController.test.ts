@@ -104,6 +104,58 @@ describe("SplatSortController", () => {
     expect(sorter.calls).toBe(0);
   });
 
+  it("caps the re-sort rate via setRefreshFps", () => {
+    const now = vi.spyOn(performance, "now");
+    try {
+      const sorter = fakeSorter();
+      const ctrl = new SplatSortController(sorter, vi.fn());
+      ctrl.setSplats(new Float32Array([0, 0, 0, 0, 0, 1]));
+      ctrl.setRefreshFps(10); // min 100ms between re-sorts
+
+      now.mockReturnValue(0);
+      ctrl.onCamera([0, 0, 0], [0, 0, 1]);
+      expect(sorter.calls).toBe(1); // first sort passes
+
+      // A large move only 50ms later is gated (< 100ms interval).
+      now.mockReturnValue(50);
+      ctrl.onCamera([5, 0, 0], [0, 0, 1]);
+      expect(sorter.calls).toBe(1);
+
+      // Once the interval elapses, the next qualifying move re-sorts.
+      now.mockReturnValue(150);
+      ctrl.onCamera([10, 0, 0], [0, 0, 1]);
+      expect(sorter.calls).toBe(2);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("dispatches a delayed final sort when refresh-rate gating skips a camera move", () => {
+    vi.useFakeTimers();
+    const now = vi.spyOn(performance, "now");
+    try {
+      const sorter = fakeSorter();
+      const ctrl = new SplatSortController(sorter, vi.fn());
+      ctrl.setSplats(new Float32Array([0, 0, 0, 0, 0, 1]));
+      ctrl.setRefreshFps(10); // min 100ms between re-sorts
+
+      now.mockReturnValue(0);
+      ctrl.onCamera([0, 0, 0], [0, 0, 1]);
+      expect(sorter.calls).toBe(1);
+
+      now.mockReturnValue(50);
+      ctrl.onCamera([5, 0, 0], [0, 0, 1]);
+      expect(sorter.calls).toBe(1);
+
+      now.mockReturnValue(100);
+      vi.advanceTimersByTime(50);
+      expect(sorter.calls).toBe(2);
+    } finally {
+      now.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it("integrates with the main-thread sorter to produce back-to-front order", () => {
     const onSorted = vi.fn();
     const ctrl = new SplatSortController(new MainThreadSplatSorter(), onSorted);

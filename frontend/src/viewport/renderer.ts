@@ -34,7 +34,7 @@ import type { RenderableMesh } from './markerRenderer';
 import { setupRendererInput } from './rendererInputHandler';
 import { renderFrame as renderFrameImpl, captureFrame as captureFrameImpl } from './rendererFrame';
 import type { RendererFrameInternals } from './rendererFrame';
-import { createSplatRenderer, type SplatRenderer, type SplatSampleMode } from './gaussian/splatRenderer';
+import { createSplatRenderer, type SplatRenderer, type SplatSampleMode, type SplatRenderMode } from './gaussian/splatRenderer';
 import { uploadMeshData, disposeMeshes, createDepthTexture, createMsaaTexture } from './rendererResources';
 import {
   createRoadMeshRegistry,
@@ -889,7 +889,7 @@ export class ViewportRenderer {
     this.markSceneDirty();
   }
 
-  uploadGaussianSplats(splatData: Uint32Array, shDegree: number, sampleMode?: SplatSampleMode, quality?: number): void {
+  uploadGaussianSplats(splatData: Uint32Array, shDegree: number, sampleMode?: SplatSampleMode, quality?: number, renderMode?: SplatRenderMode): void {
     if (splatData.length === 0) {
       this.splatRenderer?.clear();
       this.markSceneDirty();
@@ -900,7 +900,7 @@ export class ViewportRenderer {
         this.markSceneDirty(),
       );
     }
-    this.splatRenderer.upload(splatData, shDegree, sampleMode, quality);
+    this.splatRenderer.upload(splatData, shDegree, sampleMode, quality, renderMode);
     this.splatRenderer.invalidateSort();
     this.markSceneDirty();
   }
@@ -916,6 +916,17 @@ export class ViewportRenderer {
   setSplatDilation(dilation: number): void {
     this.splatRenderer?.setDilation(dilation);
     this.markSceneDirty();
+  }
+
+  /** Toggle diagnostic linear→sRGB encoding for Gaussian SH colour. */
+  setSplatLinearToSrgbEncoding(enabled: boolean): void {
+    this.splatRenderer?.setLinearToSrgbEncoding(enabled);
+    this.markSceneDirty();
+  }
+
+  /** Cap the Gaussian splat depth re-sort (refresh) rate; `fps <= 0` = realtime. */
+  setSplatRefreshFps(fps: number): void {
+    this.splatRenderer?.setRefreshFps(fps);
   }
 
   /** Upload lane line vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
@@ -1299,4 +1310,3 @@ export class ViewportRenderer {
     this.cameraController.applyZoomFactor(factor);
   }
 }
-

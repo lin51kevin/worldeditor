@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { PointCloudColorMode, PointCloudPolyline, PointCloudSummary } from '../../../services/platform';
-import type { SplatSampleMode } from '../../../viewport/gaussian/splatRenderer';
+import type { SplatSampleMode, SplatRenderMode } from '../../../viewport/gaussian/splatRenderer';
+import { DEFAULT_SPLAT_DILATION } from '../../../viewport/gaussian/splatUniform';
 
 /** Phase of the point-cloud → vector workflow. */
 export type PointCloudStage = 'idle' | 'loaded' | 'ground' | 'markings' | 'vectorized';
@@ -20,8 +21,6 @@ interface PointCloudState {
   error: string | null;
   /** Render coloring mode. */
   colorMode: PointCloudColorMode;
-  /** Voxel down-sample size in metres (0 = none). */
-  voxelSize: number;
   /** Whether ground extraction has produced a heightmap. */
   hasGround: boolean;
   /** Extracted candidate marking polylines (local coords). */
@@ -37,18 +36,26 @@ interface PointCloudState {
   splatShDegree: number;
   /** 2D low-pass dilation (splat fullness); larger = fuller/blurrier. */
   splatDilation: number;
+  /** Diagnostic encoding for inputs whose decoded SH colour is linear. */
+  splatEncodeLinearToSrgb: boolean;
   /** How oversized splat clouds are reduced to fit the GPU budget. */
   splatSampleMode: SplatSampleMode;
+  /** Whether to render every splat (`full`) or reduce to a budget (`decimated`). */
+  splatRenderMode: SplatRenderMode;
   /** Fraction (0..1] of the cloud's splats to keep (fidelity vs memory). */
   splatQuality: number;
+  /** Splat depth re-sort (refresh) rate cap in FPS; 0 = realtime (no cap). */
+  splatRefreshFps: number;
 
   setColorMode: (mode: PointCloudColorMode) => void;
-  setVoxelSize: (size: number) => void;
   setBusy: (busy: boolean) => void;
   setError: (error: string | null) => void;
   setSplatDilation: (dilation: number) => void;
+  setSplatEncodeLinearToSrgb: (enabled: boolean) => void;
   setSplatSampleMode: (mode: SplatSampleMode) => void;
+  setSplatRenderMode: (mode: SplatRenderMode) => void;
   setSplatQuality: (quality: number) => void;
+  setSplatRefreshFps: (fps: number) => void;
   setLoaded: (handle: number, fileName: string, summary: PointCloudSummary) => void;
   setSplatLoaded: (
     handle: number,
@@ -72,28 +79,32 @@ const INITIAL = {
   busy: false,
   error: null,
   colorMode: 'elevation' as PointCloudColorMode,
-  voxelSize: 0,
   hasGround: false,
   markings: [] as PointCloudPolyline[],
   isSplat: false,
   splatBuffer: null as Uint32Array | null,
   splatOriginShifted: false,
   splatShDegree: 0,
-  splatDilation: 0.15,
-  splatSampleMode: 'uniform' as SplatSampleMode,
+  splatDilation: DEFAULT_SPLAT_DILATION,
+  splatEncodeLinearToSrgb: false,
+  splatSampleMode: 'importance' as SplatSampleMode,
+  splatRenderMode: 'full' as SplatRenderMode,
   splatQuality: 1,
+  splatRefreshFps: 0,
 };
 
 export const usePointCloudStore = create<PointCloudState>((set) => ({
   ...INITIAL,
 
   setColorMode: (colorMode) => set(() => ({ colorMode })),
-  setVoxelSize: (voxelSize) => set(() => ({ voxelSize: Math.max(0, voxelSize) })),
   setBusy: (busy) => set(() => ({ busy })),
   setError: (error) => set(() => ({ error })),
   setSplatDilation: (splatDilation) => set(() => ({ splatDilation: Math.max(0, splatDilation) })),
+  setSplatEncodeLinearToSrgb: (splatEncodeLinearToSrgb) => set(() => ({ splatEncodeLinearToSrgb })),
   setSplatSampleMode: (splatSampleMode) => set(() => ({ splatSampleMode })),
+  setSplatRenderMode: (splatRenderMode) => set(() => ({ splatRenderMode })),
   setSplatQuality: (splatQuality) => set(() => ({ splatQuality: Math.min(1, Math.max(0.05, splatQuality)) })),
+  setSplatRefreshFps: (splatRefreshFps) => set(() => ({ splatRefreshFps: Math.max(0, splatRefreshFps) })),
 
   setLoaded: (handle, fileName, summary) =>
     set(() => ({

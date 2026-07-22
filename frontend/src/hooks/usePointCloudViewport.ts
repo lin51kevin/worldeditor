@@ -79,6 +79,7 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
   const prevHandleRef = useRef<number | null>(null);
   const prevColorModeRef = useRef<string | null>(null);
   const prevSampleModeRef = useRef<string | null>(null);
+  const prevRenderModeRef = useRef<string | null>(null);
   const prevQualityRef = useRef<number | null>(null);
 
   const handle = usePointCloudStore((s) => s.handle);
@@ -88,14 +89,29 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
   const splatOriginShifted = usePointCloudStore((s) => s.splatOriginShifted);
   const splatShDegree = usePointCloudStore((s) => s.splatShDegree);
   const splatDilation = usePointCloudStore((s) => s.splatDilation);
+  const splatEncodeLinearToSrgb = usePointCloudStore((s) => s.splatEncodeLinearToSrgb);
   const splatSampleMode = usePointCloudStore((s) => s.splatSampleMode);
+  const splatRenderMode = usePointCloudStore((s) => s.splatRenderMode);
   const splatQuality = usePointCloudStore((s) => s.splatQuality);
+  const splatRefreshFps = usePointCloudStore((s) => s.splatRefreshFps);
 
   // Apply the live dilation (splat fullness) slider to the renderer.
   useEffect(() => {
     if (status !== 'ready' || !isSplat) return;
     rendererRef.current?.setSplatDilation(splatDilation);
   }, [splatDilation, isSplat, status, rendererRef]);
+
+  // Apply the diagnostic linear-input encoding toggle to the renderer.
+  useEffect(() => {
+    if (status !== 'ready' || !isSplat) return;
+    rendererRef.current?.setSplatLinearToSrgbEncoding(splatEncodeLinearToSrgb);
+  }, [splatEncodeLinearToSrgb, isSplat, status, rendererRef]);
+
+  // Apply the splat refresh-rate (re-sort) cap to the renderer.
+  useEffect(() => {
+    if (status !== 'ready' || !isSplat) return;
+    rendererRef.current?.setSplatRefreshFps(splatRefreshFps);
+  }, [splatRefreshFps, isSplat, status, rendererRef]);
 
   useEffect(() => {
     if (status !== 'ready') return;
@@ -117,9 +133,11 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     if (isSplat) {
       // Re-upload on a new cloud or when the sampling strategy / quality budget
       // changes (both decide which & how many splats survive the reduction).
+      const isNewCloud = handle !== prevHandleRef.current;
       const changed =
-        handle !== prevHandleRef.current ||
+        isNewCloud ||
         splatSampleMode !== prevSampleModeRef.current ||
+        splatRenderMode !== prevRenderModeRef.current ||
         splatQuality !== prevQualityRef.current;
       if (!changed) return;
 
@@ -133,10 +151,39 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
         const shifted = splatOriginShifted
           ? splatBuffer
           : applySplatOrigin(splatBuffer, splatShDegree, origin);
-        renderer.uploadGaussianSplats(shifted, splatShDegree, splatSampleMode, splatQuality);
+        renderer.uploadGaussianSplats(shifted, splatShDegree, splatSampleMode, splatQuality, splatRenderMode);
+
+        // Start 3DGS in perspective for useful initial framing. The splat shader
+        // also has an orthographic Jacobian for later dimension-mode switches.
+        if (isNewCloud) {
+          const summary = usePointCloudStore.getState().summary;
+          renderer.setDimension('3d');
+          if (summary) {
+            const [ox, oy] = summary.origin ?? [0, 0, 0];
+            const minX = summary.min[0] + ox;
+            const minY = summary.min[1] + oy;
+            const maxX = summary.max[0] + ox;
+            const maxY = summary.max[1] + oy;
+            // Inflate the framed footprint by the cloud's vertical (Z) extent so
+            // the camera backs off far enough to start OUTSIDE the cloud. Framing
+            // by the XY box alone can place the camera inside a tall/deep capture,
+            // where splats on the near plane explode into screen-spanning streaks.
+            const zmin = summary.min[2];
+            const zmax = summary.max[2];
+            const dz =
+              typeof zmin === 'number' && typeof zmax === 'number'
+                ? Math.abs(zmax - zmin)
+                : 0;
+            const cx = (minX + maxX) / 2;
+            const cy = (minY + maxY) / 2;
+            const half = Math.max((maxX - minX) / 2, (maxY - minY) / 2, dz / 2);
+            renderer.frameScene3D(cx - half, cy - half, cx + half, cy + half);
+          }
+        }
       }
       prevHandleRef.current = handle;
       prevSampleModeRef.current = splatSampleMode;
+      prevRenderModeRef.current = splatRenderMode;
       prevQualityRef.current = splatQuality;
       prevColorModeRef.current = null;
       return;
@@ -203,5 +250,5 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     })();
 
     return () => { cancelled = true; };
-  }, [handle, colorMode, isSplat, splatBuffer, splatOriginShifted, splatShDegree, splatSampleMode, splatQuality, status, rendererRef]);
+  }, [handle, colorMode, isSplat, splatBuffer, splatOriginShifted, splatShDegree, splatSampleMode, splatRenderMode, splatQuality, status, rendererRef]);
 }

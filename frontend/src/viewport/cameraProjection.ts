@@ -26,6 +26,24 @@ const DEPTH_CORRECTION = new Float32Array([
   0, 0, 0.5, 1,
 ]);
 
+/** Build the raw projection matrix for the current camera and viewport. */
+export function buildProjectionMatrix(
+  camera: CameraState,
+  dimensionMode: '2d' | '3d',
+  numPixelsPerMeter: number,
+  width: number,
+  height: number,
+): Float32Array {
+  const aspect = width / height;
+  if (dimensionMode === '2d') {
+    // Orthographic projection: visible area determined by numPixelsPerMeter
+    const halfH = (height / 2) / numPixelsPerMeter;
+    const halfW = halfH * aspect;
+    return orthographicMatrix(-halfW, halfW, -halfH, halfH, camera.near, camera.far);
+  }
+  return perspectiveMatrix(camera.fovY, aspect, camera.near, camera.far);
+}
+
 /** Build the depth-corrected view-projection matrix for the given camera. */
 export function buildViewProjMatrix(
   camera: CameraState,
@@ -34,19 +52,8 @@ export function buildViewProjMatrix(
   width: number,
   height: number,
 ): Float32Array {
-  const aspect = width / height;
   const view = lookAtMatrix(camera.position, camera.target, camera.up);
-
-  let proj: Float32Array;
-  if (dimensionMode === '2d') {
-    // Orthographic projection: visible area determined by numPixelsPerMeter
-    const halfH = (height / 2) / numPixelsPerMeter;
-    const halfW = halfH * aspect;
-    proj = orthographicMatrix(-halfW, halfW, -halfH, halfH, camera.near, camera.far);
-  } else {
-    proj = perspectiveMatrix(camera.fovY, aspect, camera.near, camera.far);
-  }
-
+  const proj = buildProjectionMatrix(camera, dimensionMode, numPixelsPerMeter, width, height);
   return multiplyMatrices(DEPTH_CORRECTION, multiplyMatrices(proj, view));
 }
 

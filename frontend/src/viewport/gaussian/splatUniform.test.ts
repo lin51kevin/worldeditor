@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildSplatUniform, SPLAT_UNIFORM_FLOATS, splatFocal } from "./splatUniform";
+import {
+  buildSplatUniform,
+  DEFAULT_SPLAT_DILATION,
+  SPLAT_UNIFORM_FLOATS,
+  splatFocal,
+} from "./splatUniform";
 import type { CameraState } from "../cameraController";
 
 const camera: CameraState = {
@@ -31,7 +36,20 @@ describe("buildSplatUniform", () => {
     expect(u[40]).toBeCloseTo(0.75, 5);
   });
 
-  it("packs camera position, sh degree, focal and viewport", () => {
+  it("defaults to the 0.3 px² low-pass used by SuperSplat", () => {
+    const u = buildSplatUniform(camera, "3d", 50, 800, 600, 1);
+    expect(DEFAULT_SPLAT_DILATION).toBe(0.3);
+    expect(u[40]).toBeCloseTo(DEFAULT_SPLAT_DILATION, 6);
+  });
+
+  it("outputs decoded gamma-space SH directly by default", () => {
+    const direct = buildSplatUniform(camera, "3d", 50, 800, 600, 1);
+    expect(direct[41]).toBe(0);
+    const diagnosticEncoding = buildSplatUniform(camera, "3d", 50, 800, 600, 1, 0.3, true);
+    expect(diagnosticEncoding[41]).toBe(1);
+  });
+
+  it("packs camera position, sh degree, projection-derived scale and viewport", () => {
     const u = buildSplatUniform(camera, "3d", 50, 800, 600, 2);
     // cam_pos at [32..35)
     expect([u[32], u[33], u[34]]).toEqual([0, -10, 5]);
@@ -43,6 +61,15 @@ describe("buildSplatUniform", () => {
     expect(u[37]).toBeCloseTo(fy, 3);
     // viewport at [38..40)
     expect([u[38], u[39]]).toEqual([800, 600]);
+    // Perspective projection kind.
+    expect(u[42]).toBe(0);
+  });
+
+  it("packs orthographic pixels-per-world-unit without perspective depth scaling", () => {
+    const u = buildSplatUniform(camera, "2d", 37.5, 1200, 600, 1);
+    expect(u[36]).toBeCloseTo(37.5, 5);
+    expect(u[37]).toBeCloseTo(37.5, 5);
+    expect(u[42]).toBe(1);
   });
 
   it("embeds the depth-corrected view-proj and the raw view matrix", () => {
