@@ -151,7 +151,7 @@ function roadSignConfigToItem(config: RoadSignTemplateConfig): TemplateItemDef {
         z_offset: 3.5,
         signal_type: config.signalType ?? config.signCode,
         signal_subtype: '-1',
-        value: null as string | null,
+        value: config.signCode.match(/_(\d+)$/)?.[1] ?? null,
         width: config.defaultWidth ?? 0.8,
         height: config.defaultHeight ?? 0.8,
         h_offset: 0,
