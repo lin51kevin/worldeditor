@@ -235,12 +235,25 @@ pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
     let ir = header.find("red").or_else(|| header.find("r"));
     let ig = header.find("green").or_else(|| header.find("g"));
     let ib = header.find("blue").or_else(|| header.find("b"));
-    let has_rgb = ir.is_some() && ig.is_some() && ib.is_some();
+    // Resolve colour column indices up front so the per-vertex hot loops never
+    // unwrap: a malformed header (e.g. `red` present but `green`/`blue` missing)
+    // simply yields `None` and the cloud loads without colour.
+    let rgb_idx: Option<(usize, usize, usize)> = match (ir, ig, ib) {
+        (Some(r), Some(g), Some(b)) => Some((r, g, b)),
+        _ => None,
+    };
     // 3D Gaussian Splatting: band-0 spherical-harmonic colour (view-independent).
     let idc0 = header.find("f_dc_0");
     let idc1 = header.find("f_dc_1");
     let idc2 = header.find("f_dc_2");
-    let has_sh = !has_rgb && idc0.is_some() && idc1.is_some() && idc2.is_some();
+    let sh_idx: Option<(usize, usize, usize)> = if rgb_idx.is_some() {
+        None
+    } else {
+        match (idc0, idc1, idc2) {
+            (Some(a), Some(b), Some(c)) => Some((a, b, c)),
+            _ => None,
+        }
+    };
 
     let mut records: Vec<RawRecord> = Vec::with_capacity(vertex_count);
 
@@ -261,18 +274,14 @@ pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
                 let y = num(iy);
                 let z = num(iz);
                 let intensity = ii.map(|i| num(i) as f32);
-                let rgb = if has_rgb {
+                let rgb = if let Some((r, g, b)) = rgb_idx {
                     Some([
-                        num(ir.unwrap()).clamp(0.0, 255.0) as u8,
-                        num(ig.unwrap()).clamp(0.0, 255.0) as u8,
-                        num(ib.unwrap()).clamp(0.0, 255.0) as u8,
+                        num(r).clamp(0.0, 255.0) as u8,
+                        num(g).clamp(0.0, 255.0) as u8,
+                        num(b).clamp(0.0, 255.0) as u8,
                     ])
-                } else if has_sh {
-                    Some([
-                        sh_dc_to_u8(num(idc0.unwrap())),
-                        sh_dc_to_u8(num(idc1.unwrap())),
-                        sh_dc_to_u8(num(idc2.unwrap())),
-                    ])
+                } else if let Some((a, b, c)) = sh_idx {
+                    Some([sh_dc_to_u8(num(a)), sh_dc_to_u8(num(b)), sh_dc_to_u8(num(c))])
                 } else {
                     None
                 };
@@ -296,17 +305,17 @@ pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
                 let y = read(rec, iy);
                 let z = read(rec, iz);
                 let intensity = ii.map(|i| read(rec, i) as f32);
-                let rgb = if has_rgb {
+                let rgb = if let Some((r, g, b)) = rgb_idx {
                     Some([
-                        read(rec, ir.unwrap()).clamp(0.0, 255.0) as u8,
-                        read(rec, ig.unwrap()).clamp(0.0, 255.0) as u8,
-                        read(rec, ib.unwrap()).clamp(0.0, 255.0) as u8,
+                        read(rec, r).clamp(0.0, 255.0) as u8,
+                        read(rec, g).clamp(0.0, 255.0) as u8,
+                        read(rec, b).clamp(0.0, 255.0) as u8,
                     ])
-                } else if has_sh {
+                } else if let Some((a, b, c)) = sh_idx {
                     Some([
-                        sh_dc_to_u8(read(rec, idc0.unwrap())),
-                        sh_dc_to_u8(read(rec, idc1.unwrap())),
-                        sh_dc_to_u8(read(rec, idc2.unwrap())),
+                        sh_dc_to_u8(read(rec, a)),
+                        sh_dc_to_u8(read(rec, b)),
+                        sh_dc_to_u8(read(rec, c)),
                     ])
                 } else {
                     None
@@ -444,5 +453,27 @@ end_header
     #[test]
     fn test_missing_magic_errors() {
         assert!(parse_ply(b"not a ply\n").is_err());
+    }
+
+    #[test]
+    fn test_partial_rgb_header_loads_without_color_no_panic() {
+        // Malformed header: `red` present but `green`/`blue` missing. The loader
+        // must not panic — it falls back to loading geometry without colour.
+        let body = "\
+ply
+format ascii 1.0
+element vertex 2
+property float x
+property float y
+property float z
+property uchar red
+end_header
+0 0 0 255
+1 2 3 128
+";
+        let cloud = parse_ply(body.as_bytes()).expect("partial-rgb PLY should still load");
+        assert_eq!(cloud.len(), 2);
+        assert!(!cloud.has_rgb(), "incomplete RGB triple must not report colour");
+        assert_eq!(cloud.point(1), Some([1.0, 2.0, 3.0]));
     }
 }

@@ -25,7 +25,6 @@ import {
   createBasicPipelines,
   createLaneLinePipeline as createLaneLinePipelineFn,
   createBillboardPipeline as createBillboardPipelineFn,
-  createPointCloudPipeline as createPointCloudPipelineFn,
 } from './pipelineFactory';
 import { CameraController } from './cameraController';
 import { MarkerRenderer } from './markerRenderer';
@@ -35,6 +34,22 @@ import { setupRendererInput } from './rendererInputHandler';
 import { renderFrame as renderFrameImpl, captureFrame as captureFrameImpl } from './rendererFrame';
 import type { RendererFrameInternals } from './rendererFrame';
 import {
+  uploadPointCloudVertices as pcUploadPointCloudVertices,
+  clearPointCloudModeBuffers as pcClearPointCloudModeBuffers,
+  hasPointCloudColorMode as pcHasPointCloudColorMode,
+  showPointCloudColorMode as pcShowPointCloudColorMode,
+  uploadPointCloudVerticesForMode as pcUploadPointCloudVerticesForMode,
+  uploadActorPointCloudVertices as pcUploadActorPointCloudVertices,
+  type RendererPointCloudInternals,
+} from './rendererPointCloud';
+import {
+  uploadGroundMeshIndexed as imUploadGroundMeshIndexed,
+  clearGroundMesh as imClearGroundMesh,
+  uploadEgoMeshIndexed as imUploadEgoMeshIndexed,
+  clearEgoMesh as imClearEgoMesh,
+  type RendererIndexedMeshInternals,
+} from './rendererIndexedMesh';
+import {
   createSplatRenderer,
   type SplatRenderer,
   type SplatSampleMode,
@@ -42,7 +57,6 @@ import {
   type SplatUploadStatus,
 } from './gaussian/splatRenderer';
 import {
-  getOrCreateBuffer,
   uploadMeshData,
   disposeMeshes,
   createDepthTexture,
@@ -93,7 +107,8 @@ export class ViewportRenderer {
   actorPipeline!: GPURenderPipeline;
   private basicShaderModule!: GPUShaderModule;
   basicBindGroup!: GPUBindGroup;
-  private basicBindGroupLayout!: GPUBindGroupLayout;
+  // Read by the extracted point-cloud helper module to build its pipeline.
+  basicBindGroupLayout!: GPUBindGroupLayout;
   private basicUniformBuffer!: GPUBuffer;
 
   private cameraController = new CameraController();
@@ -160,17 +175,18 @@ export class ViewportRenderer {
   // Hover highlight mesh (shown when mouse hovers over a road/junction)
   private hoverMeshes: RenderableMesh[] = [];
 
-  // Point cloud background mesh (rendered behind roads)
-  private pointCloudMeshes: RenderableMesh[] = [];
+  // Point cloud background mesh (rendered behind roads). Managed by the
+  // extracted rendererPointCloud helper module; also read by rendererFrame.
+  pointCloudMeshes: RenderableMesh[] = [];
   // Per-color-mode GPU buffers for the active point cloud, so switching the
   // colour mode re-binds a cached buffer instead of re-uploading (~tens of MB)
   // every time. `pointCloudMeshes` always aliases the active mode's array.
-  private pointCloudBuffersByMode = new Map<string, RenderableMesh[]>();
-  private activePointCloudMode: string | null = null;
+  pointCloudBuffersByMode = new Map<string, RenderableMesh[]>();
+  activePointCloudMode: string | null = null;
   // Opponent (NPC) model point clouds — a SEPARATE buffer from the static road
   // cloud so per-frame opponent updates never re-upload the (large) road mesh.
   private actorPointCloudMeshes: RenderableMesh[] = [];
-  private pointCloudPipeline: GPURenderPipeline | null = null;
+  pointCloudPipeline: GPURenderPipeline | null = null;
 
   // Ground surface triangle mesh (e.g. a logsim `road_mesh.glb`): an indexed,
   // vertex-colored mesh drawn as the scene floor. Kept separate from the merged
@@ -735,63 +751,33 @@ export class ViewportRenderer {
   /** Upload point cloud vertex data (7 floats per vertex: x,y,z,r,g,b,a). Rendered as point-list.
    *  Passing empty data clears the active cloud AND every cached per-color-mode buffer. */
   uploadPointCloudVertices(vertexData: Float32Array): void {
-    if (vertexData.length === 0) {
-      if (this.pointCloudBuffersByMode.size === 0 && this.pointCloudMeshes.length === 0) return;
-      this.clearPointCloudModeBuffers();
-      this.markSceneDirty();
-      return;
-    }
-    // Legacy single-buffer callers route through the mode cache under a fixed key.
-    this.uploadPointCloudVerticesForMode('__single__', vertexData);
+    pcUploadPointCloudVertices(this as unknown as RendererPointCloudInternals, vertexData);
   }
 
   /** Dispose every cached per-color-mode point-cloud buffer and clear the active selection. */
   private clearPointCloudModeBuffers(): void {
-    for (const meshes of this.pointCloudBuffersByMode.values()) {
-      for (const m of meshes) { m.vertexBuffer.destroy(); }
-    }
-    this.pointCloudBuffersByMode.clear();
-    this.pointCloudMeshes = [];
-    this.activePointCloudMode = null;
+    pcClearPointCloudModeBuffers(this as unknown as RendererPointCloudInternals);
   }
 
   /** Whether a GPU buffer for `mode` is already uploaded for the current cloud. */
   hasPointCloudColorMode(mode: string): boolean {
-    const meshes = this.pointCloudBuffersByMode.get(mode);
-    return !!meshes && meshes.length > 0;
+    return pcHasPointCloudColorMode(this as unknown as RendererPointCloudInternals, mode);
   }
 
   /** Re-bind the cached buffer for `mode` as the drawn cloud (no upload). Returns
    *  false if that mode has not been uploaded yet. */
   showPointCloudColorMode(mode: string): boolean {
-    const meshes = this.pointCloudBuffersByMode.get(mode);
-    if (!meshes || meshes.length === 0) return false;
-    if (this.activePointCloudMode === mode && this.pointCloudMeshes === meshes) return true;
-    this.activePointCloudMode = mode;
-    this.pointCloudMeshes = meshes;
-    this.markSceneDirty();
-    return true;
+    return pcShowPointCloudColorMode(this as unknown as RendererPointCloudInternals, mode);
   }
 
   /** Upload point-cloud vertices into the cache slot for `mode` and make it the
    *  drawn cloud. Subsequent switches to this mode re-bind it for free. */
   uploadPointCloudVerticesForMode(mode: string, vertexData: Float32Array): void {
-    if (vertexData.length === 0) return;
-    // Lazy-create point cloud pipeline on first use
-    if (!this.pointCloudPipeline) {
-      this.pointCloudPipeline = createPointCloudPipelineFn(
-        this.device, this.format, this.basicShaderModule, this.basicBindGroupLayout,
-      );
-    }
-    let meshes = this.pointCloudBuffersByMode.get(mode);
-    if (!meshes) {
-      meshes = [];
-      this.pointCloudBuffersByMode.set(mode, meshes);
-    }
-    uploadMeshData(this.device, meshes, vertexData);
-    this.activePointCloudMode = mode;
-    this.pointCloudMeshes = meshes;
-    this.markSceneDirty();
+    pcUploadPointCloudVerticesForMode(
+      this as unknown as RendererPointCloudInternals,
+      mode,
+      vertexData,
+    );
   }
 
   /**
@@ -801,21 +787,7 @@ export class ViewportRenderer {
    * point-list with the shared point-cloud pipeline.
    */
   uploadActorPointCloudVertices(vertexData: Float32Array): void {
-    if (vertexData.length === 0) {
-      if (this.actorPointCloudMeshes.length === 0) return;
-      for (const m of this.actorPointCloudMeshes) { m.vertexBuffer.destroy(); }
-      this.actorPointCloudMeshes = [];
-      this.markSceneDirty();
-      return;
-    }
-    // Lazy-create point cloud pipeline on first use
-    if (!this.pointCloudPipeline) {
-      this.pointCloudPipeline = createPointCloudPipelineFn(
-        this.device, this.format, this.basicShaderModule, this.basicBindGroupLayout,
-      );
-    }
-    uploadMeshData(this.device, this.actorPointCloudMeshes, vertexData);
-    this.markSceneDirty();
+    pcUploadActorPointCloudVertices(this as unknown as RendererPointCloudInternals, vertexData);
   }
 
   /**
@@ -825,40 +797,12 @@ export class ViewportRenderer {
    * Passing empty data clears the current ground mesh.
    */
   uploadGroundMeshIndexed(vertexData: Float32Array, indices: Uint32Array): void {
-    // Replace any existing ground mesh buffers.
-    this.groundMesh?.vertexBuffer.destroy();
-    this.groundMesh?.indexBuffer.destroy();
-    this.groundMesh = null;
-
-    if (vertexData.length === 0 || indices.length === 0) {
-      this.markSceneDirty();
-      return;
-    }
-
-    const vertexBuffer = this.device.createBuffer({
-      size: vertexData.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-    });
-    this.device.queue.writeBuffer(vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
-
-    // Index buffers must be 4-byte aligned; Uint32 data already satisfies this.
-    const indexBuffer = this.device.createBuffer({
-      size: indices.byteLength,
-      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-    });
-    this.device.queue.writeBuffer(indexBuffer, 0, indices.buffer, indices.byteOffset, indices.byteLength);
-
-    this.groundMesh = { vertexBuffer, indexBuffer, indexCount: indices.length };
-    this.markSceneDirty();
+    imUploadGroundMeshIndexed(this as unknown as RendererIndexedMeshInternals, vertexData, indices);
   }
 
   /** Remove the uploaded ground surface mesh. */
   clearGroundMesh(): void {
-    if (!this.groundMesh) return;
-    this.groundMesh.vertexBuffer.destroy();
-    this.groundMesh.indexBuffer.destroy();
-    this.groundMesh = null;
-    this.markSceneDirty();
+    imClearGroundMesh(this as unknown as RendererIndexedMeshInternals);
   }
 
   /**
@@ -869,42 +813,12 @@ export class ViewportRenderer {
    * Passing empty data clears the current ego mesh.
    */
   uploadEgoMeshIndexed(vertexData: Float32Array, indices: Uint32Array): void {
-    if (vertexData.length === 0 || indices.length === 0) {
-      this.egoMesh?.vertexBuffer.destroy();
-      this.egoMesh?.indexBuffer.destroy();
-      this.egoMesh = null;
-      this.markSceneDirty();
-      return;
-    }
-
-    // Playback changes only transformed vertices; keep compatible buffers alive
-    // instead of allocating and destroying GPU resources on every frame.
-    const vertexBuffer = getOrCreateBuffer(
-      this.device,
-      this.egoMesh?.vertexBuffer,
-      vertexData.byteLength,
-    );
-    this.device.queue.writeBuffer(vertexBuffer, 0, vertexData.buffer, vertexData.byteOffset, vertexData.byteLength);
-
-    const indexBuffer = getOrCreateBuffer(
-      this.device,
-      this.egoMesh?.indexBuffer,
-      indices.byteLength,
-      GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-    );
-    this.device.queue.writeBuffer(indexBuffer, 0, indices.buffer, indices.byteOffset, indices.byteLength);
-
-    this.egoMesh = { vertexBuffer, indexBuffer, indexCount: indices.length };
-    this.markSceneDirty();
+    imUploadEgoMeshIndexed(this as unknown as RendererIndexedMeshInternals, vertexData, indices);
   }
 
   /** Remove the uploaded ego vehicle mesh. */
   clearEgoMesh(): void {
-    if (!this.egoMesh) return;
-    this.egoMesh.vertexBuffer.destroy();
-    this.egoMesh.indexBuffer.destroy();
-    this.egoMesh = null;
-    this.markSceneDirty();
+    imClearEgoMesh(this as unknown as RendererIndexedMeshInternals);
   }
 
   uploadGaussianSplats(
