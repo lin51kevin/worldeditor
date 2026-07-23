@@ -223,7 +223,7 @@ sudo apt install -y \
 推送 `v*` 格式的 git tag 会触发 GitHub Actions 自动为三平台构建并上传 Release：
 
 ```bash
-git tag v0.3.3 && git push origin v0.3.3
+git tag v0.4.0 && git push origin v0.4.0
 ```
 
 详见 [`.github/workflows/release.yml`](.github/workflows/release.yml)。

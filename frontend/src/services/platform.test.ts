@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { PlatformService } from './platform';
+import { APP_VERSION } from './index';
 
 vi.mock('../../wasm/pkg/we_wasm', () => ({
   default: vi.fn().mockResolvedValue(undefined),
@@ -71,6 +72,6 @@ describe('platform services', () => {
     const { WebPlatformService } = await import('./web');
     const service = new WebPlatformService();
 
-    expect(service.getPlatformInfo()).toEqual({ type: 'web', version: '0.3.3' });
+    expect(service.getPlatformInfo()).toEqual({ type: 'web', version: APP_VERSION });
   });
 });

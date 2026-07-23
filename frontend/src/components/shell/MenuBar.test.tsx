@@ -23,13 +23,17 @@ vi.mock('../../utils/dialog', () => ({
   showPrompt: vi.fn().mockResolvedValue('renamed.xodr'),
 }));
 
-vi.mock('../../buildInfo', () => ({
-  buildInfo: {
-    version: '0.3.3',
+const { TEST_BUILD_INFO } = vi.hoisted(() => ({
+  TEST_BUILD_INFO: {
+    version: '9.9.9',
     buildTime: '2026-05-26T07:00:00.000Z',
     gitCommit: 'abc1234',
     gitBranch: 'main',
   },
+}));
+
+vi.mock('../../buildInfo', () => ({
+  buildInfo: TEST_BUILD_INFO,
 }));
 
 function makeProject(roads: Road[] = [], name = 'Untitled'): Project {
@@ -295,7 +299,7 @@ describe('MenuBar', () => {
 
     await waitFor(() => expect(vi.mocked(showAlert)).toHaveBeenCalledTimes(1));
     expect(vi.mocked(showAlert)).toHaveBeenCalledWith(
-      expect.stringContaining('0.3.3'),
+      expect.stringContaining(TEST_BUILD_INFO.version),
       expect.any(String),
     );
   });

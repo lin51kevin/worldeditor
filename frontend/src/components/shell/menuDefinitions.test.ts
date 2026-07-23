@@ -33,13 +33,17 @@ vi.mock('../../services/updateService', () => ({
   installDesktopUpdate: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../../buildInfo', () => ({
-  buildInfo: {
-    version: '0.3.3',
+const { TEST_BUILD_INFO } = vi.hoisted(() => ({
+  TEST_BUILD_INFO: {
+    version: '9.9.9',
     buildTime: '2026-05-26T07:00:00.000Z',
     gitCommit: 'abc1234',
     gitBranch: 'main',
   },
+}));
+
+vi.mock('../../buildInfo', () => ({
+  buildInfo: TEST_BUILD_INFO,
 }));
 
 const t = (key: string) => ({
@@ -84,7 +88,7 @@ describe('menuDefinitions helpers', () => {
 
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining('0.3.3'),
+      expect.stringContaining(TEST_BUILD_INFO.version),
       'About',
     );
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
@@ -94,7 +98,7 @@ describe('menuDefinitions helpers', () => {
     );
     expect(vi.mocked(showAlert)).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining('0.3.3'),
+      expect.stringContaining(TEST_BUILD_INFO.version),
       'Version Info',
     );
     expect(openSpy).toHaveBeenCalledWith(

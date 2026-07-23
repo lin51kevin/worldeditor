@@ -5,6 +5,12 @@ import { checkForUpdate } from './updateService';
 const GITHUB_RELEASES_URL =
   'https://api.github.com/repos/lin51kevin/worldeditor/releases/latest';
 
+/** The current app version without a leading "v". */
+const CURRENT_VERSION = APP_VERSION.replace(/^v/, '');
+
+/** A version string guaranteed to be newer than the current app version. */
+const NEWER_VERSION = `${(parseInt(CURRENT_VERSION.split('.')[0] ?? '0', 10) || 0) + 1}.0.0`;
+
 function releaseResponse(tagName: string, overrides?: { body?: string | null; html_url?: string }) {
   return new Response(
     JSON.stringify({
@@ -36,25 +42,29 @@ describe('checkForUpdate', () => {
   });
 
   it('returns update information when a newer release is available', async () => {
+    const releaseUrl = `https://github.com/lin51kevin/worldeditor/releases/tag/v${NEWER_VERSION}`;
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      releaseResponse('v0.4.0', {
-        html_url: 'https://github.com/lin51kevin/worldeditor/releases/tag/v0.4.0',
+      releaseResponse(`v${NEWER_VERSION}`, {
+        html_url: releaseUrl,
         body: 'Bug fixes and improvements',
       }),
     );
 
     await expect(checkForUpdate()).resolves.toEqual({
-      latestVersion: '0.4.0',
-      releaseUrl: 'https://github.com/lin51kevin/worldeditor/releases/tag/v0.4.0',
+      latestVersion: NEWER_VERSION,
+      releaseUrl,
       releaseNotes: 'Bug fixes and improvements',
     });
   });
 
   it('treats longer semver strings as newer versions', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(releaseResponse('v0.3.3.1', { body: 'Patch metadata' }));
+    const longerVersion = `${CURRENT_VERSION}.1`;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      releaseResponse(`v${longerVersion}`, { body: 'Patch metadata' }),
+    );
 
     await expect(checkForUpdate()).resolves.toEqual({
-      latestVersion: '0.3.3.1',
+      latestVersion: longerVersion,
       releaseUrl: 'https://example.com/release',
       releaseNotes: 'Patch metadata',
     });

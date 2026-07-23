@@ -6,7 +6,7 @@
 
 WorldEditor Next is an autonomous driving road network editor that supports creating, editing, and exporting OpenDRIVE-format HD maps. It runs as a native desktop application (Tauri 2.0) and in web browsers (WebAssembly / WebGPU).
 
-**Current Version**: 0.3.0 (Phase 2 — Point Cloud, 3D Models & Collaboration)
+**Current Version**: 0.4.0 (Phase 2 — Point Cloud, 3D Gaussian Splatting, Trajectory Playback & Collaboration)
 
 ### System Requirements
 
@@ -644,10 +644,53 @@ Plugins extend the editor with additional functionality. Manage via **Plugins > 
 |--------|-------------|--------|
 | GIS Tools | Coordinate converter, CRS / projection setup, WGS84 / GCJ-02 / UTM / MGRS | ✅ |
 | Satellite | OSM / satellite imagery background overlay | 📋 |
-| 3D Models | Import and place 3D model assets in scene | 📋 |
-| Point Cloud | Load and visualize LAS / PCD point clouds (desktop only) | 📋 |
+| 3D Models | Import and place GLB / OBJ 3D model assets in scene | 🔧 |
+| Point Cloud | Load and visualize PCD / PLY / XYZ point clouds and 3D Gaussian Splatting captures (LAS / LAZ on desktop) | 🔧 |
+| Trajectory Viewer | Import and replay ego / NPC trajectories with a follow-camera | 🔧 |
 | Ecosystem | Integration with external ecosystem tools | 🔧 |
 | Scripting | JavaScript automation scripting engine | 🔧 |
+
+---
+
+## Point Cloud & 3D Gaussian Splatting 🔧
+
+Open a point cloud via **File > Import > Point Cloud** or the shortcut **Ctrl+Alt+P**. The Point Cloud plugin loads both classic point clouds and 3D Gaussian Splatting (3DGS) captures and renders them aligned with the OpenDRIVE road network.
+
+### Supported Formats
+
+| Format | Desktop | Web | Notes |
+|--------|---------|-----|-------|
+| PCD | ✅ | ✅ | ASCII / binary |
+| PLY | ✅ | ✅ | Point clouds and Gaussian Splatting (auto-detected via `f_dc` / `scale` / `rot` / `opacity` properties) |
+| XYZ | ✅ | ✅ | Plain XYZ(RGB) text |
+| LAS / LAZ | ✅ | 📋 | Desktop only (`pointcloud` feature) |
+
+### 3D Gaussian Splatting
+
+- **Automatic detection** — Gaussian `.ply` files are recognized on both desktop and web and rendered as splats instead of plain points
+- **Full-cloud rendering** — multi-million-splat captures render at the GPU device storage limit; low-memory devices fall back to importance-based decimation
+- **f16-packed splat buffer** — half-precision covariance / opacity / spherical-harmonics packing roughly doubles the splat count that fits in GPU memory
+- **Quality controls** (Point Cloud Panel):
+  - **Sample mode** — Importance (default) or Uniform when a budget cap applies
+  - **Splat budget** — cap the number of uploaded splats for lower-end GPUs
+  - **Gamma correction** — toggle linear→sRGB encoding to A/B against reference renderers (default on)
+- **Color modes** — cached per-color-mode GPU buffers for instant switching
+
+### Point Cloud Panel
+
+The **Point Cloud Panel** shows the loaded capture summary (point/splat count, bounds) and exposes the color mode, sample mode, splat budget, and gamma toggle. Clouds are framed on load so the camera backs off outside the capture volume.
+
+---
+
+## Trajectory Playback 🔧
+
+Import a trajectory via **File > Import > Trajectory** to replay recorded ego and NPC motion over the road network.
+
+- **Playback controls** — play / pause / step / scrub along the timeline
+- **Ego vehicle** — rendered using an `ego.glb` model at each timestamped pose
+- **NPC actors** — the NPC Actors plugin places actors along their trajectories, with per-actor `plyOrigin` support
+- **Follow-ego chase camera** — toggle a chase camera on the playback bar to track the ego vehicle
+- **GLB ground mesh** — optional ground-mesh rendering keeps the point cloud, road, and actors aligned
 
 ---
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditableSpline, Project } from './platform';
 import { TauriPlatformService } from './tauri';
+import { APP_VERSION } from './index';
 import * as wasmModule from '../../wasm/pkg/we_wasm';
 
 vi.mock('../../wasm/pkg/we_wasm', () => ({
@@ -61,7 +62,7 @@ describe('TauriPlatformService', () => {
 
   it('returns tauri platform info', () => {
     const service = new TauriPlatformService();
-    expect(service.getPlatformInfo()).toEqual({ type: 'tauri', version: '0.3.3' });
+    expect(service.getPlatformInfo()).toEqual({ type: 'tauri', version: APP_VERSION });
   });
 
   it('initialises the WASM module exactly once across multiple WASM-backed calls', async () => {

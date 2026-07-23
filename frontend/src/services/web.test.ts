@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project } from './platform';
 import { downloadBlob } from '../utils/download';
 import { WebPlatformService } from './web';
+import { APP_VERSION } from './index';
 import * as wasmModule from '../../wasm/pkg/we_wasm';
 
 vi.mock('../utils/download', () => ({
@@ -49,7 +50,7 @@ describe('WebPlatformService', () => {
   });
 
   it('returns web platform info', () => {
-    expect(new WebPlatformService().getPlatformInfo()).toEqual({ type: 'web', version: '0.3.3' });
+    expect(new WebPlatformService().getPlatformInfo()).toEqual({ type: 'web', version: APP_VERSION });
   });
 
   it('delegates OpenDRIVE parsing and writing to the WASM module after a single init', async () => {
