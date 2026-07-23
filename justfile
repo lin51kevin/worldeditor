@@ -20,12 +20,25 @@ build-release:
 build-wasm:
     wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg
 
+# Build the FULL WASM package including the desktop-only editor modules
+# (elevation, gis, gis_ext, io, junction_ops, measure, spline, topology,
+# validation). The default build-wasm / build-wasm-release now emit the minimal
+# set that the rnk-next embed needs (opendrive + render + pointcloud + picking);
+# the desktop app must build with the `extra-modules` feature to restore them.
+build-wasm-full:
+    wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release -- --features extra-modules
+
 # Build WASM package (release with wasm-opt)
 build-wasm-release:
     wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release
-    # Run wasm-opt if available
-    if command -v wasm-opt >/dev/null 2>&1; then \
-      wasm-opt -Oz frontend/wasm/pkg/we_wasm_bg.wasm -o frontend/wasm/pkg/we_wasm_bg.wasm.opt && \
+    # Run wasm-opt -Oz. Prefer the frontend's binaryen devDep; fall back to a
+    # system install. `--all-features` is required so binaryen accepts the
+    # reference-types / bulk-memory / etc. that wasm-bindgen emits.
+    if [ -x frontend/node_modules/.bin/wasm-opt ]; then \
+      frontend/node_modules/.bin/wasm-opt -Oz --all-features frontend/wasm/pkg/we_wasm_bg.wasm -o frontend/wasm/pkg/we_wasm_bg.wasm.opt && \
+      mv frontend/wasm/pkg/we_wasm_bg.wasm.opt frontend/wasm/pkg/we_wasm_bg.wasm; \
+    elif command -v wasm-opt >/dev/null 2>&1; then \
+      wasm-opt -Oz --all-features frontend/wasm/pkg/we_wasm_bg.wasm -o frontend/wasm/pkg/we_wasm_bg.wasm.opt && \
       mv frontend/wasm/pkg/we_wasm_bg.wasm.opt frontend/wasm/pkg/we_wasm_bg.wasm; \
     else \
       echo "wasm-opt not installed, skipping further optimization"; \

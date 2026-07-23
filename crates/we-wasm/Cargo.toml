@@ -7,6 +7,15 @@ edition.workspace = true
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = []
+# Full desktop-editor modules (gis, gis_ext, measure, validation, topology,
+# spline, junction ops, elevation, extra IO formats: csv/obj/dxf/geoz-export/…).
+# Off by default so the vendored rnk-next embed's wasm + wasm-bindgen glue stay
+# minimal (host uses only opendrive/render/pointcloud). Enable for the desktop
+# editor: `wasm-pack build ... -- --features extra-modules`.
+extra-modules = []
+
 [dependencies]
 we-core = { workspace = true }
 we-io = { workspace = true }

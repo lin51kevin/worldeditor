@@ -4,18 +4,33 @@
 
 use wasm_bindgen::prelude::*;
 
+// Host (rnk-next embed) needs only `opendrive`, `render` (which uses `picking`)
+// and `pointcloud`. The remaining editor modules are gated behind the
+// `extra-modules` feature (off by default) so the default wasm build — the one
+// vendored into the rnk-next embed — omits their exports, shrinking both the
+// wasm binary and the wasm-bindgen glue JS. Enable `extra-modules` for the full
+// desktop editor build.
+#[cfg(feature = "extra-modules")]
 pub mod elevation;
+#[cfg(feature = "extra-modules")]
 pub mod gis;
+#[cfg(feature = "extra-modules")]
 pub mod gis_ext;
+#[cfg(feature = "extra-modules")]
 pub mod io;
+#[cfg(feature = "extra-modules")]
 pub mod junction_ops;
+#[cfg(feature = "extra-modules")]
 pub mod measure;
 pub mod opendrive;
 pub mod picking;
 pub mod pointcloud;
 pub mod render;
+#[cfg(feature = "extra-modules")]
 pub mod spline;
+#[cfg(feature = "extra-modules")]
 pub mod topology;
+#[cfg(feature = "extra-modules")]
 pub mod validation;
 
 // Set up better panic messages in the browser console.

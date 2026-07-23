@@ -41,3 +41,5 @@ we-native = { path = "crates/we-native" }
 lto = true
 codegen-units = 1
 opt-level = 'z'
+# Strip symbols from release artifacts (notably the wasm binary) to cut size.
+strip = true
