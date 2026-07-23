@@ -6608,7 +6608,7 @@ dependencies = [
 
 [[package]]
 name = "we-core"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "criterion",
  "log",
@@ -6622,7 +6622,7 @@ dependencies = [
 
 [[package]]
 name = "we-io"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "flate2",
  "log",
@@ -6643,7 +6643,7 @@ dependencies = [
 
 [[package]]
 name = "we-native"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "las",
  "log",
@@ -6655,7 +6655,7 @@ dependencies = [
 
 [[package]]
 name = "we-plugin-core"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "log",
  "parking_lot",
@@ -6669,7 +6669,7 @@ dependencies = [
 
 [[package]]
 name = "we-render"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "bytemuck",
  "env_logger",
@@ -6684,7 +6684,7 @@ dependencies = [
 
 [[package]]
 name = "we-server"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6708,7 +6708,7 @@ dependencies = [
 
 [[package]]
 name = "we-service"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "log",
  "serde",
@@ -6720,7 +6720,7 @@ dependencies = [
 
 [[package]]
 name = "we-wasm"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "console_error_panic_hook",
  "console_log",
@@ -7669,7 +7669,7 @@ dependencies = [
 
 [[package]]
 name = "worldeditor"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "env_logger",
  "log",

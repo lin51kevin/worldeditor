@@ -49,7 +49,7 @@ describe('WebPlatformService', () => {
   });
 
   it('returns web platform info', () => {
-    expect(new WebPlatformService().getPlatformInfo()).toEqual({ type: 'web', version: '0.3.3' });
+    expect(new WebPlatformService().getPlatformInfo()).toEqual({ type: 'web', version: '0.4.0' });
   });
 
   it('delegates OpenDRIVE parsing and writing to the WASM module after a single init', async () => {

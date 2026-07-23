@@ -5,6 +5,60 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ---
 
+<a name="0.4.0"></a>
+## [0.4.0] — 2026-07-23
+
+### Features
+
+- 3D Gaussian Splatting 渲染管线 ([`2cedfe4`])
+- add trajViewer and plyOrigin support for NPC actors ([`574d4ec`])
+- add 3DGS splat quality budget & sampling-mode controls ([`838c65e`])
+- rnk-next SDK 暴露点云渲染能力（logsim road_mesh.ply） ([`dd1667a`])
+- trajectory import + playback controls ([`064dd69`])
+- add GeoZ export with platform-aware save dialog ([`d031c5a`])
+- 新增 unprojectToPlane(sx,sy,worldZ) 用于 logsim 精确包围盒拾取 ([`f739e53`])
+- align point cloud/3DGS with xodr + f16-pack splats to raise cap ([`7937821`])
+- add multi-click draw modes for road objects (line/polygon) ([`5e1050c`])
+- add follow-ego chase camera toggle to trajectory playback bar ([`306b4c7`])
+- **3dgs**: full-cloud rendering, SuperSplat-parity quality, and controls ([`d19c57c`])
+- **signals**: 信号渲染优化 — sprite 覆盖判断、纹理扩展、road paint billboard ([`3697dff`])
+- **templates**: 重构模板系统，拆分 signals/paints/roadSigns 分类 ([`55824f6`])
+- **ui**: add toggle for floating drawing toolbar (Ctrl+T) ([`c0fe952`])
+- **viewport**: GLB ground-mesh rendering and point-cloud/road alignment ([`2131701`])
+- **viewport**: render ego vehicle as ego.glb during trajectory playback ([`a6499af`])
+- **viewport**: add npc-actors plugin and 3D case-editor camera support ([`8156c72`])
+
+### Performance
+
+- **3dgs**: align high-fidelity rendering ([`a9b5b91`])
+- **pointcloud**: cache per-color-mode GPU buffers and add splat sampling ([`3f6c69f`])
+
+### Fixes
+
+- speed limit road sign sprite not rendering ([`fd01bed`])
+- open point cloud file dialog on Ctrl+Alt+P and menu import ([`ae01913`])
+- align web Gaussian PLY detection with desktop ([`c22cf30`])
+- prevent crash loading large 3D Gaussian Splatting PLY clouds ([`5f64c09`])
+- correct junction fill elevation and bounding box ([`df7ef97`])
+- **3dgs,trajectory**: suppress decimated-preview needles, stabilize chase camera, hide coverage toggle ([`791e2c9`])
+- **layer**: 信号子类型 -1 标签显示修正；补充 uploadPaintData 测试 mock ([`7c005d2`])
+- **picking**: snap_point_on_road 退化段安全回退 ([`16693ec`])
+- **pointcloud**: read render buffer from the same backend that loaded the cloud ([`14d8a30`])
+- **pointcloud**: serialize summary as plain object, guard panel formatting ([`f7886f4`])
+- **viewport**: 优化物体放置道路拾取逻辑，移除调试日志 ([`b811404`])
+- **viewport**: restore height-aware actor picking and translucent box fill ([`42341ee`])
+
+### Refactor
+
+- split giant files and add Prettier config ([`d85000d`])
+- **viewport,pointcloud**: split renderer.ts and harden PLY parsing ([`2543265`])
+
+### Tests
+
+- **hooks**: add unit coverage for 14 viewport hooks ([`37c4ffb`])
+
+---
+
 <a name="0.3.3"></a>
 ## [0.3.3] — 2026-06-29
 
