@@ -209,4 +209,35 @@ describe('TextureManager — cache and state', () => {
     // After destroy, isLoaded is reset
     expect(mgr.isLoaded('/t.png')).toBe(false);
   });
+
+  it('loadTexture resolves and caches texture on successful fetch', async () => {
+    const device = makeMockDevice();
+    const fakeBitmap = { width: 2, height: 2, close: vi.fn() };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      blob: vi.fn().mockResolvedValue(new Blob()),
+    }));
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(fakeBitmap));
+
+    const mgr = new TextureManager(device as unknown as GPUDevice);
+    await mgr.preload(['/test.png']);
+    expect(mgr.isLoaded('/test.png')).toBe(true);
+    expect(device.createTexture).toHaveBeenCalled();
+    expect(device.queue.copyExternalImageToTexture).toHaveBeenCalled();
+    expect(fakeBitmap.close).toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it('loadTexture falls back to placeholder on fetch failure', async () => {
+    const device = makeMockDevice();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+
+    const mgr = new TextureManager(device as unknown as GPUDevice);
+    await mgr.preload(['/missing.png']);
+    // Should cache the placeholder, not throw
+    expect(mgr.isLoaded('/missing.png')).toBe(true);
+
+    vi.unstubAllGlobals();
+  });
 });

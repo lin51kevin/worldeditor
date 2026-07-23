@@ -98,4 +98,34 @@ describe('viewport/egoModel.loadEgoModelTemplate', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
     expect(await loadEgoModelTemplate()).toBeNull();
   });
+
+  it('resolves to null when the response is not a valid GLB', async () => {
+    const fakeBytes = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0]);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: vi.fn().mockResolvedValue(fakeBytes.buffer),
+    }));
+    expect(await loadEgoModelTemplate()).toBeNull();
+  });
+
+  it('caches the result on subsequent calls', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    const first = await loadEgoModelTemplate();
+    expect(first).toBeNull();
+    // After reset, a new call can proceed
+    resetEgoModelForTest();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    const second = await loadEgoModelTemplate();
+    expect(second).toBeNull();
+  });
+
+  it('deduplicates concurrent loads', async () => {
+    const fetchFn = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+    vi.stubGlobal('fetch', fetchFn);
+    const p1 = loadEgoModelTemplate();
+    const p2 = loadEgoModelTemplate();
+    expect(p1).toBe(p2); // same promise
+    await p1;
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
 });

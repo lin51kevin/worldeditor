@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { APP_VERSION } from './index';
-import { checkForUpdate } from './updateService';
+import { checkForUpdate, isDesktopRuntime } from './updateService';
 
 const GITHUB_RELEASES_URL =
   'https://api.github.com/repos/lin51kevin/worldeditor/releases/latest';
@@ -97,5 +97,22 @@ describe('checkForUpdate', () => {
 
     await expect(checkForUpdate()).resolves.toBeNull();
     await expect(checkForUpdate()).resolves.toBeNull();
+  });
+});
+
+describe('isDesktopRuntime', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // Clean up Tauri internals if injected
+    delete (window as any).__TAURI_INTERNALS__;
+  });
+
+  it('returns false in a normal browser environment', () => {
+    expect(isDesktopRuntime()).toBe(false);
+  });
+
+  it('returns true when __TAURI_INTERNALS__ is present', () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    expect(isDesktopRuntime()).toBe(true);
   });
 });

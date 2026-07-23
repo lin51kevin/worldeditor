@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import type { ShortcutsConfig } from './useKeyboardShortcuts';
 import type { ActiveMode } from '../stores/viewportStore';
@@ -27,10 +27,20 @@ vi.mock('../stores/projectStore', () => ({
 vi.mock('../stores/viewportStore', () => ({
   useViewportStore: {
     getState: () => ({
-      editMode: null,
-      setEditMode: vi.fn(),
+      editMode: mockedViewportState.editMode,
+      setEditMode: mockedViewportState.setEditMode,
+      clearSplineKnots: mockedViewportState.clearSplineKnots,
+      toggleRoadLinks: mockedViewportState.toggleRoadLinks,
     }),
   },
+  isDrawMode: (mode: string | null) => mode === 'spline' || mode === 'drawArc' || mode === 'drawSpiral',
+}));
+
+const mockedViewportState = vi.hoisted(() => ({
+  editMode: null as string | null,
+  setEditMode: vi.fn(),
+  clearSplineKnots: vi.fn(),
+  toggleRoadLinks: vi.fn(),
 }));
 
 function makeConfig(overrides?: Partial<ShortcutsConfig>): ShortcutsConfig {
@@ -340,5 +350,52 @@ describe('useKeyboardShortcuts — Ctrl+V/C/A pass through in editable targets',
 
     expect(config.toggleOutputPanel).toHaveBeenCalledTimes(1);
     document.body.removeChild(input);
+  });
+});
+
+describe('useKeyboardShortcuts — V key (exit to select)', () => {
+  let config: ShortcutsConfig;
+
+  beforeEach(() => {
+    config = makeConfig();
+    mockedViewportState.editMode = 'drawArc';
+    mockedViewportState.setEditMode.mockClear();
+    mockedViewportState.clearSplineKnots.mockClear();
+    renderHook(() => useKeyboardShortcuts(config));
+  });
+
+  afterEach(() => {
+    mockedViewportState.editMode = null;
+  });
+
+  it('V resets editMode to default when in a non-default mode', () => {
+    press('v');
+    expect(mockedViewportState.setEditMode).toHaveBeenCalledWith('default');
+  });
+
+  it('V clears spline knots when in a draw mode', () => {
+    press('v');
+    expect(mockedViewportState.clearSplineKnots).toHaveBeenCalled();
+  });
+
+  it('V does nothing when already in default mode', () => {
+    mockedViewportState.editMode = 'default';
+    press('v');
+    expect(mockedViewportState.setEditMode).not.toHaveBeenCalled();
+  });
+});
+
+describe('useKeyboardShortcuts — T key (toggle road links)', () => {
+  let config: ShortcutsConfig;
+
+  beforeEach(() => {
+    config = makeConfig();
+    mockedViewportState.toggleRoadLinks.mockClear();
+    renderHook(() => useKeyboardShortcuts(config));
+  });
+
+  it('T toggles road links highlight', () => {
+    press('t');
+    expect(mockedViewportState.toggleRoadLinks).toHaveBeenCalledTimes(1);
   });
 });
