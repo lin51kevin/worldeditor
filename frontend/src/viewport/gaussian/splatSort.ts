@@ -131,6 +131,44 @@ export function depthBucketCount(n: number): number {
   return 2 ** bits;
 }
 
+/**
+ * Extract the four *side* frustum planes (left, right, bottom, top) from a
+ * column-major view-projection matrix, in world space (Gribb–Hartmann).
+ *
+ * Returns 16 floats = 4 planes × `(nx, ny, nz, d)`, each normalized so
+ * `nx*x + ny*y + nz*z + d` is the signed distance from the plane; a point is
+ * inside the frustum when every plane distance is `>= 0`. Near/far planes are
+ * intentionally omitted — behind-camera splats are already dropped by the
+ * front-facing `visibleCount`, and far splats shrink to sub-pixel and are
+ * discarded in the shader.
+ */
+export function frustumSidePlanes(viewProj: Float32Array): Float32Array {
+  const m = viewProj;
+  // Rows of the (column-major) matrix: row r = [m[r], m[r+4], m[r+8], m[r+12]].
+  const row = (r: number): [number, number, number, number] => [
+    m[r]!,
+    m[r + 4]!,
+    m[r + 8]!,
+    m[r + 12]!,
+  ];
+  const r0 = row(0);
+  const r1 = row(1);
+  const r3 = row(3);
+  const planes = new Float32Array(16);
+  const set = (i: number, a: number, b: number, c: number, d: number): void => {
+    const len = Math.hypot(a, b, c) || 1;
+    planes[i * 4] = a / len;
+    planes[i * 4 + 1] = b / len;
+    planes[i * 4 + 2] = c / len;
+    planes[i * 4 + 3] = d / len;
+  };
+  set(0, r3[0] + r0[0], r3[1] + r0[1], r3[2] + r0[2], r3[3] + r0[3]); // left
+  set(1, r3[0] - r0[0], r3[1] - r0[1], r3[2] - r0[2], r3[3] - r0[3]); // right
+  set(2, r3[0] + r1[0], r3[1] + r1[1], r3[2] + r1[2], r3[3] + r1[3]); // bottom
+  set(3, r3[0] - r1[0], r3[1] - r1[1], r3[2] - r1[2], r3[3] - r1[3]); // top
+  return planes;
+}
+
 // Scratch is reused because the same worker repeatedly sorts one cloud. The
 // returned order is not cached: its buffer is transferred to the main thread.
 let scratchDepths: Float32Array | null = null;
@@ -139,6 +177,8 @@ let scratchBucket: Uint32Array | null = null;
 let scratchCounts: Uint32Array | null = null;
 let scratchStarts: Uint32Array | null = null;
 let scratchOrder: Uint32Array | null = null;
+let scratchChunkVis: Uint8Array | null = null;
+let scratchPartition: Uint32Array | null = null;
 const histogramWeight = new Float64Array(HISTOGRAM_BINS);
 const histogramBase = new Uint32Array(HISTOGRAM_BINS);
 const histogramBuckets = new Uint32Array(HISTOGRAM_BINS);
@@ -279,16 +319,85 @@ function exactDescendingRadix(order: Uint32Array): void {
 }
 
 /**
+ * Stable-partition the front-facing prefix `indices[0, visibleCount)` so that
+ * splats inside the side frustum come first (preserving back-to-front order),
+ * and return the count that remain visible. Culling is done per 256-splat
+ * chunk (using the prepared bounding spheres) — cheap (one test per chunk) and
+ * naturally anti-popping, since a chunk is dropped only when its whole sphere
+ * (inflated by a margin) falls outside a plane. Out-of-frustum entries are
+ * moved after the prefix (not removed) so the order buffer stays fully valid.
+ */
+function cullFrontPrefixByFrustum(
+  indices: Uint32Array,
+  visibleCount: number,
+  prepared: PreparedSplatSort,
+  planes: Float32Array,
+): number {
+  const numChunks = Math.floor(prepared.chunks.length / 5);
+  if (numChunks === 0) return visibleCount;
+  if (!scratchChunkVis || scratchChunkVis.length !== numChunks) {
+    scratchChunkVis = new Uint8Array(numChunks);
+  }
+  const vis = scratchChunkVis;
+  const chunks = prepared.chunks;
+  // Inflate each chunk radius so splats whose gaussian tails spill past the
+  // center bounds are not clipped at the screen edge (conservative = fewer
+  // culled, no visible popping).
+  const MARGIN = 1.25;
+  for (let c = 0; c < numChunks; c++) {
+    const cx = chunks[c * 5]!;
+    const cy = chunks[c * 5 + 1]!;
+    const cz = chunks[c * 5 + 2]!;
+    const r = chunks[c * 5 + 3]! * MARGIN;
+    let inside = 1;
+    for (let p = 0; p < 4; p++) {
+      const d =
+        planes[p * 4]! * cx +
+        planes[p * 4 + 1]! * cy +
+        planes[p * 4 + 2]! * cz +
+        planes[p * 4 + 3]!;
+      if (d < -r) {
+        inside = 0;
+        break;
+      }
+    }
+    vis[c] = inside;
+  }
+
+  if (!scratchPartition || scratchPartition.length < visibleCount) {
+    scratchPartition = new Uint32Array(visibleCount);
+  }
+  const out = scratchPartition;
+  let k = 0;
+  for (let i = 0; i < visibleCount; i++) {
+    const idx = indices[i]!;
+    if (vis[(idx / CHUNK_SIZE) | 0]) out[k++] = idx;
+  }
+  const inCount = k;
+  for (let i = 0; i < visibleCount; i++) {
+    const idx = indices[i]!;
+    if (!vis[(idx / CHUNK_SIZE) | 0]) out[k++] = idx;
+  }
+  indices.set(out.subarray(0, visibleCount), 0);
+  return inCount;
+}
+
+/**
  * Return a strict back-to-front permutation and the prefix with depth >= 0.
  *
  * Passing a prepared cloud avoids rebuilding chunk bounds. When omitted, the
  * bounds are prepared for this call (convenient for tests and one-shot users).
+ *
+ * When `frustum` (four side planes from {@link frustumSidePlanes}) is supplied,
+ * front-facing splats outside the view frustum are excluded from the returned
+ * `visibleCount` (culled per chunk), reducing the drawn instance count.
  */
 export function sortSplatsByDepth(
   positions: Float32Array,
   camPos: Vec3,
   viewDir: Vec3,
   prepared = prepareSplatSort(positions),
+  frustum?: Float32Array | null,
 ): SplatSortResult {
   const n = Math.floor(positions.length / 3);
   const indices = new Uint32Array(n);
@@ -384,5 +493,8 @@ export function sortSplatsByDepth(
   }
   if (needsRadix) exactDescendingRadix(indices);
 
+  if (frustum && frustum.length >= 16 && visibleCount > 0) {
+    visibleCount = cullFrontPrefixByFrustum(indices, visibleCount, prepared, frustum);
+  }
   return { indices, visibleCount };
 }

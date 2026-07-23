@@ -13,6 +13,8 @@ import type { Vec3 } from './splatSort';
 export interface CameraPose {
   readonly camPos: Vec3;
   readonly viewDir: Vec3;
+  /** Optional four side frustum planes for view-frustum culling. */
+  readonly frustum?: Float32Array | null;
 }
 
 /** Backend that performs the actual sort (worker or synchronous fallback). */
@@ -29,6 +31,7 @@ export interface SplatSorter {
     viewDir: Vec3,
     generation: number,
     done: (indices: Uint32Array, visibleCount: number, generation: number) => void,
+    frustum?: Float32Array | null,
   ): void;
   /** Release any held resources (terminate the worker). */
   dispose(): void;
@@ -153,9 +156,9 @@ export class SplatSortController {
   }
 
   /** Notify of a new camera pose; triggers a sort if it moved enough. */
-  onCamera(camPos: Vec3, viewDir: Vec3): void {
+  onCamera(camPos: Vec3, viewDir: Vec3, frustum?: Float32Array | null): void {
     if (this.splatCount === 0) return;
-    const next: CameraPose = { camPos, viewDir };
+    const next: CameraPose = { camPos, viewDir, frustum };
     if (!shouldResort(this.lastPose, next, this.positionThreshold, this.angleThreshold)) {
       return;
     }
@@ -210,8 +213,12 @@ export class SplatSortController {
     this.lastPose = next;
     const generation = this.generation++;
     this.latestRequested = generation;
-    this.sorter.sort(next.camPos, next.viewDir, generation, (idx, count, gen) =>
-      this.deliver(idx, count, gen),
+    this.sorter.sort(
+      next.camPos,
+      next.viewDir,
+      generation,
+      (idx, count, gen) => this.deliver(idx, count, gen),
+      next.frustum ?? undefined,
     );
   }
 

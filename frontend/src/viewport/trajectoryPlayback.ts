@@ -31,6 +31,25 @@ import { smoothFollowPose, type FollowPose } from './trajectoryFollow';
 /** Max size (bytes) accepted for a trajectory import (guards runaway files). */
 const MAX_TRAJECTORY_SIZE_BYTES = 100 * 1024 * 1024;
 
+/**
+ * Target on-screen update rate during playback (Hz).
+ *
+ * Playback advances the playhead on every `requestAnimationFrame`, and each
+ * playhead change forces a full-scene redraw — which re-draws the entire
+ * Gaussian splat cloud and (under a chase camera) a camera-driven depth
+ * re-sort. At the display refresh rate (60/120 Hz) that dominates GPU usage.
+ *
+ * Capping the *visual* refresh to this rate roughly halves (60 Hz) or quarters
+ * (120 Hz) the splat draw + re-sort load during playback. Time still advances
+ * by real elapsed seconds across skipped frames, so playback speed and physics
+ * are unaffected — only the redraw cadence is throttled. Because the chase
+ * camera is also updated on the (now throttled) playhead change, the splat
+ * re-sort rate is throttled to match for free.
+ */
+const PLAYBACK_RENDER_FPS = 30;
+const PLAYBACK_FRAME_INTERVAL_MS = 1000 / PLAYBACK_RENDER_FPS;
+
+
 // Origin the trajectory geometry is shifted into (aligns with an origin-relative
 // point cloud). Module-level: a single viewport at a time.
 let sceneOrigin: [number, number, number] = [0, 0, 0];
@@ -117,6 +136,14 @@ function tick(): void {
     return;
   }
   const now = performance.now();
+  // Frame-rate gate: keep the rAF clock alive but only advance/commit the
+  // playhead — which triggers the full-scene redraw + splat re-sort — at the
+  // capped rate. Skipped frames do not touch `lastPerf`, so `dt` still covers
+  // the full elapsed span and playback stays real-time.
+  if (now - lastPerf < PLAYBACK_FRAME_INTERVAL_MS) {
+    rafId = requestAnimationFrame(tick);
+    return;
+  }
   const dt = Math.min((now - lastPerf) / 1000, 0.1);
   lastPerf = now;
 

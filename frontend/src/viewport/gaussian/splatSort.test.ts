@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { computeDepths, sortSplatsByDepth, depthBucketCount } from './splatSort';
+import {
+  computeDepths,
+  sortSplatsByDepth,
+  depthBucketCount,
+  frustumSidePlanes,
+} from './splatSort';
 
 /** Build a flat positions array from `[x,y,z]` tuples. */
 function positions(...pts: Array<[number, number, number]>): Float32Array {
@@ -158,5 +163,45 @@ describe('depthBucketCount', () => {
     expect(mid).toBeGreaterThanOrEqual(2 ** 10);
     expect(mid).toBeLessThanOrEqual(2 ** 20);
     expect(Math.log2(mid) % 1).toBe(0);
+  });
+});
+
+describe('frustumSidePlanes', () => {
+  // Identity view-projection → the side frustum is the NDC box x,y ∈ [-1, 1].
+  const identity = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const dist = (planes: Float32Array, p: number, x: number, y: number, z: number): number =>
+    planes[p * 4]! * x + planes[p * 4 + 1]! * y + planes[p * 4 + 2]! * z + planes[p * 4 + 3]!;
+
+  it('derives four inward-facing side planes', () => {
+    const planes = frustumSidePlanes(identity);
+    expect(planes.length).toBe(16);
+    // The center is inside every plane (distance >= 0).
+    for (let p = 0; p < 4; p++) expect(dist(planes, p, 0, 0, 0)).toBeGreaterThanOrEqual(0);
+    // A point far to +x lies outside at least one plane.
+    const outside = [0, 1, 2, 3].some((p) => dist(planes, p, 5, 0, 0) < 0);
+    expect(outside).toBe(true);
+  });
+});
+
+describe('sortSplatsByDepth frustum culling', () => {
+  const identity = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const planes = frustumSidePlanes(identity);
+  const cam: [number, number, number] = [0, 0, -10];
+  const dir: [number, number, number] = [0, 0, 1];
+
+  it('excludes front-facing splats whose chunk is fully outside the frustum', () => {
+    const p = positions([100, 0, 0], [100, 0, 5], [100, 0, 10]);
+    // Without a frustum every front-facing splat is drawable.
+    expect(sortSplatsByDepth(p, cam, dir).visibleCount).toBe(3);
+    // With the frustum the whole (off-screen) chunk is culled.
+    expect(sortSplatsByDepth(p, cam, dir, undefined, planes).visibleCount).toBe(0);
+  });
+
+  it('keeps splats inside the frustum', () => {
+    const p = positions([0, 0, 0], [0.2, 0, 5], [-0.3, 0, 10]);
+    const result = sortSplatsByDepth(p, cam, dir, undefined, planes);
+    expect(result.visibleCount).toBe(3);
+    // The drawn prefix is still strictly back-to-front (farthest first).
+    expect(result.indices[0]).toBe(2);
   });
 });

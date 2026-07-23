@@ -34,8 +34,9 @@ export class MainThreadSplatSorter implements SplatSorter {
     viewDir: Vec3,
     generation: number,
     done: (indices: Uint32Array, visibleCount: number, generation: number) => void,
+    frustum?: Float32Array | null,
   ): void {
-    const result = sortSplatsByDepth(this.positions, camPos, viewDir, this.prepared);
+    const result = sortSplatsByDepth(this.positions, camPos, viewDir, this.prepared, frustum);
     done(result.indices, result.visibleCount, generation);
   }
 
@@ -84,13 +85,14 @@ export function createWorkerSplatSorter(): SplatSorter {
       // the caller relinquishes it, so no duplicate lives on the main thread.
       worker.postMessage({ type: 'init', positions }, [positions.buffer]);
     },
-    sort(camPos, viewDir, generation, done): void {
+    sort(camPos, viewDir, generation, done, frustum): void {
       pending.set(generation, done);
       worker.postMessage({
         type: 'sort',
         camPos,
         viewDir,
         generation,
+        frustum: frustum ?? null,
       });
     },
     dispose(): void {

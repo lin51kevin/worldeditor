@@ -128,6 +128,7 @@ export function renderFrame(r: RendererFrameInternals): void {
       1 / r.cameraController.getMetersPerPixel(),
       r.width,
       r.height,
+      viewProj,
     );
   }
 

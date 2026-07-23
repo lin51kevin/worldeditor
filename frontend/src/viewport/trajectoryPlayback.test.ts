@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const renderer = vi.hoisted(() => ({
   setDimension: vi.fn(),
@@ -67,5 +67,49 @@ describe('trajectory follow playback', () => {
 
     useTrajectoryStore.getState().toggleFollowEgo();
     expect(renderer.setChaseCameraActive).toHaveBeenLastCalledWith(false);
+  });
+});
+
+describe('trajectory playback frame-rate cap', () => {
+  beforeEach(() => {
+    stopTrajectory();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('throttles playhead updates to the capped rate while keeping the rAF clock alive', () => {
+    let captured: FrameRequestCallback | null = null;
+    const rafSpy = vi.fn((cb: FrameRequestCallback) => {
+      captured = cb;
+      return 1;
+    });
+    vi.stubGlobal('requestAnimationFrame', rafSpy);
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
+    let nowMs = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+
+    // play() (inside startTrajectory) resets the playhead to tMin and records
+    // lastPerf = 1000, scheduling the first tick which we capture here.
+    startTrajectory(DATA);
+    expect(useTrajectoryStore.getState().isPlaying).toBe(true);
+    expect(useTrajectoryStore.getState().currentTime).toBe(0);
+    expect(captured).toBeTypeOf('function');
+
+    // A frame inside the cap interval (< 1000/30 ≈ 33.3 ms) must NOT advance the
+    // playhead, but must keep the rAF clock scheduled.
+    rafSpy.mockClear();
+    nowMs = 1016;
+    captured!(1016);
+    expect(useTrajectoryStore.getState().currentTime).toBe(0);
+    expect(rafSpy).toHaveBeenCalledTimes(1);
+
+    // Once the interval elapses, the playhead advances by the full elapsed dt.
+    nowMs = 1040;
+    captured!(1040);
+    expect(useTrajectoryStore.getState().currentTime).toBeGreaterThan(0);
   });
 });

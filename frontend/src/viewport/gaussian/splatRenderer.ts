@@ -18,7 +18,7 @@ import {
 import { SplatSortController, type SplatSorter } from "./splatSortController";
 import { createWorkerSplatSorter } from "./splatSorterBackends";
 import { buildSplatUniform, DEFAULT_SPLAT_DILATION } from "./splatUniform";
-import type { Vec3 } from "./splatSort";
+import { frustumSidePlanes, type Vec3 } from "./splatSort";
 import type { CameraState } from "../cameraController";
 
 /**
@@ -640,6 +640,7 @@ export class SplatRenderer {
     numPixelsPerMeter: number,
     width: number,
     height: number,
+    viewProj?: Float32Array,
   ): void {
     if (!this.resources.hasContent) return;
     const uniform = buildSplatUniform(
@@ -655,7 +656,12 @@ export class SplatRenderer {
     );
     this.resources.updateUniform(uniform);
     const viewDir = computeViewDir(camera.position, camera.target);
-    this.sort.onCamera(camera.position, viewDir);
+    // Frustum-cull off-screen splats in 3D (the perspective frustum tapers, so
+    // culling is worthwhile). In 2D the orthographic view fills the viewport
+    // and lateral culling buys little, so it is skipped.
+    const frustum =
+      dimensionMode === "3d" && viewProj ? frustumSidePlanes(viewProj) : undefined;
+    this.sort.onCamera(camera.position, viewDir, frustum);
   }
 
   /**

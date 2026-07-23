@@ -3,9 +3,10 @@
  *
  * Protocol:
  * - `{ type: "init", positions }` — store the splat positions once (transferable).
- * - `{ type: "sort", camPos, viewDir, generation }` — sort against the given
- *   camera; replies `{ type: "sorted", indices, generation }` (indices buffer
- *   is transferred back).
+ * - `{ type: "sort", camPos, viewDir, generation, frustum? }` — sort against
+ *   the given camera (optionally frustum-culling off-screen splats); replies
+ *   `{ type: "sorted", indices, visibleCount, generation }` (indices buffer is
+ *   transferred back).
  */
 import {
   prepareSplatSort,
@@ -20,6 +21,7 @@ type SortMessage = {
   camPos: Vec3;
   viewDir: Vec3;
   generation: number;
+  frustum?: Float32Array | null;
 };
 type InMessage = InitMessage | SortMessage;
 
@@ -41,6 +43,7 @@ ctx.onmessage = (ev: MessageEvent<InMessage>) => {
       msg.camPos,
       msg.viewDir,
       prepared,
+      msg.frustum,
     );
     ctx.postMessage({ type: 'sorted', indices, visibleCount, generation: msg.generation }, [
       indices.buffer,
