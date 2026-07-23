@@ -259,8 +259,26 @@ export interface WorldEditorRenderer {
   ): SplatUploadStatus;
   /** Latest structured Gaussian upload/fidelity status. */
   getGaussianSplatUploadStatus?(): Readonly<SplatUploadStatus> | null;
-  /** Remove the uploaded Gaussian splat cloud. */
+  /** Remove the uploaded (scene) Gaussian splat cloud. */
   clearGaussianSplats?(): void;
+  /**
+   * Upload the dynamic actor (NPC + ego) Gaussian splat cloud into a buffer
+   * separate from the static scene cloud ({@link uploadGaussianSplats}), so
+   * per-frame actor updates never re-upload/re-sort the (large) scene splats.
+   * Same packed layout + arguments as {@link uploadGaussianSplats}. Optional so
+   * hosts bundling an older SDK degrade gracefully (fall back to the shared
+   * scene buffer).
+   */
+  uploadActorGaussianSplats?(
+    data: Uint32Array,
+    shDegree: number,
+    layoutVersion: number,
+    sampleMode?: SplatSampleMode,
+    quality?: number,
+    renderMode?: SplatRenderMode,
+  ): SplatUploadStatus;
+  /** Remove the uploaded actor (NPC + ego) Gaussian splat cloud. */
+  clearActorGaussianSplats?(): void;
 }
 
 /** WASM compute contract consumed by rnk-next. */
@@ -675,6 +693,26 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     getGaussianSplatUploadStatus: () => renderer.getGaussianSplatUploadStatus(),
     clearGaussianSplats: () => {
       renderer.clearGaussianSplats();
+    },
+    uploadActorGaussianSplats: (
+      data: Uint32Array,
+      shDegree: number,
+      layoutVersion: number,
+      sampleMode?: SplatSampleMode,
+      quality?: number,
+      renderMode?: SplatRenderMode,
+    ) => {
+      return renderer.uploadActorGaussianSplats(
+        data,
+        shDegree,
+        layoutVersion,
+        sampleMode,
+        quality,
+        renderMode,
+      );
+    },
+    clearActorGaussianSplats: () => {
+      renderer.clearActorGaussianSplats();
     },
   };
 }

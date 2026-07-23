@@ -200,10 +200,16 @@ export class ViewportRenderer {
   // buffers and is drawn with the opaque basic pipeline.
   private egoMesh: { vertexBuffer: GPUBuffer; indexBuffer: GPUBuffer; indexCount: number } | null = null;
 
-  // 3D Gaussian Splatting renderer for NPC/actor `.ply` splat clouds. Lazily
-  // created on first upload so the (heavy) storage pipeline is only built when
-  // a splat cloud is actually used.
+  // 3D Gaussian Splatting renderers. Two independent buffers/pipelines so the
+  // large, static reconstructed scene is uploaded once while the small dynamic
+  // actor cloud (NPC + ego vehicles) can be re-uploaded every frame without
+  // re-uploading or re-sorting the scene:
+  //   - `splatRenderer`      → static scene splats (`uploadGaussianSplats`)
+  //   - `actorSplatRenderer` → dynamic NPC/ego splats (`uploadActorGaussianSplats`)
+  // Each is lazily created on first upload so its (heavy) storage pipeline is
+  // only built when that cloud is actually used.
   private splatRenderer: SplatRenderer | null = null;
+  private actorSplatRenderer: SplatRenderer | null = null;
 
   // Last uploaded vertex data (needed for zoomToFit re-trigger)
   private lastVertexData: Float32Array | null = null;
@@ -875,21 +881,79 @@ export class ViewportRenderer {
     this.markSceneDirty();
   }
 
+  /**
+   * Upload the dynamic actor (NPC + ego) Gaussian splat cloud into a buffer
+   * separate from the static scene cloud, so per-frame actor updates never
+   * re-upload or re-sort the (large) scene splats. Same packed layout as
+   * {@link uploadGaussianSplats}.
+   */
+  uploadActorGaussianSplats(
+    splatData: Uint32Array,
+    shDegree: number,
+    layoutVersion: number,
+    sampleMode?: SplatSampleMode,
+    quality?: number,
+    renderMode?: SplatRenderMode,
+    sourceCount?: number,
+  ): SplatUploadStatus {
+    if (splatData.length === 0) {
+      this.actorSplatRenderer?.clear();
+      this.markSceneDirty();
+      return {
+        outcome: 'empty',
+        sourceCount: sourceCount ?? 0,
+        uploadedCount: 0,
+        requestedShDegree: shDegree,
+        effectiveShDegree: shDegree,
+        renderMode: renderMode ?? 'full',
+        resourceMode: 'none',
+        fallbackReason: null,
+      };
+    }
+    if (!this.actorSplatRenderer) {
+      this.actorSplatRenderer = createSplatRenderer(this.device, this.format, 4, () =>
+        this.markSceneDirty(),
+      );
+    }
+    const uploadStatus = this.actorSplatRenderer.upload(
+      splatData,
+      shDegree,
+      layoutVersion,
+      sampleMode,
+      quality,
+      renderMode,
+      sourceCount,
+    );
+    this.actorSplatRenderer.invalidateSort();
+    this.markSceneDirty();
+    return uploadStatus;
+  }
+
+  /** Remove the current actor (NPC + ego) Gaussian splat cloud. */
+  clearActorGaussianSplats(): void {
+    if (!this.actorSplatRenderer) return;
+    this.actorSplatRenderer.clear();
+    this.markSceneDirty();
+  }
+
   /** Set the Gaussian splat 2D low-pass dilation (fullness). */
   setSplatDilation(dilation: number): void {
     this.splatRenderer?.setDilation(dilation);
+    this.actorSplatRenderer?.setDilation(dilation);
     this.markSceneDirty();
   }
 
   /** Toggle diagnostic linear→sRGB encoding for Gaussian SH colour. */
   setSplatLinearToSrgbEncoding(enabled: boolean): void {
     this.splatRenderer?.setLinearToSrgbEncoding(enabled);
+    this.actorSplatRenderer?.setLinearToSrgbEncoding(enabled);
     this.markSceneDirty();
   }
 
   /** Cap the Gaussian splat depth re-sort (refresh) rate; `fps <= 0` = realtime. */
   setSplatRefreshFps(fps: number): void {
     this.splatRenderer?.setRefreshFps(fps);
+    this.actorSplatRenderer?.setRefreshFps(fps);
   }
 
   /** Upload lane line vertex data (7 floats per vertex: x,y,z,r,g,b,a). */
@@ -1120,6 +1184,8 @@ export class ViewportRenderer {
     this.egoMesh = null;
     this.splatRenderer?.dispose();
     this.splatRenderer = null;
+    this.actorSplatRenderer?.dispose();
+    this.actorSplatRenderer = null;
     this.markerRenderer.dispose();
     disposeMeshes(this.highlightMeshes);
     disposeMeshes(this.linkHighlightMeshes);

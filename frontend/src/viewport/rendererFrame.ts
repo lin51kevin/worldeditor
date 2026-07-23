@@ -38,6 +38,7 @@ export interface RendererFrameInternals {
   groundMesh: { vertexBuffer: GPUBuffer; indexBuffer: GPUBuffer; indexCount: number } | null;
   egoMesh: { vertexBuffer: GPUBuffer; indexBuffer: GPUBuffer; indexCount: number } | null;
   splatRenderer: SplatRenderer | null;
+  actorSplatRenderer: SplatRenderer | null;
   basicBindGroup: GPUBindGroup;
   meshes: RenderableMesh[];
   junctionMeshes: RenderableMesh[];
@@ -121,8 +122,19 @@ export function renderFrame(r: RendererFrameInternals): void {
 
   // Refresh the Gaussian splat camera uniform + schedule a depth re-sort. The
   // sort is internally thresholded, so a static camera costs almost nothing.
+  // Scene and actor clouds are sorted independently (each owns its order buffer).
   if (r.splatRenderer?.hasContent) {
     r.splatRenderer.onCamera(
+      camera,
+      r.cameraController.dimension,
+      1 / r.cameraController.getMetersPerPixel(),
+      r.width,
+      r.height,
+      viewProj,
+    );
+  }
+  if (r.actorSplatRenderer?.hasContent) {
+    r.actorSplatRenderer.onCamera(
       camera,
       r.cameraController.dimension,
       1 / r.cameraController.getMetersPerPixel(),
@@ -256,8 +268,10 @@ export function renderFrame(r: RendererFrameInternals): void {
 
   // Draw 3D Gaussian splats last: translucent, back-to-front sorted, and still
   // depth-tested (reverse-Z 'greater', no write) so opaque geometry occludes
-  // them correctly.
+  // them correctly. Scene splats first, then actor (NPC/ego) splats on top so
+  // dynamic vehicles composite over the static reconstructed scene.
   r.splatRenderer?.draw(pass);
+  r.actorSplatRenderer?.draw(pass);
 
   pass.end();
   try {
