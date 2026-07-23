@@ -178,7 +178,8 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
       const platform = await getPlatformService();
       const source: PointCloudSource = { path };
       const result = await platform.loadPointCloud(source);
-      usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary);
+      // Loaded through native IPC → the render buffer must be read from native.
+      usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary, true);
     } else {
       // A file was chosen via an <input type="file"> (works on both web and the
       // desktop webview): read its bytes and load through the WASM worker.
@@ -210,7 +211,9 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
           );
       } else {
         const result = await workerLoadPointCloud(source.bytes!, source.format!);
-        usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary);
+        // Loaded through the WASM worker (even inside the Tauri webview) → the
+        // render buffer must be read from the worker, not native IPC.
+        usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary, false);
       }
     }
   } catch (err) {

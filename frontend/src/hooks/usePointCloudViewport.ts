@@ -18,10 +18,6 @@ import {
 
 const MAX_RENDER_POINTS = 2_000_000;
 
-function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
-
 /**
  * Shift an origin-relative point-cloud render buffer back into absolute world
  * coordinates so it aligns with OpenDRIVE road geometry (which is rendered in
@@ -227,9 +223,14 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     (async () => {
       try {
         const origin = usePointCloudStore.getState().summary?.origin;
+        // Read the render buffer from the SAME backend that produced the handle.
+        // A plain cloud loaded via the file-input path uses the WASM worker even
+        // inside the Tauri webview, so branching on `isTauri()` here would query
+        // the wrong (native) registry and fail with "invalid point cloud handle".
+        const nativeBackend = usePointCloudStore.getState().nativeBackend;
         let vertices: Float32Array;
-        if (isTauri()) {
-          // Tauri: binary IPC returns 6-float format, convert here (fast after binary transfer)
+        if (nativeBackend) {
+          // Native IPC returns 6-float format, convert here (fast after binary transfer)
           const service = await getPlatformService();
           const raw = await service.pointCloudRenderBuffer(handle, colorMode, MAX_RENDER_POINTS);
           if (cancelled) return;

@@ -13,6 +13,15 @@ export type PointCloudStage = 'idle' | 'loaded' | 'ground' | 'markings' | 'vecto
 interface PointCloudState {
   /** Opaque handle to the loaded cloud (native or WASM registry), or null. */
   handle: number | null;
+  /**
+   * Which registry the current `handle` belongs to. Plain point clouds can be
+   * loaded either through the native IPC registry (desktop path/LAS/LAZ) or the
+   * WASM Web Worker registry (file-input path — used even inside the Tauri
+   * webview by the File→Import menu / Ctrl+Alt+P). The render buffer MUST be
+   * fetched from the same backend that produced the handle, so this flag is the
+   * source of truth instead of a runtime `isTauri()` check.
+   */
+  nativeBackend: boolean;
   /** Source file name for display. */
   fileName: string | null;
   /** Summary of the loaded cloud. */
@@ -65,7 +74,7 @@ interface PointCloudState {
   setSplatQuality: (quality: number) => void;
   setSplatRefreshFps: (fps: number) => void;
   setSplatUploadStatus: (status: SplatUploadStatus | null) => void;
-  setLoaded: (handle: number, fileName: string, summary: PointCloudSummary) => void;
+  setLoaded: (handle: number, fileName: string, summary: PointCloudSummary, nativeBackend: boolean) => void;
   setSplatLoaded: (
     handle: number,
     fileName: string,
@@ -83,6 +92,7 @@ interface PointCloudState {
 
 const INITIAL = {
   handle: null,
+  nativeBackend: false,
   fileName: null,
   summary: null,
   stage: 'idle' as PointCloudStage,
@@ -119,9 +129,10 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
   setSplatRefreshFps: (splatRefreshFps) => set(() => ({ splatRefreshFps: Math.max(0, splatRefreshFps) })),
   setSplatUploadStatus: (splatUploadStatus) => set(() => ({ splatUploadStatus })),
 
-  setLoaded: (handle, fileName, summary) =>
+  setLoaded: (handle, fileName, summary, nativeBackend) =>
     set(() => ({
       handle,
+      nativeBackend,
       fileName,
       summary,
       stage: 'loaded',
@@ -139,6 +150,9 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
   setSplatLoaded: (handle, fileName, buffer, shDegree, layoutVersion, summary, originShifted = false) =>
     set(() => ({
       handle,
+      // Splats render straight from `splatBuffer`; the render-buffer backend
+      // flag is irrelevant here but reset so a later plain-cloud read is clean.
+      nativeBackend: false,
       fileName,
       summary,
       stage: 'loaded',

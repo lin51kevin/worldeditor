@@ -15,14 +15,30 @@ import {
 import { assertGaussianSplatLayout } from '../viewport/gaussian/splatLayout';
 
 let wasm: any = null;
+let wasmInit: Promise<any> | null = null;
 
 async function ensureWasm(): Promise<any> {
   if (wasm) return wasm;
-  // Dynamic import of the WASM package (relative to worker location)
-  const mod = await import('../../wasm/pkg/we_wasm');
-  await (mod.default as unknown as () => Promise<void>)();
-  wasm = mod;
-  return wasm;
+  // Cache the in-flight init PROMISE, not just the resolved module. Worker
+  // messages are dispatched concurrently at startup (e.g. `load` followed by
+  // `renderBuffer7`); without this guard each message that arrives before the
+  // first init resolves would call `mod.default()` again, re-initializing the
+  // WASM instance and wiping the handle registry — which surfaced as
+  // intermittent "invalid point cloud handle" errors on the first PLY load.
+  if (!wasmInit) {
+    wasmInit = (async () => {
+      // Dynamic import of the WASM package (relative to worker location)
+      const mod = await import('../../wasm/pkg/we_wasm');
+      await (mod.default as unknown as () => Promise<void>)();
+      wasm = mod;
+      return wasm;
+    })().catch((err) => {
+      // Reset so a transient init failure can be retried on the next message.
+      wasmInit = null;
+      throw err;
+    });
+  }
+  return wasmInit;
 }
 
 interface WorkerRequest {
