@@ -51,7 +51,10 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - run: cargo install wasm-pack
-      - run: wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release
+      # FULL desktop-editor build (all editor modules via `extra-modules`).
+      # The frontend typecheck/build/test consume this pkg; the slim build is
+      # only produced by `just build-rnk` for the rnk-next embed.
+      - run: wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release -- --features extra-modules
       - name: Upload WASM pkg
         uses: actions/upload-artifact@v4
         with:

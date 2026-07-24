@@ -209,10 +209,9 @@ shader 根据 scale/quaternion 重建 `Σ = R diag(scale²) Rᵀ`，避免 scale
 
 沿用已验证的链路：
 
-1. `wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release`
-2. `vite build --config vite.rnk-next.config.ts`
-3. 拷贝 `dist-rnk/worldeditor-next-sdk.js` + `wasm/pkg/we_wasm_bg.wasm` → `WebPages/src/vendor/we-next/`
-4. WebPages `tsc` + 语法/wasm magic 校验
+1. `just build-rnk`（先出 SLIM wasm → `frontend/wasm/pkg-slim/`，再 vite 打包 SDK）
+2. 拷贝 `dist-rnk/worldeditor-next-sdk.js` + `wasm/pkg-slim/we_wasm_bg.wasm` → `WebPages/src/vendor/we-next/`
+3. WebPages `tsc` + 语法/wasm magic 校验
 
 ---
 

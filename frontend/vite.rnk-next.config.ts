@@ -23,9 +23,17 @@ export default defineConfig({
     __GIT_BRANCH__: JSON.stringify(''),
   },
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
+    alias: [
+      { find: '@', replacement: path.resolve(__dirname, './src') },
+      // rnk-next embeds the SLIM wasm build (opendrive + render + pointcloud +
+      // picking only). Redirect the shared `wasm/pkg/we_wasm` imports to the
+      // slim pkg so the vendored SDK bundle stays minimal; frontend/wasm/pkg
+      // remains the FULL desktop-editor build.
+      {
+        find: /(^|\/)wasm\/pkg\/we_wasm$/,
+        replacement: '$1wasm/pkg-slim/we_wasm',
+      },
+    ],
   },
   build: {
     outDir: 'dist-rnk',

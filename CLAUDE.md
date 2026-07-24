@@ -252,11 +252,17 @@ cd frontend && yarn test              # 前端单元测试
 cd frontend && yarn playwright test   # E2E 全套测试
 
 # WASM 构建 (推荐 wasm-pack)
-just build-wasm                       # Debug WASM → frontend/wasm/pkg/
-just build-wasm-release               # Release WASM + wasm-opt 优化
+# 默认 build-wasm / build-wasm-release 为 FULL 桌面编辑器构建 (含 extra-modules:
+# gis/elevation/measure/spline/io/junction_ops/topology/validation)，输出到
+# frontend/wasm/pkg/ —— 桌面 app、前端测试、CI 均消费此目录。
+just build-wasm                       # Debug FULL WASM → frontend/wasm/pkg/
+just build-wasm-release               # Release FULL WASM + wasm-opt 优化 → frontend/wasm/pkg/
 
 # rnk-next SDK 库构建 (供外部宿主应用嵌入渲染地图)
-cd frontend && yarn build:rnk         # → frontend/dist-rnk/worldeditor-next-sdk.js (产物已 gitignore, 详见 docs/sdk-integration.md)
+# 使用 SLIM WASM (仅 opendrive+render+pointcloud+picking)，独立输出到
+# frontend/wasm/pkg-slim/，vite.rnk-next.config.ts 通过 alias 重定向导入，
+# 绝不覆盖桌面版 frontend/wasm/pkg/。
+just build-rnk                        # SLIM WASM (pkg-slim) + SDK → frontend/dist-rnk/worldeditor-next-sdk.js (产物已 gitignore, 详见 docs/sdk-integration.md)
 
 # 桌面应用
 cargo build --workspace               # Native 构建

@@ -24,12 +24,16 @@ Source of truth:
 ## Building the bundle
 
 ```bash
-cd frontend
-yarn build:rnk
+just build-rnk
 ```
 
-This runs `vite build --config vite.rnk-next.config.ts` and produces a single
-self-contained ESM file plus copied static assets:
+This first builds the **slim** WASM package (`opendrive + render + pointcloud +
+picking` only, no `extra-modules`) into `frontend/wasm/pkg-slim/`, then runs
+`vite build --config vite.rnk-next.config.ts`. The vite config aliases the
+shared `wasm/pkg/we_wasm` imports to `wasm/pkg-slim/we_wasm`, so the SDK bundle
+embeds the slim build while the desktop editor keeps using the FULL build in
+`frontend/wasm/pkg/`. The result is a single self-contained ESM file plus copied
+static assets:
 
 ```
 frontend/dist-rnk/
@@ -39,10 +43,12 @@ frontend/dist-rnk/
   favicon*.png, favicon.ico    # copied from frontend/public/
 ```
 
-> `frontend/dist-rnk/` is **generated output** and is git-ignored. Do not commit
-> it. The textures and config under it are copies of `frontend/public/**`; that
-> public folder is the source of truth. Rebuild with `yarn build:rnk` whenever
-> the SDK source or public assets change.
+> `frontend/dist-rnk/` and `frontend/wasm/pkg-slim/` are **generated output** and
+> are git-ignored. Do not commit them. The textures and config under dist-rnk
+> are copies of `frontend/public/**`; that public folder is the source of truth.
+> Rebuild with `just build-rnk` whenever the SDK source or public assets change.
+> (`yarn build:rnk` alone only runs the vite step and assumes `pkg-slim` already
+> exists.)
 
 The WASM binary (`we_wasm_bg.wasm`) is intentionally **not** inlined. The host
 serves it as a separate asset and points the SDK at its location (see below).

@@ -16,21 +16,17 @@ build:
 build-release:
     cargo build --workspace --release
 
-# Build WASM package (debug)
+# Build the WASM package (debug) — FULL desktop-editor build.
+# Includes every editor module (elevation, gis, gis_ext, io, junction_ops,
+# measure, spline, topology, validation) via the `extra-modules` feature.
+# Output: frontend/wasm/pkg — the default consumed by the desktop app, the
+# frontend unit tests, and CI (typecheck/build/test).
 build-wasm:
-    wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg
+    wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg -- --features extra-modules
 
-# Build the FULL WASM package including the desktop-only editor modules
-# (elevation, gis, gis_ext, io, junction_ops, measure, spline, topology,
-# validation). The default build-wasm / build-wasm-release now emit the minimal
-# set that the rnk-next embed needs (opendrive + render + pointcloud + picking);
-# the desktop app must build with the `extra-modules` feature to restore them.
-build-wasm-full:
-    wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release -- --features extra-modules
-
-# Build WASM package (release with wasm-opt)
+# Build the FULL WASM package (release, with wasm-opt) → frontend/wasm/pkg.
 build-wasm-release:
-    wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release
+    wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release -- --features extra-modules
     # Run wasm-opt -Oz. Prefer the frontend's binaryen devDep; fall back to a
     # system install. `--all-features` is required so binaryen accepts the
     # reference-types / bulk-memory / etc. that wasm-bindgen emits.
@@ -44,6 +40,28 @@ build-wasm-release:
       echo "wasm-opt not installed, skipping further optimization"; \
     fi
     du -h frontend/wasm/pkg/*.wasm
+
+# Build the SLIM WASM package for the rnk-next embed ONLY (release + wasm-opt).
+# Emits just the host's minimal surface (opendrive + render + pointcloud +
+# picking); the extra editor modules are gated off. Output:
+# frontend/wasm/pkg-slim — kept separate from the full frontend/wasm/pkg so the
+# desktop-editor build is never overwritten. Consumed only by `build-rnk`.
+build-wasm-rnk:
+    wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg-slim --release
+    if [ -x frontend/node_modules/.bin/wasm-opt ]; then \
+      frontend/node_modules/.bin/wasm-opt -Oz --all-features frontend/wasm/pkg-slim/we_wasm_bg.wasm -o frontend/wasm/pkg-slim/we_wasm_bg.wasm.opt && \
+      mv frontend/wasm/pkg-slim/we_wasm_bg.wasm.opt frontend/wasm/pkg-slim/we_wasm_bg.wasm; \
+    elif command -v wasm-opt >/dev/null 2>&1; then \
+      wasm-opt -Oz --all-features frontend/wasm/pkg-slim/we_wasm_bg.wasm -o frontend/wasm/pkg-slim/we_wasm_bg.wasm.opt && \
+      mv frontend/wasm/pkg-slim/we_wasm_bg.wasm.opt frontend/wasm/pkg-slim/we_wasm_bg.wasm; \
+    else \
+      echo "wasm-opt not installed, skipping further optimization"; \
+    fi
+    du -h frontend/wasm/pkg-slim/*.wasm
+
+# Build the rnk-next SDK bundle: slim wasm (pkg-slim) + vendored ESM SDK.
+build-rnk: build-wasm-rnk
+    cd frontend && yarn build:rnk
 
 # Build frontend
 build-frontend:
@@ -160,6 +178,6 @@ bundle-target target:
 # Clean all build artifacts
 clean:
     cargo clean
-    rm -rf frontend/dist frontend/node_modules/.vite
-    rm -rf crates/we-wasm/pkg
+    rm -rf frontend/dist frontend/dist-rnk frontend/node_modules/.vite
+    rm -rf crates/we-wasm/pkg frontend/wasm/pkg frontend/wasm/pkg-slim
     rm -rf coverage

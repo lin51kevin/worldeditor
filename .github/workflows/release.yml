@@ -70,8 +70,8 @@ jobs:
       - name: Install wasm-pack
         run: cargo install wasm-pack --locked
 
-      - name: Build WASM
-        run: wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release
+      - name: Build WASM (full desktop-editor build)
+        run: wasm-pack build crates/we-wasm --target web --out-dir ../../frontend/wasm/pkg --release -- --features extra-modules
 
       - name: Install yarn
         run: npm install -g yarn@1
