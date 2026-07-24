@@ -1,11 +1,14 @@
 {
-  "id": "3d-models",
-  "name": "3D Models",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "description": "External 3D model loading (OBJ/FBX/glTF) — desktop only (beta)",
-  "author": "WorldEditor Team",
-  "license": "MIT",
-  "dependencies": [],
-  "permissions": ["ui:panel", "io:import"]
+    "id": "3d-models",
+    "name": "3D Models",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "description": "External 3D model loading (OBJ/FBX/glTF) — desktop only (beta)",
+    "author": "WorldEditor Team",
+    "license": "MIT",
+    "dependencies": [],
+    "permissions": [
+        "ui:panel",
+        "io:import"
+    ]
 }

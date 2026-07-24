@@ -31,6 +31,7 @@ import type {
   ContextMenuContrib,
   ViewportOverlayContrib,
   SettingsContrib,
+  RootWidgetContrib,
 } from '../../stores/pluginContribStore';
 import type { Project } from '../../services/platform';
 import i18n from '../../i18n';
@@ -164,6 +165,8 @@ export interface PluginContext {
   registerContextMenuItem(contrib: ContextMenuContrib): void;
   registerViewportOverlay(contrib: ViewportOverlayContrib): void;
   registerSettings(contrib: SettingsContrib): void;
+  /** Register a chromeless always-on root widget (e.g. a custom overlay bar). */
+  registerRootWidget(contrib: RootWidgetContrib): void;
 
   // Project access
   /** Read the current project snapshot */
@@ -340,6 +343,11 @@ export function installPluginApi(): void {
           requirePermission(id, granted, 'ui:settings');
           checkContribId(contrib.id, 'settings');
           usePluginContribStore.getState().registerSettings(contrib);
+        },
+        registerRootWidget: (contrib) => {
+          requirePermission(id, granted, 'ui:panel');
+          checkContribId(contrib.id, 'root widget');
+          usePluginContribStore.getState().registerRootWidget(contrib);
         },
 
         getProject: () => {

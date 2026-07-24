@@ -695,6 +695,8 @@
     "builtinValidationDesc": "OpenDRIVE data quality and topology validation",
     "builtinTrafficName": "Traffic",
     "builtinTrafficDesc": "Signal phasing, timing editor, SUMO I/O",
+    "builtinTrajectoryName": "Trajectory",
+    "builtinTrajectoryDesc": "Trajectory import and playback (playback bar + scene config)",
     "builtinPointcloudName": "Point Cloud",
     "builtinPointcloudDesc": "Point cloud loading and visualization (desktop only)",
     "builtinSatelliteName": "Satellite",

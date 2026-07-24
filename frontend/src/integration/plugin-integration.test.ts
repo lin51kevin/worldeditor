@@ -388,9 +388,9 @@ describe('plugin API context', () => {
 // ── Builtin registry ─────────────────────────────────────────────────────────
 
 describe('builtinRegistry', () => {
-  it('contains all 26 expected plugin entries', async () => {
+  it('contains all 27 expected plugin entries', async () => {
     const { BUILTIN_PLUGINS } = await import('../plugins/builtinRegistry');
-    expect(BUILTIN_PLUGINS.length).toBe(26);
+    expect(BUILTIN_PLUGINS.length).toBe(27);
   });
 
   it('every plugin entry has required fields', async () => {

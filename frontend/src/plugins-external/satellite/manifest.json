@@ -1,11 +1,15 @@
 {
-  "id": "satellite-beta",
-  "name": "Satellite",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "description": "Viewport basemap / satellite imagery overlay (beta)",
-  "author": "WorldEditor Team",
-  "license": "MIT",
-  "dependencies": [],
-  "permissions": ["ui:panel", "ui:overlay", "ui:menu"]
+    "id": "satellite-beta",
+    "name": "Satellite",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "description": "Viewport basemap / satellite imagery overlay (beta)",
+    "author": "WorldEditor Team",
+    "license": "MIT",
+    "dependencies": [],
+    "permissions": [
+        "ui:panel",
+        "ui:overlay",
+        "ui:menu"
+    ]
 }

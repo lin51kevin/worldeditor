@@ -32,6 +32,7 @@ import { mountSatellitePlugin } from './gis-viz/satellite/satellite-beta.plugin'
 import { mountModels3dPlugin } from './gis-viz/models-3d/models-3d-beta.plugin';
 import { mountScriptingPlugin } from './gis-viz/scripting/scripting-beta.plugin';
 import { mountEcosystemPlugin } from './gis-viz/ecosystem/ecosystem-beta.plugin';
+import { mountTrajectoryPlugin } from './viewer/trajectory/trajectory.plugin';
 
 /** Plugin entry with a mount function for App.tsx registration. */
 export interface BuiltinPluginEntry extends PluginInfo {
@@ -67,6 +68,7 @@ const MOUNT_MAP: Record<string, () => () => void> = {
   'lane-detect': mountLaneDetectPlugin,
   'converter': mountConverterPlugin,
   'ai-copilot': mountAiCopilotPlugin,
+  'trajectory': mountTrajectoryPlugin,
 };
 
 /** Static metadata for all built-in plugins. */
@@ -130,6 +132,7 @@ const BUILTIN_META: PluginInfo[] = [
   { id: 'converter', name: 'Batch Converter', nameKey: 'pluginManager.builtinConverterName', version: '1.0.0', description: 'Batch format conversion panel', descriptionKey: 'pluginManager.builtinConverterDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'ai-copilot', name: 'AI Copilot', nameKey: 'pluginManager.builtinAiCopilotName', version: '1.0.0', description: 'AI assistant panel for road editing', descriptionKey: 'pluginManager.builtinAiCopilotDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
   { id: 'shape-editor', name: 'Shape Editor', nameKey: 'pluginManager.builtinShapeEditorName', version: '1.0.0', description: 'Vector shape layer editor for pre-road geometry construction', descriptionKey: 'pluginManager.builtinShapeEditorDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
+  { id: 'trajectory', name: 'Trajectory', nameKey: 'pluginManager.builtinTrajectoryName', version: '1.0.0', description: 'Trajectory import and playback (playback bar + scene config)', descriptionKey: 'pluginManager.builtinTrajectoryDesc', dependencies: [], permissions: [], status: 'loaded', isBuiltin: true },
 ];
 
 /**

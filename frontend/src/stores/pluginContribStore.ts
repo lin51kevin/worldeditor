@@ -171,6 +171,21 @@ export interface SettingsContrib {
   component: ComponentType<any>;
 }
 
+/**
+ * Chromeless root-level widget contributed by a plugin.
+ *
+ * Unlike {@link PanelContrib} (wrapped in titled floating-panel chrome), a root
+ * widget renders its component directly at the application root, always-on. Used
+ * for custom always-visible overlays like the trajectory playback bar, where the
+ * component manages its own visibility and positioning.
+ */
+export interface RootWidgetContrib {
+  id: string;
+  pluginId: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  component: ComponentType<any>;
+}
+
 interface PluginContribState {
   toolbarButtons: ToolbarButtonContrib[];
   menuItems: MenuItemContrib[];
@@ -181,6 +196,7 @@ interface PluginContribState {
   contextMenuItems: ContextMenuContrib[];
   viewportOverlays: ViewportOverlayContrib[];
   settingsContribs: SettingsContrib[];
+  rootWidgets: RootWidgetContrib[];
 
   // Panel tab visibility management
   panelTabVisibility: Record<string, boolean>;
@@ -204,6 +220,8 @@ interface PluginContribState {
   unregisterViewportOverlay: (id: string) => void;
   registerSettings: (contrib: SettingsContrib) => void;
   unregisterSettings: (id: string) => void;
+  registerRootWidget: (contrib: RootWidgetContrib) => void;
+  unregisterRootWidget: (id: string) => void;
   /** Remove all contributions from a given plugin at once */
   unregisterPlugin: (pluginId: string) => void;
 
@@ -234,6 +252,7 @@ export const usePluginContribStore = create<PluginContribState>((set, get) => ({
   contextMenuItems: [],
   viewportOverlays: [],
   settingsContribs: [],
+  rootWidgets: [],
   panelTabVisibility: {},
   activeTabId: null,
 
@@ -351,6 +370,14 @@ export const usePluginContribStore = create<PluginContribState>((set, get) => ({
   unregisterSettings: (id) =>
     set((state) => ({ settingsContribs: state.settingsContribs.filter((s) => s.id !== id) })),
 
+  registerRootWidget: (contrib) =>
+    set((state) => ({
+      rootWidgets: [...state.rootWidgets.filter((w) => w.id !== contrib.id), contrib],
+    })),
+
+  unregisterRootWidget: (id) =>
+    set((state) => ({ rootWidgets: state.rootWidgets.filter((w) => w.id !== id) })),
+
   registerPanelsBatch: (contribs) => {
     const { _pendingPanelBatch, ...state } = get();
     const allContribs = [...(_pendingPanelBatch ?? []), ...contribs];
@@ -411,6 +438,7 @@ export const usePluginContribStore = create<PluginContribState>((set, get) => ({
         contextMenuItems: state.contextMenuItems.filter((c) => c.pluginId !== pluginId),
         viewportOverlays: state.viewportOverlays.filter((o) => o.pluginId !== pluginId),
         settingsContribs: state.settingsContribs.filter((s) => s.pluginId !== pluginId),
+        rootWidgets: state.rootWidgets.filter((w) => w.pluginId !== pluginId),
         panelTabVisibility: nextVisibility,
         activeTabId: pluginTabIds.includes(state.activeTabId ?? '')
           ? null

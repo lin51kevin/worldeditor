@@ -1,7 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { applyOrigin, applySplatOrigin } from './usePointCloudViewport';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { createRef } from 'react';
+import { applyOrigin, applySplatOrigin, usePointCloudViewport } from './usePointCloudViewport';
 import { splatStrideForDegree } from '../viewport/gaussian/splatPipeline';
 import { GAUSSIAN_SPLAT_LAYOUT_VERSION } from '../viewport/gaussian/splatLayout';
+import { usePointCloudStore } from '../plugins/gis-viz/pointcloud/pointcloudState';
+import type { ViewportRenderer } from '../viewport/renderer';
+import type { PointCloudSummary } from '../services/platform';
 
 /** Build a 7-float vertex buffer (x,y,z,r,g,b,a) from position triples. */
 function buildBuffer(positions: [number, number, number][]): Float32Array {
@@ -135,5 +140,73 @@ describe('applySplatOrigin', () => {
     const out = applySplatOrigin(buffer, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, undefined);
 
     expect(out).toBe(buffer);
+  });
+});
+
+/** Minimal renderer stub capturing the calls the splat effect makes. */
+function makeRendererStub() {
+  const uploadGaussianSplats = vi.fn(() => ({
+    outcome: 'uploaded',
+    sourceCount: 1,
+    uploadedCount: 1,
+    requestedShDegree: 0,
+    effectiveShDegree: 0,
+    renderMode: 'full',
+    resourceMode: 'texture-array',
+    fallbackReason: null,
+  }));
+  const renderer = {
+    uploadGaussianSplats,
+    uploadPointCloudVertices: vi.fn(),
+    clearGaussianSplats: vi.fn(),
+    setDimension: vi.fn(),
+    frameScene3D: vi.fn(),
+    setSplatDilation: vi.fn(),
+    setSplatLinearToSrgbEncoding: vi.fn(),
+    setSplatRefreshFps: vi.fn(),
+  };
+  return { renderer: renderer as unknown as ViewportRenderer, uploadGaussianSplats };
+}
+
+/** Origin-zero, already-shifted summary so the effect uploads the buffer as-is. */
+const SPLAT_SUMMARY = {
+  count: 1,
+  origin: [0, 0, 0],
+  min: [0, 0, 0],
+  max: [1, 1, 1],
+} as unknown as PointCloudSummary;
+
+describe('usePointCloudViewport splat reload', () => {
+  beforeEach(() => {
+    usePointCloudStore.getState().reset();
+  });
+
+  it('re-uploads a reloaded splat cloud that reuses the same handle number', () => {
+    const { renderer, uploadGaussianSplats } = makeRendererStub();
+    const rendererRef = createRef<ViewportRenderer | null>() as {
+      current: ViewportRenderer | null;
+    };
+    rendererRef.current = renderer;
+
+    renderHook(() => usePointCloudViewport({ rendererRef, status: 'ready' }));
+
+    const bufferA = buildSplats([[0, 0, 0]]);
+    const bufferB = buildSplats([[1, 1, 1]]);
+
+    // Native splats hardcode handle 0, so both loads share the same handle.
+    act(() => {
+      usePointCloudStore
+        .getState()
+        .setSplatLoaded(0, 'a.ply', bufferA, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, SPLAT_SUMMARY, true);
+    });
+    act(() => {
+      usePointCloudStore
+        .getState()
+        .setSplatLoaded(0, 'b.ply', bufferB, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, SPLAT_SUMMARY, true);
+    });
+
+    // Both loads must upload — the second must not be skipped as "same handle".
+    expect(uploadGaussianSplats).toHaveBeenCalledTimes(2);
+    expect(uploadGaussianSplats.mock.calls[1]![0]).toBe(bufferB);
   });
 });

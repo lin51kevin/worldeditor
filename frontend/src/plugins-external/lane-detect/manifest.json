@@ -1,11 +1,13 @@
 {
-  "id": "lane-detect",
-  "name": "Lane Detection",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "description": "Automated lane detection from point cloud / satellite (beta)",
-  "author": "WorldEditor Team",
-  "license": "MIT",
-  "dependencies": [],
-  "permissions": ["ui:menu"]
+    "id": "lane-detect",
+    "name": "Lane Detection",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "description": "Automated lane detection from point cloud / satellite (beta)",
+    "author": "WorldEditor Team",
+    "license": "MIT",
+    "dependencies": [],
+    "permissions": [
+        "ui:menu"
+    ]
 }

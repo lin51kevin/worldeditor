@@ -78,6 +78,11 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
   const prevSampleModeRef = useRef<string | null>(null);
   const prevRenderModeRef = useRef<string | null>(null);
   const prevQualityRef = useRef<number | null>(null);
+  // Splat buffer identity is the true cloud identity: native splats hardcode
+  // handle 0 (and the WASM worker can reuse handles), so a handle-number match
+  // does NOT mean the same cloud. Tracking the buffer reference prevents a
+  // reloaded cloud from being skipped and leaving the previous cloud on screen.
+  const prevSplatBufferRef = useRef<Uint32Array | null>(null);
 
   const handle = usePointCloudStore((s) => s.handle);
   const colorMode = usePointCloudStore((s) => s.colorMode);
@@ -124,6 +129,10 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
         usePointCloudStore.getState().setSplatUploadStatus(null);
         prevHandleRef.current = null;
         prevColorModeRef.current = null;
+        prevSampleModeRef.current = null;
+        prevRenderModeRef.current = null;
+        prevQualityRef.current = null;
+        prevSplatBufferRef.current = null;
       }
       return;
     }
@@ -132,7 +141,11 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     if (isSplat) {
       // Re-upload on a new cloud or when the sampling strategy / quality budget
       // changes (both decide which & how many splats survive the reduction).
-      const isNewCloud = handle !== prevHandleRef.current;
+      // Compare the buffer reference (not just the handle) so a reloaded cloud
+      // that reuses the same handle number still counts as new.
+      const isNewCloud =
+        handle !== prevHandleRef.current ||
+        splatBuffer !== prevSplatBufferRef.current;
       const changed =
         isNewCloud ||
         splatSampleMode !== prevSampleModeRef.current ||
@@ -193,6 +206,7 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
       prevSampleModeRef.current = splatSampleMode;
       prevRenderModeRef.current = splatRenderMode;
       prevQualityRef.current = splatQuality;
+      prevSplatBufferRef.current = splatBuffer;
       prevColorModeRef.current = null;
       return;
     }

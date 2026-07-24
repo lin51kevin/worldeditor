@@ -12,11 +12,11 @@ import { TemplatePanel } from './plugins/editing/templates/TemplatePanel';
 import { StatusBar } from './components/shell/StatusBar';
 import { usePluginContribStore } from './stores/pluginContribStore';
 import { FloatingPanel } from './components/layout/FloatingPanel';
-import { TrajectoryPlaybackBar } from './components/panels/TrajectoryPlaybackBar';
-import { TrajectoryConfigPanel } from './components/panels/TrajectoryConfigPanel';
-// ValidationPanel is now rendered via PluginPanels
+// Trajectory playback bar + config panel are contributed by the built-in
+// `trajectory` plugin and rendered via <PluginRootWidgets/>.
 import { SelectionDetailsPanel } from './components/panels/SelectionDetailsPanel';
 import { PluginPanels } from './components/layout/PluginPanel';
+import { PluginRootWidgets } from './components/layout/PluginRootWidgets';
 import { DialogHost } from './components/common/Dialog';
 import { TextContextMenu } from './components/common/TextContextMenu';
 import { WelcomePage } from './components/shell/WelcomePage';
@@ -442,8 +442,7 @@ export function App() {
         <Suspense fallback={null}>
           <CommandPalette />
         </Suspense>
-        <TrajectoryPlaybackBar />
-        <TrajectoryConfigPanel />
+        <PluginRootWidgets />
         {measureMode !== 'none' && (
           <FloatingPanel
             className="floating-measurement"

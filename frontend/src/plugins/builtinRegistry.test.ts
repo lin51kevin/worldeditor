@@ -36,6 +36,7 @@ const mounts = vi.hoisted(() => {
     scripting: createMountPair(),
     ecosystem: createMountPair(),
     shapeEditor: createMountPair(),
+    trajectory: createMountPair(),
   };
 });
 
@@ -65,6 +66,7 @@ vi.mock('./gis-viz/models-3d/models-3d-beta.plugin', () => ({ mountModels3dPlugi
 vi.mock('./gis-viz/scripting/scripting-beta.plugin', () => ({ mountScriptingPlugin: mounts.scripting.mount }));
 vi.mock('./gis-viz/ecosystem/ecosystem-beta.plugin', () => ({ mountEcosystemPlugin: mounts.ecosystem.mount }));
 vi.mock('./editing/shape-editor/shape-editor.plugin', () => ({ mountShapeEditorPlugin: mounts.shapeEditor.mount }));
+vi.mock('./viewer/trajectory/trajectory.plugin', () => ({ mountTrajectoryPlugin: mounts.trajectory.mount }));
 
 import { BUILTIN_PLUGINS, isBetaPluginHidden } from './builtinRegistry';
 const mountById = {
@@ -94,6 +96,7 @@ const mountById = {
   'scripting-beta': mounts.scripting,
   'ecosystem-beta': mounts.ecosystem,
   'shape-editor': mounts.shapeEditor,
+  trajectory: mounts.trajectory,
 } satisfies Record<string, { mount: ReturnType<typeof vi.fn>; cleanup: ReturnType<typeof vi.fn> }>;
 
 describe('builtinRegistry', () => {
@@ -102,7 +105,7 @@ describe('builtinRegistry', () => {
   });
 
   it('exposes all built-in plugins with loaded builtin metadata', () => {
-    expect(BUILTIN_PLUGINS).toHaveLength(26);
+    expect(BUILTIN_PLUGINS).toHaveLength(27);
     expect(BUILTIN_PLUGINS.every((plugin) => plugin.isBuiltin)).toBe(true);
     expect(BUILTIN_PLUGINS.every((plugin) => plugin.status === 'loaded')).toBe(true);
     expect(BUILTIN_PLUGINS.every((plugin) => typeof plugin.mount === 'function')).toBe(true);

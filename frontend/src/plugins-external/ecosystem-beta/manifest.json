@@ -1,11 +1,14 @@
 {
-  "id": "ecosystem-beta",
-  "name": "Ecosystem",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "description": "Vegetation and tree placement (beta)",
-  "author": "WorldEditor Team",
-  "license": "MIT",
-  "dependencies": [],
-  "permissions": ["ui:panel", "ui:menu"]
+    "id": "ecosystem-beta",
+    "name": "Ecosystem",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "description": "Vegetation and tree placement (beta)",
+    "author": "WorldEditor Team",
+    "license": "MIT",
+    "dependencies": [],
+    "permissions": [
+        "ui:panel",
+        "ui:menu"
+    ]
 }
