@@ -29,7 +29,7 @@ describe('generated external bundles', () => {
     'io-csv', 'io-obj3d', 'io-osm', 'io-dxf', 'io-mif',
     'io-lanelet2', 'io-xodr-ext', 'io-nio', 'io-shapefile', 'io-signals',
     'gis-tools', 'validation', 'traffic', 'converter',
-    'ecosystem-beta', 'lane-detect', '3d-models',
+    'ecosystem-beta', 'lane-detect', '3d-models', 'satellite-beta',
   ];
 
   for (const id of ids) {
