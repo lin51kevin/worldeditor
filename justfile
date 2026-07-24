@@ -169,13 +169,13 @@ install-tauri-cli:
     cargo install tauri-cli
 
 # Bundle desktop installer for the current platform (release)
-bundle: build-plugins
+bundle:
     cd frontend && yarn install --immutable
     cargo tauri build
 
 # Bundle for a specific Rust target triple
 # Usage: just bundle-target x86_64-pc-windows-msvc
-bundle-target target: build-plugins
+bundle-target target:
     cd frontend && yarn install --immutable
     cargo tauri build --target {{target}}
 

@@ -31,8 +31,7 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../frontend/public/assets/ego.glb": "ego.glb",
-      "../plugins": "plugins"
+      "../frontend/public/assets/ego.glb": "ego.glb"
     }
   },
   "plugins": {

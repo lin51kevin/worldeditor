@@ -151,6 +151,17 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
         splatSampleMode !== prevSampleModeRef.current ||
         splatRenderMode !== prevRenderModeRef.current ||
         splatQuality !== prevQualityRef.current;
+      // [SPLAT-DIAG] TEMP: diagnose stale/exploded render on reload. Remove once fixed.
+      console.info('[SPLAT-DIAG] load', {
+        isNewCloud,
+        changed,
+        handle,
+        prevHandle: prevHandleRef.current,
+        bufferLen: splatBuffer?.length ?? 0,
+        shDegree: splatShDegree,
+        layoutVersion: splatLayoutVersion,
+        originShifted: splatOriginShifted,
+      });
       if (!changed) return;
 
       // Drop any stale point geometry, then upload the packed splat buffer. The
@@ -173,6 +184,8 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
           usePointCloudStore.getState().summary?.count,
         );
         usePointCloudStore.getState().setSplatUploadStatus(uploadStatus);
+        // [SPLAT-DIAG] TEMP: upload result (outcome/counts/resourceMode). Remove once fixed.
+        console.info('[SPLAT-DIAG] uploadStatus', uploadStatus);
 
         // Start 3DGS in perspective for useful initial framing. The splat shader
         // also has an orthographic Jacobian for later dimension-mode switches.
@@ -199,6 +212,19 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
             const cy = (minY + maxY) / 2;
             const half = Math.max((maxX - minX) / 2, (maxY - minY) / 2, dz / 2);
             renderer.frameScene3D(cx - half, cy - half, cx + half, cy + half);
+            // [SPLAT-DIAG] TEMP: framing inputs + resulting camera height. Remove once fixed.
+            console.info('[SPLAT-DIAG] frame', {
+              origin: [ox, oy],
+              summaryMin: Array.from(summary.min),
+              summaryMax: Array.from(summary.max),
+              dz,
+              cx,
+              cy,
+              half,
+              cameraDistanceAfter: renderer.getCameraDistance(),
+            });
+          } else {
+            console.info('[SPLAT-DIAG] frame skipped: no summary');
           }
         }
       }

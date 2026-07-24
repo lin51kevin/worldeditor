@@ -43,3 +43,8 @@ codegen-units = 1
 opt-level = 'z'
 # Strip symbols from release artifacts (notably the wasm binary) to cut size.
 strip = true
+# Abort on panic in release builds: drops unwinding tables/landing pads from the
+# binary (meaningful size win on a large wgpu/tokio/Tauri binary). Safe here —
+# the codebase never uses std::panic::catch_unwind. Tests run in the dev profile
+# (still unwind), so `cargo test` is unaffected.
+panic = "abort"
