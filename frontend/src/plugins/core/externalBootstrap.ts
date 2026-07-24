@@ -14,6 +14,7 @@
 import { loadPluginBundle, unloadPluginBundle, type PluginManifest } from './pluginLoader';
 import type { PluginPermission } from './pluginApi';
 import { installSharedRuntime } from './sharedRuntime';
+import { isBetaPluginHidden } from '../builtinRegistry';
 
 /** Subset of the backend `plugin_list` DTO consumed here. */
 interface ServerPluginInfo {
@@ -55,6 +56,9 @@ export async function bootstrapExternalPlugins(): Promise<() => void> {
     await Promise.all(
       plugins
         .filter((p) => p.status === 'available')
+        // Beta plugins shipped as external bundles stay hidden in production,
+        // matching the built-in beta gating (dev / VITE_SHOW_BETA_PLUGINS only).
+        .filter((p) => !isBetaPluginHidden(p.id))
         .map(async (info) => {
           try {
             const js = await invoke<string>('plugin_get_script', { id: info.id });

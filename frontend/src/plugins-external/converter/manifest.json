@@ -1,11 +1,13 @@
 {
-  "id": "converter",
-  "name": "Batch Converter",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "description": "Batch format conversion using registered importers/exporters",
-  "author": "WorldEditor Team",
-  "license": "MIT",
-  "dependencies": [],
-  "permissions": ["ui:panel"]
+    "id": "converter",
+    "name": "Batch Converter",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "description": "Batch format conversion using registered importers/exporters",
+    "author": "WorldEditor Team",
+    "license": "MIT",
+    "dependencies": [],
+    "permissions": [
+        "ui:panel"
+    ]
 }

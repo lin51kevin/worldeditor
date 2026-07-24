@@ -66,8 +66,7 @@ vi.mock('./gis-viz/scripting/scripting-beta.plugin', () => ({ mountScriptingPlug
 vi.mock('./gis-viz/ecosystem/ecosystem-beta.plugin', () => ({ mountEcosystemPlugin: mounts.ecosystem.mount }));
 vi.mock('./editing/shape-editor/shape-editor.plugin', () => ({ mountShapeEditorPlugin: mounts.shapeEditor.mount }));
 
-import { BUILTIN_PLUGINS } from './builtinRegistry';
-
+import { BUILTIN_PLUGINS, isBetaPluginHidden } from './builtinRegistry';
 const mountById = {
   'road-tools': mounts.roadTools,
   'builtin-templates': mounts.templates,
@@ -112,6 +111,15 @@ describe('builtinRegistry', () => {
   it('keeps all builtin plugin ids unique', () => {
     const ids = BUILTIN_PLUGINS.map((plugin) => plugin.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('beta gating: non-beta plugins are never hidden; beta plugins visible in dev/test', () => {
+    // Non-beta plugin is never hidden.
+    expect(isBetaPluginHidden('io-csv-import')).toBe(false);
+    expect(isBetaPluginHidden('validation')).toBe(false);
+    // Beta plugins are enabled in dev/test builds (import.meta.env.DEV), so not hidden here.
+    expect(isBetaPluginHidden('lane-detect')).toBe(false);
+    expect(isBetaPluginHidden('satellite-beta')).toBe(false);
   });
 
   it('delegates each builtin entry to its corresponding mount function', () => {

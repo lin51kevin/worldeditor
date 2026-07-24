@@ -1,11 +1,18 @@
 {
-  "id": "traffic",
-  "name": "Traffic Control",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "description": "Traffic signal phasing, timing editor, and SUMO network I/O",
-  "author": "WorldEditor Team",
-  "license": "MIT",
-  "dependencies": [],
-  "permissions": ["project:read", "project:write", "ui:panel", "ui:menu", "io:import", "io:export"]
+    "id": "traffic",
+    "name": "Traffic Control",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "description": "Traffic signal phasing, timing editor, and SUMO network I/O",
+    "author": "WorldEditor Team",
+    "license": "MIT",
+    "dependencies": [],
+    "permissions": [
+        "project:read",
+        "project:write",
+        "ui:panel",
+        "ui:menu",
+        "io:import",
+        "io:export"
+    ]
 }

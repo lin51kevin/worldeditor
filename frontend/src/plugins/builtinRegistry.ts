@@ -150,6 +150,17 @@ const BETA_PLUGIN_IDS = new Set<string>([
 const BETA_PLUGINS_ENABLED =
   import.meta.env.DEV || import.meta.env.VITE_SHOW_BETA_PLUGINS === 'true';
 
+/**
+ * Whether a plugin id is beta-gated and should be HIDDEN in this build.
+ *
+ * Used by the external plugin bootstrap so that beta plugins shipped as external
+ * bundles stay hidden in production (matching the built-in gating), and only
+ * load in dev / when `VITE_SHOW_BETA_PLUGINS=true`.
+ */
+export function isBetaPluginHidden(id: string): boolean {
+  return BETA_PLUGIN_IDS.has(id) && !BETA_PLUGINS_ENABLED;
+}
+
 /** Builtin plugins with mount functions attached (beta plugins hidden in production). */
 export const BUILTIN_PLUGINS: BuiltinPluginEntry[] = BUILTIN_META.filter(
   (meta) => BETA_PLUGINS_ENABLED || !BETA_PLUGIN_IDS.has(meta.id),
@@ -183,6 +194,9 @@ export const EXTERNALIZED_ON_DESKTOP: ReadonlyMap<string, string> = new Map([
   ['validation', 'validation'],
   ['traffic', 'traffic'],
   ['converter', 'converter'],
+  ['ecosystem-beta', 'ecosystem-beta'],
+  ['lane-detect', 'lane-detect'],
+  ['3d-models', '3d-models'],
 ]);
 
 /** True when running inside the Tauri desktop shell (has filesystem plugin loading). */
