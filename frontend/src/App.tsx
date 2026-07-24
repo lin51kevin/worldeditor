@@ -43,7 +43,7 @@ import { isDrawMode, useViewportStore } from './stores/viewportStore';
 import { useBuiltinPluginStore } from './stores/builtinPluginStore';
 import { useRecentFilesStore } from './stores/recentFilesStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { BUILTIN_PLUGINS, isExternalizedOnDesktop } from './plugins/builtinRegistry';
+import { BUILTIN_PLUGINS } from './plugins/builtinRegistry';
 import { bootstrapExternalPlugins } from './plugins/core/externalBootstrap';
 import { getPlatformService } from './services';
 import { useLoadingProgressStore } from './stores/loadingProgressStore';
@@ -142,7 +142,7 @@ export function App() {
     const { suspendPanelUpdates } = usePluginContribStore.getState();
     const flush = suspendPanelUpdates();
     const cleanups = BUILTIN_PLUGINS
-      .filter((p) => !disabledBuiltins.includes(p.id) && !isExternalizedOnDesktop(p.id))
+      .filter((p) => !disabledBuiltins.includes(p.id))
       .map((p) => {
         try {
           return p.mount();

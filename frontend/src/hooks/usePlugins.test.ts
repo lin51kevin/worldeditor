@@ -10,6 +10,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 // Suppress built-in plugins so tests see only server-provided plugins
 vi.mock('../plugins/builtinRegistry', () => ({
   BUILTIN_PLUGINS: [],
+  isExternalBuiltinDuplicate: () => false,
 }));
 
 // Mock plugin loader to avoid URL.createObjectURL in jsdom

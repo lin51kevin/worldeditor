@@ -181,6 +181,13 @@ export const BUILTIN_PLUGINS: BuiltinPluginEntry[] = BUILTIN_META.filter(
  *
  * Keys are the builtin ids in {@link BUILTIN_PLUGINS}; the external plugin's
  * manifest id may differ (see the value).
+ *
+ * NOTE: built-ins are the canonical, always-loaded delivery on BOTH platforms.
+ * These external bundles are an additional distribution form; on desktop they
+ * are only ever loaded if the built-in that covers them is unavailable. Because
+ * the external `plugins/` directory is not guaranteed to be built/discovered
+ * (e.g. `cargo tauri dev` without `just build-plugins`), the app must never hide
+ * or unmount a built-in on the assumption that its external copy exists.
  */
 export const EXTERNALIZED_ON_DESKTOP: ReadonlyMap<string, string> = new Map([
   ['io-csv-import', 'io-csv'],
@@ -204,15 +211,17 @@ export const EXTERNALIZED_ON_DESKTOP: ReadonlyMap<string, string> = new Map([
   ['scripting-beta', 'scripting-beta'],
 ]);
 
-/** True when running inside the Tauri desktop shell (has filesystem plugin loading). */
-function isDesktopRuntime(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
+/** External plugin ids that duplicate a built-in (shipped both compiled-in and as a bundle). */
+export const EXTERNAL_BUILTIN_DUPLICATE_IDS: ReadonlySet<string> = new Set(
+  EXTERNALIZED_ON_DESKTOP.values(),
+);
 
 /**
- * Whether a builtin plugin should be skipped by the static mount loop because
- * an external filesystem copy provides it on this platform.
+ * Whether an external (filesystem) plugin id is merely a duplicate of a
+ * compiled-in built-in. Such duplicates are NOT loaded (the built-in covers
+ * them) and are hidden from the Plugin Manager to avoid duplicate rows; only
+ * genuinely third-party external plugins are loaded and shown.
  */
-export function isExternalizedOnDesktop(builtinId: string): boolean {
-  return isDesktopRuntime() && EXTERNALIZED_ON_DESKTOP.has(builtinId);
+export function isExternalBuiltinDuplicate(externalId: string): boolean {
+  return EXTERNAL_BUILTIN_DUPLICATE_IDS.has(externalId);
 }

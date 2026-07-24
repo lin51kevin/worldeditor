@@ -68,7 +68,7 @@ vi.mock('./gis-viz/ecosystem/ecosystem-beta.plugin', () => ({ mountEcosystemPlug
 vi.mock('./editing/shape-editor/shape-editor.plugin', () => ({ mountShapeEditorPlugin: mounts.shapeEditor.mount }));
 vi.mock('./viewer/trajectory/trajectory.plugin', () => ({ mountTrajectoryPlugin: mounts.trajectory.mount }));
 
-import { BUILTIN_PLUGINS, isBetaPluginHidden } from './builtinRegistry';
+import { BUILTIN_PLUGINS, isBetaPluginHidden, isExternalBuiltinDuplicate } from './builtinRegistry';
 const mountById = {
   'road-tools': mounts.roadTools,
   'builtin-templates': mounts.templates,
@@ -123,6 +123,15 @@ describe('builtinRegistry', () => {
     // Beta plugins are enabled in dev/test builds (import.meta.env.DEV), so not hidden here.
     expect(isBetaPluginHidden('lane-detect')).toBe(false);
     expect(isBetaPluginHidden('satellite-beta')).toBe(false);
+  });
+
+  it('flags external filesystem ids that merely duplicate a built-in', () => {
+    // External bundle ids that duplicate a compiled-in built-in.
+    expect(isExternalBuiltinDuplicate('io-csv')).toBe(true);
+    expect(isExternalBuiltinDuplicate('validation')).toBe(true);
+    expect(isExternalBuiltinDuplicate('satellite-beta')).toBe(true);
+    // A genuinely third-party plugin id is not a duplicate.
+    expect(isExternalBuiltinDuplicate('acme-custom-tool')).toBe(false);
   });
 
   it('delegates each builtin entry to its corresponding mount function', () => {

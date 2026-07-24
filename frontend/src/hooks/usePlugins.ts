@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { BUILTIN_PLUGINS, isExternalizedOnDesktop } from '../plugins/builtinRegistry';
+import { BUILTIN_PLUGINS, isExternalBuiltinDuplicate } from '../plugins/builtinRegistry';
 import { loadPluginBundle, unloadPluginBundle, type PluginManifest } from '../plugins/core/pluginLoader';
 import type { PluginPermission } from '../plugins/core/pluginApi';
 import { useBuiltinPluginStore } from '../stores/builtinPluginStore';
@@ -88,24 +88,24 @@ export function usePlugins(): UsePluginsReturn {
   }, [invokeCommand]);
 
   /**
-   * Merged plugin list: built-ins (always loaded) + external (discovered by backend).
-   * For external plugins that have been JS-loaded in this session, status is overridden to 'loaded'.
+   * Merged plugin list: built-ins (canonical, always loaded on both platforms)
+   * + genuinely third-party external plugins discovered by the backend.
    *
-   * On the desktop build, built-ins that are shipped as external filesystem plugins
-   * are hidden here — the external entry (from the backend) represents them instead,
-   * avoiding a duplicate row in the Plugin Manager.
+   * Built-ins are always shown. External filesystem plugins that merely
+   * duplicate a built-in (same feature shipped both ways) are hidden here so the
+   * built-in is the single source of truth and no duplicate rows appear.
    */
   const plugins = useMemo<PluginInfo[]>(() => {
-    const builtins = BUILTIN_PLUGINS
-      .filter((p) => !isExternalizedOnDesktop(p.id))
+    const builtins = BUILTIN_PLUGINS.map((p) => ({
+      ...p,
+      status: disabledBuiltins.includes(p.id) ? ('disabled' as const) : p.status,
+    }));
+    const external = serverPlugins
+      .filter((p) => !isExternalBuiltinDuplicate(p.id))
       .map((p) => ({
         ...p,
-        status: disabledBuiltins.includes(p.id) ? ('disabled' as const) : p.status,
+        status: loadedIds.has(p.id) ? ('loaded' as const) : p.status,
       }));
-    const external = serverPlugins.map((p) => ({
-      ...p,
-      status: loadedIds.has(p.id) ? ('loaded' as const) : p.status,
-    }));
     return [...builtins, ...external];
   }, [serverPlugins, loadedIds, disabledBuiltins]);
 
