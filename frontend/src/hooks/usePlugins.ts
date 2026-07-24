@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { BUILTIN_PLUGINS } from '../plugins/builtinRegistry';
+import { BUILTIN_PLUGINS, isExternalizedOnDesktop } from '../plugins/builtinRegistry';
 import { loadPluginBundle, unloadPluginBundle, type PluginManifest } from '../plugins/core/pluginLoader';
 import type { PluginPermission } from '../plugins/core/pluginApi';
 import { useBuiltinPluginStore } from '../stores/builtinPluginStore';
@@ -88,12 +88,18 @@ export function usePlugins(): UsePluginsReturn {
   /**
    * Merged plugin list: built-ins (always loaded) + external (discovered by backend).
    * For external plugins that have been JS-loaded in this session, status is overridden to 'loaded'.
+   *
+   * On the desktop build, built-ins that are shipped as external filesystem plugins
+   * are hidden here — the external entry (from the backend) represents them instead,
+   * avoiding a duplicate row in the Plugin Manager.
    */
   const plugins = useMemo<PluginInfo[]>(() => {
-    const builtins = BUILTIN_PLUGINS.map((p) => ({
-      ...p,
-      status: disabledBuiltins.includes(p.id) ? ('disabled' as const) : p.status,
-    }));
+    const builtins = BUILTIN_PLUGINS
+      .filter((p) => !isExternalizedOnDesktop(p.id))
+      .map((p) => ({
+        ...p,
+        status: disabledBuiltins.includes(p.id) ? ('disabled' as const) : p.status,
+      }));
     const external = serverPlugins.map((p) => ({
       ...p,
       status: loadedIds.has(p.id) ? ('loaded' as const) : p.status,

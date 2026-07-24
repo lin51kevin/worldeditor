@@ -157,3 +157,40 @@ export const BUILTIN_PLUGINS: BuiltinPluginEntry[] = BUILTIN_META.filter(
   ...meta,
   mount: MOUNT_MAP[meta.id] ?? (() => () => {}),
 }));
+
+/**
+ * Builtin plugin ids that are shipped as EXTERNAL filesystem plugins on the
+ * Tauri desktop build (loaded from `plugins/<id>/dist/index.js` at runtime by
+ * {@link bootstrapExternalPlugins}). On desktop these are skipped by the static
+ * mount loop to avoid double-registration; on the web build they stay compiled
+ * in and mount statically as before (no filesystem access there).
+ *
+ * Keys are the builtin ids in {@link BUILTIN_PLUGINS}; the external plugin's
+ * manifest id may differ (see the value).
+ */
+export const EXTERNALIZED_ON_DESKTOP: ReadonlyMap<string, string> = new Map([
+  ['io-csv-import', 'io-csv'],
+  ['io-obj3d-export', 'io-obj3d'],
+  ['io-osm-export', 'io-osm'],
+  ['io-dxf', 'io-dxf'],
+  ['io-mif', 'io-mif'],
+  ['io-lanelet2', 'io-lanelet2'],
+  ['io-xodr-ext', 'io-xodr-ext'],
+  ['io-nio', 'io-nio'],
+  ['io-shapefile', 'io-shapefile'],
+  ['io-signals', 'io-signals'],
+  ['gis-tools', 'gis-tools'],
+]);
+
+/** True when running inside the Tauri desktop shell (has filesystem plugin loading). */
+function isDesktopRuntime(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+/**
+ * Whether a builtin plugin should be skipped by the static mount loop because
+ * an external filesystem copy provides it on this platform.
+ */
+export function isExternalizedOnDesktop(builtinId: string): boolean {
+  return isDesktopRuntime() && EXTERNALIZED_ON_DESKTOP.has(builtinId);
+}

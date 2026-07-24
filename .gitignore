@@ -25,6 +25,14 @@ src-tauri/target/
 # WASM build output
 crates/we-wasm/pkg/
 
+# Generated external plugin bundles (built by scripts/build-plugins.mjs from
+# frontend/src/plugins-external/). Source of truth lives in the frontend tree;
+# these are build artifacts shipped via Tauri bundle.resources. Only the
+# hand-authored example plugin is tracked.
+/plugins/*/
+!/plugins/plugin-example/
+!/plugins/plugin-example/**
+
 # IDE
 .idea/
 .vscode/settings.json

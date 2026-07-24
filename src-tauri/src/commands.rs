@@ -120,7 +120,11 @@ pub fn plugin_list(registry: State<'_, SharedPluginRegistry>) -> Vec<PluginInfoD
         .collect()
 }
 
-/// Read the plugin's compiled JS bundle (`dist/plugin.js`) and return its content.
+/// Read the plugin's compiled JS bundle and return its content.
+///
+/// The entry-point path is taken from the plugin's resolved manifest (`main`),
+/// so it honours conventions like `dist/index.js` and works for both bundled
+/// and user-installed plugins regardless of which directory they live in.
 #[tauri::command]
 pub fn plugin_get_script(
     id: String,
@@ -131,7 +135,9 @@ pub fn plugin_get_script(
         return Err("Invalid plugin id".to_string());
     }
     let inner = registry.read();
-    let script_path = inner.plugins_dir().join(&id).join("dist").join("plugin.js");
+    let script_path = inner
+        .plugin_script_path(&id)
+        .ok_or_else(|| format!("Plugin '{}' not found", id))?;
     std::fs::read_to_string(&script_path)
         .map_err(|e| format!("Cannot read plugin script for '{}': {}", id, e))
 }

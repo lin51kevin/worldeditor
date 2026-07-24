@@ -43,7 +43,8 @@ import { isDrawMode, useViewportStore } from './stores/viewportStore';
 import { useBuiltinPluginStore } from './stores/builtinPluginStore';
 import { useRecentFilesStore } from './stores/recentFilesStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { BUILTIN_PLUGINS } from './plugins/builtinRegistry';
+import { BUILTIN_PLUGINS, isExternalizedOnDesktop } from './plugins/builtinRegistry';
+import { bootstrapExternalPlugins } from './plugins/core/externalBootstrap';
 import { getPlatformService } from './services';
 import { useLoadingProgressStore } from './stores/loadingProgressStore';
 import { showAlert } from './utils/dialog';
@@ -141,7 +142,7 @@ export function App() {
     const { suspendPanelUpdates } = usePluginContribStore.getState();
     const flush = suspendPanelUpdates();
     const cleanups = BUILTIN_PLUGINS
-      .filter((p) => !disabledBuiltins.includes(p.id))
+      .filter((p) => !disabledBuiltins.includes(p.id) && !isExternalizedOnDesktop(p.id))
       .map((p) => {
         try {
           return p.mount();
@@ -153,6 +154,23 @@ export function App() {
     flush(); // batch-register all panels in one state update
     return () => cleanups.forEach((fn) => fn());
   }, [disabledBuiltins]);
+
+  // Discover and load external filesystem plugins (Tauri desktop only; no-op on web).
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    let disposed = false;
+    void bootstrapExternalPlugins().then((fn) => {
+      if (disposed) {
+        fn();
+      } else {
+        cleanup = fn;
+      }
+    });
+    return () => {
+      disposed = true;
+      cleanup?.();
+    };
+  }, []);
 
   // Auto-collapse the template panel when its plugin is disabled
   useEffect(() => {

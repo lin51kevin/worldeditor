@@ -124,6 +124,19 @@ pub fn run() {
             let shared_registry = we_plugin_core::SharedPluginRegistry::new(
                 we_plugin_core::PluginRegistry::new(&plugins_dir),
             );
+            // Also scan the read-only bundled plugins shipped inside the app
+            // resource directory (see tauri.conf.json `bundle.resources`). User
+            // plugins in `plugins_dir` override bundled ones with the same id.
+            if let Ok(bundled_dir) = app
+                .path()
+                .resolve("plugins", tauri::path::BaseDirectory::Resource)
+            {
+                if bundled_dir.exists() {
+                    shared_registry.write().add_bundled_dir(bundled_dir);
+                } else {
+                    log::info!("No bundled plugins directory at {:?}", bundled_dir);
+                }
+            }
             let registry_handle = shared_registry.inner().clone();
             app.manage(shared_registry);
             std::thread::spawn(move || {

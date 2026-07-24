@@ -34,6 +34,62 @@ import type {
 } from '../../stores/pluginContribStore';
 import type { Project } from '../../services/platform';
 
+// ── Codec (host-backed format conversion) ───────────────────────────────────
+
+/** Formats the host can convert via its WASM engine on a plugin's behalf. */
+export type CodecFormat = 'dxf' | 'mif' | 'lanelet2' | 'shapefile' | 'nio' | 'xodr';
+
+/**
+ * Whitelisted format codecs backed by the host WASM engine.
+ *
+ * Sandboxed external plugins cannot import the WASM module directly (the guard
+ * forbids dynamic module loading), so parsing/serialisation that needs Rust is
+ * routed through this narrow, host-implemented surface. The format set is a
+ * closed union — plugins can never name an arbitrary WASM function.
+ */
+export interface PluginCodec {
+  /** Parse file content into a Project (requires `io:import`). */
+  importFrom(format: CodecFormat, content: string | ArrayBuffer): Promise<Project>;
+  /** Serialise a Project to text or binary (requires `io:export`). */
+  exportTo(format: CodecFormat, project: Project): Promise<string | Uint8Array>;
+  /** Parse a signal-definition JSON blob into normalised signal JSON (requires `io:import`). */
+  parseSignalsJson(json: string): Promise<string>;
+}
+
+// ── GIS (host-backed coordinate conversion) ─────────────────────────────────
+
+/** A geographic coordinate (WGS84/GCJ-02/ECEF-as-geodetic). */
+export interface GeoCoord { lat: number; lon: number; alt: number }
+/** A UTM coordinate. */
+export interface UtmCoord { easting: number; northing: number; zone: number; is_northern: boolean; alt: number }
+/** An ECEF cartesian coordinate. */
+export interface EcefCoord { x: number; y: number; z: number }
+
+/**
+ * Whitelisted coordinate-system conversions backed by the host WASM engine.
+ * Sandboxed plugins (e.g. the GIS tools panel) cannot import WASM directly, so
+ * conversions are routed through this narrow host surface (requires `project:read`).
+ */
+export interface PluginGis {
+  wgs84ToGcj02(lat: number, lon: number, alt: number): Promise<GeoCoord>;
+  gcj02ToWgs84(lat: number, lon: number, alt: number): Promise<GeoCoord>;
+  geoToUtm(lat: number, lon: number, alt: number): Promise<UtmCoord>;
+  utmToGeo(easting: number, northing: number, zone: number, isNorthern: boolean, alt: number): Promise<GeoCoord>;
+  geodeticToEcef(lat: number, lon: number, alt: number): Promise<EcefCoord>;
+  ecefToGeodetic(x: number, y: number, z: number): Promise<GeoCoord>;
+  geoToMgrs(lat: number, lon: number, precision: number): Promise<string>;
+}
+
+/** Decode arbitrary import content to text. */
+function toText(content: string | ArrayBuffer): string {
+  return typeof content === 'string' ? content : new TextDecoder().decode(content);
+}
+
+/** Coerce arbitrary import content to bytes. */
+function toBytes(content: string | ArrayBuffer): Uint8Array {
+  return content instanceof ArrayBuffer ? new Uint8Array(content) : new TextEncoder().encode(content);
+}
+
 // ── Permission system ─────────────────────────────────────────────────────────
 
 /** Permissions that plugins can request in their manifest. */
@@ -110,6 +166,43 @@ export interface PluginContext {
   // Panel tab visibility
   togglePanel(panelId: string): void;
   isPanelVisible(panelId: string): boolean;
+
+  /**
+   * Save exported text content to disk (native "Save As" dialog on desktop,
+   * browser download on web). Requires the `io:export` permission.
+   *
+   * Exposed as a host API so external, sandboxed plugins can export files
+   * without bundling platform (Tauri) modules, which the sandbox guard forbids.
+   *
+   * @param filename   Suggested filename with extension, e.g. `roads.csv`.
+   * @param content    The text content to write.
+   * @param extensions Optional dot-less extensions for the save-dialog filter.
+   */
+  saveTextFile(filename: string, content: string, extensions?: string[]): Promise<void>;
+
+  /**
+   * Save exported binary content to disk (native "Save As" dialog on desktop,
+   * browser download on web). Requires the `io:export` permission.
+   *
+   * @param filename   Suggested filename with extension, e.g. `roads.shp`.
+   * @param data       The bytes to write.
+   * @param extensions Optional dot-less extensions for the save-dialog filter.
+   */
+  saveBinaryFile(filename: string, data: Uint8Array, extensions?: string[]): Promise<void>;
+
+  /** Host-backed format codecs for parsing/serialisation that needs the WASM engine. */
+  codec: PluginCodec;
+
+  /** Host-backed coordinate-system conversions (requires `project:read`). */
+  gis: PluginGis;
+
+  /**
+   * Inject a CSS stylesheet for this plugin's UI. The stylesheet is scoped to
+   * the plugin's lifetime and removed automatically on unload. Requires `ui:panel`.
+   *
+   * Exposed as a host API so sandboxed plugins never touch the DOM directly.
+   */
+  injectStyles(css: string): void;
 }
 
 type SetupFn = (ctx: PluginContext) => (() => void) | void;
@@ -121,6 +214,9 @@ interface WePluginApi {
 
 /** Cleanup functions keyed by plugin ID */
 const cleanupFns = new Map<string, () => void>();
+
+/** Injected <style> elements keyed by plugin ID (removed on unload). */
+const injectedStyles = new Map<string, HTMLStyleElement[]>();
 
 /**
  * Manifest-declared permissions per plugin ID.
@@ -258,6 +354,106 @@ export function installPluginApi(): void {
         isPanelVisible: (panelId: string): boolean => {
           return usePluginContribStore.getState().isPanelVisible(panelId);
         },
+
+        saveTextFile: async (filename, content, extensions) => {
+          requirePermission(id, granted, 'io:export');
+          const { saveExport } = await import('../../utils/download');
+          const ext = extensions ?? [filename.split('.').pop() ?? 'txt'];
+          const blob = new Blob([content], { type: 'text/plain' });
+          await saveExport(blob, filename, [{ name: filename, extensions: ext }]);
+        },
+
+        saveBinaryFile: async (filename, data, extensions) => {
+          requirePermission(id, granted, 'io:export');
+          const { saveExport } = await import('../../utils/download');
+          const ext = extensions ?? [filename.split('.').pop() ?? 'bin'];
+          const blob = new Blob([data as BlobPart], { type: 'application/octet-stream' });
+          await saveExport(blob, filename, [{ name: filename, extensions: ext }]);
+        },
+
+        codec: {
+          importFrom: async (format, content) => {
+            requirePermission(id, granted, 'io:import');
+            const wasm = await import('../../../wasm/pkg/we_wasm');
+            switch (format) {
+              case 'dxf': return wasm.import_from_dxf(toText(content)) as Project;
+              case 'mif': return wasm.import_from_mif(toText(content)) as Project;
+              case 'lanelet2': return wasm.import_from_lanelet2(toText(content)) as Project;
+              case 'xodr': return wasm.parse_opendrive(toText(content)) as Project;
+              case 'nio': return wasm.import_from_nio(toBytes(content)) as Project;
+              case 'shapefile': return wasm.import_from_shapefile(toBytes(content)) as Project;
+              default: throw new Error(`Unknown import format: ${String(format)}`);
+            }
+          },
+          exportTo: async (format, project) => {
+            requirePermission(id, granted, 'io:export');
+            const wasm = await import('../../../wasm/pkg/we_wasm');
+            const json = JSON.stringify(project);
+            switch (format) {
+              case 'dxf': return wasm.export_to_dxf(json) as string;
+              case 'mif': return wasm.export_to_mif(json) as string;
+              case 'lanelet2': return wasm.export_to_lanelet2(json) as string;
+              case 'xodr': return wasm.write_opendrive(json) as string;
+              case 'nio': return wasm.export_to_nio(json) as Uint8Array;
+              case 'shapefile': return wasm.export_to_shapefile(json) as Uint8Array;
+              default: throw new Error(`Unknown export format: ${String(format)}`);
+            }
+          },
+          parseSignalsJson: async (json) => {
+            requirePermission(id, granted, 'io:import');
+            const wasm = await import('../../../wasm/pkg/we_wasm');
+            return wasm.import_signals_from_json(json) as string;
+          },
+        },
+
+        gis: {
+          wgs84ToGcj02: async (lat, lon, alt) => {
+            requirePermission(id, granted, 'project:read');
+            const wasm = await import('../../../wasm/pkg/we_wasm');
+            return wasm.wgs84_to_gcj02(lat, lon, alt) as GeoCoord;
+          },
+          gcj02ToWgs84: async (lat, lon, alt) => {
+            requirePermission(id, granted, 'project:read');
+            const wasm = await import('../../../wasm/pkg/we_wasm');
+            return wasm.gcj02_to_wgs84(lat, lon, alt) as GeoCoord;
+          },
+          geoToUtm: async (lat, lon, alt) => {
+            requirePermission(id, granted, 'project:read');
+            const wasm = await import('../../../wasm/pkg/we_wasm');
+            return wasm.geo_to_utm(lat, lon, alt) as UtmCoord;
+          },
+          utmToGeo: async (easting, northing, zone, isNorthern, alt) => {
+            requirePermission(id, granted, 'project:read');
+            const wasm = await import('../../../wasm/pkg/we_wasm');
+            return wasm.utm_to_geo(easting, northing, zone, isNorthern, alt) as GeoCoord;
+          },
+          geodeticToEcef: async (lat, lon, alt) => {
+            requirePermission(id, granted, 'project:read');
+            const wasm = await import('../../../wasm/pkg/we_wasm');
+            return wasm.geodetic_to_ecef(lat, lon, alt) as EcefCoord;
+          },
+          ecefToGeodetic: async (x, y, z) => {
+            requirePermission(id, granted, 'project:read');
+            const wasm = await import('../../../wasm/pkg/we_wasm');
+            return wasm.ecef_to_geodetic(x, y, z) as GeoCoord;
+          },
+          geoToMgrs: async (lat, lon, precision) => {
+            requirePermission(id, granted, 'project:read');
+            const wasm = await import('../../../wasm/pkg/we_wasm');
+            return wasm.geo_to_mgrs(lat, lon, precision) as string;
+          },
+        },
+
+        injectStyles: (css: string): void => {
+          requirePermission(id, granted, 'ui:panel');
+          const style = document.createElement('style');
+          style.dataset.pluginId = id;
+          style.textContent = css;
+          document.head.appendChild(style);
+          const list = injectedStyles.get(id) ?? [];
+          list.push(style);
+          injectedStyles.set(id, list);
+        },
       };
 
       const cleanup = setup(ctx);
@@ -275,6 +471,14 @@ export function installPluginApi(): void {
       }
       // Always ensure contributions are cleaned up even if plugin provided custom cleanup
       usePluginContribStore.getState().unregisterPlugin(id);
+      // Remove any stylesheets this plugin injected.
+      const styles = injectedStyles.get(id);
+      if (styles) {
+        for (const style of styles) {
+          style.parentNode?.removeChild(style);
+        }
+        injectedStyles.delete(id);
+      }
     },
   };
 

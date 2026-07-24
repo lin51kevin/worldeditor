@@ -1,0 +1,11 @@
+{
+  "id": "io-osm",
+  "name": "OSM Export",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "description": "Export roads as OpenStreetMap XML",
+  "author": "WorldEditor Team",
+  "license": "MIT",
+  "dependencies": [],
+  "permissions": ["io:export"]
+}

@@ -25,8 +25,14 @@ pub struct PluginRegistry {
     loaded: HashMap<String, LoadedPlugin>,
     /// Disabled plugins (id -> reason)
     disabled: HashMap<String, String>,
-    /// Plugins directory path
+    /// Primary (user-writable) plugins directory path.
+    ///
+    /// Plugins installed here take precedence over bundled plugins with the
+    /// same id, allowing users to override or update shipped plugins.
     plugins_dir: PathBuf,
+    /// Additional read-only search directories (e.g. the app-bundle resource
+    /// directory). Scanned before `plugins_dir` so user plugins win on id clash.
+    bundled_dirs: Vec<PathBuf>,
 }
 
 impl PluginRegistry {
@@ -37,7 +43,23 @@ impl PluginRegistry {
             loaded: HashMap::new(),
             disabled: HashMap::new(),
             plugins_dir: plugins_dir.into(),
+            bundled_dirs: Vec::new(),
         }
+    }
+
+    /// Register an additional read-only search directory (e.g. bundled plugins
+    /// shipped inside the application resource folder). Bundled directories are
+    /// scanned first, so a same-id plugin in the writable `plugins_dir`
+    /// overrides the bundled one.
+    pub fn add_bundled_dir(&mut self, dir: impl Into<PathBuf>) {
+        self.bundled_dirs.push(dir.into());
+    }
+
+    /// Resolve the absolute path of a discovered plugin's entry-point script
+    /// (`plugin_dir/<manifest.main>`), honouring whatever `main` the manifest
+    /// declares (e.g. `dist/index.js`). Returns `None` for unknown ids.
+    pub fn plugin_script_path(&self, id: &str) -> Option<PathBuf> {
+        self.discovered.get(id).map(|r| r.main_path.clone())
     }
 
     /// Set the plugins directory and scan for available plugins
@@ -92,22 +114,32 @@ impl PluginRegistry {
         self.discovered.clear();
     }
 
-    /// Find all manifest.json files in the plugins directory
+    /// Find all manifest.json files across every search directory.
+    ///
+    /// Bundled (read-only) directories are scanned first and the user-writable
+    /// `plugins_dir` last, so that when the same plugin id exists in both, the
+    /// user copy is inserted last into the `discovered` map and wins.
     #[cfg(not(target_arch = "wasm32"))]
     fn find_manifests(&self) -> Vec<PathBuf> {
         let mut manifests = Vec::new();
-        if !self.plugins_dir.exists() {
-            return manifests;
-        }
+        let dirs = self
+            .bundled_dirs
+            .iter()
+            .chain(std::iter::once(&self.plugins_dir));
 
-        // Scan for plugins: each subdirectory with a manifest.json
-        if let Ok(entries) = std::fs::read_dir(&self.plugins_dir) {
-            for entry in entries.filter_map(Result::ok) {
-                let path = entry.path();
-                if path.is_dir() {
-                    let manifest_path = path.join("manifest.json");
-                    if manifest_path.exists() {
-                        manifests.push(manifest_path);
+        for dir in dirs {
+            if !dir.exists() {
+                continue;
+            }
+            // Scan for plugins: each subdirectory with a manifest.json
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.filter_map(Result::ok) {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        let manifest_path = path.join("manifest.json");
+                        if manifest_path.exists() {
+                            manifests.push(manifest_path);
+                        }
                     }
                 }
             }
@@ -389,6 +421,59 @@ mod tests {
         let registry = create_test_registry();
         assert!(registry.list_discovered().is_empty());
         assert!(registry.list_loaded().is_empty());
+    }
+
+    #[test]
+    fn test_plugin_script_path_honours_manifest_main() {
+        let manifest = r#"{
+            "id": "example-plugin",
+            "name": "Example",
+            "version": "1.0.0",
+            "main": "dist/index.js"
+        }"#;
+        let (temp_dir, registry) = create_registry_with_plugin(manifest);
+        let expected = temp_dir
+            .path()
+            .join("example-plugin")
+            .join("dist")
+            .join("index.js");
+        assert_eq!(registry.plugin_script_path("example-plugin"), Some(expected));
+        assert!(registry.plugin_script_path("missing").is_none());
+    }
+
+    #[test]
+    fn test_bundled_dir_discovery_and_user_override() {
+        // Bundled (read-only) source directory with one plugin.
+        let bundled = tempfile::tempdir().unwrap();
+        let bundled_plugin = bundled.path().join("io-csv");
+        std::fs::create_dir_all(&bundled_plugin).unwrap();
+        std::fs::write(
+            bundled_plugin.join("manifest.json"),
+            r#"{"id":"io-csv","name":"CSV","version":"1.0.0","main":"dist/index.js"}"#,
+        )
+        .unwrap();
+
+        // User (writable) directory overrides the bundled plugin with a newer version.
+        let user = tempfile::tempdir().unwrap();
+        let user_plugin = user.path().join("io-csv");
+        std::fs::create_dir_all(&user_plugin).unwrap();
+        std::fs::write(
+            user_plugin.join("manifest.json"),
+            r#"{"id":"io-csv","name":"CSV","version":"2.0.0","main":"dist/index.js"}"#,
+        )
+        .unwrap();
+
+        let mut registry = PluginRegistry::new(user.path());
+        registry.add_bundled_dir(bundled.path());
+        registry.discover();
+
+        // Exactly one plugin id, and the user copy (v2.0.0) wins.
+        assert_eq!(registry.list_discovered().len(), 1);
+        let info = registry.plugin_info("io-csv").unwrap();
+        assert_eq!(info.version, "2.0.0");
+        // The resolved script path points into the user directory.
+        let script = registry.plugin_script_path("io-csv").unwrap();
+        assert!(script.starts_with(user.path()));
     }
 
     #[test]

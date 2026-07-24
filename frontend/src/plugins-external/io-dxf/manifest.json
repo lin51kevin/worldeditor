@@ -1,0 +1,11 @@
+{
+  "id": "io-dxf",
+  "name": "DXF I/O",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "description": "Import/export AutoCAD DXF centerlines",
+  "author": "WorldEditor Team",
+  "license": "MIT",
+  "dependencies": [],
+  "permissions": ["io:import", "io:export"]
+}

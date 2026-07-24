@@ -67,8 +67,14 @@ build-rnk: build-wasm-rnk
 build-frontend:
     cd frontend && yarn build
 
+# Build external filesystem plugins (esbuild → plugins/<id>/dist/index.js).
+# Requires Node 18+ (same as the frontend build). The output `plugins/`
+# directory is shipped via Tauri bundle.resources and loaded at runtime.
+build-plugins:
+    node scripts/build-plugins.mjs
+
 # Build everything
-build-all: build build-wasm build-frontend
+build-all: build build-wasm build-frontend build-plugins
 
 # ── Test ───────────────────────────────────────────
 
@@ -163,13 +169,13 @@ install-tauri-cli:
     cargo install tauri-cli
 
 # Bundle desktop installer for the current platform (release)
-bundle:
+bundle: build-plugins
     cd frontend && yarn install --immutable
     cargo tauri build
 
 # Bundle for a specific Rust target triple
 # Usage: just bundle-target x86_64-pc-windows-msvc
-bundle-target target:
+bundle-target target: build-plugins
     cd frontend && yarn install --immutable
     cargo tauri build --target {{target}}
 
