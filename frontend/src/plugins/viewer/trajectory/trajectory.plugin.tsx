@@ -11,8 +11,8 @@
  */
 
 import { usePluginContribStore } from '../../../stores/pluginContribStore';
-import { TrajectoryPlaybackBar } from '../../../components/panels/TrajectoryPlaybackBar';
-import { TrajectoryConfigPanel } from '../../../components/panels/TrajectoryConfigPanel';
+import { TrajectoryPlaybackBar } from './TrajectoryPlaybackBar';
+import { TrajectoryConfigPanel } from './TrajectoryConfigPanel';
 
 const PLUGIN_ID = 'trajectory';
 

@@ -4,9 +4,9 @@ import {
   useTrajectoryStore,
   TRAJECTORY_SPEEDS,
   type TrajectorySpeed,
-} from '../../stores/trajectoryStore';
-import { useTrajectoryConfigStore } from '../../stores/trajectoryConfigStore';
-import { promptImportTrajectory, stopTrajectory } from '../../viewport/trajectoryPlayback';
+} from '../../../stores/trajectoryStore';
+import { useTrajectoryConfigStore } from '../../../stores/trajectoryConfigStore';
+import { promptImportTrajectory, stopTrajectory } from '../../../viewport/trajectoryPlayback';
 import './TrajectoryPlaybackBar.css';
 
 /** Format seconds as `mm:ss.s` for the time readout. */

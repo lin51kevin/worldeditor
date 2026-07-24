@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ImageOff, Check } from 'lucide-react';
-import type { PlyCandidate } from '../../stores/trajectoryConfigStore';
+import type { PlyCandidate } from '../../../stores/trajectoryConfigStore';
 
 function keyName(key: string): string {
   const norm = key.replace(/\\/g, '/');

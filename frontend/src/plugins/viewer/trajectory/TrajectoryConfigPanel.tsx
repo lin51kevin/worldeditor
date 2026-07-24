@@ -16,17 +16,17 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderSearch, Trash2, Plus, Download, Upload, Check } from 'lucide-react';
-import { FloatingPanel } from '../layout/FloatingPanel';
-import { useTrajectoryStore } from '../../stores/trajectoryStore';
+import { FloatingPanel } from '../../../components/layout/FloatingPanel';
+import { useTrajectoryStore } from '../../../stores/trajectoryStore';
 import {
   useTrajectoryConfigStore,
   type LogsimSceneConfig,
-} from '../../stores/trajectoryConfigStore';
-import { getPlatformService } from '../../services';
-import { refreshActorModels, applySceneModel } from '../../viewport/trajectoryPlayback';
-import { scanAndClassify, classifyWebFiles } from '../../viewport/trajectorySceneScan';
+} from '../../../stores/trajectoryConfigStore';
+import { getPlatformService } from '../../../services';
+import { refreshActorModels, applySceneModel } from '../../../viewport/trajectoryPlayback';
+import { scanAndClassify, classifyWebFiles } from '../../../viewport/trajectorySceneScan';
 import { TrajectoryPlyThumbSelect } from './TrajectoryPlyThumbSelect';
-import { showAlert } from '../../utils/dialog';
+import { showAlert } from '../../../utils/dialog';
 import './TrajectoryConfigPanel.css';
 
 function isTauri(): boolean {

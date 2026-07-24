@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TrajectoryPlaybackBar } from './TrajectoryPlaybackBar';
-import { useTrajectoryStore } from '../../stores/trajectoryStore';
-import { parseTraj } from '../../plugins/npc-actors';
+import { useTrajectoryStore } from '../../../stores/trajectoryStore';
+import { parseTraj } from '../../npc-actors';
 
 const CSV = [
   'ID,Time,PositionX,PositionY,PositionZ,Length,Width,Height,Yaw,Ego',

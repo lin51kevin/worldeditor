@@ -1,23 +1,23 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TrajectoryConfigPanel } from './TrajectoryConfigPanel';
-import { useTrajectoryStore } from '../../stores/trajectoryStore';
-import { useTrajectoryConfigStore } from '../../stores/trajectoryConfigStore';
-import { parseTraj } from '../../plugins/npc-actors';
+import { useTrajectoryStore } from '../../../stores/trajectoryStore';
+import { useTrajectoryConfigStore } from '../../../stores/trajectoryConfigStore';
+import { parseTraj } from '../../npc-actors';
 
 // Keep the component test free of the renderer / platform chains.
-vi.mock('../../viewport/trajectoryPlayback', () => ({
+vi.mock('../../../viewport/trajectoryPlayback', () => ({
   refreshActorModels: vi.fn().mockResolvedValue(undefined),
   applySceneModel: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('../../viewport/trajectorySceneScan', () => ({
+vi.mock('../../../viewport/trajectorySceneScan', () => ({
   scanAndClassify: vi.fn(),
   classifyWebFiles: vi.fn(),
 }));
-vi.mock('../../services', () => ({
+vi.mock('../../../services', () => ({
   getPlatformService: vi.fn(),
 }));
-vi.mock('../layout/FloatingPanel', () => ({
+vi.mock('../../../components/layout/FloatingPanel', () => ({
   FloatingPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
