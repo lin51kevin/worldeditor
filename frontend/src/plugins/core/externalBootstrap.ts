@@ -22,6 +22,8 @@ interface ServerPluginInfo {
   version: string;
   permissions: string[];
   status: 'available' | 'loaded' | 'disabled';
+  /** True for first-party plugins shipped in the app bundle (trusted). */
+  bundled: boolean;
 }
 
 /** True when running inside the Tauri desktop shell. */
@@ -63,7 +65,9 @@ export async function bootstrapExternalPlugins(): Promise<() => void> {
               main: 'dist/index.js',
               permissions: info.permissions as PluginPermission[],
             };
-            await loadPluginBundle(info.id, js, manifest);
+            // Trust is derived from the plugin's on-disk origin (bundled = first
+            // party), never from a self-declared flag.
+            await loadPluginBundle(info.id, js, manifest, { trusted: info.bundled });
             loaded.push(info.id);
           } catch (err) {
             console.error(`[ExternalPlugin] Failed to load "${info.id}":`, err);

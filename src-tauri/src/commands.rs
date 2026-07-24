@@ -86,6 +86,9 @@ pub struct PluginInfoDto {
     /// "available" | "loaded" | "disabled"
     pub status: String,
     pub disabled_reason: Option<String>,
+    /// True when shipped inside the app bundle (first-party, trusted); false for
+    /// user-installed (third-party) plugins that must run sandboxed.
+    pub bundled: bool,
 }
 
 /// List all plugins discovered in the plugins directory with their current status.
@@ -115,6 +118,7 @@ pub fn plugin_list(registry: State<'_, SharedPluginRegistry>) -> Vec<PluginInfoD
                 permissions: info.permissions,
                 status,
                 disabled_reason,
+                bundled: info.bundled,
             }
         })
         .collect()

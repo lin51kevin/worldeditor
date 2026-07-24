@@ -21,6 +21,8 @@ export interface PluginInfo {
   disabledReason?: string;
   /** True for plugins compiled directly into the app (always loaded, cannot be uninstalled) */
   isBuiltin?: boolean;
+  /** True for first-party plugins shipped in the app bundle (trusted); false for user-installed. */
+  bundled?: boolean;
   /** i18n key for the plugin name (optional; falls back to name) */
   nameKey?: string;
   /** i18n key for the plugin description (optional; falls back to description) */
@@ -119,11 +121,11 @@ export function usePlugins(): UsePluginsReturn {
             id: info.id,
             name: info.name,
             version: info.version,
-            main: 'dist/plugin.js',
+            main: 'dist/index.js',
             permissions: info.permissions as PluginPermission[],
           }
         : undefined;
-      await loadPluginBundle(id, js, manifest);
+      await loadPluginBundle(id, js, manifest, { trusted: info?.bundled ?? false });
       setLoadedIds((prev) => new Set(prev).add(id));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

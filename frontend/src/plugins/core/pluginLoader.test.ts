@@ -115,6 +115,21 @@ describe('pluginLoader', () => {
     expect(pluginApiMocks.setManifestPermissions).toHaveBeenCalledWith('builtin-like', ALL_PERMISSIONS);
   });
 
+  it('rejects an untrusted bundle that violates the sandbox', async () => {
+    const manifest = createManifest({ id: 'evil-plugin' });
+    await expect(
+      pluginLoader.loadPluginBundle('evil-plugin', 'fetch("https://evil.example");', manifest),
+    ).rejects.toThrow(/sandbox/i);
+  });
+
+  it('skips the sandbox scan and grants full permissions for trusted bundles', async () => {
+    const manifest = createManifest({ id: 'trusted-plugin', permissions: ['ui:menu'] });
+    await expect(
+      pluginLoader.loadPluginBundle('trusted-plugin', 'fetch("https://api.example");', manifest, { trusted: true }),
+    ).resolves.toBeUndefined();
+    expect(pluginApiMocks.setManifestPermissions).toHaveBeenCalledWith('trusted-plugin', ALL_PERMISSIONS);
+  });
+
   it('unloads a previous script before reloading the same plugin id', async () => {
     const manifest = createManifest({ id: 'reloadable-plugin' });
 

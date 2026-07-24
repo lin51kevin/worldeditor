@@ -33,6 +33,30 @@ import type {
   SettingsContrib,
 } from '../../stores/pluginContribStore';
 import type { Project } from '../../services/platform';
+import i18n from '../../i18n';
+import { getAssetUrl } from '../../utils/assetUrl';
+import { showAlert, showConfirm, showPrompt } from '../../utils/dialog';
+
+// ── UI / i18n / assets host services ────────────────────────────────────────
+
+/** Themed dialog helpers exposed to plugins (benign, host-mediated). */
+export interface PluginUi {
+  alert(message: string, title?: string): Promise<void>;
+  confirm(message: string, title?: string): Promise<boolean>;
+  prompt(message: string, defaultValue?: string, title?: string): Promise<string | null>;
+}
+
+/** Localisation helper. */
+export interface PluginI18n {
+  /** Translate a key, falling back to the key (or provided fallback) when missing. */
+  t(key: string, fallback?: string): string;
+}
+
+/** Static-asset URL resolver. */
+export interface PluginAssets {
+  /** Resolve a public/ asset path to a fetchable URL. */
+  url(path: string): string;
+}
 
 // ── Codec (host-backed format conversion) ───────────────────────────────────
 
@@ -203,6 +227,13 @@ export interface PluginContext {
    * Exposed as a host API so sandboxed plugins never touch the DOM directly.
    */
   injectStyles(css: string): void;
+
+  /** Themed dialog helpers (alert/confirm/prompt). */
+  ui: PluginUi;
+  /** Localisation helper bound to the host i18n instance. */
+  i18n: PluginI18n;
+  /** Static-asset URL resolver. */
+  assets: PluginAssets;
 }
 
 type SetupFn = (ctx: PluginContext) => (() => void) | void;
@@ -453,6 +484,18 @@ export function installPluginApi(): void {
           const list = injectedStyles.get(id) ?? [];
           list.push(style);
           injectedStyles.set(id, list);
+        },
+
+        ui: {
+          alert: (message, title) => showAlert(message, title),
+          confirm: (message, title) => showConfirm(message, title),
+          prompt: (message, defaultValue, title) => showPrompt(message, defaultValue, title),
+        },
+        i18n: {
+          t: (key, fallback) => i18n.t(key, fallback ?? key),
+        },
+        assets: {
+          url: (path) => getAssetUrl(path),
         },
       };
 

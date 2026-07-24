@@ -69,25 +69,40 @@ const loadedScripts = new Map<string, HTMLScriptElement>();
  * @param manifest  Optional manifest — when provided, permissions are validated
  *                  and enforced. Without a manifest, ALL permissions are granted
  *                  (backward-compatible for built-in plugins).
+ * @param options   `trusted: true` for first-party (bundled) plugins — skips the
+ *                  sandbox source scan and grants full permissions. Trust is
+ *                  decided by the caller from the plugin's ON-DISK ORIGIN (a
+ *                  bundled resource dir), never from a self-declared manifest flag.
  */
-export async function loadPluginBundle(id: string, jsContent: string, manifest?: PluginManifest): Promise<void> {
+export async function loadPluginBundle(
+  id: string,
+  jsContent: string,
+  manifest?: PluginManifest,
+  options?: { trusted?: boolean },
+): Promise<void> {
+  const trusted = options?.trusted ?? false;
   // Validate manifest if provided
   if (manifest) {
     const error = validateManifest(manifest);
     if (error) throw new Error(`Invalid manifest for plugin '${id}': ${error}`);
     if (manifest.id !== id) throw new Error(`Manifest id '${manifest.id}' does not match plugin id '${id}'`);
-    // Security: external (manifest-bearing, untrusted) bundles are statically
-    // scanned for forbidden platform capabilities before they are ever injected.
-    // Built-in plugins (loaded without a manifest) are trusted and skip this.
-    assertPluginSourceSafe(id, jsContent);
+    // Security: untrusted (third-party) bundles are statically scanned for
+    // forbidden platform capabilities before injection. First-party bundled
+    // plugins are shipped with the app and trusted, so they skip the scan (they
+    // may legitimately use the shared runtime — stores, React, etc.).
+    if (!trusted) {
+      assertPluginSourceSafe(id, jsContent);
+    }
   }
   // Ensure the global API is available before any plugin script runs
   installPluginApi();
 
-  // Security: pre-register manifest permissions BEFORE the bundle executes.
-  // registerPlugin() will consume this entry and use it as the authoritative
-  // permission set — ignoring whatever the bundle claims at runtime.
-  const grantedPermissions: readonly PluginPermission[] = manifest?.permissions ?? ALL_PERMISSIONS;
+  // Security: pre-register the authoritative permission set BEFORE the bundle
+  // executes. Trusted (first-party) plugins receive all permissions; untrusted
+  // plugins are limited to what their manifest declares.
+  const grantedPermissions: readonly PluginPermission[] = trusted
+    ? ALL_PERMISSIONS
+    : manifest?.permissions ?? ALL_PERMISSIONS;
   setManifestPermissions(id, grantedPermissions);
 
   // Unload previous instance if reloading

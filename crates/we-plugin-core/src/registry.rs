@@ -33,6 +33,9 @@ pub struct PluginRegistry {
     /// Additional read-only search directories (e.g. the app-bundle resource
     /// directory). Scanned before `plugins_dir` so user plugins win on id clash.
     bundled_dirs: Vec<PathBuf>,
+    /// Per-plugin origin: `true` = discovered in a bundled (first-party, trusted)
+    /// directory, `false` = the user-writable directory (third-party).
+    discovered_source: HashMap<String, bool>,
 }
 
 impl PluginRegistry {
@@ -44,6 +47,7 @@ impl PluginRegistry {
             disabled: HashMap::new(),
             plugins_dir: plugins_dir.into(),
             bundled_dirs: Vec::new(),
+            discovered_source: HashMap::new(),
         }
     }
 
@@ -80,9 +84,10 @@ impl PluginRegistry {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn discover(&mut self) {
         self.discovered.clear();
+        self.discovered_source.clear();
 
         let manifest_paths = self.find_manifests();
-        for manifest_path in manifest_paths {
+        for (manifest_path, is_bundled) in manifest_paths {
             match PluginManifest::from_path(&manifest_path) {
                 Ok(manifest) => {
                     if manifest.validate().is_ok() {
@@ -92,7 +97,8 @@ impl PluginRegistry {
                             .to_path_buf();
                         let resolved = ResolvedManifest::resolve(manifest, plugin_dir);
                         let id = resolved.manifest.id.clone();
-                        self.discovered.insert(id, resolved);
+                        self.discovered.insert(id.clone(), resolved);
+                        self.discovered_source.insert(id, is_bundled);
                     }
                 }
                 Err(e) => {
@@ -112,22 +118,25 @@ impl PluginRegistry {
     #[cfg(target_arch = "wasm32")]
     pub fn discover(&mut self) {
         self.discovered.clear();
+        self.discovered_source.clear();
     }
 
-    /// Find all manifest.json files across every search directory.
+    /// Find all manifest.json files across every search directory, tagged with
+    /// their origin (`true` = bundled/first-party dir, `false` = user dir).
     ///
     /// Bundled (read-only) directories are scanned first and the user-writable
     /// `plugins_dir` last, so that when the same plugin id exists in both, the
     /// user copy is inserted last into the `discovered` map and wins.
     #[cfg(not(target_arch = "wasm32"))]
-    fn find_manifests(&self) -> Vec<PathBuf> {
+    fn find_manifests(&self) -> Vec<(PathBuf, bool)> {
         let mut manifests = Vec::new();
         let dirs = self
             .bundled_dirs
             .iter()
-            .chain(std::iter::once(&self.plugins_dir));
+            .map(|d| (d, true))
+            .chain(std::iter::once((&self.plugins_dir, false)));
 
-        for dir in dirs {
+        for (dir, is_bundled) in dirs {
             if !dir.exists() {
                 continue;
             }
@@ -138,7 +147,7 @@ impl PluginRegistry {
                     if path.is_dir() {
                         let manifest_path = path.join("manifest.json");
                         if manifest_path.exists() {
-                            manifests.push(manifest_path);
+                            manifests.push((manifest_path, is_bundled));
                         }
                     }
                 }
@@ -150,7 +159,7 @@ impl PluginRegistry {
 
     /// Find all manifest.json files — stub for WASM (no filesystem access)
     #[cfg(target_arch = "wasm32")]
-    fn find_manifests(&self) -> Vec<PathBuf> {
+    fn find_manifests(&self) -> Vec<(PathBuf, bool)> {
         Vec::new()
     }
 
@@ -171,6 +180,7 @@ impl PluginRegistry {
 
     /// Get info about a specific plugin
     pub fn plugin_info(&self, id: &str) -> Option<PluginInfo> {
+        let bundled = self.discovered_source.get(id).copied().unwrap_or(false);
         if let Some(loaded) = self.loaded.get(id) {
             Some(PluginInfo {
                 id: loaded.manifest.id.clone(),
@@ -180,6 +190,7 @@ impl PluginRegistry {
                 dependencies: loaded.manifest.dependencies.clone(),
                 permissions: loaded.manifest.permissions.clone(),
                 status: PluginStatus::Loaded,
+                bundled,
             })
         } else if let Some(resolved) = self.discovered.get(id) {
             let status = self
@@ -195,10 +206,17 @@ impl PluginRegistry {
                 dependencies: resolved.manifest.dependencies.clone(),
                 permissions: resolved.manifest.permissions.clone(),
                 status,
+                bundled,
             })
         } else {
             None
         }
+    }
+
+    /// Whether a discovered plugin originates from a bundled (first-party,
+    /// trusted) directory rather than the user-writable directory.
+    pub fn is_bundled(&self, id: &str) -> bool {
+        self.discovered_source.get(id).copied().unwrap_or(false)
     }
 
     /// Load a plugin by ID
@@ -359,6 +377,9 @@ pub struct PluginInfo {
     pub dependencies: Vec<String>,
     pub permissions: Vec<String>,
     pub status: PluginStatus,
+    /// True when the plugin was discovered in a bundled (first-party, trusted)
+    /// directory; false for user-installed (third-party) plugins.
+    pub bundled: bool,
 }
 
 /// Plugin status
@@ -474,6 +495,29 @@ mod tests {
         // The resolved script path points into the user directory.
         let script = registry.plugin_script_path("io-csv").unwrap();
         assert!(script.starts_with(user.path()));
+        // Origin is the user directory → not bundled/trusted.
+        assert!(!registry.is_bundled("io-csv"));
+        assert!(!info.bundled);
+    }
+
+    #[test]
+    fn test_bundled_only_plugin_is_marked_bundled() {
+        let bundled = tempfile::tempdir().unwrap();
+        let plugin = bundled.path().join("io-obj3d");
+        std::fs::create_dir_all(&plugin).unwrap();
+        std::fs::write(
+            plugin.join("manifest.json"),
+            r#"{"id":"io-obj3d","name":"OBJ","version":"1.0.0","main":"dist/index.js"}"#,
+        )
+        .unwrap();
+
+        let user = tempfile::tempdir().unwrap();
+        let mut registry = PluginRegistry::new(user.path());
+        registry.add_bundled_dir(bundled.path());
+        registry.discover();
+
+        assert!(registry.is_bundled("io-obj3d"));
+        assert!(registry.plugin_info("io-obj3d").unwrap().bundled);
     }
 
     #[test]

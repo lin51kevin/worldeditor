@@ -370,3 +370,44 @@ describe('pluginApi security', () => {
     }).not.toThrow();
   });
 });
+
+describe('ctx host services (ui / i18n / assets)', () => {
+  beforeEach(() => {
+    delete (window as unknown as Record<string, unknown>)['__WE_PLUGIN_API__'];
+    installPluginApi();
+  });
+
+  function capture(): {
+    ui: { alert: (m: string) => Promise<void>; confirm: (m: string) => Promise<boolean>; prompt: (m: string, d?: string) => Promise<string | null> };
+    i18n: { t: (key: string, fallback?: string) => string };
+    assets: { url: (path: string) => string };
+  } {
+    const api = (window as unknown as Record<string, unknown>)['__WE_PLUGIN_API__'] as {
+      registerPlugin: (id: string, setup: (ctx: unknown) => void) => void;
+    };
+    let captured: unknown;
+    api.registerPlugin('host-svc', (ctx) => { captured = ctx; });
+    return captured as ReturnType<typeof capture>;
+  }
+
+  it('exposes ui/i18n/assets on the context', () => {
+    const ctx = capture();
+    expect(typeof ctx.ui.alert).toBe('function');
+    expect(typeof ctx.ui.confirm).toBe('function');
+    expect(typeof ctx.ui.prompt).toBe('function');
+    expect(typeof ctx.i18n.t).toBe('function');
+    expect(typeof ctx.assets.url).toBe('function');
+  });
+
+  it('i18n.t returns the provided fallback for a missing key', () => {
+    const ctx = capture();
+    expect(ctx.i18n.t('definitely.missing.key.xyz', 'Fallback Text')).toBe('Fallback Text');
+  });
+
+  it('assets.url normalises a public asset path', () => {
+    const ctx = capture();
+    expect(ctx.assets.url('assets/textures/manifest.json')).toBe('/assets/textures/manifest.json');
+    expect(ctx.assets.url('/config/intents.json')).toBe('/config/intents.json');
+    expect(ctx.assets.url('https://cdn.example/x.png')).toBe('https://cdn.example/x.png');
+  });
+});
