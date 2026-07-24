@@ -71,12 +71,14 @@ export default function PointCloudPanel() {
   const isWeb = !(typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window);
   const loaded = handle !== null;
 
+  // Always load through an <input type="file"> — the SAME mechanism as the
+  // File→Import flow and the (fast, crash-free) first load. Bytes are read
+  // inside the webview (File API) and parsed off the main thread in the WASM
+  // worker. This avoids the native-dialog + IPC/asset path, which buffered the
+  // whole multi-GB file on the main thread (UI stutter) and could crash the
+  // native process on very large clouds.
   const onLoadClick = () => {
-    if (isWeb) {
-      fileInputRef.current?.click();
-    } else {
-      void loadPointCloud();
-    }
+    fileInputRef.current?.click();
   };
 
   const onWebFile = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,9 +91,7 @@ export default function PointCloudPanel() {
     <div className="pc-panel">
       <h3>{t('pointcloud.title')}</h3>
 
-      {isWeb && (
-        <input ref={fileInputRef} type="file" accept={WEB_ACCEPT} style={{ display: 'none' }} onChange={onWebFile} />
-      )}
+      <input ref={fileInputRef} type="file" accept={WEB_ACCEPT} style={{ display: 'none' }} onChange={onWebFile} />
 
       <button type="button" disabled={busy} onClick={onLoadClick} className="pc-btn">
         {loaded ? t('pointcloud.loadAnother') : t('pointcloud.loadPointCloud')}

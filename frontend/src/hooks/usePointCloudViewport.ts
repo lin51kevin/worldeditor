@@ -125,7 +125,9 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     if (handle === null) {
       if (prevHandleRef.current !== null) {
         renderer.uploadPointCloudVertices(new Float32Array(0));
-        renderer.clearGaussianSplats();
+        // Fully tear down the splat renderer (not just clear) so the next load
+        // recreates a pristine instance + sort worker, matching first-load state.
+        renderer.disposeGaussianSplats();
         usePointCloudStore.getState().setSplatUploadStatus(null);
         prevHandleRef.current = null;
         prevColorModeRef.current = null;
@@ -151,17 +153,6 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
         splatSampleMode !== prevSampleModeRef.current ||
         splatRenderMode !== prevRenderModeRef.current ||
         splatQuality !== prevQualityRef.current;
-      // [SPLAT-DIAG] TEMP: diagnose stale/exploded render on reload. Remove once fixed.
-      console.info('[SPLAT-DIAG] load', {
-        isNewCloud,
-        changed,
-        handle,
-        prevHandle: prevHandleRef.current,
-        bufferLen: splatBuffer?.length ?? 0,
-        shDegree: splatShDegree,
-        layoutVersion: splatLayoutVersion,
-        originShifted: splatOriginShifted,
-      });
       if (!changed) return;
 
       // Drop any stale point geometry, then upload the packed splat buffer. The
@@ -169,6 +160,13 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
       // buffer) so the live quality slider keeps working. The origin shift was
       // already done off the main thread (web worker) or is applied here (native).
       renderer.uploadPointCloudVertices(new Float32Array(0));
+      // On a genuinely new cloud, tear down any existing splat renderer first so
+      // the upload below recreates a fresh instance + sort worker. This makes a
+      // reload behave exactly like the first load (no retained/stale GPU or
+      // worker state), fixing the reloaded-cloud render corruption and stutter.
+      if (isNewCloud) {
+        renderer.disposeGaussianSplats();
+      }
       if (splatBuffer) {
         const origin = usePointCloudStore.getState().summary?.origin;
         const shifted = splatOriginShifted
@@ -184,8 +182,6 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
           usePointCloudStore.getState().summary?.count,
         );
         usePointCloudStore.getState().setSplatUploadStatus(uploadStatus);
-        // [SPLAT-DIAG] TEMP: upload result (outcome/counts/resourceMode). Remove once fixed.
-        console.info('[SPLAT-DIAG] uploadStatus', uploadStatus);
 
         // Start 3DGS in perspective for useful initial framing. The splat shader
         // also has an orthographic Jacobian for later dimension-mode switches.
@@ -212,19 +208,6 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
             const cy = (minY + maxY) / 2;
             const half = Math.max((maxX - minX) / 2, (maxY - minY) / 2, dz / 2);
             renderer.frameScene3D(cx - half, cy - half, cx + half, cy + half);
-            // [SPLAT-DIAG] TEMP: framing inputs + resulting camera height. Remove once fixed.
-            console.info('[SPLAT-DIAG] frame', {
-              origin: [ox, oy],
-              summaryMin: Array.from(summary.min),
-              summaryMax: Array.from(summary.max),
-              dz,
-              cx,
-              cy,
-              half,
-              cameraDistanceAfter: renderer.getCameraDistance(),
-            });
-          } else {
-            console.info('[SPLAT-DIAG] frame skipped: no summary');
           }
         }
       }

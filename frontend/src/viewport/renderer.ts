@@ -882,6 +882,23 @@ export class ViewportRenderer {
   }
 
   /**
+   * Fully tear down the scene Gaussian splat renderer (GPU resources, uniform
+   * buffer, pipeline handle, and the depth-sort Web Worker), so the next
+   * {@link uploadGaussianSplats} recreates a pristine instance.
+   *
+   * Unlike {@link clearGaussianSplats} (which keeps the renderer and its sort
+   * worker alive between clouds), this makes a reload start from the exact same
+   * state as the first-ever load — avoiding stale sort/worker state that caused
+   * a reloaded cloud to render incorrectly and stutter.
+   */
+  disposeGaussianSplats(): void {
+    if (!this.splatRenderer) return;
+    this.splatRenderer.dispose();
+    this.splatRenderer = null;
+    this.markSceneDirty();
+  }
+
+  /**
    * Upload the dynamic actor (NPC + ego) Gaussian splat cloud into a buffer
    * separate from the static scene cloud, so per-frame actor updates never
    * re-upload or re-sort the (large) scene splats. Same packed layout as

@@ -29,12 +29,6 @@ import { assertGaussianSplatLayout } from '../../../viewport/gaussian/splatLayou
 const NATIVE_EXTENSIONS = ['las', 'laz', 'pcd', 'ply', 'xyz', 'txt', 'asc'];
 const WEB_EXTENSIONS = ['pcd', 'ply', 'xyz', 'txt', 'asc'];
 
-/**
- * Explicit native parse budget for `decimated` mode. Full mode passes no cap
- * and either preserves the source cloud or reports a later upload failure.
- */
-const NATIVE_SPLAT_LOAD_BUDGET = 16_000_000;
-
 function extensionOf(name: string): string {
   const dot = name.lastIndexOf('.');
   return dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
@@ -142,44 +136,55 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
 
     let fileName: string;
     if (!webFile && isTauri()) {
-      // Desktop with no pre-selected file (panel "Load" button): use the native
-      // file dialog + IPC so LAS/LAZ and large path-based clouds are supported.
+      // Desktop panel "Load" button. Pick via the native dialog (needed to get a
+      // filesystem path for LAS/LAZ, which only the native `las` parser handles).
       const path = await pickNativePath();
       if (!path) { usePointCloudStore.getState().setBusy(false); return; }
       fileName = path.split(/[/\\]/).pop() ?? path;
-      // 3D Gaussian Splatting PLYs are parsed natively (never loaded whole into
-      // JS/WASM — a multi-GB splat cloud would crash). Detect via a header-only
-      // native probe, then hand the path to the native splat loader.
-      if (extensionOf(path) === 'ply') {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const isSplat = await invoke<boolean>('ply_is_gaussian', { path });
-        if (isSplat) {
-          const platform = await getPlatformService();
-          const { meta, buffer } = await platform.loadGaussianSplatsNative(
-            path,
-            store.splatRenderMode === 'decimated'
-              ? NATIVE_SPLAT_LOAD_BUDGET
-              : undefined,
+      const ext = extensionOf(path);
+
+      if (ext === 'las' || ext === 'laz') {
+        // No WASM/worker parser exists for LAS/LAZ, and streaming a multi-GB
+        // LiDAR file into JS would blow the heap — so load it natively. The
+        // native loader returns only a small handle + summary (the render buffer
+        // is fetched lazily from the native registry), so there is no giant IPC.
+        const platform = await getPlatformService();
+        const result = await platform.loadPointCloud({ path });
+        usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary, true);
+      } else {
+        // Everything else (ply / pcd / xyz / txt / asc) uses the SAME off-thread
+        // worker path as the File→Import / first-load flow. Stream the bytes into
+        // the webview via the asset protocol (NOT an fs `readFile` IPC — returning
+        // a multi-GB file in a single IPC response crashes the native process),
+        // then parse (and, for splats, origin-shift) off the main thread.
+        const { convertFileSrc } = await import('@tauri-apps/api/core');
+        const resp = await fetch(convertFileSrc(path));
+        if (!resp.ok) throw new Error(`Failed to read point cloud file (HTTP ${resp.status}).`);
+        const bytes = new Uint8Array(await resp.arrayBuffer());
+
+        if (ext === 'ply' && isGaussianPly(bytes)) {
+          const { handle, meta, buffer } = await workerLoadGaussianSplats(
+            bytes,
+            store.splatRenderMode === 'decimated' ? DEFAULT_SPLAT_LOAD_BUDGET : undefined,
           );
           assertGaussianSplatLayout(meta, buffer);
           usePointCloudStore
             .getState()
             .setSplatLoaded(
-              0,
+              handle,
               fileName,
               buffer,
               meta.shDegree,
               meta.layoutVersion,
               gaussianMetaToSummary(meta),
+              true,
             );
-          return;
+        } else {
+          const format = ext === 'txt' || ext === 'asc' ? 'xyz' : ext;
+          const result = await workerLoadPointCloud(bytes, format);
+          usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary, false);
         }
       }
-      const platform = await getPlatformService();
-      const source: PointCloudSource = { path };
-      const result = await platform.loadPointCloud(source);
-      // Loaded through native IPC → the render buffer must be read from native.
-      usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary, true);
     } else {
       // A file was chosen via an <input type="file"> (works on both web and the
       // desktop webview): read its bytes and load through the WASM worker.
@@ -210,7 +215,8 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
             true,
           );
       } else {
-        const result = await workerLoadPointCloud(source.bytes!, source.format!);
+        if (!source.bytes || !source.format) throw new Error('Failed to read point cloud bytes.');
+        const result = await workerLoadPointCloud(source.bytes, source.format);
         // Loaded through the WASM worker (even inside the Tauri webview) → the
         // render buffer must be read from the worker, not native IPC.
         usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary, false);
