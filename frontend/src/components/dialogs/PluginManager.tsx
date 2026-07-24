@@ -109,6 +109,17 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
     }
   };
 
+  const handleOpenPluginsFolder = async () => {
+    if (typeof window !== 'undefined' && '__TAURI__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('open_plugins_dir');
+      } catch (err) {
+        console.error('[PluginManager] open plugins folder error:', err);
+      }
+    }
+  };
+
   const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -243,6 +254,17 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
               <FolderOpen size={13} />
               {t('pluginManager.installFromFile')}
             </button>
+            {typeof window !== 'undefined' && '__TAURI__' in window && (
+              <button
+                className="pm-btn pm-btn-secondary"
+                onClick={() => void handleOpenPluginsFolder()}
+                disabled={loading}
+                title={t('pluginManager.openPluginsFolder', 'Open Plugins Folder')}
+              >
+                <FolderOpen size={13} />
+                {t('pluginManager.openPluginsFolder', 'Open Plugins Folder')}
+              </button>
+            )}
             <button
               className="pm-btn pm-btn-secondary"
               onClick={() => void refresh()}

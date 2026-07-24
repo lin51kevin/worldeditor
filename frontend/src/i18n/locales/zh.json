@@ -663,6 +663,7 @@
     "confirmDisable": "确认禁用",
     "builtin": "内置",
     "installFromFile": "从文件安装",
+    "openPluginsFolder": "打开插件目录",
     "builtinRoadToolsName": "道路工具",
     "builtinRoadToolsDesc": "道路编辑工具栏按鈕与道路菜单项",
     "builtinTemplatesName": "内置模板",

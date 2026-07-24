@@ -29,6 +29,7 @@ pub fn run() {
             commands::plugin_disable,
             commands::plugin_install,
             commands::plugin_unload,
+            commands::open_plugins_dir,
             commands::set_window_theme,
             commands::show_main_window,
             // Point cloud pipeline

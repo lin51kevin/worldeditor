@@ -332,6 +332,34 @@ pub fn plugin_unload(id: String, _registry: State<'_, SharedPluginRegistry>) -> 
     Ok(())
 }
 
+/// Open the user plugins directory (`<app_data>/plugins`) in the OS file manager,
+/// creating it if it does not exist. Returns the resolved path.
+///
+/// This is where user-installed (third-party) plugins live; first-party plugins
+/// are compiled into the app. Program Files is not user-writable on Windows, so
+/// the writable plugins folder is under the per-user app-data directory.
+#[tauri::command]
+pub fn open_plugins_dir(app: tauri::AppHandle) -> Result<String, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("plugins");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Cannot create plugins dir: {}", e))?;
+
+    #[cfg(target_os = "windows")]
+    let spawned = std::process::Command::new("explorer").arg(&dir).spawn();
+    #[cfg(target_os = "macos")]
+    let spawned = std::process::Command::new("open").arg(&dir).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let spawned = std::process::Command::new("xdg-open").arg(&dir).spawn();
+
+    // `explorer.exe` returns a non-zero exit code even on success; `spawn()` only
+    // launches the process without waiting, so a successful launch is enough.
+    spawned.map_err(|e| format!("Failed to open plugins directory: {}", e))?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
