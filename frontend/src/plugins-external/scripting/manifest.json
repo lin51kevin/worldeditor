@@ -1,0 +1,11 @@
+{
+  "id": "scripting-beta",
+  "name": "Script Console",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "description": "Safe command console for project inspection and light automation (beta)",
+  "author": "WorldEditor Team",
+  "license": "MIT",
+  "dependencies": [],
+  "permissions": ["project:read", "project:write", "ui:panel", "ui:menu"]
+}

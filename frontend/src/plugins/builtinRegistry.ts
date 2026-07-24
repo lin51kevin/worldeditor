@@ -198,6 +198,7 @@ export const EXTERNALIZED_ON_DESKTOP: ReadonlyMap<string, string> = new Map([
   ['lane-detect', 'lane-detect'],
   ['3d-models', '3d-models'],
   ['satellite-beta', 'satellite-beta'],
+  ['scripting-beta', 'scripting-beta'],
 ]);
 
 /** True when running inside the Tauri desktop shell (has filesystem plugin loading). */
