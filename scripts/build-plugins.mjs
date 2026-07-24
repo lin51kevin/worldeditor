@@ -40,94 +40,94 @@ const esbuild = frontendRequire('esbuild');
  * the sandbox guard (which forbids bracket access on the global object).
  */
 const sharedRuntimeShim = {
-  name: 'we-shared-runtime',
-  setup(build) {
-    build.onResolve({ filter: /^react$/ }, () => ({ path: 'react', namespace: 'we-shared' }));
-    build.onResolve({ filter: /^react\/jsx-runtime$/ }, () => ({
-      path: 'react/jsx-runtime',
-      namespace: 'we-shared',
-    }));
-    build.onLoad({ filter: /.*/, namespace: 'we-shared' }, (args) => {
-      const expr =
-        args.path === 'react' ? 'window.__WE_SHARED__.react' : 'window.__WE_SHARED__.reactJsxRuntime';
-      return { contents: `module.exports = ${expr};`, loader: 'js' };
-    });
-  },
+    name: 'we-shared-runtime',
+    setup(build) {
+        build.onResolve({ filter: /^react$/ }, () => ({ path: 'react', namespace: 'we-shared' }));
+        build.onResolve({ filter: /^react\/jsx-runtime$/ }, () => ({
+            path: 'react/jsx-runtime',
+            namespace: 'we-shared',
+        }));
+        build.onLoad({ filter: /.*/, namespace: 'we-shared' }, (args) => {
+            const expr =
+                args.path === 'react' ? 'window.__WE_SHARED__.react' : 'window.__WE_SHARED__.reactJsxRuntime';
+            return { contents: `module.exports = ${expr};`, loader: 'js' };
+        });
+    },
 };
 
 /** Discover plugin source directories that contain both index.ts and manifest.json. */
 async function discoverPlugins() {
-  if (!existsSync(SRC_ROOT)) {
-    return [];
-  }
-  const entries = await readdir(SRC_ROOT, { withFileTypes: true });
-  const plugins = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const dir = join(SRC_ROOT, entry.name);
-    const manifestFile = join(dir, 'manifest.json');
-    if (!existsSync(manifestFile)) continue;
-    // Entry point is index.tsx (UI plugins) or index.ts (logic-only plugins).
-    const entryFile = existsSync(join(dir, 'index.tsx'))
-      ? join(dir, 'index.tsx')
-      : join(dir, 'index.ts');
-    if (existsSync(entryFile)) {
-      plugins.push({ name: entry.name, dir, entryFile, manifestFile });
+    if (!existsSync(SRC_ROOT)) {
+        return [];
     }
-  }
-  return plugins;
+    const entries = await readdir(SRC_ROOT, { withFileTypes: true });
+    const plugins = [];
+    for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const dir = join(SRC_ROOT, entry.name);
+        const manifestFile = join(dir, 'manifest.json');
+        if (!existsSync(manifestFile)) continue;
+        // Entry point is index.tsx (UI plugins) or index.ts (logic-only plugins).
+        const entryFile = existsSync(join(dir, 'index.tsx'))
+            ? join(dir, 'index.tsx')
+            : join(dir, 'index.ts');
+        if (existsSync(entryFile)) {
+            plugins.push({ name: entry.name, dir, entryFile, manifestFile });
+        }
+    }
+    return plugins;
 }
 
 async function buildPlugin(plugin) {
-  const manifest = JSON.parse(await readFile(plugin.manifestFile, 'utf8'));
-  const id = manifest.id ?? plugin.name;
-  const main = manifest.main ?? 'dist/index.js';
+    const manifest = JSON.parse(await readFile(plugin.manifestFile, 'utf8'));
+    const id = manifest.id ?? plugin.name;
+    const main = manifest.main ?? 'dist/index.js';
 
-  const outFile = join(OUT_ROOT, id, main);
-  await mkdir(dirname(outFile), { recursive: true });
+    const outFile = join(OUT_ROOT, id, main);
+    await mkdir(dirname(outFile), { recursive: true });
 
-  await esbuild.build({
-    entryPoints: [plugin.entryFile],
-    outfile: outFile,
-    bundle: true,
-    format: 'iife',
-    platform: 'browser',
-    target: 'es2020',
-    minify: true,
-    legalComments: 'none',
-    logLevel: 'warning',
-    jsx: 'automatic',
-    loader: { '.css': 'text' },
-    plugins: [sharedRuntimeShim],
-  });
+    await esbuild.build({
+        entryPoints: [plugin.entryFile],
+        outfile: outFile,
+        bundle: true,
+        format: 'iife',
+        platform: 'browser',
+        target: 'es2020',
+        minify: true,
+        legalComments: 'none',
+        logLevel: 'warning',
+        jsx: 'automatic',
+        loader: { '.css': 'text' },
+        plugins: [sharedRuntimeShim],
+    });
 
-  await copyFile(plugin.manifestFile, join(OUT_ROOT, id, 'manifest.json'));
-  return { id, outFile };
+    await copyFile(plugin.manifestFile, join(OUT_ROOT, id, 'manifest.json'));
+    return { id, outFile };
 }
 
 async function main() {
-  const plugins = await discoverPlugins();
-  if (plugins.length === 0) {
-    console.log('[build-plugins] No external plugins found in', SRC_ROOT);
-    return;
-  }
-
-  console.log(`[build-plugins] Building ${plugins.length} external plugin(s)…`);
-  for (const plugin of plugins) {
-    try {
-      const { id, outFile } = await buildPlugin(plugin);
-      console.log(`  ✓ ${id} → ${outFile.replace(REPO_ROOT, '.')}`);
-    } catch (err) {
-      // Clean up a partial output directory so a broken build can't ship.
-      const partial = join(OUT_ROOT, plugin.name);
-      await rm(partial, { recursive: true, force: true }).catch(() => {});
-      console.error(`  ✗ ${plugin.name} failed:`, err.message ?? err);
-      process.exitCode = 1;
+    const plugins = await discoverPlugins();
+    if (plugins.length === 0) {
+        console.log('[build-plugins] No external plugins found in', SRC_ROOT);
+        return;
     }
-  }
+
+    console.log(`[build-plugins] Building ${plugins.length} external plugin(s)…`);
+    for (const plugin of plugins) {
+        try {
+            const { id, outFile } = await buildPlugin(plugin);
+            console.log(`  ✓ ${id} → ${outFile.replace(REPO_ROOT, '.')}`);
+        } catch (err) {
+            // Clean up a partial output directory so a broken build can't ship.
+            const partial = join(OUT_ROOT, plugin.name);
+            await rm(partial, { recursive: true, force: true }).catch(() => { });
+            console.error(`  ✗ ${plugin.name} failed:`, err.message ?? err);
+            process.exitCode = 1;
+        }
+    }
 }
 
 main().catch((err) => {
-  console.error('[build-plugins] Fatal error:', err);
-  process.exit(1);
+    console.error('[build-plugins] Fatal error:', err);
+    process.exit(1);
 });

@@ -1,11 +1,14 @@
 {
-  "id": "io-lanelet2",
-  "name": "Lanelet2 I/O",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "description": "Import/export Lanelet2 HD maps (OSM-XML)",
-  "author": "WorldEditor Team",
-  "license": "MIT",
-  "dependencies": [],
-  "permissions": ["io:import", "io:export"]
+    "id": "io-lanelet2",
+    "name": "Lanelet2 I/O",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "description": "Import/export Lanelet2 HD maps (OSM-XML)",
+    "author": "WorldEditor Team",
+    "license": "MIT",
+    "dependencies": [],
+    "permissions": [
+        "io:import",
+        "io:export"
+    ]
 }

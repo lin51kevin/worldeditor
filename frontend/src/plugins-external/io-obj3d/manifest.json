@@ -1,11 +1,13 @@
 {
-  "id": "io-obj3d",
-  "name": "OBJ 3D Export",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "description": "Export 3D road mesh as Wavefront OBJ",
-  "author": "WorldEditor Team",
-  "license": "MIT",
-  "dependencies": [],
-  "permissions": ["io:export"]
+    "id": "io-obj3d",
+    "name": "OBJ 3D Export",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "description": "Export 3D road mesh as Wavefront OBJ",
+    "author": "WorldEditor Team",
+    "license": "MIT",
+    "dependencies": [],
+    "permissions": [
+        "io:export"
+    ]
 }

@@ -180,6 +180,7 @@ export const EXTERNALIZED_ON_DESKTOP: ReadonlyMap<string, string> = new Map([
   ['io-shapefile', 'io-shapefile'],
   ['io-signals', 'io-signals'],
   ['gis-tools', 'gis-tools'],
+  ['validation', 'validation'],
 ]);
 
 /** True when running inside the Tauri desktop shell (has filesystem plugin loading). */

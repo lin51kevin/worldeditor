@@ -28,7 +28,7 @@ describe('generated external bundles', () => {
   const ids = [
     'io-csv', 'io-obj3d', 'io-osm', 'io-dxf', 'io-mif',
     'io-lanelet2', 'io-xodr-ext', 'io-nio', 'io-shapefile', 'io-signals',
-    'gis-tools',
+    'gis-tools', 'validation',
   ];
 
   for (const id of ids) {

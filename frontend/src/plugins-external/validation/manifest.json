@@ -1,0 +1,11 @@
+{
+  "id": "validation",
+  "name": "Validation",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "description": "OpenDRIVE project validation panel",
+  "author": "WorldEditor Team",
+  "license": "MIT",
+  "dependencies": [],
+  "permissions": ["project:read", "ui:panel"]
+}

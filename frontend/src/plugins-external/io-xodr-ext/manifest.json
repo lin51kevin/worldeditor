@@ -1,11 +1,14 @@
 {
-  "id": "io-xodr-ext",
-  "name": "OpenDRIVE Extended I/O",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "description": "OpenDRIVE import with 1.4→1.6 migration and validated export",
-  "author": "WorldEditor Team",
-  "license": "MIT",
-  "dependencies": [],
-  "permissions": ["io:import", "io:export"]
+    "id": "io-xodr-ext",
+    "name": "OpenDRIVE Extended I/O",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "description": "OpenDRIVE import with 1.4→1.6 migration and validated export",
+    "author": "WorldEditor Team",
+    "license": "MIT",
+    "dependencies": [],
+    "permissions": [
+        "io:import",
+        "io:export"
+    ]
 }

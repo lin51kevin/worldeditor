@@ -1,11 +1,14 @@
 {
-  "id": "gis-tools",
-  "name": "GIS Tools",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "description": "Advanced GIS coordinate system panel and tools",
-  "author": "WorldEditor Team",
-  "license": "MIT",
-  "dependencies": [],
-  "permissions": ["project:read", "ui:panel"]
+    "id": "gis-tools",
+    "name": "GIS Tools",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "description": "Advanced GIS coordinate system panel and tools",
+    "author": "WorldEditor Team",
+    "license": "MIT",
+    "dependencies": [],
+    "permissions": [
+        "project:read",
+        "ui:panel"
+    ]
 }

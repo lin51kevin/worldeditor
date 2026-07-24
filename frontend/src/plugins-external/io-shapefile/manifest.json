@@ -1,11 +1,14 @@
 {
-  "id": "io-shapefile",
-  "name": "Shapefile I/O",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "description": "Import/export single-file Shapefile bundles",
-  "author": "WorldEditor Team",
-  "license": "MIT",
-  "dependencies": [],
-  "permissions": ["io:import", "io:export"]
+    "id": "io-shapefile",
+    "name": "Shapefile I/O",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "description": "Import/export single-file Shapefile bundles",
+    "author": "WorldEditor Team",
+    "license": "MIT",
+    "dependencies": [],
+    "permissions": [
+        "io:import",
+        "io:export"
+    ]
 }
