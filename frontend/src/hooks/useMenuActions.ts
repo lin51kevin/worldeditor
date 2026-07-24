@@ -12,7 +12,7 @@ import type { Project } from '../services/platform';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import { useFileLoader } from './useFileLoader';
 import { promptImportTrajectory, stopTrajectory } from '../viewport/trajectoryPlayback';
-import { promptImportPointCloud } from '../plugins/gis-viz/pointcloud/pointcloudActions';
+import { promptImportPointCloud, freeCurrentCloud } from '../plugins/gis-viz/pointcloud/pointcloudActions';
 
 function calculateTotalRoadLength(project: Project): number {
   return project.roads.reduce((sum, road) => sum + road.length, 0);
@@ -40,6 +40,7 @@ export function useMenuActions() {
       if (!await showConfirm(t('dialog.confirmNew'))) return;
     }
     stopTrajectory();
+    void freeCurrentCloud();
     reset();
   }, [isDirty, reset, t]);
 
@@ -251,6 +252,7 @@ export function useMenuActions() {
       if (!await showConfirm(t('dialog.confirmClose'))) return;
     }
     stopTrajectory();
+    void freeCurrentCloud();
     reset();
   }, [isDirty, reset, t]);
 

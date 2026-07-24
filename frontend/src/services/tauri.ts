@@ -7,7 +7,7 @@
 import type {
   PlatformService, Project, Road,
   PointCloudColorMode, PointCloudLoadResult, PointCloudPolyline, PointCloudSource,
-  GaussianSplatNativeResult,
+  GaussianSplatNativeResult, ScannedFile,
 } from './platform';
 import { APP_VERSION } from './index';
 import { BasePlatformService } from './basePlatformService';
@@ -190,5 +190,47 @@ export class TauriPlatformService extends BasePlatformService implements Platfor
     } finally {
       await invoke('gaussian_splat_free', { handle }).catch(() => undefined);
     }
+  }
+
+  /** Show the native directory picker and return the chosen absolute path. */
+  async pickDirectory(): Promise<string | null> {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const selected = await open({ directory: true, multiple: false });
+    return normalizeDialogPath(selected);
+  }
+
+  /**
+   * Recursively walk `dir` and return every file whose extension is in
+   * `extensions` (lower-case, without the dot). Unreadable sub-directories are
+   * skipped rather than aborting the whole scan.
+   */
+  async scanDirectory(dir: string, extensions: string[]): Promise<ScannedFile[]> {
+    const { readDir } = await import('@tauri-apps/plugin-fs');
+    const { join } = await import('@tauri-apps/api/path');
+    const exts = new Set(extensions.map((e) => e.toLowerCase()));
+    const out: ScannedFile[] = [];
+    const walk = async (d: string): Promise<void> => {
+      let entries: Array<{ name: string; isDirectory: boolean; isFile: boolean }>;
+      try {
+        entries = await readDir(d);
+      } catch (err) {
+        // Skip unreadable sub-directories, but surface the reason (e.g. a missing
+        // `fs:allow-read-dir` capability) instead of silently returning nothing.
+        console.warn('[fs] readDir failed for', d, err);
+        return;
+      }
+      for (const entry of entries) {
+        const full = await join(d, entry.name);
+        if (entry.isDirectory) {
+          await walk(full);
+        } else if (entry.isFile) {
+          const dot = entry.name.lastIndexOf('.');
+          const ext = dot >= 0 ? entry.name.slice(dot + 1).toLowerCase() : '';
+          if (exts.has(ext)) out.push({ name: entry.name, path: full });
+        }
+      }
+    };
+    await walk(dir);
+    return out;
   }
 }

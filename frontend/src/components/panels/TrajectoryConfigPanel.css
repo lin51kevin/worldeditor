@@ -1,0 +1,375 @@
+/* ── Trajectory scene config — floating panel opened from the playback bar ── */
+.floating-traj-config {
+    position: absolute;
+    z-index: 45;
+    /* Flex column + a concrete initial size so FloatingPanel adopts it (it reads
+       getBoundingClientRect on mount) and, like the other panels, stays fully
+       resizable — the height is driven by FloatingPanel's inline `height`, so no
+       max-height cap here (a cap would block vertical resize). */
+    display: flex;
+    flex-direction: column;
+    width: 440px;
+    height: min(560px, 80vh);
+    min-height: 280px;
+}
+
+.traj-cfg {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--glass-bg, rgba(30, 30, 34, 0.92));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg, 10px);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.35));
+    color: var(--color-text-primary);
+    font-size: var(--font-size-base);
+    overflow: hidden;
+}
+
+.traj-cfg-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-2) var(--space-3);
+    font-weight: 600;
+    border-bottom: 1px solid var(--glass-border);
+    cursor: move;
+    flex-shrink: 0;
+}
+
+.traj-cfg-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: var(--space-2) var(--space-3);
+}
+
+.traj-cfg-section {
+    margin-bottom: var(--space-4, 16px);
+}
+
+.traj-cfg-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+}
+
+.traj-cfg-section-head h4 {
+    margin: 0;
+}
+
+.traj-cfg-apply-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 var(--space-2);
+    background: var(--color-accent, #4c9aff);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs, 11px);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: filter var(--transition-fast);
+}
+
+.traj-cfg-apply-btn:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.traj-cfg-apply-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.traj-cfg-section h4 {
+    margin: 0 0 var(--space-2) 0;
+    font-size: var(--font-size-sm, 12px);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.traj-cfg-root-row,
+.traj-cfg-map-row,
+.traj-cfg-add-row,
+.traj-cfg-list-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.traj-cfg-list-row + .traj-cfg-list-row {
+    margin-top: var(--space-1);
+}
+
+.traj-cfg-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 30px;
+    padding: 0 var(--space-2);
+    background: var(--color-bg-input, rgba(255, 255, 255, 0.06));
+    color: var(--color-text-primary);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm, 12px);
+}
+
+.traj-cfg-select {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 30px;
+    padding: 0 var(--space-2);
+    background: var(--color-bg-input, rgba(255, 255, 255, 0.06));
+    color: var(--color-text-primary);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm, 12px);
+    cursor: pointer;
+}
+
+/* Fixed-width label column so the ego / opponent / scene controls all line up
+   and share the same width. */
+.traj-cfg-actor {
+    display: flex;
+    align-items: center;
+    flex: 0 0 104px;
+    width: 104px;
+    height: 30px;
+    padding: 0 var(--space-2);
+    background: var(--color-bg-input, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm, 12px);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The add-row opponent picker doubles as this row's label column. */
+.traj-cfg-actor-select {
+    flex: 0 0 104px;
+    width: 104px;
+}
+
+.traj-cfg-actor-ego {
+    color: var(--color-accent, #4c9aff);
+    border-color: var(--color-accent, #4c9aff);
+}
+
+.traj-cfg-arrow {
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+}
+
+.traj-cfg-hint {
+    margin: var(--space-1) 0 0 0;
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-secondary);
+}
+
+.traj-cfg-empty {
+    margin: 0;
+    padding: var(--space-2);
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-secondary);
+    text-align: center;
+}
+
+.traj-cfg-list {
+    margin-top: var(--space-2);
+    /* Cap the configured-opponent list height; scroll when it overflows. */
+    max-height: 168px;
+    overflow-y: auto;
+}
+
+.traj-cfg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: 28px;
+    padding: 0 var(--space-3);
+    background: var(--color-bg-input, rgba(255, 255, 255, 0.06));
+    color: var(--color-text-primary);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm, 12px);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--transition-fast), color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.traj-cfg-btn:hover:not(:disabled) {
+    background: var(--color-bg-hover);
+}
+
+.traj-cfg-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.traj-cfg-btn-primary {
+    background: var(--color-accent, #4c9aff);
+    color: #fff;
+    border-color: transparent;
+    margin-left: auto;
+}
+
+.traj-cfg-btn-primary:hover:not(:disabled) {
+    filter: brightness(1.1);
+    background: var(--color-accent, #4c9aff);
+}
+
+.traj-cfg-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.traj-cfg-icon-btn:hover:not(:disabled) {
+    color: var(--color-text-primary);
+    background: var(--color-bg-hover);
+}
+
+.traj-cfg-icon-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.traj-cfg-add-btn:hover:not(:disabled) {
+    color: var(--color-accent, #4c9aff);
+}
+
+.traj-cfg-del-btn:hover:not(:disabled) {
+    color: var(--color-danger, #ff5c5c);
+}
+
+.traj-cfg-footer {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-top: 1px solid var(--glass-border);
+    flex-shrink: 0;
+}
+
+.traj-cfg-hidden {
+    display: none;
+}
+
+/* ── Thumbnail-aware PLY selector ── */
+.traj-cfg-thumb-select {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.traj-cfg-thumb-trigger,
+.traj-cfg-thumb-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    height: 30px;
+    padding: 0 var(--space-2);
+    background: var(--color-bg-input, rgba(255, 255, 255, 0.06));
+    color: var(--color-text-primary);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm, 12px);
+    cursor: pointer;
+    text-align: left;
+}
+
+.traj-cfg-thumb-item {
+    height: 34px;
+    border: none;
+    border-radius: 0;
+    background: none;
+}
+
+.traj-cfg-thumb-item:hover {
+    background: var(--color-bg-hover);
+}
+
+.traj-cfg-thumb {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.traj-cfg-thumb-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+}
+
+.traj-cfg-thumb-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.traj-cfg-thumb-caret {
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+}
+
+.traj-cfg-thumb-check {
+    flex-shrink: 0;
+    color: var(--color-accent, #4c9aff);
+}
+
+/* Enlarged hover preview (portaled to <body> so it escapes menu clipping). */
+.traj-cfg-thumb-preview {
+    position: fixed;
+    z-index: 200;
+    width: 200px;
+    height: 200px;
+    object-fit: contain;
+    background: var(--color-bg-secondary, #252526);
+    border: 1px solid var(--color-border, var(--glass-border));
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.45));
+    pointer-events: none;
+}
+
+.traj-cfg-thumb-menu {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    z-index: 10;
+    margin: 0;
+    padding: var(--space-1);
+    list-style: none;
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--color-bg-secondary, #252526);
+    border: 1px solid var(--color-border, var(--glass-border));
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.35));
+}
+

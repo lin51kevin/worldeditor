@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next';
-import { Play, Pause, SkipBack, SkipForward, Repeat, Crosshair, FolderOpen, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Repeat, Crosshair, FolderOpen, Settings, X } from 'lucide-react';
 import {
   useTrajectoryStore,
   TRAJECTORY_SPEEDS,
   type TrajectorySpeed,
 } from '../../stores/trajectoryStore';
+import { useTrajectoryConfigStore } from '../../stores/trajectoryConfigStore';
 import { promptImportTrajectory, stopTrajectory } from '../../viewport/trajectoryPlayback';
 import './TrajectoryPlaybackBar.css';
 
@@ -33,6 +34,8 @@ export function TrajectoryPlaybackBar() {
   const toggleLoop = useTrajectoryStore((s) => s.toggleLoop);
   const followEgo = useTrajectoryStore((s) => s.followEgo);
   const toggleFollowEgo = useTrajectoryStore((s) => s.toggleFollowEgo);
+  const configOpen = useTrajectoryConfigStore((s) => s.configOpen);
+  const toggleConfigOpen = useTrajectoryConfigStore((s) => s.toggleConfigOpen);
 
   if (!data) return null;
 
@@ -129,6 +132,17 @@ export function TrajectoryPlaybackBar() {
         aria-label={t('trajectory.import')}
       >
         <FolderOpen size={16} />
+      </button>
+
+      <button
+        type="button"
+        className={`traj-btn ${configOpen ? 'active' : ''}`}
+        onClick={() => toggleConfigOpen()}
+        title={t('trajectory.settings')}
+        aria-label={t('trajectory.settings')}
+        aria-pressed={configOpen}
+      >
+        <Settings size={16} />
       </button>
 
       <button

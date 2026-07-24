@@ -13,6 +13,7 @@ import { StatusBar } from './components/shell/StatusBar';
 import { usePluginContribStore } from './stores/pluginContribStore';
 import { FloatingPanel } from './components/layout/FloatingPanel';
 import { TrajectoryPlaybackBar } from './components/panels/TrajectoryPlaybackBar';
+import { TrajectoryConfigPanel } from './components/panels/TrajectoryConfigPanel';
 // ValidationPanel is now rendered via PluginPanels
 import { SelectionDetailsPanel } from './components/panels/SelectionDetailsPanel';
 import { PluginPanels } from './components/layout/PluginPanel';
@@ -424,6 +425,7 @@ export function App() {
           <CommandPalette />
         </Suspense>
         <TrajectoryPlaybackBar />
+        <TrajectoryConfigPanel />
         {measureMode !== 'none' && (
           <FloatingPanel
             className="floating-measurement"

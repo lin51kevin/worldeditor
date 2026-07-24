@@ -27,6 +27,14 @@ import { useTrajectoryStore } from '../stores/trajectoryStore';
 import { showAlert } from '../utils/dialog';
 import i18n from '../i18n';
 import { smoothFollowPose, type FollowPose } from './trajectoryFollow';
+import {
+  buildActorSplatFrame,
+  loadActorModels,
+  actorModelIds,
+  buildSceneSplat,
+} from './trajectoryActorModels';
+import { GAUSSIAN_SPLAT_LAYOUT_VERSION } from './gaussian/splatLayout';
+import { useTrajectoryConfigStore } from '../stores/trajectoryConfigStore';
 
 /** Max size (bytes) accepted for a trajectory import (guards runaway files). */
 const MAX_TRAJECTORY_SIZE_BYTES = 100 * 1024 * 1024;
@@ -77,6 +85,10 @@ function renderActorsAt(t: number): void {
   const renderer = getViewportRenderer();
   if (!renderer || !data) return;
 
+  // Actors with a loaded Gaussian model render as splats instead of a box/mesh.
+  const modelIds = actorModelIds();
+  const egoHasModel = data.entities.some((e) => e.ego && modelIds.has(e.id));
+
   const rawEgoBox = buildEgoBox(data, t);
   const filteredEgoBox: CaseActorBox | null =
     followEgo && followPose && rawEgoBox
@@ -94,17 +106,17 @@ function renderActorsAt(t: number): void {
         }
       : null;
 
-  // When the ego model is loaded, draw the ego as a solid model and exclude it
-  // from the (translucent) box set so it is not drawn twice.
-  const boxes = buildTrajBoxes(data, t, {
-    includeEgo: egoTemplate === null && filteredEgoBox === null,
-  });
-  if (egoTemplate === null && filteredEgoBox) boxes.push(filteredEgoBox);
-  renderer.uploadActorVertices(
-    buildBoxVertices(boxes, sceneOrigin),
+  // The ego is drawn as a solid model (`ego.glb`) or a Gaussian splat when
+  // available, so exclude it from the (translucent) box set in those cases.
+  const egoAsBox = !egoHasModel && egoTemplate === null && filteredEgoBox === null;
+  const boxes = buildTrajBoxes(data, t, { includeEgo: egoAsBox }).filter(
+    // Drop any actor rendered as a splat (box ids are `traj:<entityId>`).
+    (b) => !modelIds.has(b.id.startsWith('traj:') ? b.id.slice(5) : b.id),
   );
+  if (!egoHasModel && egoTemplate === null && filteredEgoBox) boxes.push(filteredEgoBox);
+  renderer.uploadActorVertices(buildBoxVertices(boxes, sceneOrigin));
 
-  if (egoTemplate) {
+  if (!egoHasModel && egoTemplate) {
     const egoBox = filteredEgoBox ?? rawEgoBox;
     if (egoBox) {
       renderer.uploadEgoMeshIndexed(
@@ -117,6 +129,14 @@ function renderActorsAt(t: number): void {
   } else {
     renderer.clearEgoMesh();
   }
+
+  // Per-actor Gaussian splats: merge every mapped actor's model at its pose.
+  const frame = buildActorSplatFrame(data, t, sceneOrigin);
+  if (frame && frame.buffer.length > 0) {
+    renderer.uploadActorGaussianSplats(frame.buffer, frame.shDegree, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+  } else {
+    renderer.clearActorGaussianSplats();
+  }
 }
 
 /** Clear both actor and ribbon buffers from the renderer. */
@@ -126,6 +146,7 @@ function clearRenderer(): void {
   renderer.uploadActorVertices(new Float32Array(0));
   renderer.uploadPathVertices(new Float32Array(0));
   renderer.clearEgoMesh();
+  renderer.clearActorGaussianSplats();
 }
 
 /** The RAF clock: advance the playhead by real elapsed time × speed. */
@@ -292,6 +313,16 @@ export function startTrajectory(
   // loadData triggers the subscription → uploads ribbons + renders first frame.
   useTrajectoryStore.getState().loadData(data);
 
+  // Load any pre-configured actor Gaussian models, then re-render the current
+  // frame so mapped actors appear as splats without waiting for a scrub.
+  if (Object.keys(useTrajectoryConfigStore.getState().actorModels).length > 0) {
+    void loadActorModels().then(() => {
+      if (useTrajectoryStore.getState().data) {
+        renderActorsAt(useTrajectoryStore.getState().currentTime);
+      }
+    });
+  }
+
   const bounds = trajBounds(data);
   if (bounds && renderer) {
     renderer.frameScene3D(
@@ -313,8 +344,43 @@ export function stopTrajectory(): void {
   }
   followPose = null;
   followPerf = 0;
+  // Clear the static-scene point cloud / Gaussian splats and the cached actor
+  // models, and close the config panel — closing must wipe everything, not just
+  // the trajectory ribbons/boxes.
+  getViewportRenderer()?.clearGaussianSplats();
+  const config = useTrajectoryConfigStore.getState();
+  config.clearLoadedModels();
+  config.toggleConfigOpen(false);
   // clear() sets data → null, which the subscription turns into a buffer clear.
   useTrajectoryStore.getState().clear();
+}
+
+/**
+ * Reload the configured actor Gaussian models and re-render the current frame.
+ * When `filter` is given, only matching actor ids are (re)loaded — used by the
+ * ego / opponent apply buttons to update each independently. Safe to call with
+ * no trajectory loaded (it simply refreshes the model cache).
+ */
+export async function refreshActorModels(filter?: (actorId: string) => boolean): Promise<void> {
+  await loadActorModels(filter);
+  if (useTrajectoryStore.getState().data) {
+    renderActorsAt(useTrajectoryStore.getState().currentTime);
+  }
+}
+
+/**
+ * Load the configured static-scene PLY into the scene Gaussian renderer (or
+ * clear it when none is configured). Independent of the actor models.
+ */
+export async function applySceneModel(): Promise<void> {
+  const renderer = getViewportRenderer();
+  if (!renderer) return;
+  const scene = await buildSceneSplat();
+  if (scene && scene.buffer.length > 0) {
+    renderer.uploadGaussianSplats(scene.buffer, scene.shDegree, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+  } else {
+    renderer.clearGaussianSplats();
+  }
 }
 
 /**

@@ -466,6 +466,12 @@ export interface GaussianSplatNativeResult {
   buffer: Uint32Array;
 }
 
+/** A file discovered by a directory scan: display name + absolute path. */
+export interface ScannedFile {
+  name: string;
+  path: string;
+}
+
 export interface PlatformService {
   /** Parse an OpenDRIVE XML string into a Project. */
   parseOpenDrive(xml: string): Promise<Project>;
@@ -754,4 +760,12 @@ export interface PlatformService {
    *  metadata plus the packed SH instance buffer via raw binary transfer,
    *  avoiding the whole-file JS/WASM copy that crashes on large clouds. */
   loadGaussianSplatsNative(path: string, maxSplats?: number): Promise<GaussianSplatNativeResult>;
+
+  /** Pick a directory via the native dialog and return its absolute path.
+   *  Optional — platforms without a real filesystem (Web) omit this. */
+  pickDirectory?(): Promise<string | null>;
+
+  /** Recursively scan a directory for files whose extension (lower-case, no dot)
+   *  is in `extensions`. Desktop only; Web platforms omit this. */
+  scanDirectory?(dir: string, extensions: string[]): Promise<ScannedFile[]>;
 }
