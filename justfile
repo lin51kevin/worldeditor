@@ -90,14 +90,16 @@ build-web:
 docker-web tag="worldeditor-web:latest": build-web
     docker build -f Dockerfile.web -t {{tag}} .
 
-# Serve frontend/dist locally via the RoadNetworkRTService's bundled nginx.exe
-# (separate prefix/port — does not touch that service's own nginx.conf).
-serve-dist port="8090":
-    bash scripts/serve-dist-nginx.sh start {{port}}
+# Serve frontend/dist locally via an externally provided nginx.exe
+# (separate prefix/port — does not touch that nginx's own nginx.conf).
+# nginx_bin defaults to the RoadNetworkRTService copy; override as needed:
+#   just serve-dist nginx_bin=D:/other/nginx.exe port=9000
+serve-dist nginx_bin="F:/Builds/MnemoGS_cooperation_20260702090447_91/Tools/RoadNetworkRTService/nginx.exe" port="8090":
+    bash scripts/serve-dist-nginx.sh start "{{nginx_bin}}" {{port}}
 
 # Stop the local nginx instance started by `just serve-dist`.
-serve-dist-stop:
-    bash scripts/serve-dist-nginx.sh stop
+serve-dist-stop nginx_bin="F:/Builds/MnemoGS_cooperation_20260702090447_91/Tools/RoadNetworkRTService/nginx.exe":
+    bash scripts/serve-dist-nginx.sh stop "{{nginx_bin}}"
 
 # ── Test ───────────────────────────────────────────
 

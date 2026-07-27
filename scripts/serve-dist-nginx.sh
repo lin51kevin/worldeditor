@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
-# serve-dist-nginx.sh — serve frontend/dist using the nginx.exe bundled with
-# RoadNetworkRTService, WITHOUT touching that service's own nginx.conf.
+# serve-dist-nginx.sh — serve frontend/dist using an externally provided
+# nginx.exe (e.g. the one bundled with RoadNetworkRTService), WITHOUT
+# touching that nginx installation's own nginx.conf.
 #
 # Runs a second, independent nginx instance with its own prefix directory
 # (.nginx-local/: conf + logs + temp) and its own port, so it never conflicts
-# with the RoadNetworkRTService instance already listening on 8067.
+# with whatever the given nginx.exe is already serving elsewhere.
 #
 # Usage:
-#   scripts/serve-dist-nginx.sh [start|stop|reload] [port]
+#   scripts/serve-dist-nginx.sh <start|stop|reload> <path-to-nginx.exe> [port]
 #
-# Env overrides:
-#   NGINX_BIN  path to nginx.exe (default: RoadNetworkRTService's copy)
+# Example:
+#   scripts/serve-dist-nginx.sh start F:/Builds/.../RoadNetworkRTService/nginx.exe 8090
+#   scripts/serve-dist-nginx.sh stop  F:/Builds/.../RoadNetworkRTService/nginx.exe
+#
+# Env overrides (used only if <path-to-nginx.exe> is omitted):
+#   NGINX_BIN  path to nginx.exe
 #   DIST_DIR   path to the built frontend (default: frontend/dist)
 
 set -euo pipefail
@@ -23,17 +28,23 @@ winpath() { ( cd "$1" && { pwd -W 2>/dev/null || pwd; } ); }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(winpath "$SCRIPT_DIR/..")"
 
-NGINX_BIN="${NGINX_BIN:-F:/Builds/MnemoGS_cooperation_20260702090447_91/Tools/RoadNetworkRTService/nginx.exe}"
-NGINX_HOME="$(dirname "$NGINX_BIN")"
+ACTION="${1:-start}"
+NGINX_BIN="${2:-${NGINX_BIN:-}}"
 DIST_DIR="${DIST_DIR:-$REPO_ROOT/frontend/dist}"
 WORK_DIR="$REPO_ROOT/.nginx-local"
 CONF_FILE="$WORK_DIR/nginx.conf"
-ACTION="${1:-start}"
-PORT="${2:-${PORT:-8090}}"
+PORT="${3:-${PORT:-8090}}"
+
+if [[ -z "$NGINX_BIN" ]]; then
+  echo "error: nginx.exe path not specified." >&2
+  echo "  Usage: $0 [start|stop|reload] <path-to-nginx.exe> [port]" >&2
+  echo "  Or set it via: NGINX_BIN=/path/to/nginx.exe $0 $ACTION" >&2
+  exit 1
+fi
+NGINX_HOME="$(dirname "$NGINX_BIN")"
 
 if [[ ! -f "$NGINX_BIN" ]]; then
   echo "error: nginx.exe not found at $NGINX_BIN" >&2
-  echo "  Override with: NGINX_BIN=/path/to/nginx.exe $0 $ACTION" >&2
   exit 1
 fi
 
@@ -51,7 +62,7 @@ case "$ACTION" in
   start)
     ;;
   *)
-    echo "usage: $0 [start|stop|reload] [port]" >&2
+    echo "usage: $0 [start|stop|reload] <path-to-nginx.exe> [port]" >&2
     exit 1
     ;;
 esac
@@ -103,4 +114,4 @@ EOF
 
 "$NGINX_BIN" -p "$WORK_DIR" -c "$CONF_FILE"
 echo "nginx started -> http://localhost:$PORT  (serving $DIST_DIR)"
-echo "stop with: $0 stop"
+echo "stop with: $0 stop \"$NGINX_BIN\""
