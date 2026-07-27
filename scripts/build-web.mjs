@@ -38,106 +38,106 @@ const isWindows = process.platform === 'win32';
 
 /** Run a command, inheriting stdio, and abort the build on failure. */
 function run(command, cmdArgs, cwd = REPO_ROOT) {
-  const shown = [command, ...cmdArgs].join(' ');
-  console.log(`\n\u001b[36m$ ${shown}\u001b[0m  (cwd: ${cwd})`);
-  execFileSync(command, cmdArgs, {
-    cwd,
-    stdio: 'inherit',
-    // Yarn / wasm-pack are resolved via PATH; on Windows they are .cmd shims.
-    shell: isWindows,
-  });
+    const shown = [command, ...cmdArgs].join(' ');
+    console.log(`\n\u001b[36m$ ${shown}\u001b[0m  (cwd: ${cwd})`);
+    execFileSync(command, cmdArgs, {
+        cwd,
+        stdio: 'inherit',
+        // Yarn / wasm-pack are resolved via PATH; on Windows they are .cmd shims.
+        shell: isWindows,
+    });
 }
 
 /** Resolve an executable that may be a `.cmd` shim on Windows. */
 function bin(name) {
-  return isWindows ? `${name}.cmd` : name;
+    return isWindows ? `${name}.cmd` : name;
 }
 
 function ensureWasmPack() {
-  try {
-    execFileSync('wasm-pack', ['--version'], { stdio: 'ignore', shell: isWindows });
-  } catch {
-    console.error(
-      '\u001b[31merror:\u001b[0m wasm-pack not found. Install it with:\n' +
-        '  cargo install wasm-pack',
-    );
-    process.exit(1);
-  }
+    try {
+        execFileSync('wasm-pack', ['--version'], { stdio: 'ignore', shell: isWindows });
+    } catch {
+        console.error(
+            '\u001b[31merror:\u001b[0m wasm-pack not found. Install it with:\n' +
+            '  cargo install wasm-pack',
+        );
+        process.exit(1);
+    }
 }
 
 function buildWasm() {
-  ensureWasmPack();
-  run('wasm-pack', [
-    'build',
-    'crates/we-wasm',
-    '--target',
-    'web',
-    '--out-dir',
-    '../../frontend/wasm/pkg',
-    '--release',
-    '--',
-    '--features',
-    'extra-modules',
-  ]);
+    ensureWasmPack();
+    run('wasm-pack', [
+        'build',
+        'crates/we-wasm',
+        '--target',
+        'web',
+        '--out-dir',
+        '../../frontend/wasm/pkg',
+        '--release',
+        '--',
+        '--features',
+        'extra-modules',
+    ]);
 
-  // Optional wasm-opt pass (-Oz). Prefer the frontend's binaryen devDep so the
-  // reference-types / bulk-memory features wasm-bindgen emits are accepted.
-  const localWasmOpt = join(
-    FRONTEND,
-    'node_modules',
-    '.bin',
-    isWindows ? 'wasm-opt.cmd' : 'wasm-opt',
-  );
-  const optimized = `${WASM_FILE}.opt`;
-  const optArgs = ['-Oz', '--all-features', WASM_FILE, '-o', optimized];
+    // Optional wasm-opt pass (-Oz). Prefer the frontend's binaryen devDep so the
+    // reference-types / bulk-memory features wasm-bindgen emits are accepted.
+    const localWasmOpt = join(
+        FRONTEND,
+        'node_modules',
+        '.bin',
+        isWindows ? 'wasm-opt.cmd' : 'wasm-opt',
+    );
+    const optimized = `${WASM_FILE}.opt`;
+    const optArgs = ['-Oz', '--all-features', WASM_FILE, '-o', optimized];
 
-  let ran = false;
-  if (existsSync(localWasmOpt)) {
-    run(localWasmOpt, optArgs);
-    ran = true;
-  } else {
-    try {
-      execFileSync('wasm-opt', ['--version'], { stdio: 'ignore', shell: isWindows });
-      run('wasm-opt', optArgs);
-      ran = true;
-    } catch {
-      console.log('wasm-opt not installed, skipping further optimization');
+    let ran = false;
+    if (existsSync(localWasmOpt)) {
+        run(localWasmOpt, optArgs);
+        ran = true;
+    } else {
+        try {
+            execFileSync('wasm-opt', ['--version'], { stdio: 'ignore', shell: isWindows });
+            run('wasm-opt', optArgs);
+            ran = true;
+        } catch {
+            console.log('wasm-opt not installed, skipping further optimization');
+        }
     }
-  }
 
-  if (ran) {
-    // Replace the original with the optimized artifact (cross-platform).
-    renameSync(optimized, WASM_FILE);
-  }
+    if (ran) {
+        // Replace the original with the optimized artifact (cross-platform).
+        renameSync(optimized, WASM_FILE);
+    }
 }
 
 function buildFrontend() {
-  if (!skipInstall) {
-    run(bin('yarn'), ['install', '--frozen-lockfile'], FRONTEND);
-  }
-  run(bin('yarn'), ['build:web'], FRONTEND);
+    if (!skipInstall) {
+        run(bin('yarn'), ['install', '--frozen-lockfile'], FRONTEND);
+    }
+    run(bin('yarn'), ['build:web'], FRONTEND);
 }
 
 console.log('\u001b[1m▶ Building WorldEditor Next — Web artifact\u001b[0m');
 
 if (skipWasm) {
-  console.log('Skipping WASM build (--skip-wasm).');
-  if (!existsSync(WASM_FILE)) {
-    console.error(
-      `\u001b[31merror:\u001b[0m --skip-wasm set but ${WASM_FILE} is missing. ` +
-        'Run without --skip-wasm first.',
-    );
-    process.exit(1);
-  }
+    console.log('Skipping WASM build (--skip-wasm).');
+    if (!existsSync(WASM_FILE)) {
+        console.error(
+            `\u001b[31merror:\u001b[0m --skip-wasm set but ${WASM_FILE} is missing. ` +
+            'Run without --skip-wasm first.',
+        );
+        process.exit(1);
+    }
 } else {
-  buildWasm();
+    buildWasm();
 }
 
 buildFrontend();
 
 if (!existsSync(join(DIST, 'index.html'))) {
-  console.error('\u001b[31merror:\u001b[0m build finished but frontend/dist/index.html is missing.');
-  process.exit(1);
+    console.error('\u001b[31merror:\u001b[0m build finished but frontend/dist/index.html is missing.');
+    process.exit(1);
 }
 
 console.log(`\n\u001b[32m✔ Web artifact ready:\u001b[0m ${DIST}`);

@@ -90,6 +90,15 @@ build-web:
 docker-web tag="worldeditor-web:latest": build-web
     docker build -f Dockerfile.web -t {{tag}} .
 
+# Serve frontend/dist locally via the RoadNetworkRTService's bundled nginx.exe
+# (separate prefix/port — does not touch that service's own nginx.conf).
+serve-dist port="8090":
+    bash scripts/serve-dist-nginx.sh start {{port}}
+
+# Stop the local nginx instance started by `just serve-dist`.
+serve-dist-stop:
+    bash scripts/serve-dist-nginx.sh stop
+
 # ── Test ───────────────────────────────────────────
 
 # Run all Rust tests
