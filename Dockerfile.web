@@ -1,0 +1,25 @@
+# Dockerfile.web — package the pre-built Web artifact into an Nginx image.
+#
+# This image is intentionally lightweight: it only serves the static SPA
+# produced by `scripts/build-web.mjs` (or `just build-web`). Build the artifact
+# first, then build this image:
+#
+#   node scripts/build-web.mjs           # → frontend/dist/
+#   docker build -f Dockerfile.web -t worldeditor-web .
+#   docker run --rm -p 8080:80 worldeditor-web   # http://localhost:8080
+#
+# CI/CD builds the artifact once (uploadable), then packages it here so the
+# image build stays fast and needs no Rust/Node toolchain.
+
+FROM nginx:1.27-alpine
+
+# Static SPA (index.html + hashed assets + WASM). Must be built beforehand.
+COPY frontend/dist/ /usr/share/nginx/html/
+
+# Serving config: correct WASM MIME, gzip, SPA fallback, /healthz.
+COPY docker/nginx.web.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --quiet --spider http://localhost/healthz || exit 1

@@ -76,6 +76,20 @@ build-plugins:
 # Build everything
 build-all: build build-wasm build-frontend build-plugins
 
+# ── Web deploy artifact ────────────────────────────
+
+# One-click build of the complete Web artifact → frontend/dist.
+# Builds FULL release WASM (+ wasm-opt) then the static SPA (`yarn build:web`).
+# This is the single entry point consumed by CI/CD and the Docker image.
+build-web:
+    node scripts/build-web.mjs
+
+# Build the lightweight Nginx Docker image from the Web artifact.
+# Produces frontend/dist first, then packages it via Dockerfile.web.
+# Override the tag with: just docker-web tag=my-registry/worldeditor-web:1.0
+docker-web tag="worldeditor-web:latest": build-web
+    docker build -f Dockerfile.web -t {{tag}} .
+
 # ── Test ───────────────────────────────────────────
 
 # Run all Rust tests
