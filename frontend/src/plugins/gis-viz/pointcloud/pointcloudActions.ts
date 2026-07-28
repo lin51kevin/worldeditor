@@ -21,6 +21,7 @@ import {
   workerExtractGround,
   workerExtractMarkings,
   workerVectorize,
+  terminatePointCloudWorker,
   DEFAULT_SPLAT_LOAD_BUDGET,
   type GaussianSplatMeta,
 } from '../../../workers/pointcloudBridge';
@@ -179,6 +180,12 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
               gaussianMetaToSummary(meta),
               true,
             );
+          // The packed splat buffer now lives on the main thread (transferred
+          // out of the worker). The worker's WASM linear memory grew to hold
+          // the ~GB parse + retrieval copy and never shrinks back to the OS, so
+          // tear the worker down to reclaim that RSS; it is lazily recreated on
+          // the next point-cloud operation. Splats need no further worker calls.
+          terminatePointCloudWorker();
         } else {
           const format = ext === 'txt' || ext === 'asc' ? 'xyz' : ext;
           const result = await workerLoadPointCloud(bytes, format);
@@ -214,6 +221,9 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
             gaussianMetaToSummary(meta),
             true,
           );
+        // Reclaim the worker's WASM heap (it never shrinks after the ~GB splat
+        // parse). It is lazily recreated on the next point-cloud operation.
+        terminatePointCloudWorker();
       } else {
         if (!source.bytes || !source.format) throw new Error('Failed to read point cloud bytes.');
         const result = await workerLoadPointCloud(source.bytes, source.format);
