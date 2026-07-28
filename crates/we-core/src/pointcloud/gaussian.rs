@@ -879,6 +879,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::needless_range_loop)] // 3×3 matrix indexed by both i and j
     fn test_quat_identity_is_identity_matrix() {
         let r = quat_to_rotmat([1.0, 0.0, 0.0, 0.0]);
         for i in 0..3 {

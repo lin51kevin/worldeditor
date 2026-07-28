@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 const mockShowAlert = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('../../../utils/dialog', () => ({ showAlert: mockShowAlert }));
 const rp = vi.fn(), rm = vi.fn(), u = vi.fn();
@@ -12,8 +14,6 @@ describe('ecosystem-beta.plugin', () => {
   it('panel component renders a placeholder message', () => {
     mountEcosystemPlugin();
     const panelCall = rp.mock.calls[0]?.[0];
-    const { createElement } = require('react');
-    const { renderToStaticMarkup } = require('react-dom/server');
     const html = renderToStaticMarkup(createElement(panelCall.component));
     expect(html).toContain('coming soon');
   });

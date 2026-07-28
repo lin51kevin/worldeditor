@@ -44,6 +44,7 @@ export default tseslint.config(
   {
     ignores: [
       'dist/',
+      'dist-rnk/',
       'wasm/',
       'coverage/',
       'playwright-report/',
