@@ -450,6 +450,8 @@ input[type="number"]:focus::-webkit-outer-spin-button {
   left: 12px;
   width: var(--floating-panel-width);
   min-height: 200px;
+  /* Safety net: cap height before JS clamps so tall content can't overflow the viewport */
+  max-height: calc(100vh - var(--menubar-height) - var(--toolbar-height) - 28px);
   display: flex;
   flex-direction: column;
 }
@@ -459,6 +461,7 @@ input[type="number"]:focus::-webkit-outer-spin-button {
   top: calc(var(--menubar-height) + var(--toolbar-height) + 12px);
   right: 12px;
   width: var(--floating-right-width);
+  max-height: calc(100vh - var(--menubar-height) - var(--toolbar-height) - 28px);
   display: flex;
   flex-direction: column;
 }
@@ -486,6 +489,7 @@ input[type="number"]:focus::-webkit-outer-spin-button {
   top: calc(var(--menubar-height) + var(--toolbar-height) + 12px + 420px + 8px);
   left: 12px;
   width: var(--floating-panel-width);
+  max-height: calc(100vh - var(--menubar-height) - var(--toolbar-height) - 28px);
   display: flex;
   flex-direction: column;
 }

@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { FloatingPanel } from './FloatingPanel';
 
@@ -223,5 +223,55 @@ describe('FloatingPanel — resize handles', () => {
     expect(container.querySelector('.fp-resize-corner-lb')).toBeTruthy();
     expect(container.querySelector('.fp-resize-corner-rt')).toBeTruthy();
     expect(container.querySelector('.fp-resize-corner-lt')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Overflow / height cap + top-bound clamping
+// ---------------------------------------------------------------------------
+
+describe('FloatingPanel — maxHeight & topBound clamping', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    Object.defineProperty(window, 'innerWidth',  { value: 1024, configurable: true, writable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 768,  configurable: true, writable: true });
+  });
+  afterEach(() => localStorage.clear());
+
+  it('clamps a restored oversized height to maxHeight on load', () => {
+    localStorage.setItem('fp-tall', JSON.stringify({ x: 10, y: 20, w: 340, h: 5000, v: 2 }));
+    let container!: HTMLElement;
+    act(() => {
+      ({ container } = render(makePanel({ storageKey: 'fp-tall', maxHeight: 300 })));
+    });
+    const el = getPanel(container);
+    expect(el.style.height).toBe('300px');
+  });
+
+  it('clamps a restored top above topBound down to topBound on load', () => {
+    localStorage.setItem('fp-above', JSON.stringify({ x: 10, y: 5, w: 340, h: 200, v: 2 }));
+    let container!: HTMLElement;
+    act(() => {
+      ({ container } = render(makePanel({ storageKey: 'fp-above', topBound: 100 })));
+    });
+    const el = getPanel(container);
+    expect(el.style.top).toBe('100px');
+  });
+
+  it('prevents dragging the title bar above topBound', () => {
+    localStorage.setItem('fp-drag', JSON.stringify({ x: 100, y: 300, w: 340, h: 200, v: 2 }));
+    let container!: HTMLElement;
+    act(() => {
+      ({ container } = render(makePanel({ storageKey: 'fp-drag', topBound: 150 })));
+    });
+    const handle = container.querySelector('.handle')!;
+    act(() => {
+      fireEvent.mouseDown(handle, { clientX: 100, clientY: 350 });
+      // Drag far upward — target y would be negative but must clamp to topBound
+      fireEvent.mouseMove(window, { clientX: 100, clientY: -150 });
+      fireEvent.mouseUp(window);
+    });
+    const el = getPanel(container);
+    expect(el.style.top).toBe('150px');
   });
 });

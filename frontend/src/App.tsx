@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 // Eagerly pre-warm WebGPU adapter+device so the viewport mounts faster.
 import './viewport/gpuDeviceCache';
@@ -98,6 +98,18 @@ export function App() {
 
   const disabledBuiltins = useBuiltinPluginStore((s) => s.disabledBuiltins);
   const templatePluginEnabled = !disabledBuiltins.includes('builtin-templates');
+
+  // Minimum y a top-anchored floating panel may be dragged to — keeps its title bar
+  // below the fixed menubar/toolbar (which sit at a higher z-index and would hide it).
+  // Equals the bottom edge of the visible chrome; recomputed when the toolbar toggles.
+  const panelTopBound = useMemo(() => {
+    const cs = getComputedStyle(document.documentElement);
+    const menubar = parseInt(cs.getPropertyValue('--menubar-height'), 10) || 32;
+    const toolbar = parseInt(cs.getPropertyValue('--toolbar-height'), 10) || 36;
+    // Toolbar is positioned at top: menubar + 10px (see Toolbar.css); its bottom is
+    // the lowest fixed chrome. When collapsed, only the menubar obstructs.
+    return layout.toolbarCollapsed ? menubar : menubar + 10 + toolbar;
+  }, [layout.toolbarCollapsed]);
 
   useEffect(() => {
     initTheme();
@@ -393,6 +405,7 @@ export function App() {
             minWidth={180}
             maxWidth={500}
             minHeight={200}
+            topBound={panelTopBound}
             resizeEdges={['top', 'right', 'bottom', 'left']}
             storageKey="we-panel-left"
             onClose={toggleLeftPanel}
@@ -410,6 +423,7 @@ export function App() {
             minWidth={220}
             maxWidth={680}
             minHeight={200}
+            topBound={panelTopBound}
             resizeEdges={['top', 'right', 'bottom', 'left']}
             storageKey="we-panel-right"
             onClose={toggleRightPanel}
@@ -427,6 +441,7 @@ export function App() {
           minWidth={180}
           maxWidth={500}
           minHeight={80}
+            topBound={panelTopBound}
             resizeEdges={['top', 'right', 'bottom', 'left']}
             storageKey="we-panel-template"
             onClose={toggleTemplatePanel}

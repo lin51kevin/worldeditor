@@ -50,6 +50,20 @@ const HANDLE_CURSOR: Record<string, string> = {
 
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 
+/** Bottom margin kept between a panel's lower edge and the viewport bottom. */
+const BOTTOM_MARGIN = 16;
+
+/**
+ * Maximum height a panel may occupy: viewport height minus the top obstruction
+ * (menubar/toolbar, via `topBound`) and a bottom margin. Explicit `maxHeight`
+ * overrides the computed value. Never returns less than `minHeight`.
+ */
+function computeMaxHeight(topBound: number, minHeight: number, maxHeight?: number): number {
+  const available = window.innerHeight - topBound - BOTTOM_MARGIN;
+  const cap = maxHeight ?? available;
+  return Math.max(minHeight, Math.min(cap, available));
+}
+
 function loadRect(key: string): Rect | null {
   try {
     const raw = localStorage.getItem(key);
@@ -96,6 +110,10 @@ interface FloatingPanelProps {
   minWidth?: number;
   maxWidth?: number;
   minHeight?: number;
+  /** Maximum height in px. When omitted, capped to viewport minus topBound and margin. */
+  maxHeight?: number;
+  /** Minimum y (px) the panel may be dragged to — keeps the title bar below fixed chrome (menubar/toolbar). */
+  topBound?: number;
   /** Which edges are resizable (corners are auto-derived from adjacent enabled edges) */
   resizeEdges: Array<Edge>;
   /** localStorage key for persisting position/size */
@@ -119,6 +137,8 @@ export function FloatingPanel({
   minWidth = 180,
   maxWidth = 600,
   minHeight = 150,
+  maxHeight,
+  topBound = 0,
   resizeEdges,
   storageKey,
   onClose,
@@ -126,8 +146,16 @@ export function FloatingPanel({
   initialCenter,
   initialCenterOffset,
 }: FloatingPanelProps) {
-  // null = first frame, let CSS class control position; rect is set in useLayoutEffect
-  const [rect, setRect] = useState<Rect | null>(() => loadRect(storageKey));
+  // null = first frame, let CSS class control position; rect is set in useLayoutEffect.
+  // A restored rect may exceed the current viewport (e.g. saved on a taller screen),
+  // so clamp its height and top on load to keep the title bar reachable.
+  const [rect, setRect] = useState<Rect | null>(() => {
+    const r = loadRect(storageKey);
+    if (!r) return null;
+    const maxH = computeMaxHeight(topBound, minHeight, maxHeight);
+    const h = clamp(r.h, minHeight, maxH);
+    return { ...r, h, y: clamp(r.y, topBound, Math.max(topBound, window.innerHeight - h)) };
+  });
   const rectRef = useRef(rect);
   rectRef.current = rect;
 
@@ -186,32 +214,37 @@ export function FloatingPanel({
     if (!el) return;
     const brc = el.getBoundingClientRect();
     const w = Math.round(brc.width) || defaultWidth;
-    const h = Math.round(brc.height);
+    const maxH = computeMaxHeight(topBound, minHeight, maxHeight);
+    const h = clamp(Math.round(brc.height), minHeight, maxH);
     const x = initialCenter
       ? Math.round((window.innerWidth  - w) / 2) + (initialCenterOffset?.x ?? 0)
       : Math.round(brc.left);
     const y = initialCenter
       ? Math.round((window.innerHeight - h) / 2) + (initialCenterOffset?.y ?? 0)
-      : Math.round(brc.top);
+      : clamp(Math.round(brc.top), topBound, Math.max(topBound, window.innerHeight - h));
     // Set rect immediately; in test environments requestAnimationFrame may not advance.
     // Keeping this synchronous avoids missing initial layout in jsdom-based tests.
     setRect({ x, y, w, h });
     return;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-clamp position when the browser viewport is resized
+  // Re-clamp position/size when the browser viewport is resized
   useEffect(() => {
     const onResize = () =>
-      setRect((r) =>
-        r ? {
+      setRect((r) => {
+        if (!r) return r;
+        const maxH = computeMaxHeight(topBound, minHeight, maxHeight);
+        const h = clamp(r.h, minHeight, maxH);
+        return {
           ...r,
-          x: clamp(r.x, 0, window.innerWidth  - r.w),
-          y: clamp(r.y, 0, window.innerHeight - r.h),
-        } : r,
-      );
+          h,
+          x: clamp(r.x, 0, window.innerWidth - r.w),
+          y: clamp(r.y, topBound, Math.max(topBound, window.innerHeight - h)),
+        };
+      });
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [topBound, minHeight, maxHeight]);
 
   // Global mouse-move / mouse-up for drag and resize
   useEffect(() => {
@@ -227,23 +260,26 @@ export function FloatingPanel({
           document.body.style.cursor = 'move';
         }
         const { ox, oy, ow, oh } = drag.current;
+        // y lower bound = topBound (below fixed chrome); upper bound keeps the title
+        // visible even when the panel is taller than the viewport (Math.max guard).
         setRect((r) => r ? {
           ...r,
           x: clamp(ox + dx, 0, window.innerWidth  - ow),
-          y: clamp(oy + dy, 0, window.innerHeight - oh),
+          y: clamp(oy + dy, topBound, Math.max(topBound, window.innerHeight - oh)),
         } : r);
         return;
       }
       if (resize.current) {
         const { id, sx, sy, origin } = resize.current;
         const dx = e.clientX - sx, dy = e.clientY - sy;
+        const maxH = computeMaxHeight(topBound, minHeight, maxHeight);
         // Compact all-direction resize logic — each handle id encodes its direction(s)
         setRect(() => {
           const n = { ...origin };
           if (id.includes('r')) n.w = clamp(origin.w + dx, minWidth, maxWidth);
-          if (id.includes('b')) n.h = Math.max(minHeight, origin.h + dy);
+          if (id.includes('b')) n.h = clamp(origin.h + dy, minHeight, maxH);
           if (id.includes('l')) { const w = clamp(origin.w - dx, minWidth, maxWidth); n.x = origin.x + origin.w - w; n.w = w; }
-          if (id.includes('t')) { const h = Math.max(minHeight, origin.h - dy); n.y = origin.y + origin.h - h; n.h = h; }
+          if (id.includes('t')) { const h = clamp(origin.h - dy, minHeight, maxH); n.y = origin.y + origin.h - h; n.h = h; }
           return n;
         });
       }
@@ -263,7 +299,7 @@ export function FloatingPanel({
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [minWidth, maxWidth, minHeight]);
+  }, [minWidth, maxWidth, minHeight, maxHeight, topBound]);
 
   const handleContainerMouseDown = useCallback(
     (e: React.MouseEvent) => {
