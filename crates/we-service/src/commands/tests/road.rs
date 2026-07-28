@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::Command;
 
-
 // ── AddRoad tests ────────────────────────────────
 
 #[test]
@@ -15,14 +14,12 @@ fn test_add_road() {
     assert_eq!(result.roads[0].id, "1");
 }
 
-
 #[test]
 fn test_add_road_duplicate() {
     let project = make_project();
     let cmd = AddRoad::new(Road::new("1", 50.0));
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_add_road_undo() {
@@ -32,7 +29,6 @@ fn test_add_road_undo() {
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.roads.len(), 0);
 }
-
 
 // ── DeleteRoad tests ─────────────────────────────
 
@@ -46,14 +42,12 @@ fn test_delete_road() {
     assert_eq!(result.roads[0].id, "2");
 }
 
-
 #[test]
 fn test_delete_road_not_found() {
     let project = make_project();
     let cmd = DeleteRoad::new("999");
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_delete_road_undo() {
@@ -64,7 +58,6 @@ fn test_delete_road_undo() {
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.roads.len(), 2);
 }
-
 
 // ── UpdateRoadName tests ─────────────────────────
 
@@ -77,7 +70,6 @@ fn test_rename_road() {
     assert_eq!(result.roads[0].name, "NewName");
 }
 
-
 #[test]
 fn test_rename_road_undo() {
     let mut project = make_project();
@@ -87,7 +79,6 @@ fn test_rename_road_undo() {
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.roads[0].name, "OldName");
 }
-
 
 // ── SetRoadGeometry tests ────────────────────────
 
@@ -107,7 +98,6 @@ fn test_set_road_geometry() {
     assert_eq!(result.roads[0].plan_view.len(), 1);
     assert!((result.roads[0].length - 75.0).abs() < f64::EPSILON);
 }
-
 
 #[test]
 fn test_set_road_geometry_undo() {
@@ -134,7 +124,6 @@ fn test_set_road_geometry_undo() {
     assert_eq!(undone.roads[0].plan_view.len(), 1);
     assert!((undone.roads[0].length - 100.0).abs() < f64::EPSILON);
 }
-
 
 // ── CreateRoadFromCenterline tests ────────────────────
 
@@ -166,7 +155,6 @@ fn test_create_road_from_centerline() {
     assert_eq!(section.center[0].id, 0);
 }
 
-
 #[test]
 fn test_create_road_from_centerline_undo() {
     let project = Project::default();
@@ -184,7 +172,6 @@ fn test_create_road_from_centerline_undo() {
     assert_eq!(undone.roads.len(), 0);
 }
 
-
 #[test]
 fn test_create_road_from_centerline_duplicate() {
     let mut project = Project::default();
@@ -200,7 +187,6 @@ fn test_create_road_from_centerline_duplicate() {
     let cmd = CreateRoadFromCenterline::new("1", geometries);
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_create_road_from_spline_undo() {
@@ -218,7 +204,6 @@ fn test_create_road_from_spline_undo() {
     assert_eq!(undone.roads.len(), 0);
 }
 
-
 #[test]
 fn test_create_road_from_spline_duplicate_id() {
     use we_core::spline::{EditableSpline, SplineKnot, SplineOutputMode};
@@ -234,7 +219,6 @@ fn test_create_road_from_spline_duplicate_id() {
     let cmd = CreateRoadFromSpline::new("road_1", spline, template, SplineOutputMode::Classify);
     assert!(cmd.execute(&project).is_err());
 }
-
 
 // ── SetRoadLink tests ─────────────────────────────────
 
@@ -254,7 +238,6 @@ fn test_set_road_link() {
     assert!(result.roads[0].link.is_some());
 }
 
-
 #[test]
 fn test_translate_road() {
     let project = make_project_with_road();
@@ -266,7 +249,6 @@ fn test_translate_road() {
     assert!((result.roads[0].plan_view[0].y - (orig_y + 30.0)).abs() < 1e-9);
 }
 
-
 #[test]
 fn test_translate_road_undo() {
     let project = make_project_with_road();
@@ -277,7 +259,6 @@ fn test_translate_road_undo() {
     assert!((undone.roads[0].plan_view[0].x - orig_x).abs() < 1e-9);
 }
 
-
 #[test]
 fn test_rotate_road() {
     let project = make_project_with_road();
@@ -286,7 +267,6 @@ fn test_rotate_road() {
     let result = cmd.execute(&project).unwrap();
     assert!((result.roads[0].plan_view[0].hdg - angle).abs() < 1e-9);
 }
-
 
 #[test]
 fn test_rotate_road_around_pivot() {
@@ -299,7 +279,6 @@ fn test_rotate_road_around_pivot() {
     assert!(result.roads[0].plan_view[0].x.abs() < 1e-6);
     assert!((result.roads[0].plan_view[0].y - 100.0).abs() < 1e-6);
 }
-
 
 #[test]
 fn test_rotate_road_undo() {

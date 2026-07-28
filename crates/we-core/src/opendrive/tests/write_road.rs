@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::model::*;
 
-
 // ── Write-only tests ────────────────────────────
 
 #[test]
@@ -15,7 +14,6 @@ fn test_write_produces_valid_xml() {
     assert!(xml.contains("</OpenDRIVE>"));
     assert!(xml.contains("<header"));
 }
-
 
 #[test]
 fn test_write_road_with_junction() {
@@ -55,7 +53,6 @@ fn test_write_road_with_junction() {
     assert!(xml.contains(r#"junction="10""#));
 }
 
-
 // ── Road Link ───────────────────────────────────
 
 #[test]
@@ -86,7 +83,6 @@ fn test_write_road_link() {
     assert!(xml.contains(r#"elementType="junction""#));
 }
 
-
 #[test]
 fn test_write_road_link_roundtrip() {
     let p = project_with(
@@ -113,7 +109,6 @@ fn test_write_road_link_roundtrip() {
     assert_eq!(pred.contact_point, Some(ContactPoint::Start));
 }
 
-
 // ── Junction ────────────────────────────────────
 
 #[test]
@@ -130,7 +125,6 @@ fn test_write_junction_empty_connections() {
     assert!(xml.contains(r#"<junction"#));
     assert!(xml.contains(r#"id="j1""#));
 }
-
 
 // ── Header geo reference ────────────────────────
 
@@ -151,7 +145,6 @@ fn test_write_header_no_geo_reference() {
     assert!(!xml.contains("<geoReference"));
     assert!(xml.contains("<header"));
 }
-
 
 #[test]
 fn test_write_header_with_geo_reference() {
@@ -174,7 +167,6 @@ fn test_write_header_with_geo_reference() {
     assert!(xml.contains("<geoReference"));
     assert!(xml.contains(r#"originLat="31.23""#));
 }
-
 
 // ── Full complex roundtrip ──────────────────────
 

@@ -25,5 +25,9 @@ fn main() {
         println!("splat {i}: color={c:?} opacity={o:.3} cov={cov:?}");
     }
     let buf = cloud.build_splat_buffer();
-    println!("splat buffer floats: {} ({} MB)", buf.len(), buf.len() * 4 / (1024 * 1024));
+    println!(
+        "splat buffer floats: {} ({} MB)",
+        buf.len(),
+        buf.len() * 4 / (1024 * 1024)
+    );
 }

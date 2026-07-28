@@ -4,7 +4,6 @@
 use super::*;
 use crate::model::*;
 
-
 // ══════════════════════════════════════════════════
 // Writer unit tests — cover every branch in writer.rs
 // ══════════════════════════════════════════════════
@@ -38,7 +37,6 @@ pub(super) fn base_road() -> Road {
         spline_edit_data: None,
     }
 }
-
 
 pub(super) fn project_with(roads: Vec<Road>, junctions: Vec<Junction>) -> Project {
     Project {

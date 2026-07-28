@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::Command;
 
-
 #[test]
 fn test_add_signal() {
     let project = make_project();
@@ -13,7 +12,6 @@ fn test_add_signal() {
     assert_eq!(result.roads[0].signals[0].id, "sig-1");
 }
 
-
 #[test]
 fn test_add_signal_duplicate() {
     let mut project = make_project();
@@ -21,7 +19,6 @@ fn test_add_signal_duplicate() {
     let cmd = AddSignal::new("1", make_signal("sig-1"));
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_add_signal_undo() {
@@ -31,7 +28,6 @@ fn test_add_signal_undo() {
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.roads[0].signals.len(), 0);
 }
-
 
 // ── DeleteSignal tests ────────────────────────────────
 
@@ -45,7 +41,6 @@ fn test_delete_signal() {
     assert_eq!(result.roads[0].signals.len(), 0);
 }
 
-
 #[test]
 fn test_delete_signal_undo() {
     let mut project = make_project();
@@ -56,7 +51,6 @@ fn test_delete_signal_undo() {
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.roads[0].signals.len(), 1);
 }
-
 
 // ── UpdateSignal tests ────────────────────────────────
 
@@ -73,7 +67,6 @@ fn test_update_signal() {
     assert!((result.roads[0].signals[0].s - 75.0).abs() < f64::EPSILON);
     assert_eq!(result.roads[0].signals[0].name, "Updated");
 }
-
 
 #[test]
 fn test_update_signal_undo() {

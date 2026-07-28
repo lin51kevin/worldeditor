@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::Command;
 
-
 #[test]
 fn test_create_road_from_spline_empty_knots() {
     use we_core::spline::{EditableSpline, SplineOutputMode};
@@ -15,7 +14,6 @@ fn test_create_road_from_spline_empty_knots() {
     assert!(cmd.execute(&project).is_err());
 }
 
-
 #[test]
 fn test_create_road_from_spline_single_knot() {
     use we_core::spline::{EditableSpline, SplineKnot, SplineOutputMode};
@@ -26,7 +24,6 @@ fn test_create_road_from_spline_single_knot() {
     let cmd = CreateRoadFromSpline::new("road_1", spline, template, SplineOutputMode::Classify);
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_modify_road_knots_execute() {
@@ -42,7 +39,6 @@ fn test_modify_road_knots_execute() {
     assert!(result.roads[0].length > 0.0);
 }
 
-
 #[test]
 fn test_modify_road_knots_undo() {
     let project = make_project_with_road();
@@ -55,14 +51,12 @@ fn test_modify_road_knots_undo() {
     assert!((undone.roads[0].length - old_len).abs() < 1e-6);
 }
 
-
 #[test]
 fn test_modify_road_knots_invalid_road() {
     let project = make_project_with_road();
     let cmd = ModifyRoadKnots::new("nonexistent", vec![], 0.0, make_straight_knots());
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_move_knot_execute() {
@@ -89,7 +83,6 @@ fn test_move_knot_execute() {
     );
 }
 
-
 #[test]
 fn test_move_knot_with_constraint() {
     let project = make_project_with_road();
@@ -109,7 +102,6 @@ fn test_move_knot_with_constraint() {
     assert!(!result.roads[0].plan_view.is_empty());
 }
 
-
 #[test]
 fn test_move_knot_with_soft_selection() {
     let project = make_project_with_road();
@@ -128,7 +120,6 @@ fn test_move_knot_with_soft_selection() {
     let result = cmd.execute(&project).unwrap();
     assert!(!result.roads[0].plan_view.is_empty());
 }
-
 
 #[test]
 fn test_move_knot_undo() {
@@ -153,7 +144,6 @@ fn test_move_knot_undo() {
     assert!((undone.roads[0].length - old_len).abs() < 1e-6);
 }
 
-
 #[test]
 fn test_move_knot_out_of_range() {
     let project = make_project_with_road();
@@ -172,7 +162,6 @@ fn test_move_knot_out_of_range() {
     assert!(cmd.execute(&project).is_err());
 }
 
-
 #[test]
 fn test_insert_knot_execute() {
     let project = make_project_with_road();
@@ -188,7 +177,6 @@ fn test_insert_knot_execute() {
     assert!(!result.roads[0].plan_view.is_empty());
 }
 
-
 #[test]
 fn test_insert_knot_at_index() {
     let project = make_project_with_road();
@@ -203,7 +191,6 @@ fn test_insert_knot_at_index() {
     let result = cmd.execute(&project).unwrap();
     assert!(!result.roads[0].plan_view.is_empty());
 }
-
 
 #[test]
 fn test_insert_knot_undo() {
@@ -223,7 +210,6 @@ fn test_insert_knot_undo() {
     assert_eq!(undone.roads[0].plan_view.len(), old_pv.len());
 }
 
-
 #[test]
 fn test_delete_knot_execute() {
     let project = make_project_with_road();
@@ -238,7 +224,6 @@ fn test_delete_knot_execute() {
     assert!(!result.roads[0].plan_view.is_empty());
 }
 
-
 #[test]
 fn test_delete_knot_undo() {
     let project = make_project_with_road();
@@ -250,7 +235,6 @@ fn test_delete_knot_undo() {
     assert_eq!(undone.roads[0].plan_view.len(), old_pv.len());
     assert!((undone.roads[0].length - old_len).abs() < 1e-6);
 }
-
 
 #[test]
 fn test_delete_knot_minimum_knots_error() {
@@ -269,7 +253,6 @@ fn test_delete_knot_minimum_knots_error() {
     assert!(cmd.execute(&project).is_err());
 }
 
-
 #[test]
 fn test_delete_knot_out_of_range() {
     let project = make_project_with_road();
@@ -282,7 +265,6 @@ fn test_delete_knot_out_of_range() {
     );
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_set_knot_tangent_execute() {
@@ -305,7 +287,6 @@ fn test_set_knot_tangent_execute() {
     );
 }
 
-
 #[test]
 fn test_set_knot_tangent_undo() {
     let project = make_project_with_road();
@@ -324,7 +305,6 @@ fn test_set_knot_tangent_undo() {
     assert_eq!(undone.roads[0].plan_view.len(), old_pv.len());
 }
 
-
 #[test]
 fn test_set_knot_tangent_zero_error() {
     let project = make_project_with_road();
@@ -338,7 +318,6 @@ fn test_set_knot_tangent_zero_error() {
     );
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_set_knot_tangent_out_of_range() {

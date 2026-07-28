@@ -12,7 +12,6 @@ pub(super) fn make_project() -> Project {
     }
 }
 
-
 // ── AddSignal tests ───────────────────────────────────
 
 pub(super) fn make_signal(id: &str) -> Signal {
@@ -35,7 +34,6 @@ pub(super) fn make_signal(id: &str) -> Signal {
         validities: Vec::new(),
     }
 }
-
 
 // ── AddObject tests ───────────────────────────────────
 
@@ -60,7 +58,6 @@ pub(super) fn make_road_object(id: &str) -> RoadObject {
     }
 }
 
-
 // ── Spline knot editing command tests ────────────
 
 pub(super) fn make_road_with_geometry() -> Road {
@@ -77,7 +74,6 @@ pub(super) fn make_road_with_geometry() -> Road {
     )
 }
 
-
 pub(super) fn make_project_with_road() -> Project {
     Project {
         name: "test".into(),
@@ -88,7 +84,6 @@ pub(super) fn make_project_with_road() -> Project {
     }
 }
 
-
 pub(super) fn make_straight_knots() -> Vec<we_core::spline::SplineKnot> {
     vec![
         we_core::spline::SplineKnot::with_tangent(0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
@@ -96,7 +91,6 @@ pub(super) fn make_straight_knots() -> Vec<we_core::spline::SplineKnot> {
         we_core::spline::SplineKnot::with_tangent(100.0, 0.0, 0.0, 1.0, 0.0, 0.0),
     ]
 }
-
 
 // ── Phase 3: Lane & Section editing command tests ─
 
@@ -168,7 +162,6 @@ pub(super) fn make_project_two_sections() -> Project {
         ..Default::default()
     }
 }
-
 
 // ── Phase 5: Elevation editing command tests ──
 

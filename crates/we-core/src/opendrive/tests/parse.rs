@@ -16,7 +16,6 @@ fn test_parse_minimal() {
     assert!(project.junctions.is_empty());
 }
 
-
 // ── Single road file ─────────────────────────────
 
 #[test]
@@ -32,7 +31,6 @@ fn test_parse_single_road() {
     assert!(road.junction_id.is_none());
 }
 
-
 #[test]
 fn test_parse_header_geo_reference() {
     let xml = include_str!("../../../../../tests/fixtures/xodr/single_road.xodr");
@@ -42,7 +40,6 @@ fn test_parse_header_geo_reference() {
     assert!((geo.origin_lat - 31.23).abs() < 1e-10);
     assert!((geo.origin_long - 121.47).abs() < 1e-10);
 }
-
 
 #[test]
 fn test_parse_road_link() {
@@ -59,7 +56,6 @@ fn test_parse_road_link() {
     assert_eq!(succ.element_type, LinkElementType::Junction);
     assert_eq!(succ.element_id, "10");
 }
-
 
 #[test]
 fn test_parse_plan_view() {
@@ -93,7 +89,6 @@ fn test_parse_plan_view() {
     }
 }
 
-
 #[test]
 fn test_parse_elevation_profile() {
     let xml = include_str!("../../../../../tests/fixtures/xodr/single_road.xodr");
@@ -106,7 +101,6 @@ fn test_parse_elevation_profile() {
     assert!((elevations[1].a - 1.0).abs() < f64::EPSILON);
     assert!((elevations[1].s - 50.0).abs() < f64::EPSILON);
 }
-
 
 #[test]
 fn test_parse_lane_sections() {
@@ -139,7 +133,6 @@ fn test_parse_lane_sections() {
     assert_eq!(s0.right[1].id, -2);
 }
 
-
 #[test]
 fn test_parse_lane_width() {
     let xml = include_str!("../../../../../tests/fixtures/xodr/single_road.xodr");
@@ -149,7 +142,6 @@ fn test_parse_lane_width() {
     assert_eq!(lane.width.len(), 1);
     assert!((lane.width[0].a - 3.5).abs() < f64::EPSILON);
 }
-
 
 #[test]
 fn test_parse_lane_link() {
@@ -162,7 +154,6 @@ fn test_parse_lane_link() {
     assert_eq!(link.successor, Some(1));
 }
 
-
 #[test]
 fn test_parse_road_mark() {
     let xml = include_str!("../../../../../tests/fixtures/xodr/single_road.xodr");
@@ -173,7 +164,6 @@ fn test_parse_road_mark() {
     assert_eq!(lane.road_marks[0].mark_type, RoadMarkType::Solid);
     assert_eq!(lane.road_marks[0].color, RoadMarkColor::Yellow);
 }
-
 
 // ── Junction file ────────────────────────────────
 
@@ -199,7 +189,6 @@ fn test_parse_junction() {
     assert_eq!(conn0.lane_links[0].to, -1);
 }
 
-
 #[test]
 fn test_parse_junction_road_link() {
     let xml = include_str!("../../../../../tests/fixtures/xodr/junction.xodr");
@@ -210,7 +199,6 @@ fn test_parse_junction_road_link() {
     assert_eq!(road3.junction_id.as_deref(), Some("100"));
 }
 
-
 // ── Error handling tests ─────────────────────────
 
 #[test]
@@ -219,7 +207,6 @@ fn test_parse_invalid_xml() {
     // Invalid XML should return an error
     assert!(result.is_err());
 }
-
 
 #[test]
 fn test_parse_empty_string() {

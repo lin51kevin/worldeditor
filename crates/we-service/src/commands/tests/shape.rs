@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::Command;
 
-
 #[test]
 fn test_set_crossfall() {
     let project = make_project_with_road();
@@ -23,7 +22,6 @@ fn test_set_crossfall() {
         CrossfallSide::Both
     );
 }
-
 
 #[test]
 fn test_set_crossfall_undo() {

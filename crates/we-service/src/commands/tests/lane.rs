@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::Command;
 
-
 // ── AddLaneSection tests ─────────────────────────
 
 #[test]
@@ -46,7 +45,6 @@ fn test_add_lane_section() {
     assert_eq!(result.roads[0].lane_sections.len(), 1);
 }
 
-
 #[test]
 fn test_add_lane_section_undo() {
     let project = make_project();
@@ -63,7 +61,6 @@ fn test_add_lane_section_undo() {
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.roads[0].lane_sections.len(), 0);
 }
-
 
 // ── CreateRoadFromSpline tests ────────────────────
 
@@ -89,7 +86,6 @@ fn test_create_road_from_spline_single_lane() {
     assert_eq!(road.lane_sections[0].right.len(), 1);
 }
 
-
 #[test]
 fn test_create_road_from_spline_dual_lanes() {
     use we_core::spline::{EditableSpline, SplineKnot, SplineOutputMode};
@@ -107,7 +103,6 @@ fn test_create_road_from_spline_dual_lanes() {
     assert_eq!(road.lane_sections[0].left.len(), 2);
     assert_eq!(road.lane_sections[0].right.len(), 2);
 }
-
 
 // ── AddLane tests ─────────────────────────────────────
 
@@ -151,7 +146,6 @@ fn test_add_lane() {
     assert!(!section.left.iter().any(|l| l.id == 2));
 }
 
-
 #[test]
 fn test_add_lane_right() {
     let mut project = Project::default();
@@ -190,7 +184,6 @@ fn test_add_lane_right() {
     assert!(section.right.iter().any(|l| l.id == -2));
 }
 
-
 // ── DeleteLane tests ──────────────────────────────────
 
 #[test]
@@ -217,7 +210,6 @@ fn test_delete_lane() {
     assert_eq!(undone.roads[0].lane_sections[0].left.len(), 1);
     assert_eq!(undone.roads[0].lane_sections[0].left[0].id, 1);
 }
-
 
 // ── UpdateLaneWidth tests ─────────────────────────────
 
@@ -251,7 +243,6 @@ fn test_update_lane_width() {
     assert!((undone.roads[0].lane_sections[0].left[0].width[0].a - 3.5).abs() < f64::EPSILON);
 }
 
-
 // ── UpdateLaneType tests ──────────────────────────────
 
 #[test]
@@ -282,7 +273,6 @@ fn test_update_lane_type() {
     );
 }
 
-
 #[test]
 fn test_split_lane_section() {
     let project = make_project_with_road();
@@ -298,7 +288,6 @@ fn test_split_lane_section() {
     );
 }
 
-
 #[test]
 fn test_split_lane_section_undo() {
     let project = make_project_with_road();
@@ -309,7 +298,6 @@ fn test_split_lane_section_undo() {
     assert_eq!(undone.roads[0].lane_sections.len(), old_sections.len());
 }
 
-
 #[test]
 fn test_split_lane_section_too_close() {
     let project = make_project_with_road();
@@ -318,7 +306,6 @@ fn test_split_lane_section_too_close() {
     assert!(cmd.execute(&project).is_err());
 }
 
-
 #[test]
 fn test_split_lane_section_beyond_end() {
     let project = make_project_with_road();
@@ -326,7 +313,6 @@ fn test_split_lane_section_beyond_end() {
     let cmd = SplitLaneSection::new("road_1", 0.0, 999.0, old_sections);
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_split_lane_section_preserves_widths() {
@@ -345,7 +331,6 @@ fn test_split_lane_section_preserves_widths() {
     assert!((new_a - 4.0).abs() < 1e-6);
 }
 
-
 #[test]
 fn test_merge_lane_sections() {
     let project = make_project_two_sections();
@@ -354,7 +339,6 @@ fn test_merge_lane_sections() {
     let result = cmd.execute(&project).unwrap();
     assert_eq!(result.roads[0].lane_sections.len(), 1);
 }
-
 
 #[test]
 fn test_merge_lane_sections_undo() {
@@ -366,7 +350,6 @@ fn test_merge_lane_sections_undo() {
     assert_eq!(undone.roads[0].lane_sections.len(), old_sections.len());
 }
 
-
 #[test]
 fn test_merge_lane_sections_no_successor() {
     let project = make_project_two_sections();
@@ -374,7 +357,6 @@ fn test_merge_lane_sections_no_successor() {
     let cmd = MergeLaneSections::new("road_1", 100.0, old_sections);
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_delete_lane_section() {
@@ -384,7 +366,6 @@ fn test_delete_lane_section() {
     let result = cmd.execute(&project).unwrap();
     assert_eq!(result.roads[0].lane_sections.len(), 1);
 }
-
 
 #[test]
 fn test_delete_lane_section_undo() {
@@ -396,14 +377,12 @@ fn test_delete_lane_section_undo() {
     assert_eq!(undone.roads[0].lane_sections.len(), 2);
 }
 
-
 #[test]
 fn test_delete_lane_section_last_one_error() {
     let project = make_project_with_road();
     let cmd = DeleteLaneSection::new("road_1", 0.0);
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_set_lane_link() {
@@ -423,7 +402,6 @@ fn test_set_lane_link() {
     assert_eq!(lane.link.as_ref().unwrap().predecessor, Some(-1));
 }
 
-
 #[test]
 fn test_set_lane_link_undo() {
     let project = make_project_with_road();
@@ -441,7 +419,6 @@ fn test_set_lane_link_undo() {
         .unwrap();
     assert!(lane.link.is_none());
 }
-
 
 #[test]
 fn test_set_lane_road_mark() {
@@ -467,7 +444,6 @@ fn test_set_lane_road_mark() {
     assert_eq!(lane.road_marks[0].mark_type, RoadMarkType::Solid);
 }
 
-
 #[test]
 fn test_set_lane_road_mark_undo() {
     let project = make_project_with_road();
@@ -492,7 +468,6 @@ fn test_set_lane_road_mark_undo() {
     assert!(lane.road_marks.is_empty());
 }
 
-
 #[test]
 fn test_set_lane_offset() {
     let project = make_project_with_road();
@@ -508,7 +483,6 @@ fn test_set_lane_offset() {
     assert_eq!(result.roads[0].lane_offsets.len(), 1);
     assert!((result.roads[0].lane_offsets[0].a - 0.5).abs() < 1e-9);
 }
-
 
 #[test]
 fn test_set_lane_offset_undo() {

@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::model::*;
 
-
 // ── Lanes ───────────────────────────────────────
 
 #[test]
@@ -86,7 +85,6 @@ fn test_write_lane_section_with_all_groups() {
     assert!(xml.contains(r#"color="yellow""#));
 }
 
-
 #[test]
 fn test_write_lane_section_single_side() {
     let p = project_with(
@@ -107,7 +105,6 @@ fn test_write_lane_section_single_side() {
     let xml = write_xodr(&p).unwrap();
     assert!(xml.contains(r#"singleSide="1""#));
 }
-
 
 #[test]
 fn test_write_lane_no_children_self_closing() {
@@ -139,7 +136,6 @@ fn test_write_lane_no_children_self_closing() {
     // Self-closing lane element: <lane ... />
     assert!(xml.contains(r#"type="sidewalk""#));
 }
-
 
 #[test]
 fn test_write_lane_link_roundtrip() {
@@ -183,7 +179,6 @@ fn test_write_lane_link_roundtrip() {
     assert_eq!(link.successor, Some(-3));
 }
 
-
 // ── Lane Offsets ────────────────────────────────
 
 #[test]
@@ -215,7 +210,6 @@ fn test_write_lane_offsets() {
     assert_eq!(xml.matches("<laneOffset ").count(), 2);
 }
 
-
 #[test]
 fn test_write_junction_connection_no_lane_links() {
     let p = project_with(
@@ -236,7 +230,6 @@ fn test_write_junction_connection_no_lane_links() {
     // Self-closing connection element
     assert!(xml.contains(r#"contactPoint="start""#));
 }
-
 
 #[test]
 fn test_write_junction_connection_with_lane_links() {
@@ -261,7 +254,6 @@ fn test_write_junction_connection_with_lane_links() {
     assert!(xml.contains(r#"contactPoint="end""#));
     assert_eq!(xml.matches("<laneLink ").count(), 2);
 }
-
 
 // ── Road mark types exhaustive ──────────────────
 
@@ -322,7 +314,6 @@ fn test_write_all_road_mark_types() {
     }
 }
 
-
 // ── Road mark colors ────────────────────────────
 
 #[test]
@@ -378,7 +369,6 @@ fn test_write_all_road_mark_colors() {
         );
     }
 }
-
 
 // ── Lane types exhaustive ───────────────────────
 
@@ -444,7 +434,6 @@ fn test_write_all_lane_types() {
         );
     }
 }
-
 
 // ── Road mark weight ────────────────────────────
 

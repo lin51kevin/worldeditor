@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::Command;
 
-
 // ── AddJunction tests ────────────────────────────
 
 #[test]
@@ -20,7 +19,6 @@ fn test_add_junction() {
     assert_eq!(result.junctions[0].name, "J1");
 }
 
-
 #[test]
 fn test_add_junction_duplicate() {
     let junction = Junction {
@@ -33,7 +31,6 @@ fn test_add_junction_duplicate() {
     let cmd = AddJunction::new(junction);
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_add_junction_undo() {
@@ -48,7 +45,6 @@ fn test_add_junction_undo() {
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.junctions.len(), 0);
 }
-
 
 // ── DeleteJunction tests ─────────────────────────
 
@@ -66,7 +62,6 @@ fn test_delete_junction() {
     assert_eq!(result.junctions.len(), 0);
 }
 
-
 #[test]
 fn test_delete_junction_undo() {
     let junction = Junction {
@@ -81,7 +76,6 @@ fn test_delete_junction_undo() {
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.junctions.len(), 1);
 }
-
 
 // ── UpdateJunctionConnections tests ───────────────────
 
@@ -107,7 +101,6 @@ fn test_update_junction_connections() {
     assert_eq!(undone.junctions[0].connections.len(), 0);
 }
 
-
 #[test]
 fn test_update_junction() {
     let mut project = Project::default();
@@ -120,7 +113,6 @@ fn test_update_junction() {
     let result = cmd.execute(&project).unwrap();
     assert_eq!(result.junctions[0].name, "New Name");
 }
-
 
 #[test]
 fn test_update_junction_undo() {
@@ -135,7 +127,6 @@ fn test_update_junction_undo() {
     let undone = cmd.undo(&modified).unwrap();
     assert_eq!(undone.junctions[0].name, "Original");
 }
-
 
 #[test]
 fn test_update_junction_not_found() {

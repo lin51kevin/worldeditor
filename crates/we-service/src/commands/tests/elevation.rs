@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::Command;
 
-
 // ── SetRoadElevation tests ────────────────────────────
 
 #[test]
@@ -22,7 +21,6 @@ fn test_set_road_elevation() {
     assert!((result.roads[0].elevation_profile[0].a - 5.0).abs() < f64::EPSILON);
 }
 
-
 #[test]
 fn test_set_road_elevation_undo() {
     let project = make_project();
@@ -38,7 +36,6 @@ fn test_set_road_elevation_undo() {
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.roads[0].elevation_profile.len(), 0);
 }
-
 
 #[test]
 fn test_set_superelevation() {
@@ -56,7 +53,6 @@ fn test_set_superelevation() {
     assert!((result.roads[0].lateral_profile.superelevations[0].a - 0.02).abs() < 1e-9);
 }
 
-
 #[test]
 fn test_set_superelevation_undo() {
     let project = make_project_with_road();
@@ -73,7 +69,6 @@ fn test_set_superelevation_undo() {
     assert!(undone.roads[0].lateral_profile.superelevations.is_empty());
 }
 
-
 #[test]
 fn test_translate_road_with_elevation() {
     let project = make_project_with_road();
@@ -83,7 +78,6 @@ fn test_translate_road_with_elevation() {
     assert!((result.roads[0].elevation_profile[0].a - 10.0).abs() < 1e-9);
 }
 
-
 #[test]
 fn test_add_elevation_point() {
     let project = make_project_with_elevation();
@@ -92,7 +86,6 @@ fn test_add_elevation_point() {
     let result = cmd.execute(&project).unwrap();
     assert_eq!(result.roads[0].elevation_profile.len(), 4);
 }
-
 
 #[test]
 fn test_add_elevation_point_undo() {
@@ -104,7 +97,6 @@ fn test_add_elevation_point_undo() {
     assert_eq!(undone.roads[0].elevation_profile.len(), 3);
 }
 
-
 #[test]
 fn test_delete_elevation_point() {
     let project = make_project_with_elevation();
@@ -114,7 +106,6 @@ fn test_delete_elevation_point() {
     assert_eq!(result.roads[0].elevation_profile.len(), 2);
 }
 
-
 #[test]
 fn test_delete_elevation_point_not_found() {
     let project = make_project_with_elevation();
@@ -122,7 +113,6 @@ fn test_delete_elevation_point_not_found() {
     let cmd = DeleteElevationPoint::new("road_1", 999.0, 1.0, old);
     assert!(cmd.execute(&project).is_err());
 }
-
 
 #[test]
 fn test_delete_elevation_point_undo() {
@@ -133,7 +123,6 @@ fn test_delete_elevation_point_undo() {
     let undone = cmd.undo(&modified).unwrap();
     assert_eq!(undone.roads[0].elevation_profile.len(), 3);
 }
-
 
 #[test]
 fn test_move_elevation_point() {
@@ -146,7 +135,6 @@ fn test_move_elevation_point() {
     assert!((moved.a - 7.0).abs() < 1e-9);
 }
 
-
 #[test]
 fn test_move_elevation_point_undo() {
     let project = make_project_with_elevation();
@@ -157,7 +145,6 @@ fn test_move_elevation_point_undo() {
     assert!((undone.roads[0].elevation_profile[1].s - 50.0).abs() < 1e-9);
 }
 
-
 #[test]
 fn test_smooth_elevation() {
     let project = make_project_with_elevation();
@@ -166,7 +153,6 @@ fn test_smooth_elevation() {
     let result = cmd.execute(&project).unwrap();
     assert!(result.roads[0].elevation_profile[1].a < 5.0);
 }
-
 
 #[test]
 fn test_smooth_elevation_undo() {

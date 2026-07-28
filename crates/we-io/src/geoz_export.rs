@@ -628,8 +628,12 @@ fn build_object(object: &RoadObject, road: &Road) -> proto::Object {
         user_data.push(prop("validityToLane", validity.to_lane as f64));
     }
 
-    let (wx, wy, wz) =
-        road_frame_to_world(road, object.position.x, object.position.y, object.position.z);
+    let (wx, wy, wz) = road_frame_to_world(
+        road,
+        object.position.x,
+        object.position.y,
+        object.position.z,
+    );
     let theta = road_heading_at(road, object.position.x) + object.hdg;
 
     proto::Object {

@@ -90,7 +90,9 @@ impl PlyHeader {
 
     /// Index of the first property whose name matches `name` (case-insensitive).
     pub(super) fn find(&self, name: &str) -> Option<usize> {
-        self.props.iter().position(|p| p.name.eq_ignore_ascii_case(name))
+        self.props
+            .iter()
+            .position(|p| p.name.eq_ignore_ascii_case(name))
     }
 
     /// The PLY body format (ASCII or binary little-endian).
@@ -281,7 +283,11 @@ pub fn parse_ply(bytes: &[u8]) -> PointCloudResult<PointCloud> {
                         num(b).clamp(0.0, 255.0) as u8,
                     ])
                 } else if let Some((a, b, c)) = sh_idx {
-                    Some([sh_dc_to_u8(num(a)), sh_dc_to_u8(num(b)), sh_dc_to_u8(num(c))])
+                    Some([
+                        sh_dc_to_u8(num(a)),
+                        sh_dc_to_u8(num(b)),
+                        sh_dc_to_u8(num(c)),
+                    ])
                 } else {
                     None
                 };
@@ -473,7 +479,10 @@ end_header
 ";
         let cloud = parse_ply(body.as_bytes()).expect("partial-rgb PLY should still load");
         assert_eq!(cloud.len(), 2);
-        assert!(!cloud.has_rgb(), "incomplete RGB triple must not report colour");
+        assert!(
+            !cloud.has_rgb(),
+            "incomplete RGB triple must not report colour"
+        );
         assert_eq!(cloud.point(1), Some([1.0, 2.0, 3.0]));
     }
 }

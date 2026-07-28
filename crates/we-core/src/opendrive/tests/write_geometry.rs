@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::model::*;
 
-
 // ── f() formatting ──────────────────────────────
 
 #[test]
@@ -20,7 +19,6 @@ fn test_write_f_zero() {
     assert!(xml.contains(r#"x="0""#));
 }
 
-
 #[test]
 fn test_write_f_integer() {
     let p = project_with(
@@ -35,7 +33,6 @@ fn test_write_f_integer() {
     assert!(xml.contains(r#"x="42.0""#));
 }
 
-
 #[test]
 fn test_write_f_fractional() {
     let p = project_with(
@@ -49,7 +46,6 @@ fn test_write_f_fractional() {
     let xml = write_xodr(&p).unwrap();
     assert!(xml.contains(r#"x="1.234""#));
 }
-
 
 // ── Geometry types ──────────────────────────────
 
@@ -67,7 +63,6 @@ fn test_write_arc_geometry() {
     assert!(xml.contains("<arc"));
     assert!(xml.contains(r#"curvature="0.05""#));
 }
-
 
 #[test]
 fn test_write_spiral_geometry() {
@@ -87,7 +82,6 @@ fn test_write_spiral_geometry() {
     assert!(xml.contains(r#"curvStart="0""#));
     assert!(xml.contains(r#"curvEnd="0.1""#));
 }
-
 
 #[test]
 fn test_write_poly3_geometry() {
@@ -109,7 +103,6 @@ fn test_write_poly3_geometry() {
     assert!(xml.contains(r#"a="1.0""#));
     assert!(xml.contains(r#"d="4.0""#));
 }
-
 
 #[test]
 fn test_write_param_poly3_geometry_arclength() {
@@ -137,7 +130,6 @@ fn test_write_param_poly3_geometry_arclength() {
     assert!(xml.contains(r#"bU="1.0""#));
 }
 
-
 #[test]
 fn test_write_param_poly3_geometry_normalized() {
     let p = project_with(
@@ -161,7 +153,6 @@ fn test_write_param_poly3_geometry_normalized() {
     let xml = write_xodr(&p).unwrap();
     assert!(xml.contains(r#"pRange="normalized""#));
 }
-
 
 // ── Elevation ───────────────────────────────────
 
@@ -197,7 +188,6 @@ fn test_write_elevation_profile() {
     assert_eq!(count, 2);
 }
 
-
 #[test]
 fn test_write_elevation_roundtrip() {
     let p = project_with(
@@ -222,7 +212,6 @@ fn test_write_elevation_roundtrip() {
     assert!((elev.c - 0.002).abs() < 1e-10);
     assert!((elev.d - (-0.0001)).abs() < 1e-10);
 }
-
 
 // ── Lateral Profile ─────────────────────────────
 
@@ -249,7 +238,6 @@ fn test_write_superelevation() {
     assert!(xml.contains("<lateralProfile>"));
     assert!(xml.contains("<superelevation "));
 }
-
 
 #[test]
 fn test_write_crossfall() {
@@ -285,7 +273,6 @@ fn test_write_crossfall() {
     assert!(xml.contains(r#"side="both""#));
     assert!(xml.contains(r#"side="left""#));
 }
-
 
 #[test]
 fn test_write_crossfall_right() {

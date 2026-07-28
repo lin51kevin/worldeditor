@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::model::*;
 
-
 #[test]
 fn test_parking_space_round_trip() {
     // Test that ParkingSpace objects with outline corners survive parse→write→parse
@@ -92,7 +91,6 @@ fn test_parking_space_round_trip() {
     assert!((obj.corners[0].z - 0.03).abs() < 1e-6);
 }
 
-
 #[test]
 fn test_parkinglot_xodr_parse() {
     // Ensure the real parkinglot fixture parses without errors and preserves parking data
@@ -172,7 +170,6 @@ fn test_parkinglot_xodr_parse() {
         );
     }
 }
-
 
 /// Verify all 15 roads produce valid reference line points and all 16 parking
 /// objects can be located on their road's reference line.

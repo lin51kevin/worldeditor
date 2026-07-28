@@ -458,7 +458,10 @@ mod tests {
             .join("example-plugin")
             .join("dist")
             .join("index.js");
-        assert_eq!(registry.plugin_script_path("example-plugin"), Some(expected));
+        assert_eq!(
+            registry.plugin_script_path("example-plugin"),
+            Some(expected)
+        );
         assert!(registry.plugin_script_path("missing").is_none());
     }
 

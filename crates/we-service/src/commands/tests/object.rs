@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::Command;
 
-
 #[test]
 fn test_add_object() {
     let project = make_project();
@@ -11,7 +10,6 @@ fn test_add_object() {
     let result = cmd.execute(&project).unwrap();
     assert_eq!(result.roads[0].objects.len(), 1);
 }
-
 
 #[test]
 fn test_add_object_duplicate() {
@@ -21,7 +19,6 @@ fn test_add_object_duplicate() {
     assert!(cmd.execute(&project).is_err());
 }
 
-
 #[test]
 fn test_add_object_undo() {
     let project = make_project();
@@ -30,7 +27,6 @@ fn test_add_object_undo() {
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.roads[0].objects.len(), 0);
 }
-
 
 // ── DeleteObject tests ────────────────────────────────
 
@@ -44,7 +40,6 @@ fn test_delete_object() {
     assert_eq!(result.roads[0].objects.len(), 0);
 }
 
-
 #[test]
 fn test_delete_object_undo() {
     let mut project = make_project();
@@ -55,7 +50,6 @@ fn test_delete_object_undo() {
     let undone = cmd.undo(&after).unwrap();
     assert_eq!(undone.roads[0].objects.len(), 1);
 }
-
 
 // ── UpdateObject tests ────────────────────────────────
 

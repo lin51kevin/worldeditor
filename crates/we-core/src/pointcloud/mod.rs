@@ -8,8 +8,8 @@
 //! Heavy native formats (LAS/LAZ) and memory-mapped streaming live in the
 //! desktop-only `we-native` crate, which produces a [`model::PointCloud`].
 
-pub mod ground;
 pub mod gaussian;
+pub mod ground;
 pub mod heightmap;
 pub mod markings;
 pub mod model;
@@ -19,12 +19,12 @@ pub mod render;
 pub mod vectorize;
 pub mod xyz;
 
-pub use ground::{GroundConfig, GroundResult, extract_ground};
 pub use gaussian::{
     GaussianCloud, PACKED_GAUSSIAN_LAYOUT_NAME, PACKED_GAUSSIAN_LAYOUT_VERSION, PackedGaussians,
     packed_gaussian_stride, parse_gaussian_ply, parse_gaussian_ply_capped,
     parse_gaussian_ply_packed, parse_gaussian_ply_packed_f16,
 };
+pub use ground::{GroundConfig, GroundResult, extract_ground};
 pub use heightmap::Heightmap;
 pub use markings::{MarkingConfig, extract_markings};
 pub use model::{Aabb, PointCloud};

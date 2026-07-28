@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::model::*;
 
-
 // ── Bridges & Tunnels ───────────────────────────
 
 #[test]
@@ -27,7 +26,6 @@ fn test_write_bridges() {
     assert!(xml.contains(r#"type="concrete""#));
 }
 
-
 #[test]
 fn test_write_tunnels() {
     let p = project_with(
@@ -47,7 +45,6 @@ fn test_write_tunnels() {
     assert!(xml.contains("<tunnels>"));
     assert!(xml.contains(r#"id="tn1""#));
 }
-
 
 // ── Signals ────────────────────────���────────────
 
@@ -85,7 +82,6 @@ fn test_write_signals() {
     assert!(xml.contains(r#"value="30""#));
 }
 
-
 #[test]
 fn test_write_signal_dynamic() {
     let p = project_with(
@@ -117,7 +113,6 @@ fn test_write_signal_dynamic() {
     assert!(xml.contains(r#"dynamic="true""#));
     assert!(!xml.contains(r#"value="#));
 }
-
 
 // ── Objects ─────────────────────────────────────
 
@@ -162,7 +157,6 @@ fn test_write_objects() {
     assert!(xml.contains(r#"fromLane="-1""#));
     assert!(xml.contains(r#"toLane="-2""#));
 }
-
 
 #[test]
 fn test_write_objects_all_types() {
@@ -214,7 +208,6 @@ fn test_write_objects_all_types() {
         );
     }
 }
-
 
 #[test]
 fn test_write_object_no_validity() {

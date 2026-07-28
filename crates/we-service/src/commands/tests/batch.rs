@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::Command;
 
-
 // ── Phase 4: Batch / Transform / Junction tests ──
 
 #[test]
@@ -18,7 +17,6 @@ fn test_batch_command_multiple_ops() {
     let result = cmd.execute(&project).unwrap();
     assert_eq!(result.roads[0].name, "Renamed");
 }
-
 
 #[test]
 fn test_batch_command_undo_restores_snapshot() {
@@ -35,7 +33,6 @@ fn test_batch_command_undo_restores_snapshot() {
     assert_eq!(undone.roads[0].name, project.roads[0].name);
 }
 
-
 #[test]
 fn test_batch_command_delete_roads() {
     let project = make_project_with_road();
@@ -46,7 +43,6 @@ fn test_batch_command_delete_roads() {
     let result = cmd.execute(&project).unwrap();
     assert!(result.roads.is_empty());
 }
-
 
 #[test]
 fn test_batch_command_transform_road() {
@@ -62,7 +58,6 @@ fn test_batch_command_transform_road() {
     let result = cmd.execute(&project).unwrap();
     assert!((result.roads[0].plan_view[0].x - (orig_x + 100.0)).abs() < 1e-9);
 }
-
 
 #[test]
 fn test_batch_command_invalid_road() {

@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::model::*;
 
-
 // ── Roundtrip tests (parse → write → parse) ─────
 
 #[test]
@@ -17,7 +16,6 @@ fn test_roundtrip_minimal() {
     assert_eq!(reparsed.header.rev_minor, project.header.rev_minor);
     assert_eq!(reparsed.header.name, project.header.name);
 }
-
 
 #[test]
 fn test_roundtrip_single_road() {
@@ -37,7 +35,6 @@ fn test_roundtrip_single_road() {
     assert_eq!(orig.lane_sections.len(), copy.lane_sections.len());
 }
 
-
 #[test]
 fn test_roundtrip_junction() {
     let xml = include_str!("../../../../../tests/fixtures/xodr/junction.xodr");
@@ -51,7 +48,6 @@ fn test_roundtrip_junction() {
     assert_eq!(reparsed.junctions[0].connections[0].lane_links.len(), 1);
 }
 
-
 #[test]
 fn test_roundtrip_preserves_geo_reference() {
     let xml = include_str!("../../../../../tests/fixtures/xodr/single_road.xodr");
@@ -64,7 +60,6 @@ fn test_roundtrip_preserves_geo_reference() {
     assert!((orig_geo.origin_lat - copy_geo.origin_lat).abs() < 1e-10);
     assert!((orig_geo.origin_long - copy_geo.origin_long).abs() < 1e-10);
 }
-
 
 #[test]
 fn test_roundtrip_preserves_lane_links() {

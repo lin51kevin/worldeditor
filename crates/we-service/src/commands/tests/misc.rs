@@ -3,7 +3,6 @@ use super::super::*;
 use super::*;
 use crate::Command;
 
-
 // ── Integration with ActionHistory ───────────────
 
 #[test]
