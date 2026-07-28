@@ -37,7 +37,8 @@ static assets:
 
 ```
 frontend/dist-rnk/
-  worldeditor-next-sdk.js      # the SDK bundle (entry: createWorldEditorSdk)
+  we-next-sdk.js               # the SDK bundle (entry: createWorldEditorSdk)
+  we-next-sdk.wasm             # the slim wasm-bindgen binary (copied from pkg-slim)
   assets/textures/**           # copied from frontend/public/ (signs, lights, paints)
   config/intents.json          # copied from frontend/public/
   favicon*.png, favicon.ico    # copied from frontend/public/
@@ -50,8 +51,10 @@ frontend/dist-rnk/
 > (`yarn build:rnk` alone only runs the vite step and assumes `pkg-slim` already
 > exists.)
 
-The WASM binary (`we_wasm_bg.wasm`) is intentionally **not** inlined. The host
-serves it as a separate asset and points the SDK at its location (see below).
+The WASM binary is emitted as `we-next-sdk.wasm` (the vite build copies
+`pkg-slim/we_wasm_bg.wasm` under the unified vendor name) and is intentionally
+**not** inlined. The host serves it as a separate asset and points the SDK at
+its location (see below).
 
 ## Consuming the SDK from the host app
 
@@ -66,7 +69,7 @@ import { registerWorldEditorSdk } from 'utils/rnk-next';
 // a pre-fetched Request, or raw bytes/module.
 registerWorldEditorSdk(
   await createWorldEditorSdk({
-    wasmInput: new URL('/assets/we_wasm_bg.wasm', window.location.origin),
+    wasmInput: new URL('/assets/we-next-sdk.wasm', window.location.origin),
   }),
 );
 ```
@@ -78,7 +81,7 @@ it resolves, so the synchronous WASM wrappers can be called immediately.
 
 | Option      | Type                                                                       | Notes                                                              |
 | ----------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `wasmInput` | `string \| URL \| Request \| ArrayBuffer \| Uint8Array \| WebAssembly.Module` | Location of `we_wasm_bg.wasm`. Defaults to the package-relative path. |
+| `wasmInput` | `string \| URL \| Request \| ArrayBuffer \| Uint8Array \| WebAssembly.Module` | Location of the emitted `we-next-sdk.wasm`. Defaults to the package-relative path. |
 
 ## Public surface
 
@@ -111,7 +114,7 @@ definitions and JSDoc.
 
 The host must serve, alongside the bundle:
 
-1. `we_wasm_bg.wasm` — referenced via `wasmInput`.
+1. `we-next-sdk.wasm` — referenced via `wasmInput`.
 2. The contents of `dist-rnk/assets/textures/**` and `dist-rnk/config/intents.json`
    — the renderer's texture manager fetches the manifest and texture PNGs at the
    `basePath` declared in `assets/textures/manifest.json` (default `/assets/textures`).
