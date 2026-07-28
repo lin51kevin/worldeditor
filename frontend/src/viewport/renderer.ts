@@ -211,6 +211,12 @@ export class ViewportRenderer {
   private splatRenderer: SplatRenderer | null = null;
   private actorSplatRenderer: SplatRenderer | null = null;
 
+  // When false, the static scene (point cloud + splats + ground mesh) is not
+  // drawn, WITHOUT discarding its GPU buffers — so a host can hide/show the scene
+  // or toggle 2D/3D with no re-decode/re-upload. Dynamic actors (NPC/ego) are
+  // unaffected. Read by rendererFrame's draw pass.
+  staticSceneVisible = true;
+
   // Last uploaded vertex data (needed for zoomToFit re-trigger)
   private lastVertexData: Float32Array | null = null;
 
@@ -971,6 +977,16 @@ export class ViewportRenderer {
   setSplatRefreshFps(fps: number): void {
     this.splatRenderer?.setRefreshFps(fps);
     this.actorSplatRenderer?.setRefreshFps(fps);
+  }
+
+  /**
+   * Show/hide the static scene (point cloud + splats + ground mesh) without
+   * discarding its GPU buffers, so hide/show and 2D/3D toggles need no reload.
+   * Dynamic actors (NPC/ego) are unaffected.
+   */
+  setStaticSceneVisible(visible: boolean): void {
+    this.staticSceneVisible = visible;
+    this.markSceneDirty();
   }
 
   /** Upload lane line vertex data (7 floats per vertex: x,y,z,r,g,b,a). */

@@ -59,6 +59,7 @@ export interface RendererFrameInternals {
   overlayRenderers: Array<(ctx: { device?: GPUDevice; canvas?: HTMLCanvasElement }) => void>;
   overlayCanvas: HTMLCanvasElement | null;
   sceneDirty: boolean;
+  staticSceneVisible: boolean;
   lastVertexData: Float32Array | null;
   markSceneDirty(): void;
 }
@@ -180,9 +181,12 @@ export function renderFrame(r: RendererFrameInternals): void {
   if ((r.pointCloudMeshes.length > 0 || r.actorPointCloudMeshes.length > 0) && r.pointCloudPipeline) {
     pass.setPipeline(r.pointCloudPipeline);
     pass.setBindGroup(0, r.basicBindGroup);
-    for (const mesh of r.pointCloudMeshes) {
-      pass.setVertexBuffer(0, mesh.vertexBuffer);
-      pass.draw(mesh.vertexCount);
+    // Static scene cloud is gated by visibility; actor clouds always draw.
+    if (r.staticSceneVisible) {
+      for (const mesh of r.pointCloudMeshes) {
+        pass.setVertexBuffer(0, mesh.vertexBuffer);
+        pass.draw(mesh.vertexCount);
+      }
     }
     // Opponent (NPC) model clouds share the pipeline but live in a separate buffer.
     for (const mesh of r.actorPointCloudMeshes) {
@@ -194,7 +198,7 @@ export function renderFrame(r: RendererFrameInternals): void {
   // Draw the ground surface triangle mesh (e.g. road_mesh.glb) as an opaque,
   // vertex-colored floor beneath the roads. Uses the basic pipeline with an
   // indexed draw.
-  if (r.groundMesh) {
+  if (r.groundMesh && r.staticSceneVisible) {
     pass.setPipeline(r.basicPipeline);
     pass.setBindGroup(0, r.basicBindGroup);
     pass.setVertexBuffer(0, r.groundMesh.vertexBuffer);
@@ -270,7 +274,7 @@ export function renderFrame(r: RendererFrameInternals): void {
   // depth-tested (reverse-Z 'greater', no write) so opaque geometry occludes
   // them correctly. Scene splats first, then actor (NPC/ego) splats on top so
   // dynamic vehicles composite over the static reconstructed scene.
-  r.splatRenderer?.draw(pass);
+  if (r.staticSceneVisible) r.splatRenderer?.draw(pass);
   r.actorSplatRenderer?.draw(pass);
 
   pass.end();
