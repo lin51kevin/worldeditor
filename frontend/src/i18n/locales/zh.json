@@ -83,7 +83,7 @@
     "zoomIn": "放大",
     "zoomOut": "缩小",
     "new": "新建",
-    "newTitle": "新建项目 (Ctrl+N)",
+    "newTitle": "新建项目 ({{key}})",
     "open": "打开...",
     "openTitle": "打开文件 (Ctrl+O)",
     "save": "保存...",

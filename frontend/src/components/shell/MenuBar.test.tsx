@@ -220,7 +220,7 @@ describe('MenuBar', () => {
     fireEvent.click(hamburger);
     fireEvent.click(screen.getByText('文件'));
     expect(screen.getByText('新建')).toBeInTheDocument();
-    expect(screen.getByText('Ctrl+N')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl+Alt+N')).toBeInTheDocument();
     expect(screen.getByText('Ctrl+Shift+S')).toBeInTheDocument();
 
     fireEvent.click(hamburger);
@@ -384,11 +384,11 @@ describe('MenuBar', () => {
 
     render(<MenuBar />);
 
-    dispatchWindowKey({ key: 'n', ctrlKey: true });
+    dispatchWindowKey({ key: 'n', ctrlKey: true, altKey: true });
     await act(async () => {});
     expect(useProjectStore.getState().project.name).toBe('Original');
 
-    dispatchWindowKey({ key: 'n', ctrlKey: true });
+    dispatchWindowKey({ key: 'n', ctrlKey: true, altKey: true });
     await act(async () => {});
     expect(useProjectStore.getState().project.name).toBe('Untitled');
 

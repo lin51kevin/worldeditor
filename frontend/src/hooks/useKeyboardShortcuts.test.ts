@@ -299,15 +299,39 @@ describe('useKeyboardShortcuts — Ctrl+V/C/A pass through in editable targets',
     document.body.removeChild(input);
   });
 
-  it('Ctrl+T toggles the floating toolbar (not the left panel)', () => {
+  it('Ctrl+Alt+B toggles the floating toolbar in the web build (not the left panel)', () => {
+    const toggleToolbar = vi.fn();
+    const cfg = makeConfig({ toggleToolbar });
+    renderHook(() => useKeyboardShortcuts(cfg));
+
+    press('b', { ctrlKey: true, altKey: true, code: 'KeyB' });
+
+    expect(toggleToolbar).toHaveBeenCalledTimes(1);
+    expect(cfg.toggleLeftPanel).not.toHaveBeenCalled();
+  });
+
+  it('Ctrl+T does NOT toggle the toolbar in the web build (reserved: new tab)', () => {
     const toggleToolbar = vi.fn();
     const cfg = makeConfig({ toggleToolbar });
     renderHook(() => useKeyboardShortcuts(cfg));
 
     press('t', { ctrlKey: true, code: 'KeyT' });
 
-    expect(toggleToolbar).toHaveBeenCalledTimes(1);
-    expect(cfg.toggleLeftPanel).not.toHaveBeenCalled();
+    expect(toggleToolbar).not.toHaveBeenCalled();
+  });
+
+  it('Ctrl+T toggles the toolbar in the desktop build', () => {
+    const toggleToolbar = vi.fn();
+    const cfg = makeConfig({ toggleToolbar });
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    try {
+      renderHook(() => useKeyboardShortcuts(cfg));
+      press('t', { ctrlKey: true, code: 'KeyT' });
+      expect(toggleToolbar).toHaveBeenCalledTimes(1);
+      expect(cfg.toggleLeftPanel).not.toHaveBeenCalled();
+    } finally {
+      delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    }
   });
 
   it('Ctrl+Alt+T does NOT toggle the toolbar (reserved for import trajectory)', () => {
@@ -320,7 +344,7 @@ describe('useKeyboardShortcuts — Ctrl+V/C/A pass through in editable targets',
     expect(toggleToolbar).not.toHaveBeenCalled();
   });
 
-  it('Ctrl+T toggles the toolbar even when focused on an input', () => {
+  it('Ctrl+Alt+B toggles the toolbar even when focused on an input (web build)', () => {
     const toggleToolbar = vi.fn();
     const cfg = makeConfig({ toggleToolbar });
     renderHook(() => useKeyboardShortcuts(cfg));
@@ -329,7 +353,7 @@ describe('useKeyboardShortcuts — Ctrl+V/C/A pass through in editable targets',
     document.body.appendChild(input);
     input.focus();
     const event = new KeyboardEvent('keydown', {
-      bubbles: true, cancelable: true, key: 't', code: 'KeyT', ctrlKey: true,
+      bubbles: true, cancelable: true, key: 'b', code: 'KeyB', ctrlKey: true, altKey: true,
     });
     act(() => { input.dispatchEvent(event); });
 

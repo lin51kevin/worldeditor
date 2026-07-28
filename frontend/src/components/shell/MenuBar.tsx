@@ -30,6 +30,7 @@ import { useViewportStore } from '../../stores/viewportStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { resetAllPanels } from '../layout/FloatingPanel';
 import { useMenuActions } from '../../hooks/useMenuActions';
+import { matchesCloseFile, matchesNewProject, shortcutLabel } from '../../utils/platformShortcuts';
 import {
   checkForUpdates,
   showAbout,
@@ -242,18 +243,6 @@ export function MenuBar({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // TEMP DIAGNOSTIC: log every Ctrl+Alt combo to compare P vs T. Remove after debugging.
-      if ((event.ctrlKey || event.metaKey) && event.altKey) {
-        // eslint-disable-next-line no-console
-        console.log('[shortcut-diag] Ctrl+Alt keydown', {
-          key: event.key,
-          code: event.code,
-          ctrlKey: event.ctrlKey,
-          altKey: event.altKey,
-          metaKey: event.metaKey,
-          defaultPrevented: event.defaultPrevented,
-        });
-      }
       const activeElement = document.activeElement as HTMLElement | null;
       const tag = activeElement?.tagName;
       if (activeElement?.closest('.menubar, .toolbar, .road-edit-toolbar') && tag !== 'INPUT' && tag !== 'TEXTAREA') {
@@ -266,7 +255,7 @@ export function MenuBar({
       // and fall back to `event.key` (which unit tests dispatch without a code).
       const isLetter = (ch: string): boolean =>
         event.code === `Key${ch.toUpperCase()}` || event.key.toLowerCase() === ch;
-      if (isCtrl && event.key === 'n') {
+      if (matchesNewProject(event)) {
         event.preventDefault();
         void handleNew();
       } else if (isCtrl && event.key === 'o') {
@@ -279,7 +268,7 @@ export function MenuBar({
         } else {
           void handleSave();
         }
-      } else if (isCtrl && event.key === 'w') {
+      } else if (matchesCloseFile(event)) {
         event.preventDefault();
         void handleClose();
       } else if (isCtrl && event.key === 'd') {
@@ -433,7 +422,7 @@ export function MenuBar({
         <div className="menubar-action-separator" />
 
         <div className="menubar-quick-actions">
-          <button className="menubar-action-btn" onClick={() => { void handleNew(); }} title={t('toolbar.newTitle')}>
+          <button className="menubar-action-btn" onClick={() => { void handleNew(); }} title={t('toolbar.newTitle', { key: shortcutLabel('newProject') })}>
             <FileText size={14} />
           </button>
           <button className="menubar-action-btn" onClick={() => { void handleOpen(); }} title={t('toolbar.openTitle')}>

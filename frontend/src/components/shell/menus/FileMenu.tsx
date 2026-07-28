@@ -4,6 +4,7 @@ import type { ExporterContrib, ImporterContrib } from '../../../stores/pluginCon
 import type { RecentFile } from '../../../stores/recentFilesStore';
 import { showAlert, showConfirm } from '../../../utils/dialog';
 import { isExportCancelled } from '../../../utils/exportErrors';
+import { shortcutLabel } from '../../../utils/platformShortcuts';
 import type { MenuItem, TranslateFn } from '../menuDefinitions';
 import { MenuSection, type MenuSectionInteractionProps } from './MenuSection';
 
@@ -156,7 +157,7 @@ export function FileMenu({
     items: [
       {
         label: t('menu.new'),
-        shortcut: 'Ctrl+N',
+        shortcut: shortcutLabel('newProject'),
         action: () => {
           void onNew();
         },
@@ -191,7 +192,7 @@ export function FileMenu({
       { separator: true, label: '' },
       {
         label: t('menu.closeFile'),
-        shortcut: 'Ctrl+W',
+        shortcut: shortcutLabel('closeFile'),
         action: () => {
           void onCloseFile();
         },

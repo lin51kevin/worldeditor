@@ -7,12 +7,17 @@
  *   Universal      — Escape (smart cancel) · Delete/Backspace (delete) · F (zoom-to-fit)
  *   Panels         — I (inspector) · Ctrl+B/Ctrl+J (panels) · / or ? (help)
  *
+ * Note: Ctrl+W/N (menu) and the toolbar toggle collide with unpreventable
+ * browser shortcuts, so in the web build they are remapped to the Ctrl+Alt+*
+ * family via ../utils/platformShortcuts (desktop keeps the native combos).
+ *
  * Escape behaviour in draw modes (spline):
  *   1st press — clears in-progress knots (cancels current stroke, stays in mode)
  *   2nd press — returns to default select mode
  */
 import { useEffect } from 'react';
 import { isShortcutHelpTrigger } from '../constants/shortcutHelp';
+import { matchesToggleToolbar } from '../utils/platformShortcuts';
 import { useProjectStore } from '../stores/projectStore';
 import { isDrawMode, useViewportStore } from '../stores/viewportStore';
 import type { ActiveMode } from '../stores/viewportStore';
@@ -77,8 +82,8 @@ export function useKeyboardShortcuts({
           toggleValidationPanel?.();
           return;
         }
-        // Ctrl+T (toggle floating toolbar) is not a text shortcut — still handle it.
-        if (!e.altKey && !e.shiftKey && (e.code === 'KeyT' || e.key === 't' || e.key === 'T')) {
+        // Toolbar toggle (Ctrl+T desktop / Ctrl+Alt+B web) is not a text shortcut — still handle it.
+        if (matchesToggleToolbar(e)) {
           e.preventDefault();
           toggleToolbar?.();
           return;
@@ -119,7 +124,7 @@ export function useKeyboardShortcuts({
         if (canRedo()) redo();
         return;
       }
-      if (mod && !e.altKey && !e.shiftKey && (e.code === 'KeyT' || e.key === 't' || e.key === 'T')) {
+      if (matchesToggleToolbar(e)) {
         e.preventDefault();
         toggleToolbar?.();
         return;

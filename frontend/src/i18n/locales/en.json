@@ -83,7 +83,7 @@
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out",
     "new": "New",
-    "newTitle": "New Project (Ctrl+N)",
+    "newTitle": "New Project ({{key}})",
     "open": "Open...",
     "openTitle": "Open File (Ctrl+O)",
     "save": "Save...",
