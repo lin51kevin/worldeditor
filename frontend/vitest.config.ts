@@ -143,6 +143,27 @@ export default defineConfig({
         'src/components/panels/layer/JunctionLayerTree.ts',
         // Platform service factory — dynamic import requiring runtime detection
         'src/services/index.ts',
+        // External filesystem plugins — standalone esbuild entry points bundled by
+        // scripts/build-plugins.mjs into plugins/<id>/dist/index.js for the Tauri
+        // desktop build. Business logic mirrors the already-unit-tested built-in
+        // plugins under src/plugins/io/* (e.g. io-csv.plugin.test.ts); these entry
+        // points additionally require the runtime PluginContext, not unit-testable.
+        'src/plugins-external/**',
+        // Renderer internals split out of ViewportRenderer (already excluded) —
+        // take an explicit GPUDevice/GPURenderPassEncoder and issue real WebGPU
+        // draw/compute calls; not unit-testable without a GPU. Covered by E2E.
+        'src/viewport/rendererFrame.ts',
+        'src/viewport/rendererIndexedMesh.ts',
+        'src/viewport/rendererPointCloud.ts',
+        'src/viewport/rendererResources.ts',
+        'src/viewport/gaussian/splatSortCompute.ts',
+        // Camera mouse-control input handler — DOM events + WebGPU marker renderer,
+        // same category as cameraController.ts/mouseControls.ts. Covered by E2E.
+        'src/viewport/rendererInputHandler.ts',
+        // rnk-next SDK adapter — thin delegation to ViewportRenderer (WebGPU,
+        // excluded above) and the WASM module; requires a real GPU + WASM runtime
+        // to instantiate, covered by integration/E2E tests.
+        'src/integration/rnkNextSdk.ts',
       ],
       thresholds: {
         statements: 80,
