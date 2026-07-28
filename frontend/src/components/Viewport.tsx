@@ -146,18 +146,29 @@ export function Viewport() {
   // ── Road link (predecessor/successor) highlight ──
   useRoadLinkHighlight({ rendererRef, status });
 
-  // Throttle Zustand cursor updates to once per animation frame
+  // Throttle Zustand cursor updates to once per animation frame.
+  // On-demand: a single frame is scheduled only when the pointer actually
+  // moves, then it flushes and stops. This avoids a self-perpetuating rAF loop
+  // that would pin the event loop (and CPU) at ~60fps even while idle.
   useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     let frameId = 0;
     const flush = () => {
+      frameId = 0;
       if (pendingCursorRef.current) {
         useProjectStore.getState().setCursorWorldPos(pendingCursorRef.current);
         pendingCursorRef.current = null;
       }
-      frameId = requestAnimationFrame(flush);
     };
-    frameId = requestAnimationFrame(flush);
-    return () => cancelAnimationFrame(frameId);
+    const schedule = () => {
+      if (frameId === 0) frameId = requestAnimationFrame(flush);
+    };
+    canvas.addEventListener('pointermove', schedule);
+    return () => {
+      canvas.removeEventListener('pointermove', schedule);
+      if (frameId !== 0) cancelAnimationFrame(frameId);
+    };
   }, []);
 
   // Wire plugin viewport overlays to the renderer
