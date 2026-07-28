@@ -220,6 +220,16 @@ export interface WorldEditorRenderer {
   /** Remove the uploaded ground surface mesh. */
   clearGroundMesh(): void;
   /**
+   * Upload an indexed, vertex-colored ego vehicle mesh (7 floats/vertex:
+   * x,y,z,r,g,b,a + a 32-bit index buffer), e.g. a world-transformed ego
+   * `.glb`, rendered as an opaque triangle model (shared basic pipeline) so
+   * the main vehicle is a solid mesh distinct from the translucent opponent
+   * boxes. Passing empty data clears the current ego mesh.
+   */
+  uploadEgoMeshIndexed(vertexData: Float32Array, indices: Uint32Array): void;
+  /** Remove the uploaded ego vehicle mesh. */
+  clearEgoMesh(): void;
+  /**
    * Upload opponent (NPC) model point clouds into a buffer separate from the
    * road cloud (6 floats/point: x,y,z,r,g,b), so per-frame opponent updates
    * never re-upload the (large) static road mesh. Expanded to 7-float (rgba).
@@ -624,6 +634,14 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     },
     clearGroundMesh: () => {
       renderer.clearGroundMesh();
+      renderer.render();
+    },
+    uploadEgoMeshIndexed: (vertexData: Float32Array, indices: Uint32Array) => {
+      renderer.uploadEgoMeshIndexed(vertexData, indices);
+      renderer.render();
+    },
+    clearEgoMesh: () => {
+      renderer.clearEgoMesh();
       renderer.render();
     },
     uploadActorPointCloud: (data: Float32Array) => {
