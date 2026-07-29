@@ -31,6 +31,7 @@
     "openFile": "Open File...",
     "save": "Save",
     "saveAs": "Save As...",
+    "download": "Download",
     "importOpenDrive": "Import OpenDRIVE...",
     "importPointCloud": "Import Point Cloud...",
     "importTrajectory": "Import Trajectory...",
@@ -721,6 +722,7 @@
   "snapshot": {
     "title": "Export Snapshot",
     "exportPath": "Export Path",
+    "filename": "Filename",
     "browse": "Browse",
     "format": "Format",
     "backgroundColor": "Background",

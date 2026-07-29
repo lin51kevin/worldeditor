@@ -31,6 +31,7 @@
     "openFile": "打开文件...",
     "save": "保存",
     "saveAs": "另存为...",
+    "download": "下载",
     "importOpenDrive": "导入 OpenDRIVE...",
     "importPointCloud": "导入点云...",
     "importTrajectory": "导入轨迹文件...",
@@ -721,6 +722,7 @@
   "snapshot": {
     "title": "导出快照",
     "exportPath": "导出路径",
+    "filename": "文件名",
     "browse": "选择路径",
     "format": "图片格式",
     "backgroundColor": "背景色",

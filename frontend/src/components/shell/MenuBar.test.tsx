@@ -9,6 +9,11 @@ import { emitViewportEvent } from '../../viewport/viewportEvents';
 import { showAlert, showConfirm, showPrompt } from '../../utils/dialog';
 import { MenuBar } from './MenuBar';
 
+vi.mock('../../utils/platformDetect', () => ({
+  isDesktopRuntime: vi.fn(() => true),
+  isWebRuntime: vi.fn(() => false),
+}));
+
 vi.mock('../../services', () => ({
   getPlatformService: vi.fn(),
 }));

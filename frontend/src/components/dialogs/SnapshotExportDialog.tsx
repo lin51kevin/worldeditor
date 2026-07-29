@@ -16,6 +16,7 @@ import {
   type SnapshotOptions,
 } from '../../viewport/snapshotCapture';
 import { getPlatformService } from '../../services';
+import { isDesktopRuntime } from '../../utils/platformDetect';
 import './SnapshotExportDialog.css';
 
 export interface SnapshotExportDialogProps {
@@ -226,7 +227,7 @@ export function SnapshotExportDialog({ open, onClose }: SnapshotExportDialogProp
         <div className="snapshot-body">
           {/* Export Path */}
           <div className="snapshot-field">
-            <label>{t('snapshot.exportPath')}</label>
+            <label>{isDesktopRuntime() ? t('snapshot.exportPath') : t('snapshot.filename', 'Filename')}</label>
             <div className="snapshot-path-group">
               <input
                 type="text"
@@ -234,13 +235,15 @@ export function SnapshotExportDialog({ open, onClose }: SnapshotExportDialogProp
                 onChange={(e) => setExportPath(e.target.value)}
                 placeholder={generateSnapshotFilename(format)}
               />
-              <button
-                className="snapshot-browse-btn"
-                onClick={() => void handleBrowse()}
-                title={t('snapshot.browse')}
-              >
-                <FolderOpen size={14} />
-              </button>
+              {isDesktopRuntime() && (
+                <button
+                  className="snapshot-browse-btn"
+                  onClick={() => void handleBrowse()}
+                  title={t('snapshot.browse')}
+                >
+                  <FolderOpen size={14} />
+                </button>
+              )}
             </div>
           </div>
 

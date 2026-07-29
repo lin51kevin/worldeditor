@@ -1,7 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WelcomePage } from './WelcomePage';
 import type { RecentFile } from './WelcomePage';
+
+vi.mock('../../utils/platformDetect', () => ({
+  isDesktopRuntime: vi.fn(() => false),
+  isWebRuntime: vi.fn(() => true),
+}));
 
 describe('WelcomePage', () => {
   const baseProps = {
@@ -17,6 +22,10 @@ describe('WelcomePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('renders without crashing', () => {
@@ -36,12 +45,21 @@ describe('WelcomePage', () => {
     expect(screen.getByRole('button', { name: /项目主页/ })).toBeInTheDocument();
   });
 
-  it('shows the empty state message when no recent files', () => {
+  it('shows the empty state message when no recent files (desktop)', async () => {
+    const { isDesktopRuntime } = await import('../../utils/platformDetect');
+    vi.mocked(isDesktopRuntime).mockReturnValue(true);
     render(<WelcomePage {...baseProps} recentFiles={[]} />);
     expect(screen.getByText('暂无最近文件，打开文件开始使用')).toBeInTheDocument();
   });
 
-  it('shows recent files when provided', () => {
+  it('hides recent files section on web', () => {
+    render(<WelcomePage {...baseProps} recentFiles={[]} />);
+    expect(screen.queryByText('暂无最近文件，打开文件开始使用')).not.toBeInTheDocument();
+  });
+
+  it('shows recent files when provided (desktop)', async () => {
+    const { isDesktopRuntime } = await import('../../utils/platformDetect');
+    vi.mocked(isDesktopRuntime).mockReturnValue(true);
     const recentFile: RecentFile = { name: 'demo.xodr', path: '/maps/demo.xodr', lastOpened: Date.now() };
     render(<WelcomePage {...baseProps} recentFiles={[recentFile]} />);
     expect(screen.getAllByText('demo.xodr').length).toBeGreaterThan(0);
@@ -59,7 +77,9 @@ describe('WelcomePage', () => {
     expect(baseProps.onOpenFile).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onOpenRecent when a recent file is clicked', () => {
+  it('calls onOpenRecent when a recent file is clicked (desktop)', async () => {
+    const { isDesktopRuntime } = await import('../../utils/platformDetect');
+    vi.mocked(isDesktopRuntime).mockReturnValue(true);
     const recentFile: RecentFile = { name: 'demo.xodr', path: '/maps/demo.xodr', lastOpened: Date.now() };
     render(<WelcomePage {...baseProps} recentFiles={[recentFile]} />);
     fireEvent.click(screen.getByText('demo.xodr'));

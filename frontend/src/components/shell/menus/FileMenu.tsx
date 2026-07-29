@@ -4,6 +4,7 @@ import type { ExporterContrib, ImporterContrib } from '../../../stores/pluginCon
 import type { RecentFile } from '../../../stores/recentFilesStore';
 import { showAlert, showConfirm } from '../../../utils/dialog';
 import { isExportCancelled } from '../../../utils/exportErrors';
+import { isDesktopRuntime } from '../../../utils/platformDetect';
 import { shortcutLabel } from '../../../utils/platformShortcuts';
 import type { MenuItem, TranslateFn } from '../menuDefinitions';
 import { MenuSection, type MenuSectionInteractionProps } from './MenuSection';
@@ -152,58 +153,72 @@ export function FileMenu({
     })),
   ];
 
+  const isDesktop = isDesktopRuntime();
+
+  const menuItems: MenuItem[] = [
+    {
+      label: t('menu.new'),
+      shortcut: shortcutLabel('newProject'),
+      action: () => {
+        void onNew();
+      },
+    },
+    {
+      label: t('menu.openFile'),
+      shortcut: 'Ctrl+O',
+      action: () => {
+        void onOpen();
+      },
+    },
+    // "Recent Files" only meaningful on desktop (requires filesystem paths)
+    ...(isDesktop ? [{ label: t('menu.openRecentFiles'), submenu: recentSubmenu }] : []),
+    { separator: true, label: '' },
+    { label: t('menu.import'), submenu: importSubmenu },
+    { label: t('menu.export'), submenu: exportSubmenu },
+    { separator: true, label: '' },
+    // Desktop: Save/SaveAs with native dialogs; Web: Download
+    ...(isDesktop
+      ? [
+          {
+            label: t('menu.save'),
+            shortcut: 'Ctrl+S',
+            action: () => { void onSave(); },
+            disabled: !isDirty,
+          },
+          {
+            label: t('menu.saveAs'),
+            shortcut: 'Ctrl+Shift+S',
+            action: () => { void onSaveAs(); },
+          },
+        ]
+      : [
+          {
+            label: t('menu.download'),
+            shortcut: 'Ctrl+S',
+            action: () => { void onSave(); },
+            disabled: !isDirty,
+          },
+        ]),
+    { separator: true, label: '' },
+    {
+      label: t('menu.closeFile'),
+      shortcut: shortcutLabel('closeFile'),
+      action: () => {
+        void onCloseFile();
+      },
+    },
+    // "Exit" only on desktop (close native window)
+    ...(isDesktop
+      ? [{
+          label: t('menu.exit'),
+          action: () => { void onExit(); },
+        }]
+      : []),
+  ];
+
   const menu = {
     label: t('menu.file'),
-    items: [
-      {
-        label: t('menu.new'),
-        shortcut: shortcutLabel('newProject'),
-        action: () => {
-          void onNew();
-        },
-      },
-      {
-        label: t('menu.openFile'),
-        shortcut: 'Ctrl+O',
-        action: () => {
-          void onOpen();
-        },
-      },
-      { label: t('menu.openRecentFiles'), submenu: recentSubmenu },
-      { separator: true, label: '' },
-      { label: t('menu.import'), submenu: importSubmenu },
-      { label: t('menu.export'), submenu: exportSubmenu },
-      { separator: true, label: '' },
-      {
-        label: t('menu.save'),
-        shortcut: 'Ctrl+S',
-        action: () => {
-          void onSave();
-        },
-        disabled: !isDirty,
-      },
-      {
-        label: t('menu.saveAs'),
-        shortcut: 'Ctrl+Shift+S',
-        action: () => {
-          void onSaveAs();
-        },
-      },
-      { separator: true, label: '' },
-      {
-        label: t('menu.closeFile'),
-        shortcut: shortcutLabel('closeFile'),
-        action: () => {
-          void onCloseFile();
-        },
-      },
-      {
-        label: t('menu.exit'),
-        action: () => {
-          void onExit();
-        },
-      },
-    ],
+    items: menuItems,
   };
 
   return <MenuSection menu={menu} {...menuProps} />;

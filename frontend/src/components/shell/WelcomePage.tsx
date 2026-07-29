@@ -12,6 +12,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Globe, FolderOpen, Plus, BookOpen, Home, Clock, Keyboard, X } from 'lucide-react';
 import type { RecentFile } from '../../stores/recentFilesStore';
+import { isDesktopRuntime } from '../../utils/platformDetect';
 import './WelcomePage.css';
 
 // Re-export so existing imports of `RecentFile` from WelcomePage still work
@@ -69,8 +70,10 @@ export function WelcomePage({
     });
   };
 
+  const isDesktop = isDesktopRuntime();
+
   return (
-    <div className="wp-container">
+    <div className={`wp-container${isDesktop ? '' : ' wp-two-col'}`}>
       {/* ── Header ── */}
       <header className="wp-header">
         <div className="wp-logo">
@@ -131,7 +134,8 @@ export function WelcomePage({
           </div>
         </div>
 
-      {/* ── Recent files (row 2, col 3) ── */}
+      {/* ── Recent files (row 2, col 3) — desktop only ── */}
+      {isDesktopRuntime() && (
       <div className="wp-col wp-col-recent">
           <h2 className="wp-section-title">
             <Clock size={13} />
@@ -163,6 +167,7 @@ export function WelcomePage({
             </p>
           )}
       </div>
+      )}
 
       {/* ── Footer (row 3, col 2) ── */}
       <footer className="wp-footer">

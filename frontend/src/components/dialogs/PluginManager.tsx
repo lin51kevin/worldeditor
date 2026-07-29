@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { usePlugins, type PluginInfo } from '../../hooks/usePlugins';
 import { loadPluginBundle } from '../../plugins/core/pluginLoader';
+import { isDesktopRuntime } from '../../utils/platformDetect';
 import './PluginManager.css';
 
 type TabId = 'available' | 'installed' | 'disabled';
@@ -90,7 +91,7 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   const handleDisable = (id: string) => withLoading(id, () => disablePlugin(id));
 
   const handleInstallFromFile = async () => {
-    if (typeof window !== 'undefined' && '__TAURI__' in window) {
+    if (isDesktopRuntime()) {
       // Tauri desktop: use native directory picker
       try {
         const { open } = await import('@tauri-apps/plugin-dialog');
@@ -110,7 +111,7 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
   };
 
   const handleOpenPluginsFolder = async () => {
-    if (typeof window !== 'undefined' && '__TAURI__' in window) {
+    if (isDesktopRuntime()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('open_plugins_dir');
@@ -254,7 +255,7 @@ export function PluginManager({ open = true, onClose = () => {} }: PluginManager
               <FolderOpen size={13} />
               {t('pluginManager.installFromFile')}
             </button>
-            {typeof window !== 'undefined' && '__TAURI__' in window && (
+            {isDesktopRuntime() && (
               <button
                 className="pm-btn pm-btn-secondary"
                 onClick={() => void handleOpenPluginsFolder()}

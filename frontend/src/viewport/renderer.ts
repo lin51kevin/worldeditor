@@ -650,21 +650,18 @@ export class ViewportRenderer {
   centerCamera3D(x: number, y: number): void {
     this.cameraController.centerOnGround(x, y);
     this.markSceneDirty();
-    this.renderFrame();
   }
 
   /** Position the camera in a chase-cam view behind a moving entity. */
   setChaseCam3D(x: number, y: number, z: number, yaw: number): void {
     this.cameraController.setChaseCam(x, y, z, yaw);
     this.markSceneDirty();
-    this.renderFrame();
   }
 
   /** Position the camera in a first-person / front-facing view from an entity. */
   setFrontCam3D(x: number, y: number, z: number, yaw: number): void {
     this.cameraController.setFrontCam(x, y, z, yaw);
     this.markSceneDirty();
-    this.renderFrame();
   }
 
   /** Give or release exclusive camera navigation ownership to chase mode. */

@@ -19,6 +19,15 @@
   overflow-y: auto;
 }
 
+/* Web (2-column): no Recent Files column */
+.wp-container.wp-two-col {
+  grid-template-columns: 220px 280px;
+  grid-template-areas:
+    "header header"
+    "start shortcuts"
+    "footer footer";
+}
+
 /* ── Header ───────────────────────────────────────────────────── */
 
 .wp-header {
