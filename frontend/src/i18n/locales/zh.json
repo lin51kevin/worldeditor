@@ -838,6 +838,17 @@
     "cameraOff": "自由视角",
     "cameraFollow": "跟车视角",
     "cameraFront": "前置视角",
+    "actor": {
+      "title": "目标信息",
+      "ego": "主车",
+      "opponent": "对手车",
+      "position": "位置",
+      "heading": "航向",
+      "speed": "速度",
+      "size": "尺寸",
+      "time": "时间",
+      "close": "关闭"
+    },
     "settings": "场景配置",
     "config": {
       "title": "轨迹场景配置",

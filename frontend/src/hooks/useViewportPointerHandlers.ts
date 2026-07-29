@@ -3,6 +3,7 @@ import { emitCursorMove } from '../viewport/cursorEvents';
 import { useProjectStore } from '../stores/projectStore';
 import { isDrawMode, useViewportStore } from '../stores/viewportStore';
 import { useTrajectoryStore } from '../stores/trajectoryStore';
+import { selectTrajectoryActorAt } from '../viewport/trajectoryPlayback';
 import { getPlatformService } from '../services';
 import { buildSnapConfig } from '../services/snapService';
 import { showContextMenu } from '../services/contextMenu';
@@ -346,9 +347,20 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
     mouseGestureRef.current = null;
     if (!gesture || gesture.button !== 0) return;
 
-    // While a follow/front camera owns navigation, drags and clicks are
-    // ignored (the camera is locked anyway).
+    // While a follow/front camera owns navigation the only viewport interaction
+    // is selecting a trajectory actor: a clean click selects (or clears) it and
+    // opens its info tooltip; drags are ignored (the camera is locked anyway).
     if (cameraMode !== 'off') {
+      if (gesture.dragged || exceededDragThreshold(gesture.startX, gesture.startY, e.clientX, e.clientY)) return;
+      const canvas0 = canvasRef.current;
+      const renderer0 = rendererRef.current;
+      if (canvas0 && renderer0 && useTrajectoryStore.getState().data) {
+        const rect0 = canvas0.getBoundingClientRect();
+        selectTrajectoryActorAt(
+          (e.clientX - rect0.left) * devicePixelRatio,
+          (e.clientY - rect0.top) * devicePixelRatio,
+        );
+      }
       return;
     }
 
@@ -376,6 +388,15 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
     const rect = canvas.getBoundingClientRect();
     const screenX = (e.clientX - rect.left) * devicePixelRatio;
     const screenY = (e.clientY - rect.top) * devicePixelRatio;
+
+    // Trajectory viewer: a left click selects the actor under the cursor (and
+    // opens its info tooltip), or clears the selection on a miss. Screen-space
+    // pick is robust to camera tilt / elevated actors. Only active while a
+    // trajectory is loaded; consumes the click on a hit so it does not also
+    // change the road/lane selection.
+    if (useTrajectoryStore.getState().data) {
+      if (selectTrajectoryActorAt(screenX, screenY)) return;
+    }
 
     const worldPos = renderer.unprojectToGround(screenX, screenY);
     if (!worldPos) return;

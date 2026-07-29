@@ -838,6 +838,17 @@
     "cameraOff": "Free Camera",
     "cameraFollow": "Follow Car",
     "cameraFront": "Front Camera",
+    "actor": {
+      "title": "Actor Info",
+      "ego": "Ego",
+      "opponent": "Opponent",
+      "position": "Position",
+      "heading": "Heading",
+      "speed": "Speed",
+      "size": "Size",
+      "time": "Time",
+      "close": "Close"
+    },
     "settings": "Scene Settings",
     "config": {
       "title": "Trajectory Scene Config",

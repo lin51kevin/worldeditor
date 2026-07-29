@@ -16,6 +16,7 @@ import {
   buildTrajBoxes,
   interpPose,
   parseTraj,
+  pickActorAtScreen,
   trajBounds,
 } from '../plugins/npc-actors';
 import type { TrajData } from '../plugins/npc-actors';
@@ -81,7 +82,7 @@ let egoTemplate: EgoModelTemplate | null = null;
 
 /** Rebuild and upload actor geometry for time `t`; uploads wake the render loop. */
 function renderActorsAt(t: number): void {
-  const { data, cameraMode } = useTrajectoryStore.getState();
+  const { data, cameraMode, selectedEntityId } = useTrajectoryStore.getState();
   const renderer = getViewportRenderer();
   if (!renderer || !data) return;
 
@@ -114,6 +115,13 @@ function renderActorsAt(t: number): void {
     (b) => !modelIds.has(b.id.startsWith('traj:') ? b.id.slice(5) : b.id),
   );
   if (!egoHasModel && egoTemplate === null && filteredEgoBox) boxes.push(filteredEgoBox);
+  // Highlight the actor whose info tooltip is open (wine-red selected fill).
+  if (selectedEntityId) {
+    for (const box of boxes) {
+      const eid = box.id.startsWith('traj:') ? box.id.slice(5) : box.id;
+      if (eid === selectedEntityId) box.selected = true;
+    }
+  }
   renderer.uploadActorVertices(buildBoxVertices(boxes, sceneOrigin));
 
   if (!egoHasModel && egoTemplate) {
@@ -281,6 +289,7 @@ function ensureSubscribed(): void {
     }
 
     const followChanged = modeChanged;
+    const selectionChanged = state.selectedEntityId !== prev.selectedEntityId;
     if (dataChanged) {
       if (!state.data) {
         clearRenderer();
@@ -290,7 +299,7 @@ function ensureSubscribed(): void {
       // hidden); clear any stale ribbons from a previous dataset.
       getViewportRenderer()?.uploadPathVertices(new Float32Array(0));
       renderActorsAt(state.currentTime);
-    } else if (timeChanged || followChanged) {
+    } else if (timeChanged || followChanged || selectionChanged) {
       renderActorsAt(state.currentTime);
     }
 
@@ -302,6 +311,52 @@ function ensureSubscribed(): void {
       rafId = 0;
     }
   });
+}
+
+/**
+ * Scene origin the trajectory is rendered against (origin-relative, to align
+ * with a loaded point cloud). Consumers projecting an actor's absolute world
+ * position to screen must subtract this first.
+ */
+export function getTrajectorySceneOrigin(): readonly [number, number, number] {
+  return sceneOrigin;
+}
+
+/**
+ * Hit-test trajectory actors at a screen pixel and update the selection.
+ * Returns the selected entity id, or null when the click missed (which also
+ * clears any existing selection).
+ *
+ * `screenX`/`screenY` are canvas device pixels (the same space
+ * {@link ViewportRenderer.projectWorldToScreen} returns). Picking is done in
+ * screen space so it is robust to camera tilt and to actors above the ground
+ * plane, and gives a forgiving target for small, moving vehicles.
+ */
+export function selectTrajectoryActorAt(screenX: number, screenY: number): string | null {
+  const state = useTrajectoryStore.getState();
+  if (!state.data) return null;
+  const renderer = getViewportRenderer();
+  if (!renderer) return null;
+  const boxes = buildTrajBoxes(state.data, state.currentTime);
+  // Boxes carry absolute world positions; the renderer draws them origin-
+  // relative, so shift by the scene origin before projecting. Project the box
+  // *center height* (not the ground) so the screen target matches the visible
+  // box at any zoom/tilt.
+  const project = (box: CaseActorBox) =>
+    renderer.projectWorldToScreen(
+      box.position[0] - sceneOrigin[0],
+      box.position[1] - sceneOrigin[1],
+      box.position[2] - sceneOrigin[2],
+    );
+  const thresholdPx = 44 * (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+  const hitId = pickActorAtScreen(boxes, project, screenX, screenY, thresholdPx);
+  const entityId = hitId ? (hitId.startsWith('traj:') ? hitId.slice(5) : hitId) : null;
+  if (entityId) {
+    state.setSelectedEntity(entityId);
+  } else if (state.selectedEntityId) {
+    state.setSelectedEntity(null);
+  }
+  return entityId;
 }
 
 /**

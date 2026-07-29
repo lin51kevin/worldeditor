@@ -33,6 +33,8 @@ interface TrajectoryState {
   speed: TrajectorySpeed;
   /** How the camera tracks the ego vehicle during playback. */
   cameraMode: TrajectoryCameraMode;
+  /** Id of the actor whose info tooltip is shown, or null when none selected. */
+  selectedEntityId: string | null;
 
   /** Replace the loaded trajectory, reset the clock to its start, and pause. */
   loadData: (data: TrajData) => void;
@@ -54,6 +56,8 @@ interface TrajectoryState {
   toggleLoop: () => void;
   /** Set the playback camera mode. */
   setCameraMode: (mode: TrajectoryCameraMode) => void;
+  /** Select an actor (by entity id) to show its info tooltip, or clear it. */
+  setSelectedEntity: (id: string | null) => void;
 }
 
 const EMPTY = {
@@ -74,16 +78,17 @@ export const useTrajectoryStore = create<TrajectoryState>((set, get) => ({
   loop: true,
   speed: 1,
   cameraMode: 'off',
+  selectedEntityId: null,
 
   loadData: (data) => {
     const frames = trajFrames(data);
     const [spanMin, spanMax] = trajTimeSpan(data);
     const tMin = Number.isFinite(spanMin) ? spanMin : 0;
     const tMax = Number.isFinite(spanMax) ? spanMax : tMin;
-    set({ data, frames, tMin, tMax, currentTime: tMin, isPlaying: false });
+    set({ data, frames, tMin, tMax, currentTime: tMin, isPlaying: false, selectedEntityId: null });
   },
 
-  clear: () => set({ ...EMPTY, cameraMode: 'off' }),
+  clear: () => set({ ...EMPTY, cameraMode: 'off', selectedEntityId: null }),
 
   play: () => {
     const { data, currentTime, tMin, tMax } = get();
@@ -123,4 +128,6 @@ export const useTrajectoryStore = create<TrajectoryState>((set, get) => ({
   toggleLoop: () => set((s) => ({ loop: !s.loop })),
 
   setCameraMode: (mode) => set({ cameraMode: mode }),
+
+  setSelectedEntity: (id) => set({ selectedEntityId: id }),
 }));

@@ -8,7 +8,7 @@
 
 export { CaseActorLayer } from './actorLayer';
 export { buildBoxVertices, buildPathVertices } from './actorGeometry';
-export { pickActorAt } from './actorPicker';
+export { pickActorAt, pickActorAtScreen } from './actorPicker';
 export type { CaseActorBox, Rgba } from './actorTypes';
 export { ACTOR_VERTEX_STRIDE } from './actorTypes';
 export {
@@ -30,8 +30,9 @@ export {
   trajBounds,
   trajTimeSpan,
   interpPose,
+  getEntityInfoAt,
   PATH_HALF_WIDTH,
   PATH_Z,
 } from './trajViewer';
-export type { TrajViewerTarget, TrajData, BuildTrajBoxesOptions } from './trajViewer';
+export type { TrajViewerTarget, TrajData, BuildTrajBoxesOptions, TrajActorInfo } from './trajViewer';
 export { parsePlyFirstVertex } from './plyOrigin';

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { buildBoxVertices, buildPathVertices } from '../actorGeometry';
-import { pickActorAt } from '../actorPicker';
+import { pickActorAt, pickActorAtScreen } from '../actorPicker';
 import { CaseActorLayer } from '../actorLayer';
 import { ACTOR_VERTEX_STRIDE, CaseActorBox } from '../actorTypes';
 import {
@@ -114,6 +114,40 @@ describe('npc-actors picking', () => {
     const body = box({ id: 'el:1', position: [0, 0, 0], size: [10, 10, 2] });
     const handle = box({ id: 'wp:1:0', kind: 'waypoint', position: [0, 0, 0], size: [1, 1, 1] });
     expect(pickActorAt([body, handle], 0, 0)).toBe('wp:1:0');
+  });
+});
+
+describe('npc-actors screen-space picking', () => {
+  // Simple orthographic-ish projection: world (x, y) → screen (x*10, y*10).
+  const project = (b: CaseActorBox) => ({ x: b.position[0] * 10, y: b.position[1] * 10 });
+
+  it('picks the box whose projected center is nearest the click', () => {
+    const a = box({ id: 'el:a', position: [0, 0, 0] });
+    const b = box({ id: 'el:b', position: [5, 0, 0] });
+    // Click at screen (48, 0) is nearest el:b's center (50, 0).
+    expect(pickActorAtScreen([a, b], project, 48, 0)).toBe('el:b');
+    // Click at screen (5, 0) is nearest el:a's center (0, 0).
+    expect(pickActorAtScreen([a, b], project, 5, 0)).toBe('el:a');
+  });
+
+  it('returns null when no projected center is within the pixel threshold', () => {
+    const a = box({ id: 'el:a', position: [0, 0, 0] });
+    // Center at (0,0); click 100px away with a 40px threshold → miss.
+    expect(pickActorAtScreen([a], project, 100, 0, 40)).toBeNull();
+  });
+
+  it('projects the box at its own height (independent of a ground-only projection)', () => {
+    // A box high above the ground still resolves via its projected center.
+    const high = box({ id: 'el:high', position: [3, 0, 50] });
+    expect(pickActorAtScreen([high], project, 30, 0, 40)).toBe('el:high');
+  });
+
+  it('skips boxes the projection reports as behind the camera', () => {
+    const behind = box({ id: 'el:behind', position: [0, 0, 0] });
+    const front = box({ id: 'el:front', position: [4, 0, 0] });
+    const projectClip = (b: CaseActorBox) =>
+      b.position[0] < 1 ? null : { x: b.position[0] * 10, y: b.position[1] * 10 };
+    expect(pickActorAtScreen([behind, front], projectClip, 0, 0, 60)).toBe('el:front');
   });
 });
 

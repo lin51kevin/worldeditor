@@ -1,0 +1,97 @@
+/* Trajectory actor info tooltip — semi-transparent glass card that tracks the
+   selected actor on screen. Positioned via inline left/top (client coords). */
+
+.traj-actor-tooltip {
+    position: fixed;
+    z-index: var(--z-panel, 100);
+    /* Anchor above-right of the actor's screen point; the -100% Y lifts it
+       clear of the box, the +14px X nudges it off the center. */
+    transform: translate(14px, -100%);
+    min-width: 150px;
+    max-width: 260px;
+    padding: 8px 10px;
+    background: var(--glass-bg, rgba(24, 26, 30, 0.72));
+    backdrop-filter: blur(var(--glass-blur, 8px));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 8px));
+    border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.14));
+    border-radius: var(--radius-md, 8px);
+    box-shadow: var(--glass-shadow, 0 6px 20px rgba(0, 0, 0, 0.35));
+    color: var(--color-text-primary, #f2f3f5);
+    font-size: var(--font-size-sm, 12px);
+    pointer-events: auto;
+    user-select: none;
+}
+
+.traj-actor-tooltip-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.traj-actor-badge {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm, 4px);
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.traj-actor-badge.ego {
+    background: rgba(51, 128, 242, 0.85);
+}
+
+.traj-actor-badge.opp {
+    background: rgba(51, 199, 82, 0.85);
+}
+
+.traj-actor-id {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-secondary, #b7bcc4);
+}
+
+.traj-actor-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    color: var(--color-text-secondary, #b7bcc4);
+    cursor: pointer;
+}
+
+.traj-actor-close:hover {
+    color: var(--color-text-primary, #f2f3f5);
+    background: var(--color-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.traj-actor-tooltip-body {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 3px 10px;
+    margin: 0;
+}
+
+.traj-actor-tooltip-body>div {
+    display: contents;
+}
+
+.traj-actor-tooltip-body dt {
+    color: var(--color-text-secondary, #b7bcc4);
+    white-space: nowrap;
+}
+
+.traj-actor-tooltip-body dd {
+    margin: 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}

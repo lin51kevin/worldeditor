@@ -196,6 +196,71 @@ function entityBox(entity: TrajEntity, t: number): CaseActorBox | null {
   };
 }
 
+/** Per-actor state sampled at a single playback time, for the info tooltip. */
+export interface TrajActorInfo {
+  /** Entity id (without the `traj:` box prefix). */
+  id: string;
+  /** True for the ego vehicle, false for opponents. */
+  ego: boolean;
+  /** World position (meters), interpolated at the sample time. */
+  x: number;
+  y: number;
+  z: number;
+  /** Heading in degrees, interpolated (shortest-arc). */
+  yaw: number;
+  /** Bounding-box extents (meters), falling back to defaults when unset. */
+  length: number;
+  width: number;
+  height: number;
+  /** Instantaneous speed (m/s), derived from the local trajectory segment. */
+  speed: number;
+  /** The sample time (seconds). */
+  time: number;
+}
+
+/** Instantaneous speed (m/s) from the trajectory segment bracketing time `t`. */
+function entitySpeedAt(rows: TrajRow[], t: number): number {
+  if (rows.length < 2) return 0;
+  const first = rows[0]!;
+  const last = rows[rows.length - 1]!;
+  const clamped = Math.min(Math.max(t, first.time), last.time);
+  let low = 1;
+  let high = rows.length - 1;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (rows[mid]!.time < clamped) low = mid + 1;
+    else high = mid;
+  }
+  const b = rows[low]!;
+  const a = rows[low - 1]!;
+  const dt = b.time - a.time;
+  if (!(dt > 0)) return 0;
+  return Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / dt;
+}
+
+/**
+ * Sample a single entity's full state at absolute time `t` for the info
+ * tooltip. Returns null when the entity is unknown or has no samples.
+ */
+export function getEntityInfoAt(data: TrajData, entityId: string, t: number): TrajActorInfo | null {
+  const entity = data.entities.find((e) => e.id === entityId);
+  if (!entity || entity.rows.length === 0) return null;
+  const pose = interpPose(entity.rows, t);
+  return {
+    id: entity.id,
+    ego: entity.ego,
+    x: pose.x,
+    y: pose.y,
+    z: pose.z,
+    yaw: pose.yaw,
+    length: entity.length || 4.5,
+    width: entity.width || 2,
+    height: entity.height || 1.6,
+    speed: entitySpeedAt(entity.rows, t),
+    time: pose.time,
+  };
+}
+
 /** Options controlling which actors {@link buildTrajBoxes} emits. */
 export interface BuildTrajBoxesOptions {
   /**

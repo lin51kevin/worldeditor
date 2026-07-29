@@ -39,3 +39,40 @@ export function pickActorAt(boxes: readonly CaseActorBox[], worldX: number, worl
   }
   return null;
 }
+
+/**
+ * Screen-space actor pick: project each box center to screen and return the id
+ * of the box whose projection is nearest the click, within `thresholdPx`.
+ *
+ * Unlike {@link pickActorAt} (a ground-plane footprint test), this is robust to
+ * camera tilt and to actors sitting above the ground plane — a grazing camera
+ * would otherwise offset a ground-projected click far from the visible box — and
+ * the pixel radius gives a forgiving target for small, moving vehicles. The
+ * `project` callback receives the whole box so it can project the box center at
+ * its true height (a ground-only projection drifts from the visible box as the
+ * camera zooms). Later boxes (handles) win ties. `project` returns null for
+ * points behind the camera.
+ */
+export function pickActorAtScreen(
+  boxes: readonly CaseActorBox[],
+  project: (box: CaseActorBox) => { x: number; y: number } | null,
+  screenX: number,
+  screenY: number,
+  thresholdPx = 40,
+): string | null {
+  let bestId: string | null = null;
+  let bestDistSq = thresholdPx * thresholdPx;
+  for (let i = boxes.length - 1; i >= 0; i--) {
+    const box = boxes[i]!;
+    const p = project(box);
+    if (!p) continue;
+    const dx = p.x - screenX;
+    const dy = p.y - screenY;
+    const distSq = dx * dx + dy * dy;
+    if (distSq <= bestDistSq) {
+      bestDistSq = distSq;
+      bestId = box.id;
+    }
+  }
+  return bestId;
+}

@@ -13,6 +13,7 @@
 import { usePluginContribStore } from '../../../stores/pluginContribStore';
 import { TrajectoryPlaybackBar } from './TrajectoryPlaybackBar';
 import { TrajectoryConfigPanel } from './TrajectoryConfigPanel';
+import { TrajectoryActorTooltip } from './TrajectoryActorTooltip';
 
 const PLUGIN_ID = 'trajectory';
 
@@ -28,6 +29,11 @@ export function mountTrajectoryPlugin(): () => void {
     id: `${PLUGIN_ID}:config-panel`,
     pluginId: PLUGIN_ID,
     component: TrajectoryConfigPanel,
+  });
+  registerRootWidget({
+    id: `${PLUGIN_ID}:actor-tooltip`,
+    pluginId: PLUGIN_ID,
+    component: TrajectoryActorTooltip,
   });
 
   return () => unregisterPlugin(PLUGIN_ID);

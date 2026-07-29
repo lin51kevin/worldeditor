@@ -6,6 +6,7 @@ import {
   buildEgoBox,
   buildTrajSegments,
   interpPose,
+  getEntityInfoAt,
   playTraj,
 } from '../trajViewer';
 import type { TrajViewerTarget } from '../trajViewer';
@@ -46,6 +47,37 @@ describe('npc-actors/trajViewer.parseTraj', () => {
 
   it('returns no entities for empty input', () => {
     expect(parseTraj('').entities).toEqual([]);
+  });
+});
+
+describe('npc-actors/trajViewer.getEntityInfoAt', () => {
+  it('samples an entity pose, dimensions and derived speed at a time', () => {
+    const data = parseTraj(CSV);
+    // npc1 travels from (5,5) to (5,15) over 2s → 5 m/s, constant.
+    const info = getEntityInfoAt(data, 'npc1', 1);
+    expect(info).not.toBeNull();
+    expect(info!.id).toBe('npc1');
+    expect(info!.ego).toBe(false);
+    expect(info!.x).toBeCloseTo(5, 5);
+    expect(info!.y).toBeCloseTo(10, 5);
+    expect(info!.speed).toBeCloseTo(5, 5);
+    expect(info!.length).toBe(4);
+    expect(info!.width).toBe(2);
+    expect(info!.height).toBe(1.6);
+    expect(info!.time).toBe(1);
+  });
+
+  it('flags the ego entity and interpolates its heading', () => {
+    const data = parseTraj(CSV);
+    const info = getEntityInfoAt(data, 'ego', 0.5);
+    expect(info!.ego).toBe(true);
+    // yaw 0° → 90° over [0,1], sampled at 0.5 → 45°.
+    expect(info!.yaw).toBeCloseTo(45, 5);
+  });
+
+  it('returns null for an unknown entity id', () => {
+    const data = parseTraj(CSV);
+    expect(getEntityInfoAt(data, 'nope', 0)).toBeNull();
   });
 });
 
