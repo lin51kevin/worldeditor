@@ -81,7 +81,7 @@ let egoTemplate: EgoModelTemplate | null = null;
 
 /** Rebuild and upload actor geometry for time `t`; uploads wake the render loop. */
 function renderActorsAt(t: number): void {
-  const { data, followEgo } = useTrajectoryStore.getState();
+  const { data, cameraMode } = useTrajectoryStore.getState();
   const renderer = getViewportRenderer();
   if (!renderer || !data) return;
 
@@ -91,7 +91,7 @@ function renderActorsAt(t: number): void {
 
   const rawEgoBox = buildEgoBox(data, t);
   const filteredEgoBox: CaseActorBox | null =
-    followEgo && followPose && rawEgoBox
+    cameraMode !== 'off' && followPose && rawEgoBox
       ? {
           ...rawEgoBox,
           position: [
@@ -161,7 +161,13 @@ function tick(): void {
   // playhead — which triggers the full-scene redraw + splat re-sort — at the
   // capped rate. Skipped frames do not touch `lastPerf`, so `dt` still covers
   // the full elapsed span and playback stays real-time.
-  if (now - lastPerf < PLAYBACK_FRAME_INTERVAL_MS) {
+  //
+  // Exception: while a follow/front camera owns the view, the camera pose is
+  // driven off the playhead, so throttling it to 30 Hz makes the camera step
+  // visibly on 60/120 Hz displays. Commit every frame in those modes so the
+  // camera stays smooth (the free camera is static, so 30 Hz is fine there).
+  const throttleMs = s.cameraMode === 'off' ? PLAYBACK_FRAME_INTERVAL_MS : 0;
+  if (now - lastPerf < throttleMs) {
     rafId = requestAnimationFrame(tick);
     return;
   }
@@ -189,28 +195,34 @@ function ensureSubscribed(): void {
   if (unsub) return;
   unsub = useTrajectoryStore.subscribe((state, prev) => {
     const timeChanged = state.currentTime !== prev.currentTime;
-    const followJustEnabled = state.followEgo && !prev.followEgo;
+    const followActive = state.cameraMode !== 'off';
+    const followWasActive = prev.cameraMode !== 'off';
+    const modeChanged = state.cameraMode !== prev.cameraMode;
+    const followJustEnabled = followActive && !followWasActive;
     const dataChanged = state.data !== prev.data;
     const ego = state.data?.entities.find((entity) => entity.ego);
 
-    if (state.followEgo !== prev.followEgo || dataChanged) {
+    if (modeChanged || dataChanged) {
       getViewportRenderer()?.setChaseCameraActive(
-        Boolean(state.followEgo && ego && ego.rows.length > 0),
+        Boolean(followActive && ego && ego.rows.length > 0),
       );
     }
 
     // Update the camera before actor buffers are submitted so both use the same
     // playhead in the one frame rendered below.
     if (
-      state.followEgo &&
+      followActive &&
       state.data &&
-      (timeChanged || followJustEnabled || dataChanged)
+      (timeChanged || followJustEnabled || modeChanged || dataChanged)
     ) {
       if (ego && ego.rows.length > 0) {
         const pose = interpPose(ego.rows, state.currentTime);
         const now = performance.now();
+        // Switching between camera modes changes the camera offset, so snap
+        // instantly instead of gliding through the intermediate framing.
         const shouldSnap =
           followJustEnabled ||
+          modeChanged ||
           dataChanged ||
           !state.isPlaying ||
           state.currentTime < prev.currentTime ||
@@ -245,20 +257,30 @@ function ensureSubscribed(): void {
           followPerf > 0 ? (now - followPerf) / 1000 : 0,
         );
         followPerf = now;
-        getViewportRenderer()?.setChaseCam3D(
-          followPose.x,
-          followPose.y,
-          followPose.z,
-          followPose.yaw,
-        );
+        const renderer = getViewportRenderer();
+        if (state.cameraMode === 'front') {
+          renderer?.setFrontCam3D(
+            followPose.x,
+            followPose.y,
+            followPose.z,
+            followPose.yaw,
+          );
+        } else {
+          renderer?.setChaseCam3D(
+            followPose.x,
+            followPose.y,
+            followPose.z,
+            followPose.yaw,
+          );
+        }
       }
-    } else if (!state.followEgo) {
+    } else if (!followActive) {
       followPose = null;
       followPerf = 0;
       followPrevGround = null;
     }
 
-    const followChanged = state.followEgo !== prev.followEgo;
+    const followChanged = modeChanged;
     if (dataChanged) {
       if (!state.data) {
         clearRenderer();

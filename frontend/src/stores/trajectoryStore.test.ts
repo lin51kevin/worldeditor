@@ -90,14 +90,26 @@ describe('trajectoryStore', () => {
     expect(useTrajectoryStore.getState().loop).toBe(!before);
   });
 
+  it('setCameraMode switches the playback camera view', () => {
+    expect(useTrajectoryStore.getState().cameraMode).toBe('off');
+    useTrajectoryStore.getState().setCameraMode('follow');
+    expect(useTrajectoryStore.getState().cameraMode).toBe('follow');
+    useTrajectoryStore.getState().setCameraMode('front');
+    expect(useTrajectoryStore.getState().cameraMode).toBe('front');
+    useTrajectoryStore.getState().setCameraMode('off');
+    expect(useTrajectoryStore.getState().cameraMode).toBe('off');
+  });
+
   it('clear returns to the empty state', () => {
     useTrajectoryStore.getState().loadData(parseTraj(CSV));
     useTrajectoryStore.getState().play();
+    useTrajectoryStore.getState().setCameraMode('front');
     useTrajectoryStore.getState().clear();
     const s = useTrajectoryStore.getState();
     expect(s.data).toBeNull();
     expect(s.frames).toEqual([]);
     expect(s.isPlaying).toBe(false);
     expect(s.currentTime).toBe(0);
+    expect(s.cameraMode).toBe('off');
   });
 });

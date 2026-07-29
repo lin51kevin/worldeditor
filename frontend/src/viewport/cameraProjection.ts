@@ -127,10 +127,11 @@ export function projectToScreen(
   height: number,
   wx: number,
   wy: number,
+  wz = 0,
 ): { x: number; y: number } | null {
   const x = wx;
   const y = wy;
-  const z = 0;
+  const z = wz;
   const w = 1;
   const px = viewProj[0]! * x + viewProj[4]! * y + viewProj[8]! * z + viewProj[12]! * w;
   const py = viewProj[1]! * x + viewProj[5]! * y + viewProj[9]! * z + viewProj[13]! * w;

@@ -489,4 +489,57 @@ describe('CameraController', () => {
       expect(cam.isFlyMode).toBe(false);
     });
   });
+
+  describe('follow cameras', () => {
+    it('setChaseCam places the camera behind the entity along its heading', () => {
+      // Entity at origin heading +X (yaw 0): camera sits at negative X, raised.
+      cam.setChaseCam(0, 0, 0, 0);
+      const { position, target } = cam.state;
+      expect(position[0]).toBeLessThan(0); // behind along -X
+      expect(position[2]).toBeGreaterThan(0); // raised above the entity
+      expect(target[0]).toBeGreaterThan(0); // look-at ahead along +X
+      expect(position.every(Number.isFinite)).toBe(true);
+    });
+
+    it('setChaseCam is a no-op in 2D mode', () => {
+      cam.setDimension('2d');
+      const posBefore = [...cam.state.position];
+      cam.setChaseCam(10, 20, 0, Math.PI / 2);
+      expect(cam.state.position).toEqual(posBefore);
+    });
+
+    it('setFrontCam looks forward from the entity with a level gaze', () => {
+      // Entity at origin heading +X: camera slightly ahead + raised, gaze level.
+      cam.setFrontCam(0, 0, 0, 0);
+      const { position, target } = cam.state;
+      expect(position[0]).toBeGreaterThan(0); // pushed ahead along +X
+      expect(position[2]).toBeGreaterThan(0); // raised (dashboard height)
+      expect(target[0]).toBeGreaterThan(position[0]); // looks further ahead
+      // Level gaze: look-at Z equals camera Z.
+      expect(target[2]).toBeCloseTo(position[2], 5);
+      expect(position.every(Number.isFinite)).toBe(true);
+    });
+
+    it('setFrontCam respects heading direction', () => {
+      // Heading +Y (yaw π/2): camera pushed ahead along +Y.
+      cam.setFrontCam(0, 0, 0, Math.PI / 2);
+      const { position, target } = cam.state;
+      expect(position[1]).toBeGreaterThan(0);
+      expect(target[1]).toBeGreaterThan(position[1]);
+    });
+
+    it('setFrontCam is a no-op in 2D mode', () => {
+      cam.setDimension('2d');
+      const posBefore = [...cam.state.position];
+      cam.setFrontCam(10, 20, 0, 0);
+      expect(cam.state.position).toEqual(posBefore);
+    });
+
+    it('setChaseCameraActive locks manual navigation', () => {
+      cam.setChaseCameraActive(true);
+      expect(cam.locked).toBe(true);
+      cam.setChaseCameraActive(false);
+      expect(cam.locked).toBe(false);
+    });
+  });
 });

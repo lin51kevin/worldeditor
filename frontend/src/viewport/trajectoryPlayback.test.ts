@@ -11,6 +11,7 @@ const renderer = vi.hoisted(() => ({
   clearGaussianSplats: vi.fn(),
   render: vi.fn(),
   setChaseCam3D: vi.fn(),
+  setFrontCam3D: vi.fn(),
   setChaseCameraActive: vi.fn(),
   frameScene3D: vi.fn(),
 }));
@@ -60,7 +61,7 @@ describe('trajectory follow playback', () => {
 
   it('updates the follow camera before actor upload without a synchronous extra render', () => {
     startTrajectory(DATA);
-    useTrajectoryStore.getState().toggleFollowEgo();
+    useTrajectoryStore.getState().setCameraMode('follow');
     expect(renderer.setChaseCameraActive).toHaveBeenLastCalledWith(true);
     vi.clearAllMocks();
 
@@ -85,7 +86,7 @@ describe('trajectory follow playback', () => {
       5,
     );
 
-    useTrajectoryStore.getState().toggleFollowEgo();
+    useTrajectoryStore.getState().setCameraMode('off');
     expect(renderer.setChaseCameraActive).toHaveBeenLastCalledWith(false);
   });
 });
@@ -266,7 +267,7 @@ describe('trajectory follow - heading derivation', () => {
 
   it('derives heading from travel direction after initial snap', () => {
     startTrajectory(MULTI_FRAME_DATA);
-    useTrajectoryStore.getState().toggleFollowEgo();
+    useTrajectoryStore.getState().setCameraMode('follow');
     vi.clearAllMocks();
 
     // First seek after follow enabled (snap)
@@ -281,7 +282,7 @@ describe('trajectory follow - heading derivation', () => {
 
   it('snaps on large time jumps (seek backward)', () => {
     startTrajectory(MULTI_FRAME_DATA);
-    useTrajectoryStore.getState().toggleFollowEgo();
+    useTrajectoryStore.getState().setCameraMode('follow');
 
     // Seek forward
     useTrajectoryStore.getState().seek(0.8);
@@ -294,10 +295,10 @@ describe('trajectory follow - heading derivation', () => {
 
   it('disables chase camera when follow is toggled off', () => {
     startTrajectory(MULTI_FRAME_DATA);
-    useTrajectoryStore.getState().toggleFollowEgo();
+    useTrajectoryStore.getState().setCameraMode('follow');
     vi.clearAllMocks();
 
-    useTrajectoryStore.getState().toggleFollowEgo();
+    useTrajectoryStore.getState().setCameraMode('off');
     expect(renderer.setChaseCameraActive).toHaveBeenLastCalledWith(false);
   });
 });

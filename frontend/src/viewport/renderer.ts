@@ -629,9 +629,9 @@ export class ViewportRenderer {
     return this.cameraController.unprojectToPlane(screenX, screenY, worldZ);
   }
 
-  /** Project a world-space XY point (Z=0) to canvas pixel coordinates. Returns null if off-screen. */
-  projectWorldToScreen(wx: number, wy: number): { x: number; y: number } | null {
-    return this.cameraController.projectWorldToScreen(wx, wy);
+  /** Project a world-space point to canvas pixel coordinates. Returns null if off-screen. */
+  projectWorldToScreen(wx: number, wy: number, wz = 0): { x: number; y: number } | null {
+    return this.cameraController.projectWorldToScreen(wx, wy, wz);
   }
 
   /** World-space ground point (Z=0) under the viewport center. Null if unavailable. */
@@ -657,6 +657,14 @@ export class ViewportRenderer {
   setChaseCam3D(x: number, y: number, z: number, yaw: number): void {
     this.cameraController.setChaseCam(x, y, z, yaw);
     this.markSceneDirty();
+    this.renderFrame();
+  }
+
+  /** Position the camera in a first-person / front-facing view from an entity. */
+  setFrontCam3D(x: number, y: number, z: number, yaw: number): void {
+    this.cameraController.setFrontCam(x, y, z, yaw);
+    this.markSceneDirty();
+    this.renderFrame();
   }
 
   /** Give or release exclusive camera navigation ownership to chase mode. */

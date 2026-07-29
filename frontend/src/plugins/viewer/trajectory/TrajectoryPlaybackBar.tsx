@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { Play, Pause, SkipBack, SkipForward, Repeat, Crosshair, FolderOpen, Settings, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Repeat, Video, FolderOpen, Settings, X } from 'lucide-react';
 import {
   useTrajectoryStore,
   TRAJECTORY_SPEEDS,
   type TrajectorySpeed,
+  type TrajectoryCameraMode,
 } from '../../../stores/trajectoryStore';
 import { useTrajectoryConfigStore } from '../../../stores/trajectoryConfigStore';
 import { promptImportTrajectory, stopTrajectory } from '../../../viewport/trajectoryPlayback';
@@ -32,8 +33,8 @@ export function TrajectoryPlaybackBar() {
   const stepFrame = useTrajectoryStore((s) => s.stepFrame);
   const setSpeed = useTrajectoryStore((s) => s.setSpeed);
   const toggleLoop = useTrajectoryStore((s) => s.toggleLoop);
-  const followEgo = useTrajectoryStore((s) => s.followEgo);
-  const toggleFollowEgo = useTrajectoryStore((s) => s.toggleFollowEgo);
+  const cameraMode = useTrajectoryStore((s) => s.cameraMode);
+  const setCameraMode = useTrajectoryStore((s) => s.setCameraMode);
   const configOpen = useTrajectoryConfigStore((s) => s.configOpen);
   const toggleConfigOpen = useTrajectoryConfigStore((s) => s.toggleConfigOpen);
 
@@ -86,16 +87,22 @@ export function TrajectoryPlaybackBar() {
         <Repeat size={15} />
       </button>
 
-      <button
-        type="button"
-        className={`traj-btn ${followEgo ? 'active' : ''}`}
-        onClick={toggleFollowEgo}
-        title={t('trajectory.followEgo')}
-        aria-label={t('trajectory.followEgo')}
-        aria-pressed={followEgo}
+      <div
+        className={`traj-camera ${cameraMode !== 'off' ? 'active' : ''}`}
+        title={t('trajectory.cameraMode')}
       >
-        <Crosshair size={15} />
-      </button>
+        <Video size={15} aria-hidden="true" />
+        <select
+          className="traj-camera-select"
+          value={cameraMode}
+          onChange={(e) => setCameraMode(e.target.value as TrajectoryCameraMode)}
+          aria-label={t('trajectory.cameraMode')}
+        >
+          <option value="off">{t('trajectory.cameraOff')}</option>
+          <option value="follow">{t('trajectory.cameraFollow')}</option>
+          <option value="front">{t('trajectory.cameraFront')}</option>
+        </select>
+      </div>
 
       <select
         className="traj-speed"

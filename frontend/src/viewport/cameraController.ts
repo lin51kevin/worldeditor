@@ -235,6 +235,51 @@ export class CameraController {
     this.onViewBecameDirty?.();
   }
 
+  /**
+   * Position the camera in a first-person / front-facing view from a moving
+   * entity: the camera sits at the entity (raised `height` metres, pushed
+   * `forwardDist` metres ahead so the hood is out of frame) and looks forward
+   * along the entity's heading (`yaw`, radians, 0 = +X axis, CCW) with a level
+   * gaze. Used for the "前置摄像头视角" preview mode. No-op in 2D mode.
+   */
+  setFrontCam(
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    forwardDist = 1.5,
+    height = 1.4,
+    lookAheadDist = 30,
+  ): void {
+    if (this.dimensionMode !== '3d') return;
+    if (
+      !Number.isFinite(x) ||
+      !Number.isFinite(y) ||
+      !Number.isFinite(z) ||
+      !Number.isFinite(yaw)
+    ) return;
+    const cosY = Math.cos(yaw);
+    const sinY = Math.sin(yaw);
+    // Camera at the entity, slightly ahead + raised (dashboard / hood cam).
+    const camX = x + cosY * forwardDist;
+    const camY = y + sinY * forwardDist;
+    const camZ = z + height;
+    // Look far ahead along the heading, keeping the gaze level with the camera.
+    const targetX = x + cosY * (forwardDist + lookAheadDist);
+    const targetY = y + sinY * (forwardDist + lookAheadDist);
+    this.dimensionMode = '3d';
+    this.camera.target = [targetX, targetY, camZ];
+    this.camera.position = [camX, camY, camZ];
+    this.camera.up = [0, 0, 1];
+    const clip = this.perspClipPlanes(lookAheadDist);
+    this.camera.near = clip.near;
+    this.camera.far = clip.far;
+    this.cachedViewProj = null;
+    this.cachedInverseViewProj = null;
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+  }
+
   get isViewDirty(): boolean {
     return this.viewDirty;
   }  set isViewDirty(v: boolean) {
@@ -410,9 +455,9 @@ export class CameraController {
     return unprojectPlane(inv, this.width, this.height, screenX, screenY, worldZ);
   }
 
-  projectWorldToScreen(wx: number, wy: number): { x: number; y: number } | null {
+  projectWorldToScreen(wx: number, wy: number, wz = 0): { x: number; y: number } | null {
     if (this.width === 0 || this.height === 0) return null;
-    return projectToScreen(this.computeViewProj(), this.width, this.height, wx, wy);
+    return projectToScreen(this.computeViewProj(), this.width, this.height, wx, wy, wz);
   }
 
   fitToVertices(vertexData: Float32Array): void {

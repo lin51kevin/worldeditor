@@ -834,7 +834,10 @@
     "timeline": "Timeline",
     "import": "Import Trajectory...",
     "clear": "Close Trajectory",
-    "followEgo": "Follow Ego",
+    "cameraMode": "Camera View",
+    "cameraOff": "Free Camera",
+    "cameraFollow": "Follow Car",
+    "cameraFront": "Front Camera",
     "settings": "Scene Settings",
     "config": {
       "title": "Trajectory Scene Config",

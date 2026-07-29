@@ -6,6 +6,14 @@ import { trajFrames, trajTimeSpan } from '../plugins/npc-actors';
 export const TRAJECTORY_SPEEDS = [0.25, 0.5, 1, 2, 4] as const;
 export type TrajectorySpeed = (typeof TRAJECTORY_SPEEDS)[number];
 
+/**
+ * Playback camera modes.
+ * - `off`   — free orbit navigation (the camera ignores the ego vehicle).
+ * - `follow` — chase camera trailing behind and above the ego (跟车视角).
+ * - `front`  — first-person dashcam at the ego looking forward (前置视角).
+ */
+export type TrajectoryCameraMode = 'off' | 'follow' | 'front';
+
 interface TrajectoryState {
   /** Loaded trajectory data, or null when nothing is loaded. */
   data: TrajData | null;
@@ -23,8 +31,8 @@ interface TrajectoryState {
   loop: boolean;
   /** Playback rate multiplier. */
   speed: TrajectorySpeed;
-  /** Whether the camera tracks the ego vehicle during playback. */
-  followEgo: boolean;
+  /** How the camera tracks the ego vehicle during playback. */
+  cameraMode: TrajectoryCameraMode;
 
   /** Replace the loaded trajectory, reset the clock to its start, and pause. */
   loadData: (data: TrajData) => void;
@@ -44,8 +52,8 @@ interface TrajectoryState {
   setSpeed: (speed: TrajectorySpeed) => void;
   /** Toggle loop-at-end behavior. */
   toggleLoop: () => void;
-  /** Toggle follow-ego camera mode. */
-  toggleFollowEgo: () => void;
+  /** Set the playback camera mode. */
+  setCameraMode: (mode: TrajectoryCameraMode) => void;
 }
 
 const EMPTY = {
@@ -65,7 +73,7 @@ export const useTrajectoryStore = create<TrajectoryState>((set, get) => ({
   ...EMPTY,
   loop: true,
   speed: 1,
-  followEgo: false,
+  cameraMode: 'off',
 
   loadData: (data) => {
     const frames = trajFrames(data);
@@ -75,7 +83,7 @@ export const useTrajectoryStore = create<TrajectoryState>((set, get) => ({
     set({ data, frames, tMin, tMax, currentTime: tMin, isPlaying: false });
   },
 
-  clear: () => set({ ...EMPTY, followEgo: false }),
+  clear: () => set({ ...EMPTY, cameraMode: 'off' }),
 
   play: () => {
     const { data, currentTime, tMin, tMax } = get();
@@ -114,5 +122,5 @@ export const useTrajectoryStore = create<TrajectoryState>((set, get) => ({
 
   toggleLoop: () => set((s) => ({ loop: !s.loop })),
 
-  toggleFollowEgo: () => set((s) => ({ followEgo: !s.followEgo })),
+  setCameraMode: (mode) => set({ cameraMode: mode }),
 }));
