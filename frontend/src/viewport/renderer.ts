@@ -211,6 +211,13 @@ export class ViewportRenderer {
   private splatRenderer: SplatRenderer | null = null;
   private actorSplatRenderer: SplatRenderer | null = null;
 
+  // Desired per-frame GPU compute depth-sort state. Remembered here because the
+  // splat renderers are created LAZILY on first upload — long after the host
+  // calls setSplatGpuSort() (typically right after init, when both renderers are
+  // still null). Applied to each renderer at its creation site AND to any live
+  // renderers in setSplatGpuSort(), so the toggle is never silently dropped.
+  private splatGpuSortEnabled = false;
+
   // When false, the static scene (point cloud + splats + ground mesh) is not
   // drawn, WITHOUT discarding its GPU buffers — so a host can hide/show the scene
   // or toggle 2D/3D with no re-decode/re-upload. Dynamic actors (NPC/ego) are
@@ -865,6 +872,7 @@ export class ViewportRenderer {
       this.splatRenderer = createSplatRenderer(this.device, this.format, 4, () =>
         this.markSceneDirty(),
       );
+      this.splatRenderer.setGpuSort(this.splatGpuSortEnabled);
     }
     const uploadStatus = this.splatRenderer.upload(
       splatData,
@@ -942,6 +950,7 @@ export class ViewportRenderer {
       this.actorSplatRenderer = createSplatRenderer(this.device, this.format, 4, () =>
         this.markSceneDirty(),
       );
+      this.actorSplatRenderer.setGpuSort(this.splatGpuSortEnabled);
     }
     const uploadStatus = this.actorSplatRenderer.upload(
       splatData,
@@ -991,6 +1000,9 @@ export class ViewportRenderer {
    * that blurs continuous chase/front-cam playback. Falls back to the CPU sort.
    */
   setSplatGpuSort(enabled: boolean): void {
+    // Persist so a splat renderer created LATER (lazy, on first upload) still
+    // picks up the desired state at its creation site.
+    this.splatGpuSortEnabled = enabled;
     this.splatRenderer?.setGpuSort(enabled);
     this.actorSplatRenderer?.setGpuSort(enabled);
     this.markSceneDirty();

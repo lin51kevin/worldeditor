@@ -307,6 +307,16 @@ export interface WorldEditorRenderer {
   ): SplatUploadStatus;
   /** Remove the uploaded actor (NPC + ego) Gaussian splat cloud. */
   clearActorGaussianSplats?(): void;
+  /**
+   * Enable/disable the per-frame GPU compute depth sort for Gaussian splats
+   * (scene + actor). When on (and the texture-array path + compute are
+   * available) splats are sorted on the GPU inside the render encoder with zero
+   * latency, eliminating the worker-sort lag that blurs continuous chase /
+   * front-cam trajectory playback. Falls back to the CPU worker sort on
+   * unsupported devices. Optional so hosts bundling an older SDK degrade
+   * gracefully.
+   */
+  setSplatGpuSort?(enabled: boolean): void;
 }
 
 /** WASM compute contract consumed by rnk-next. */
@@ -755,6 +765,9 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     },
     clearActorGaussianSplats: () => {
       renderer.clearActorGaussianSplats();
+    },
+    setSplatGpuSort: (enabled: boolean) => {
+      renderer.setSplatGpuSort(enabled);
     },
   };
 }
