@@ -334,6 +334,47 @@ describe("SplatRenderer", () => {
     expect(writeSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("builds the GPU positions buffer before the worker transfers the array", () => {
+    const bufferSizes: number[] = [];
+    const device = {
+      createBuffer: (d: { size: number }) => {
+        bufferSizes.push(d.size);
+        return { size: d.size, destroy() {} };
+      },
+      createTexture: () => ({ createView: () => ({}), destroy() {} }),
+      createBindGroup: () => ({}),
+      queue: { writeBuffer: vi.fn(), writeTexture: vi.fn() },
+      limits: {
+        maxTextureDimension2D: 64,
+        maxTextureArrayLayers: 256,
+        maxBufferSize: 1_073_741_824,
+        maxStorageBufferBindingSize: 1_073_741_824,
+      },
+    } as unknown as GPUDevice;
+    // Worker-like sorter: transfers (neuters) the positions buffer on init, so a
+    // main-thread read after setSplats would see a detached, length-0 array.
+    const transferSorter: SplatSorter = {
+      init(p) {
+        structuredClone(p, { transfer: [p.buffer] });
+      },
+      sort(_camPos, _viewDir, generation, done) {
+        done(new Uint32Array(0), 0, generation);
+      },
+      dispose() {},
+    };
+    const r = new SplatRenderer(
+      device,
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      transferSorter,
+    );
+    const count = 4;
+    r.upload(new Uint32Array(count * STRIDE0), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+    // The positions buffer (count × xyz × 4 bytes) must have been allocated,
+    // proving setPositions ran on the live array, not the post-transfer view.
+    expect(bufferSizes).toContain(count * 3 * 4);
+  });
+
   it("uses 0.3 px² low-pass and direct gamma-space SH output by default", () => {
     const device = fakeDevice();
     const writeSpy = device.queue.writeBuffer as ReturnType<typeof vi.fn>;

@@ -359,6 +359,8 @@ export class SplatRenderer {
   /** Latest camera pose, captured by {@link onCamera} for the GPU sort pass. */
   private lastCamPos: Vec3 = [0, 0, 0];
   private lastViewDir: Vec3 = [0, 0, 1];
+  /** One-time diagnostic latch so the GPU-sort status is logged once per state. */
+  private gpuSortLogged = false;
   /** Cloud AABB (world) for O(1) per-frame projected depth-range estimation. */
   private boundsMin: Vec3 = [0, 0, 0];
   private boundsMax: Vec3 = [0, 0, 0];
@@ -584,12 +586,14 @@ export class SplatRenderer {
     }
 
     const positions = extractSplatPositions(data, stride);
-    this.sort.setSplats(positions);
-    // Mirror the centres into a GPU storage buffer so the (optional) GPU compute
-    // sort can read them without a packed buffer; a no-op on the packed path.
+    // Build the GPU positions buffer and cloud bounds BEFORE handing the array
+    // to the worker sorter: `setSplats` transfers (zero-copies) `positions.buffer`
+    // to the worker, which neuters the main-thread view (length -> 0). Doing this
+    // first keeps the GPU-sort positions buffer populated instead of empty.
     this.resources.setPositions(positions);
     this.updateBounds(positions);
     this.gpuSorter?.resize(this.resources.count);
+    this.sort.setSplats(positions);
     this._uploadStatus = {
       outcome:
         fallbackReason !== null || resourceMode === "packed-storage-fallback"
@@ -703,6 +707,8 @@ export class SplatRenderer {
   setGpuSort(enabled: boolean): void {
     if (this.useGpuSort === enabled) return;
     this.useGpuSort = enabled;
+    this.gpuSortLogged = false;
+    console.info(`[Splat] GPU depth sort ${enabled ? "requested" : "disabled"}`);
     if (enabled) {
       this.resources.markAllVisible();
     } else {
@@ -759,10 +765,24 @@ export class SplatRenderer {
    * reverts to the CPU path so the cloud never gets stuck on a stale order.
    */
   sortGpu(encoder: GPUCommandEncoder): boolean {
-    if (!this.isGpuSortEligible()) return false;
+    if (!this.useGpuSort || this.resources.count === 0) return false;
+    // Granular, one-time diagnostics so a silent CPU fallback is visible.
+    if (this.resources.resourceMode !== "texture-array") {
+      this.logGpuSortOnce(
+        `inactive — resource mode is "${this.resources.resourceMode}" (needs texture-array)`,
+      );
+      return false;
+    }
+    if (typeof this.device.createComputePipeline !== "function") {
+      this.logGpuSortOnce("inactive — this device/browser has no WebGPU compute");
+      return false;
+    }
     const positionsBuffer = this.resources.gpuPositionsBuffer;
     const orderBuffer = this.resources.gpuOrderBuffer;
-    if (!positionsBuffer || !orderBuffer) return false;
+    if (!positionsBuffer || !orderBuffer) {
+      this.logGpuSortOnce("inactive — positions/order buffer missing");
+      return false;
+    }
     try {
       if (!this.gpuSorter) {
         this.gpuSorter = new GpuSplatSorter(this.device);
@@ -778,6 +798,7 @@ export class SplatRenderer {
         minD,
         maxD,
       );
+      this.logGpuSortOnce(`ACTIVE (${this.resources.count.toLocaleString()} splats)`);
       return true;
     } catch (error) {
       console.error("[Splat] GPU sort failed; reverting to CPU sort", error);
@@ -787,6 +808,13 @@ export class SplatRenderer {
       this.sort.invalidate();
       return false;
     }
+  }
+
+  /** Log a GPU-sort status line at most once per enable/upload. */
+  private logGpuSortOnce(message: string): void {
+    if (this.gpuSortLogged) return;
+    this.gpuSortLogged = true;
+    console.info(`[Splat] GPU depth sort ${message}`);
   }
 
   /** Draw the splats into the active render pass (after opaque geometry). */
