@@ -574,6 +574,9 @@ export class SplatRenderer {
 
     const positions = extractSplatPositions(data, stride);
     this.sort.setSplats(positions);
+    // Mirror the centres into a GPU storage buffer so the (optional) GPU compute
+    // sort can read them without a packed buffer; a no-op on the packed path.
+    this.resources.setPositions(positions);
     this._uploadStatus = {
       outcome:
         fallbackReason !== null || resourceMode === "packed-storage-fallback"

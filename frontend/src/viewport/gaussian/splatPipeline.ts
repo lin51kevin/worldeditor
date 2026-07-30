@@ -154,6 +154,7 @@ export class GaussianSplatResources {
   private featureTexture: GPUTexture | null = null;
   private packedSplatBuffer: GPUBuffer | null = null;
   private orderBuffer: GPUBuffer | null = null;
+  private positionsBuffer: GPUBuffer | null = null;
   private readonly uniformBuffer: GPUBuffer;
   private bindGroup: GPUBindGroup | null = null;
   private _count = 0;
@@ -207,6 +208,16 @@ export class GaussianSplatResources {
   /** The one global sorted index buffer. */
   get gpuOrderBuffer(): GPUBuffer | null {
     return this.orderBuffer;
+  }
+
+  /**
+   * Dedicated `array<vec3<f32>>`-equivalent (3 f32 words/splat) of splat centres
+   * for the GPU compute sort's depth pass. Populated by {@link setPositions}
+   * after a texture-array upload; `null` on the packed fallback path or before
+   * positions are provided.
+   */
+  get gpuPositionsBuffer(): GPUBuffer | null {
+    return this.positionsBuffer;
   }
 
   /**
@@ -264,6 +275,30 @@ export class GaussianSplatResources {
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
     this.device.queue.writeBuffer(this.orderBuffer, 0, order);
+  }
+
+  /**
+   * Upload splat centres (3 f32 words/splat) into a GPU storage buffer for the
+   * compute-sort depth pass. Reuses the `positions` array the renderer already
+   * extracts for the CPU worker sort, so there is no second extraction. Safe to
+   * call after {@link upload}; the buffer lives until the next upload/clear.
+   * A length mismatch with the uploaded count is ignored (leaves no buffer) so
+   * the caller falls back to the CPU sort rather than sorting stale positions.
+   */
+  setPositions(positions: Float32Array): void {
+    this.positionsBuffer?.destroy();
+    this.positionsBuffer = null;
+    if (this._count === 0 || positions.length !== this._count * 3) return;
+    if (typeof this.device.createBuffer !== "function") return;
+    this.positionsBuffer = this.device.createBuffer({
+      size: positions.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(
+      this.positionsBuffer,
+      0,
+      positions as GPUAllowSharedBufferSource,
+    );
   }
 
   private uploadPackedFallback(splatData: Uint32Array): void {
@@ -530,10 +565,12 @@ export class GaussianSplatResources {
     this.featureTexture?.destroy();
     this.packedSplatBuffer?.destroy();
     this.orderBuffer?.destroy();
+    this.positionsBuffer?.destroy();
     this.transformTexture = null;
     this.featureTexture = null;
     this.packedSplatBuffer = null;
     this.orderBuffer = null;
+    this.positionsBuffer = null;
     this.bindGroup = null;
     this._textureLayout = null;
   }

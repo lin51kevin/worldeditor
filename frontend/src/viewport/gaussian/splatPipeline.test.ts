@@ -197,6 +197,35 @@ describe("GaussianSplatResources", () => {
     expect(destroyed).toBeGreaterThanOrEqual(2);
   });
 
+  it("uploads a positions buffer sized to the splat count", () => {
+    const { device } = fakeDevice();
+    const res = new GaussianSplatResources(device, {} as GPUBindGroupLayout);
+    res.upload(splats(3), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+    expect(res.gpuPositionsBuffer).toBeNull();
+    res.setPositions(new Float32Array(9)); // 3 splats × xyz
+    expect(res.gpuPositionsBuffer).not.toBeNull();
+    expect((res.gpuPositionsBuffer as unknown as { size: number }).size).toBe(9 * 4);
+  });
+
+  it("ignores a positions array whose length mismatches the splat count", () => {
+    const { device } = fakeDevice();
+    const res = new GaussianSplatResources(device, {} as GPUBindGroupLayout);
+    res.upload(splats(3), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+    res.setPositions(new Float32Array(6)); // only 2 splats’ worth
+    expect(res.gpuPositionsBuffer).toBeNull();
+  });
+
+  it("frees the positions buffer on clear", () => {
+    const { device } = fakeDevice();
+    const res = new GaussianSplatResources(device, {} as GPUBindGroupLayout);
+    res.upload(splats(2), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+    res.setPositions(new Float32Array(6));
+    const posBuf = res.gpuPositionsBuffer as unknown as { destroyed: boolean };
+    res.clear();
+    expect(res.gpuPositionsBuffer).toBeNull();
+    expect(posBuf.destroyed).toBe(true);
+  });
+
   it("uploads f32 transforms and f16 opacity/SH as aligned texture arrays", () => {
     const { device, textures, textureWrites } = textureDevice();
     const res = new GaussianSplatResources(device, {} as GPUBindGroupLayout);
