@@ -1,0 +1,41 @@
+/* Trajectory frame-rate stats HUD — top-right floating telemetry panel. */
+.traj-stats-hud {
+    position: absolute;
+    top: 52px;
+    right: var(--space-4, 16px);
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1, 4px);
+    min-width: 132px;
+    padding: var(--space-2, 8px) var(--space-3, 12px);
+    background: var(--glass-bg, rgba(30, 30, 34, 0.82));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+    border-radius: var(--radius-md, 8px);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.35));
+    color: var(--color-text-primary, #e8e8ea);
+    font-size: var(--font-size-sm, 12px);
+    user-select: none;
+    pointer-events: none;
+}
+
+.traj-stats-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3, 12px);
+}
+
+.traj-stats-label {
+    color: var(--color-text-secondary, #a0a0a8);
+    white-space: nowrap;
+}
+
+.traj-stats-value {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--color-text-primary, #e8e8ea);
+    white-space: nowrap;
+}
