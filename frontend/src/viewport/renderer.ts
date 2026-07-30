@@ -145,6 +145,10 @@ export class ViewportRenderer {
   private width = 0;
   private height = 0;
   private renderLoop: RenderLoop | null = null;
+  // True while the host-facing camera facade started the render loop to drive
+  // fly-mode movement (host embedding never calls start() itself). Guards
+  // stop() so we only tear down a loop we own.
+  private hostFlyLoopActive = false;
   private deviceLost = false;
   // Set to true by dispose(); guards against async init() completing after cleanup
   private disposed = false;
@@ -715,13 +719,27 @@ export class ViewportRenderer {
     button: number,
     event: { clientX: number; clientY: number; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean },
   ): boolean {
-    return this.cameraController.beginPointerDrag(button, {
+    const started = this.cameraController.beginPointerDrag(button, {
       clientX: event.clientX,
       clientY: event.clientY,
       ctrlKey: !!event.ctrlKey,
       shiftKey: !!event.shiftKey,
       altKey: !!event.altKey,
     });
+    // The host (rnk-next) owns pointer input, so the canvas-level
+    // rendererInputHandler never sees this gesture. Mirror its fly-mode setup
+    // here: attach the WASD/QE/Shift keyboard and ensure a render loop runs so
+    // flyMove is processed every frame (the host embedding never calls start()).
+    if (started && this.cameraController.isFlyMode) {
+      this.flyKeyboard.attach(() => this.renderLoop?.wakeUp());
+      if (!this.renderLoop) {
+        this.hostFlyLoopActive = true;
+        this.start();
+      } else {
+        this.renderLoop.wakeUp();
+      }
+    }
+    return started;
   }
 
   /** Update the active camera drag with the current pointer position. */
@@ -734,7 +752,22 @@ export class ViewportRenderer {
 
   /** End the active camera drag. */
   cameraEndDrag(): void {
+    // Capture fly state before endPointerDrag(), which exits fly mode.
+    const wasFly = this.cameraController.isFlyMode;
     this.cameraController.endPointerDrag();
+    if (wasFly) {
+      this.flyKeyboard.detach();
+      // Tear down the render loop we started for fly movement, returning the
+      // host to its on-demand render() model.
+      if (this.hostFlyLoopActive) {
+        this.hostFlyLoopActive = false;
+        this.stop();
+      }
+      // exitFlyMode() recomputes the orbit target and clip planes; flush one
+      // frame so that state is drawn (the host renders on demand and won't
+      // redraw until its next store change).
+      this.renderFrame();
+    }
   }
 
   /** Zoom the camera by a wheel delta (positive deltaY = zoom out). */
