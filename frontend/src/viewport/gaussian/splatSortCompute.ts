@@ -1,26 +1,33 @@
 /**
- * Deprecated GPU Compute Sort for 3D Gaussian Splatting.
+ * GPU Compute Sort for 3D Gaussian Splatting.
  *
- * @deprecated Disabled: its depth pass reads the legacy packed splat storage
- * buffer. The active texture-array renderer sorts positions in a worker and
- * uploads one global order buffer. Do not reconnect this implementation without
- * replacing its packed attribute binding with the texture addressing contract.
+ * Replaces the async worker CPU counting sort with a per-frame GPU sort that
+ * runs inside the same command encoder as the render pass. This eliminates the
+ * worker round-trip latency (the source of persistent blur during continuous
+ * chase/front-cam playback) and keeps the order fresh every frame.
  *
- * Replaces the CPU 16-bit counting sort with a per-frame GPU sort that runs
- * inside the same command encoder as the render pass. This eliminates the async
- * delay of the worker-based sort and provides perfect 32-bit depth ordering.
+ * The depth pass reads splat centres from the dedicated positions storage
+ * buffer ({@link GaussianSplatResources.gpuPositionsBuffer}, 3 f32 words/splat),
+ * so it works with the active texture-array render path. The depth range is
+ * supplied by the caller (computed once from cloud bounds), avoiding a
+ * per-frame O(n) CPU scan.
  *
  * Algorithm: 3-pass counting sort
- *   Pass 1 — Depth & bucket assignment: compute depth per splat, quantize to
+ *   Pass 1 - Depth & bucket assignment: compute depth per splat, quantize to
  *            bucket, atomicAdd to histogram, store bucket per splat.
- *   Pass 2 — Prefix sum: exclusive scan of the histogram (bottom-up + top-down
- *            in shared memory, multi-level for >WORKGROUP_SIZE buckets).
- *   Pass 3 — Scatter: write each splat's index to its sorted output slot,
+ *   Pass 2 - Prefix sum: exclusive scan of the histogram (two-level: block scan
+ *            then a single top scan; supports up to BUCKET_COUNT = BLOCK²).
+ *   Pass 3 - Scatter: write each splat's index to its sorted output slot,
  *            back-to-front (largest depth first).
  */
 
-/** Number of sort buckets — higher = better depth precision. */
-const BUCKET_COUNT = 65536;
+/**
+ * Number of sort buckets - higher = better depth precision. 2^18 is the maximum
+ * the two-level prefix scan supports without a third level (numBlocks =
+ * BUCKET_COUNT / (WORKGROUP_SIZE*2) must be <= WORKGROUP_SIZE*2). At ~12M splats
+ * that is ~47 splats/bucket, 4x finer than the old 65536-bucket worker sort.
+ */
+const BUCKET_COUNT = 262144;
 /** Must match the WGSL `WORKGROUP_SIZE` constant. */
 const WORKGROUP_SIZE = 256;
 
@@ -40,7 +47,7 @@ struct SortParams {
 };
 
 @group(0) @binding(0) var<uniform>       params    : SortParams;
-@group(0) @binding(1) var<storage, read>  splats    : array<u32>;
+@group(0) @binding(1) var<storage, read>  positions : array<f32>;
 @group(0) @binding(2) var<storage, read_write> histogram : array<atomic<u32>>;
 @group(0) @binding(3) var<storage, read_write> buckets   : array<u32>;
 
@@ -51,11 +58,11 @@ fn depth_main(@builtin(global_invocation_id) gid : vec3<u32>) {
   let i = gid.x;
   if (i >= params.count) { return; }
 
-  // Read position (first 3 f32 words of the splat record).
-  let base = i * params.stride;
-  let px = bitcast<f32>(splats[base]);
-  let py = bitcast<f32>(splats[base + 1u]);
-  let pz = bitcast<f32>(splats[base + 2u]);
+  // Read splat centre (3 f32 words/splat in the positions buffer).
+  let base = i * 3u;
+  let px = positions[base];
+  let py = positions[base + 1u];
+  let pz = positions[base + 2u];
 
   // View-space depth: dot(viewDir, pos - camPos).
   let dx = px - params.cam_pos.x;
@@ -280,7 +287,6 @@ export class GpuSplatSorter {
   private scatterBindGroupLayout!: GPUBindGroupLayout;
 
   private count = 0;
-  private stride = 0;
   private initialized = false;
 
   constructor(private readonly device: GPUDevice) {}
@@ -382,10 +388,9 @@ export class GpuSplatSorter {
    * Allocate the per-splat bucket buffer sized for `count` splats.
    * Called when the splat count changes (on upload).
    */
-  resize(count: number, stride: number): void {
-    if (count === this.count && stride === this.stride) return;
+  resize(count: number): void {
+    if (count === this.count) return;
     this.count = count;
-    this.stride = stride;
     this.bucketsBuffer?.destroy();
     this.bucketsBuffer = null;
     if (count === 0) return;
@@ -399,37 +404,30 @@ export class GpuSplatSorter {
    * Encode the 3-pass GPU sort into the provided command encoder.
    *
    * @param encoder  Active command encoder (sort runs before the render pass).
-   * @param splatBuffer  The packed splat storage buffer (positions at word 0-2).
+   * @param positionsBuffer  Splat centres (3 f32 words/splat).
    * @param orderBuffer  Output: sorted index buffer written by the scatter pass.
    * @param camPos   Camera world position.
    * @param viewDir  Normalized view direction (target - position).
-   * @param positions  CPU-side positions for depth range computation (cheap one-time scan).
+   * @param minDepth Smallest view-space depth of the cloud for this camera.
+   * @param maxDepth Largest view-space depth of the cloud for this camera.
    */
   sort(
     encoder: GPUCommandEncoder,
-    splatBuffer: GPUBuffer,
+    positionsBuffer: GPUBuffer,
     orderBuffer: GPUBuffer,
     camPos: readonly [number, number, number],
     viewDir: readonly [number, number, number],
-    positions: Float32Array,
+    minDepth: number,
+    maxDepth: number,
   ): void {
     this.ensureInit();
     const n = this.count;
     if (n === 0 || !this.bucketsBuffer) return;
 
-    // ── Compute depth range on CPU (fast scan, <1ms for 8M positions) ───────
-    let minD = Infinity;
-    let maxD = -Infinity;
     const [cx, cy, cz] = camPos;
     const [vx, vy, vz] = viewDir;
-    for (let i = 0; i < n; i++) {
-      const d =
-        (positions[i * 3]! - cx) * vx +
-        (positions[i * 3 + 1]! - cy) * vy +
-        (positions[i * 3 + 2]! - cz) * vz;
-      if (d < minD) minD = d;
-      if (d > maxD) maxD = d;
-    }
+    const minD = minDepth;
+    let maxD = maxDepth;
     if (!(maxD > minD)) { maxD = minD + 1; }
     const invRange = (BUCKET_COUNT - 1) / (maxD - minD);
 
@@ -438,7 +436,7 @@ export class GpuSplatSorter {
     params[0] = cx; params[1] = cy; params[2] = cz;
     new Uint32Array(params.buffer)[3] = n;
     params[4] = vx; params[5] = vy; params[6] = vz;
-    new Uint32Array(params.buffer)[7] = this.stride;
+    new Uint32Array(params.buffer)[7] = 3; // positions stride (f32 words/splat)
     params[8] = minD;
     params[9] = invRange;
     this.device.queue.writeBuffer(this.paramsBuffer, 0, params);
@@ -457,7 +455,7 @@ export class GpuSplatSorter {
       layout: this.depthBindGroupLayout,
       entries: [
         { binding: 0, resource: { buffer: this.paramsBuffer } },
-        { binding: 1, resource: { buffer: splatBuffer } },
+        { binding: 1, resource: { buffer: positionsBuffer } },
         { binding: 2, resource: { buffer: this.histogramBuffer } },
         { binding: 3, resource: { buffer: this.bucketsBuffer } },
       ],
@@ -558,7 +556,6 @@ export class GpuSplatSorter {
     this.bucketsBuffer?.destroy();
     this.bucketsBuffer = null;
     this.count = 0;
-    this.stride = 0;
     if (!this.initialized) return;
     this.paramsBuffer.destroy();
     this.prefixParamsBuffer.destroy();
