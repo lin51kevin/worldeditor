@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TrajectoryPlaybackBar } from './TrajectoryPlaybackBar';
 import { useTrajectoryStore } from '../../../stores/trajectoryStore';
+import { useTrajectoryConfigStore } from '../../../stores/trajectoryConfigStore';
 import { parseTraj } from '../../npc-actors';
 
 const CSV = [
@@ -18,6 +19,7 @@ afterEach(() => {
   act(() => {
     useTrajectoryStore.getState().clear();
     useTrajectoryStore.setState({ loop: true, speed: 1 });
+    useTrajectoryConfigStore.getState().toggleStatsHud(false);
   });
 });
 
@@ -80,5 +82,15 @@ describe('TrajectoryPlaybackBar', () => {
     render(<TrajectoryPlaybackBar />);
     act(() => { fireEvent.click(screen.getByLabelText('关闭轨迹')); });
     expect(useTrajectoryStore.getState().data).toBeNull();
+  });
+
+  it('toggles the frame-rate stats HUD via its button', () => {
+    load();
+    render(<TrajectoryPlaybackBar />);
+    expect(useTrajectoryConfigStore.getState().statsHudOpen).toBe(false);
+    act(() => { fireEvent.click(screen.getByLabelText('帧率信息')); });
+    expect(useTrajectoryConfigStore.getState().statsHudOpen).toBe(true);
+    act(() => { fireEvent.click(screen.getByLabelText('帧率信息')); });
+    expect(useTrajectoryConfigStore.getState().statsHudOpen).toBe(false);
   });
 });

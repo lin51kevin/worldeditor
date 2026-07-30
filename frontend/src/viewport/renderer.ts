@@ -5,6 +5,13 @@ import { takePrewarmedGPU, returnPrewarmedGPU, buildRequiredLimits } from './gpu
 import type { PrewarmedGPU } from './gpuDeviceCache';
 import { createRenderLoop } from './renderLoop';
 import type { RenderLoop } from './renderLoop';
+import {
+  createFrameStatsState,
+  updateFrameStats,
+  frameTimeToFps,
+  type FrameStatsState,
+  type RenderStats,
+} from './renderStats';
 
 /**
  * WebGPU viewport renderer.
@@ -161,6 +168,8 @@ export class ViewportRenderer {
   private sceneDirty = true;
   /** Timestamp of last rendered frame (for fly mode delta-time calculation). */
   private lastFrameTime = 0;
+  /** Smoothed frame-rate accumulator, updated once per drawn frame. */
+  private frameStats: FrameStatsState = createFrameStatsState();
 
   // Visibility flags for grid/axis
   showGrid = true;
@@ -1171,6 +1180,25 @@ export class ViewportRenderer {
   }
 
   /**
+   * Smoothed render-loop performance snapshot (FPS, frame time, splat count).
+   *
+   * FPS/frame time reflect only frames the (idle-aware) loop actually drew, so
+   * when the scene is static and the loop parks, `lastRenderTs` stops advancing
+   * — consumers should treat a stale `lastRenderTs` as "idle" rather than a
+   * genuine low frame rate.
+   */
+  getRenderStats(): RenderStats {
+    const splatCount =
+      (this.splatRenderer?.count ?? 0) + (this.actorSplatRenderer?.count ?? 0);
+    return {
+      fps: frameTimeToFps(this.frameStats.frameTimeMs),
+      frameTimeMs: this.frameStats.frameTimeMs,
+      splatCount,
+      lastRenderTs: this.frameStats.lastRenderTs,
+    };
+  }
+
+  /**
    * Render the current frame and return it as a PNG data URL (empty string on
    * failure). Convenience wrapper over {@link captureFrame} for hosts that want
    * a non-null string (e.g. thumbnail generation in rnk-next).
@@ -1215,6 +1243,7 @@ export class ViewportRenderer {
           this.cameraController.flyMove(mv.forward, mv.right, mv.up, dt, mv.sprint);
         }
         this.lastFrameTime = now;
+        this.frameStats = updateFrameStats(this.frameStats, now);
         this.renderFrame();
       },
       onDirtyCleared: () => {

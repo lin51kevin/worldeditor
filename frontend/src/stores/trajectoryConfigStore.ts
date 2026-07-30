@@ -87,6 +87,8 @@ interface PersistedSlice {
 interface TrajectoryConfigState extends PersistedSlice {
   /** Whether the floating config panel is visible. */
   configOpen: boolean;
+  /** Whether the floating frame-rate stats HUD is visible (runtime only). */
+  statsHudOpen: boolean;
   /** Discovered + classified files (runtime only — not persisted). */
   scan: ScanResult;
   /** Actor ids parsed from the scanned trajectory CSV (runtime only). */
@@ -95,6 +97,8 @@ interface TrajectoryConfigState extends PersistedSlice {
   loadedModels: Record<string, ActorSplatModel>;
 
   toggleConfigOpen: (open?: boolean) => void;
+  /** Show / hide the frame-rate stats HUD (toggles when `open` is omitted). */
+  toggleStatsHud: (open?: boolean) => void;
   setPlyRoot: (root: string | null) => void;
   setScan: (scan: ScanResult) => void;
   setScanEntities: (entities: ScanEntity[]) => void;
@@ -183,12 +187,16 @@ export const useTrajectoryConfigStore = create<TrajectoryConfigState>((set, get)
   return {
     ...loadPersisted(),
     configOpen: false,
+    statsHudOpen: false,
     scan: EMPTY_SCAN,
     scanEntities: [],
     loadedModels: {},
 
     toggleConfigOpen: (open) =>
       set((s) => ({ configOpen: open ?? !s.configOpen })),
+
+    toggleStatsHud: (open) =>
+      set((s) => ({ statsHudOpen: open ?? !s.statsHudOpen })),
 
     setPlyRoot: (root) => setPersisted({ plyRoot: root }),
 
@@ -256,7 +264,7 @@ export const useTrajectoryConfigStore = create<TrajectoryConfigState>((set, get)
     },
 
     reset: () => {
-      set({ scan: EMPTY_SCAN, scanEntities: [], loadedModels: {}, configOpen: false });
+      set({ scan: EMPTY_SCAN, scanEntities: [], loadedModels: {}, configOpen: false, statsHudOpen: false });
       setPersisted({ ...EMPTY_PERSISTED });
     },
   };

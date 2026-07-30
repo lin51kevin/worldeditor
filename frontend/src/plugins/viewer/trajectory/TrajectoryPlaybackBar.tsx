@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Play, Pause, SkipBack, SkipForward, Repeat, Video, FolderOpen, Settings, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Repeat, Video, Gauge, FolderOpen, Settings, X } from 'lucide-react';
 import {
   useTrajectoryStore,
   TRAJECTORY_SPEEDS,
@@ -37,6 +37,8 @@ export function TrajectoryPlaybackBar() {
   const setCameraMode = useTrajectoryStore((s) => s.setCameraMode);
   const configOpen = useTrajectoryConfigStore((s) => s.configOpen);
   const toggleConfigOpen = useTrajectoryConfigStore((s) => s.toggleConfigOpen);
+  const statsHudOpen = useTrajectoryConfigStore((s) => s.statsHudOpen);
+  const toggleStatsHud = useTrajectoryConfigStore((s) => s.toggleStatsHud);
 
   if (!data) return null;
 
@@ -139,6 +141,17 @@ export function TrajectoryPlaybackBar() {
         aria-label={t('trajectory.import')}
       >
         <FolderOpen size={16} />
+      </button>
+
+      <button
+        type="button"
+        className={`traj-btn ${statsHudOpen ? 'active' : ''}`}
+        onClick={() => toggleStatsHud()}
+        title={t('trajectory.stats.toggle')}
+        aria-label={t('trajectory.stats.toggle')}
+        aria-pressed={statsHudOpen}
+      >
+        <Gauge size={16} />
       </button>
 
       <button

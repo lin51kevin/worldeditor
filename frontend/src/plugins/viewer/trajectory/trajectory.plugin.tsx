@@ -14,6 +14,7 @@ import { usePluginContribStore } from '../../../stores/pluginContribStore';
 import { TrajectoryPlaybackBar } from './TrajectoryPlaybackBar';
 import { TrajectoryConfigPanel } from './TrajectoryConfigPanel';
 import { TrajectoryActorTooltip } from './TrajectoryActorTooltip';
+import { TrajectoryStatsHud } from './TrajectoryStatsHud';
 
 const PLUGIN_ID = 'trajectory';
 
@@ -34,6 +35,11 @@ export function mountTrajectoryPlugin(): () => void {
     id: `${PLUGIN_ID}:actor-tooltip`,
     pluginId: PLUGIN_ID,
     component: TrajectoryActorTooltip,
+  });
+  registerRootWidget({
+    id: `${PLUGIN_ID}:stats-hud`,
+    pluginId: PLUGIN_ID,
+    component: TrajectoryStatsHud,
   });
 
   return () => unregisterPlugin(PLUGIN_ID);

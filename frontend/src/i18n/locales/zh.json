@@ -840,6 +840,15 @@
     "cameraOff": "自由视角",
     "cameraFollow": "跟车视角",
     "cameraFront": "前置视角",
+    "stats": {
+      "title": "渲染信息",
+      "toggle": "帧率信息",
+      "fps": "帧率",
+      "frameTime": "单帧耗时",
+      "actors": "目标数",
+      "splats": "高斯点",
+      "idle": "待机"
+    },
     "actor": {
       "title": "目标信息",
       "ego": "主车",

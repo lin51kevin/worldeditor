@@ -840,6 +840,15 @@
     "cameraOff": "Free Camera",
     "cameraFollow": "Follow Car",
     "cameraFront": "Front Camera",
+    "stats": {
+      "title": "Render Stats",
+      "toggle": "Frame-rate stats",
+      "fps": "FPS",
+      "frameTime": "Frame",
+      "actors": "Actors",
+      "splats": "Splats",
+      "idle": "idle"
+    },
     "actor": {
       "title": "Actor Info",
       "ego": "Ego",
