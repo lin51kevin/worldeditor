@@ -83,14 +83,16 @@ describe('SplatSortController', () => {
     expect(sorter.calls).toBe(2);
   });
 
-  it('ignores stale async results even when the older result arrives first', () => {
+  it('coalesces rapid camera moves into one queued re-sort (no worker backlog)', () => {
     const pending: Record<
       number,
       (indices: Uint32Array, visibleCount: number, generation: number) => void
     > = {};
+    let dispatched = 0;
     const sorter: SplatSorter = {
       init() {},
       sort(_camPos, _viewDir, generation, done) {
+        dispatched++;
         pending[generation] = done;
       },
       dispose() {},
@@ -99,14 +101,27 @@ describe('SplatSortController', () => {
     const ctrl = new SplatSortController(sorter, onSorted);
     ctrl.setSplats(new Float32Array([0, 0, 0]));
 
-    ctrl.onCamera([0, 0, 0], [0, 0, 1]); // generation 0
-    ctrl.onCamera([9, 0, 0], [0, 0, 1]); // generation 1
+    // First frame dispatches generation 0; it is now in flight (async).
+    ctrl.onCamera([0, 0, 0], [0, 0, 1]);
+    expect(dispatched).toBe(1);
 
+    // Rapid moves while generation 0 is still running are QUEUED, not dispatched:
+    // only the latest pose is retained, so the worker never builds a backlog.
+    ctrl.onCamera([3, 0, 0], [0, 0, 1]);
+    ctrl.onCamera([6, 0, 0], [0, 0, 1]);
+    ctrl.onCamera([9, 0, 0], [0, 0, 1]);
+    expect(dispatched).toBe(1);
+
+    // Generation 0 completes → the single coalesced latest pose dispatches next.
     const oldIndices = new Uint32Array([0]);
-    const newIndices = new Uint32Array([1]);
     pending[0]!(oldIndices, 1, 0);
+    expect(dispatched).toBe(2);
+    expect(onSorted).toHaveBeenLastCalledWith(oldIndices, 1);
+
+    // The coalesced sort (generation 1) delivers the newest resting order.
+    const newIndices = new Uint32Array([0]);
     pending[1]!(newIndices, 1, 1);
-    expect(onSorted).toHaveBeenCalledTimes(1);
+    expect(onSorted).toHaveBeenCalledTimes(2);
     expect(onSorted).toHaveBeenLastCalledWith(newIndices, 1);
   });
 

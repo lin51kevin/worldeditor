@@ -117,6 +117,10 @@ export class SplatSortController {
   private generation = 0;
   private latestRequested = -1;
   private latestDelivered = -1;
+  /** Generation of the sort currently running in the sorter, or `null` if idle. */
+  private inFlightGeneration: number | null = null;
+  /** Latest pose seen while a sort was in flight; dispatched on completion. */
+  private queuedPose: CameraPose | null = null;
   private splatCount = 0;
   private positionThreshold = MIN_POS_THRESHOLD;
   /**
@@ -150,6 +154,8 @@ export class SplatSortController {
     this.lastPose = null;
     this.latestRequested = -1;
     this.latestDelivered = -1;
+    this.inFlightGeneration = null;
+    this.queuedPose = null;
     this.lastSortTime = Number.NEGATIVE_INFINITY;
     this.clearPendingRefresh();
     this.sorter.init(positions);
@@ -177,7 +183,7 @@ export class SplatSortController {
       this.lastSortTime = now;
     }
     this.clearPendingRefresh();
-    this.dispatchSort(next);
+    this.requestSort(next);
   }
 
   /**
@@ -193,9 +199,18 @@ export class SplatSortController {
 
   /** Deliver a sort result, ignoring any that are older than the newest seen. */
   deliver(indices: Uint32Array, visibleCount: number, generation: number): void {
-    if (generation !== this.latestRequested || generation <= this.latestDelivered) return;
-    this.latestDelivered = generation;
-    this.onSorted(indices, visibleCount);
+    const wasInFlight = generation === this.inFlightGeneration;
+    if (wasInFlight) this.inFlightGeneration = null;
+    if (generation === this.latestRequested && generation > this.latestDelivered) {
+      this.latestDelivered = generation;
+      this.onSorted(indices, visibleCount);
+    }
+    // Only the in-flight sort completing frees capacity for the queued pose.
+    if (wasInFlight && this.queuedPose !== null) {
+      const next = this.queuedPose;
+      this.queuedPose = null;
+      this.dispatchSort(next);
+    }
   }
 
   /** Force a re-sort on the next `onCamera` call. */
@@ -206,13 +221,33 @@ export class SplatSortController {
 
   dispose(): void {
     this.clearPendingRefresh();
+    this.inFlightGeneration = null;
+    this.queuedPose = null;
     this.sorter.dispose();
+  }
+
+  /**
+   * Dispatch a sort, or—if one is already running—remember only this latest
+   * pose and dispatch it when the in-flight sort completes. This request
+   * coalescing keeps at most one sort in flight, so rapid camera motion (e.g.
+   * orbiting a multi-million-splat cloud) can never build a worker backlog that
+   * delays the correct resting order and leaves the view stuck on a stale,
+   * wrongly-blended (blurry) frame.
+   */
+  private requestSort(next: CameraPose): void {
+    if (this.inFlightGeneration !== null) {
+      this.queuedPose = next;
+      this.lastPose = next;
+      return;
+    }
+    this.dispatchSort(next);
   }
 
   private dispatchSort(next: CameraPose): void {
     this.lastPose = next;
     const generation = this.generation++;
     this.latestRequested = generation;
+    this.inFlightGeneration = generation;
     this.sorter.sort(
       next.camPos,
       next.viewDir,
@@ -231,7 +266,7 @@ export class SplatSortController {
         this.pendingPose = null;
         if (!next || this.splatCount === 0) return;
         this.lastSortTime = nowMs();
-        this.dispatchSort(next);
+        this.requestSort(next);
       },
       Math.max(0, delayMs),
     );
