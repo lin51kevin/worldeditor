@@ -12,7 +12,7 @@ import { buildProjectionMatrix, buildViewProjMatrix } from "../cameraProjection"
 import type { CameraState } from "../cameraController";
 
 /**
- * Uniform layout (std140, 176 bytes / 44 floats):
+ * Uniform layout (std140, 192 bytes / 48 floats):
  * ```
  * [ 0..16) view_proj : mat4x4  (depth-corrected)
  * [16..32) view      : mat4x4  (look-at)
@@ -25,9 +25,11 @@ import type { CameraState } from "../cameraController";
  * [41]     linear_to_srgb : f32 (diagnostic; default 0 = direct gamma-space SH)
  * [42]     projection_kind : f32 (0 = perspective, 1 = orthographic)
  * [43]     clamp_anisotropy : f32 (1 = cap splat aspect ratio; decimated preview)
+ * [44]     near_plane : f32 (view-space centre culling distance)
+ * [45..48) padding
  * ```
  */
-export const SPLAT_UNIFORM_FLOATS = 44;
+export const SPLAT_UNIFORM_FLOATS = 48;
 /** Byte size of the splat uniform buffer. */
 export const SPLAT_UNIFORM_BYTES = SPLAT_UNIFORM_FLOATS * 4;
 /** Reference EWA low-pass variance in screen-space pixels squared. */
@@ -72,13 +74,14 @@ export function buildSplatUniform(
   out[33] = camera.position[1];
   out[34] = camera.position[2];
   out[35] = shDegree;
-  out[36] = Math.abs(projection[0]!) * width * 0.5;
-  out[37] = Math.abs(projection[5]!) * height * 0.5;
+  out[36] = Math.abs(projection[0] ?? 0) * width * 0.5;
+  out[37] = Math.abs(projection[5] ?? 0) * height * 0.5;
   out[38] = width;
   out[39] = height;
   out[40] = dilation;
   out[41] = encodeLinearToSrgb ? 1 : 0;
   out[42] = dimensionMode === "2d" ? 1 : 0;
   out[43] = clampAnisotropy ? 1 : 0;
+  out[44] = camera.near;
   return out;
 }

@@ -190,15 +190,17 @@ export class CameraController {
    * entity. The camera sits `behindDist` metres behind and `height` metres
    * above the entity, offset along the entity's heading (`yaw`, radians,
    * 0 = +X axis, counter-clockwise). The look-at target is placed slightly
-   * ahead of the entity so the road ahead is visible. No-op in 2D mode.
+  * ahead of the entity so the road ahead is visible. The defaults keep the
+  * camera below and ahead of common aerial reconstruction-artifact layers in
+  * Gaussian scenes. No-op in 2D mode.
    */
   setChaseCam(
     x: number,
     y: number,
     z: number,
     yaw: number,
-    behindDist = 18,
-    height = 8,
+    behindDist = 12,
+    height = 5,
     lookAheadDist = 10,
   ): void {
     if (this.dimensionMode !== '3d') return;
@@ -240,15 +242,16 @@ export class CameraController {
    * entity: the camera sits at the entity (raised `height` metres, pushed
    * `forwardDist` metres ahead so the hood is out of frame) and looks forward
    * along the entity's heading (`yaw`, radians, 0 = +X axis, CCW) with a level
-   * gaze. Used for the "前置摄像头视角" preview mode. No-op in 2D mode.
+  * gaze. The defaults clear near-ground reconstruction artifacts around the
+  * ego footprint. Used for the "前置摄像头视角" preview mode. No-op in 2D mode.
    */
   setFrontCam(
     x: number,
     y: number,
     z: number,
     yaw: number,
-    forwardDist = 1.5,
-    height = 1.4,
+    forwardDist = 3,
+    height = 2.2,
     lookAheadDist = 30,
   ): void {
     if (this.dimensionMode !== '3d') return;

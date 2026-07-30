@@ -28,6 +28,10 @@ struct SplatUniforms {
   linear_to_srgb : f32,
   projection_kind : f32,
   clamp_anisotropy : f32,
+  near_plane : f32,
+  _pad1 : f32,
+  _pad2 : f32,
+  _pad3 : f32,
 };
 
 @group(0) @binding(0) var<uniform> u : SplatUniforms;
@@ -52,10 +56,9 @@ const SH_C3_5 : f32 = 1.445305721320277;
 const SH_C3_6 : f32 = -0.5900435899266435;
 const ALPHA_CUTOFF : f32 = 0.00392156862745;
 const EXP4 : f32 = 0.01831563889;
-// Minor/major eigenvalue floor ratio (=1/aspect²) used only for decimated
-// previews: caps a splat's screen-space aspect ratio at ~8:1 so large splats
-// left without their small neighbours cannot project into long bright needles.
-const ANISO_MIN_RATIO : f32 = 0.015625;
+// Decimated previews use an 8:1 guard because missing neighbours expose
+// needles. Full-quality data keeps SuperSplat's natural anisotropy.
+const PREVIEW_ANISO_MIN_RATIO : f32 = 0.015625;
 
 struct VSOut {
   @builtin(position) pos : vec4<f32>,
@@ -194,9 +197,11 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
 
   let cam = u.view * vec4<f32>(center, 1.0);
   let clip = u.view_proj * vec4<f32>(center, 1.0);
-  // The view convention looks down -Z. Reject means behind/on the eye plane
-  // explicitly because orthographic clip.w does not encode this distinction.
-  if (cam.z >= -1e-6 || clip.w <= 1e-6) { return culled(); }
+  let viewDepth = -cam.z;
+  // Reject only centers at or behind the eye. The true view depth drives the
+  // perspective Jacobian so close splats keep their real projected size
+  // (SuperSplat parity); a per-axis screen cap below bounds the footprint.
+  if (viewDepth <= 1e-6 || clip.w <= 1e-6) { return culled(); }
   // Keep the Gaussian center inside WebGPU's reverse-Z depth range instead of
   // clipping the whole footprint when it crosses a near/far plane.
   let clipDepth = clamp(clip.z / clip.w, 0.0, 1.0);
@@ -215,11 +220,13 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
     vec3<f32>(0.0, 0.0, 0.0),
   );
   if (u.projection_kind < 0.5) {
-    let viewDepth = -cam.z;
+    // Standard 3DGS perspective Jacobian evaluated at the true view depth
+    // (matches PlayCanvas/SuperSplat). No near-plane flooring or FOV limiting:
+    // those distort close and off-axis covariances into blur and needle streaks.
     let J1x = u.projection_scale.x / viewDepth;
     let J1y = u.projection_scale.y / viewDepth;
-    let J2x = (u.projection_scale.x * cam.x) / (viewDepth * viewDepth);
-    let J2y = (u.projection_scale.y * cam.y) / (viewDepth * viewDepth);
+    let J2x = u.projection_scale.x * cam.x / (viewDepth * viewDepth);
+    let J2y = u.projection_scale.y * cam.y / (viewDepth * viewDepth);
     // Perspective (J2) terms live in the third row (col0.z / col1.z).
     J = mat3x3<f32>(
       vec3<f32>(J1x, 0.0, J2x),
@@ -247,15 +254,13 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
   let mid = 0.5 * (a + cc);
   let disc = sqrt(max(0.0, mid * mid - (a * cc - bc * bc)));
   let lambda1 = mid + disc;
+  if (lambda1 <= 0.0) { return culled(); }
   // Floor the minor eigenvalue at 0.1 px² (matches PlayCanvas/SuperSplat). Without
   // it, edge-on / highly anisotropic splats collapse to zero-width needles that
   // render as bright hairy spikes; 0.1 keeps a ~0.45px minimum thickness.
   var lambda2 = max(0.1, mid - disc);
-  if (lambda1 <= 0.0) { return culled(); }
-  // Decimated preview only: cap anisotropy so exposed large splats round out
-  // into ellipses instead of bright needles/spikes. Full mode is untouched.
   if (u.clamp_anisotropy > 0.5) {
-    lambda2 = max(lambda2, lambda1 * ANISO_MIN_RATIO);
+    lambda2 = max(lambda2, lambda1 * PREVIEW_ANISO_MIN_RATIO);
   }
 
   // Principal eigenvector (major axis). Fall back to the X axis for near-
@@ -263,26 +268,20 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
   var ev = vec2<f32>(1.0, 0.0);
   if (abs(bc) > 1e-6) { ev = normalize(vec2<f32>(bc, lambda1 - a)); }
 
-  // Pixel radii along each axis.
-  let r1 = min(sqrt(2.0 * lambda1), 1024.0);
-  let r2 = min(sqrt(2.0 * lambda2), 1024.0);
-  let majorAxis = ev * r1;
-  let minorAxis = vec2<f32>(-ev.y, ev.x) * r2;
-
   // Solve the normalized falloff for alpha=1/255 so low-opacity splats use a
   // smaller quad while retaining the exact same fragment result.
   let alphaEdge = EXP4 + ALPHA_CUTOFF * (1.0 - EXP4) / opacity;
   let quadRadius = sqrt(clamp(-log(clamp(alphaEdge, EXP4, 1.0)), 0.0, 4.0));
+  // Cap each screen-space axis independently at the smaller viewport dimension
+  // (max 1024 px), exactly like SuperSplat/PlayCanvas. This bounds a near-camera
+  // splat without distorting the covariances that remain on screen.
+  let vmin = min(1024.0, min(u.viewport.x, u.viewport.y));
+  let r1 = min(sqrt(2.0 * lambda1), vmin);
+  let r2 = min(sqrt(2.0 * lambda2), vmin);
+  let majorAxis = ev * r1;
+  let minorAxis = vec2<f32>(-ev.y, ev.x) * r2;
   let diameter = 2.0 * quadRadius * max(r1, r2);
-  // Cull sub-pixel splats AND near-plane Jacobian blow-ups. As a splat approaches
-  // the camera plane (viewDepth → 0) the perspective Jacobian J = focal/viewDepth
-  // explodes, projecting the splat into a screen-spanning ~1024px streak (with the
-  // eigenvector falling back to the horizontal axis). A legitimate splat never
-  // needs to cover the whole viewport, so reject anything wider than the longest
-  // viewport edge — this removes the streak/blob artefact when the camera sits
-  // inside or grazes the cloud.
-  let maxViewportDim = max(u.viewport.x, u.viewport.y);
-  if (diameter < 2.0 || diameter > maxViewportDim) { return culled(); }
+  if (diameter < 2.0) { return culled(); }
 
   var corners = array<vec2<f32>, 4>(
     vec2<f32>(-1.0, -1.0),

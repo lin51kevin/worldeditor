@@ -28,7 +28,12 @@ describe("buildSplatUniform", () => {
   it("produces the fixed-size uniform array", () => {
     const u = buildSplatUniform(camera, "3d", 50, 800, 600, 1);
     expect(u.length).toBe(SPLAT_UNIFORM_FLOATS);
-    expect(SPLAT_UNIFORM_FLOATS).toBe(44);
+    expect(SPLAT_UNIFORM_FLOATS).toBe(48);
+  });
+
+  it("packs the perspective near plane for splat-centre culling", () => {
+    const u = buildSplatUniform(camera, "3d", 50, 800, 600, 1);
+    expect(u[44]).toBeCloseTo(camera.near, 6);
   });
 
   it("packs the dilation at index 40", () => {

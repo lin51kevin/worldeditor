@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { GAUSSIAN_SPLAT_PACKED_SHADER } from "./splatPackedShader";
 import { GAUSSIAN_SPLAT_SHADER } from "./splatShader";
 
 describe("GAUSSIAN_SPLAT_SHADER", () => {
@@ -26,8 +27,51 @@ describe("GAUSSIAN_SPLAT_SHADER", () => {
     expect(GAUSSIAN_SPLAT_SHADER).toContain("if (u.projection_kind < 0.5)");
   });
 
+  it.each([GAUSSIAN_SPLAT_SHADER, GAUSSIAN_SPLAT_PACKED_SHADER])(
+    "drives the perspective Jacobian from the true view depth without near-plane or FOV clamping (SuperSplat parity)",
+    (shader) => {
+      expect(shader).toContain("viewDepth <= 1e-6");
+      expect(shader).not.toContain("viewDepth < u.near_plane");
+      expect(shader).not.toContain("projectionDepth");
+      expect(shader).not.toContain("FOV_CLAMP_MARGIN");
+      expect(shader).toContain("let J1x = u.projection_scale.x / viewDepth");
+      expect(shader).toContain("let J1y = u.projection_scale.y / viewDepth");
+      expect(shader).toContain(
+        "let J2x = u.projection_scale.x * cam.x / (viewDepth * viewDepth)",
+      );
+      expect(shader).toContain(
+        "let J2y = u.projection_scale.y * cam.y / (viewDepth * viewDepth)",
+      );
+    },
+  );
+
+  it.each([GAUSSIAN_SPLAT_SHADER, GAUSSIAN_SPLAT_PACKED_SHADER])(
+    "caps each screen-space axis at the smaller viewport dimension like SuperSplat",
+    (shader) => {
+      expect(shader).toContain(
+        "let vmin = min(1024.0, min(u.viewport.x, u.viewport.y))",
+      );
+      expect(shader).toContain("let r1 = min(sqrt(2.0 * lambda1), vmin)");
+      expect(shader).toContain("let r2 = min(sqrt(2.0 * lambda2), vmin)");
+      expect(shader).toContain("if (diameter < 2.0) { return culled(); }");
+      expect(shader).not.toContain("radiusScale");
+      expect(shader).not.toContain("diameter > maxViewportDim");
+    },
+  );
+
+  it.each([GAUSSIAN_SPLAT_SHADER, GAUSSIAN_SPLAT_PACKED_SHADER])(
+    "matches SuperSplat's full-quality minor-axis floor and only tightens previews",
+    (shader) => {
+      expect(shader).toContain(
+        "var lambda2 = max(0.1, mid - disc)",
+      );
+      expect(shader).not.toContain("PATHOLOGICAL_ANISO_MIN_RATIO");
+      expect(shader).toContain("lambda1 * PREVIEW_ANISO_MIN_RATIO");
+    },
+  );
+
   it("culls behind-camera, off-screen, and sub-2px splats while clamping depth", () => {
-    expect(GAUSSIAN_SPLAT_SHADER).toContain("cam.z >= -1e-6");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("viewDepth <= 1e-6");
     expect(GAUSSIAN_SPLAT_SHADER).toContain(
       "let clipDepth = clamp(clip.z / clip.w, 0.0, 1.0)",
     );

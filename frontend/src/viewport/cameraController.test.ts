@@ -207,6 +207,13 @@ describe('CameraController', () => {
     it('positions a chase camera relative to the followed elevation', () => {
       cam.setChaseCam(10, 20, 5, 0);
 
+      expect(cam.state.position).toEqual([-2, 20, 10]);
+      expect(cam.state.target).toEqual([20, 20, 5]);
+    });
+
+    it('keeps explicit chase-camera offsets available for host integrations', () => {
+      cam.setChaseCam(10, 20, 5, 0, 18, 8, 10);
+
       expect(cam.state.position).toEqual([-8, 20, 13]);
       expect(cam.state.target).toEqual([20, 20, 5]);
     });
@@ -240,7 +247,6 @@ describe('CameraController', () => {
         [0, 0, 0], [10000, 10000, 0],
       ]);
       cam.fitToVertices(verts);
-      const initialDist = cam.getCameraDistance();
 
       // Zoom out extensively
       for (let i = 0; i < 100; i++) cam.handleWheel(120);
@@ -512,8 +518,7 @@ describe('CameraController', () => {
       // Entity at origin heading +X: camera slightly ahead + raised, gaze level.
       cam.setFrontCam(0, 0, 0, 0);
       const { position, target } = cam.state;
-      expect(position[0]).toBeGreaterThan(0); // pushed ahead along +X
-      expect(position[2]).toBeGreaterThan(0); // raised (dashboard height)
+      expect(position).toEqual([3, 0, 2.2]);
       expect(target[0]).toBeGreaterThan(position[0]); // looks further ahead
       // Level gaze: look-at Z equals camera Z.
       expect(target[2]).toBeCloseTo(position[2], 5);
