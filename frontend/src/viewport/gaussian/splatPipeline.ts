@@ -205,6 +205,15 @@ export class GaussianSplatResources {
     return this._count > 0 && this.bindGroup !== null;
   }
 
+  /**
+   * Mark every splat drawable. Used by the GPU compute sort, which orders the
+   * whole cloud each frame (behind-eye splats are culled in the vertex shader),
+   * so the CPU front-prefix `visibleCount` no longer applies.
+   */
+  markAllVisible(): void {
+    this._visibleCount = this._count;
+  }
+
   /** The one global sorted index buffer. */
   get gpuOrderBuffer(): GPUBuffer | null {
     return this.orderBuffer;

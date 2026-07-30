@@ -1228,6 +1228,8 @@
     "refreshRealtime": "Realtime",
     "refreshFps": "{{fps}} FPS",
     "splatRefreshRateHint": "Caps how often the splat depth order is recomputed. Realtime is sharpest while moving; a lower rate reduces sort load on huge clouds (rendering stays smooth).",
+    "splatGpuSort": "GPU depth sort",
+    "splatGpuSortHint": "Sort splats on the GPU every frame with zero latency, keeping distant detail sharp during continuous chase/front-cam playback. Requires WebGPU compute; falls back to the CPU sort otherwise.",
     "workflow": "Workflow",
     "extractGround": "1. Extract Ground",
     "extractGroundDone": "1. Extract Ground ✓",

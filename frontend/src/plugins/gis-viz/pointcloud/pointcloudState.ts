@@ -61,6 +61,8 @@ interface PointCloudState {
   splatQuality: number;
   /** Splat depth re-sort (refresh) rate cap in FPS; 0 = realtime (no cap). */
   splatRefreshFps: number;
+  /** Sort splats on the GPU each frame (zero-latency; opt-in, texture path). */
+  splatGpuSort: boolean;
   /** Fidelity/resource result from the most recent GPU upload attempt. */
   splatUploadStatus: SplatUploadStatus | null;
 
@@ -73,6 +75,7 @@ interface PointCloudState {
   setSplatRenderMode: (mode: SplatRenderMode) => void;
   setSplatQuality: (quality: number) => void;
   setSplatRefreshFps: (fps: number) => void;
+  setSplatGpuSort: (enabled: boolean) => void;
   setSplatUploadStatus: (status: SplatUploadStatus | null) => void;
   setLoaded: (handle: number, fileName: string, summary: PointCloudSummary, nativeBackend: boolean) => void;
   setSplatLoaded: (
@@ -112,6 +115,7 @@ const INITIAL = {
   splatRenderMode: 'full' as SplatRenderMode,
   splatQuality: 1,
   splatRefreshFps: 30,
+  splatGpuSort: false,
   splatUploadStatus: null as SplatUploadStatus | null,
 };
 
@@ -127,6 +131,7 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
   setSplatRenderMode: (splatRenderMode) => set(() => ({ splatRenderMode })),
   setSplatQuality: (splatQuality) => set(() => ({ splatQuality: Math.min(1, Math.max(0.05, splatQuality)) })),
   setSplatRefreshFps: (splatRefreshFps) => set(() => ({ splatRefreshFps: Math.max(0, splatRefreshFps) })),
+  setSplatGpuSort: (splatGpuSort) => set(() => ({ splatGpuSort })),
   setSplatUploadStatus: (splatUploadStatus) => set(() => ({ splatUploadStatus })),
 
   setLoaded: (handle, fileName, summary, nativeBackend) =>

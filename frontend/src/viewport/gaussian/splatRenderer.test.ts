@@ -315,6 +315,25 @@ describe("SplatRenderer", () => {
     expect(writeSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("keeps the CPU sort in charge when the GPU sort is ineligible", () => {
+    const device = fakeDevice();
+    const writeSpy = device.queue.writeBuffer as ReturnType<typeof vi.fn>;
+    const r = new SplatRenderer(
+      device,
+      {} as GPUBindGroupLayout,
+      {} as GPURenderPipeline,
+      syncSorter(),
+    );
+    r.upload(new Uint32Array(3 * STRIDE0), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+    r.setGpuSort(true);
+    // Ineligible device (no compute pipeline / packed path): a safe no-op that
+    // never throws, leaving the async CPU worker sort to own the order buffer.
+    expect(r.sortGpu({} as GPUCommandEncoder)).toBe(false);
+    writeSpy.mockClear();
+    r.onCamera(camera, "3d", 50, 800, 600);
+    expect(writeSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("uses 0.3 px² low-pass and direct gamma-space SH output by default", () => {
     const device = fakeDevice();
     const writeSpy = device.queue.writeBuffer as ReturnType<typeof vi.fn>;

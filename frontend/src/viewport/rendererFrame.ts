@@ -147,10 +147,11 @@ export function renderFrame(r: RendererFrameInternals): void {
 
   const encoder = r.device.createCommandEncoder();
 
-  // GPU compute sort disabled — CPU worker sort handles ordering.
-  // if (r.splatRenderer?.hasContent) {
-  //   r.splatRenderer.sortGpu(encoder);
-  // }
+  // Optional GPU compute sort: writes each cloud's order buffer in-encoder,
+  // before the render pass reads it. Returns false when disabled or ineligible
+  // (packed fallback / no compute), leaving the async CPU worker sort in charge.
+  if (r.splatRenderer?.hasContent) r.splatRenderer.sortGpu(encoder);
+  if (r.actorSplatRenderer?.hasContent) r.actorSplatRenderer.sortGpu(encoder);
 
   const swapChainView = texture.createView();
   const msaaView = r.msaaTexture?.createView() ?? swapChainView;

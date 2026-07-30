@@ -59,9 +59,11 @@ export default function PointCloudPanel() {
   const splatRenderMode = usePointCloudStore((s) => s.splatRenderMode);
   const splatQuality = usePointCloudStore((s) => s.splatQuality);
   const splatRefreshFps = usePointCloudStore((s) => s.splatRefreshFps);
+  const splatGpuSort = usePointCloudStore((s) => s.splatGpuSort);
   const splatUploadStatus = usePointCloudStore((s) => s.splatUploadStatus);
   const setColorMode = usePointCloudStore((s) => s.setColorMode);
   const setSplatRefreshFps = usePointCloudStore((s) => s.setSplatRefreshFps);
+  const setSplatGpuSort = usePointCloudStore((s) => s.setSplatGpuSort);
   const setSplatDilation = usePointCloudStore((s) => s.setSplatDilation);
   const setSplatEncodeLinearToSrgb = usePointCloudStore((s) => s.setSplatEncodeLinearToSrgb);
   const setSplatSampleMode = usePointCloudStore((s) => s.setSplatSampleMode);
@@ -257,6 +259,20 @@ export default function PointCloudPanel() {
             </select>
           </label>
           <p className="pc-hint">{t('pointcloud.splatRefreshRateHint')}</p>
+        </div>
+      )}
+
+      {isSplat && (
+        <div className="pc-field-group">
+          <label className="pc-field">
+            <span>{t('pointcloud.splatGpuSort')}</span>
+            <input
+              type="checkbox"
+              checked={splatGpuSort}
+              onChange={(e) => setSplatGpuSort(e.target.checked)}
+            />
+          </label>
+          <p className="pc-hint">{t('pointcloud.splatGpuSortHint')}</p>
         </div>
       )}
 

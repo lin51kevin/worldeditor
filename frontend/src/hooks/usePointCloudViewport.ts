@@ -97,6 +97,7 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
   const splatRenderMode = usePointCloudStore((s) => s.splatRenderMode);
   const splatQuality = usePointCloudStore((s) => s.splatQuality);
   const splatRefreshFps = usePointCloudStore((s) => s.splatRefreshFps);
+  const splatGpuSort = usePointCloudStore((s) => s.splatGpuSort);
 
   // Apply the live dilation (splat fullness) slider to the renderer.
   useEffect(() => {
@@ -115,6 +116,12 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     if (status !== 'ready' || !isSplat) return;
     rendererRef.current?.setSplatRefreshFps(splatRefreshFps);
   }, [splatRefreshFps, isSplat, status, rendererRef]);
+
+  // Toggle the per-frame GPU compute depth sort (zero-latency ordering).
+  useEffect(() => {
+    if (status !== 'ready' || !isSplat) return;
+    rendererRef.current?.setSplatGpuSort(splatGpuSort);
+  }, [splatGpuSort, isSplat, status, rendererRef]);
 
   useEffect(() => {
     if (status !== 'ready') return;

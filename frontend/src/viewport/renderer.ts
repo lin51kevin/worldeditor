@@ -985,6 +985,18 @@ export class ViewportRenderer {
   }
 
   /**
+   * Enable/disable the per-frame GPU compute depth sort. When on (and the
+   * texture-array path + compute are available) splats are sorted on the GPU
+   * inside the render encoder with zero latency, eliminating the worker-sort lag
+   * that blurs continuous chase/front-cam playback. Falls back to the CPU sort.
+   */
+  setSplatGpuSort(enabled: boolean): void {
+    this.splatRenderer?.setGpuSort(enabled);
+    this.actorSplatRenderer?.setGpuSort(enabled);
+    this.markSceneDirty();
+  }
+
+  /**
    * Show/hide the static scene (point cloud + splats + ground mesh) without
    * discarding its GPU buffers, so hide/show and 2D/3D toggles need no reload.
    * Dynamic actors (NPC/ego) are unaffected.

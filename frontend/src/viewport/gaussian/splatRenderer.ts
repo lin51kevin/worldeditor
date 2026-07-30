@@ -17,6 +17,7 @@ import {
 } from "./splatLayout";
 import { SplatSortController, type SplatSorter } from "./splatSortController";
 import { createWorkerSplatSorter } from "./splatSorterBackends";
+import { GpuSplatSorter } from "./splatSortCompute";
 import { buildSplatUniform, DEFAULT_SPLAT_DILATION } from "./splatUniform";
 import { frustumSidePlanes, type Vec3 } from "./splatSort";
 import type { CameraState } from "../cameraController";
@@ -351,6 +352,16 @@ export class SplatRenderer {
    * project into bright needles once their small neighbours are gone.
    */
   private clampAnisotropy = false;
+  /** Optional GPU compute sorter; lazily built the first time GPU sort runs. */
+  private gpuSorter: GpuSplatSorter | null = null;
+  /** When true and the texture-array path is active, sort on the GPU each frame. */
+  private useGpuSort = false;
+  /** Latest camera pose, captured by {@link onCamera} for the GPU sort pass. */
+  private lastCamPos: Vec3 = [0, 0, 0];
+  private lastViewDir: Vec3 = [0, 0, 1];
+  /** Cloud AABB (world) for O(1) per-frame projected depth-range estimation. */
+  private boundsMin: Vec3 = [0, 0, 0];
+  private boundsMax: Vec3 = [0, 0, 0];
   /** Max bytes bindable by the explicit packed compatibility path. */
   private readonly maxStorageBytes: number;
   /** Max splats addressable by the one global order storage buffer. */
@@ -577,6 +588,8 @@ export class SplatRenderer {
     // Mirror the centres into a GPU storage buffer so the (optional) GPU compute
     // sort can read them without a packed buffer; a no-op on the packed path.
     this.resources.setPositions(positions);
+    this.updateBounds(positions);
+    this.gpuSorter?.resize(this.resources.count);
     this._uploadStatus = {
       outcome:
         fallbackReason !== null || resourceMode === "packed-storage-fallback"
@@ -659,6 +672,15 @@ export class SplatRenderer {
     );
     this.resources.updateUniform(uniform);
     const viewDir = computeViewDir(camera.position, camera.target);
+    this.lastCamPos = [camera.position[0], camera.position[1], camera.position[2]];
+    this.lastViewDir = viewDir;
+    // GPU sort path: the order is produced every frame in sortGpu(); skip the
+    // async worker sort and keep the whole cloud drawable (behind-eye splats are
+    // culled in the vertex shader). Otherwise drive the CPU worker sort.
+    if (this.isGpuSortEligible()) {
+      this.resources.markAllVisible();
+      return;
+    }
     // Frustum-cull off-screen splats in 3D (the perspective frustum tapers, so
     // culling is worthwhile). In 2D the orthographic view fills the viewport
     // and lateral culling buys little, so it is skipped.
@@ -667,13 +689,104 @@ export class SplatRenderer {
     this.sort.onCamera(camera.position, viewDir, frustum);
   }
 
+  /** Whether the GPU compute sort should run for the current cloud/device. */
+  private isGpuSortEligible(): boolean {
+    return (
+      this.useGpuSort &&
+      this.resources.count > 0 &&
+      this.resources.resourceMode === "texture-array" &&
+      typeof this.device.createComputePipeline === "function"
+    );
+  }
+
+  /** Enable/disable the per-frame GPU compute sort. Wakes a redraw. */
+  setGpuSort(enabled: boolean): void {
+    if (this.useGpuSort === enabled) return;
+    this.useGpuSort = enabled;
+    if (enabled) {
+      this.resources.markAllVisible();
+    } else {
+      // Back to the CPU path: force a fresh worker sort on the next frame.
+      this.sort.invalidate();
+    }
+    this.onOrderChanged?.();
+  }
+
+  /** Recompute the cloud AABB used for the GPU sort's depth-range estimate. */
+  private updateBounds(positions: Float32Array): void {
+    const n = Math.floor(positions.length / 3);
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity;
+    let x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const x = positions[i * 3]!;
+      const y = positions[i * 3 + 1]!;
+      const z = positions[i * 3 + 2]!;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+      if (z < z0) z0 = z;
+      if (z > z1) z1 = z;
+    }
+    if (!(x1 >= x0)) {
+      x0 = y0 = z0 = x1 = y1 = z1 = 0;
+    }
+    this.boundsMin = [x0, y0, z0];
+    this.boundsMax = [x1, y1, z1];
+  }
+
+  /** View-space depth [min,max] of the cloud AABB for the latest camera (O(1)). */
+  private projectedDepthRange(): [number, number] {
+    const v = this.lastViewDir;
+    const camDepth =
+      this.lastCamPos[0] * v[0] + this.lastCamPos[1] * v[1] + this.lastCamPos[2] * v[2];
+    let minP = 0;
+    let maxP = 0;
+    for (let a = 0; a < 3; a++) {
+      const lo = this.boundsMin[a]! * v[a]!;
+      const hi = this.boundsMax[a]! * v[a]!;
+      minP += Math.min(lo, hi);
+      maxP += Math.max(lo, hi);
+    }
+    return [minP - camDepth, maxP - camDepth];
+  }
+
   /**
-   * @deprecated GPU sorting is disabled. Its old shader depended on packed
-   * splat storage and must be redesigned for texture-array transforms before it
-   * can return. Worker sorting owns the one global order buffer.
+   * Run the GPU compute sort into `encoder` (before the render pass) when it is
+   * enabled and the texture-array path is active. Returns `true` when the GPU
+   * sort ran; `false` leaves the CPU worker sort in charge. On any failure it
+   * reverts to the CPU path so the cloud never gets stuck on a stale order.
    */
-  sortGpu(_encoder: GPUCommandEncoder): boolean {
-    return false;
+  sortGpu(encoder: GPUCommandEncoder): boolean {
+    if (!this.isGpuSortEligible()) return false;
+    const positionsBuffer = this.resources.gpuPositionsBuffer;
+    const orderBuffer = this.resources.gpuOrderBuffer;
+    if (!positionsBuffer || !orderBuffer) return false;
+    try {
+      if (!this.gpuSorter) {
+        this.gpuSorter = new GpuSplatSorter(this.device);
+        this.gpuSorter.resize(this.resources.count);
+      }
+      const [minD, maxD] = this.projectedDepthRange();
+      this.gpuSorter.sort(
+        encoder,
+        positionsBuffer,
+        orderBuffer,
+        this.lastCamPos,
+        this.lastViewDir,
+        minD,
+        maxD,
+      );
+      return true;
+    } catch (error) {
+      console.error("[Splat] GPU sort failed; reverting to CPU sort", error);
+      this.useGpuSort = false;
+      this.gpuSorter?.dispose();
+      this.gpuSorter = null;
+      this.sort.invalidate();
+      return false;
+    }
   }
 
   /** Draw the splats into the active render pass (after opaque geometry). */
@@ -706,6 +819,8 @@ export class SplatRenderer {
   dispose(): void {
     this.resources.dispose();
     this.sort.dispose();
+    this.gpuSorter?.dispose();
+    this.gpuSorter = null;
   }
 }
 

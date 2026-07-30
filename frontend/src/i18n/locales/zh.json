@@ -1228,6 +1228,8 @@
     "refreshRealtime": "实时",
     "refreshFps": "{{fps}} 帧/秒",
     "splatRefreshRateHint": "控制高斯点深度排序的重算频率。实时模式移动时最清晰；降低频率可减轻超大点云的排序负载（渲染仍流畅）。",
+    "splatGpuSort": "GPU 深度排序",
+    "splatGpuSortHint": "每帧在 GPU 上零延迟排序高斯点，跟车/前视连续回放时远处细节保持清晰。需要 WebGPU compute；否则回退到 CPU 排序。",
     "workflow": "工作流",
     "extractGround": "1. 提取地面",
     "extractGroundDone": "1. 提取地面 ✓",
