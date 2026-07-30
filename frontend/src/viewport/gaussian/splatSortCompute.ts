@@ -496,16 +496,16 @@ export class GpuSplatSorter {
       bsp[0] = numBlocks;
       this.device.queue.writeBuffer(this.prefixParamsBuffer, 0, bsp);
 
-      // Clear and reuse the persistent top-block-sums buffer.
-      const topZero = new Uint32Array(4);
-      this.device.queue.writeBuffer(this.topBlockSumsBuffer, 0, topZero);
-
+      // scan_top exclusive-scans its `block_sums` (binding 2) IN PLACE. Bind the
+      // real block-totals buffer there so cross-block offsets are computed from
+      // the actual block sums (numBlocks <= BLOCK, so one workgroup suffices).
+      // binding 1 (`data`) is unused by scan_top — a harmless placeholder.
       const scanTopBG = this.device.createBindGroup({
         layout: this.prefixBindGroupLayout,
         entries: [
           { binding: 0, resource: { buffer: this.prefixParamsBuffer } },
-          { binding: 1, resource: { buffer: this.blockSumsBuffer } },
-          { binding: 2, resource: { buffer: this.topBlockSumsBuffer } },
+          { binding: 1, resource: { buffer: this.topBlockSumsBuffer } },
+          { binding: 2, resource: { buffer: this.blockSumsBuffer } },
         ],
       });
       const pass2b = encoder.beginComputePass();
