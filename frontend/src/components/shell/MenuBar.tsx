@@ -40,6 +40,7 @@ import {
 import { EditMenu } from './menus/EditMenu';
 import { FileMenu } from './menus/FileMenu';
 import { MenuSection } from './menus/MenuSection';
+import { RoadMenu } from './menus/RoadMenu';
 import { ToolsMenu } from './menus/ToolsMenu';
 import { ViewMenu } from './menus/ViewMenu';
 import { SnapSettingsPanel } from '../panels/SnapSettingsPanel';
@@ -131,6 +132,10 @@ export function MenuBar({
     () => allMenuItems.filter((item) => item.menu === 'road'),
     [allMenuItems],
   );
+  const editMenuItems = useMemo(
+    () => allMenuItems.filter((item) => item.menu === 'edit'),
+    [allMenuItems],
+  );
   const toolsPluginItems = useMemo(
     () => allMenuItems.filter((item) => item.menu === 'tools'),
     [allMenuItems],
@@ -139,6 +144,11 @@ export function MenuBar({
     () => allMenuItems.filter((item) => item.menu === 'view'),
     [allMenuItems],
   );
+  const pluginPanels = usePluginContribStore((state) => state.panels);
+  const panelTabVisibility = usePluginContribStore((state) => state.panelTabVisibility);
+  const togglePanel = useCallback((id: string) => {
+    usePluginContribStore.getState().togglePanel(id);
+  }, []);
 
   const toggleLanguage = useCallback(() => {
     const next = i18n.language.startsWith('zh') ? 'en' : 'zh';
@@ -370,17 +380,25 @@ export function MenuBar({
               <EditMenu
                 {...getMenuSectionProps(1)}
                 t={t}
-                roadMenuItems={roadMenuItems}
+                editMenuItems={editMenuItems}
                 canUndo={canUndo()}
                 canRedo={canRedo()}
                 onUndo={undo}
                 onRedo={redo}
                 onDelete={handleDelete}
               />
-              <ViewMenu
+              <RoadMenu
                 {...getMenuSectionProps(2)}
                 t={t}
+                roadMenuItems={roadMenuItems}
+              />
+              <ViewMenu
+                {...getMenuSectionProps(3)}
+                t={t}
                 viewPluginItems={viewPluginItems}
+                pluginPanels={pluginPanels}
+                panelTabVisibility={panelTabVisibility}
+                onTogglePanel={togglePanel}
                 dimension={dimension}
                 showGrid={showGrid}
                 showAxis={showAxis}
@@ -402,7 +420,7 @@ export function MenuBar({
                 onResetPanels={resetAllPanels}
               />
               <ToolsMenu
-                {...getMenuSectionProps(3)}
+                {...getMenuSectionProps(4)}
                 t={t}
                 project={project}
                 toolsPluginItems={toolsPluginItems}
@@ -413,8 +431,8 @@ export function MenuBar({
                 onMeasureAngle={() => setMeasureMode('angle')}
                 onMeasureArea={() => setMeasureMode('area')}
               />
-              <MenuSection menu={pluginMenu} {...getMenuSectionProps(4)} />
-              <MenuSection menu={helpMenu} {...getMenuSectionProps(5)} />
+              <MenuSection menu={pluginMenu} {...getMenuSectionProps(5)} />
+              <MenuSection menu={helpMenu} {...getMenuSectionProps(6)} />
             </div>
           )}
         </div>

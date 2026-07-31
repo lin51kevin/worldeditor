@@ -102,7 +102,7 @@ export function mountRoadToolsPlugin(): () => void {
     {
       id: `${PLUGIN_ID}:menu-draw-arc`,
       pluginId: PLUGIN_ID,
-      menu: 'tools',
+      menu: 'road',
       labelKey: 'toolPanel.drawArcRoad',
       shortcut: 'A',
       onClick: () => {

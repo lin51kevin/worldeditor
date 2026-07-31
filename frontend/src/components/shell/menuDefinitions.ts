@@ -113,6 +113,24 @@ export function appendPluginItems(menu: Menu, items: MenuItemContrib[], t: Trans
   };
 }
 
+/** Append edit-menu plugin items (menu: 'edit') with a separator. */
+export function appendEditPluginItems(menu: Menu, items: MenuItemContrib[], t: TranslateFn): Menu {
+  if (items.length === 0) return menu;
+  return {
+    ...menu,
+    items: [...menu.items, { separator: true, label: '' }, ...items.map((item) => toPluginMenuItem(item, t))],
+  };
+}
+
+/** Build a standalone Road menu populated with grouped road items. */
+export function buildRoadMenu(items: MenuItemContrib[], t: TranslateFn, label: string): Menu {
+  return {
+    label,
+    items: buildGroupedRoadItems(items, t),
+  };
+}
+
+/** @deprecated Use appendEditPluginItems for edit items and buildRoadMenu for road items. */
 export function appendRoadItemsToEdit(menu: Menu, items: MenuItemContrib[], t: TranslateFn): Menu {
   if (items.length === 0) return menu;
   return {
@@ -121,7 +139,19 @@ export function appendRoadItemsToEdit(menu: Menu, items: MenuItemContrib[], t: T
   };
 }
 
-const ROAD_GROUP_ORDER = ['', 'transform', 'edit', 'advanced', 'deploy', 'infrastructure', 'junction'];
+const ROAD_GROUP_ORDER = ['', 'transform', 'edit', 'advanced', 'place', 'deploy', 'infrastructure', 'junction'];
+
+/**
+ * Groups that are rendered as flyout submenus in the Road menu.
+ * Groups not listed here (e.g. '') are rendered as flat top-level items.
+ */
+const GROUP_SUBMENU_LABELS: Record<string, string> = {
+  advanced: 'menu.roadSubEdit',
+  place: 'menu.roadSubPlace',
+  deploy: 'menu.roadSubDeploy',
+  infrastructure: 'menu.roadSubInfrastructure',
+  junction: 'menu.roadSubJunction',
+};
 
 function buildGroupedRoadItems(items: MenuItemContrib[], t: TranslateFn): MenuItem[] {
   const realItems = items.filter((item) => !item.separator);
@@ -139,11 +169,13 @@ function buildGroupedRoadItems(items: MenuItemContrib[], t: TranslateFn): MenuIt
     return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
   });
 
+  const flatKeys = sortedKeys.filter((k) => !GROUP_SUBMENU_LABELS[k]);
+  const submenuKeys = sortedKeys.filter((k) => GROUP_SUBMENU_LABELS[k]);
+
   const result: MenuItem[] = [];
-  let firstGroup = true;
-  for (const key of sortedKeys) {
-    if (!firstGroup) result.push({ separator: true, label: '' });
-    firstGroup = false;
+
+  // Flat items first (basic road operations — group '' or unknown)
+  for (const key of flatKeys) {
     for (const item of groups.get(key)!) {
       result.push({
         label: t(item.labelKey),
@@ -152,6 +184,27 @@ function buildGroupedRoadItems(items: MenuItemContrib[], t: TranslateFn): MenuIt
         disabled: item.isDisabled?.() ?? false,
       });
     }
+  }
+
+  // One separator between flat items and the submenu section
+  if (flatKeys.length > 0 && submenuKeys.length > 0) {
+    result.push({ separator: true, label: '' });
+  }
+
+  // Each non-empty named group becomes a flyout submenu
+  for (const key of submenuKeys) {
+    const groupItems = groups.get(key)!;
+    const labelKey = GROUP_SUBMENU_LABELS[key];
+    if (!labelKey) continue;
+    result.push({
+      label: t(labelKey),
+      submenu: groupItems.map((item) => ({
+        label: t(item.labelKey),
+        shortcut: item.shortcut,
+        action: item.onClick,
+        disabled: item.isDisabled?.() ?? false,
+      })),
+    });
   }
 
   return result;

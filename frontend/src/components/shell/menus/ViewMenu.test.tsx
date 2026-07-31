@@ -70,6 +70,9 @@ describe('ViewMenu', () => {
         {...interactionProps}
         t={t}
         viewPluginItems={[{ id: 'extra-view', pluginId: 'plugin', menu: 'view', labelKey: 'plugin.extraView', onClick: onPluginView }]}
+        pluginPanels={[]}
+        panelTabVisibility={{}}
+        onTogglePanel={vi.fn()}
         dimension="3d"
         showGrid={true}
         showAxis={false}
@@ -134,6 +137,9 @@ describe('ViewMenu', () => {
         {...interactionProps}
         t={t}
         viewPluginItems={[]}
+        pluginPanels={[]}
+        panelTabVisibility={{}}
+        onTogglePanel={vi.fn()}
         dimension="2d"
         showGrid={false}
         showAxis={false}

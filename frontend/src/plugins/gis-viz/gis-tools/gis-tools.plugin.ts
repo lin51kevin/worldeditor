@@ -14,6 +14,7 @@ export function mountGisToolsPlugin(): () => void {
     titleKey: 'panels.gisTools',
     component: GisToolsPanel,
     position: 'right',
+    category: 'gis',
   });
 
   return () => unregisterPlugin(PLUGIN_ID);

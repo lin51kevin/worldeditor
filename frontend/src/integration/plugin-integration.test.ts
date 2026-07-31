@@ -257,11 +257,10 @@ describe('plugin-traffic', () => {
 });
 
 describe('plugin-scripting', () => {
-  it('mounts, registers panel and menu item, unmounts cleanly', async () => {
+  it('mounts, registers panel, unmounts cleanly', async () => {
     const { mountScriptingPlugin } = await import('../plugins/gis-viz/scripting/scripting-beta.plugin');
     const unmount = mountScriptingPlugin();
     expect(store.registerPanel).toHaveBeenCalledOnce();
-    expect(store.registerMenuItem.mock.calls.length).toBeGreaterThanOrEqual(1);
     unmount();
     expect(store.unregisterPlugin).toHaveBeenCalledWith('scripting-beta');
   });

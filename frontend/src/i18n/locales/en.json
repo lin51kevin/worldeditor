@@ -48,6 +48,11 @@
     "showHoverHighlight": "Hover Highlight",
     "calculateRoadLength": "Calculate Road Length",
     "road": "Road",
+    "roadSubEdit": "Edit",
+    "roadSubPlace": "Place",
+    "roadSubDeploy": "Deploy",
+    "roadSubInfrastructure": "Infrastructure",
+    "roadSubJunction": "Junction",
     "resetPanels": "Reset Panel Positions",
     "showLayerPanel": "Navigator Panel",
     "showPropertyPanel": "Property Panel",
@@ -650,6 +655,8 @@
     "satellite": "Satellite",
     "batchConverter": "Batch Converter",
     "pointcloud": "Point Cloud",
+    "models3d": "3D Models",
+    "ecosystem": "Ecosystem",
     "pluginPanels": "Plugin Panels"
   },
   "pluginManager": {
@@ -1274,5 +1281,8 @@
     "unload": "Unload Point Cloud",
     "yes": "yes",
     "no": "no"
+  },
+  "shapeEditor": {
+    "addLayer": "Add Shape Layer"
   }
 }

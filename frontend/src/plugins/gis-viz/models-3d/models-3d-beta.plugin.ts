@@ -11,7 +11,7 @@ const Models3dPanel = () => createElement(
 );
 export function mountModels3dPlugin(): () => void {
   const { registerPanel, registerImporter, unregisterPlugin } = usePluginContribStore.getState();
-  registerPanel({ id: `${PLUGIN_ID}:panel`, pluginId: PLUGIN_ID, title: '3D Models', component: Models3dPanel, position: 'left' });
+  registerPanel({ id: `${PLUGIN_ID}:panel`, pluginId: PLUGIN_ID, title: '3D Models', titleKey: 'panels.models3d', component: Models3dPanel, position: 'left', category: 'gis' });
   // TODO: [Phase 3] 待实现 — implement desktop 3D model import integration
   registerImporter({ id: `${PLUGIN_ID}:importer`, pluginId: PLUGIN_ID, formatName: '3D Model', extensions: ['.obj', '.fbx', '.gltf', '.glb'], onImport: async () => { await showAlert('3D model import is coming soon (Phase 3).', 'Coming Soon'); return createEmptyProject('3D Model Import'); } });
   return () => unregisterPlugin(PLUGIN_ID);

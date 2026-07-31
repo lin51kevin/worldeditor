@@ -126,6 +126,11 @@ export interface PanelContrib {
   icon?: ReactNode;
   /** When true, the generic plugin-panel-header is not rendered; the component manages its own header */
   headerless?: boolean;
+  /**
+   * Optional grouping category for the View menu panel toggle section.
+   * Known values: 'gis' | 'analysis' | 'tools' | 'ai'
+   */
+  category?: string;
 }
 
 /** Context passed to `ContextMenuContrib.isVisible` for conditional visibility */

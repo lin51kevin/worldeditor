@@ -14,6 +14,7 @@ export function mountValidationPlugin(): () => void {
     titleKey: 'panels.validation',
     component: ValidationPanel,
     position: 'right',
+    category: 'analysis',
   });
 
   return () => unregisterPlugin(PLUGIN_ID);

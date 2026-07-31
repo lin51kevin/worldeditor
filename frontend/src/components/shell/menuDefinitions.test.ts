@@ -187,6 +187,7 @@ describe('menuDefinitions helpers', () => {
   });
 
   it('groups road edit items by priority order and ignores separator contribs', () => {
+    const editDisabled = vi.fn(() => true);
     const menu = appendRoadItemsToEdit(
       makeMenu(),
       [
@@ -194,19 +195,26 @@ describe('menuDefinitions helpers', () => {
         { id: 'separator', pluginId: 'plugin', menu: 'edit', labelKey: 'plugin.copy', separator: true, onClick: vi.fn() },
         { id: 'custom', pluginId: 'plugin', menu: 'edit', labelKey: 'plugin.custom', group: 'custom', onClick: vi.fn() },
         { id: 'transform', pluginId: 'plugin', menu: 'edit', labelKey: 'plugin.transform', group: 'transform', onClick: vi.fn() },
-        { id: 'edit', pluginId: 'plugin', menu: 'edit', labelKey: 'plugin.edit', group: 'edit', onClick: vi.fn(), isDisabled: () => true },
+        { id: 'edit', pluginId: 'plugin', menu: 'edit', labelKey: 'plugin.edit', group: 'edit', onClick: vi.fn(), isDisabled: editDisabled },
       ],
       t,
     );
 
-    expect(menu.items.filter((item) => !item.separator).map((item) => item.label)).toEqual([
+    // Flat items (transform, edit) come first, then unknown group (custom), then submenu for advanced.
+    const nonSep = menu.items.filter((item) => !item.separator);
+    expect(nonSep.map((item) => item.label)).toEqual([
       'Undo',
       'Transform',
       'Edit',
-      'Advanced',
       'Custom',
+      'menu.roadSubEdit', // advanced group rendered as submenu with untranslated key in test t()
     ]);
-    expect(menu.items.filter((item) => item.separator)).toHaveLength(4);
+    // 2 separators: one prepended by appendRoadItemsToEdit, one between flat and submenu sections
+    expect(menu.items.filter((item) => item.separator)).toHaveLength(2);
     expect(menu.items.find((item) => item.label === 'Edit')?.disabled).toBe(true);
+    // advanced items are in a submenu
+    const submenuItem = nonSep.find((item) => item.label === 'menu.roadSubEdit');
+    expect(submenuItem?.submenu).toHaveLength(1);
+    expect(submenuItem?.submenu?.[0].label).toBe('Advanced');
   });
 });

@@ -14,6 +14,7 @@ export function mountConverterPlugin(): () => void {
     titleKey: 'panels.batchConverter',
     component: ConverterPanel,
     position: 'right',
+    category: 'tools',
   });
 
   return () => unregisterPlugin(PLUGIN_ID);

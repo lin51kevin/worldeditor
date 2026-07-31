@@ -20,6 +20,7 @@ export function mountTrafficPlugin(): () => void {
     titleKey: 'panels.traffic',
     component: TrafficPanel,
     position: 'right',
+    category: 'analysis',
   });
 
   registerMenuItem({

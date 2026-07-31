@@ -53,6 +53,11 @@
     "showOutputPanel": "输出面板",
     "calculateRoadLength": "计算道路总长度",
     "road": "道路",
+    "roadSubEdit": "编辑操作",
+    "roadSubPlace": "放置",
+    "roadSubDeploy": "部署",
+    "roadSubInfrastructure": "基础设施",
+    "roadSubJunction": "交叉口",
     "aboutWorldEditor": "关于 WorldEditor",
     "versionInfo": "版本信息",
     "plugins": "插件",
@@ -650,6 +655,8 @@
     "satellite": "卫星影像",
     "batchConverter": "批量转换",
     "pointcloud": "点云",
+    "models3d": "三维模型",
+    "ecosystem": "生态系统",
     "pluginPanels": "插件面板"
   },
   "pluginManager": {
@@ -1176,7 +1183,7 @@
     }
   },
   "copilot": {
-    "title": "对话",
+    "title": "AI Copilot",
     "emptyHint": "发送消息或输入 / 命令开始",
     "inputPlaceholder": "描述你想做什么...",
     "newChat": "新对话",
@@ -1274,5 +1281,8 @@
     "unload": "卸载点云",
     "yes": "是",
     "no": "否"
+  },
+  "shapeEditor": {
+    "addLayer": "添加矢量图层"
   }
 }

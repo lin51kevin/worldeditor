@@ -15,6 +15,7 @@ export function mountPointcloudPlugin(): () => void {
     titleKey: 'panels.pointcloud',
     component: PointCloudPanel,
     position: 'left',
+    category: 'gis',
   });
   return () => unregisterPlugin(PLUGIN_ID);
 }

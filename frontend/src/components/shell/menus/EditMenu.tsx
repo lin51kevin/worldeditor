@@ -1,13 +1,13 @@
 import type { MenuItemContrib } from '../../../stores/pluginContribStore';
 import { showConfirm } from '../../../utils/dialog';
-import { appendRoadItemsToEdit, type TranslateFn } from '../menuDefinitions';
+import { appendEditPluginItems, type TranslateFn } from '../menuDefinitions';
 import { MenuSection, type MenuSectionInteractionProps } from './MenuSection';
 
 type MenuAction = () => void | Promise<void>;
 
 interface EditMenuProps extends MenuSectionInteractionProps {
   t: TranslateFn;
-  roadMenuItems: MenuItemContrib[];
+  editMenuItems: MenuItemContrib[];
   canUndo: boolean;
   canRedo: boolean;
   onUndo: MenuAction;
@@ -17,7 +17,7 @@ interface EditMenuProps extends MenuSectionInteractionProps {
 
 export function EditMenu({
   t,
-  roadMenuItems,
+  editMenuItems,
   canUndo,
   canRedo,
   onUndo,
@@ -25,7 +25,7 @@ export function EditMenu({
   onDelete,
   ...menuProps
 }: EditMenuProps) {
-  const menu = appendRoadItemsToEdit(
+  const menu = appendEditPluginItems(
     {
       label: t('menu.edit'),
       items: [
@@ -56,7 +56,7 @@ export function EditMenu({
         },
       ],
     },
-    roadMenuItems,
+    editMenuItems,
     t,
   );
 

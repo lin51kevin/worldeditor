@@ -3,19 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Road } from '../../../services/platform';
 import { ToolsMenu } from './ToolsMenu';
 
-const pluginStoreState = vi.hoisted(() => ({
-  panelTabVisibility: { 'panel-one': true, 'panel-two': false },
-  togglePanel: vi.fn(),
-  panels: [
-    { id: 'panel-one', pluginId: 'plugin', title: 'Panel One', titleKey: 'panel.one', component: () => null, position: 'float' },
-    { id: 'panel-two', pluginId: 'plugin', title: 'Panel Two', component: () => null, position: 'float' },
-  ],
-}));
-
-vi.mock('../../../stores/pluginContribStore', () => ({
-  usePluginContribStore: (selector: (state: typeof pluginStoreState) => unknown) => selector(pluginStoreState),
-}));
-
 vi.mock('./MenuSection', () => ({
   MenuSection: ({ menu }: { menu: { label: string; items: Array<{ label: string; action?: () => void; disabled?: boolean; checked?: boolean; separator?: boolean }> } }) => (
     <div>
@@ -46,7 +33,6 @@ const t = (key: string) => ({
   'measurement.distance': 'Distance',
   'measurement.angle': 'Angle',
   'measurement.area': 'Area',
-  'panel.one': 'Panel One',
   'plugin.customTool': 'Custom Tool',
 }[key] ?? key);
 
@@ -75,7 +61,7 @@ describe('ToolsMenu', () => {
     vi.clearAllMocks();
   });
 
-  it('renders tool items, panel toggles, and triggers actions on click', () => {
+  it('renders tool items and triggers actions on click', () => {
     const onCalculateRoadLength = vi.fn();
     const onToggleSnap = vi.fn();
     const onMeasureDistance = vi.fn();
@@ -101,15 +87,13 @@ describe('ToolsMenu', () => {
     expect(screen.getByText('Tools')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Calculate road length' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Snap' })).toHaveAttribute('data-checked', 'true');
-    expect(screen.getByRole('button', { name: 'Panel One' })).toHaveAttribute('data-checked', 'true');
-    expect(screen.getByRole('button', { name: 'Panel Two' })).toHaveAttribute('data-checked', 'false');
+    expect(screen.queryByRole('button', { name: 'Panel One' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Calculate road length' }));
     fireEvent.click(screen.getByRole('button', { name: 'Snap' }));
     fireEvent.click(screen.getByRole('button', { name: 'Distance' }));
     fireEvent.click(screen.getByRole('button', { name: 'Angle' }));
     fireEvent.click(screen.getByRole('button', { name: 'Area' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Panel One' }));
     fireEvent.click(screen.getByRole('button', { name: 'Custom Tool' }));
 
     expect(onCalculateRoadLength).toHaveBeenCalledTimes(1);
@@ -117,7 +101,6 @@ describe('ToolsMenu', () => {
     expect(onMeasureDistance).toHaveBeenCalledTimes(1);
     expect(onMeasureAngle).toHaveBeenCalledTimes(1);
     expect(onMeasureArea).toHaveBeenCalledTimes(1);
-    expect(pluginStoreState.togglePanel).toHaveBeenCalledWith('panel-one');
     expect(onPluginTool).toHaveBeenCalledTimes(1);
   });
 

@@ -55,7 +55,7 @@ describe('EditMenu', () => {
       <EditMenu
         {...interactionProps}
         t={t}
-        roadMenuItems={[
+        editMenuItems={[
           { id: 'cut', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.cut', onClick: vi.fn() },
           { id: 'copy', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.copy', onClick: vi.fn() },
           { id: 'paste', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.paste', onClick: vi.fn() },
@@ -88,7 +88,7 @@ describe('EditMenu', () => {
       <EditMenu
         {...interactionProps}
         t={t}
-        roadMenuItems={[
+        editMenuItems={[
           { id: 'cut', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.cut', onClick: onCut },
           { id: 'copy', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.copy', onClick: onCopy },
           { id: 'paste', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.paste', onClick: onPaste },
@@ -120,7 +120,7 @@ describe('EditMenu', () => {
       <EditMenu
         {...interactionProps}
         t={t}
-        roadMenuItems={[]}
+        editMenuItems={[]}
         canUndo={false}
         canRedo={false}
         onUndo={onUndo}
