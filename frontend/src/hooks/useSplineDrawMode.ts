@@ -8,6 +8,7 @@ import {
   type SplineControlPoint,
 } from '../components/viewportUtils';
 import { applyHandleDrag, inferConstraint, type DragConstraint } from '../viewport/tangentHandleController';
+import { snapAngleFromPrev } from '../viewport/drawConstraints';
 import { useSplineOperations } from './useSplineOperations';
 import { getPlatformService } from '../services';
 
@@ -262,7 +263,13 @@ export function useSplineDrawMode({
     }
 
     // Update the live cursor preview position for real-time road mesh preview
-    viewState.setCursorPreviewPos([worldPos.x, worldPos.y, 0]);
+    let previewX = worldPos.x;
+    let previewY = worldPos.y;
+    if (mouseEvent?.shiftKey && viewState.splineKnots.length > 0) {
+      const prev = viewState.splineKnots[viewState.splineKnots.length - 1]!;
+      [previewX, previewY] = snapAngleFromPrev([prev[0], prev[1]], [previewX, previewY]);
+    }
+    viewState.setCursorPreviewPos([previewX, previewY, 0]);
 
     const nextHover = findSplineControlPointHit(
       worldPos,
@@ -318,8 +325,15 @@ export function useSplineDrawMode({
     // If snapped to an endpoint, use the snapped position instead of raw cursor
     const snap = viewState.drawSnapResult;
     const useSnap = snap?.snapped && snap.snapType === 'Endpoint' && snap.targetId && snap.contactPoint;
-    const px = useSnap ? snap.x : worldPos.x;
-    const py = useSnap ? snap.y : worldPos.y;
+    let px = useSnap ? snap.x : worldPos.x;
+    let py = useSnap ? snap.y : worldPos.y;
+
+    // Angle constraint: holding Shift snaps the new segment's heading to the
+    // nearest 15° relative to the previous knot (skipped when endpoint-snapped).
+    if (!useSnap && e.shiftKey && viewState.splineKnots.length > 0) {
+      const prev = viewState.splineKnots[viewState.splineKnots.length - 1]!;
+      [px, py] = snapAngleFromPrev([prev[0], prev[1]], [px, py]);
+    }
 
     const point: [number, number, number] = [px, py, 0];
     const knotIndex = viewState.splineKnots.length;
