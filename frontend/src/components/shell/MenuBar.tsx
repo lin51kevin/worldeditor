@@ -37,6 +37,7 @@ import {
   showUserManual,
   type Menu,
 } from './menuDefinitions';
+import { isDesktopRuntime } from '../../utils/platformDetect';
 import { EditMenu } from './menus/EditMenu';
 import { FileMenu } from './menus/FileMenu';
 import { MenuSection } from './menus/MenuSection';
@@ -230,7 +231,9 @@ export function MenuBar({
       { label: t('menu.welcome'), action: onOpenWelcome },
       { separator: true, label: '' },
       { label: t('menu.userManual'), action: () => void showUserManual(t) },
-      { label: t('menu.checkForUpdates'), action: () => void checkForUpdates(t) },
+      ...(isDesktopRuntime()
+        ? [{ label: t('menu.checkForUpdates'), action: () => void checkForUpdates(t) }]
+        : []),
       { separator: true, label: '' },
       { label: t('menu.aboutWorldEditor'), action: () => void showAbout(t) },
     ],
