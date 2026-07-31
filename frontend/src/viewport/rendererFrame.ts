@@ -12,6 +12,7 @@ import type { CameraController } from './cameraController';
 import type { MarkerRenderer } from './markerRenderer';
 import type { SpriteRenderer } from './spriteRenderer';
 import type { SplatRenderer } from './gaussian/splatRenderer';
+import type { ActorSplatInstancer } from './gaussian/actorSplatInstancer';
 
 /** Subset of ViewportRenderer state/methods needed for frame rendering + capture. */
 export interface RendererFrameInternals {
@@ -39,6 +40,7 @@ export interface RendererFrameInternals {
   egoMesh: { vertexBuffer: GPUBuffer; indexBuffer: GPUBuffer; indexCount: number } | null;
   splatRenderer: SplatRenderer | null;
   actorSplatRenderer: SplatRenderer | null;
+  actorSplatInstancer: ActorSplatInstancer | null;
   basicBindGroup: GPUBindGroup;
   meshes: RenderableMesh[];
   junctionMeshes: RenderableMesh[];
@@ -144,6 +146,16 @@ export function renderFrame(r: RendererFrameInternals): void {
       viewProj,
     );
   }
+  if (r.actorSplatInstancer?.hasContent) {
+    r.actorSplatInstancer.onCamera(
+      camera,
+      r.cameraController.dimension,
+      1 / r.cameraController.getMetersPerPixel(),
+      r.width,
+      r.height,
+      viewProj,
+    );
+  }
 
   const encoder = r.device.createCommandEncoder();
 
@@ -152,6 +164,7 @@ export function renderFrame(r: RendererFrameInternals): void {
   // (packed fallback / no compute), leaving the async CPU worker sort in charge.
   if (r.splatRenderer?.hasContent) r.splatRenderer.sortGpu(encoder);
   if (r.actorSplatRenderer?.hasContent) r.actorSplatRenderer.sortGpu(encoder);
+  // actorSplatInstancer uses its own CPU-worker sort (no GPU compute sort path yet).
 
   const swapChainView = texture.createView();
   const msaaView = r.msaaTexture?.createView() ?? swapChainView;
@@ -277,6 +290,7 @@ export function renderFrame(r: RendererFrameInternals): void {
   // dynamic vehicles composite over the static reconstructed scene.
   if (r.staticSceneVisible) r.splatRenderer?.draw(pass);
   r.actorSplatRenderer?.draw(pass);
+  r.actorSplatInstancer?.draw(pass);
 
   pass.end();
   try {

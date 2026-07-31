@@ -307,6 +307,26 @@ export interface WorldEditorRenderer {
   ): SplatUploadStatus;
   /** Remove the uploaded actor (NPC + ego) Gaussian splat cloud. */
   clearActorGaussianSplats?(): void;
+
+  // ── Instanced actor splat API (GPU-persistent per-model buffers) ──────
+  /**
+   * Upload a model's degree-0 packed splat data once, keyed by URL.
+   * No-op for duplicate URLs.  Must be called before the URL appears in
+   * any {@link updateActorSplatInstances} call.
+   */
+  uploadActorModel?(url: string, data: Uint32Array): void;
+  /**
+   * Per-frame instanced actor update.  Only M×32 bytes written to GPU per
+   * frame (transforms buffer) plus an off-thread O(N×3) sort.
+   */
+  updateActorSplatInstances?(instances: readonly {
+    url: string;
+    cos_yaw: number; sin_yaw: number;
+    hw: number; hz: number;
+    px: number; py: number; pz: number;
+  }[]): void;
+  /** Release all instanced actor GPU buffers. */
+  clearActorSplatInstances?(): void;
   /**
    * Enable/disable the per-frame GPU compute depth sort for Gaussian splats
    * (scene + actor). When on (and the texture-array path + compute are
@@ -765,6 +785,15 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     },
     clearActorGaussianSplats: () => {
       renderer.clearActorGaussianSplats();
+    },
+    uploadActorModel: (url: string, data: Uint32Array) => {
+      renderer.uploadActorModel(url, data);
+    },
+    updateActorSplatInstances: (instances) => {
+      renderer.updateActorSplatInstances(instances);
+    },
+    clearActorSplatInstances: () => {
+      renderer.clearActorSplatInstances();
     },
     setSplatGpuSort: (enabled: boolean) => {
       renderer.setSplatGpuSort(enabled);

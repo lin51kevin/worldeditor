@@ -31,6 +31,8 @@ import {
 } from './gaussian/splatTransform';
 import { interpPose } from '../plugins/npc-actors';
 import type { TrajData } from '../plugins/npc-actors';
+import type { ActorInstance } from './gaussian/actorSplatInstancer';
+import { getViewportRenderer } from './viewportRef';
 
 const DEG_TO_RAD = Math.PI / 180;
 
@@ -208,4 +210,53 @@ export function buildActorSplatFrame(
   }
 
   return { buffer: mergePackedSplats(pieces), shDegree: 0 };
+}
+
+/**
+ * Upload all currently loaded actor models to the GPU-persistent instancer.
+ * Must be called after `loadActorModels` resolves so that each model's band-0
+ * buffer is present in the renderer for instanced draw calls.
+ */
+export function uploadActorModelsToGpu(): void {
+  const renderer = getViewportRenderer();
+  if (!renderer) return;
+  const { loadedModels } = useTrajectoryConfigStore.getState();
+  for (const [, model] of Object.entries(loadedModels)) {
+    if (!model) continue;
+    renderer.uploadActorModel(model.key, model.buffer);
+  }
+}
+
+/**
+ * Build per-frame instance descriptors for the GPU-persistent instancer.
+ * Each entry carries the model URL (key) and the pose (yaw quaternion + position)
+ * so the instancer can update only a small per-instance transform buffer.
+ */
+export function buildActorInstances(
+  data: TrajData,
+  t: number,
+  sceneOrigin: readonly [number, number, number],
+): ActorInstance[] {
+  const { loadedModels } = useTrajectoryConfigStore.getState();
+  if (Object.keys(loadedModels).length === 0) return [];
+
+  const instances: ActorInstance[] = [];
+  for (const entity of data.entities) {
+    const model = loadedModels[entity.id];
+    if (!model || entity.rows.length === 0) continue;
+    const pose = interpPose(entity.rows, t);
+    const h = entity.height || 1.6;
+    const yawRad = pose.yaw * DEG_TO_RAD;
+    instances.push({
+      url: model.key,
+      cos_yaw: Math.cos(yawRad),
+      sin_yaw: Math.sin(yawRad),
+      hw: Math.cos(yawRad / 2),
+      hz: Math.sin(yawRad / 2),
+      px: pose.x - sceneOrigin[0],
+      py: pose.y - sceneOrigin[1],
+      pz: pose.z + h / 2 - sceneOrigin[2],
+    });
+  }
+  return instances;
 }

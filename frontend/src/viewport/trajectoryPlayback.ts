@@ -29,10 +29,11 @@ import { showAlert } from '../utils/dialog';
 import i18n from '../i18n';
 import { smoothFollowPose, type FollowPose } from './trajectoryFollow';
 import {
-  buildActorSplatFrame,
   loadActorModels,
   actorModelIds,
   buildSceneSplat,
+  uploadActorModelsToGpu,
+  buildActorInstances,
 } from './trajectoryActorModels';
 import { GAUSSIAN_SPLAT_LAYOUT_VERSION } from './gaussian/splatLayout';
 import { useTrajectoryConfigStore } from '../stores/trajectoryConfigStore';
@@ -167,12 +168,13 @@ function renderActorsAt(t: number): void {
     renderer.clearEgoMesh();
   }
 
-  // Per-actor Gaussian splats: merge every mapped actor's model at its pose.
-  const frame = buildActorSplatFrame(data, t, sceneOrigin);
-  if (frame && frame.buffer.length > 0) {
-    renderer.uploadActorGaussianSplats(frame.buffer, frame.shDegree, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+  // Per-actor Gaussian splats: update per-instance transforms on the GPU-
+  // persistent instancer (models were uploaded once via uploadActorModelsToGpu).
+  const instances = buildActorInstances(data, t, sceneOrigin);
+  if (instances.length > 0) {
+    renderer.updateActorSplatInstances(instances);
   } else {
-    renderer.clearActorGaussianSplats();
+    renderer.clearActorSplatInstances();
   }
 }
 
@@ -183,7 +185,7 @@ function clearRenderer(): void {
   renderer.uploadActorVertices(new Float32Array(0));
   renderer.uploadPathVertices(new Float32Array(0));
   renderer.clearEgoMesh();
-  renderer.clearActorGaussianSplats();
+  renderer.clearActorSplatInstances();
 }
 
 /** The RAF clock: advance the playhead by real elapsed time × speed. */
@@ -463,6 +465,7 @@ export function stopTrajectory(): void {
   // models, and close the config panel — closing must wipe everything, not just
   // the trajectory ribbons/boxes.
   getViewportRenderer()?.clearGaussianSplats();
+  getViewportRenderer()?.clearActorSplatInstances();
   const config = useTrajectoryConfigStore.getState();
   config.clearLoadedModels();
   config.toggleConfigOpen(false);
@@ -478,6 +481,7 @@ export function stopTrajectory(): void {
  */
 export async function refreshActorModels(filter?: (actorId: string) => boolean): Promise<void> {
   await loadActorModels(filter);
+  uploadActorModelsToGpu();
   if (useTrajectoryStore.getState().data) {
     renderActorsAt(useTrajectoryStore.getState().currentTime);
   }
