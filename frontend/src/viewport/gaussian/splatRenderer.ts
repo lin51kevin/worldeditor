@@ -359,6 +359,19 @@ export class SplatRenderer {
   /** Latest camera pose, captured by {@link onCamera} for the GPU sort pass. */
   private lastCamPos: Vec3 = [0, 0, 0];
   private lastViewDir: Vec3 = [0, 0, 1];
+  /**
+   * GPU-sort skip cache. The counting sort orders splats back-to-front for the
+   * current camera; that order only changes when the cloud changes (upload/
+   * invalidate) or the camera moves. For a large static scene (e.g. a 10M-splat
+   * reconstruction) re-running the sort every frame while the camera holds still
+   * is pure waste and dominates preview-playback frame time. We record the pose
+   * we last sorted for and a dirty flag, then skip the sort when nothing changed
+   * (the persistent order buffer stays valid). A moving-actor cloud re-uploads
+   * every frame (which calls invalidateSort), so it always re-sorts.
+   */
+  private gpuSortDirty = true;
+  private lastSortedCamPos: Vec3 = [NaN, NaN, NaN];
+  private lastSortedViewDir: Vec3 = [NaN, NaN, NaN];
   /** One-time diagnostic latch so the GPU-sort status is logged once per state. */
   private gpuSortLogged = false;
   /** Cloud AABB (world) for O(1) per-frame projected depth-range estimation. */
@@ -708,6 +721,7 @@ export class SplatRenderer {
     if (this.useGpuSort === enabled) return;
     this.useGpuSort = enabled;
     this.gpuSortLogged = false;
+    this.gpuSortDirty = true;
     console.info(`[Splat] GPU depth sort ${enabled ? "requested" : "disabled"}`);
     if (enabled) {
       this.resources.markAllVisible();
@@ -783,6 +797,14 @@ export class SplatRenderer {
       this.logGpuSortOnce("inactive — positions/order buffer missing");
       return false;
     }
+    // Skip the sort when neither the cloud nor the camera pose changed since the
+    // last sort — the order buffer still holds a valid back-to-front ordering,
+    // so drawing with it is correct. This is the dominant win for a large static
+    // scene during preview playback (a static camera → zero per-frame sort cost).
+    if (!this.gpuSortDirty && this.sameCameraAsLastSort()) {
+      this.logGpuSortOnce(`ACTIVE (${this.resources.count.toLocaleString()} splats)`);
+      return true;
+    }
     try {
       if (!this.gpuSorter) {
         this.gpuSorter = new GpuSplatSorter(this.device);
@@ -798,6 +820,10 @@ export class SplatRenderer {
         minD,
         maxD,
       );
+      // Remember the pose we just sorted for so identical subsequent frames skip.
+      this.lastSortedCamPos = [this.lastCamPos[0], this.lastCamPos[1], this.lastCamPos[2]];
+      this.lastSortedViewDir = [this.lastViewDir[0], this.lastViewDir[1], this.lastViewDir[2]];
+      this.gpuSortDirty = false;
       this.logGpuSortOnce(`ACTIVE (${this.resources.count.toLocaleString()} splats)`);
       return true;
     } catch (error) {
@@ -808,6 +834,28 @@ export class SplatRenderer {
       this.sort.invalidate();
       return false;
     }
+  }
+
+  /**
+   * True when the current camera pose matches the pose the GPU sort last ran for,
+   * so the cached order buffer is still correct. A tiny epsilon absorbs float
+   * noise; any real camera motion (pan/orbit/fly/chase) fails it and re-sorts.
+   */
+  private sameCameraAsLastSort(): boolean {
+    const p = this.lastCamPos;
+    const q = this.lastSortedCamPos;
+    const d = this.lastViewDir;
+    const e = this.lastSortedViewDir;
+    const EPS_POS = 1e-3; // world meters
+    const EPS_DIR = 1e-5;
+    return (
+      Math.abs(p[0] - q[0]) < EPS_POS &&
+      Math.abs(p[1] - q[1]) < EPS_POS &&
+      Math.abs(p[2] - q[2]) < EPS_POS &&
+      Math.abs(d[0] - e[0]) < EPS_DIR &&
+      Math.abs(d[1] - e[1]) < EPS_DIR &&
+      Math.abs(d[2] - e[2]) < EPS_DIR
+    );
   }
 
   /** Log a GPU-sort status line at most once per enable/upload. */
@@ -840,6 +888,7 @@ export class SplatRenderer {
 
   /** Force a re-sort next frame (e.g. after a projection change). */
   invalidateSort(): void {
+    this.gpuSortDirty = true;
     this.sort.invalidate();
   }
 
