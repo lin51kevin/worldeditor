@@ -224,19 +224,22 @@ Road menu > **Optimise Lane Geometry** — removes redundant control knots while
 
 When a road is selected:
 
-| Field | Description |
-|-------|-------------|
-| Road ID | Unique identifier (read-only) |
-| Name | User-editable road name |
-| Length | Total road length in metres |
-| Junction | Junction reference (if inside a junction) |
-| Geometry Segments | Type (Line/Arc/Spiral), position, heading, length per segment |
-| Lane Sections | List of lane sections with per-lane configuration |
-| Bridge/Tunnel | Bridge or tunnel segments along this road |
-| Signals | Signals placed on this road |
-| Objects | Road objects (guardrails, cones, etc.) |
-| Crossfall | Lateral superelevation profile |
-| Elevation | Vertical elevation profile |
+| Field | Description | Editable |
+|-------|-------------|----------|
+| Road ID | Unique identifier | — |
+| Name | User-editable road name | ✅ |
+| Length | Total road length in metres | — |
+| Junction | Junction reference (if inside a junction) | ✅ |
+| Speed | Design speed in m/s | ✅ |
+| Geometry Segments | Type (Line/Arc/Spiral), position, heading, length per segment | via Edit Geometry |
+| Lane Sections | List of lane sections with per-lane configuration | ✅ |
+| Cross-Section | Interactive 2D lane-width view at a given station | ✅ |
+| Superelevation | Banking angle profile (cubic polynomial per station) | ✅ |
+| Crossfall | Drainage slope profile per side (left / right / both) | ✅ |
+| Elevation | Vertical elevation profile | ✅ |
+| Bridge/Tunnel | Bridge or tunnel segments along this road | ✅ |
+| Signals | Signals placed on this road | ✅ |
+| Objects | Road objects (guardrails, cones, etc.) | ✅ |
 
 ---
 
@@ -295,14 +298,27 @@ Each elevation point stores cubic coefficients `a, b, c, d` over station `s`. Th
 
 ---
 
-## Crossfall / Superelevation Editing 🔧
+## Crossfall / Superelevation Editing ✅
 
-Edit the lateral slope (cross-slope / superelevation) of road surfaces.
+Edit the lateral banking (superelevation) and drainage slope (crossfall) of road surfaces. Changes are reflected in the rendered road cross-section in real time.
+
+### Superelevation
 
 1. Select a road
-2. Open **Property Panel > Crossfall** (or use the **Crossfall Editor** panel)
-3. Add superelevation records specifying station `s` and lateral slope values for each lane
-4. The 3D viewport reflects the tilt in real time
+2. Open **Property Panel > Superelevation** (collapsed card, shows point count)
+3. Enter a station `s` and the banking angle `a` (radians); optionally set polynomial coefficients `b, c, d`
+4. Click **Add Point** — the section bank angle updates immediately
+5. Click the **Delete** button next to any row to remove that point
+6. The road surface visually tilts in the 3D viewport: positive angle raises the left side
+
+### Crossfall
+
+1. Open **Property Panel > Crossfall**
+2. Select the applicable side: **Left**, **Right**, or **Both**
+3. Enter station `s` and slope angle `a`; click **Add Point**
+4. Crossfall drains each lane away from the centerline on the specified side
+
+> Both superelevation and crossfall use cubic polynomials evaluated as: `value(s) = a + b·ds + c·ds² + d·ds³`
 
 ---
 
@@ -317,9 +333,60 @@ Edit road centerlines using B-spline / Catmull-Rom curves.
    - Hold **Shift** to mirror the in/out tangent symmetrically
 5. Press **Enter** (or **Finish**) to commit the spline as final road geometry
 
+### Angle-Snap Drawing Constraint
+
+Hold **Shift** while clicking to place a new knot to snap the new road segment's heading to the **nearest 15° multiple** relative to the previous knot. This makes it easy to draw straight roads at 0°, 45°, 90°, or other cardinal and diagonal angles without manual alignment.
+
+- Angle-snap is applied to both the placed knot and the live preview so you can see the constrained direction before committing.
+- Angle-snap is skipped when the cursor is snapped to a road endpoint.
+
+## Cross-Section Visual Editor ✅
+
+The **Cross-Section Editor** shows a real-time SVG diagram of the road’s lane layout at any station.
+
+### Opening the Editor
+
+1. Select a road
+2. Open **Property Panel > Cross-Section** (collapsed card)
+
+### Usage
+
+| Action | How |
+|--------|-----|
+| Scrub station | Drag the station slider to preview the section at any point along the road |
+| Select a lane | Click a lane rectangle in the SVG to select it |
+| Edit width | Enter a width in the input that appears after selecting a lane |
+| Add lane | Click **+ Left lane** or **+ Right lane** |
+| Remove lane | Select a lane → click **Remove** |
+
+Lanes are colour-coded by type (Driving, Shoulder, Sidewalk, etc.) and each lane’s ID is shown inside the rectangle. The blue dashed vertical line marks the reference centerline.
+
+All changes go through the existing `updateLaneWidth`, `addLane`, and `removeLane` store actions and are **fully undoable**.
+
 ---
 
-## Road Marking Editing ✅
+## Batch Road Editing ✅
+
+When **two or more roads are selected simultaneously**, the Property Panel switches to a **batch edit view**.
+
+### Selecting Multiple Roads
+
+| Method | How |
+|--------|-----|
+| Rubber-band select | Hold **Shift** and drag a rectangle over the viewport |
+| Shift-click | Shift + left-click each road to add it to the selection |
+| Select All | **Ctrl+A** |
+
+### Batch Edit Actions
+
+| Control | Description |
+|---------|-------------|
+| **Name prefix** | Rename all selected roads with an incremental suffix (`prefix1`, `prefix2`, …) |
+| **Speed** | Apply a single speed (m/s) to all selected roads |
+| **Lane type** | Set all driving lanes across all sections of all selected roads to the chosen type |
+| **Lane width** | Apply a uniform constant width to all driving lanes |
+| **Hide / Show all** | Toggle `render_hidden` for all selected roads |
+| **Delete** | Delete all selected roads in one undo step |
 
 Fine-tune individual road mark records per lane section.
 
@@ -411,6 +478,15 @@ The plugin calculates connector roads automatically.
 | Rebuild Junction Connections | Regenerate all connector roads for a junction |
 | Fill Junction Gap | Fill a topological gap in connector roads |
 | Build Junction Polygon | Re-triangulate the junction area polygon |
+| **Auto Detect Junctions** | Scan the entire network for nearby road endpoints and create junctions automatically |
+
+### Auto Detect Junctions
+
+**Tools > Auto Detect Junctions** (ToolPanel button) scans every road endpoint in the project and groups those within **5 m** of each other into junction candidates. A junction is created for each candidate cluster and the roads are automatically attached with the nearest contact point.
+
+- Runs as a **single undo step** — pressing Ctrl+Z removes all detected junctions at once.
+- Skips roads that are already assigned to a junction.
+- Works on both T-intersections (3 arms) and 4-way crossings; the threshold can be customised programmatically via `detectJunctionClusters(project, threshold)`.
 
 ---
 
@@ -582,6 +658,7 @@ All editing operations are undoable. The undo/redo stacks use the **Command** pa
 | Ctrl+A | Select all |
 | Ctrl+D | Duplicate selected road |
 | Ctrl+B | Toggle left panel |
+| **Shift** (during draw) | Snap segment to nearest 15° heading |
 | Delete | Delete selected |
 | Esc | Cancel selection / exit current mode |
 | E | Enter / exit geometry edit for selected road |

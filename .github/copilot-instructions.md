@@ -36,7 +36,7 @@ src-tauri       — Tauri 2.0 桌面应用壳
 - 严格类型，禁止 `any`
 - 不可变更新：`{ ...state, field: newValue }`
 - 内置插件放在 `frontend/src/plugins/`，外部插件放在 `plugins/`
-- 视口控制器拆分在 `frontend/src/viewport/` (camera, gizmo, tangent, spline)
+- 视口控制器拆分在 `frontend/src/viewport/` (camera, gizmo, tangent, spline, **drawConstraints**)
 
 ## 架构约束
 
@@ -56,4 +56,4 @@ src-tauri       — Tauri 2.0 桌面应用壳
 - E2E 测试：`cd frontend && yarn playwright test` (17 spec files)
 - 视觉回归：`just test-visual` / `just update-snapshots`
 - 每个 Rust 模块底部 `#[cfg(test)] mod tests { }`
-- 覆盖率目标：Rust core/service ≥ 90%，render/io ≥ 80%，TypeScript ≥ 80%
+- 覆盖率目标：Rust core/service ≥ 90%，render/io ≥ 80%，TypeScript ≥ 80%（当前达成 84.4% stmts / 83.4% branches）

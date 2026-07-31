@@ -197,6 +197,7 @@ stores/recentFilesStore.ts       — 最近打开文件
 ### 视口控制器
 
 ```
+```
 viewport/renderer.ts                 — WebGPU 主渲染器 (管线, 帧循环)
 viewport/cameraController.ts         — 相机交互 (轨道, 平移, 缩放)
 viewport/gizmoController.ts          — 3D 变换手柄控制器
@@ -210,6 +211,7 @@ viewport/viewportMath.ts             — 视口数学 (屏幕↔世界坐标)
 viewport/viewportShaders.ts          — 内嵌 WGSL 着色器
 viewport/viewportTypes.ts            — 类型定义
 viewport/cursorEvents.ts             — 光标事件处理
+viewport/drawConstraints.ts          — 绘制几何约束 (角度吸附, 距离锁定)
 ```
 
 ### 内置插件 (24+)
@@ -218,7 +220,7 @@ viewport/cursorEvents.ts             — 光标事件处理
 - ioGeoZ, ioCsv, ioDxf, ioShapefile, ioOsm, ioLanelet2, ioNio, ioMif, ioObj3d, ioSignals, ioXodrExt, converter
 
 **编辑工具 (4)**:
-- advancedEditing (软选择, 约束移动, 切线手柄), roadTools, templates, scripting
+- advancedEditing (软选择, 约束移动, 切线手柄, **角度约束绘制**, **自动检测交叉口**), roadTools, templates, scripting
 
 **分析 (4)**:
 - validation, laneDetect, traffic, ecosystem
@@ -231,6 +233,11 @@ viewport/cursorEvents.ts             — 光标事件处理
 ```
 components/shell/         — 主布局 (MenuBar, StatusBar)
 components/panels/        — 面板 (LayerPanel, PropertyPanel, OutputPanel, MeasurementPanel, ToolPanel...)
+  BatchRoadEditor.tsx     — 多路段批量属性编辑 (名称前缀/限速/车道类型/宽度/可见性/删除)
+  CrossSectionEditor.tsx  — 2D 横断面可视编辑器 (SVG, 站点滑块, 拖拽车道宽度)
+  CrossSectionLayout.ts   — 横断面布局计算辅助 (computeCrossSection, evalLaneWidth)
+  SuperelevationEditor.tsx — 超高横坡曲线编辑
+  CrossfallEditor.tsx     — 横坡曲线编辑
 components/dialogs/       — 对话框
 components/common/        — 通用 (FloatingPanel, Splitter)
 components/Viewport.tsx   — 画布组件
@@ -513,6 +520,35 @@ Playwright 测试位于 `frontend/e2e/` (17 spec files)，覆盖以下场景：
 3. execute 必须返回新 Project (不可变更新)
 4. 编写单元测试 (RED → GREEN → REFACTOR)
 
+### 道路编辑 — 关键新功能 (2026-07-31)
+
+**超高/横坡渲染**:
+- `we-core/geometry/eval.rs`: `evaluate_superelevation()`, `lateral_z_offset(supers, crossfalls, s, t)` — 超高滚转 + 横坡排水计算
+- `we-render/road_mesh.rs` + `we-wasm/render/road_mesh.rs`: `gen_lane_strip` 按每条边缘计算银行倾斜 Z
+- 前端 `lateral_profile.superelevations/crossfalls` 序列化 → WASM `generate_road_vertices` 渲染
+
+**批量多选编辑**:
+- 框选/套索：`useRubberBandSelect` → `selectMultiple(roadIds, junctionIds)` (已完整接线)
+- `BatchRoadEditor.tsx`: 多选时 PropertyPanel 显示批量编辑视图，名称前缀/限速/车道类型宽度/可见性/删除，使用 `executePluginCommand` 单步撤销
+
+**绘制约束**:
+- `viewport/drawConstraints.ts`: `snapAngleFromPrev(prev, cur, stepDeg=15)` — Shift 键 15° 角度吸附
+- `useSplineDrawMode` 点击 + 预览均接入约束
+
+**属性面板易用性**:
+- junction_id 和 speed（m/s）均从只读改为可编辑输入
+- `updateRoad` 扩展支持 `speed` 字段
+
+**交叉口自动检测**:
+- `utils/junctionAutoDetect.ts`: `detectJunctionClusters(project, threshold=5m)` — 全网端点聚类检测
+- `autoDetectJunctions()` 命令 — 单步撤销建立所有检测到的交叉口
+- ToolPanel 新增「Auto Detect Junctions」按钮
+
+**横断面可视编辑器**:
+- `CrossSectionEditor.tsx`: SVG 横断面视图（站点滑块, 点击车道选中, 宽度输入, 增删车道）
+- `crossSectionLayout.ts`: `computeCrossSection(road, station)` 计算各车道内外边缘布局
+- 集成在 PropertyPanel 道路属性「横断面」折叠卡片
+
 ### 开发 REST API 端点
 
 1. 在 `crates/we-server/src/api/` 添加路由模块
@@ -522,7 +558,7 @@ Playwright 测试位于 `frontend/e2e/` (17 spec files)，覆盖以下场景：
 
 ## 已知限制
 
-> 现状核对日期：2026-06-26。下列条目不含 2026-05-14 ~ 2026-05-15 已修复的 crosswalk / parking space / `objectReference` 问题。
+> 现状核对日期：2026-07-31。下列条目不含 2026-05-14 ~ 2026-05-15 已修复的 crosswalk / parking space / `objectReference` 问题，以及 2026-07-31 新增的超高渲染、批量编辑、绘制约束、交叉口自动检测、横断面编辑器五项功能。
 
 ### 已实现（曾经的限制，现已解决）
 
@@ -533,6 +569,11 @@ Playwright 测试位于 `frontend/e2e/` (17 spec files)，覆盖以下场景：
 - 网格增量缓存核心已实现：we-render `mesh_cache::SceneMeshCache`（按内容哈希仅重建变更道路）
 - we-server WebSocket 协作编辑：房间广播 hub 已实现（`websocket` feature，按 project_id 分房广播）
 - 外部插件 JS 已加静态沙箱守卫（`sandboxGuard`，注入前拦截禁用能力）
+- **超高/横坡渲染已实现**：`lateral_z_offset()` 评估器 + we-render + we-wasm `gen_lane_strip` 双路径均支持 superelevation/crossfall，前端 PropertyPanel 超高/横坡编辑器已全程接线
+- **批量多选道路编辑已实现**：BatchRoadEditor + PropertyPanel `'multi'` 模式，使用 `executePluginCommand` 单步撤销
+- **绘制角度约束已实现**：`drawConstraints.ts` Shift=15° 吸附，接入 `useSplineDrawMode`
+- **交叉口自动检测已实现**：`detectJunctionClusters` 全网端点聚类 + `autoDetectJunctions` 命令
+- **横断面可视编辑器已实现**：`CrossSectionEditor.tsx` SVG 横断面视图，集成 PropertyPanel
 
 ### 仍存在的限制
 
