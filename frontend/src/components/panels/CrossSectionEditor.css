@@ -1,0 +1,46 @@
+.cross-section-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 6px);
+}
+
+.cross-section-svg {
+  width: 100%;
+  height: auto;
+  background: var(--color-bg-input, #1e1e22);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 4px;
+}
+
+.cross-section-lane {
+  cursor: pointer;
+}
+
+.cross-section-label {
+  fill: #ddd;
+  font-size: 9px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.cross-section-center {
+  stroke: #4da3ff;
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  opacity: 0.7;
+}
+
+.cross-section-ground {
+  stroke: #555;
+  stroke-width: 1;
+}
+
+.cross-section-slider {
+  flex: 1;
+  accent-color: #4da3ff;
+}
+
+.cross-section-editor .property-hint {
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+}
