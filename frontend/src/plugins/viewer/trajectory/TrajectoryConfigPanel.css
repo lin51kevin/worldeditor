@@ -373,3 +373,13 @@
     box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.35));
 }
 
+/* Portaled variant — uses fixed positioning so it escapes overflow:hidden/auto
+   containers (e.g. .traj-cfg-list). top/left/width are set via inline style. */
+.traj-cfg-thumb-menu--portal {
+    position: fixed;
+    top: auto;
+    left: auto;
+    right: auto;
+    z-index: 9999;
+}
+

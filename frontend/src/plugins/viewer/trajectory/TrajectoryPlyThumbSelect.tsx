@@ -28,15 +28,30 @@ interface Props {
 export function TrajectoryPlyThumbSelect({ value, candidates, onChange, ariaLabel, noneLabel }: Props) {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<{ src: string; top: number; left: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      const inRoot = rootRef.current?.contains(target) ?? false;
+      const inMenu = menuRef.current?.contains(target) ?? false;
+      if (!inRoot && !inMenu) setOpen(false);
+    };
+    // 只在菜单外部发生滚动时关闭（菜单内部滚动不关闭）
+    const onScroll = (e: Event) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
     };
     window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('scroll', onScroll, true);
+    };
   }, [open]);
 
   // Hide any hover preview once the menu closes.
@@ -55,6 +70,16 @@ export function TrajectoryPlyThumbSelect({ value, candidates, onChange, ariaLabe
     [onChange],
   );
 
+  const handleToggle = useCallback(() => {
+    setOpen((o) => {
+      if (!o && triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        setMenuPos({ top: rect.bottom + 2, left: rect.left, width: rect.width });
+      }
+      return !o;
+    });
+  }, []);
+
   /** Show an enlarged preview anchored to the hovered row's right edge. */
   const showPreview = useCallback((e: React.MouseEvent, thumbnail: string | undefined) => {
     if (!thumbnail) {
@@ -65,12 +90,50 @@ export function TrajectoryPlyThumbSelect({ value, candidates, onChange, ariaLabe
     setPreview({ src: thumbnail, top: rect.top, left: rect.right + 8 });
   }, []);
 
+  const menuList = open && menuPos ? (
+    <ul
+      ref={menuRef}
+      className="traj-cfg-thumb-menu traj-cfg-thumb-menu--portal"
+      role="listbox"
+      style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+      onWheel={(e) => e.stopPropagation()}
+    >
+      <li>
+        <button type="button" className="traj-cfg-thumb-item" onClick={() => pick(null)}>
+          <span className="traj-cfg-thumb traj-cfg-thumb-empty"><ImageOff size={12} /></span>
+          <span className="traj-cfg-thumb-label">{noneLabel}</span>
+          {value === null && <Check size={13} className="traj-cfg-thumb-check" />}
+        </button>
+      </li>
+      {candidates.map((c) => (
+        <li key={c.key}>
+          <button
+            type="button"
+            className="traj-cfg-thumb-item"
+            onClick={() => pick(c.key)}
+            onMouseEnter={(e) => showPreview(e, c.thumbnail)}
+            onMouseLeave={() => setPreview(null)}
+          >
+            {c.thumbnail ? (
+              <img className="traj-cfg-thumb" src={c.thumbnail} alt="" />
+            ) : (
+              <span className="traj-cfg-thumb traj-cfg-thumb-empty"><ImageOff size={12} /></span>
+            )}
+            <span className="traj-cfg-thumb-label">{c.name}</span>
+            {c.key === value && <Check size={13} className="traj-cfg-thumb-check" />}
+          </button>
+        </li>
+      ))}
+    </ul>
+  ) : null;
+
   return (
     <div className="traj-cfg-thumb-select" ref={rootRef}>
       <button
+        ref={triggerRef}
         type="button"
         className="traj-cfg-thumb-trigger"
-        onClick={() => setOpen((o) => !o)}
+        onClick={handleToggle}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -83,36 +146,7 @@ export function TrajectoryPlyThumbSelect({ value, candidates, onChange, ariaLabe
         <span className="traj-cfg-thumb-label">{label}</span>
         <ChevronDown size={14} className="traj-cfg-thumb-caret" />
       </button>
-      {open && (
-        <ul className="traj-cfg-thumb-menu" role="listbox">
-          <li>
-            <button type="button" className="traj-cfg-thumb-item" onClick={() => pick(null)}>
-              <span className="traj-cfg-thumb traj-cfg-thumb-empty"><ImageOff size={12} /></span>
-              <span className="traj-cfg-thumb-label">{noneLabel}</span>
-              {value === null && <Check size={13} className="traj-cfg-thumb-check" />}
-            </button>
-          </li>
-          {candidates.map((c) => (
-            <li key={c.key}>
-              <button
-                type="button"
-                className="traj-cfg-thumb-item"
-                onClick={() => pick(c.key)}
-                onMouseEnter={(e) => showPreview(e, c.thumbnail)}
-                onMouseLeave={() => setPreview(null)}
-              >
-                {c.thumbnail ? (
-                  <img className="traj-cfg-thumb" src={c.thumbnail} alt="" />
-                ) : (
-                  <span className="traj-cfg-thumb traj-cfg-thumb-empty"><ImageOff size={12} /></span>
-                )}
-                <span className="traj-cfg-thumb-label">{c.name}</span>
-                {c.key === value && <Check size={13} className="traj-cfg-thumb-check" />}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {menuList && createPortal(menuList, document.body)}
       {preview &&
         createPortal(
           <img
