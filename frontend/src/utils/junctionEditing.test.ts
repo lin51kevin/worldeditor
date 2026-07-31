@@ -602,3 +602,40 @@ describe('createJunctionConnectionId (collision handling)', () => {
     expect(id).toBe('conn_2');
   });
 });
+
+// ─── addConnectionBetweenRoads — missing-road branches ───────────────────────
+
+describe('addConnectionBetweenRoads — uncovered branches', () => {
+  it('returns project unchanged when incoming road is missing', () => {
+    const r2 = makeRoad('r2', {
+      plan_view: [{ s: 0, x: 15, y: 0, hdg: 0, length: 10, geo_type: 'Line' }],
+    });
+    const project = makeProject([r2], [makeJunction('j1', [])]);
+    const result = addConnectionBetweenRoads(project, 'j1', 'r-missing', 'r2');
+    expect(result).toBe(project);
+  });
+
+  it('returns project unchanged when outgoing road is missing', () => {
+    const r1 = makeRoad('r1', {
+      plan_view: [{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }],
+    });
+    const project = makeProject([r1], [makeJunction('j1', [])]);
+    const result = addConnectionBetweenRoads(project, 'j1', 'r1', 'r-missing');
+    expect(result).toBe(project);
+  });
+
+  it('skips re-attaching roads that are already linked to the junction', () => {
+    const r1 = makeRoad('r1', {
+      plan_view: [{ s: 0, x: 0, y: 0, hdg: 0, length: 10, geo_type: 'Line' }],
+      link: { predecessor: null, successor: { element_id: 'j1', element_type: 'Junction', contact_point: 'End' as const } },
+    });
+    const r2 = makeRoad('r2', {
+      plan_view: [{ s: 0, x: 15, y: 0, hdg: 0, length: 10, geo_type: 'Line' }],
+      link: { predecessor: { element_id: 'j1', element_type: 'Junction', contact_point: 'Start' as const }, successor: null },
+    });
+    const project = makeProject([r1, r2], [makeJunction('j1', [])]);
+    const result = addConnectionBetweenRoads(project, 'j1', 'r1', 'r2');
+    // Roads are already linked so attachRoadToJunction is skipped, but connector still built.
+    expect(result.junctions[0]?.connections).toHaveLength(1);
+  });
+});

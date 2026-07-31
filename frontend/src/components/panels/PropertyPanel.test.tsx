@@ -103,7 +103,7 @@ describe('PropertyPanel', () => {
     expect(screen.getByText('r-42')).toBeInTheDocument();
     expect(screen.getByDisplayValue('测试道路')).toBeInTheDocument();
     expect(screen.getByText('120.50 m')).toBeInTheDocument();
-    expect(screen.getByText('j-1')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('j-1')).toBeInTheDocument();
 
     // Geometry card is collapsed by default — expand it to reveal geometry items
     const geometryHeader = screen.getByText(/几何/);

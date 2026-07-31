@@ -206,6 +206,27 @@ describe('laneSlice', () => {
       const lane = useProjectStore.getState().project.roads[0]!.lane_sections[0]!.right[0]!;
       expect(lane.borders).toHaveLength(1);
     });
+
+    it('should create borders array when lane has no borders', () => {
+      // Use a lane with no borders property (undefined).
+      const laneNoB = {
+        id: 1, lane_type: 'driving', level: 0,
+        link: { predecessor: null, successor: null },
+        width: [], road_marks: [],
+        // No borders field → undefined
+      };
+      useProjectStore.getState().addRoad({
+        ...makeRoadWithLane(),
+        lane_sections: [{
+          s: 0, single_side: false,
+          left: [], center: [], right: [laneNoB as ReturnType<typeof makeLane>],
+        }],
+      });
+      const border = makeLaneBorder();
+      useProjectStore.getState().addLaneBorder('r1', 0, 'right', 1, border);
+      const lane = useProjectStore.getState().project.roads[0]!.lane_sections[0]!.right[0]!;
+      expect(lane.borders).toHaveLength(1);
+    });
   });
 
   describe('updateLaneBorder', () => {
@@ -370,6 +391,62 @@ describe('laneSlice', () => {
       const r2 = useProjectStore.getState().project.roads.find((r) => r.id === 'r2')!;
       expect(r1.lateral_profile!.superelevation!.length).toBe(1);
       expect(r2.lateral_profile!.crossfall!.length).toBe(1);
+    });
+  });
+
+  describe('out-of-bounds guards', () => {
+    it('updateElevationPoint no-ops when index is out of bounds', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addElevationPoint('r1', 0, 5.0);
+      useProjectStore.getState().updateElevationPoint('r1', 99, { a: 99 });
+      const profile = useProjectStore.getState().project.roads[0]!.elevation_profile;
+      expect(profile[0]!.a).toBeCloseTo(5.0);
+    });
+
+    it('removeElevationPoint no-ops when index is out of bounds', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addElevationPoint('r1', 0, 5.0);
+      useProjectStore.getState().removeElevationPoint('r1', 99);
+      expect(useProjectStore.getState().project.roads[0]!.elevation_profile).toHaveLength(1);
+    });
+
+    it('updateSuperelevation no-ops when index is out of bounds', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addSuperelevation('r1', { s: 0, a: 0.1, b: 0, c: 0, d: 0 });
+      useProjectStore.getState().updateSuperelevation('r1', 99, { a: 0.99 });
+      expect(useProjectStore.getState().project.roads[0]!.lateral_profile!.superelevation![0]!.a).toBeCloseTo(0.1);
+    });
+
+    it('removeSuperelevation no-ops when index is out of bounds', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addSuperelevation('r1', { s: 0, a: 0.1, b: 0, c: 0, d: 0 });
+      useProjectStore.getState().removeSuperelevation('r1', 99);
+      expect(useProjectStore.getState().project.roads[0]!.lateral_profile!.superelevation).toHaveLength(1);
+    });
+
+    it('updateRoadMark no-ops when markIndex is out of bounds', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addRoadMark('r1', 0, 'right', 1, { s_offset: 0, mark_type: 'Solid', weight: 'Standard', color: 'White', material: 'standard', width: 0.15, lane_change: 'none' });
+      useProjectStore.getState().updateRoadMark('r1', 0, 'right', 1, 99, { color: 'Yellow' });
+      const mark = useProjectStore.getState().project.roads[0]!.lane_sections[0]!.right[0]!.road_marks[0]!;
+      expect(mark.color).toBe('White');
+    });
+
+    it('updateLaneBorder no-ops when borderIndex is out of bounds', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addLaneBorder('r1', 0, 'right', 1, makeLaneBorder());
+      useProjectStore.getState().updateLaneBorder('r1', 0, 'right', 1, 99, { a: 0.99 });
+      expect(useProjectStore.getState().project.roads[0]!.lane_sections[0]!.right[0]!.borders![0]!.a).toBeCloseTo(makeLaneBorder().a);
+    });
+
+    it('smoothElevation is a no-op when fewer than 3 elevation points', () => {
+      useProjectStore.getState().addRoad(makeRoadWithLane());
+      useProjectStore.getState().addElevationPoint('r1', 0, 1.0);
+      useProjectStore.getState().addElevationPoint('r1', 10, 2.0);
+      useProjectStore.getState().smoothElevation('r1');
+      const profile = useProjectStore.getState().project.roads[0]!.elevation_profile;
+      expect(profile[0]!.a).toBeCloseTo(1.0);
+      expect(profile[1]!.a).toBeCloseTo(2.0);
     });
   });
 });

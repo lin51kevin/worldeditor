@@ -312,4 +312,51 @@ describe('roadSlice — additional branch coverage', () => {
     const road = useProjectStore.getState().project.roads[0]!;
     expect(road.name).toBe('Updated');
   });
+
+  it('updateRoad can set speed on a road', () => {
+    useProjectStore.getState().addRoad(makeRoad('r1'));
+    useProjectStore.getState().updateRoad('r1', { speed: 13.89 });
+    const road = useProjectStore.getState().project.roads[0]!;
+    expect(road.speed).toBeCloseTo(13.89);
+  });
+
+  it('addRoadObjectItem appends to objects on a road that has no objects array', () => {
+    // Roads created via makeRoad() don't include objects, so objects is undefined.
+    useProjectStore.getState().addRoad(makeRoad('r1'));
+    useProjectStore.getState().addRoadObjectItem('r1', {
+      id: 'o1', object_type: 'Sign', s: 5, t: 0, z_offset: 0, width: 0.6, height: 2.0,
+      length: 0.1, hdg: 0, pitch: 0, roll: 0, orientation: 'none', name: '',
+    });
+    const road = useProjectStore.getState().project.roads[0]!;
+    expect(road.objects).toHaveLength(1);
+  });
+
+  it('addRoadSignalItem appends to signals on a road that has no signals array', () => {
+    useProjectStore.getState().addRoad(makeRoad('r1'));
+    useProjectStore.getState().addRoadSignalItem('r1', {
+      id: 's1', s: 5, t: 0, z_offset: 0, value: 0, width: 0.6, height: 2.0,
+      signal_type: '274', signal_subtype: '1', orientation: '+', is_dynamic: false,
+      name: '', country: 'DEU', unit: 'km/h', h_offset: 0,
+    });
+    const road = useProjectStore.getState().project.roads[0]!;
+    expect(road.signals).toHaveLength(1);
+  });
+
+  it('removeJunctionConnection clears selectedRoadId when the connector road was selected', () => {
+    // Set up a junction with one connection where connecting_road === r2
+    useProjectStore.setState({
+      project: {
+        ...initialProject,
+        roads: [makeRoad('r1'), makeRoad('r2'), makeRoad('r3')],
+        junctions: [{
+          id: 'j1', name: 'J1',
+          connections: [{ id: 'c0', incoming_road: 'r1', connecting_road: 'r2', contact_point: 'Start', lane_links: [] }],
+        }],
+      },
+      selectedRoadId: 'r2', // r2 is the connector being removed
+      selectedSceneNode: null,
+    });
+    useProjectStore.getState().removeJunctionConnection('j1', 0);
+    expect(useProjectStore.getState().selectedRoadId).toBeNull();
+  });
 });
