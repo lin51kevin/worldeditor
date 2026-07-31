@@ -31,6 +31,17 @@ const DEGREE0_STRIDE = 12;
 /** Float32 elements per instance in the transforms GPU buffer (padded to 8). */
 const TRANSFORM_FLOATS = 8;
 
+/**
+ * Global cap on the total number of actor splats merged across every instance.
+ * Each model is already capped individually, but the sum across all mapped
+ * actors is not — an unbounded total makes the per-frame world-position buffer
+ * (and the merged/order buffers) exceed the engine's `ArrayBuffer` limit and
+ * throw `RangeError: Array buffer allocation failed`. When the raw total exceeds
+ * this budget every instance is thinned proportionally so the total stays
+ * bounded. 2,000,000 splats ≈ 96 MB merged + 24 MB world positions.
+ */
+const MAX_ACTOR_SPLAT_TOTAL = 2_000_000;
+
 /** One actor instance posed in the render frame (world minus scene origin). */
 export interface ActorInstance {
   url: string;
@@ -62,6 +73,14 @@ export class ActorSplatInstancer {
   private orderBuffer: GPUBuffer | null = null;
   private totalCount = 0;
   private lastInstanceKey = '';
+
+  /**
+   * Per-instance render plan (model + thinned splat count), rebuilt with the
+   * merged buffers on an actor-set change. Both the merged buffer and the
+   * per-frame world positions sample the same thinned subset so their splat
+   * ordering stays consistent with the sort's index buffer.
+   */
+  private instancePlan: { model: ModelEntry; instanceIndex: number; effCount: number }[] = [];
 
   // Per-frame tiny write
   private transformsBuffer: GPUBuffer | null = null;
@@ -229,21 +248,23 @@ export class ActorSplatInstancer {
       });
     }
 
-    // Compute world-space XYZ only (O(N×3)) and hand off to sort worker.
-    let validTotal = 0;
-    for (const inst of instances) validTotal += this.models.get(inst.url)?.count ?? 0;
-    if (validTotal === this.totalCount) {
+    // Compute world-space XYZ only (O(N×3)) and hand off to sort worker. The
+    // plan drives the same thinned subset the merged buffer was built from, so
+    // world-position index k maps to merged splat k (and thus the sort order).
+    // Guarded: an over-large allocation must degrade (stale sort this frame)
+    // rather than crash the app.
+    try {
       const worldPositions = new Float32Array(this.totalCount * 3);
       let out = 0;
-      for (const inst of instances) {
-        const model = this.models.get(inst.url);
-        if (!model) continue;
+      for (const { model, instanceIndex, effCount } of this.instancePlan) {
+        const inst = instances[instanceIndex]!;
         const lp = model.localPositions;
         const n = model.count;
-        for (let i = 0; i < n; i++) {
-          const lx = lp[i * 3]!;
-          const ly = lp[i * 3 + 1]!;
-          const lz = lp[i * 3 + 2]!;
+        for (let j = 0; j < effCount; j++) {
+          const s = effCount === n ? j : Math.floor((j * n) / effCount);
+          const lx = lp[s * 3]!;
+          const ly = lp[s * 3 + 1]!;
+          const lz = lp[s * 3 + 2]!;
           worldPositions[out++] = lx * inst.cos_yaw - ly * inst.sin_yaw + inst.px;
           worldPositions[out++] = lx * inst.sin_yaw + ly * inst.cos_yaw + inst.py;
           worldPositions[out++] = lz + inst.pz;
@@ -251,6 +272,11 @@ export class ActorSplatInstancer {
       }
       // setSplats resets lastPose so the next onCamera always re-sorts.
       this.sort.setSplats(worldPositions);
+    } catch (err) {
+      console.warn(
+        '[actorSplats] world-position allocation failed; skipping sort this frame',
+        err,
+      );
     }
   }
 
@@ -303,6 +329,7 @@ export class ActorSplatInstancer {
     this.group1 = null;
     this.totalCount = 0;
     this.lastInstanceKey = '';
+    this.instancePlan = [];
   }
 
   private rebuildMergedBuffers(instances: readonly ActorInstance[]): void {
@@ -314,23 +341,73 @@ export class ActorSplatInstancer {
     this.orderBuffer = null;
     this.group0 = null;
     this._visibleCount = 0;
+    this.instancePlan = [];
 
+    // Raw (uncapped) total across all present actor models.
+    let rawTotal = 0;
+    for (const inst of instances) rawTotal += this.models.get(inst.url)?.count ?? 0;
+    if (rawTotal === 0) {
+      this.totalCount = 0;
+      return;
+    }
+
+    // Thin each model proportionally when the raw total exceeds the global
+    // budget so the merged / order / world-position allocations stay bounded.
+    const scale = rawTotal > MAX_ACTOR_SPLAT_TOTAL ? MAX_ACTOR_SPLAT_TOTAL / rawTotal : 1;
     let total = 0;
-    for (const inst of instances) total += this.models.get(inst.url)?.count ?? 0;
-    this.totalCount = total;
-    if (total === 0) return;
-
-    const merged = new Uint32Array(total * DEGREE0_STRIDE);
-    const instanceIds = new Uint32Array(total);
-    let splatOffset = 0;
     for (let i = 0; i < instances.length; i++) {
       const model = this.models.get(instances[i]!.url);
       if (!model) continue;
-      merged.set(model.cpuData.subarray(0, model.count * DEGREE0_STRIDE), splatOffset);
-      const start = splatOffset / DEGREE0_STRIDE;
-      instanceIds.fill(i, start, start + model.count);
-      splatOffset += model.count * DEGREE0_STRIDE;
+      const effCount = scale === 1 ? model.count : Math.max(1, Math.floor(model.count * scale));
+      this.instancePlan.push({ model, instanceIndex: i, effCount });
+      total += effCount;
     }
+    this.totalCount = total;
+    if (total === 0) return;
+
+    let merged: Uint32Array<ArrayBuffer>;
+    let instanceIds: Uint32Array<ArrayBuffer>;
+    let order: Uint32Array<ArrayBuffer>;
+    try {
+      merged = new Uint32Array(total * DEGREE0_STRIDE);
+      instanceIds = new Uint32Array(total);
+      order = new Uint32Array(total);
+    } catch (err) {
+      console.warn(
+        '[actorSplats] merged buffer allocation failed; skipping actor splats',
+        err,
+      );
+      this.totalCount = 0;
+      this.instancePlan = [];
+      return;
+    }
+
+    let splatWord = 0;
+    let splatIndex = 0;
+    for (const { model, instanceIndex, effCount } of this.instancePlan) {
+      const src = model.cpuData;
+      const n = model.count;
+      if (effCount === n) {
+        // Fast path (no thinning): one contiguous copy + range fill.
+        merged.set(src.subarray(0, n * DEGREE0_STRIDE), splatWord);
+        instanceIds.fill(instanceIndex, splatIndex, splatIndex + n);
+        splatWord += n * DEGREE0_STRIDE;
+        splatIndex += n;
+      } else {
+        // Thinned: sample `effCount` records evenly across the model.
+        for (let j = 0; j < effCount; j++) {
+          const s = Math.floor((j * n) / effCount);
+          merged.set(
+            src.subarray(s * DEGREE0_STRIDE, s * DEGREE0_STRIDE + DEGREE0_STRIDE),
+            splatWord,
+          );
+          instanceIds[splatIndex] = instanceIndex;
+          splatWord += DEGREE0_STRIDE;
+          splatIndex++;
+        }
+      }
+    }
+    for (let i = 0; i < total; i++) order[i] = i;
 
     this.mergedSplatBuffer = this.device.createBuffer({
       label: 'actorMergedSplats',
@@ -346,7 +423,6 @@ export class ActorSplatInstancer {
     });
     this.device.queue.writeBuffer(this.instanceIdsBuffer, 0, instanceIds);
 
-    const order = Uint32Array.from({ length: total }, (_, i) => i);
     this.orderBuffer = this.device.createBuffer({
       label: 'actorOrder',
       size: order.byteLength,

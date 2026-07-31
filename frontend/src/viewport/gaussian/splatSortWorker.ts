@@ -35,6 +35,11 @@ ctx.onmessage = (ev: MessageEvent<InMessage>) => {
   if (msg.type === 'init') {
     positions = msg.positions;
     prepared = prepareSplatSort(positions);
+    // Acknowledge so the main thread can apply backpressure: it keeps at most
+    // one `init` in flight and coalesces newer positions until this returns,
+    // preventing an unbounded queue of (transferred) position buffers from
+    // accumulating during playback and exhausting memory.
+    ctx.postMessage({ type: 'inited' });
     return;
   }
   if (msg.type === 'sort') {

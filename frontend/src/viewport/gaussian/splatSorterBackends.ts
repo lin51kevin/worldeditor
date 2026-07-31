@@ -62,6 +62,22 @@ export function createWorkerSplatSorter(): SplatSorter {
     (indices: Uint32Array, visibleCount: number, generation: number) => void
   >();
 
+  // Backpressure for `init`: keep at most one positions upload in flight. While
+  // one is unacknowledged, stash only the LATEST positions (replacing any
+  // previous stash, whose buffer is GC'd since it was never transferred) and
+  // send it once the worker acks. Without this, playback posts a fresh
+  // (transferred) positions buffer every frame and, when the worker can't keep
+  // up, the queued messages pin their buffers and grow memory until a crash.
+  let initInFlight = false;
+  let stashedInit: Float32Array | null = null;
+
+  const postInit = (positions: Float32Array): void => {
+    initInFlight = true;
+    // Transfer ownership of the positions buffer to the worker (zero-copy) —
+    // the caller relinquishes it, so no duplicate lives on the main thread.
+    worker.postMessage({ type: 'init', positions }, [positions.buffer]);
+  };
+
   worker.onmessage = (
     ev: MessageEvent<{
       type: string;
@@ -70,6 +86,15 @@ export function createWorkerSplatSorter(): SplatSorter {
       generation: number;
     }>,
   ) => {
+    if (ev.data.type === 'inited') {
+      initInFlight = false;
+      if (stashedInit) {
+        const next = stashedInit;
+        stashedInit = null;
+        postInit(next);
+      }
+      return;
+    }
     if (ev.data.type === 'sorted') {
       const done = pending.get(ev.data.generation);
       if (!done) return;
@@ -81,9 +106,12 @@ export function createWorkerSplatSorter(): SplatSorter {
   return {
     init(positions: Float32Array): void {
       pending.clear();
-      // Transfer ownership of the positions buffer to the worker (zero-copy) —
-      // the caller relinquishes it, so no duplicate lives on the main thread.
-      worker.postMessage({ type: 'init', positions }, [positions.buffer]);
+      if (initInFlight) {
+        // Coalesce: keep only the newest positions until the worker is free.
+        stashedInit = positions;
+      } else {
+        postInit(positions);
+      }
     },
     sort(camPos, viewDir, generation, done, frustum): void {
       pending.set(generation, done);
@@ -97,6 +125,8 @@ export function createWorkerSplatSorter(): SplatSorter {
     },
     dispose(): void {
       pending.clear();
+      stashedInit = null;
+      initInFlight = false;
       worker.terminate();
     },
   };
