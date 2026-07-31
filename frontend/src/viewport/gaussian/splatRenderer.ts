@@ -921,7 +921,7 @@ export class SplatRenderer {
 export function createSplatRenderer(
   device: GPUDevice,
   format: GPUTextureFormat,
-  sampleCount = 4,
+  sampleCount: number,
   onOrderChanged?: () => void,
 ): SplatRenderer {
   const {

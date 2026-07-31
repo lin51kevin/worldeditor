@@ -64,6 +64,10 @@ import {
   type SplatUploadStatus,
 } from './gaussian/splatRenderer';
 import {
+  ActorSplatInstancer,
+  type ActorInstance,
+} from './gaussian/actorSplatInstancer';
+import {
   uploadMeshData,
   disposeMeshes,
   createDepthTexture,
@@ -224,6 +228,7 @@ export class ViewportRenderer {
   // only built when that cloud is actually used.
   private splatRenderer: SplatRenderer | null = null;
   private actorSplatRenderer: SplatRenderer | null = null;
+  private actorSplatInstancer: import('./gaussian/actorSplatInstancer').ActorSplatInstancer | null = null;
 
   // Desired per-frame GPU compute depth-sort state. Remembered here because the
   // splat renderers are created LAZILY on first upload — long after the host
@@ -1018,6 +1023,43 @@ export class ViewportRenderer {
     this.markSceneDirty();
   }
 
+  // ── Instanced actor splat API (GPU-persistent per-model buffers) ────────
+
+  /**
+   * Upload a model's degree-0 packed splat data to a persistent GPU buffer.
+   * No-op if the same URL was already uploaded.  Must be called before the
+   * URL appears in any {@link updateActorSplatInstances} call.
+   */
+  uploadActorModel(url: string, data: Uint32Array): void {
+    if (!this.device) return;
+    if (!this.actorSplatInstancer) {
+      this.actorSplatInstancer = new ActorSplatInstancer(
+        this.device,
+        this.format,
+        () => this.markSceneDirty(),
+      );
+    }
+    this.actorSplatInstancer.uploadModel(url, data);
+  }
+
+  /**
+   * Per-frame instanced actor update.  Only writes M×32 bytes to the GPU plus
+   * an O(N×3) world-position computation that runs off-thread in the sort
+   * worker.
+   */
+  updateActorSplatInstances(instances: readonly ActorInstance[]): void {
+    if (!this.device || !this.actorSplatInstancer) return;
+    this.actorSplatInstancer.updateInstances(instances);
+    this.markSceneDirty();
+  }
+
+  /** Release all instanced actor GPU buffers. */
+  clearActorSplatInstances(): void {
+    this.actorSplatInstancer?.dispose();
+    this.actorSplatInstancer = null;
+    this.markSceneDirty();
+  }
+
   /** Set the Gaussian splat 2D low-pass dilation (fullness). */
   setSplatDilation(dilation: number): void {
     this.splatRenderer?.setDilation(dilation);
@@ -1315,6 +1357,8 @@ export class ViewportRenderer {
     this.splatRenderer = null;
     this.actorSplatRenderer?.dispose();
     this.actorSplatRenderer = null;
+    this.actorSplatInstancer?.dispose();
+    this.actorSplatInstancer = null;
     this.markerRenderer.dispose();
     disposeMeshes(this.highlightMeshes);
     disposeMeshes(this.linkHighlightMeshes);

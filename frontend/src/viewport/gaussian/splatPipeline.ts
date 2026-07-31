@@ -72,7 +72,7 @@ function createRenderPipeline(
 export function createGaussianSplatPipeline(
   device: GPUDevice,
   format: GPUTextureFormat,
-  sampleCount = 4,
+  sampleCount: number,
 ): GaussianSplatPipelines {
   const bindGroupLayout = device.createBindGroupLayout({
     entries: [
