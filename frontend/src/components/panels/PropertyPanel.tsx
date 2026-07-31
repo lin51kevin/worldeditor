@@ -7,6 +7,8 @@ import { getPlatformService } from '../../services';
 import type { Road, RoadSignal, RoadObjectItem } from '../../services/platform';
 import { RoadMarkingPanel } from './RoadMarkingPanel';
 import { LaneEditor } from './LaneEditor';
+import { BatchRoadEditor } from './BatchRoadEditor';
+import { CrossSectionEditor } from './CrossSectionEditor';
 import { SuperelevationEditor } from './SuperelevationEditor';
 import { CrossfallEditor } from './CrossfallEditor';
 import { JunctionEditor } from './JunctionEditor';
@@ -46,6 +48,7 @@ export function PropertyPanel() {
   const project = useProjectStore((s) => s.project);
   const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
   const selectedJunctionId = useProjectStore((s) => s.selectedJunctionId);
+  const selectedRoadIds = useProjectStore((s) => s.selectedRoadIds);
   const selectedSceneNode = useProjectStore((s) => s.selectedSceneNode);
   const selectedRoad = project.roads.find((r) => r.id === selectedRoadId);
   const selectedJunction = project.junctions.find((j) => j.id === selectedJunctionId);
@@ -87,10 +90,11 @@ export function PropertyPanel() {
     ?? [];
 
   // Determine what to display — signal/object take priority even though selectedRoadId is also set
-  type DisplayMode = 'road' | 'signal' | 'object' | 'junction' | 'none';
+  type DisplayMode = 'multi' | 'road' | 'signal' | 'object' | 'junction' | 'none';
   const displayMode: DisplayMode = (() => {
     if (selectedSceneNode?.type === 'signal') return 'signal';
     if (selectedSceneNode?.type === 'object') return 'object';
+    if (selectedRoadIds.length > 1) return 'multi';
     if (selectedRoad) return 'road';
     if (selectedJunction) return 'junction';
     return 'none';
@@ -134,7 +138,9 @@ export function PropertyPanel() {
 
       {/* Properties content */}
       <div className="property-content">
-          {displayMode === 'road' ? (
+          {displayMode === 'multi' ? (
+            <BatchRoadEditor roadIds={selectedRoadIds} />
+          ) : displayMode === 'road' ? (
             !selectedRoad ? null : (
             <div className="inspector-cards">
               {/* Basic Properties Card */}
@@ -168,7 +174,40 @@ export function PropertyPanel() {
                 </div>
                 <div className="property-row">
                   <span className="property-label">{t('propertyPanel.junction')}</span>
-                  <span className="property-value">{selectedRoad.junction_id ?? '—'}</span>
+                  <input
+                    className="property-input"
+                    value={selectedRoad.junction_id ?? ''}
+                    placeholder="—"
+                    aria-label={t('propertyPanel.junction')}
+                    onChange={(e) => {
+                      const value = e.target.value.trim();
+                      useProjectStore.getState().updateRoad(selectedRoad.id, { junction_id: value === '' ? null : value });
+                    }}
+                  />
+                </div>
+                <div className="property-row">
+                  <span className="property-label">{t('propertyPanel.speed')}</span>
+                  <input
+                    className="property-input property-input-narrow"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={selectedRoad.speed ?? ''}
+                    placeholder="—"
+                    aria-label={t('propertyPanel.speed')}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === '') {
+                        useProjectStore.getState().updateRoad(selectedRoad.id, { speed: undefined });
+                        return;
+                      }
+                      const value = parseFloat(raw);
+                      if (!Number.isNaN(value) && value >= 0) {
+                        useProjectStore.getState().updateRoad(selectedRoad.id, { speed: value });
+                      }
+                    }}
+                  />
+                  <span className="property-unit">m/s</span>
                 </div>
               </CardSection>
 
@@ -216,6 +255,11 @@ export function PropertyPanel() {
                   laneSections={selectedRoad.lane_sections}
                   roadLength={selectedRoad.length}
                 />
+              </CardSection>
+
+              {/* Cross-section Card */}
+              <CardSection title={t('crossSection.title')} defaultOpen={false}>
+                <CrossSectionEditor road={selectedRoad} />
               </CardSection>
 
               {/* Elevation Card */}

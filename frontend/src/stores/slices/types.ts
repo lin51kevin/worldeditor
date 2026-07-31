@@ -79,7 +79,7 @@ export interface EditorState {
   addRoad: (road: Road) => void;
   addRoads: (roads: Road[]) => void;
   removeRoad: (id: string) => void;
-  updateRoad: (id: string, updates: Partial<Pick<Road, 'name' | 'length' | 'junction_id'>>) => void;
+  updateRoad: (id: string, updates: Partial<Pick<Road, 'name' | 'length' | 'junction_id' | 'speed'>>) => void;
   updateRoadGeometry: (id: string, planView: Geometry[], length: number, splineEditData?: [number, number, number][]) => void;
   cloneRoad: (id: string, newId: string, offsetXy: [number, number]) => void;
   reverseRoad: (id: string) => void;

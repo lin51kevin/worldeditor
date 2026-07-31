@@ -271,6 +271,17 @@
   background: var(--color-bg-hover);
 }
 
+.property-btn-danger {
+  color: #e05050;
+  border-color: rgba(224, 80, 80, 0.5);
+}
+
+.property-btn-danger:hover {
+  color: #fff;
+  background: #e05050;
+  border-color: #e05050;
+}
+
 .property-btn-delete-lane {
   padding: 1px 5px;
   font-size: 13px;

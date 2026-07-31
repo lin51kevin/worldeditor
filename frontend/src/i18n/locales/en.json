@@ -195,6 +195,7 @@
     "name": "Name",
     "length": "Length",
     "junction": "Junction",
+    "speed": "Speed",
     "geometry": "Geometry",
     "editGeometry": "Edit Geometry",
     "finishEditGeometry": "Finish Editing",
@@ -349,6 +350,7 @@
     "autoCreateTrashBin": "Auto Create Trash Bins",
     "autoSplitOverlapping": "Auto Split Overlapping",
     "autoCreateJunction": "Auto Create Junction",
+    "autoDetectJunctions": "Auto Detect Junctions",
     "autoCreateSignBoard": "Auto Create Sign Boards",
     "autoCreateContinuousRoad": "Auto Create Continuous Road",
     "autoCreateTrafficSignal": "Auto Create Traffic Signals",
@@ -392,6 +394,27 @@
     "speedLimit": "Speed Limit",
     "pedestrianCrossing": "Pedestrian Crossing",
     "custom": "Custom signal"
+  },
+  "batchEdit": {
+    "title": "Batch Edit ({{count}} roads)",
+    "namePrefix": "Name prefix",
+    "speed": "Speed (m/s)",
+    "laneType": "Lane type",
+    "laneWidth": "Lane width (m)",
+    "visibility": "Visibility",
+    "hideAll": "Hide all",
+    "showAll": "Show all",
+    "deleteAll": "Delete {{count}} roads",
+    "apply": "Apply"
+  },
+  "crossSection": {
+    "title": "Cross-section",
+    "station": "Station",
+    "addLeft": "+ Left lane",
+    "addRight": "+ Right lane",
+    "selectedWidth": "Lane {{id}} width",
+    "remove": "Remove",
+    "selectHint": "Click a lane to edit its width."
   },
   "templatePanel": {
     "header": "Templates",
@@ -981,6 +1004,8 @@
     "editJunctionTooltip": "Enter interactive mode: click roads to attach/detach from junction",
     "autoCreateJunction": "Create Junction",
     "autoCreateJunctionTooltip": "Create a junction from the selected roads",
+    "autoDetectJunctions": "Auto-detect junctions",
+    "noIntersectionsDetected": "No intersections detected",
     "buildJunctionPolygonTooltip": "Generate junction area polygon",
     "autoDeployCrosswalksTooltip": "Auto-deploy crosswalks at junction entrances",
     "autoDeployStopLinesTooltip": "Auto-deploy stop lines at junction entrances",

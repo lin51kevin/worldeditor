@@ -195,6 +195,7 @@
     "name": "名称",
     "length": "长度",
     "junction": "路口",
+    "speed": "限速",
     "geometry": "几何",
     "editGeometry": "编辑几何",
     "finishEditGeometry": "完成编辑",
@@ -349,6 +350,7 @@
     "autoCreateTrashBin": "自动创建垃圾桶",
     "autoSplitOverlapping": "自动切割重叠",
     "autoCreateJunction": "自动创建路口",
+    "autoDetectJunctions": "自动检测路口",
     "autoCreateSignBoard": "自动创建标识牌",
     "autoCreateContinuousRoad": "自动创建连续道路",
     "autoCreateTrafficSignal": "自动创建交通信号",
@@ -392,6 +394,27 @@
     "speedLimit": "限速标志",
     "pedestrianCrossing": "人行横道",
     "custom": "自定义信号"
+  },
+  "batchEdit": {
+    "title": "批量编辑（{{count}} 条道路）",
+    "namePrefix": "名称前缀",
+    "speed": "速度 (m/s)",
+    "laneType": "车道类型",
+    "laneWidth": "车道宽度 (m)",
+    "visibility": "可见性",
+    "hideAll": "全部隐藏",
+    "showAll": "全部显示",
+    "deleteAll": "删除 {{count}} 条道路",
+    "apply": "应用"
+  },
+  "crossSection": {
+    "title": "横断面",
+    "station": "站点",
+    "addLeft": "+ 左侧车道",
+    "addRight": "+ 右侧车道",
+    "selectedWidth": "车道 {{id}} 宽度",
+    "remove": "删除",
+    "selectHint": "点击车道以编辑其宽度。"
   },
   "templatePanel": {
     "header": "模板",
@@ -981,6 +1004,8 @@
     "editJunctionTooltip": "进入交互模式：点击道路可添加/移除入口道路",
     "autoCreateJunction": "创建路口",
     "autoCreateJunctionTooltip": "从选中的道路创建路口",
+    "autoDetectJunctions": "自动检测路口",
+    "noIntersectionsDetected": "未检测到交叉口",
     "buildJunctionPolygonTooltip": "生成路口区域多边形",
     "autoDeployCrosswalksTooltip": "在路口入口处自动铺设斑马线",
     "autoDeployStopLinesTooltip": "在路口入口处自动铺设停车线",
