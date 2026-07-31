@@ -6,10 +6,10 @@
 use crate::render_config::RoadRenderConfig;
 use crate::vertex::ColorVertex;
 use we_core::geometry::eval::{
-    TessellationParams, evaluate_elevation, evaluate_lane_width, offset_point,
+    TessellationParams, evaluate_elevation, evaluate_lane_width, lateral_z_offset, offset_point,
     sample_road_reference_line_adaptive,
 };
-use we_core::model::{LaneType, Road, RoadMarkColor};
+use we_core::model::{Crossfall, LaneType, Road, RoadMarkColor, Superelevation};
 
 /// Color palette for lane types (RGBA), read from RoadRenderConfig.
 fn lane_color(lane_type: LaneType, config: &RoadRenderConfig) -> [f32; 4] {
@@ -73,6 +73,8 @@ pub fn generate_road_mesh(
                 &lane.width,
                 section.s,
                 &road.elevation_profile,
+                &road.lateral_profile.superelevations,
+                &road.lateral_profile.crossfalls,
                 right_offset,
                 false, // right side
                 color,
@@ -93,6 +95,8 @@ pub fn generate_road_mesh(
                 &lane.width,
                 section.s,
                 &road.elevation_profile,
+                &road.lateral_profile.superelevations,
+                &road.lateral_profile.crossfalls,
                 left_offset,
                 true, // left side
                 color,
@@ -112,11 +116,14 @@ pub fn generate_road_mesh(
 }
 
 /// Generate a triangle strip for a single lane.
+#[allow(clippy::too_many_arguments)]
 fn generate_lane_strip(
     ref_pts: &[&we_core::geometry::eval::RefLinePoint],
     widths: &[we_core::model::LaneWidth],
     section_s: f64,
     elevations: &[we_core::model::Elevation],
+    superelevations: &[Superelevation],
+    crossfalls: &[Crossfall],
     inner_offset: f64,
     is_left: bool,
     color: [f32; 4],
@@ -133,8 +140,8 @@ fn generate_lane_strip(
         let w0 = evaluate_lane_width(widths, ds0);
         let w1 = evaluate_lane_width(widths, ds1);
 
-        let z0 = evaluate_elevation(elevations, pt0.s) as f32;
-        let z1 = evaluate_elevation(elevations, pt1.s) as f32;
+        let base_z0 = evaluate_elevation(elevations, pt0.s);
+        let base_z1 = evaluate_elevation(elevations, pt1.s);
 
         // Inner and outer edges
         let (inner0, outer0) = if is_left {
@@ -149,19 +156,25 @@ fn generate_lane_strip(
             (-inner_offset, -(inner_offset + w1))
         };
 
+        // Per-edge height including superelevation banking + crossfall.
+        let zi0 = (base_z0 + lateral_z_offset(superelevations, crossfalls, pt0.s, inner0)) as f32;
+        let zo0 = (base_z0 + lateral_z_offset(superelevations, crossfalls, pt0.s, outer0)) as f32;
+        let zi1 = (base_z1 + lateral_z_offset(superelevations, crossfalls, pt1.s, inner1)) as f32;
+        let zo1 = (base_z1 + lateral_z_offset(superelevations, crossfalls, pt1.s, outer1)) as f32;
+
         let (ix0, iy0, _) = offset_point(pt0, inner0, 0.0);
         let (ox0, oy0, _) = offset_point(pt0, outer0, 0.0);
         let (ix1, iy1, _) = offset_point(pt1, inner1, 0.0);
         let (ox1, oy1, _) = offset_point(pt1, outer1, 0.0);
 
         // Two triangles: inner0-outer0-inner1, outer0-outer1-inner1
-        verts.push(ColorVertex::new([ix0 as f32, iy0 as f32, z0], color));
-        verts.push(ColorVertex::new([ox0 as f32, oy0 as f32, z0], color));
-        verts.push(ColorVertex::new([ix1 as f32, iy1 as f32, z1], color));
+        verts.push(ColorVertex::new([ix0 as f32, iy0 as f32, zi0], color));
+        verts.push(ColorVertex::new([ox0 as f32, oy0 as f32, zo0], color));
+        verts.push(ColorVertex::new([ix1 as f32, iy1 as f32, zi1], color));
 
-        verts.push(ColorVertex::new([ox0 as f32, oy0 as f32, z0], color));
-        verts.push(ColorVertex::new([ox1 as f32, oy1 as f32, z1], color));
-        verts.push(ColorVertex::new([ix1 as f32, iy1 as f32, z1], color));
+        verts.push(ColorVertex::new([ox0 as f32, oy0 as f32, zo0], color));
+        verts.push(ColorVertex::new([ox1 as f32, oy1 as f32, zo1], color));
+        verts.push(ColorVertex::new([ix1 as f32, iy1 as f32, zi1], color));
     }
 
     verts
@@ -522,7 +535,7 @@ mod tests {
             d: 0.0,
         }];
 
-        let verts = generate_lane_strip(&section_pts, &widths, 0.0, &[], 0.0, true, [1.0; 4]);
+        let verts = generate_lane_strip(&section_pts, &widths, 0.0, &[], &[], &[], 0.0, true, [1.0; 4]);
 
         assert_eq!(verts.len(), 6);
         assert_position_close(verts[0].position, [0.0, 0.0, 0.0]);
@@ -543,7 +556,7 @@ mod tests {
             d: 0.0,
         }];
 
-        let verts = generate_lane_strip(&section_pts, &widths, 0.0, &[], 1.0, false, [1.0; 4]);
+        let verts = generate_lane_strip(&section_pts, &widths, 0.0, &[], &[], &[], 1.0, false, [1.0; 4]);
 
         assert_eq!(verts.len(), 6);
         assert_position_close(verts[0].position, [0.0, -1.0, 0.0]);

@@ -8,6 +8,8 @@ pub(crate) fn gen_lane_strip(
     section_s: f64,
     elevations: &[we_core::model::Elevation],
     lane_offsets: &[we_core::model::LaneOffset],
+    superelevations: &[we_core::model::Superelevation],
+    crossfalls: &[we_core::model::Crossfall],
     prev_widths: &[&[we_core::model::LaneWidth]],
     is_left: bool,
     color: [f32; 4],
@@ -16,6 +18,8 @@ pub(crate) fn gen_lane_strip(
     eval_lane_off: &impl Fn(&[we_core::model::LaneOffset], f64) -> f64,
     offset_pt: &impl Fn(&we_core::geometry::eval::RefLinePoint, f64, f64) -> (f64, f64, f64),
 ) -> Vec<[f32; 7]> {
+    use we_core::geometry::eval::lateral_z_offset;
+
     let mut verts = Vec::new();
     let [r, g, b, a] = color;
 
@@ -34,8 +38,8 @@ pub(crate) fn gen_lane_strip(
         let inner0 = sum_widths_at_ds(prev_widths, ds0, eval_width);
         let inner1 = sum_widths_at_ds(prev_widths, ds1, eval_width);
 
-        let z0 = eval_elev(elevations, pt0.s) as f32;
-        let z1 = eval_elev(elevations, pt1.s) as f32;
+        let base_z0 = eval_elev(elevations, pt0.s);
+        let base_z1 = eval_elev(elevations, pt1.s);
 
         let lo0 = eval_lane_off(lane_offsets, pt0.s);
         let lo1 = eval_lane_off(lane_offsets, pt1.s);
@@ -51,17 +55,23 @@ pub(crate) fn gen_lane_strip(
             (lo1 - inner1, lo1 - (inner1 + w1))
         };
 
+        // Per-edge height including superelevation banking + crossfall.
+        let zi0 = (base_z0 + lateral_z_offset(superelevations, crossfalls, pt0.s, in0)) as f32;
+        let zo0 = (base_z0 + lateral_z_offset(superelevations, crossfalls, pt0.s, out0)) as f32;
+        let zi1 = (base_z1 + lateral_z_offset(superelevations, crossfalls, pt1.s, in1)) as f32;
+        let zo1 = (base_z1 + lateral_z_offset(superelevations, crossfalls, pt1.s, out1)) as f32;
+
         let (ix0, iy0, _) = offset_pt(pt0, in0, 0.0);
         let (ox0, oy0, _) = offset_pt(pt0, out0, 0.0);
         let (ix1, iy1, _) = offset_pt(pt1, in1, 0.0);
         let (ox1, oy1, _) = offset_pt(pt1, out1, 0.0);
 
-        verts.push([ix0 as f32, iy0 as f32, z0, r, g, b, a]);
-        verts.push([ox0 as f32, oy0 as f32, z0, r, g, b, a]);
-        verts.push([ix1 as f32, iy1 as f32, z1, r, g, b, a]);
-        verts.push([ox0 as f32, oy0 as f32, z0, r, g, b, a]);
-        verts.push([ox1 as f32, oy1 as f32, z1, r, g, b, a]);
-        verts.push([ix1 as f32, iy1 as f32, z1, r, g, b, a]);
+        verts.push([ix0 as f32, iy0 as f32, zi0, r, g, b, a]);
+        verts.push([ox0 as f32, oy0 as f32, zo0, r, g, b, a]);
+        verts.push([ix1 as f32, iy1 as f32, zi1, r, g, b, a]);
+        verts.push([ox0 as f32, oy0 as f32, zo0, r, g, b, a]);
+        verts.push([ox1 as f32, oy1 as f32, zo1, r, g, b, a]);
+        verts.push([ix1 as f32, iy1 as f32, zi1, r, g, b, a]);
     }
 
     verts
@@ -158,6 +168,8 @@ mod tests {
                 c: 0.0,
                 d: 0.0,
             }],
+            &[],
+            &[],
             &[&prev_widths],
             true,
             [0.2, 0.3, 0.4, 0.5],
@@ -174,6 +186,45 @@ mod tests {
     }
 
     #[test]
+    fn test_gen_lane_strip_applies_superelevation_banking() {
+        use we_core::model::Superelevation;
+
+        let ref_pts = ref_points();
+        let ref_refs = vec![&ref_pts[0], &ref_pts[1]];
+        // 0.1 rad bank. Left lane spans t in [0, 3]; outer edge (t=3) rises,
+        // inner edge (t=0) stays at base elevation 0.
+        let super_profile = [Superelevation {
+            s: 0.0,
+            a: 0.1,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }];
+        let verts = gen_lane_strip(
+            &ref_refs,
+            &[width(3.0)],
+            0.0,
+            &[],
+            &[],
+            &super_profile,
+            &[],
+            &[],
+            true,
+            [1.0, 1.0, 1.0, 1.0],
+            &|_, _| 0.0,
+            &|widths: &[LaneWidth], _| widths[0].a,
+            &|_, _| 0.0,
+            &|pt: &RefLinePoint, t, _| (pt.x, pt.y + t, 0.0),
+        );
+
+        // verts[0] is the inner edge (t=0) → z stays 0.
+        assert!((verts[0][2] - 0.0).abs() < 1e-5);
+        // verts[1] is the outer edge (t=3) → z = 3 * sin(0.1).
+        let expected = (3.0 * 0.1_f64.sin()) as f32;
+        assert!((verts[1][2] - expected).abs() < 1e-5);
+    }
+
+    #[test]
     fn test_gen_lane_strip_skips_segments_with_zero_width() {
         let ref_pts = ref_points();
         let ref_refs = vec![&ref_pts[0], &ref_pts[1]];
@@ -181,6 +232,8 @@ mod tests {
             &ref_refs,
             &[width(0.0)],
             0.0,
+            &[],
+            &[],
             &[],
             &[],
             &[],
