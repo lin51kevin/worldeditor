@@ -36,6 +36,7 @@ import {
 } from './trajectoryActorModels';
 import { GAUSSIAN_SPLAT_LAYOUT_VERSION } from './gaussian/splatLayout';
 import { useTrajectoryConfigStore } from '../stores/trajectoryConfigStore';
+import { usePointCloudStore } from '../plugins/gis-viz/pointcloud/pointcloudState';
 
 /** Max size (bytes) accepted for a trajectory import (guards runaway files). */
 const MAX_TRAJECTORY_SIZE_BYTES = 100 * 1024 * 1024;
@@ -75,6 +76,34 @@ let followPerf = 0;
 let followPrevGround: [number, number] | null = null;
 /** Minimum travel between frames (m) before the heading tracks motion. */
 const FOLLOW_HEADING_MIN_MOVE = 0.01;
+
+/**
+ * Apply or restore Gaussian splat sort settings to eliminate flickering during
+ * follow/front camera playback.
+ *
+ * When the chase camera is active the static scene splat cloud must be depth-
+ * sorted on *every rendered frame* — the camera moves continuously and the
+ * 30 fps CPU-sort rate cap (the user's performance trade-off for a static
+ * camera) causes visibly wrong alpha blending on the road surface.
+ *
+ * Strategy:
+ * - `enable = true`  → zero the rate cap + enable the per-frame GPU compute
+ *   sort (no-op fallback when the texture-array path is unavailable).
+ * - `enable = false` → restore whatever the user has configured in the
+ *   point-cloud panel (cap + GPU-sort toggle).
+ */
+function applyFollowSortMode(enable: boolean): void {
+  const renderer = getViewportRenderer();
+  if (!renderer) return;
+  if (enable) {
+    renderer.setSplatRefreshFps(0);  // realtime CPU sort (no artificial cap)
+    renderer.setSplatGpuSort(true);  // per-frame GPU sort if available
+  } else {
+    const pc = usePointCloudStore.getState();
+    renderer.setSplatRefreshFps(pc.splatRefreshFps);
+    renderer.setSplatGpuSort(pc.splatGpuSort);
+  }
+}
 
 // Loaded ego car model (`ego.glb`). Null until the async load resolves (or if
 // it fails, in which case the ego falls back to a bounding box).
@@ -214,6 +243,11 @@ function ensureSubscribed(): void {
       getViewportRenderer()?.setChaseCameraActive(
         Boolean(followActive && ego && ego.rows.length > 0),
       );
+      // In follow/front mode the camera moves every frame — disable the sort
+      // rate cap and switch to per-frame GPU sort so the static scene splat
+      // cloud (road surface) is always depth-sorted for the current camera
+      // position, preventing the flickering caused by a stale CPU sort order.
+      if (modeChanged) applyFollowSortMode(followActive);
     }
 
     // Update the camera before actor buffers are submitted so both use the same
@@ -421,6 +455,10 @@ export function stopTrajectory(): void {
   }
   followPose = null;
   followPerf = 0;
+  // If we left while a follow camera was active, restore the splat sort
+  // settings that were in effect before follow mode was engaged.
+  const wasFollowing = useTrajectoryStore.getState().cameraMode !== 'off';
+  if (wasFollowing) applyFollowSortMode(false);
   // Clear the static-scene point cloud / Gaussian splats and the cached actor
   // models, and close the config panel — closing must wipe everything, not just
   // the trajectory ribbons/boxes.

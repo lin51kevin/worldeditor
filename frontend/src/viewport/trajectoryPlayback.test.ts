@@ -14,6 +14,8 @@ const renderer = vi.hoisted(() => ({
   setFrontCam3D: vi.fn(),
   setChaseCameraActive: vi.fn(),
   frameScene3D: vi.fn(),
+  setSplatRefreshFps: vi.fn(),
+  setSplatGpuSort: vi.fn(),
 }));
 
 vi.mock('./viewportRef', () => ({
