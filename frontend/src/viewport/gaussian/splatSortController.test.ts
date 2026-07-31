@@ -236,4 +236,24 @@ describe('SplatSortController', () => {
     expect(Array.from(idx)).toEqual([1, 2, 0]);
     expect(onSorted).toHaveBeenLastCalledWith(idx, 3);
   });
+
+  it('discards CPU sort results while suppressed (GPU sort active)', () => {
+    const onSorted = vi.fn();
+    const ctrl = new SplatSortController(new MainThreadSplatSorter(), onSorted);
+    ctrl.setSplats(new Float32Array([0, 0, 1, 0, 0, 3]));
+    ctrl.suppress();
+    // Sort is dispatched but deliver should be suppressed.
+    ctrl.onCamera([0, 0, 0], [0, 0, 1]);
+    expect(onSorted).toHaveBeenCalledTimes(0);
+  });
+
+  it('resumes delivering CPU sort results after unsuppress', () => {
+    const onSorted = vi.fn();
+    const ctrl = new SplatSortController(new MainThreadSplatSorter(), onSorted);
+    ctrl.setSplats(new Float32Array([0, 0, 1, 0, 0, 3]));
+    ctrl.suppress();
+    ctrl.unsuppress();
+    ctrl.onCamera([0, 0, 0], [0, 0, 1]);
+    expect(onSorted).toHaveBeenCalledTimes(1);
+  });
 });

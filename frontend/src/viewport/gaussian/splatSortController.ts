@@ -137,6 +137,14 @@ export class SplatSortController {
   private pendingPose: CameraPose | null = null;
   /** Timer that guarantees a final resting sort when render-on-demand goes idle. */
   private refreshTimer: TimerHandle | null = null;
+  /**
+   * When `true`, incoming sort results are discarded without being applied to
+   * the order buffer. Set while the GPU compute sort is active so that a
+   * stale CPU worker result that was in-flight at the moment GPU sort was
+   * enabled cannot overwrite the freshly GPU-sorted order and cause a
+   * one-frame flicker.
+   */
+  private suppressed = false;
 
   constructor(
     private readonly sorter: SplatSorter,
@@ -199,6 +207,14 @@ export class SplatSortController {
 
   /** Deliver a sort result, ignoring any that are older than the newest seen. */
   deliver(indices: Uint32Array, visibleCount: number, generation: number): void {
+    // While suppressed (GPU sort is active), discard CPU worker results so a
+    // stale in-flight sort cannot overwrite the GPU-sorted order buffer and
+    // produce a one-frame flicker.
+    if (this.suppressed) {
+      if (generation === this.inFlightGeneration) this.inFlightGeneration = null;
+      this.queuedPose = null;
+      return;
+    }
     const wasInFlight = generation === this.inFlightGeneration;
     if (wasInFlight) this.inFlightGeneration = null;
     if (generation === this.latestRequested && generation > this.latestDelivered) {
@@ -218,6 +234,19 @@ export class SplatSortController {
     this.lastPose = null;
     this.clearPendingRefresh();
   }
+
+  /**
+   * Suppress incoming CPU sort results (called when GPU sort takes over).
+   * Any worker result that arrives while suppressed is silently discarded.
+   */
+  suppress(): void { this.suppressed = true; }
+
+  /**
+   * Resume accepting CPU sort results (called when GPU sort is disabled
+   * or falls back to CPU). Always paired with a subsequent `invalidate()` so
+   * the CPU sort re-runs with the current camera pose.
+   */
+  unsuppress(): void { this.suppressed = false; }
 
   dispose(): void {
     this.clearPendingRefresh();

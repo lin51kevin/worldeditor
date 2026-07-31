@@ -695,9 +695,16 @@ export class SplatRenderer {
     // async worker sort and keep the whole cloud drawable (behind-eye splats are
     // culled in the vertex shader). Otherwise drive the CPU worker sort.
     if (this.isGpuSortEligible()) {
+      // Suppress CPU sort deliveries so an in-flight worker result cannot
+      // overwrite the GPU-sorted order buffer and cause a one-frame flicker.
+      this.sort.suppress();
       this.resources.markAllVisible();
       return;
     }
+    // GPU sort is not eligible for this cloud or device — ensure CPU sort can
+    // deliver its results (it may have been suppressed by a prior setGpuSort(true)
+    // or an earlier eligible frame).
+    this.sort.unsuppress();
     // Frustum-cull off-screen splats in 3D (the perspective frustum tapers, so
     // culling is worthwhile). In 2D the orthographic view fills the viewport
     // and lateral culling buys little, so it is skipped.
@@ -724,9 +731,14 @@ export class SplatRenderer {
     this.gpuSortDirty = true;
     console.info(`[Splat] GPU depth sort ${enabled ? "requested" : "disabled"}`);
     if (enabled) {
+      // Pre-suppress CPU sort results so that any worker sort already in-flight
+      // at the moment we switch does not overwrite the GPU-sorted order buffer.
+      // onCamera() will re-check eligibility each frame and keep this in sync.
+      this.sort.suppress();
       this.resources.markAllVisible();
     } else {
       // Back to the CPU path: force a fresh worker sort on the next frame.
+      this.sort.unsuppress();
       this.sort.invalidate();
     }
     this.onOrderChanged?.();
@@ -831,6 +843,7 @@ export class SplatRenderer {
       this.useGpuSort = false;
       this.gpuSorter?.dispose();
       this.gpuSorter = null;
+      this.sort.unsuppress();
       this.sort.invalidate();
       return false;
     }
