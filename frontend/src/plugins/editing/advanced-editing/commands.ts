@@ -17,6 +17,11 @@ import {
   isRoadLinkedToJunction,
 } from '../../../utils/junctionEditing';
 import {
+  clusterRoadContacts,
+  detectJunctionClusters,
+  DEFAULT_JUNCTION_DETECT_THRESHOLD,
+} from '../../../utils/junctionAutoDetect';
+import {
   splitRoadAt,
   weldRoads as weldRoadsUtil,
   deploySidewalks as deploySidewalksUtil,
@@ -592,4 +597,39 @@ export function autoCreateJunction(): void {
   setTimeout(() => {
     selectJunction(junctionId);
   }, 0);
+}
+
+/**
+ * Scan the whole network for clusters of coincident road endpoints and create
+ * a junction at each detected intersection, attaching the involved roads.
+ * Runs as a single undo step.
+ */
+export function autoDetectJunctions(): void {
+  const { project, executePluginCommand } = getStore();
+
+  const clusters = detectJunctionClusters(project, DEFAULT_JUNCTION_DETECT_THRESHOLD);
+  if (clusters.length === 0) {
+    void showAlert(t('advancedEditing.noIntersectionsDetected', 'No intersections detected'));
+    return;
+  }
+
+  executePluginCommand(
+    t('advancedEditing.autoDetectJunctions', 'Auto-detect junctions'),
+    (p) => {
+      let updated = p;
+      for (const cluster of clusters) {
+        const junctionId = genId();
+        updated = {
+          ...updated,
+          junctions: [...updated.junctions, { id: junctionId, name: `Junction(${junctionId})`, connections: [] }],
+        };
+        for (const { roadId, contactPoint } of clusterRoadContacts(cluster)) {
+          if (!updated.roads.some((r) => r.id === roadId)) continue;
+          const cp = contactPoint === 'start' ? 'Start' : 'End';
+          updated = attachRoadToJunction(updated, junctionId, roadId, cp);
+        }
+      }
+      return updated;
+    },
+  );
 }

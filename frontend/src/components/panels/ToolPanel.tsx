@@ -10,7 +10,7 @@ import {
   startObjectPlacement,
   startSignalPlacement,
 } from '../../hooks/useSignalPlacement';
-import { autoCreateJunction } from '../../plugins/editing/advanced-editing/commands';
+import { autoCreateJunction, autoDetectJunctions } from '../../plugins/editing/advanced-editing/commands';
 import './ToolPanel.css';
 
 interface ToolItem {
@@ -27,6 +27,7 @@ const TOOLS: ToolItem[] = [
   { icon: 'Trash2', labelKey: 'toolPanel.autoCreateTrashBin', disabled: true },
   { icon: 'Scissors', labelKey: 'toolPanel.autoSplitOverlapping', disabled: true },
   { icon: 'Diamond', labelKey: 'toolPanel.autoCreateJunction', action: autoCreateJunction },
+  { icon: 'Waypoints', labelKey: 'toolPanel.autoDetectJunctions', action: autoDetectJunctions },
   { icon: 'PanelTop', labelKey: 'toolPanel.autoCreateSignBoard', disabled: true },
   { icon: 'Link2', labelKey: 'toolPanel.autoCreateContinuousRoad', disabled: true },
   { icon: 'TrafficCone', labelKey: 'toolPanel.autoCreateTrafficSignal', disabled: true },
