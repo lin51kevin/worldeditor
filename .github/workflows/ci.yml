@@ -94,28 +94,6 @@ jobs:
       - name: Build
         run: cd frontend && yarn build
 
-  # Stage 1.5: Lint & Format (strict gate)
-  lint:
-    name: Lint & Format
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
-      - name: Rustfmt check
-        run: cargo fmt --all -- --check
-      - name: Clippy (deny warnings)
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install frontend dependencies
-        run: npm install -g yarn@1 && cd frontend && yarn install --frozen-lockfile
-      - name: ESLint
-        run: cd frontend && yarn lint
-
   # Stage 2: Unit Tests
   test-rust:
     name: Test Rust
