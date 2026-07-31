@@ -5,6 +5,87 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ---
 
+<a name="0.4.1"></a>
+## [0.4.1] — 2026-07-31
+
+### Features
+
+- **frontend**: cross-section visual lane profile editor ([`7b32982`])
+- **frontend**: auto-detect junctions from coincident road endpoint clusters ([`db25950`])
+- **frontend**: batch road editing and property panel improvements ([`197ddd1`])
+- **frontend**: angle-snap drawing constraint (Shift=15° heading lock) ([`bbdcf6c`])
+- **we-core**: add evaluate_superelevation and lateral_z_offset evaluators ([`0f8abfd`])
+- **we-render,we-wasm**: apply superelevation/crossfall banking to lane-strip mesh ([`d12f1a0`])
+- **plugins**: Phase A — SDK foundation, source-derived trust tiers, shared runtime ([`ecb594e`])
+- **plugins**: Phase B (1/2) — trusted-UI plugin pattern + validation migration ([`cddfaf0`])
+- **plugins**: Phase B (2/2) — migrate traffic + converter to trusted UI plugins ([`2310d93`])
+- **plugins**: externalize I/O + gis-tools plugins with filesystem loading ([`4eab773`])
+- **plugins**: externalize beta stubs + add beta-gating to bootstrap ([`9886818`])
+- **plugins**: externalize satellite (beta) overlay plugin ([`246790c`])
+- **plugins**: externalize scripting (beta) command console ([`3d6f0e3`])
+- **plugins**: extract trajectory playback UI into a built-in plugin ([`3512dbe`])
+- **plugins**: add 'Open Plugins Folder' button + clarify plugin locations ([`6b884ff`])
+- **viewport**: separate scene + actor (NPC/ego) gaussian splat pipelines ([`c155d2d`])
+- **viewport**: wire fly-mode keyboard + render loop into host camera facade ([`b93af50`])
+- **splat**: wire GPU compute sort into the frame loop (opt-in) ([`0579f06`])
+- **splat**: rework GPU compute sorter for texture-array path ([`da5e4f6`])
+- **splat**: add GPU positions buffer for compute-sort depth pass ([`df4a67f`])
+- **sdk**: expose ego vehicle mesh upload/clear in renderer facade ([`5134b6b`])
+- add trajectory scene config panel with per-actor Gaussian PLY mapping ([`e9c0053`])
+- add trajectory actor picking and info tooltip ([`dad567a`])
+- add trajectory preview real-time FPS/frame-time HUD ([`f011043`])
+- expose setSplatGpuSort on rnk-next facade ([`fb0f492`])
+- add setStaticSceneVisible toggle to renderer and SDK ([`36422f4`])
+- add one-click web build and Docker/CI-CD deploy pipeline ([`c398d34`])
+- add local nginx script to serve frontend/dist ([`5c6415f`])
+- hide desktop-only UI on web version ([`550209b`])
+
+### Performance
+
+- **size**: panic=abort release profile — desktop binary 12.8 MB → 6.5 MB (−49%) ([`ccb0a8b`])
+- **wasm**: slim we-wasm build (strip + wasm-opt -Oz + gate desktop-only modules) ([`cb476ec`])
+- **splat**: skip GPU depth sort when cloud + camera unchanged ([`a91fccf`])
+- **3dgs,trajectory**: cap playback render rate and frustum-cull splats ([`42b0b8b`])
+- **pointcloud**: reclaim worker WASM heap after Gaussian splat load ([`7b0a733`])
+- **viewport**: make cursor flush idle-aware to stop idle CPU spin ([`a851dfc`])
+
+### Fixes
+
+- **splat**: raw-depth EWA Jacobian, per-axis footprint cap, near-camera cull ([`a6f2326`])
+- **splat**: correct GPU counting-sort cross-block prefix scan ([`c908bdb`])
+- **splat**: build GPU positions buffer before the worker neuters it ([`28562be`])
+- **splat**: coalesce depth-sort requests to prevent worker backlog ([`0f77395`])
+- **plugins**: show all built-in plugins in the manager (regression) ([`8d25893`])
+- **shortcuts**: remap browser-reserved shortcuts to Ctrl+Alt on web ([`117bfdc`])
+- 3DGS splat cloud reload renders stale/exploded and crashes ([`481a8a5`])
+- prevent stale CPU sort from overwriting GPU-sorted order buffer ([`4350483`])
+- eliminate road-surface flickering during follow/front camera playback ([`fb4b4f1`])
+- trajectory playback bar overflow and HUD top offset ([`96c2fa0`])
+- cap floating panel height and keep drag within visible chrome ([`afda874`])
+- resolve clippy and ESLint errors blocking CI Lint & Format step ([`c73583c`])
+
+### Refactor
+
+- 菜单全面重组 — 新增 Road 菜单、View 接管面板开关、修复重复项 ([`745b6e7`])
+- replace followEgo with cameraMode tri-state and add front camera ([`b831257`])
+- **plugins**: co-locate trajectory UI files into the plugin directory ([`3c630cd`])
+
+### Build
+
+- **rnk-next**: unify SDK vendor output as we-next-sdk.{js,wasm} ([`6824116`])
+- **wasm**: split full/slim wasm-pkg outputs into separate dirs ([`e6fad82`])
+
+### Tests
+
+- improve branch/statement coverage to 84.4% / 83.5% ([`3b8566e`])
+- raise frontend coverage to 80%+ across viewport, hooks, plugins and utils ([`4dcedea`])
+
+### CI
+
+- remove Lint & Format job from CI pipeline ([`48ba340`])
+
+---
+
 <a name="0.4.0"></a>
 ## [0.4.0] — 2026-07-23
 
