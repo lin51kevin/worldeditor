@@ -5,7 +5,8 @@
 //! Pure Rust, WASM compatible.
 
 use crate::model::{
-    Elevation, Geometry, GeometryType, LaneOffset, LaneWidth, ParamPoly3Range, Road,
+    Crossfall, CrossfallSide, Elevation, Geometry, GeometryType, LaneOffset, LaneWidth,
+    ParamPoly3Range, Road, Superelevation,
 };
 
 #[path = "arc_eval.rs"]
@@ -408,6 +409,54 @@ pub fn evaluate_elevation(elevations: &[Elevation], s: f64) -> f64 {
     // backward-extrapolation spikes in the rendered surface.
     let ds = (s - entry.s).max(0.0);
     entry.evaluate(ds)
+}
+
+/// Evaluate the superelevation (banking) angle in radians at a road station `s`.
+///
+/// Superelevation rolls the road cross-section about the reference line.
+/// A positive angle raises the left side (positive `t`) and lowers the right.
+/// Returns `0.0` when no entry applies.
+pub fn evaluate_superelevation(superelevations: &[Superelevation], s: f64) -> f64 {
+    let Some(entry) = superelevations.iter().rev().find(|e| e.s <= s + 1e-9) else {
+        return 0.0;
+    };
+    let ds = (s - entry.s).max(0.0);
+    entry.evaluate(ds)
+}
+
+/// Evaluate the vertical height contribution (metres) of the lateral profile
+/// (superelevation + crossfall) for a point at lateral offset `t` at station `s`.
+///
+/// `t` follows the OpenDRIVE convention (positive = left, negative = right).
+///
+/// - Superelevation applies a rigid roll: `z += t * sin(angle)`.
+/// - Crossfall tilts each side downward towards the edge for drainage:
+///   `z -= |t| * sin(angle)` on the side(s) it applies to.
+///
+/// Returns `0.0` when neither profile applies.
+pub fn lateral_z_offset(
+    superelevations: &[Superelevation],
+    crossfalls: &[Crossfall],
+    s: f64,
+    t: f64,
+) -> f64 {
+    let super_angle = evaluate_superelevation(superelevations, s);
+    let mut z = t * super_angle.sin();
+
+    if let Some(entry) = crossfalls.iter().rev().find(|e| e.s <= s + 1e-9) {
+        let applies = match entry.side {
+            CrossfallSide::Both => true,
+            CrossfallSide::Left => t > 0.0,
+            CrossfallSide::Right => t < 0.0,
+        };
+        if applies {
+            let ds = (s - entry.s).max(0.0);
+            let angle = entry.evaluate(ds);
+            z -= t.abs() * angle.sin();
+        }
+    }
+
+    z
 }
 
 /// Compute an offset point perpendicular to the reference line.
@@ -975,6 +1024,65 @@ mod tests {
         let (ox, oy, _) = offset_point(&pt, 3.5, 0.0);
         assert!((ox + 3.5).abs() < 1e-9); // left of northbound = west
         assert!((oy).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_evaluate_superelevation_selects_last_applicable_entry() {
+        let profile = vec![
+            Superelevation {
+                s: 0.0,
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+            Superelevation {
+                s: 10.0,
+                a: 0.05,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+            },
+        ];
+        assert!((evaluate_superelevation(&profile, 5.0)).abs() < 1e-12);
+        assert!((evaluate_superelevation(&profile, 15.0) - 0.05).abs() < 1e-12);
+        // Empty profile returns 0.
+        assert!((evaluate_superelevation(&[], 5.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_lateral_z_offset_superelevation_rolls_cross_section() {
+        // 0.1 rad bank: left edge rises, right edge sinks by t*sin(angle).
+        let profile = vec![Superelevation {
+            s: 0.0,
+            a: 0.1,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+        }];
+        let left = lateral_z_offset(&profile, &[], 0.0, 3.5);
+        let right = lateral_z_offset(&profile, &[], 0.0, -3.5);
+        assert!((left - 3.5 * 0.1_f64.sin()).abs() < 1e-12);
+        assert!((right + 3.5 * 0.1_f64.sin()).abs() < 1e-12);
+        // Centerline (t = 0) is unaffected.
+        assert!((lateral_z_offset(&profile, &[], 0.0, 0.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_lateral_z_offset_crossfall_lowers_applicable_side() {
+        let crossfalls = vec![Crossfall {
+            s: 0.0,
+            a: 0.08,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+            side: CrossfallSide::Right,
+        }];
+        // Right side (t < 0) is lowered by |t|*sin(angle); left side untouched.
+        let right = lateral_z_offset(&[], &crossfalls, 0.0, -3.0);
+        let left = lateral_z_offset(&[], &crossfalls, 0.0, 3.0);
+        assert!((right + 3.0 * 0.08_f64.sin()).abs() < 1e-12);
+        assert!((left).abs() < 1e-12);
     }
 
     /// When a lane section boundary falls between two geometry-derived sample
