@@ -7,6 +7,7 @@
 
 import { TextureManager } from './textureManager';
 import { SPRITE_SHADER, ROAD_PAINT_SHADER } from './viewportShaders';
+import { MSAA_SAMPLE_COUNT } from './rendererResources';
 
 /** A sprite instance to render as a billboard (faces camera). */
 export interface SpriteInstance {
@@ -132,7 +133,7 @@ export class SpriteRenderer {
         }],
       },
       depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'greater-equal' },
-      multisample: { count: 4 },
+      multisample: { count: MSAA_SAMPLE_COUNT },
       primitive: { topology: 'triangle-list' },
     });
 
@@ -169,7 +170,7 @@ export class SpriteRenderer {
         depthBias: 4,
         depthBiasSlopeScale: 2.0,
       },
-      multisample: { count: 4 },
+      multisample: { count: MSAA_SAMPLE_COUNT },
       primitive: { topology: 'triangle-list' },
     });
   }

@@ -69,17 +69,32 @@ export function disposeMeshes(meshes: RenderableMesh[]): void {
   meshes.length = 0;
 }
 
-/** Create the 4× MSAA depth texture sized to the viewport. */
+/**
+ * Multisample (MSAA) sample count used by every viewport pipeline and the
+ * depth / resolve attachments. Kept in one place so the whole renderer stays in
+ * lockstep (a pipeline's `multisample.count` must match its render target's
+ * `sampleCount`). Set to 1 to disable MSAA entirely: this skips the resolve
+ * texture and renders straight to the swap chain, which is a large fill-rate /
+ * bandwidth win on translucent-overdraw-heavy scenes (case-actor bounding-box
+ * fill, road-network blending) at the cost of edge aliasing.
+ */
+export const MSAA_SAMPLE_COUNT = 1;
+
+/** Create the depth texture sized to the viewport (MSAA sample count applied). */
 export function createDepthTexture(device: GPUDevice, width: number, height: number): GPUTexture {
   return device.createTexture({
     size: [width, height],
     format: 'depth32float',
-    sampleCount: 4,
+    sampleCount: MSAA_SAMPLE_COUNT,
     usage: GPUTextureUsage.RENDER_ATTACHMENT,
   });
 }
 
-/** Create the 4× MSAA color resolve texture sized to the viewport. */
+/**
+ * Create the MSAA color resolve texture sized to the viewport. Only meaningful
+ * when {@link MSAA_SAMPLE_COUNT} > 1; the renderer skips this allocation (and
+ * the resolve step) at 1×.
+ */
 export function createMsaaTexture(
   device: GPUDevice,
   format: GPUTextureFormat,
@@ -89,7 +104,7 @@ export function createMsaaTexture(
   return device.createTexture({
     size: [width, height],
     format,
-    sampleCount: 4,
+    sampleCount: MSAA_SAMPLE_COUNT,
     usage: GPUTextureUsage.RENDER_ATTACHMENT,
   });
 }

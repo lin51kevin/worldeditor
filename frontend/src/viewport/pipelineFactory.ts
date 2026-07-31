@@ -4,6 +4,7 @@
  */
 
 import { GRID_SHADER, BASIC_SHADER } from './viewportShaders';
+import { MSAA_SAMPLE_COUNT } from './rendererResources';
 
 export interface GridPipelineResult {
   pipeline: GPURenderPipeline;
@@ -51,7 +52,7 @@ export function createGridPipeline(device: GPUDevice, format: GPUTextureFormat):
       depthWriteEnabled: false,
       depthCompare: 'greater-equal',
     },
-    multisample: { count: 4 },
+    multisample: { count: MSAA_SAMPLE_COUNT },
     primitive: { topology: 'triangle-list' },
   });
 
@@ -115,7 +116,7 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
       }],
     },
     depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' },
-    multisample: { count: 4 },
+    multisample: { count: MSAA_SAMPLE_COUNT },
     primitive: { topology: 'triangle-list' },
   });
 
@@ -140,7 +141,7 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
       depthBias: 2,
       depthBiasSlopeScale: 2.0,
     },
-    multisample: { count: 4 },
+    multisample: { count: MSAA_SAMPLE_COUNT },
     primitive: { topology: 'triangle-list' },
   });
 
@@ -165,7 +166,7 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
       }],
     },
     depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'greater' },
-    multisample: { count: 4 },
+    multisample: { count: MSAA_SAMPLE_COUNT },
     primitive: { topology: 'triangle-list' },
   });
 
@@ -203,7 +204,7 @@ export function createLaneLinePipeline(
       }}],
     },
     depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' },
-    multisample: { count: 4 },
+    multisample: { count: MSAA_SAMPLE_COUNT },
     primitive: { topology: 'triangle-list' },
   });
 }
@@ -239,7 +240,7 @@ export function createBillboardPipeline(
       }}],
     },
     depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'greater' },
-    multisample: { count: 4 },
+    multisample: { count: MSAA_SAMPLE_COUNT },
     primitive: { topology: 'triangle-list' },
   });
 }
@@ -267,7 +268,7 @@ export function createPointCloudPipeline(
       }],
     },
     depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' },
-    multisample: { count: 4 },
+    multisample: { count: MSAA_SAMPLE_COUNT },
     primitive: { topology: 'point-list' },
   });
 }

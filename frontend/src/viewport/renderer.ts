@@ -68,6 +68,7 @@ import {
   disposeMeshes,
   createDepthTexture,
   createMsaaTexture,
+  MSAA_SAMPLE_COUNT,
 } from './rendererResources';
 import {
   createRoadMeshRegistry,
@@ -358,7 +359,9 @@ export class ViewportRenderer {
     const tConfigure = performance.now();
     this.depthTexture = createDepthTexture(this.device, this.width, this.height);
     const tDepth = performance.now();
-    this.msaaTexture = createMsaaTexture(this.device, this.format, this.width, this.height);
+    this.msaaTexture = MSAA_SAMPLE_COUNT > 1
+      ? createMsaaTexture(this.device, this.format, this.width, this.height)
+      : null;
     const tMsaa = performance.now();
     this.createGridPipeline();
     const tGrid = performance.now();
@@ -911,7 +914,7 @@ export class ViewportRenderer {
       };
     }
     if (!this.splatRenderer) {
-      this.splatRenderer = createSplatRenderer(this.device, this.format, 4, () =>
+      this.splatRenderer = createSplatRenderer(this.device, this.format, MSAA_SAMPLE_COUNT, () =>
         this.markSceneDirty(),
       );
       this.splatRenderer.setGpuSort(this.splatGpuSortEnabled);
@@ -989,7 +992,7 @@ export class ViewportRenderer {
       };
     }
     if (!this.actorSplatRenderer) {
-      this.actorSplatRenderer = createSplatRenderer(this.device, this.format, 4, () =>
+      this.actorSplatRenderer = createSplatRenderer(this.device, this.format, MSAA_SAMPLE_COUNT, () =>
         this.markSceneDirty(),
       );
       this.actorSplatRenderer.setGpuSort(this.splatGpuSortEnabled);
@@ -1145,7 +1148,9 @@ export class ViewportRenderer {
     this.msaaTexture?.destroy();
     this.msaaTexture = null;
     this.depthTexture = createDepthTexture(this.device, this.width, this.height);
-    this.msaaTexture = createMsaaTexture(this.device, this.format, this.width, this.height);
+    this.msaaTexture = MSAA_SAMPLE_COUNT > 1
+      ? createMsaaTexture(this.device, this.format, this.width, this.height)
+      : null;
   }
 
   /**
