@@ -24,10 +24,18 @@ export class CaseActorLayer {
   // align both. Ground picks arrive in the render frame, so the origin is added
   // back before hit-testing the absolute footprints.
   private sceneOrigin: [number, number, number] = [0, 0, 0];
+  // When set, boxed (non-waypoint) actors render as wireframe (edge bars only,
+  // no translucent fill) to cut overdraw during playback.
+  private wireframe = false;
 
   /** Replace the current actor boxes. */
   setBoxes(boxes: CaseActorBox[]): void {
     this.boxes = boxes;
+  }
+
+  /** Drop the translucent box fill (wireframe-only) to cut overdraw. */
+  setWireframe(enabled: boolean): void {
+    this.wireframe = enabled;
   }
 
   /** Replace the trajectory segment list (flat pairs, 14 floats per segment). */
@@ -61,7 +69,7 @@ export class CaseActorLayer {
 
   /** Triangle vertices for the current boxes (7 floats/vertex). */
   boxVertices(): Float32Array {
-    return buildBoxVertices(this.boxes, this.sceneOrigin);
+    return buildBoxVertices(this.boxes, this.sceneOrigin, this.wireframe);
   }
 
   /** Triangle vertices for the current trajectories (7 floats/vertex). */

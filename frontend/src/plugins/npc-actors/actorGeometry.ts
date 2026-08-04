@@ -46,10 +46,12 @@ const FILL_ALPHA = 0.5;
 
 /**
  * Emit the 12 triangles of a local axis-aligned box [minL, maxL], rotated by
- * (cos, sin) about Z and translated to (cx, cy, cz), into `out` (7 floats/vertex).
+ * (cos, sin) about Z and translated to (cx, cy, cz), into `out` at `off`
+ * (7 floats/vertex). Returns the next write offset.
  */
 function emitBox(
-  out: number[],
+  out: Float32Array,
+  off: number,
   minL: readonly [number, number, number],
   maxL: readonly [number, number, number],
   cos: number,
@@ -58,7 +60,7 @@ function emitBox(
   cy: number,
   cz: number,
   color: Rgba,
-): void {
+): number {
   const wx: number[] = new Array(8);
   const wy: number[] = new Array(8);
   const wz: number[] = new Array(8);
@@ -71,8 +73,15 @@ function emitBox(
     wz[i] = cz + lz;
   }
   for (const idx of CUBE_TRIS) {
-    out.push(wx[idx]!, wy[idx]!, wz[idx]!, color[0], color[1], color[2], color[3]);
+    out[off++] = wx[idx]!;
+    out[off++] = wy[idx]!;
+    out[off++] = wz[idx]!;
+    out[off++] = color[0];
+    out[off++] = color[1];
+    out[off++] = color[2];
+    out[off++] = color[3];
   }
+  return off;
 }
 
 /**
@@ -85,12 +94,27 @@ function emitBox(
  * `origin` shifts every box into an origin-relative render frame (subtracted
  * from each center) so authored (absolute) boxes align with an origin-relative
  * point cloud. Defaults to no shift.
+ *
+ * When `wireframe` is set, boxed actors drop the translucent fill and render as
+ * edge bars only (cuts overdraw during playback). Waypoint handles are
+ * unaffected.
  */
 export function buildBoxVertices(
   boxes: readonly CaseActorBox[],
   origin: readonly [number, number, number] = [0, 0, 0],
+  wireframe = false,
 ): Float32Array {
-  const out: number[] = [];
+  // Precompute the vertex count and write into one preallocated Float32Array —
+  // avoids growing a JS array + a full copy every frame. 36 verts per emitted
+  // box: fill (unless wireframe-skipped) + 12 edge bars (432) when boxed.
+  let vertexCount = 0;
+  for (const box of boxes) {
+    const withEdges = box.kind !== 'waypoint';
+    if (!wireframe || !withEdges) vertexCount += 36;
+    if (withEdges) vertexCount += 432;
+  }
+  const out = new Float32Array(vertexCount * ACTOR_VERTEX_STRIDE);
+  let off = 0;
 
   for (const box of boxes) {
     const hl = box.size[0] / 2;
@@ -106,9 +130,12 @@ export function buildBoxVertices(
     const base = box.selected ? SELECTED_FILL : box.color;
     const fillAlpha = box.selected ? SELECTED_FILL_ALPHA : FILL_ALPHA;
 
-    // Fill (translucent for boxed actors so the road shows through).
+    // Fill (translucent for boxed actors so the road shows through). Skipped for
+    // boxed actors in wireframe mode.
     const fill: Rgba = withEdges ? [base[0], base[1], base[2], base[3] * fillAlpha] : base;
-    emitBox(out, [-hl, -hw, -hh], [hl, hw, hh], cos, sin, cx, cy, cz, fill);
+    if (!wireframe || !withEdges) {
+      off = emitBox(out, off, [-hl, -hw, -hh], [hl, hw, hh], cos, sin, cx, cy, cz, fill);
+    }
 
     if (!withEdges) continue;
 
@@ -116,19 +143,19 @@ export function buildBoxVertices(
     const t = EDGE_HALF;
     // 4 edges parallel to local X (vary Y, Z at ±half).
     for (const [Y, Z] of [[hw, hh], [hw, -hh], [-hw, hh], [-hw, -hh]] as const) {
-      emitBox(out, [-hl, Y - t, Z - t], [hl, Y + t, Z + t], cos, sin, cx, cy, cz, EDGE_COLOR);
+      off = emitBox(out, off, [-hl, Y - t, Z - t], [hl, Y + t, Z + t], cos, sin, cx, cy, cz, EDGE_COLOR);
     }
     // 4 edges parallel to local Y (vary X, Z).
     for (const [X, Z] of [[hl, hh], [hl, -hh], [-hl, hh], [-hl, -hh]] as const) {
-      emitBox(out, [X - t, -hw, Z - t], [X + t, hw, Z + t], cos, sin, cx, cy, cz, EDGE_COLOR);
+      off = emitBox(out, off, [X - t, -hw, Z - t], [X + t, hw, Z + t], cos, sin, cx, cy, cz, EDGE_COLOR);
     }
     // 4 edges parallel to local Z (vary X, Y).
     for (const [X, Y] of [[hl, hw], [hl, -hw], [-hl, hw], [-hl, -hw]] as const) {
-      emitBox(out, [X - t, Y - t, -hh], [X + t, Y + t, hh], cos, sin, cx, cy, cz, EDGE_COLOR);
+      off = emitBox(out, off, [X - t, Y - t, -hh], [X + t, Y + t, hh], cos, sin, cx, cy, cz, EDGE_COLOR);
     }
   }
 
-  return new Float32Array(out);
+  return out;
 }
 
 /**

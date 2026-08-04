@@ -1026,11 +1026,11 @@ export class ViewportRenderer {
   // ── Instanced actor splat API (GPU-persistent per-model buffers) ────────
 
   /**
-   * Upload a model's degree-0 packed splat data to a persistent GPU buffer.
+   * Upload a model's packed splat data (full SH) to a persistent GPU buffer.
    * No-op if the same URL was already uploaded.  Must be called before the
    * URL appears in any {@link updateActorSplatInstances} call.
    */
-  uploadActorModel(url: string, data: Uint32Array): void {
+  uploadActorModel(url: string, data: Uint32Array, degree = 0): void {
     if (!this.device) return;
     if (!this.actorSplatInstancer) {
       this.actorSplatInstancer = new ActorSplatInstancer(
@@ -1039,7 +1039,7 @@ export class ViewportRenderer {
         () => this.markSceneDirty(),
       );
     }
-    this.actorSplatInstancer.uploadModel(url, data);
+    this.actorSplatInstancer.uploadModel(url, data, degree);
   }
 
   /**

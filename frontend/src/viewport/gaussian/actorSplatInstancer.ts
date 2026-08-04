@@ -17,16 +17,14 @@
  *   group(1) binding(0) — per-instance ActorTransform (Float32, written per frame)
  */
 import { GAUSSIAN_SPLAT_ACTOR_INSTANCED_SHADER } from './actorSplatInstancedShader';
-import { SPLAT_UNIFORM_BYTES, buildSplatUniform } from './splatUniform';
+import { SPLAT_UNIFORM_BYTES, buildSplatUniform, DEFAULT_SPLAT_DILATION } from './splatUniform';
+import { splatStrideForDegree } from './splatLayout';
 import type { CameraState } from '../cameraController';
 import { SplatSortController, type SplatSorter } from './splatSortController';
 import { createWorkerSplatSorter } from './splatSorterBackends';
 import { computeViewDir } from './splatRenderer';
 import { frustumSidePlanes } from './splatSort';
 import { MSAA_SAMPLE_COUNT } from '../rendererResources';
-
-/** Degree-0 packed layout-v2 stride in u32 words. */
-const DEGREE0_STRIDE = 12;
 
 /** Float32 elements per instance in the transforms GPU buffer (padded to 8). */
 const TRANSFORM_FLOATS = 8;
@@ -61,6 +59,10 @@ interface ModelEntry {
   localPositions: Float32Array;
   /** Full packed data (CPU copy) for merged-buffer rebuilds. */
   cpuData: Uint32Array;
+  /** Packed u32 words per splat = splatStrideForDegree(degree). */
+  stride: number;
+  /** Spherical-harmonics degree (0–3). */
+  degree: number;
 }
 
 /** GPU-persistent instanced actor splat manager + renderer. */
@@ -72,6 +74,7 @@ export class ActorSplatInstancer {
   private instanceIdsBuffer: GPUBuffer | null = null;
   private orderBuffer: GPUBuffer | null = null;
   private totalCount = 0;
+  private mergedDegree = 0;
   private lastInstanceKey = '';
 
   /**
@@ -174,20 +177,21 @@ export class ActorSplatInstancer {
   get count(): number { return this.totalCount; }
 
   /**
-   * Upload a model's degree-0 packed splat data to a persistent GPU buffer.
+   * Upload a model's packed splat data (full SH) to a persistent GPU buffer.
    * No-op if the URL was already uploaded.
    */
-  uploadModel(url: string, data: Uint32Array): void {
+  uploadModel(url: string, data: Uint32Array, degree = 0): void {
     if (this.models.has(url)) return;
-    const count = Math.floor(data.length / DEGREE0_STRIDE);
+    const stride = splatStrideForDegree(degree);
+    const count = Math.floor(data.length / stride);
     if (count === 0) return;
 
     const localPositions = new Float32Array(count * 3);
     const dataF = new Float32Array(data.buffer, data.byteOffset, data.byteLength / 4);
     for (let i = 0; i < count; i++) {
-      localPositions[i * 3]     = dataF[i * DEGREE0_STRIDE]!;
-      localPositions[i * 3 + 1] = dataF[i * DEGREE0_STRIDE + 1]!;
-      localPositions[i * 3 + 2] = dataF[i * DEGREE0_STRIDE + 2]!;
+      localPositions[i * 3]     = dataF[i * stride]!;
+      localPositions[i * 3 + 1] = dataF[i * stride + 1]!;
+      localPositions[i * 3 + 2] = dataF[i * stride + 2]!;
     }
 
     const gpuBuffer = this.device.createBuffer({
@@ -197,7 +201,7 @@ export class ActorSplatInstancer {
     });
     this.device.queue.writeBuffer(gpuBuffer, 0, data.buffer, data.byteOffset, data.byteLength);
 
-    this.models.set(url, { gpuBuffer, count, localPositions, cpuData: data.slice() });
+    this.models.set(url, { gpuBuffer, count, localPositions, cpuData: data.slice(), stride, degree });
   }
 
   /**
@@ -291,7 +295,8 @@ export class ActorSplatInstancer {
   ): void {
     if (!this.hasContent) return;
     const uniform = buildSplatUniform(
-      camera, dimensionMode, numPixelsPerMeter, width, height, 0 /* shDegree */,
+      camera, dimensionMode, numPixelsPerMeter, width, height,
+      this.mergedDegree, DEFAULT_SPLAT_DILATION, false, true /* clampAnisotropy */,
     );
     this.device.queue.writeBuffer(this.uniformBuffer, 0, uniform);
     const viewDir = computeViewDir(camera.position, camera.target);
@@ -355,21 +360,27 @@ export class ActorSplatInstancer {
     // budget so the merged / order / world-position allocations stay bounded.
     const scale = rawTotal > MAX_ACTOR_SPLAT_TOTAL ? MAX_ACTOR_SPLAT_TOTAL / rawTotal : 1;
     let total = 0;
+    let maxDegree = 0;
     for (let i = 0; i < instances.length; i++) {
       const model = this.models.get(instances[i]!.url);
       if (!model) continue;
       const effCount = scale === 1 ? model.count : Math.max(1, Math.floor(model.count * scale));
       this.instancePlan.push({ model, instanceIndex: i, effCount });
       total += effCount;
+      if (model.degree > maxDegree) maxDegree = model.degree;
     }
     this.totalCount = total;
+    this.mergedDegree = maxDegree;
     if (total === 0) return;
+    // Merge every instance at the max degree present; lower-degree models get
+    // their higher SH bands zero-extended (a zero coefficient contributes nothing).
+    const outStride = splatStrideForDegree(maxDegree);
 
     let merged: Uint32Array<ArrayBuffer>;
     let instanceIds: Uint32Array<ArrayBuffer>;
     let order: Uint32Array<ArrayBuffer>;
     try {
-      merged = new Uint32Array(total * DEGREE0_STRIDE);
+      merged = new Uint32Array(total * outStride);
       instanceIds = new Uint32Array(total);
       order = new Uint32Array(total);
     } catch (err) {
@@ -387,22 +398,22 @@ export class ActorSplatInstancer {
     for (const { model, instanceIndex, effCount } of this.instancePlan) {
       const src = model.cpuData;
       const n = model.count;
-      if (effCount === n) {
-        // Fast path (no thinning): one contiguous copy + range fill.
-        merged.set(src.subarray(0, n * DEGREE0_STRIDE), splatWord);
+      const ms = model.stride;
+      if (effCount === n && ms === outStride) {
+        // Fast path (no thinning, same degree): one contiguous copy + range fill.
+        merged.set(src.subarray(0, n * ms), splatWord);
         instanceIds.fill(instanceIndex, splatIndex, splatIndex + n);
-        splatWord += n * DEGREE0_STRIDE;
+        splatWord += n * outStride;
         splatIndex += n;
       } else {
-        // Thinned: sample `effCount` records evenly across the model.
+        // Thinned and/or zero-extended: copy `ms` words per splat into an
+        // `outStride` slot (the merged buffer is zero-initialised, so any higher
+        // SH bands this model lacks stay zero).
         for (let j = 0; j < effCount; j++) {
-          const s = Math.floor((j * n) / effCount);
-          merged.set(
-            src.subarray(s * DEGREE0_STRIDE, s * DEGREE0_STRIDE + DEGREE0_STRIDE),
-            splatWord,
-          );
+          const s = effCount === n ? j : Math.floor((j * n) / effCount);
+          merged.set(src.subarray(s * ms, s * ms + ms), splatWord);
           instanceIds[splatIndex] = instanceIndex;
-          splatWord += DEGREE0_STRIDE;
+          splatWord += outStride;
           splatIndex++;
         }
       }

@@ -1,7 +1,7 @@
 /**
  * WGSL shader for instanced actor (NPC/ego) Gaussian splat rendering.
  *
- * Actor splats are always degree-0 (SH band 0 only) and the model-local packed
+ * Actor splats carry the FULL spherical-harmonics tail; the model-local packed
  * data lives in a persistent GPU buffer uploaded ONCE per model URL. Per frame,
  * only a tiny per-instance transform buffer is updated (M × 32 bytes).
  *
@@ -15,14 +15,17 @@
  * The vertex shader reads model-local center/scale/quaternion, looks up the
  * per-splat instance index, fetches the matching ActorTransform, applies the
  * yaw rotation + translation to center, and composes the yaw quaternion with
- * the model-local orientation.  Covariance projection and fragment blending are
- * identical to the packed fallback shader.
+ * the model-local orientation. View-dependent SH colour is evaluated against
+ * the view direction rotated BACK by the instance yaw (equivalent to rotating
+ * the SH coefficients), so shading stays correct without any per-frame CPU work.
+ * Covariance projection and fragment blending match the packed scene shader.
  *
- * Stride is fixed at 12 u32 words (degree-0 layout v2):
+ * Stride grows with SH degree (see `strideForDegree`, driven by u.sh_degree =
+ * the merged max degree): degree-0 = 12 u32 words, degree-3 = 35.
  *   words  0-2:  position xyz      (f32 × 3)
  *   words  3-5:  activated scale   (f32 × 3)
  *   words  6-9:  quaternion wxyz   (f32 × 4)
- *   words 10-11: opacity + sh0 rgb (f16 pairs × 2 words)
+ *   words 10+:   opacity + SH rgb  (f16 pairs, coefficient-major)
  */
 export const GAUSSIAN_SPLAT_ACTOR_INSTANCED_SHADER = /* wgsl */`
 struct SplatUniforms {
@@ -60,10 +63,26 @@ struct ActorTransform {
 @group(1) @binding(0) var<storage, read> actorTransforms : array<ActorTransform>;
 
 const SH_C0 : f32 = 0.28209479177387814;
+const SH_C1 : f32 = 0.4886025119029199;
+const SH_C2_0 : f32 = 1.0925484305920792;
+const SH_C2_1 : f32 = -1.0925484305920792;
+const SH_C2_2 : f32 = 0.31539156525252005;
+const SH_C2_3 : f32 = -1.0925484305920792;
+const SH_C2_4 : f32 = 0.5462742152960396;
+const SH_C3_0 : f32 = -0.5900435899266435;
+const SH_C3_1 : f32 = 2.890611442640554;
+const SH_C3_2 : f32 = -0.4570457994644658;
+const SH_C3_3 : f32 = 0.3731763325901154;
+const SH_C3_4 : f32 = -0.4570457994644658;
+const SH_C3_5 : f32 = 1.445305721320277;
+const SH_C3_6 : f32 = -0.5900435899266435;
 const ALPHA_CUTOFF : f32 = 0.00392156862745;
 const EXP4 : f32 = 0.01831563889;
-// Fixed degree-0 packed stride (words per splat).
-const STRIDE : u32 = 12u;
+// Packed stride (words per splat) grows with SH degree.
+fn strideForDegree(d : u32) -> u32 {
+  let coeffs = (d + 1u) * (d + 1u);
+  return 10u + (coeffs * 3u + 2u) / 2u;
+}
 
 struct VSOut {
   @builtin(position) pos : vec4<f32>,
@@ -107,11 +126,48 @@ fn covarianceFromTransform(scale : vec3<f32>, quaternion : vec4<f32>) -> mat3x3<
   );
 }
 
+// Read SH coefficient k (a per-channel RGB triple) after opacity element 0.
+fn shCoeff(b : u32, k : u32) -> vec3<f32> {
+  let e = 1u + k * 3u;
+  return vec3<f32>(halfAt(b, e), halfAt(b, e + 1u), halfAt(b, e + 2u));
+}
+
+// Full view-dependent SH colour (mirrors the scene splat shader's evalSH).
+fn evalActorSH(b : u32, degree : u32, dir : vec3<f32>) -> vec3<f32> {
+  var c = SH_C0 * shCoeff(b, 0u);
+  if (degree >= 1u) {
+    let x = dir.x; let y = dir.y; let z = dir.z;
+    c = c - SH_C1 * y * shCoeff(b, 1u)
+          + SH_C1 * z * shCoeff(b, 2u)
+          - SH_C1 * x * shCoeff(b, 3u);
+    if (degree >= 2u) {
+      let xx = x*x; let yy = y*y; let zz = z*z;
+      let xy = x*y; let yz = y*z; let xz = x*z;
+      c = c + SH_C2_0 * xy * shCoeff(b, 4u)
+            + SH_C2_1 * yz * shCoeff(b, 5u)
+            + SH_C2_2 * (2.0*zz - xx - yy) * shCoeff(b, 6u)
+            + SH_C2_3 * xz * shCoeff(b, 7u)
+            + SH_C2_4 * (xx - yy) * shCoeff(b, 8u);
+      if (degree >= 3u) {
+        c = c + SH_C3_0 * y * (3.0*xx - yy) * shCoeff(b, 9u)
+              + SH_C3_1 * xy * z * shCoeff(b, 10u)
+              + SH_C3_2 * y * (4.0*zz - xx - yy) * shCoeff(b, 11u)
+              + SH_C3_3 * z * (2.0*zz - 3.0*xx - 3.0*yy) * shCoeff(b, 12u)
+              + SH_C3_4 * x * (4.0*zz - xx - yy) * shCoeff(b, 13u)
+              + SH_C3_5 * z * (xx - yy) * shCoeff(b, 14u)
+              + SH_C3_6 * x * (xx - 3.0*yy) * shCoeff(b, 15u);
+      }
+    }
+  }
+  return clamp(c + vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
 @vertex
 fn vs_main(@builtin(vertex_index) vtx : u32,
            @builtin(instance_index) inst : u32) -> VSOut {
+  let deg = u32(u.sh_degree);
   let si = order[inst];
-  let b  = si * STRIDE;
+  let b  = si * strideForDegree(deg);
 
   // Read model-local transform from packed splat data.
   let local_center = vec3<f32>(
@@ -150,12 +206,17 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
     xf.hw * lqz + xf.hz * lqw,
   );
 
-  // Opacity (element 0) and SH0 color (elements 1-3).
+  // Opacity (element 0) + full view-dependent SH colour. The model's SH is
+  // authored in its own frame, so evaluate against the view direction rotated
+  // back by the instance yaw (equivalent to rotating the coefficients).
   let opacityRaw = halfAt(b, 0u);
-  let sh_r = halfAt(b, 1u);
-  let sh_g = halfAt(b, 2u);
-  let sh_b = halfAt(b, 3u);
-  let color = clamp(vec3<f32>(sh_r, sh_g, sh_b) * SH_C0 + vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(1.0));
+  let dirWorld = normalize(center - u.cam_pos);
+  let dirModel = vec3<f32>(
+    dirWorld.x * xf.cos_yaw + dirWorld.y * xf.sin_yaw,
+    -dirWorld.x * xf.sin_yaw + dirWorld.y * xf.cos_yaw,
+    dirWorld.z,
+  );
+  let color = evalActorSH(b, deg, dirModel);
 
   // Standard EWA splatting from here — identical to packed fallback shader.
   let cam    = u.view * vec4<f32>(center, 1.0);
@@ -229,16 +290,24 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
   let ndcDelta = delta * 2.0 / u.viewport;
   var out : VSOut;
   out.pos   = vec4<f32>(ndcCenter + ndcDelta, clipDepth, 1.0);
-  out.color = vec4<f32>(color * opacityRaw, opacityRaw);
+  out.color = vec4<f32>(color, opacityRaw);
   out.quad  = corner * quadRadius;
   return out;
 }
 
 @fragment
 fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
-  let d = dot(in.quad, in.quad);
-  let alpha = in.color.a * exp(-0.5 * d);
+  let r2 = dot(in.quad, in.quad);
+  if (r2 > 4.0) { discard; }
+  let falloff = (exp(-r2) - EXP4) / (1.0 - EXP4);
+  let alpha = in.color.a * falloff;
   if (alpha < ALPHA_CUTOFF) { discard; }
-  return vec4<f32>(in.color.rgb * alpha, alpha);
+  var rgb = in.color.rgb;
+  if (u.linear_to_srgb > 0.5) {
+    let lo = rgb * 12.92;
+    let hi = 1.055 * pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.4)) - 0.055;
+    rgb = select(hi, lo, rgb <= vec3<f32>(0.0031308));
+  }
+  return vec4<f32>(rgb * alpha, alpha);
 }
 `;

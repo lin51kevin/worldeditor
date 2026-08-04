@@ -168,6 +168,8 @@ export interface WorldEditorRenderer {
   uploadActorBoxes(boxes: CaseActorBox[]): void;
   /** Remove all actor boxes and trajectory ribbons. */
   clearActorBoxes(): void;
+  /** Render non-waypoint actor boxes as wireframe (no fill) to cut overdraw. */
+  setActorBoxWireframe(enabled: boolean): void;
   /** Upload trajectory segments (flat pairs: 14 floats per segment: 2 × xyz+rgba). */
   uploadPathLines(segments: Float32Array): void;
   /** Pick the top-most actor box under a page-space point, or null. */
@@ -310,11 +312,11 @@ export interface WorldEditorRenderer {
 
   // ── Instanced actor splat API (GPU-persistent per-model buffers) ──────
   /**
-   * Upload a model's degree-0 packed splat data once, keyed by URL.
+   * Upload a model's packed splat data (full SH) once, keyed by URL.
    * No-op for duplicate URLs.  Must be called before the URL appears in
    * any {@link updateActorSplatInstances} call.
    */
-  uploadActorModel?(url: string, data: Uint32Array): void;
+  uploadActorModel?(url: string, data: Uint32Array, degree?: number): void;
   /**
    * Per-frame instanced actor update.  Only M×32 bytes written to GPU per
    * frame (transforms buffer) plus an off-thread O(N×3) sort.
@@ -563,6 +565,11 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
       renderer.uploadActorVertices(new Float32Array(0));
       renderer.uploadPathVertices(new Float32Array(0));
     },
+    setActorBoxWireframe: (enabled: boolean) => {
+      actorLayer.setWireframe(enabled);
+      renderer.uploadActorVertices(actorLayer.boxVertices());
+      renderer.render();
+    },
     uploadPathLines: (segments: Float32Array) => {
       actorLayer.setPathSegments(segments);
       renderer.uploadPathVertices(actorLayer.pathVertices());
@@ -786,8 +793,8 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     clearActorGaussianSplats: () => {
       renderer.clearActorGaussianSplats();
     },
-    uploadActorModel: (url: string, data: Uint32Array) => {
-      renderer.uploadActorModel(url, data);
+    uploadActorModel: (url: string, data: Uint32Array, degree?: number) => {
+      renderer.uploadActorModel(url, data, degree);
     },
     updateActorSplatInstances: (instances) => {
       renderer.updateActorSplatInstances(instances);
