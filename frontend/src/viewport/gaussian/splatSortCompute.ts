@@ -5,11 +5,13 @@
  * the worker round-trip latency that caused stale/blurry frames during chase/
  * front-cam playback.
  *
- * ## Algorithm: stable 8-bit-digit LSD radix over the FULL 32-bit depth key
- * Each splat's view depth is mapped to a radix-sortable u32 (exact, no bucketing)
- * so the back-to-front order is precise — matching the CPU sort's sharpness
- * (a coarser 16-bit key blends equal-bucket splats in index order → haze). Four
- * 8-bit passes; each pass:
+ * ## Algorithm: stable 8-bit-digit LSD radix over a 24-bit normalized depth key
+ * Each splat's view depth is normalized into a 24-bit fixed-point key over the
+ * scene depth range [minDepth,maxDepth] — sub-mm resolution (≈6 µm at 200 m), far
+ * finer than the splat footprint, so the back-to-front order stays sharp (a coarse
+ * 16-bit key at ~1.5 mm/bucket blends equal-bucket splats in index order → haze).
+ * A 24-bit key needs only THREE 8-bit passes instead of four for a full 32-bit
+ * float key — 25 % less sort work. Each pass:
  *   1. histogram — per-workgroup 256-bin digit counts → digit-major group table;
  *   2. scan      — exclusive prefix over the group table (proven multi-level scan);
  *   3. scatter   — each splat to base[digit,group] + stable local rank.
@@ -29,16 +31,21 @@
 const WORKGROUP_SIZE = 256;
 /** Elements scanned per Blelloch block (2 per thread). */
 const SCAN_BLOCK = WORKGROUP_SIZE * 2;
-/** Digit radix (8 bits) and the number of passes to cover a 32-bit key. */
+/** Digit radix (8 bits) and the number of passes to cover the 24-bit key. */
 const RADIX = 256;
-const KEY_PASSES = 4;
+const KEY_PASSES = 3;
+/** Max value of the 24-bit normalized depth key (2^24 − 1). */
+const KEY_MAX_24 = 16777215;
+/** Odd pass count → seed the identity permutation into scratch so the final
+ *  (even-indexed) pass still lands in the external order buffer. */
+const INIT_TO_SCRATCH = KEY_PASSES % 2 === 1;
 
 const ceilDiv = (a: number, b: number): number => Math.floor((a + b - 1) / b);
 
 // ─── WGSL (verbatim from the validated harness) ──────────────────────────────
 
 const INIT_SHADER = /* wgsl */ `
-struct DepthParams { cam:vec3<f32>, count:u32, view:vec3<f32>, _pad:u32 };
+struct DepthParams { cam:vec3<f32>, count:u32, view:vec3<f32>, _pad:u32, dmin:f32, dmax:f32, _pad2:vec2<f32> };
 @group(0) @binding(0) var<uniform> params : DepthParams;
 @group(0) @binding(1) var<storage, read> positions : array<f32>;
 @group(0) @binding(2) var<storage, read_write> keys : array<u32>;
@@ -52,11 +59,12 @@ fn init_keys(@builtin(global_invocation_id) gid : vec3<u32>) {
   let dy = positions[b+1u] - params.cam.y;
   let dz = positions[b+2u] - params.cam.z;
   let depth = dx*params.view.x + dy*params.view.y + dz*params.view.z;
-  // Radix-sortable u32 of the float depth (ascending), then bit-inverted so an
-  // ASCENDING sort draws the FARTHEST splat first (back-to-front). Full precision.
-  let u = bitcast<u32>(depth);
-  let af = select(u | 0x80000000u, ~u, (u >> 31u) == 1u);
-  keys[i] = ~af;
+  // Normalize depth into a 24-bit fixed-point key over [dmin,dmax], then INVERT so
+  // an ASCENDING sort draws the FARTHEST splat (t=1) first (back-to-front).
+  let range = max(params.dmax - params.dmin, 1e-9);
+  let t = clamp((depth - params.dmin) / range, 0.0, 1.0);
+  let n = u32(t * ${KEY_MAX_24}.0 + 0.5);
+  keys[i] = ${KEY_MAX_24}u - n;
   order[i] = i;
 }`;
 
@@ -160,7 +168,7 @@ fn add_offsets(@builtin(global_invocation_id) gid : vec3<u32>, @builtin(workgrou
   data[idx] += block_sums[wid.x / 2u];
 }`;
 
-const DEPTH_PARAMS_SIZE = 32;
+const DEPTH_PARAMS_SIZE = 48;
 
 interface SortPipelines {
   readonly init: GPUComputePipeline;
@@ -313,9 +321,11 @@ export class GpuSplatSorter {
     this.histBG = [];
     this.scatterBG = [];
     for (let p = 0; p < KEY_PASSES; p++) {
-      // Even pass → source is the order buffer; odd pass → source is the scratch.
-      const src = p % 2 === 0 ? orderBuffer : scratch;
-      const dst = p % 2 === 0 ? scratch : orderBuffer;
+      // Parity chosen so the FINAL pass writes into `orderBuffer` regardless of
+      // whether KEY_PASSES is odd or even (pass 0's source is seeded by init()).
+      const dstIsOrder = (KEY_PASSES - 1 - p) % 2 === 0;
+      const src = dstIsOrder ? scratch : orderBuffer;
+      const dst = dstIsOrder ? orderBuffer : scratch;
       const rp = this.rParams[p]!;
       this.histBG.push(bg(pipes.hist, [rp, keys, src, groupHist]));
       this.scatterBG.push(bg(pipes.scatter, [rp, keys, src, groupHist, dst]));
@@ -347,7 +357,7 @@ export class GpuSplatSorter {
   /**
    * Encode the stable radix sort into `encoder` (before the render pass).
    * Writes the back-to-front index order into `orderBuffer`. `minDepth`/`maxDepth`
-   * are unused (the key is full-precision), kept for a stable call signature.
+   * bound the 24-bit normalized depth key (splats outside clamp to the extremes).
    */
   sort(
     encoder: GPUCommandEncoder,
@@ -355,8 +365,8 @@ export class GpuSplatSorter {
     orderBuffer: GPUBuffer,
     camPos: readonly [number, number, number],
     viewDir: readonly [number, number, number],
-    _minDepth: number,
-    _maxDepth: number,
+    minDepth: number,
+    maxDepth: number,
   ): void {
     const pipes = this.ensureInit();
     if (this.count === 0 || !this.keys) return;
@@ -368,17 +378,20 @@ export class GpuSplatSorter {
     f[0] = camPos[0]; f[1] = camPos[1]; f[2] = camPos[2];
     u[3] = this.count;
     f[4] = viewDir[0]; f[5] = viewDir[1]; f[6] = viewDir[2];
+    f[8] = minDepth; f[9] = maxDepth;
     this.device.queue.writeBuffer(this.depthParams!, 0, dp);
 
-    // init: seed keys + reset the order buffer to identity (needs the positions
-    // buffer, so this bind group is built here rather than in resize()).
+    // init: seed keys + reset the identity permutation into pass 0's source
+    // buffer (scratch when KEY_PASSES is odd, else the order buffer) so the final
+    // pass lands in `orderBuffer`. Needs `positions`, so bound here not in resize().
+    const initTarget = INIT_TO_SCRATCH ? this.scratch! : orderBuffer;
     const initBG = this.device.createBindGroup({
       layout: pipes.init.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: { buffer: this.depthParams! } },
         { binding: 1, resource: { buffer: positionsBuffer } },
         { binding: 2, resource: { buffer: this.keys } },
-        { binding: 3, resource: { buffer: orderBuffer } },
+        { binding: 3, resource: { buffer: initTarget } },
       ],
     });
     const initPass = encoder.beginComputePass();
@@ -402,7 +415,7 @@ export class GpuSplatSorter {
       scatterPass.dispatchWorkgroups(this.numGroups);
       scatterPass.end();
     }
-    // KEY_PASSES is even, so the final order lands in `orderBuffer`.
+    // Parity is chosen in ensureOrderBindGroups so the final pass lands in `orderBuffer`.
   }
 
   private releaseBuffers(): void {
