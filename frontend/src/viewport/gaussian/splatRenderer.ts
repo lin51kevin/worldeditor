@@ -65,6 +65,16 @@ export const PREVIEW_SPLAT_BUDGET = 16_000_000;
 export const DEFAULT_MAX_STORAGE_BINDING_BYTES = 134_217_728;
 
 /**
+ * Minimum interval between GPU depth re-sorts (ms). The sort is a near-full-cloud
+ * pass (~tens of ms at 10M+), so re-running it on every display frame under a
+ * moving camera would bind the frame rate to the sort cost. Capping it to ~20 Hz
+ * and reusing the still-valid order buffer between sorts keeps rendering smooth;
+ * the order is at most one interval stale (imperceptible) and a settled camera
+ * re-sorts within one interval for a correct resting order.
+ */
+export const GPU_SORT_MIN_INTERVAL_MS = 50;
+
+/**
  * Safety ceiling for the explicit packed fallback buffer (2 GiB). Its budget is
  * `min(device.maxStorageBufferBindingSize, this)`, so the renderer uses the
  * the minimum of the device's buffer limits and this guard. The normal full
@@ -372,6 +382,8 @@ export class SplatRenderer {
   private gpuSortDirty = true;
   private lastSortedCamPos: Vec3 = [NaN, NaN, NaN];
   private lastSortedViewDir: Vec3 = [NaN, NaN, NaN];
+  /** Timestamp (ms) of the last GPU sort, for the re-sort rate cap. */
+  private lastGpuSortMs = Number.NEGATIVE_INFINITY;
   /** One-time diagnostic latch so the GPU-sort status is logged once per state. */
   private gpuSortLogged = false;
   /** Cloud AABB (world) for O(1) per-frame projected depth-range estimation. */
@@ -817,6 +829,17 @@ export class SplatRenderer {
       this.logGpuSortOnce(`ACTIVE (${this.resources.count.toLocaleString()} splats)`);
       return true;
     }
+    // Rate-cap the expensive re-sort: under continuous motion re-sort at most
+    // every GPU_SORT_MIN_INTERVAL_MS and reuse the still-valid order buffer in
+    // between, so the frame rate is not bound to the sort cost.
+    const now = performance.now();
+    if (!this.gpuSortDirty && now - this.lastGpuSortMs < GPU_SORT_MIN_INTERVAL_MS) {
+      // Keep the render loop ticking so a trailing sort still runs once the
+      // interval elapses after the camera settles (else the resting order stays
+      // one interval stale).
+      this.onOrderChanged?.();
+      return true;
+    }
     try {
       if (!this.gpuSorter) {
         this.gpuSorter = new GpuSplatSorter(this.device);
@@ -836,6 +859,7 @@ export class SplatRenderer {
       this.lastSortedCamPos = [this.lastCamPos[0], this.lastCamPos[1], this.lastCamPos[2]];
       this.lastSortedViewDir = [this.lastViewDir[0], this.lastViewDir[1], this.lastViewDir[2]];
       this.gpuSortDirty = false;
+      this.lastGpuSortMs = now;
       this.logGpuSortOnce(`ACTIVE (${this.resources.count.toLocaleString()} splats)`);
       return true;
     } catch (error) {

@@ -1,415 +1,353 @@
 /**
- * GPU Compute Sort for 3D Gaussian Splatting.
+ * GPU stable depth sort for 3D Gaussian Splatting.
  *
- * Replaces the async worker CPU counting sort with a per-frame GPU sort that
- * runs inside the same command encoder as the render pass. This eliminates the
- * worker round-trip latency (the source of persistent blur during continuous
- * chase/front-cam playback) and keeps the order fresh every frame.
+ * Per-frame GPU sort that runs inside the render command encoder, eliminating
+ * the worker round-trip latency that caused stale/blurry frames during chase/
+ * front-cam playback.
  *
- * The depth pass reads splat centres from the dedicated positions storage
- * buffer ({@link GaussianSplatResources.gpuPositionsBuffer}, 3 f32 words/splat),
- * so it works with the active texture-array render path. The depth range is
- * supplied by the caller (computed once from cloud bounds), avoiding a
- * per-frame O(n) CPU scan.
+ * ## Algorithm: stable 8-bit-digit LSD radix over the FULL 32-bit depth key
+ * Each splat's view depth is mapped to a radix-sortable u32 (exact, no bucketing)
+ * so the back-to-front order is precise — matching the CPU sort's sharpness
+ * (a coarser 16-bit key blends equal-bucket splats in index order → haze). Four
+ * 8-bit passes; each pass:
+ *   1. histogram — per-workgroup 256-bin digit counts → digit-major group table;
+ *   2. scan      — exclusive prefix over the group table (proven multi-level scan);
+ *   3. scatter   — each splat to base[digit,group] + stable local rank.
+ * The scatter position comes from a prefix sum (never an atomic race), so the
+ * order is a deterministic, stable function of the keys — identical every frame
+ * for the same camera, smooth under motion (no twinkle).
  *
- * Algorithm: 3-pass counting sort
- *   Pass 1 - Depth & bucket assignment: compute depth per splat, quantize to
- *            bucket, atomicAdd to histogram, store bucket per splat.
- *   Pass 2 - Prefix sum: exclusive scan of the histogram (two-level: block scan
- *            then a single top scan; supports up to BUCKET_COUNT = BLOCK²).
- *   Pass 3 - Scatter: write each splat's index to its sorted output slot,
- *            back-to-front (largest depth first).
+ * ## Validation
+ * The exact WGSL + orchestration were verified on real hardware via
+ * `frontend/public/gpu-sort-harness.html` (correct + deterministic + stable at
+ * up to 12,000,000 splats incl. clustered/tie-heavy inputs; ~28 ms at 12M).
+ * Pipelines use `layout: "auto"` so bind-group layouts are inferred from the
+ * shaders (no hand-written layout can drift from the WGSL).
  */
 
-/**
- * Number of sort buckets - higher = better depth precision. 2^18 is the maximum
- * the two-level prefix scan supports without a third level (numBlocks =
- * BUCKET_COUNT / (WORKGROUP_SIZE*2) must be <= WORKGROUP_SIZE*2). At ~12M splats
- * that is ~47 splats/bucket, 4x finer than the old 65536-bucket worker sort.
- */
-const BUCKET_COUNT = 262144;
-/** Must match the WGSL `WORKGROUP_SIZE` constant. */
+/** Must match the WGSL `@workgroup_size`. */
 const WORKGROUP_SIZE = 256;
+/** Elements scanned per Blelloch block (2 per thread). */
+const SCAN_BLOCK = WORKGROUP_SIZE * 2;
+/** Digit radix (8 bits) and the number of passes to cover a 32-bit key. */
+const RADIX = 256;
+const KEY_PASSES = 4;
 
-// ─── WGSL Compute Shaders ─────────────────────────────────────────────────────
+const ceilDiv = (a: number, b: number): number => Math.floor((a + b - 1) / b);
 
-const DEPTH_SHADER = /* wgsl */ `
-// Pass 1: Compute per-splat depth, assign bucket, build histogram.
+// ─── WGSL (verbatim from the validated harness) ──────────────────────────────
 
-struct SortParams {
-  cam_pos   : vec3<f32>,
-  count     : u32,
-  view_dir  : vec3<f32>,
-  stride    : u32,
-  min_depth : f32,
-  inv_range : f32,
-  _pad      : vec2<f32>,
-};
-
-@group(0) @binding(0) var<uniform>       params    : SortParams;
-@group(0) @binding(1) var<storage, read>  positions : array<f32>;
-@group(0) @binding(2) var<storage, read_write> histogram : array<atomic<u32>>;
-@group(0) @binding(3) var<storage, read_write> buckets   : array<u32>;
-
-const BUCKET_COUNT : u32 = ${BUCKET_COUNT}u;
-
+const INIT_SHADER = /* wgsl */ `
+struct DepthParams { cam:vec3<f32>, count:u32, view:vec3<f32>, _pad:u32 };
+@group(0) @binding(0) var<uniform> params : DepthParams;
+@group(0) @binding(1) var<storage, read> positions : array<f32>;
+@group(0) @binding(2) var<storage, read_write> keys : array<u32>;
+@group(0) @binding(3) var<storage, read_write> order : array<u32>;
 @compute @workgroup_size(${WORKGROUP_SIZE})
-fn depth_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+fn init_keys(@builtin(global_invocation_id) gid : vec3<u32>) {
   let i = gid.x;
   if (i >= params.count) { return; }
+  let b = i * 3u;
+  let dx = positions[b] - params.cam.x;
+  let dy = positions[b+1u] - params.cam.y;
+  let dz = positions[b+2u] - params.cam.z;
+  let depth = dx*params.view.x + dy*params.view.y + dz*params.view.z;
+  // Radix-sortable u32 of the float depth (ascending), then bit-inverted so an
+  // ASCENDING sort draws the FARTHEST splat first (back-to-front). Full precision.
+  let u = bitcast<u32>(depth);
+  let af = select(u | 0x80000000u, ~u, (u >> 31u) == 1u);
+  keys[i] = ~af;
+  order[i] = i;
+}`;
 
-  // Read splat centre (3 f32 words/splat in the positions buffer).
-  let base = i * 3u;
-  let px = positions[base];
-  let py = positions[base + 1u];
-  let pz = positions[base + 2u];
-
-  // View-space depth: dot(viewDir, pos - camPos).
-  let dx = px - params.cam_pos.x;
-  let dy = py - params.cam_pos.y;
-  let dz = pz - params.cam_pos.z;
-  let depth = dx * params.view_dir.x + dy * params.view_dir.y + dz * params.view_dir.z;
-
-  // Quantize to bucket [0, BUCKET_COUNT-1], REVERSED so bucket 0 = farthest.
-  // This ensures the prefix sum matches the back-to-front scatter order.
-  let t = (depth - params.min_depth) * params.inv_range;
-  var b = BUCKET_COUNT - 1u - u32(clamp(t, 0.0, f32(BUCKET_COUNT - 1u)));
-  buckets[i] = b;
-  atomicAdd(&histogram[b], 1u);
-}
-`;
-
-const PREFIX_SUM_SHADER = /* wgsl */ `
-// Pass 2: Work-efficient exclusive prefix sum on the histogram.
-// Processes BUCKET_COUNT elements using a two-level approach:
-//   Level 1: Each workgroup scans a block of WG_SIZE*2 elements.
-//   Level 2: A single workgroup scans the block sums.
-//   Level 3: Add block offsets back.
-
-struct PrefixParams {
-  n        : u32,
-  _pad     : vec3<u32>,
-};
-
-@group(0) @binding(0) var<uniform>             prefix_params : PrefixParams;
-@group(0) @binding(1) var<storage, read_write> data          : array<u32>;
-@group(0) @binding(2) var<storage, read_write> block_sums    : array<u32>;
-
-const WG_SIZE : u32 = ${WORKGROUP_SIZE}u;
-const BLOCK   : u32 = ${WORKGROUP_SIZE * 2}u;
-
-var<workgroup> shmem : array<u32, ${WORKGROUP_SIZE * 2}>;
-
+const HIST_SHADER = /* wgsl */ `
+struct RParams { count:u32, shift:u32, num_groups:u32, _pad:u32 };
+@group(0) @binding(0) var<uniform> rp : RParams;
+@group(0) @binding(1) var<storage, read> keys : array<u32>;
+@group(0) @binding(2) var<storage, read> order : array<u32>;
+@group(0) @binding(3) var<storage, read_write> group_hist : array<u32>;
+var<workgroup> counts : array<atomic<u32>, ${RADIX}>;
 @compute @workgroup_size(${WORKGROUP_SIZE})
-fn scan_blocks(@builtin(global_invocation_id) gid : vec3<u32>,
-               @builtin(local_invocation_id) lid : vec3<u32>,
-               @builtin(workgroup_id) wid : vec3<u32>) {
+fn histogram(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>, @builtin(global_invocation_id) gid : vec3<u32>) {
+  atomicStore(&counts[lid.x], 0u);
+  workgroupBarrier();
+  let i = gid.x;
+  if (i < rp.count) {
+    let d = (keys[order[i]] >> rp.shift) & 0xFFu;
+    atomicAdd(&counts[d], 1u);
+  }
+  workgroupBarrier();
+  // Digit-major layout: [digit * num_groups + group].
+  group_hist[lid.x * rp.num_groups + wid.x] = atomicLoad(&counts[lid.x]);
+}`;
+
+const SCATTER_SHADER = /* wgsl */ `
+struct RParams { count:u32, shift:u32, num_groups:u32, _pad:u32 };
+@group(0) @binding(0) var<uniform> rp : RParams;
+@group(0) @binding(1) var<storage, read> keys : array<u32>;
+@group(0) @binding(2) var<storage, read> order_src : array<u32>;
+@group(0) @binding(3) var<storage, read> group_base : array<u32>;
+@group(0) @binding(4) var<storage, read_write> order_dst : array<u32>;
+var<workgroup> sdig : array<u32, ${WORKGROUP_SIZE}>;
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn scatter(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>, @builtin(global_invocation_id) gid : vec3<u32>) {
+  let i = gid.x;
+  var d = 0xFFFFFFFFu;
+  var e = 0u;
+  if (i < rp.count) { e = order_src[i]; d = (keys[e] >> rp.shift) & 0xFFu; }
+  sdig[lid.x] = d;
+  workgroupBarrier();
+  if (i >= rp.count) { return; }
+  // Stable local rank: # of earlier threads in this group with the same digit.
+  var rank = 0u;
+  for (var t = 0u; t < lid.x; t = t + 1u) { if (sdig[t] == d) { rank = rank + 1u; } }
+  order_dst[group_base[d * rp.num_groups + wid.x] + rank] = e;
+}`;
+
+const SCAN_SHADER = /* wgsl */ `
+struct PrefixParams { n:u32, _pad:vec3<u32> };
+@group(0) @binding(0) var<uniform> prefix_params : PrefixParams;
+@group(0) @binding(1) var<storage, read_write> data : array<u32>;
+@group(0) @binding(2) var<storage, read_write> block_sums : array<u32>;
+const WG_SIZE : u32 = ${WORKGROUP_SIZE}u;
+const BLOCK : u32 = ${SCAN_BLOCK}u;
+var<workgroup> shmem : array<u32, ${SCAN_BLOCK}>;
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn scan_blocks(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>) {
   let block_offset = wid.x * BLOCK;
   let idx0 = block_offset + lid.x;
   let idx1 = block_offset + lid.x + WG_SIZE;
-
-  // Load into shared memory.
-  shmem[lid.x]          = select(0u, data[idx0], idx0 < prefix_params.n);
+  shmem[lid.x] = select(0u, data[idx0], idx0 < prefix_params.n);
   shmem[lid.x + WG_SIZE] = select(0u, data[idx1], idx1 < prefix_params.n);
   workgroupBarrier();
-
-  // Up-sweep (reduce).
   var offset = 1u;
   for (var d = BLOCK >> 1u; d > 0u; d >>= 1u) {
     workgroupBarrier();
     if (lid.x < d) {
-      let ai = offset * (2u * lid.x + 1u) - 1u;
-      let bi = offset * (2u * lid.x + 2u) - 1u;
+      let ai = offset * (2u*lid.x + 1u) - 1u;
+      let bi = offset * (2u*lid.x + 2u) - 1u;
       shmem[bi] += shmem[ai];
     }
     offset <<= 1u;
   }
-
-  // Store block sum and clear last element.
-  if (lid.x == 0u) {
-    block_sums[wid.x] = shmem[BLOCK - 1u];
-    shmem[BLOCK - 1u] = 0u;
-  }
+  if (lid.x == 0u) { block_sums[wid.x] = shmem[BLOCK - 1u]; shmem[BLOCK - 1u] = 0u; }
   workgroupBarrier();
-
-  // Down-sweep.
   for (var d = 1u; d < BLOCK; d <<= 1u) {
     offset >>= 1u;
     workgroupBarrier();
     if (lid.x < d) {
-      let ai = offset * (2u * lid.x + 1u) - 1u;
-      let bi = offset * (2u * lid.x + 2u) - 1u;
+      let ai = offset * (2u*lid.x + 1u) - 1u;
+      let bi = offset * (2u*lid.x + 2u) - 1u;
       let t = shmem[ai];
       shmem[ai] = shmem[bi];
       shmem[bi] += t;
     }
   }
   workgroupBarrier();
-
-  // Write back.
   if (idx0 < prefix_params.n) { data[idx0] = shmem[lid.x]; }
   if (idx1 < prefix_params.n) { data[idx1] = shmem[lid.x + WG_SIZE]; }
-}
+}`;
 
+const ADD_SHADER = /* wgsl */ `
+struct PrefixParams { n:u32, _pad:vec3<u32> };
+@group(0) @binding(0) var<uniform> prefix_params : PrefixParams;
+@group(0) @binding(1) var<storage, read_write> data : array<u32>;
+@group(0) @binding(2) var<storage, read> block_sums : array<u32>;
 @compute @workgroup_size(${WORKGROUP_SIZE})
-fn scan_top(@builtin(local_invocation_id) lid : vec3<u32>) {
-  // Scan the block_sums array (fits in one workgroup for <= 512 blocks).
-  let n = prefix_params.n;
-  shmem[lid.x]          = select(0u, block_sums[lid.x],          lid.x < n);
-  shmem[lid.x + WG_SIZE] = select(0u, block_sums[lid.x + WG_SIZE], lid.x + WG_SIZE < n);
-  workgroupBarrier();
-
-  var offset = 1u;
-  for (var d = BLOCK >> 1u; d > 0u; d >>= 1u) {
-    workgroupBarrier();
-    if (lid.x < d) {
-      let ai = offset * (2u * lid.x + 1u) - 1u;
-      let bi = offset * (2u * lid.x + 2u) - 1u;
-      if (bi < BLOCK) { shmem[bi] += shmem[ai]; }
-    }
-    offset <<= 1u;
-  }
-  if (lid.x == 0u) { shmem[BLOCK - 1u] = 0u; }
-  workgroupBarrier();
-  for (var d = 1u; d < BLOCK; d <<= 1u) {
-    offset >>= 1u;
-    workgroupBarrier();
-    if (lid.x < d) {
-      let ai = offset * (2u * lid.x + 1u) - 1u;
-      let bi = offset * (2u * lid.x + 2u) - 1u;
-      if (bi < BLOCK) {
-        let t = shmem[ai];
-        shmem[ai] = shmem[bi];
-        shmem[bi] += t;
-      }
-    }
-  }
-  workgroupBarrier();
-  if (lid.x < n)          { block_sums[lid.x] = shmem[lid.x]; }
-  if (lid.x + WG_SIZE < n) { block_sums[lid.x + WG_SIZE] = shmem[lid.x + WG_SIZE]; }
-}
-
-@compute @workgroup_size(${WORKGROUP_SIZE})
-fn add_block_offsets(@builtin(global_invocation_id) gid : vec3<u32>,
-                     @builtin(workgroup_id) wid : vec3<u32>) {
-  let idx = gid.x;
-  if (idx >= prefix_params.n) { return; }
-  data[idx] += block_sums[wid.x / 2u];  // Each dispatch covers BLOCK elements per workgroup
-}
-`;
-
-const ADD_OFFSETS_SHADER = /* wgsl */ `
-// Pass 2b: Add scanned block sums back to each element.
-struct PrefixParams {
-  n    : u32,
-  _pad : vec3<u32>,
-};
-
-@group(0) @binding(0) var<uniform>             prefix_params : PrefixParams;
-@group(0) @binding(1) var<storage, read_write> data          : array<u32>;
-@group(0) @binding(2) var<storage, read>       block_sums    : array<u32>;
-
-const BLOCK : u32 = ${WORKGROUP_SIZE * 2}u;
-
-@compute @workgroup_size(${WORKGROUP_SIZE})
-fn add_offsets(@builtin(global_invocation_id) gid : vec3<u32>,
-              @builtin(workgroup_id) wid : vec3<u32>) {
+fn add_offsets(@builtin(global_invocation_id) gid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>) {
   let idx = gid.x;
   if (idx >= prefix_params.n) { return; }
   data[idx] += block_sums[wid.x / 2u];
+}`;
+
+const DEPTH_PARAMS_SIZE = 32;
+
+interface SortPipelines {
+  readonly init: GPUComputePipeline;
+  readonly hist: GPUComputePipeline;
+  readonly scatter: GPUComputePipeline;
+  readonly scan: GPUComputePipeline;
+  readonly add: GPUComputePipeline;
 }
-`;
-
-const SCATTER_SHADER = /* wgsl */ `
-// Pass 3: Scatter splat indices into sorted order (back-to-front).
-// Buckets were assigned in reverse order by the depth pass (0 = farthest),
-// so the prefix-summed histogram directly gives back-to-front positions.
-
-struct SortParams {
-  cam_pos   : vec3<f32>,
-  count     : u32,
-  view_dir  : vec3<f32>,
-  stride    : u32,
-  min_depth : f32,
-  inv_range : f32,
-  _pad      : vec2<f32>,
-};
-
-@group(0) @binding(0) var<uniform>             params    : SortParams;
-@group(0) @binding(1) var<storage, read>       buckets   : array<u32>;
-@group(0) @binding(2) var<storage, read_write> offsets   : array<atomic<u32>>;
-@group(0) @binding(3) var<storage, read_write> output    : array<u32>;
-
-@compute @workgroup_size(${WORKGROUP_SIZE})
-fn scatter_main(@builtin(global_invocation_id) gid : vec3<u32>) {
-  let i = gid.x;
-  if (i >= params.count) { return; }
-
-  let b = buckets[i];
-  // Buckets are already reversed in the depth pass (0 = farthest),
-  // so the prefix sum directly gives back-to-front output positions.
-  let pos = atomicAdd(&offsets[b], 1u);
-  output[pos] = i;
-}
-`;
-
-// ─── GPU Sort Class ───────────────────────────────────────────────────────────
-
-/** Uniform buffer layout for the sort params (48 bytes, std140 aligned). */
-const SORT_PARAMS_SIZE = 48; // 3+1+3+1+1+1+2 = 12 floats × 4 bytes
 
 /**
- * GPU-based counting sort for Gaussian splats.
+ * Per-frame GPU stable radix sort for Gaussian splats.
  *
- * Runs entirely on the GPU within a single command encoder submission. The
- * sorted index order is written directly to the provided output buffer (the
- * render pipeline's `orderBuffer`), so there is zero CPU↔GPU round-trip and the
- * result is available in the same frame.
+ * The sorted index order is written directly into the render pipeline's order
+ * buffer (used as one ping-pong index buffer), so there is no CPU↔GPU round-trip
+ * and the result is available in the same frame.
  */
-/** @deprecated See the module note; not used by `SplatRenderer`. */
 export class GpuSplatSorter {
-  private depthPipeline!: GPUComputePipeline;
-  private scanBlocksPipeline!: GPUComputePipeline;
-  private scanTopPipeline!: GPUComputePipeline;
-  private addOffsetsPipeline!: GPUComputePipeline;
-  private scatterPipeline!: GPUComputePipeline;
+  private pipelines: SortPipelines | null = null;
 
-  private paramsBuffer!: GPUBuffer;
-  private prefixParamsBuffer!: GPUBuffer;
-  private histogramBuffer!: GPUBuffer;
-  private bucketsBuffer: GPUBuffer | null = null;
-  private blockSumsBuffer!: GPUBuffer;
-  private topBlockSumsBuffer!: GPUBuffer;
+  private keys: GPUBuffer | null = null;      // 32-bit depth keys (not permuted)
+  private scratch: GPUBuffer | null = null;   // second ping-pong index buffer
+  private groupHist: GPUBuffer | null = null; // [RADIX * numGroups], scanned in place
+  private bs0: GPUBuffer | null = null;
+  private bs1: GPUBuffer | null = null;
+  private bs2: GPUBuffer | null = null;
+  private depthParams: GPUBuffer | null = null;
+  private ppN: GPUBuffer | null = null;
+  private ppNb0: GPUBuffer | null = null;
+  private ppNb1: GPUBuffer | null = null;
+  private rParams: GPUBuffer[] = [];
 
-  private depthBindGroupLayout!: GPUBindGroupLayout;
-  private prefixBindGroupLayout!: GPUBindGroupLayout;
-  private addOffsetsBindGroupLayout!: GPUBindGroupLayout;
-  private scatterBindGroupLayout!: GPUBindGroupLayout;
+  private scanHistBG: GPUBindGroup | null = null;
+  private scanBs0BG: GPUBindGroup | null = null;
+  private scanBs1BG: GPUBindGroup | null = null;
+  private addBs0BG: GPUBindGroup | null = null;
+  private addHistBG: GPUBindGroup | null = null;
+  private orderRef: GPUBuffer | null = null;
+  private histBG: GPUBindGroup[] = [];
+  private scatterBG: GPUBindGroup[] = [];
 
   private count = 0;
-  private initialized = false;
+  private numGroups = 0;
+  private histLen = 0;
+  private nb0 = 0;
+  private nb1 = 0;
+  private nb2 = 0;
 
   constructor(private readonly device: GPUDevice) {}
 
-  /** Lazily create all GPU pipelines and buffers on first use. */
-  private ensureInit(): void {
-    if (this.initialized) return;
-    this.initialized = true;
+  private ensureInit(): SortPipelines {
+    if (this.pipelines) return this.pipelines;
     const device = this.device;
-    // ── Depth pass pipeline ─────────────────────────────────────────────────
-    const depthModule = device.createShaderModule({ code: DEPTH_SHADER });
-    this.depthBindGroupLayout = device.createBindGroupLayout({
-      entries: [
-        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
-        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
-        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
-        { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
-      ],
-    });
-    this.depthPipeline = device.createComputePipeline({
-      layout: device.createPipelineLayout({ bindGroupLayouts: [this.depthBindGroupLayout] }),
-      compute: { module: depthModule, entryPoint: "depth_main" },
-    });
+    // `layout: "auto"` infers each bind-group layout from the shader, so a
+    // hand-written layout can never drift out of sync with the WGSL bindings.
+    const cp = (code: string, entryPoint: string): GPUComputePipeline =>
+      device.createComputePipeline({
+        layout: "auto",
+        compute: { module: device.createShaderModule({ code }), entryPoint },
+      });
+    this.pipelines = {
+      init: cp(INIT_SHADER, "init_keys"),
+      hist: cp(HIST_SHADER, "histogram"),
+      scatter: cp(SCATTER_SHADER, "scatter"),
+      scan: cp(SCAN_SHADER, "scan_blocks"),
+      add: cp(ADD_SHADER, "add_offsets"),
+    };
+    return this.pipelines;
+  }
 
-    // ── Prefix sum pipelines ────────────────────────────────────────────────
-    const prefixModule = device.createShaderModule({ code: PREFIX_SUM_SHADER });
-    this.prefixBindGroupLayout = device.createBindGroupLayout({
-      entries: [
-        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
-        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
-        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
-      ],
-    });
-    this.scanBlocksPipeline = device.createComputePipeline({
-      layout: device.createPipelineLayout({ bindGroupLayouts: [this.prefixBindGroupLayout] }),
-      compute: { module: prefixModule, entryPoint: "scan_blocks" },
-    });
-    this.scanTopPipeline = device.createComputePipeline({
-      layout: device.createPipelineLayout({ bindGroupLayouts: [this.prefixBindGroupLayout] }),
-      compute: { module: prefixModule, entryPoint: "scan_top" },
-    });
-
-    // ── Add offsets pipeline ────────────────────────────────────────────────
-    const addOffsetsModule = device.createShaderModule({ code: ADD_OFFSETS_SHADER });
-    this.addOffsetsBindGroupLayout = device.createBindGroupLayout({
-      entries: [
-        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
-        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
-        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
-      ],
-    });
-    this.addOffsetsPipeline = device.createComputePipeline({
-      layout: device.createPipelineLayout({ bindGroupLayouts: [this.addOffsetsBindGroupLayout] }),
-      compute: { module: addOffsetsModule, entryPoint: "add_offsets" },
-    });
-
-    // ── Scatter pipeline ────────────────────────────────────────────────────
-    const scatterModule = device.createShaderModule({ code: SCATTER_SHADER });
-    this.scatterBindGroupLayout = device.createBindGroupLayout({
-      entries: [
-        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
-        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
-        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
-        { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
-      ],
-    });
-    this.scatterPipeline = device.createComputePipeline({
-      layout: device.createPipelineLayout({ bindGroupLayouts: [this.scatterBindGroupLayout] }),
-      compute: { module: scatterModule, entryPoint: "scatter_main" },
-    });
-
-    // ── Shared buffers ──────────────────────────────────────────────────────
-    this.paramsBuffer = device.createBuffer({
-      size: SORT_PARAMS_SIZE,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-    this.prefixParamsBuffer = device.createBuffer({
-      size: 32, // PrefixParams: u32 n (offset 0) + vec3<u32> _pad (offset 16) = 32 bytes
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-    this.histogramBuffer = device.createBuffer({
-      size: BUCKET_COUNT * 4,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    // Block sums for prefix scan: ceil(BUCKET_COUNT / (WG_SIZE*2)) entries.
-    const numBlocks = Math.ceil(BUCKET_COUNT / (WORKGROUP_SIZE * 2));
-    this.blockSumsBuffer = device.createBuffer({
-      size: Math.max(numBlocks * 4, 16),
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    // Persistent buffer for the top-level block sums scan (avoids per-frame create/destroy).
-    this.topBlockSumsBuffer = device.createBuffer({
-      size: 16,
+  private makeStorage(bytes: number): GPUBuffer {
+    return this.device.createBuffer({
+      size: Math.max(bytes, 4),
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
   }
 
-  /**
-   * Allocate the per-splat bucket buffer sized for `count` splats.
-   * Called when the splat count changes (on upload).
-   */
+  private makeUniform(values: readonly number[]): GPUBuffer {
+    // 32 bytes: PrefixParams `{ n:u32, _pad:vec3<u32> }` is 32B in WGSL (the
+    // vec3 aligns to offset 16), so its uniform binding requires ≥32 bytes.
+    const buf = this.device.createBuffer({
+      size: 32,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    const a = new Uint32Array(8);
+    a.set(values);
+    this.device.queue.writeBuffer(buf, 0, a);
+    return buf;
+  }
+
+  /** Allocate per-splat buffers and pre-write the size-dependent uniforms. */
   resize(count: number): void {
     if (count === this.count) return;
+    const pipes = this.ensureInit();
+    this.releaseBuffers();
     this.count = count;
-    this.bucketsBuffer?.destroy();
-    this.bucketsBuffer = null;
+    this.orderRef = null; // force per-order bind groups to rebuild
     if (count === 0) return;
-    this.bucketsBuffer = this.device.createBuffer({
-      size: Math.max(count * 4, 4),
-      usage: GPUBufferUsage.STORAGE,
+
+    this.numGroups = ceilDiv(count, WORKGROUP_SIZE);
+    this.histLen = RADIX * this.numGroups;
+    this.nb0 = ceilDiv(this.histLen, SCAN_BLOCK);
+    this.nb1 = ceilDiv(this.nb0, SCAN_BLOCK);
+    this.nb2 = ceilDiv(this.nb1, SCAN_BLOCK);
+
+    this.keys = this.makeStorage(count * 4);
+    this.scratch = this.makeStorage(count * 4);
+    this.groupHist = this.makeStorage(this.histLen * 4);
+    this.bs0 = this.makeStorage(this.nb0 * 4);
+    this.bs1 = this.makeStorage(this.nb1 * 4);
+    this.bs2 = this.makeStorage(this.nb2 * 4);
+    this.depthParams = this.device.createBuffer({
+      size: DEPTH_PARAMS_SIZE,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+
+    // Size-dependent uniforms: written ONCE here, never per-frame.
+    this.ppN = this.makeUniform([this.histLen]);
+    this.ppNb0 = this.makeUniform([this.nb0]);
+    this.ppNb1 = this.makeUniform([this.nb1]);
+    this.rParams = [];
+    for (let p = 0; p < KEY_PASSES; p++) {
+      this.rParams.push(this.makeUniform([count, p * 8, this.numGroups, 0]));
+    }
+
+    const bg = (pipe: GPUComputePipeline, bufs: GPUBuffer[]): GPUBindGroup =>
+      this.device.createBindGroup({
+        layout: pipe.getBindGroupLayout(0),
+        entries: bufs.map((buffer, binding) => ({ binding, resource: { buffer } })),
+      });
+    this.scanHistBG = bg(pipes.scan, [this.ppN, this.groupHist, this.bs0]);
+    this.scanBs0BG = bg(pipes.scan, [this.ppNb0, this.bs0, this.bs1]);
+    this.scanBs1BG = bg(pipes.scan, [this.ppNb1, this.bs1, this.bs2]);
+    this.addBs0BG = bg(pipes.add, [this.ppNb0, this.bs0, this.bs1]);
+    this.addHistBG = bg(pipes.add, [this.ppN, this.groupHist, this.bs0]);
+  }
+
+  /** (Re)build the bind groups that reference the external order buffer. */
+  private ensureOrderBindGroups(orderBuffer: GPUBuffer): void {
+    if (this.orderRef === orderBuffer) return;
+    this.orderRef = orderBuffer;
+    const pipes = this.ensureInit();
+    const keys = this.keys!;
+    const scratch = this.scratch!;
+    const groupHist = this.groupHist!;
+    const bg = (pipe: GPUComputePipeline, bufs: GPUBuffer[]): GPUBindGroup =>
+      this.device.createBindGroup({
+        layout: pipe.getBindGroupLayout(0),
+        entries: bufs.map((buffer, binding) => ({ binding, resource: { buffer } })),
+      });
+    this.histBG = [];
+    this.scatterBG = [];
+    for (let p = 0; p < KEY_PASSES; p++) {
+      // Even pass → source is the order buffer; odd pass → source is the scratch.
+      const src = p % 2 === 0 ? orderBuffer : scratch;
+      const dst = p % 2 === 0 ? scratch : orderBuffer;
+      const rp = this.rParams[p]!;
+      this.histBG.push(bg(pipes.hist, [rp, keys, src, groupHist]));
+      this.scatterBG.push(bg(pipes.scatter, [rp, keys, src, groupHist, dst]));
+    }
+  }
+
+  /** Encode a full exclusive prefix scan of `groupHist` (up to 3 levels). */
+  private encodeScan(encoder: GPUCommandEncoder, pipes: SortPipelines): void {
+    // Each dependent step runs in its OWN compute pass: WebGPU only guarantees
+    // storage visibility BETWEEN passes, not between dispatches within one pass.
+    const step = (pipeline: GPUComputePipeline, group: GPUBindGroup, groups: number): void => {
+      const pass = encoder.beginComputePass();
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, group);
+      pass.dispatchWorkgroups(groups);
+      pass.end();
+    };
+    step(pipes.scan, this.scanHistBG!, this.nb0);
+    if (this.nb0 > 1) {
+      step(pipes.scan, this.scanBs0BG!, this.nb1);
+      if (this.nb1 > 1) {
+        step(pipes.scan, this.scanBs1BG!, this.nb2); // nb2 === 1 → bs1 fully scanned
+        step(pipes.add, this.addBs0BG!, ceilDiv(this.nb0, WORKGROUP_SIZE));
+      }
+      step(pipes.add, this.addHistBG!, ceilDiv(this.histLen, WORKGROUP_SIZE));
+    }
   }
 
   /**
-   * Encode the 3-pass GPU sort into the provided command encoder.
-   *
-   * @param encoder  Active command encoder (sort runs before the render pass).
-   * @param positionsBuffer  Splat centres (3 f32 words/splat).
-   * @param orderBuffer  Output: sorted index buffer written by the scatter pass.
-   * @param camPos   Camera world position.
-   * @param viewDir  Normalized view direction (target - position).
-   * @param minDepth Smallest view-space depth of the cloud for this camera.
-   * @param maxDepth Largest view-space depth of the cloud for this camera.
+   * Encode the stable radix sort into `encoder` (before the render pass).
+   * Writes the back-to-front index order into `orderBuffer`. `minDepth`/`maxDepth`
+   * are unused (the key is full-precision), kept for a stable call signature.
    */
   sort(
     encoder: GPUCommandEncoder,
@@ -417,151 +355,74 @@ export class GpuSplatSorter {
     orderBuffer: GPUBuffer,
     camPos: readonly [number, number, number],
     viewDir: readonly [number, number, number],
-    minDepth: number,
-    maxDepth: number,
+    _minDepth: number,
+    _maxDepth: number,
   ): void {
-    this.ensureInit();
-    const n = this.count;
-    if (n === 0 || !this.bucketsBuffer) return;
+    const pipes = this.ensureInit();
+    if (this.count === 0 || !this.keys) return;
+    this.ensureOrderBindGroups(orderBuffer);
 
-    const [cx, cy, cz] = camPos;
-    const [vx, vy, vz] = viewDir;
-    const minD = minDepth;
-    let maxD = maxDepth;
-    if (!(maxD > minD)) { maxD = minD + 1; }
-    const invRange = (BUCKET_COUNT - 1) / (maxD - minD);
+    const dp = new ArrayBuffer(DEPTH_PARAMS_SIZE);
+    const f = new Float32Array(dp);
+    const u = new Uint32Array(dp);
+    f[0] = camPos[0]; f[1] = camPos[1]; f[2] = camPos[2];
+    u[3] = this.count;
+    f[4] = viewDir[0]; f[5] = viewDir[1]; f[6] = viewDir[2];
+    this.device.queue.writeBuffer(this.depthParams!, 0, dp);
 
-    // ── Upload sort params uniform ──────────────────────────────────────────
-    const params = new Float32Array(12);
-    params[0] = cx; params[1] = cy; params[2] = cz;
-    new Uint32Array(params.buffer)[3] = n;
-    params[4] = vx; params[5] = vy; params[6] = vz;
-    new Uint32Array(params.buffer)[7] = 3; // positions stride (f32 words/splat)
-    params[8] = minD;
-    params[9] = invRange;
-    this.device.queue.writeBuffer(this.paramsBuffer, 0, params);
-
-    // Clear histogram.
-    const zeros = new Uint32Array(BUCKET_COUNT);
-    this.device.queue.writeBuffer(this.histogramBuffer, 0, zeros);
-
-    // Prefix params: n = BUCKET_COUNT.
-    const pp = new Uint32Array(4);
-    pp[0] = BUCKET_COUNT;
-    this.device.queue.writeBuffer(this.prefixParamsBuffer, 0, pp);
-
-    // ── Pass 1: Depth + histogram ───────────────────────────────────────────
-    const depthBG = this.device.createBindGroup({
-      layout: this.depthBindGroupLayout,
+    // init: seed keys + reset the order buffer to identity (needs the positions
+    // buffer, so this bind group is built here rather than in resize()).
+    const initBG = this.device.createBindGroup({
+      layout: pipes.init.getBindGroupLayout(0),
       entries: [
-        { binding: 0, resource: { buffer: this.paramsBuffer } },
+        { binding: 0, resource: { buffer: this.depthParams! } },
         { binding: 1, resource: { buffer: positionsBuffer } },
-        { binding: 2, resource: { buffer: this.histogramBuffer } },
-        { binding: 3, resource: { buffer: this.bucketsBuffer } },
-      ],
-    });
-    const pass1 = encoder.beginComputePass();
-    pass1.setPipeline(this.depthPipeline);
-    pass1.setBindGroup(0, depthBG);
-    pass1.dispatchWorkgroups(Math.ceil(n / WORKGROUP_SIZE));
-    pass1.end();
-
-    // ── Pass 2: Prefix sum on histogram ─────────────────────────────────────
-    const BLOCK = WORKGROUP_SIZE * 2;
-    const numBlocks = Math.ceil(BUCKET_COUNT / BLOCK);
-
-    // Clear block sums.
-    const blockZeros = new Uint32Array(numBlocks);
-    this.device.queue.writeBuffer(this.blockSumsBuffer, 0, blockZeros);
-
-    // 2a: Scan each block of the histogram.
-    const scanBG = this.device.createBindGroup({
-      layout: this.prefixBindGroupLayout,
-      entries: [
-        { binding: 0, resource: { buffer: this.prefixParamsBuffer } },
-        { binding: 1, resource: { buffer: this.histogramBuffer } },
-        { binding: 2, resource: { buffer: this.blockSumsBuffer } },
-      ],
-    });
-    const pass2a = encoder.beginComputePass();
-    pass2a.setPipeline(this.scanBlocksPipeline);
-    pass2a.setBindGroup(0, scanBG);
-    pass2a.dispatchWorkgroups(numBlocks);
-    pass2a.end();
-
-    // 2b: Scan the block sums (single workgroup — numBlocks must be <= BLOCK).
-    if (numBlocks > 1) {
-      // Update prefix params for block sums count.
-      const bsp = new Uint32Array(4);
-      bsp[0] = numBlocks;
-      this.device.queue.writeBuffer(this.prefixParamsBuffer, 0, bsp);
-
-      // scan_top exclusive-scans its `block_sums` (binding 2) IN PLACE. Bind the
-      // real block-totals buffer there so cross-block offsets are computed from
-      // the actual block sums (numBlocks <= BLOCK, so one workgroup suffices).
-      // binding 1 (`data`) is unused by scan_top — a harmless placeholder.
-      const scanTopBG = this.device.createBindGroup({
-        layout: this.prefixBindGroupLayout,
-        entries: [
-          { binding: 0, resource: { buffer: this.prefixParamsBuffer } },
-          { binding: 1, resource: { buffer: this.topBlockSumsBuffer } },
-          { binding: 2, resource: { buffer: this.blockSumsBuffer } },
-        ],
-      });
-      const pass2b = encoder.beginComputePass();
-      pass2b.setPipeline(this.scanTopPipeline);
-      pass2b.setBindGroup(0, scanTopBG);
-      pass2b.dispatchWorkgroups(1);
-      pass2b.end();
-
-      // 2c: Add block offsets back to each histogram element.
-      // Restore prefix params to full histogram size.
-      const hpp = new Uint32Array(4);
-      hpp[0] = BUCKET_COUNT;
-      this.device.queue.writeBuffer(this.prefixParamsBuffer, 0, hpp);
-
-      const addBG = this.device.createBindGroup({
-        layout: this.addOffsetsBindGroupLayout,
-        entries: [
-          { binding: 0, resource: { buffer: this.prefixParamsBuffer } },
-          { binding: 1, resource: { buffer: this.histogramBuffer } },
-          { binding: 2, resource: { buffer: this.blockSumsBuffer } },
-        ],
-      });
-      const pass2c = encoder.beginComputePass();
-      pass2c.setPipeline(this.addOffsetsPipeline);
-      pass2c.setBindGroup(0, addBG);
-      pass2c.dispatchWorkgroups(Math.ceil(BUCKET_COUNT / WORKGROUP_SIZE));
-      pass2c.end();
-    }
-
-    // ── Pass 3: Scatter (back-to-front) ─────────────────────────────────────
-    const scatterBG = this.device.createBindGroup({
-      layout: this.scatterBindGroupLayout,
-      entries: [
-        { binding: 0, resource: { buffer: this.paramsBuffer } },
-        { binding: 1, resource: { buffer: this.bucketsBuffer } },
-        { binding: 2, resource: { buffer: this.histogramBuffer } }, // now contains prefix sums = offsets
+        { binding: 2, resource: { buffer: this.keys } },
         { binding: 3, resource: { buffer: orderBuffer } },
       ],
     });
-    const pass3 = encoder.beginComputePass();
-    pass3.setPipeline(this.scatterPipeline);
-    pass3.setBindGroup(0, scatterBG);
-    pass3.dispatchWorkgroups(Math.ceil(n / WORKGROUP_SIZE));
-    pass3.end();
+    const initPass = encoder.beginComputePass();
+    initPass.setPipeline(pipes.init);
+    initPass.setBindGroup(0, initBG);
+    initPass.dispatchWorkgroups(ceilDiv(this.count, WORKGROUP_SIZE));
+    initPass.end();
+
+    for (let p = 0; p < KEY_PASSES; p++) {
+      const histPass = encoder.beginComputePass();
+      histPass.setPipeline(pipes.hist);
+      histPass.setBindGroup(0, this.histBG[p]!);
+      histPass.dispatchWorkgroups(this.numGroups);
+      histPass.end();
+
+      this.encodeScan(encoder, pipes);
+
+      const scatterPass = encoder.beginComputePass();
+      scatterPass.setPipeline(pipes.scatter);
+      scatterPass.setBindGroup(0, this.scatterBG[p]!);
+      scatterPass.dispatchWorkgroups(this.numGroups);
+      scatterPass.end();
+    }
+    // KEY_PASSES is even, so the final order lands in `orderBuffer`.
+  }
+
+  private releaseBuffers(): void {
+    for (const buf of [this.keys, this.scratch, this.groupHist, this.bs0, this.bs1, this.bs2, this.depthParams, this.ppN, this.ppNb0, this.ppNb1, ...this.rParams]) {
+      buf?.destroy();
+    }
+    this.keys = this.scratch = this.groupHist = null;
+    this.bs0 = this.bs1 = this.bs2 = null;
+    this.depthParams = this.ppN = this.ppNb0 = this.ppNb1 = null;
+    this.rParams = [];
+    this.scanHistBG = this.scanBs0BG = this.scanBs1BG = null;
+    this.addBs0BG = this.addHistBG = null;
+    this.histBG = [];
+    this.scatterBG = [];
+    this.orderRef = null;
   }
 
   dispose(): void {
-    this.bucketsBuffer?.destroy();
-    this.bucketsBuffer = null;
+    this.releaseBuffers();
     this.count = 0;
-    if (!this.initialized) return;
-    this.paramsBuffer.destroy();
-    this.prefixParamsBuffer.destroy();
-    this.histogramBuffer.destroy();
-    this.blockSumsBuffer.destroy();
-    this.topBlockSumsBuffer.destroy();
-    this.initialized = false;
+    this.pipelines = null;
   }
 }

@@ -88,8 +88,9 @@ const FOLLOW_HEADING_MIN_MOVE = 0.01;
  * camera) causes visibly wrong alpha blending on the road surface.
  *
  * Strategy:
- * - `enable = true`  → zero the rate cap + enable the per-frame GPU compute
- *   sort (no-op fallback when the texture-array path is unavailable).
+ * - `enable = true`  → zero the CPU-sort rate cap and enable the per-frame GPU
+ *   stable radix sort (no-op fallback when the texture-array path is
+ *   unavailable), so the order stays fresh every frame without flicker.
  * - `enable = false` → restore whatever the user has configured in the
  *   point-cloud panel (cap + GPU-sort toggle).
  */
@@ -97,8 +98,8 @@ function applyFollowSortMode(enable: boolean): void {
   const renderer = getViewportRenderer();
   if (!renderer) return;
   if (enable) {
-    renderer.setSplatRefreshFps(0);  // realtime CPU sort (no artificial cap)
-    renderer.setSplatGpuSort(true);  // per-frame GPU sort if available
+    renderer.setSplatRefreshFps(0);  // realtime sort (no artificial cap)
+    renderer.setSplatGpuSort(true);  // per-frame GPU stable sort if available
   } else {
     const pc = usePointCloudStore.getState();
     renderer.setSplatRefreshFps(pc.splatRefreshFps);
