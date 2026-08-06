@@ -18,6 +18,12 @@ describe("pointcloudState Gaussian defaults", () => {
     expect(usePointCloudStore.getState().splatEncodeLinearToSrgb).toBe(true);
   });
 
+  it("defaults the splat background to sky and updates via setter", () => {
+    expect(usePointCloudStore.getState().splatBackground).toBe("sky");
+    usePointCloudStore.getState().setSplatBackground("theme");
+    expect(usePointCloudStore.getState().splatBackground).toBe("theme");
+  });
+
   it("stores and clears structured Gaussian fidelity status", () => {
     const status = {
       outcome: "uploaded" as const,

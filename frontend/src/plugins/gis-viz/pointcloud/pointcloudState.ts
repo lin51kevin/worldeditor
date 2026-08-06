@@ -10,6 +10,14 @@ import { DEFAULT_SPLAT_DILATION } from '../../../viewport/gaussian/splatUniform'
 /** Phase of the point-cloud → vector workflow. */
 export type PointCloudStage = 'idle' | 'loaded' | 'ground' | 'markings' | 'vectorized';
 
+/**
+ * Viewport background used while a splat cloud is shown. Sparse splats blend
+ * over this colour, so a dark backdrop makes thin sky regions read as black
+ * patches. `'theme'` keeps the editor's default; the lighter presets let sparse
+ * areas fade into the background the way SuperSplat renders them.
+ */
+export type SplatBackground = 'theme' | 'gray' | 'white' | 'sky';
+
 interface PointCloudState {
   /** Opaque handle to the loaded cloud (native or WASM registry), or null. */
   handle: number | null;
@@ -61,6 +69,8 @@ interface PointCloudState {
   splatQuality: number;
   /** Splat depth re-sort (refresh) rate cap in FPS; 0 = realtime (no cap). */
   splatRefreshFps: number;
+  /** Viewport background preset used while a splat cloud is displayed. */
+  splatBackground: SplatBackground;
   /** Sort splats on the GPU each frame (zero-latency; opt-in, texture path). */
   splatGpuSort: boolean;
   /** Fidelity/resource result from the most recent GPU upload attempt. */
@@ -76,6 +86,7 @@ interface PointCloudState {
   setSplatQuality: (quality: number) => void;
   setSplatRefreshFps: (fps: number) => void;
   setSplatGpuSort: (enabled: boolean) => void;
+  setSplatBackground: (background: SplatBackground) => void;
   setSplatUploadStatus: (status: SplatUploadStatus | null) => void;
   setLoaded: (handle: number, fileName: string, summary: PointCloudSummary, nativeBackend: boolean) => void;
   setSplatLoaded: (
@@ -116,6 +127,7 @@ const INITIAL = {
   splatQuality: 1,
   splatRefreshFps: 60,
   splatGpuSort: true,
+  splatBackground: 'sky' as SplatBackground,
   splatUploadStatus: null as SplatUploadStatus | null,
 };
 
@@ -132,6 +144,7 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
   setSplatQuality: (splatQuality) => set(() => ({ splatQuality: Math.min(1, Math.max(0.05, splatQuality)) })),
   setSplatRefreshFps: (splatRefreshFps) => set(() => ({ splatRefreshFps: Math.max(0, splatRefreshFps) })),
   setSplatGpuSort: (splatGpuSort) => set(() => ({ splatGpuSort })),
+  setSplatBackground: (splatBackground) => set(() => ({ splatBackground })),
   setSplatUploadStatus: (splatUploadStatus) => set(() => ({ splatUploadStatus })),
 
   setLoaded: (handle, fileName, summary, nativeBackend) =>

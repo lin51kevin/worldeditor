@@ -10,6 +10,8 @@ import { useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import type { ViewportRenderer } from '../viewport/renderer';
 import { usePointCloudStore } from '../plugins/gis-viz/pointcloud/pointcloudState';
+import type { SplatBackground } from '../plugins/gis-viz/pointcloud/pointcloudState';
+import { useThemeStore } from '../stores/themeStore';
 import { getPlatformService } from '../services';
 import { workerRenderBuffer7 } from '../workers/pointcloudBridge';
 import {
@@ -17,6 +19,26 @@ import {
 } from '../viewport/gaussian/splatLayout';
 
 const MAX_RENDER_POINTS = 2_000_000;
+
+/** RGB (0..1) backdrop for each non-theme splat background preset. */
+const SPLAT_BG_COLORS: Record<Exclude<SplatBackground, 'theme'>, [number, number, number]> = {
+  gray: [0.5, 0.5, 0.53],
+  white: [1, 1, 1],
+  sky: [0.62, 0.68, 0.75],
+};
+
+/** Resolve the editor's theme viewport background from CSS custom properties. */
+function themeClearColor(): [number, number, number] {
+  try {
+    const style = getComputedStyle(document.documentElement);
+    const r = parseFloat(style.getPropertyValue('--color-viewport-clear-r')) || 0.10;
+    const g = parseFloat(style.getPropertyValue('--color-viewport-clear-g')) || 0.10;
+    const b = parseFloat(style.getPropertyValue('--color-viewport-clear-b')) || 0.12;
+    return [r, g, b];
+  } catch {
+    return [0.10, 0.10, 0.12];
+  }
+}
 
 /**
  * Shift an origin-relative point-cloud render buffer back into absolute world
@@ -98,6 +120,8 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
   const splatQuality = usePointCloudStore((s) => s.splatQuality);
   const splatRefreshFps = usePointCloudStore((s) => s.splatRefreshFps);
   const splatGpuSort = usePointCloudStore((s) => s.splatGpuSort);
+  const splatBackground = usePointCloudStore((s) => s.splatBackground);
+  const theme = useThemeStore((s) => s.theme);
 
   // Apply the live dilation (splat fullness) slider to the renderer.
   useEffect(() => {
@@ -122,6 +146,21 @@ export function usePointCloudViewport({ rendererRef, status }: UsePointCloudView
     if (status !== 'ready' || !isSplat) return;
     rendererRef.current?.setSplatGpuSort(splatGpuSort);
   }, [splatGpuSort, isSplat, status, rendererRef]);
+
+  // Drive the viewport background from the splat preset while a splat cloud is
+  // shown so sparse sky regions blend into the backdrop instead of reading as
+  // black; restore the theme background once the splat is cleared. `theme` is a
+  // dependency so a theme switch re-applies the correct colour either way.
+  useEffect(() => {
+    if (status !== 'ready') return;
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    const [r, g, b] =
+      isSplat && splatBackground !== 'theme'
+        ? SPLAT_BG_COLORS[splatBackground]
+        : themeClearColor();
+    renderer.setClearColor(r, g, b);
+  }, [splatBackground, isSplat, theme, status, rendererRef]);
 
   useEffect(() => {
     if (status !== 'ready') return;

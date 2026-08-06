@@ -167,6 +167,7 @@ function makeRendererStub() {
     setSplatLinearToSrgbEncoding: vi.fn(),
     setSplatRefreshFps: vi.fn(),
     setSplatGpuSort: vi.fn(),
+    setClearColor: vi.fn(),
   };
   return { renderer: renderer as unknown as ViewportRenderer, uploadGaussianSplats };
 }

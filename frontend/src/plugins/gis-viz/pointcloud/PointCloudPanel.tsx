@@ -60,10 +60,12 @@ export default function PointCloudPanel() {
   const splatQuality = usePointCloudStore((s) => s.splatQuality);
   const splatRefreshFps = usePointCloudStore((s) => s.splatRefreshFps);
   const splatGpuSort = usePointCloudStore((s) => s.splatGpuSort);
+  const splatBackground = usePointCloudStore((s) => s.splatBackground);
   const splatUploadStatus = usePointCloudStore((s) => s.splatUploadStatus);
   const setColorMode = usePointCloudStore((s) => s.setColorMode);
   const setSplatRefreshFps = usePointCloudStore((s) => s.setSplatRefreshFps);
   const setSplatGpuSort = usePointCloudStore((s) => s.setSplatGpuSort);
+  const setSplatBackground = usePointCloudStore((s) => s.setSplatBackground);
   const setSplatDilation = usePointCloudStore((s) => s.setSplatDilation);
   const setSplatEncodeLinearToSrgb = usePointCloudStore((s) => s.setSplatEncodeLinearToSrgb);
   const setSplatSampleMode = usePointCloudStore((s) => s.setSplatSampleMode);
@@ -175,6 +177,21 @@ export default function PointCloudPanel() {
             value={splatDilation}
             onChange={(e) => setSplatDilation(Number(e.target.value))}
           />
+        </label>
+      )}
+
+      {isSplat && (
+        <label className="pc-field">
+          <span>{t('pointcloud.splatBackground')}</span>
+          <select
+            value={splatBackground}
+            onChange={(e) => setSplatBackground(e.target.value as typeof splatBackground)}
+          >
+            <option value="sky">{t('pointcloud.splatBackgroundSky')}</option>
+            <option value="gray">{t('pointcloud.splatBackgroundGray')}</option>
+            <option value="white">{t('pointcloud.splatBackgroundWhite')}</option>
+            <option value="theme">{t('pointcloud.splatBackgroundTheme')}</option>
+          </select>
         </label>
       )}
 

@@ -5,6 +5,7 @@ import { useEffect, type RefObject } from 'react';
 import type { ViewportRenderer } from '../viewport/renderer';
 import { useViewportStore } from '../stores/viewportStore';
 import { useThemeStore } from '../stores/themeStore';
+import { usePointCloudStore } from '../plugins/gis-viz/pointcloud/pointcloudState';
 
 export function useViewportSync(
   rendererRef: RefObject<ViewportRenderer | null>,
@@ -51,10 +52,14 @@ export function useViewportSync(
     if (!renderer || status !== 'ready') return;
     try {
       const style = getComputedStyle(document.documentElement);
-      const r = parseFloat(style.getPropertyValue('--color-viewport-clear-r')) || 0.10;
-      const g = parseFloat(style.getPropertyValue('--color-viewport-clear-g')) || 0.10;
-      const b = parseFloat(style.getPropertyValue('--color-viewport-clear-b')) || 0.12;
-      renderer.setClearColor(r, g, b);
+      // A splat cloud owns the background (see usePointCloudViewport); skip the
+      // theme clear colour here so a theme switch doesn't clobber that backdrop.
+      if (!usePointCloudStore.getState().isSplat) {
+        const r = parseFloat(style.getPropertyValue('--color-viewport-clear-r')) || 0.10;
+        const g = parseFloat(style.getPropertyValue('--color-viewport-clear-g')) || 0.10;
+        const b = parseFloat(style.getPropertyValue('--color-viewport-clear-b')) || 0.12;
+        renderer.setClearColor(r, g, b);
+      }
       const gr = parseFloat(style.getPropertyValue('--color-viewport-grid-r')) || 0.35;
       const gg = parseFloat(style.getPropertyValue('--color-viewport-grid-g')) || 0.35;
       const gb = parseFloat(style.getPropertyValue('--color-viewport-grid-b')) || 0.35;
