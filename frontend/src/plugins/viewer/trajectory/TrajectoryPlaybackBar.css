@@ -1,7 +1,7 @@
 /* ── Trajectory playback bar — bottom-center floating control strip ── */
 .traj-playback-bar {
     position: absolute;
-    bottom: var(--space-6, 24px);
+    bottom: var(--space-2, 8px);
     left: 50%;
     transform: translateX(-50%);
     z-index: 40;
