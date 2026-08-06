@@ -890,6 +890,13 @@
       "time": "时间",
       "close": "关闭"
     },
+    "info": "信息",
+    "infoFile": "文件",
+    "infoDir": "目录",
+    "infoEntities": "实体数",
+    "infoFrames": "帧数",
+    "infoDuration": "时长",
+    "infoSampleRate": "采样频率",
     "settings": "场景配置",
     "config": {
       "title": "轨迹场景配置",

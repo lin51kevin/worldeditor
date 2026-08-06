@@ -890,6 +890,13 @@
       "time": "Time",
       "close": "Close"
     },
+    "info": "Info",
+    "infoFile": "File",
+    "infoDir": "Directory",
+    "infoEntities": "Entities",
+    "infoFrames": "Frames",
+    "infoDuration": "Duration",
+    "infoSampleRate": "Sample Rate",
     "settings": "Scene Settings",
     "config": {
       "title": "Trajectory Scene Config",

@@ -151,7 +151,7 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
         // is fetched lazily from the native registry), so there is no giant IPC.
         const platform = await getPlatformService();
         const result = await platform.loadPointCloud({ path });
-        usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary, true);
+        usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary, true, path);
       } else {
         // Everything else (ply / pcd / xyz / txt / asc) uses the SAME off-thread
         // worker path as the File→Import / first-load flow. Stream the bytes into
@@ -179,6 +179,7 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
               meta.layoutVersion,
               gaussianMetaToSummary(meta),
               true,
+              path,
             );
           // The packed splat buffer now lives on the main thread (transferred
           // out of the worker). The worker's WASM linear memory grew to hold
@@ -189,7 +190,7 @@ export async function loadPointCloud(webFile?: File): Promise<void> {
         } else {
           const format = ext === 'txt' || ext === 'asc' ? 'xyz' : ext;
           const result = await workerLoadPointCloud(bytes, format);
-          usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary, false);
+          usePointCloudStore.getState().setLoaded(result.handle, fileName, result.summary, false, path);
         }
       }
     } else {

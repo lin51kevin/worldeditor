@@ -47,6 +47,7 @@ export default function PointCloudPanel() {
 
   const handle = usePointCloudStore((s) => s.handle);
   const fileName = usePointCloudStore((s) => s.fileName);
+  const filePath = usePointCloudStore((s) => s.filePath);
   const summary = usePointCloudStore((s) => s.summary);
   const busy = usePointCloudStore((s) => s.busy);
   const error = usePointCloudStore((s) => s.error);
@@ -82,7 +83,12 @@ export default function PointCloudPanel() {
   // whole multi-GB file on the main thread (UI stutter) and could crash the
   // native process on very large clouds.
   const onLoadClick = () => {
-    fileInputRef.current?.click();
+    if (!isWeb) {
+      // Desktop: use native dialog to get the full filesystem path for tooltip.
+      void loadPointCloud();
+    } else {
+      fileInputRef.current?.click();
+    }
   };
 
   const onWebFile = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,7 +115,7 @@ export default function PointCloudPanel() {
 
       {summary && (
         <div className="pc-card">
-          <div className="pc-card-title">{fileName}</div>
+          <div className="pc-card-title" title={filePath ?? fileName ?? undefined}>{fileName}</div>
           {isSplat && (
             <Row label={t('pointcloud.renderMode')} value={`3DGS · SH ${splatShDegree}`} />
           )}

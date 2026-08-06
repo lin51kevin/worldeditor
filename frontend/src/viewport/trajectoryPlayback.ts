@@ -405,6 +405,8 @@ export function selectTrajectoryActorAt(screenX: number, screenY: number): strin
 export function startTrajectory(
   data: TrajData,
   origin: readonly [number, number, number] = [0, 0, 0],
+  fileName?: string,
+  filePath?: string,
 ): void {
   if (data.entities.length === 0) return;
   ensureSubscribed();
@@ -425,7 +427,7 @@ export function startTrajectory(
   });
 
   // loadData triggers the subscription → uploads ribbons + renders first frame.
-  useTrajectoryStore.getState().loadData(data);
+  useTrajectoryStore.getState().loadData(data, fileName, filePath);
 
   // Load any pre-configured actor Gaussian models, then re-render the current
   // frame so mapped actors appear as splats without waiting for a scrub.
@@ -511,6 +513,39 @@ export async function applySceneModel(): Promise<void> {
  */
 export function promptImportTrajectory(): void {
   const t = (key: string, fallback?: string): string => i18n.t(key, fallback ?? key);
+
+  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    // Desktop: use native dialog to obtain the full filesystem path.
+    void (async () => {
+      try {
+        const { open } = await import('@tauri-apps/plugin-dialog');
+        const selected = await open({
+          multiple: false,
+          filters: [{ name: 'Trajectory', extensions: ['traj', 'csv', 'txt'] }],
+        });
+        const filePath = Array.isArray(selected) ? (selected[0] ?? null) : selected;
+        if (!filePath) return;
+        const { convertFileSrc } = await import('@tauri-apps/api/core');
+        const resp = await fetch(convertFileSrc(filePath));
+        if (!resp.ok) throw new Error(`Failed to read trajectory file (HTTP ${resp.status}).`);
+        const text = await resp.text();
+        const data = parseTraj(text);
+        if (data.entities.length === 0) {
+          void showAlert(t('dialog.importEmptyProject'), t('dialog.warningTitle'));
+          return;
+        }
+        const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
+        startTrajectory(data, undefined, fileName, filePath);
+      } catch (err) {
+        console.error('[trajectory] Failed to import trajectory:', err);
+        const detail = err instanceof Error ? err.message : String(err);
+        void showAlert(`${t('dialog.importError')}\n\n${detail}`, t('dialog.errorTitle', 'Error'));
+      }
+    })();
+    return;
+  }
+
+  // Web: use <input type="file"> (no full path available from browser sandbox).
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.traj,.csv,text/plain';
@@ -529,7 +564,7 @@ export function promptImportTrajectory(): void {
           void showAlert(t('dialog.importEmptyProject'), t('dialog.warningTitle'));
           return;
         }
-        startTrajectory(data);
+        startTrajectory(data, undefined, file.name);
       } catch (err) {
         console.error('[trajectory] Failed to import trajectory:', err);
         const detail = err instanceof Error ? err.message : String(err);

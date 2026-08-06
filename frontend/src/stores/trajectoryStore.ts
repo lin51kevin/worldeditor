@@ -17,6 +17,10 @@ export type TrajectoryCameraMode = 'off' | 'follow' | 'front';
 interface TrajectoryState {
   /** Loaded trajectory data, or null when nothing is loaded. */
   data: TrajData | null;
+  /** Source file name for display (when loaded via file picker). */
+  fileName: string | null;
+  /** Full file path (desktop only; null on web). */
+  filePath: string | null;
   /** Sorted, de-duplicated distinct timestamps (frame boundaries). */
   frames: number[];
   /** First timestamp in the trajectory. */
@@ -37,7 +41,7 @@ interface TrajectoryState {
   selectedEntityId: string | null;
 
   /** Replace the loaded trajectory, reset the clock to its start, and pause. */
-  loadData: (data: TrajData) => void;
+  loadData: (data: TrajData, fileName?: string, filePath?: string) => void;
   /** Unload everything and return to the empty state. */
   clear: () => void;
   /** Start advancing time. Restarts from tMin if currently at the end. */
@@ -62,6 +66,8 @@ interface TrajectoryState {
 
 const EMPTY = {
   data: null,
+  fileName: null,
+  filePath: null,
   frames: [] as number[],
   tMin: 0,
   tMax: 0,
@@ -80,12 +86,12 @@ export const useTrajectoryStore = create<TrajectoryState>((set, get) => ({
   cameraMode: 'off',
   selectedEntityId: null,
 
-  loadData: (data) => {
+  loadData: (data, fileName, filePath) => {
     const frames = trajFrames(data);
     const [spanMin, spanMax] = trajTimeSpan(data);
     const tMin = Number.isFinite(spanMin) ? spanMin : 0;
     const tMax = Number.isFinite(spanMax) ? spanMax : tMin;
-    set({ data, frames, tMin, tMax, currentTime: tMin, isPlaying: false, selectedEntityId: null });
+    set({ data, fileName: fileName ?? null, filePath: filePath ?? null, frames, tMin, tMax, currentTime: tMin, isPlaying: false, selectedEntityId: null });
   },
 
   clear: () => set({ ...EMPTY, cameraMode: 'off', selectedEntityId: null }),

@@ -32,6 +32,8 @@ interface PointCloudState {
   nativeBackend: boolean;
   /** Source file name for display. */
   fileName: string | null;
+  /** Full file path (available on desktop; same as fileName on web). */
+  filePath: string | null;
   /** Summary of the loaded cloud. */
   summary: PointCloudSummary | null;
   /** Current workflow stage. */
@@ -88,7 +90,7 @@ interface PointCloudState {
   setSplatGpuSort: (enabled: boolean) => void;
   setSplatBackground: (background: SplatBackground) => void;
   setSplatUploadStatus: (status: SplatUploadStatus | null) => void;
-  setLoaded: (handle: number, fileName: string, summary: PointCloudSummary, nativeBackend: boolean) => void;
+  setLoaded: (handle: number, fileName: string, summary: PointCloudSummary, nativeBackend: boolean, filePath?: string) => void;
   setSplatLoaded: (
     handle: number,
     fileName: string,
@@ -97,6 +99,7 @@ interface PointCloudState {
     layoutVersion: number,
     summary: PointCloudSummary,
     originShifted?: boolean,
+    filePath?: string,
   ) => void;
   setGround: () => void;
   setMarkings: (markings: PointCloudPolyline[]) => void;
@@ -108,6 +111,7 @@ const INITIAL = {
   handle: null,
   nativeBackend: false,
   fileName: null,
+  filePath: null,
   summary: null,
   stage: 'idle' as PointCloudStage,
   busy: false,
@@ -147,11 +151,12 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
   setSplatBackground: (splatBackground) => set(() => ({ splatBackground })),
   setSplatUploadStatus: (splatUploadStatus) => set(() => ({ splatUploadStatus })),
 
-  setLoaded: (handle, fileName, summary, nativeBackend) =>
+  setLoaded: (handle, fileName, summary, nativeBackend, filePath) =>
     set(() => ({
       handle,
       nativeBackend,
       fileName,
+      filePath: filePath ?? fileName,
       summary,
       stage: 'loaded',
       hasGround: summary.has_heightmap,
@@ -165,13 +170,14 @@ export const usePointCloudStore = create<PointCloudState>((set) => ({
       splatUploadStatus: null,
     })),
 
-  setSplatLoaded: (handle, fileName, buffer, shDegree, layoutVersion, summary, originShifted = false) =>
+  setSplatLoaded: (handle, fileName, buffer, shDegree, layoutVersion, summary, originShifted = false, filePath?: string) =>
     set(() => ({
       handle,
       // Splats render straight from `splatBuffer`; the render-buffer backend
       // flag is irrelevant here but reset so a later plain-cloud read is clean.
       nativeBackend: false,
       fileName,
+      filePath: filePath ?? fileName,
       summary,
       stage: 'loaded',
       hasGround: false,

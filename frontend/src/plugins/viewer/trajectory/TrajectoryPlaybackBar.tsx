@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Play, Pause, SkipBack, SkipForward, Repeat, Video, Gauge, FolderOpen, Settings, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Repeat, Video, Gauge, FolderOpen, Settings, Info, X } from 'lucide-react';
 import {
   useTrajectoryStore,
   TRAJECTORY_SPEEDS,
@@ -21,7 +22,11 @@ function formatTime(seconds: number): string {
 
 export function TrajectoryPlaybackBar() {
   const { t } = useTranslation();
+  const [infoOpen, setInfoOpen] = useState(false);
   const data = useTrajectoryStore((s) => s.data);
+  const fileName = useTrajectoryStore((s) => s.fileName);
+  const filePath = useTrajectoryStore((s) => s.filePath);
+  const frames = useTrajectoryStore((s) => s.frames);
   const tMin = useTrajectoryStore((s) => s.tMin);
   const tMax = useTrajectoryStore((s) => s.tMax);
   const currentTime = useTrajectoryStore((s) => s.currentTime);
@@ -164,6 +169,31 @@ export function TrajectoryPlaybackBar() {
       >
         <Settings size={16} />
       </button>
+
+      <div className="traj-info-anchor">
+        <button
+          type="button"
+          className={`traj-btn ${infoOpen ? 'active' : ''}`}
+          onClick={() => setInfoOpen((v) => !v)}
+          title={t('trajectory.info')}
+          aria-label={t('trajectory.info')}
+          aria-pressed={infoOpen}
+        >
+          <Info size={16} />
+        </button>
+        {infoOpen && (
+          <div className="traj-info-popup" role="tooltip">
+            <div className="traj-info-row"><span className="traj-info-label">{t('trajectory.infoFile')}</span><span className="traj-info-value" title={fileName ?? '—'}>{fileName ?? '—'}</span></div>
+            {filePath && (
+              <div className="traj-info-row"><span className="traj-info-label">{t('trajectory.infoDir')}</span><span className="traj-info-value" title={filePath.replace(/[/\\][^/\\]*$/, '')}>{filePath.replace(/[/\\][^/\\]*$/, '')}</span></div>
+            )}
+            <div className="traj-info-row"><span className="traj-info-label">{t('trajectory.infoEntities')}</span><span className="traj-info-value">{data.entities.length}</span></div>
+            <div className="traj-info-row"><span className="traj-info-label">{t('trajectory.infoFrames')}</span><span className="traj-info-value">{frames.length}</span></div>
+            <div className="traj-info-row"><span className="traj-info-label">{t('trajectory.infoDuration')}</span><span className="traj-info-value">{formatTime(span)}</span></div>
+            <div className="traj-info-row"><span className="traj-info-label">{t('trajectory.infoSampleRate')}</span><span className="traj-info-value">{span > 0 ? (frames.length / span).toFixed(1) : '—'} Hz</span></div>
+          </div>
+        )}
+      </div>
 
       <button
         type="button"
