@@ -10,7 +10,7 @@ describe("pointcloudState Gaussian defaults", () => {
     const state = usePointCloudStore.getState();
     expect(state.splatDilation).toBe(0.3);
     expect(state.splatEncodeLinearToSrgb).toBe(false);
-    expect(state.splatRefreshFps).toBe(30);
+    expect(state.splatRefreshFps).toBe(60);
   });
 
   it("allows explicit linear-input encoding for diagnostics", () => {

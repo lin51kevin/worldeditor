@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stable GPU splat-sort validation harness</title>
+    <style>
+        body {
+            font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            margin: 16px;
+            background: #111;
+            color: #ddd;
+        }
+
+        h1 {
+            font-size: 16px;
+        }
+
+        button {
+            font: inherit;
+            padding: 6px 12px;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            background: #000;
+            color: #cfe;
+            padding: 12px;
+            border: 1px solid #333;
+            border-radius: 6px;
+        }
+
+        .pass {
+            color: #6f6;
+        }
+
+        .fail {
+            color: #f66;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Stable GPU splat-sort validation harness</h1>
+    <p>Open in Chrome/Edge (WebGPU). Click Run, then copy the whole report back to me.</p>
+    <button id="run">Run validation</button>
+    <pre id="out">Ready.</pre>
+
+    <script type="module">
+        // ─────────────────────────────────────────────────────────────────────────────
+        // This mirrors the proposed stable GPU sort (splatSortCompute.ts) EXACTLY so we
+        // can debug the real WGSL on a device. It validates each stage against a plain
+        // JS reference and reports the first failing stage/size.
+        // ─────────────────────────────────────────────────────────────────────────────
+
+        const WG = 256;            // workgroup size
+        const SCAN_BLOCK = WG * 2; // 512 elements per Blelloch block
+        const KEY_BITS = 16;
+        const MAX_Q = (1 << KEY_BITS) - 1;
+        const ceilDiv = (a, b) => Math.floor((a + b - 1) / b);
+
+        const out = document.getElementById('out');
+        let report = '';
+        function log(s = '', cls) {
+            report += s + '\n';
+            const span = cls ? `<span class="${cls}">${s}</span>` : s;
+            out.innerHTML += span + '\n';
+        }
+        function reset() { report = ''; out.innerHTML = ''; }
+
+        // ── JS reference ─────────────────────────────────────────────────────────────
+        function jsExclusiveScan(a) {
+            const out = new Uint32Array(a.length);
+            let s = 0;
+            for (let i = 0; i < a.length; i++) { out[i] = s; s += a[i]; }
+            return out;
+        }
+        function depthToKey(depth, minD, invRange) {
+            const t = (depth - minD) * invRange;
+            const q = Math.min(MAX_Q, Math.max(0, Math.floor(t)));
+            return MAX_Q - q;
+        }
+        function jsStableArgsort(keys) {
+            return [...keys.keys()].sort((a, b) => keys[a] - keys[b] || a - b);
+        }
+
+        // ── WGSL (verbatim from the proposed implementation) ─────────────────────────
+        const INIT_SHADER = `
+struct DepthParams { cam:vec3<f32>, count:u32, view:vec3<f32>, _p0:u32, min_depth:f32, inv_range:f32, max_q:f32, _p1:f32 };
+@group(0) @binding(0) var<uniform> params : DepthParams;
+@group(0) @binding(1) var<storage, read> positions : array<f32>;
+@group(0) @binding(2) var<storage, read_write> keys : array<u32>;
+@group(0) @binding(3) var<storage, read_write> order : array<u32>;
+@compute @workgroup_size(${WG})
+fn init_keys(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let i = gid.x;
+  if (i >= params.count) { return; }
+  let b = i * 3u;
+  let dx = positions[b] - params.cam.x;
+  let dy = positions[b+1u] - params.cam.y;
+  let dz = positions[b+2u] - params.cam.z;
+  let depth = dx*params.view.x + dy*params.view.y + dz*params.view.z;
+  let t = (depth - params.min_depth) * params.inv_range;
+  let q = u32(clamp(t, 0.0, params.max_q));
+  keys[i] = u32(params.max_q) - q;
+  order[i] = i;
+}`;
+
+        const FLAGS_SHADER = `
+struct BitParams { bit:u32, count:u32, _pad:vec2<u32> };
+@group(0) @binding(0) var<uniform> bp : BitParams;
+@group(0) @binding(1) var<storage, read> keys : array<u32>;
+@group(0) @binding(2) var<storage, read> order : array<u32>;
+@group(0) @binding(3) var<storage, read_write> flags : array<u32>;
+@compute @workgroup_size(${WG})
+fn write_flags(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let i = gid.x;
+  if (i >= bp.count) { return; }
+  let key = keys[order[i]];
+  flags[i] = 1u - ((key >> bp.bit) & 1u);
+}`;
+
+        const SCAN_SHADER = `
+struct PrefixParams { n:u32, _pad:vec3<u32> };
+@group(0) @binding(0) var<uniform> prefix_params : PrefixParams;
+@group(0) @binding(1) var<storage, read_write> data : array<u32>;
+@group(0) @binding(2) var<storage, read_write> block_sums : array<u32>;
+const WG_SIZE : u32 = ${WG}u;
+const BLOCK : u32 = ${SCAN_BLOCK}u;
+var<workgroup> shmem : array<u32, ${SCAN_BLOCK}>;
+@compute @workgroup_size(${WG})
+fn scan_blocks(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>) {
+  let block_offset = wid.x * BLOCK;
+  let idx0 = block_offset + lid.x;
+  let idx1 = block_offset + lid.x + WG_SIZE;
+  shmem[lid.x] = select(0u, data[idx0], idx0 < prefix_params.n);
+  shmem[lid.x + WG_SIZE] = select(0u, data[idx1], idx1 < prefix_params.n);
+  workgroupBarrier();
+  var offset = 1u;
+  for (var d = BLOCK >> 1u; d > 0u; d >>= 1u) {
+    workgroupBarrier();
+    if (lid.x < d) {
+      let ai = offset * (2u*lid.x + 1u) - 1u;
+      let bi = offset * (2u*lid.x + 2u) - 1u;
+      shmem[bi] += shmem[ai];
+    }
+    offset <<= 1u;
+  }
+  if (lid.x == 0u) { block_sums[wid.x] = shmem[BLOCK - 1u]; shmem[BLOCK - 1u] = 0u; }
+  workgroupBarrier();
+  for (var d = 1u; d < BLOCK; d <<= 1u) {
+    offset >>= 1u;
+    workgroupBarrier();
+    if (lid.x < d) {
+      let ai = offset * (2u*lid.x + 1u) - 1u;
+      let bi = offset * (2u*lid.x + 2u) - 1u;
+      let t = shmem[ai];
+      shmem[ai] = shmem[bi];
+      shmem[bi] += t;
+    }
+  }
+  workgroupBarrier();
+  if (idx0 < prefix_params.n) { data[idx0] = shmem[lid.x]; }
+  if (idx1 < prefix_params.n) { data[idx1] = shmem[lid.x + WG_SIZE]; }
+}`;
+
+        const ADD_SHADER = `
+struct PrefixParams { n:u32, _pad:vec3<u32> };
+@group(0) @binding(0) var<uniform> prefix_params : PrefixParams;
+@group(0) @binding(1) var<storage, read_write> data : array<u32>;
+@group(0) @binding(2) var<storage, read> block_sums : array<u32>;
+@compute @workgroup_size(${WG})
+fn add_offsets(@builtin(global_invocation_id) gid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>) {
+  let idx = gid.x;
+  if (idx >= prefix_params.n) { return; }
+  data[idx] += block_sums[wid.x / 2u];
+}`;
+
+        const TOTAL_SHADER = `
+struct BitParams { bit:u32, count:u32, _pad:vec2<u32> };
+@group(0) @binding(0) var<uniform> bp : BitParams;
+@group(0) @binding(1) var<storage, read> keys : array<u32>;
+@group(0) @binding(2) var<storage, read> order : array<u32>;
+@group(0) @binding(3) var<storage, read> prefix : array<u32>;
+@group(0) @binding(4) var<storage, read_write> total : array<u32>;
+@compute @workgroup_size(1)
+fn compute_total() {
+  let n = bp.count;
+  let last_key = keys[order[n - 1u]];
+  let last_flag = 1u - ((last_key >> bp.bit) & 1u);
+  total[0] = prefix[n - 1u] + last_flag;
+}`;
+
+        const SCATTER_SHADER = `
+struct BitParams { bit:u32, count:u32, _pad:vec2<u32> };
+@group(0) @binding(0) var<uniform> bp : BitParams;
+@group(0) @binding(1) var<storage, read> keys : array<u32>;
+@group(0) @binding(2) var<storage, read> order_src : array<u32>;
+@group(0) @binding(3) var<storage, read> prefix : array<u32>;
+@group(0) @binding(4) var<storage, read> total : array<u32>;
+@group(0) @binding(5) var<storage, read_write> order_dst : array<u32>;
+@compute @workgroup_size(${WG})
+fn scatter(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let i = gid.x;
+  if (i >= bp.count) { return; }
+  let e = order_src[i];
+  let bit = (keys[e] >> bp.bit) & 1u;
+  let zeros_before = prefix[i];
+  var pos : u32;
+  if (bit == 0u) { pos = zeros_before; } else { pos = total[0] + (i - zeros_before); }
+  order_dst[pos] = e;
+}`;
+
+        // ── GPU helpers ──────────────────────────────────────────────────────────────
+        function u32buf(device, data, extraUsage = 0) {
+            const b = device.createBuffer({
+                size: Math.max(data.byteLength ?? data, 4),
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC | extraUsage,
+            });
+            if (data.byteLength) device.queue.writeBuffer(b, 0, data);
+            return b;
+        }
+        function uniformU32(device, arr) {
+            const b = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+            const a = new Uint32Array(8); a.set(arr);
+            device.queue.writeBuffer(b, 0, a);
+            return b;
+        }
+        async function readU32(device, buf, n) {
+            const rb = device.createBuffer({ size: n * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+            const enc = device.createCommandEncoder();
+            enc.copyBufferToBuffer(buf, 0, rb, 0, n * 4);
+            device.queue.submit([enc.finish()]);
+            await rb.mapAsync(GPUMapMode.READ);
+            const res = new Uint32Array(rb.getMappedRange().slice(0));
+            rb.unmap(); rb.destroy();
+            return res;
+        }
+        function pass(enc, pipeline, bg, groups) {
+            const p = enc.beginComputePass();
+            p.setPipeline(pipeline); p.setBindGroup(0, bg); p.dispatchWorkgroups(groups); p.end();
+        }
+
+        // ── Multi-level scan (mirrors encodeScan) ────────────────────────────────────
+        function encodeScan(enc, pipes, flags, bs0, bs1, bs2, ppN, ppNb0, ppNb1, count, nb0, nb1, nb2) {
+            const bg = (data, block, pp) => pipes.device.createBindGroup({
+                layout: pipes.scan.getBindGroupLayout(0),
+                entries: [{ binding: 0, resource: { buffer: pp } }, { binding: 1, resource: { buffer: data } }, { binding: 2, resource: { buffer: block } }],
+            });
+            const abg = (data, block, pp) => pipes.device.createBindGroup({
+                layout: pipes.add.getBindGroupLayout(0),
+                entries: [{ binding: 0, resource: { buffer: pp } }, { binding: 1, resource: { buffer: data } }, { binding: 2, resource: { buffer: block } }],
+            });
+            pass(enc, pipes.scan, bg(flags, bs0, ppN), nb0);
+            if (nb0 > 1) {
+                pass(enc, pipes.scan, bg(bs0, bs1, ppNb0), nb1);
+                if (nb1 > 1) {
+                    pass(enc, pipes.scan, bg(bs1, bs2, ppNb1), nb2);
+                    pass(enc, pipes.add, abg(bs0, bs1, ppNb0), ceilDiv(nb0, WG));
+                }
+                pass(enc, pipes.add, abg(flags, bs0, ppN), ceilDiv(count, WG));
+            }
+        }
+
+        // ── Tests ────────────────────────────────────────────────────────────────────
+        async function testScan(pipes, n) {
+            const device = pipes.device;
+            const input = new Uint32Array(n);
+            let seed = 987654321 ^ n;
+            for (let i = 0; i < n; i++) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; input[i] = seed % 4; }
+            const nb0 = ceilDiv(n, SCAN_BLOCK), nb1 = ceilDiv(nb0, SCAN_BLOCK), nb2 = ceilDiv(nb1, SCAN_BLOCK);
+            const flags = u32buf(device, input);
+            const bs0 = u32buf(device, nb0 * 4), bs1 = u32buf(device, nb1 * 4), bs2 = u32buf(device, nb2 * 4);
+            const ppN = uniformU32(device, [n]), ppNb0 = uniformU32(device, [nb0]), ppNb1 = uniformU32(device, [nb1]);
+            const enc = device.createCommandEncoder();
+            encodeScan(enc, pipes, flags, bs0, bs1, bs2, ppN, ppNb0, ppNb1, n, nb0, nb1, nb2);
+            device.queue.submit([enc.finish()]);
+            const got = await readU32(device, flags, n);
+            const truth = jsExclusiveScan(input);
+            let mism = -1;
+            for (let i = 0; i < n; i++) if (got[i] !== truth[i]) { mism = i; break; }
+            [flags, bs0, bs1, bs2].forEach(b => b.destroy());
+            const levels = nb0 > 1 ? (nb1 > 1 ? 3 : 2) : 1;
+            if (mism === -1) log(`  SCAN n=${n} (${levels}-level): PASS`, 'pass');
+            else log(`  SCAN n=${n} (${levels}-level): FAIL at i=${mism} got=${got[mism]} want=${truth[mism]} (prev got=${got[mism - 1]} want=${truth[mism - 1]})`, 'fail');
+            return mism === -1;
+        }
+
+        // ── Faithful port of the REAL GpuSplatSorter: persistent buffers, cached bind
+        //    groups, write-once uniforms, reused every frame. The simplified test above
+        //    used fresh buffers each call; the app bug (if any) lives in THIS machinery.
+        class HarnessSorter {
+            constructor(device, pipes) { this.device = device; this.pipes = pipes; this.count = 0; this.orderRef = null; this.bp = []; }
+            resize(count) {
+                if (count === this.count) return;
+                this.releaseBuffers();
+                this.count = count; this.orderRef = null;
+                if (count === 0) return;
+                const d = this.device;
+                this.nb0 = ceilDiv(count, SCAN_BLOCK); this.nb1 = ceilDiv(this.nb0, SCAN_BLOCK); this.nb2 = ceilDiv(this.nb1, SCAN_BLOCK);
+                this.keys = u32buf(d, count * 4); this.scratch = u32buf(d, count * 4); this.flags = u32buf(d, count * 4);
+                this.bs0 = u32buf(d, this.nb0 * 4); this.bs1 = u32buf(d, this.nb1 * 4); this.bs2 = u32buf(d, this.nb2 * 4);
+                this.total = u32buf(d, 16);
+                this.ppN = uniformU32(d, [count]); this.ppNb0 = uniformU32(d, [this.nb0]); this.ppNb1 = uniformU32(d, [this.nb1]);
+                this.bp = [];
+                for (let b = 0; b < KEY_BITS; b++) this.bp.push(uniformU32(d, [b, count]));
+                this.dpBuf = d.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+                const bg = (pipe, bufs) => d.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: bufs.map((buffer, binding) => ({ binding, resource: { buffer } })) });
+                this.scanFlagsBG = bg(this.pipes.scan, [this.ppN, this.flags, this.bs0]);
+                this.scanBs0BG = bg(this.pipes.scan, [this.ppNb0, this.bs0, this.bs1]);
+                this.scanBs1BG = bg(this.pipes.scan, [this.ppNb1, this.bs1, this.bs2]);
+                this.addBs0BG = bg(this.pipes.add, [this.ppNb0, this.bs0, this.bs1]);
+                this.addFlagsBG = bg(this.pipes.add, [this.ppN, this.flags, this.bs0]);
+            }
+            ensureOrderBindGroups(orderBuffer) {
+                if (this.orderRef === orderBuffer) return;
+                this.orderRef = orderBuffer;
+                const d = this.device;
+                const bg = (pipe, bufs) => d.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: bufs.map((buffer, binding) => ({ binding, resource: { buffer } })) });
+                this.flagsBG = []; this.totalBG = []; this.scatterBG = [];
+                for (let b = 0; b < KEY_BITS; b++) {
+                    const src = b % 2 === 0 ? orderBuffer : this.scratch;
+                    const dst = b % 2 === 0 ? this.scratch : orderBuffer;
+                    this.flagsBG.push(bg(this.pipes.flags, [this.bp[b], this.keys, src, this.flags]));
+                    this.totalBG.push(bg(this.pipes.total, [this.bp[b], this.keys, src, this.flags, this.total]));
+                    this.scatterBG.push(bg(this.pipes.scatter, [this.bp[b], this.keys, src, this.flags, this.total, dst]));
+                }
+            }
+            encodeScan(enc) {
+                pass(enc, this.pipes.scan, this.scanFlagsBG, this.nb0);
+                if (this.nb0 > 1) {
+                    pass(enc, this.pipes.scan, this.scanBs0BG, this.nb1);
+                    if (this.nb1 > 1) {
+                        pass(enc, this.pipes.scan, this.scanBs1BG, this.nb2);
+                        pass(enc, this.pipes.add, this.addBs0BG, ceilDiv(this.nb0, WG));
+                    }
+                    pass(enc, this.pipes.add, this.addFlagsBG, ceilDiv(this.count, WG));
+                }
+            }
+            sort(enc, positionsBuffer, orderBuffer, cam, view, minD, maxD) {
+                if (this.count === 0) return;
+                this.ensureOrderBindGroups(orderBuffer);
+                const invRange = MAX_Q / ((maxD > minD ? maxD : minD + 1) - minD);
+                const dp = new ArrayBuffer(48); const df = new Float32Array(dp); const du = new Uint32Array(dp);
+                df[0] = cam[0]; df[1] = cam[1]; df[2] = cam[2]; du[3] = this.count; df[4] = view[0]; df[5] = view[1]; df[6] = view[2];
+                df[8] = minD; df[9] = invRange; df[10] = MAX_Q;
+                this.device.queue.writeBuffer(this.dpBuf, 0, dp);
+                const initBG = this.device.createBindGroup({
+                    layout: this.pipes.init.getBindGroupLayout(0), entries: [
+                        { binding: 0, resource: { buffer: this.dpBuf } }, { binding: 1, resource: { buffer: positionsBuffer } },
+                        { binding: 2, resource: { buffer: this.keys } }, { binding: 3, resource: { buffer: orderBuffer } }]
+                });
+                pass(enc, this.pipes.init, initBG, ceilDiv(this.count, WG));
+                const groups = ceilDiv(this.count, WG);
+                for (let b = 0; b < KEY_BITS; b++) {
+                    pass(enc, this.pipes.flags, this.flagsBG[b], groups);
+                    this.encodeScan(enc);
+                    pass(enc, this.pipes.total, this.totalBG[b], 1);
+                    pass(enc, this.pipes.scatter, this.scatterBG[b], groups);
+                }
+            }
+            releaseBuffers() {
+                for (const b of [this.keys, this.scratch, this.flags, this.bs0, this.bs1, this.bs2, this.total, this.dpBuf, this.ppN, this.ppNb0, this.ppNb1, ...this.bp]) b?.destroy();
+                this.keys = this.scratch = this.flags = null; this.bp = [];
+            }
+        }
+
+        // Validate GPU order against the GPU's OWN keys: valid permutation + monotonic +
+        // stable (index-ascending on ties). Avoids the benign f32/f64 key-rounding noise.
+        function checkOrder(order, keys, count) {
+            const seen = new Uint8Array(count);
+            for (let i = 0; i < count; i++) { const v = order[i]; if (v >= count) return `permutation FAIL: out-of-bounds@${i}=${v}`; if (seen[v]) return `permutation FAIL: duplicate@${i}=${v}`; seen[v] = 1; }
+            for (let i = 1; i < count; i++) {
+                const a = order[i - 1], b = order[i], ka = keys[a], kb = keys[b];
+                if (ka > kb) return `order FAIL: non-monotonic at i=${i} key[${a}]=${ka} > key[${b}]=${kb}`;
+                if (ka === kb && a > b) return `order FAIL: non-stable at i=${i} (equal key ${ka}, idx ${a} before ${b})`;
+            }
+            return null;
+        }
+
+        async function testSort(pipes, count, clustered = false) {
+            const device = pipes.device;
+            const positions = new Float32Array(count * 3);
+            let seed = 424242 ^ count ^ (clustered ? 999 : 0);
+            for (let i = 0; i < count; i++) {
+                seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+                // Depth along +x. Clustered = few discrete planes → many equal keys (stability stress).
+                positions[i * 3] = clustered ? (seed % 50) * 2 : (seed % 100000) / 100;
+            }
+            let minD = Infinity, maxD = -Infinity;
+            for (let i = 0; i < count; i++) { const d = positions[i * 3]; if (d < minD) minD = d; if (d > maxD) maxD = d; }
+
+            const sorter = new HarnessSorter(device, pipes);
+            sorter.resize(count);
+            const pos = u32buf(device, positions);
+            const order = u32buf(device, count * 4);
+            const runOnce = async (cam, view) => {
+                const enc = device.createCommandEncoder();
+                sorter.sort(enc, pos, order, cam, view, minD, maxD);
+                device.queue.submit([enc.finish()]);
+                return { o: await readU32(device, order, count), k: await readU32(device, sorter.keys, count) };
+            };
+
+            const tag = `${count}${clustered ? ' clustered' : ''}`;
+            log(`  SORT ${tag}:`);
+            // run1 cam A → run2 SAME cam (reuse determinism) → run3 opposite view (re-sort on persistent buffers).
+            const r1 = await runOnce([0, 0, 0], [1, 0, 0]);
+            const r2 = await runOnce([0, 0, 0], [1, 0, 0]);
+            const r3 = await runOnce([0, 0, 0], [-1, 0, 0]);
+            const e1 = checkOrder(r1.o, r1.k, count);
+            log(`    run1 (cam A):        ${e1 ?? 'PASS'}`, e1 ? 'fail' : 'pass');
+            let det = -1; for (let i = 0; i < count; i++) if (r1.o[i] !== r2.o[i]) { det = i; break; }
+            log(`    run2 reuse determ.:  ${det === -1 ? 'PASS' : `FAIL at i=${det} run1=${r1.o[det]} run2=${r2.o[det]}`}`, det === -1 ? 'pass' : 'fail');
+            const e3 = checkOrder(r3.o, r3.k, count);
+            log(`    run3 (cam B reuse):  ${e3 ?? 'PASS'}`, e3 ? 'fail' : 'pass');
+            // Timing: one sort's GPU wall time (no readback) — this is the per-frame cost.
+            const t0 = performance.now();
+            const tenc = device.createCommandEncoder();
+            sorter.sort(tenc, pos, order, [0, 0, 0], [1, 0, 0], minD, maxD);
+            device.queue.submit([tenc.finish()]);
+            await device.queue.onSubmittedWorkDone();
+            log(`    sort GPU time:       ${(performance.now() - t0).toFixed(1)} ms (${KEY_BITS} passes)`);
+            pos.destroy(); order.destroy(); sorter.releaseBuffers();
+        }
+
+        // ══════════════════════════════════════════════════════════════════════════
+        //  Candidate replacement: 8-bit-digit LSD radix (4 passes) over the FULL 32-bit
+        //  float depth key. Exact depth order (no 16-bit-bucket blur) AND ~4× fewer
+        //  passes than the 1-bit sorter. Reuses the proven multi-level scan.
+        // ══════════════════════════════════════════════════════════════════════════
+        const RADIX = 256;
+        const R8_INIT = `
+struct DepthParams { cam:vec3<f32>, count:u32, view:vec3<f32>, _p0:u32, min_depth:f32, inv_range:f32, max_q:f32, _p1:f32 };
+@group(0) @binding(0) var<uniform> params : DepthParams;
+@group(0) @binding(1) var<storage, read> positions : array<f32>;
+@group(0) @binding(2) var<storage, read_write> keys : array<u32>;
+@group(0) @binding(3) var<storage, read_write> order : array<u32>;
+@compute @workgroup_size(${WG})
+fn init_keys(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let i = gid.x;
+  if (i >= params.count) { return; }
+  let b = i * 3u;
+  let dx = positions[b] - params.cam.x;
+  let dy = positions[b+1u] - params.cam.y;
+  let dz = positions[b+2u] - params.cam.z;
+  let depth = dx*params.view.x + dy*params.view.y + dz*params.view.z;
+  // Radix-sortable u32 of the float depth (ascending), then bit-inverted so an
+  // ASCENDING sort draws the FARTHEST splat first (back-to-front). Full precision.
+  let u = bitcast<u32>(depth);
+  let af = select(u | 0x80000000u, ~u, (u >> 31u) == 1u);
+  keys[i] = ~af;
+  order[i] = i;
+}`;
+        const R8_HIST = `
+struct RParams { count:u32, shift:u32, num_groups:u32, _pad:u32 };
+@group(0) @binding(0) var<uniform> rp : RParams;
+@group(0) @binding(1) var<storage, read> keys : array<u32>;
+@group(0) @binding(2) var<storage, read> order : array<u32>;
+@group(0) @binding(3) var<storage, read_write> group_hist : array<u32>;
+var<workgroup> counts : array<atomic<u32>, ${RADIX}>;
+@compute @workgroup_size(${WG})
+fn histogram(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>, @builtin(global_invocation_id) gid : vec3<u32>) {
+  atomicStore(&counts[lid.x], 0u);
+  workgroupBarrier();
+  let i = gid.x;
+  if (i < rp.count) {
+    let d = (keys[order[i]] >> rp.shift) & 0xFFu;
+    atomicAdd(&counts[d], 1u);
+  }
+  workgroupBarrier();
+  // Digit-major layout: [digit * num_groups + group].
+  group_hist[lid.x * rp.num_groups + wid.x] = atomicLoad(&counts[lid.x]);
+}`;
+        const R8_SCATTER = `
+struct RParams { count:u32, shift:u32, num_groups:u32, _pad:u32 };
+@group(0) @binding(0) var<uniform> rp : RParams;
+@group(0) @binding(1) var<storage, read> keys : array<u32>;
+@group(0) @binding(2) var<storage, read> order_src : array<u32>;
+@group(0) @binding(3) var<storage, read> group_base : array<u32>;
+@group(0) @binding(4) var<storage, read_write> order_dst : array<u32>;
+var<workgroup> sdig : array<u32, ${WG}>;
+@compute @workgroup_size(${WG})
+fn scatter(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>, @builtin(global_invocation_id) gid : vec3<u32>) {
+  let i = gid.x;
+  var d = 0xFFFFFFFFu;
+  var e = 0u;
+  if (i < rp.count) { e = order_src[i]; d = (keys[e] >> rp.shift) & 0xFFu; }
+  sdig[lid.x] = d;
+  workgroupBarrier();
+  if (i >= rp.count) { return; }
+  // Stable local rank: # of earlier threads in this group with the same digit.
+  var rank = 0u;
+  for (var t = 0u; t < lid.x; t = t + 1u) { if (sdig[t] == d) { rank = rank + 1u; } }
+  order_dst[group_base[d * rp.num_groups + wid.x] + rank] = e;
+}`;
+
+        class Radix8Sorter {
+            constructor(device) {
+                this.device = device;
+                const cp = (code, entry) => device.createComputePipeline({ layout: 'auto', compute: { module: device.createShaderModule({ code }), entryPoint: entry } });
+                this.pInit = cp(R8_INIT, 'init_keys');
+                this.pHist = cp(R8_HIST, 'histogram');
+                this.pScatter = cp(R8_SCATTER, 'scatter');
+                this.pScan = cp(SCAN_SHADER, 'scan_blocks');
+                this.pAdd = cp(ADD_SHADER, 'add_offsets');
+                this.count = 0; this.orderRef = null; this.rp = [];
+            }
+            resize(count) {
+                if (count === this.count) return;
+                this.release();
+                this.count = count; this.orderRef = null;
+                if (count === 0) return;
+                const d = this.device;
+                this.numGroups = ceilDiv(count, WG);
+                this.histLen = RADIX * this.numGroups;
+                this.nb0 = ceilDiv(this.histLen, SCAN_BLOCK);
+                this.nb1 = ceilDiv(this.nb0, SCAN_BLOCK);
+                this.nb2 = ceilDiv(this.nb1, SCAN_BLOCK);
+                this.keys = u32buf(d, count * 4);
+                this.scratch = u32buf(d, count * 4);
+                this.groupHist = u32buf(d, this.histLen * 4);
+                this.bs0 = u32buf(d, this.nb0 * 4);
+                this.bs1 = u32buf(d, this.nb1 * 4);
+                this.bs2 = u32buf(d, this.nb2 * 4);
+                this.dpBuf = d.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+                this.ppN = uniformU32(d, [this.histLen]);
+                this.ppNb0 = uniformU32(d, [this.nb0]);
+                this.ppNb1 = uniformU32(d, [this.nb1]);
+                this.rp = [];
+                for (let p = 0; p < 4; p++) this.rp.push(uniformU32(d, [count, p * 8, this.numGroups, 0]));
+                const bg = (pipe, bufs) => d.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: bufs.map((buffer, binding) => ({ binding, resource: { buffer } })) });
+                this.scanHistBG = bg(this.pScan, [this.ppN, this.groupHist, this.bs0]);
+                this.scanBs0BG = bg(this.pScan, [this.ppNb0, this.bs0, this.bs1]);
+                this.scanBs1BG = bg(this.pScan, [this.ppNb1, this.bs1, this.bs2]);
+                this.addBs0BG = bg(this.pAdd, [this.ppNb0, this.bs0, this.bs1]);
+                this.addHistBG = bg(this.pAdd, [this.ppN, this.groupHist, this.bs0]);
+            }
+            ensureOrderBGs(orderBuffer) {
+                if (this.orderRef === orderBuffer) return;
+                this.orderRef = orderBuffer;
+                const d = this.device;
+                const bg = (pipe, bufs) => d.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: bufs.map((buffer, binding) => ({ binding, resource: { buffer } })) });
+                this.histBG = []; this.scatterBG = [];
+                for (let p = 0; p < 4; p++) {
+                    const src = p % 2 === 0 ? orderBuffer : this.scratch;
+                    const dst = p % 2 === 0 ? this.scratch : orderBuffer;
+                    this.histBG.push(bg(this.pHist, [this.rp[p], this.keys, src, this.groupHist]));
+                    this.scatterBG.push(bg(this.pScatter, [this.rp[p], this.keys, src, this.groupHist, dst]));
+                }
+            }
+            encodeScan(enc) {
+                const step = (pipe, group, groups) => pass(enc, pipe, group, groups);
+                step(this.pScan, this.scanHistBG, this.nb0);
+                if (this.nb0 > 1) {
+                    step(this.pScan, this.scanBs0BG, this.nb1);
+                    if (this.nb1 > 1) {
+                        step(this.pScan, this.scanBs1BG, this.nb2);
+                        step(this.pAdd, this.addBs0BG, ceilDiv(this.nb0, WG));
+                    }
+                    step(this.pAdd, this.addHistBG, ceilDiv(this.histLen, WG));
+                }
+            }
+            sort(enc, positionsBuffer, orderBuffer, cam, view, minD, maxD) {
+                if (this.count === 0) return;
+                this.ensureOrderBGs(orderBuffer);
+                const dp = new ArrayBuffer(48); const df = new Float32Array(dp); const du = new Uint32Array(dp);
+                df[0] = cam[0]; df[1] = cam[1]; df[2] = cam[2]; du[3] = this.count; df[4] = view[0]; df[5] = view[1]; df[6] = view[2];
+                df[8] = minD; df[9] = 1; df[10] = MAX_Q; // min/inv/max unused by R8 init (full-precision key)
+                this.device.queue.writeBuffer(this.dpBuf, 0, dp);
+                const initBG = this.device.createBindGroup({
+                    layout: this.pInit.getBindGroupLayout(0), entries: [
+                        { binding: 0, resource: { buffer: this.dpBuf } }, { binding: 1, resource: { buffer: positionsBuffer } },
+                        { binding: 2, resource: { buffer: this.keys } }, { binding: 3, resource: { buffer: orderBuffer } }]
+                });
+                pass(enc, this.pInit, initBG, ceilDiv(this.count, WG));
+                for (let p = 0; p < 4; p++) {
+                    pass(enc, this.pHist, this.histBG[p], this.numGroups);
+                    this.encodeScan(enc);
+                    pass(enc, this.pScatter, this.scatterBG[p], this.numGroups);
+                }
+            }
+            release() {
+                for (const b of [this.keys, this.scratch, this.groupHist, this.bs0, this.bs1, this.bs2, this.dpBuf, this.ppN, this.ppNb0, this.ppNb1, ...this.rp]) b?.destroy();
+                this.keys = null; this.rp = [];
+            }
+        }
+
+        async function testRadix8(device) {
+            log('\n=== STAGE 4: 8-bit radix, full 32-bit key (candidate: sharper + faster) ===');
+            const sorter = new Radix8Sorter(device);
+            for (const [count, clustered] of [[50000, false], [2000000, false], [12000000, false], [12000000, true]]) {
+                try {
+                    const positions = new Float32Array(count * 3);
+                    let seed = 424242 ^ count ^ (clustered ? 999 : 0);
+                    for (let i = 0; i < count; i++) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; positions[i * 3] = clustered ? (seed % 50) * 2 : (seed % 100000) / 100; }
+                    let minD = Infinity, maxD = -Infinity; for (let i = 0; i < count; i++) { const d = positions[i * 3]; if (d < minD) minD = d; if (d > maxD) maxD = d; }
+                    sorter.resize(count);
+                    const pos = u32buf(device, positions);
+                    const order = u32buf(device, count * 4);
+                    const runOnce = async (cam, view) => { const enc = device.createCommandEncoder(); sorter.sort(enc, pos, order, cam, view, minD, maxD); device.queue.submit([enc.finish()]); return { o: await readU32(device, order, count), k: await readU32(device, sorter.keys, count) }; };
+                    const tag = `${count}${clustered ? ' clustered' : ''}`;
+                    const r1 = await runOnce([0, 0, 0], [1, 0, 0]);
+                    const r2 = await runOnce([0, 0, 0], [1, 0, 0]);
+                    const r3 = await runOnce([0, 0, 0], [-1, 0, 0]);
+                    log(`  R8 ${tag}:`);
+                    const e1 = checkOrder(r1.o, r1.k, count); log(`    run1 (cam A):        ${e1 ?? 'PASS'}`, e1 ? 'fail' : 'pass');
+                    let det = -1; for (let i = 0; i < count; i++) if (r1.o[i] !== r2.o[i]) { det = i; break; } log(`    run2 reuse determ.:  ${det === -1 ? 'PASS' : `FAIL@${det}`}`, det === -1 ? 'pass' : 'fail');
+                    const e3 = checkOrder(r3.o, r3.k, count); log(`    run3 (cam B reuse):  ${e3 ?? 'PASS'}`, e3 ? 'fail' : 'pass');
+                    const t0 = performance.now(); const tenc = device.createCommandEncoder(); sorter.sort(tenc, pos, order, [0, 0, 0], [1, 0, 0], minD, maxD); device.queue.submit([tenc.finish()]); await device.queue.onSubmittedWorkDone();
+                    log(`    sort GPU time:       ${(performance.now() - t0).toFixed(1)} ms (4 passes)`);
+                    pos.destroy(); order.destroy();
+                } catch (e) { log(`  R8 ${count}: EXCEPTION ${e.message}`, 'fail'); }
+            }
+            sorter.release();
+        }
+
+        async function main() {
+            reset();
+            if (!navigator.gpu) { log('navigator.gpu is undefined — WebGPU unavailable. Use Chrome/Edge, and if opened via file:// try serving over http.', 'fail'); return; }
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) { log('No WebGPU adapter.', 'fail'); return; }
+            // Match the APP: raise the limits we depend on to the adapter's maximum so a
+            // 12M cloud's 144MB positions buffer can bind (default limit is only 128MB).
+            const requiredLimits = {
+                maxBufferSize: adapter.limits.maxBufferSize,
+                maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
+            };
+            const device = await adapter.requestDevice({ requiredLimits });
+            device.addEventListener?.('uncapturederror', (e) => log('GPU ERROR: ' + e.error.message, 'fail'));
+            log('Adapter: ' + (adapter.info ? JSON.stringify({ vendor: adapter.info.vendor, arch: adapter.info.architecture }) : '(info n/a)'));
+            const limits = device.limits;
+            log(`maxComputeWorkgroupsPerDimension=${limits.maxComputeWorkgroupsPerDimension}, maxStorageBufferBindingSize=${(limits.maxStorageBufferBindingSize / 1048576).toFixed(0)}MiB, maxBufferSize=${(limits.maxBufferSize / 1048576).toFixed(0)}MiB`);
+
+            const cp = (code, entry) => device.createComputePipeline({ layout: 'auto', compute: { module: device.createShaderModule({ code }), entryPoint: entry } });
+            const pipes = {
+                device,
+                init: cp(INIT_SHADER, 'init_keys'),
+                flags: cp(FLAGS_SHADER, 'write_flags'),
+                scan: cp(SCAN_SHADER, 'scan_blocks'),
+                add: cp(ADD_SHADER, 'add_offsets'),
+                total: cp(TOTAL_SHADER, 'compute_total'),
+                scatter: cp(SCATTER_SHADER, 'scatter'),
+            };
+
+            log('\n=== STAGE 1: exclusive prefix scan (the prime suspect) ===');
+            for (const n of [1, 7, 300, 512, 513, 1024, 100000, 262144, 262145, 500000]) {
+                try { await testScan(pipes, n); } catch (e) { log(`  SCAN n=${n}: EXCEPTION ${e.message}`, 'fail'); }
+            }
+
+            log('\n=== STAGE 2: full stable sort (persistent sorter; time = per-frame GPU cost) ===');
+            for (const n of [1, 16, 1000, 50000, 300000, 2000000, 8000000, 12000000]) {
+                try { await testSort(pipes, n); } catch (e) { log(`  SORT count=${n}: EXCEPTION ${e.message}`, 'fail'); }
+            }
+            log('\n=== STAGE 3: clustered depth (many equal keys → stability stress) ===');
+            for (const n of [50000, 12000000]) {
+                try { await testSort(pipes, n, true); } catch (e) { log(`  SORT ${n} clustered: EXCEPTION ${e.message}`, 'fail'); }
+            }
+
+            await testRadix8(device);
+
+            log('\n=== DONE. Copy everything above back to me. ===');
+        }
+
+        document.getElementById('run').addEventListener('click', () => { main().catch(e => log('FATAL: ' + e.stack, 'fail')); });
+    </script>
+</body>
+
+</html>

@@ -114,8 +114,8 @@ const INITIAL = {
   splatSampleMode: 'importance' as SplatSampleMode,
   splatRenderMode: 'full' as SplatRenderMode,
   splatQuality: 1,
-  splatRefreshFps: 30,
-  splatGpuSort: false,
+  splatRefreshFps: 60,
+  splatGpuSort: true,
   splatUploadStatus: null as SplatUploadStatus | null,
 };
 

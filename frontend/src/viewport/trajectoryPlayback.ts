@@ -57,7 +57,7 @@ const MAX_TRAJECTORY_SIZE_BYTES = 100 * 1024 * 1024;
  * camera is also updated on the (now throttled) playhead change, the splat
  * re-sort rate is throttled to match for free.
  */
-const PLAYBACK_RENDER_FPS = 30;
+const PLAYBACK_RENDER_FPS = 60;
 const PLAYBACK_FRAME_INTERVAL_MS = 1000 / PLAYBACK_RENDER_FPS;
 
 
