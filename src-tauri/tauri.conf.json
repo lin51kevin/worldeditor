@@ -1,6 +1,6 @@
 {
   "productName": "WorldEditor",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "identifier": "com.worldeditor",
   "build": {
     "frontendDist": "../frontend/dist",

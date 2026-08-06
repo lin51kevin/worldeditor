@@ -5,6 +5,31 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ---
 
+<a name="0.4.2"></a>
+## [0.4.2] — 2026-08-06
+
+### Features
+
+- 轨迹回放改用 GPU-persistent 实例化 Actor Splat 渲染器 ([`9690109`])
+- **splat**: add adjustable viewport background for sparse sky ([`6156f24`])
+- **splat**: full-SH NPC actor splats + wireframe box option ([`f578bf5`])
+
+### Performance
+
+- drop MSAA 4× to 1× to reduce GPU fill/bandwidth ([`b77d035`])
+- **splat**: enable GPU depth sort by default and raise playback to 60fps ([`e0d1ce2`])
+- **splat**: 24-bit normalized depth key → 3 radix passes (-25% GPU sort) ([`c30ab33`])
+
+### Fixes
+
+- stable GPU splat sort — eliminate flicker, sharpen quality, cap re-sort rate ([`803163d`])
+- prevent actor-splat OOM crash and sort-worker memory leak ([`8a2aa49`])
+- 修复轨迹配置面板下拉框被 overflow 容器裁切的问题 ([`ce1f4cb`])
+- **menu**: hide 'Check for Updates' on web — desktop-only feature ([`ee0d532`])
+- **splat**: remove sampleCount=4 defaults; declare actorSplatInstancer property ([`5cb2e3e`])
+
+---
+
 <a name="0.4.1"></a>
 ## [0.4.1] — 2026-07-31
 
