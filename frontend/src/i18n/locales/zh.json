@@ -265,7 +265,15 @@
     "lateralOffset": "横向偏移 (t)",
     "signalType": "信号类型",
     "signalValue": "数值",
-    "signalOrientation": "朝向"
+    "signalOrientation": "朝向",
+    "width": "宽度",
+    "height": "高度",
+    "heading": "航向角",
+    "zOffset": "高程偏移",
+    "deleteObject": "删除物体",
+    "deleteSignal": "删除信号",
+    "transformHint": "在视口中直接拖拽选中项即可移动，或按 M 移动 / R 旋转。",
+    "sizeLockedByCorners": "尺寸由绘制的轮廓决定"
   },
   "laneEditor": {
     "group": {

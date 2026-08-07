@@ -75,11 +75,14 @@ export function PropertyPanel() {
   }, [selectedSignalRoad, selectedSceneNode]);
 
   // Resolve selected object when an object node is selected
+  const selectedObjectRoad: Road | null = useMemo(() => {
+    if (selectedSceneNode?.type !== 'object') return null;
+    return project.roads.find((r) => r.id === selectedSceneNode.roadId) ?? null;
+  }, [project.roads, selectedSceneNode]);
   const selectedObject: RoadObjectItem | null = useMemo(() => {
     if (selectedSceneNode?.type !== 'object') return null;
-    const road = project.roads.find((r) => r.id === selectedSceneNode.roadId);
-    return (road?.objects ?? []).find((o) => o.id === selectedSceneNode.objectId) ?? null;
-  }, [project.roads, selectedSceneNode]);
+    return (selectedObjectRoad?.objects ?? []).find((o) => o.id === selectedSceneNode.objectId) ?? null;
+  }, [selectedObjectRoad, selectedSceneNode]);
 
   const isEditingGeometry = geometryEditRoadId === selectedRoadId;
   const superelevationProfile = selectedRoad?.lateral_profile?.superelevation
@@ -404,6 +407,7 @@ export function PropertyPanel() {
               <CardSection title={t('propertyPanel.objectProperties', 'Object Properties')}>
                 <ObjectPropertiesCard
                   object={selectedObject}
+                  road={selectedObjectRoad}
                   roadId={selectedSceneNode?.type === 'object' ? selectedSceneNode.roadId : '—'}
                 />
               </CardSection>

@@ -3,20 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../../stores/projectStore';
 import type { RoadSignal, Road } from '../../../services/platform';
 import { COMMON_SIGNAL_TYPES } from '../../../hooks/useSignalPlacement';
+import { NumberField, ReadOnlyField, SliderField, TextField, roadLateralRange } from './PropertyFields';
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function getRoadLateralRange(road: Road): number {
-  let maxWidth = 8;
-  for (const section of road.lane_sections) {
-    const leftWidth = section.left.reduce((sum, lane) => sum + (lane.width[0]?.a ?? 3.5), 0);
-    const rightWidth = section.right.reduce((sum, lane) => sum + (lane.width[0]?.a ?? 3.5), 0);
-    maxWidth = Math.max(maxWidth, leftWidth, rightWidth);
-  }
-  return Math.max(8, Math.ceil(maxWidth + 4));
-}
+const RAD_TO_DEG = 180 / Math.PI;
+const DEG_TO_RAD = Math.PI / 180;
 
 interface SignalPropertiesCardProps {
   signal: RoadSignal;
@@ -25,8 +15,11 @@ interface SignalPropertiesCardProps {
 
 export const SignalPropertiesCard = memo(function SignalPropertiesCard({ signal, road }: SignalPropertiesCardProps) {
   const { t } = useTranslation();
-  const roadLength = road.length;
-  const tRange = getRoadLateralRange(road);
+  const roadLength = Math.max(road.length, 0.1);
+  const tRange = roadLateralRange(road.lane_sections);
+
+  const update = (updates: Partial<RoadSignal>) =>
+    useProjectStore.getState().updateSignal(signal.id, updates);
 
   const signalTypeOptions = (() => {
     const currentType = signal.signal_type;
@@ -42,54 +35,50 @@ export const SignalPropertiesCard = memo(function SignalPropertiesCard({ signal,
 
   return (
     <>
-      <div className="property-row">
-        <span className="property-label">{t('propertyPanel.id')}</span>
-        <span className="property-value">{signal.id}</span>
-      </div>
-      <div className="property-row">
-        <span className="property-label">RoadId</span>
-        <span className="property-value">{road.id}</span>
-      </div>
-      <div className="property-row property-row--stacked">
-        <span className="property-label">{t('propertyPanel.station')}</span>
-        <div className="property-control-stack">
-          <input
-            type="range"
-            className="property-range"
-            min={0}
-            max={Math.max(roadLength, 0.1)}
-            step={0.1}
-            value={clamp(signal.s, 0, Math.max(roadLength, 0.1))}
-            onChange={(event) => useProjectStore.getState().updateSignal(signal.id, {
-              s: clamp(Number(event.target.value), 0, road.length),
-            })}
-          />
-          <span className="property-range-value">{signal.s.toFixed(2)} m</span>
-        </div>
-      </div>
-      <div className="property-row property-row--stacked">
-        <span className="property-label">{t('propertyPanel.lateralOffset')}</span>
-        <div className="property-control-stack">
-          <input
-            type="range"
-            className="property-range"
-            min={-tRange}
-            max={tRange}
-            step={0.1}
-            value={clamp(signal.t, -tRange, tRange)}
-            onChange={(event) => useProjectStore.getState().updateSignal(signal.id, {
-              t: Number(event.target.value),
-            })}
-          />
-          <span className="property-range-value">{signal.t.toFixed(2)} m</span>
-        </div>
-      </div>
+      <ReadOnlyField label={t('propertyPanel.id')}>{signal.id}</ReadOnlyField>
+      <ReadOnlyField label="RoadId">{road.id}</ReadOnlyField>
+
+      <TextField
+        label={t('propertyPanel.name')}
+        value={signal.name}
+        onCommit={(name) => update({ name })}
+      />
+
+      <SliderField
+        label={t('propertyPanel.station')}
+        value={signal.s}
+        min={0}
+        max={roadLength}
+        onChange={(s) => update({ s })}
+      />
+      <SliderField
+        label={t('propertyPanel.lateralOffset')}
+        value={signal.t}
+        min={-tRange}
+        max={tRange}
+        onChange={(lateral) => update({ t: lateral })}
+      />
+      <NumberField
+        label={t('propertyPanel.zOffset')}
+        value={signal.z_offset}
+        onChange={(z_offset) => update({ z_offset })}
+      />
+      <SliderField
+        label={t('propertyPanel.heading')}
+        value={signal.h_offset * RAD_TO_DEG}
+        min={-180}
+        max={180}
+        step={1}
+        unit="°"
+        onChange={(deg) => update({ h_offset: deg * DEG_TO_RAD })}
+      />
+
       <div className="property-row">
         <span className="property-label">{t('propertyPanel.signalType')}</span>
         <select
           className="property-select"
           value={signal.signal_type}
-          onChange={(event) => useProjectStore.getState().updateSignal(signal.id, {
+          onChange={(event) => update({
             signal_type: event.target.value,
             is_dynamic: event.target.value === 'traffic_light',
           })}
@@ -104,7 +93,7 @@ export const SignalPropertiesCard = memo(function SignalPropertiesCard({ signal,
         <input
           className="property-input"
           value={signal.value ?? ''}
-          onChange={(event) => useProjectStore.getState().updateSignal(signal.id, {
+          onChange={(event) => update({
             value: event.target.value.trim() === '' ? null : event.target.value,
           })}
         />
@@ -114,24 +103,37 @@ export const SignalPropertiesCard = memo(function SignalPropertiesCard({ signal,
         <select
           className="property-select"
           value={signal.orientation}
-          onChange={(event) => useProjectStore.getState().updateSignal(signal.id, {
-            orientation: event.target.value,
-          })}
+          onChange={(event) => update({ orientation: event.target.value })}
         >
           <option value="+">+</option>
           <option value="-">-</option>
           <option value="none">none</option>
         </select>
       </div>
+
+      <NumberField
+        label={t('propertyPanel.width')}
+        value={signal.width}
+        min={0}
+        onChange={(width) => update({ width })}
+      />
+      <NumberField
+        label={t('propertyPanel.height')}
+        value={signal.height}
+        min={0}
+        onChange={(height) => update({ height })}
+      />
+
       <div className="property-row">
-        <span className="property-label">{t('propertyPanel.headingOffset', 'HeadingLocal')}</span>
-        <span className="property-value">{signal.h_offset.toFixed(5)}</span>
+        <span className="property-hint">{t('propertyPanel.transformHint')}</span>
       </div>
       <div className="property-row">
-        <span className="property-label">{t('propertyPanel.positionLocal', 'PositionLocal')}</span>
-        <span className="property-value">
-          {signal.s.toFixed(5)}&nbsp;&nbsp;{signal.t.toFixed(5)}&nbsp;&nbsp;{signal.z_offset.toFixed(5)}
-        </span>
+        <button
+          className="property-btn property-btn-danger"
+          onClick={() => useProjectStore.getState().removeSignal(signal.id)}
+        >
+          {t('propertyPanel.deleteSignal')}
+        </button>
       </div>
     </>
   );

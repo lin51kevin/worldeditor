@@ -215,6 +215,20 @@
   margin-left: 2px;
 }
 
+.property-hint {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+}
+
+.property-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .property-lane-section {
   margin-bottom: 4px;
 }

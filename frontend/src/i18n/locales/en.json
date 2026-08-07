@@ -265,7 +265,15 @@
     "lateralOffset": "Lateral Offset (t)",
     "signalType": "Signal Type",
     "signalValue": "Value",
-    "signalOrientation": "Orientation"
+    "signalOrientation": "Orientation",
+    "width": "Width",
+    "height": "Height",
+    "heading": "Heading",
+    "zOffset": "Z Offset",
+    "deleteObject": "Delete Object",
+    "deleteSignal": "Delete Signal",
+    "transformHint": "Drag the selected item in the viewport to move it, or press M to move / R to rotate.",
+    "sizeLockedByCorners": "Size comes from the drawn outline"
   },
   "laneEditor": {
     "group": {
