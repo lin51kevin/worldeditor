@@ -500,14 +500,23 @@
       "guardrail": "护栏",
       "barrier": "隔离墩",
       "trafficCone": "锥桶",
-      "streetLight": "路灯杆"
+      "streetLight": "路灯杆",
+      "simpleCrossHatch": "简单网格区",
+      "sidewalkRail": "人行道护栏",
+      "curb": "路缘石",
+      "flowerBed": "花坛",
+      "trashBin": "垃圾桶",
+      "bridge": "桥梁",
+      "tunnel": "隧道"
     },
     "signs": {
       "signPole": "标志牌杆",
       "gantry": "门架式标志",
       "simpleSignalPole": "简易信号灯杆",
       "trafficLightPole": "交通灯杆",
-      "lTypePole": "L型信号灯杆"
+      "lTypePole": "L型信号灯杆",
+      "tTypePole": "T型信号灯杆",
+      "pole": "普通立杆"
     },
     "roadSigns": {
       "1010100111001111": "十字交叉",

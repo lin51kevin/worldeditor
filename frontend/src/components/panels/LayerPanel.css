@@ -213,6 +213,14 @@
 .type-tag[data-type="StreetLightPole"]    { background: #7a6a2a; }
 .type-tag[data-type="SignGantry"]         { background: #2a6490; }
 .type-tag[data-type="LTypeSignalPole"]    { background: #2a6490; }
+.type-tag[data-type="TTypeSignalPole"]    { background: #2a6490; }
+.type-tag[data-type="Pole"]               { background: #2a6490; }
+.type-tag[data-type="SidewalkRail"]       { background: #5c5c5c; }
+.type-tag[data-type="FlowerBed"]          { background: #3d6b45; }
+.type-tag[data-type="TrashBin"]           { background: #44607a; }
+.type-tag[data-type="SimpleCrossHatch"]   { background: #5c7a3e; }
+.type-tag[data-type="Bridge"]             { background: #6b4c2a; }
+.type-tag[data-type="Tunnel"]             { background: #4a4a4a; }
 .type-tag[data-type="Custom"]             { background: #666666; }
 
 .road-visibility {

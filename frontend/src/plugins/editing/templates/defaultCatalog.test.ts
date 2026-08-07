@@ -9,8 +9,8 @@ describe('defaultCatalog', () => {
     expect(catalog.signals).toHaveLength(7);
     expect(catalog.markings).toHaveLength(0);
     expect(catalog.paints).toHaveLength(15);
-    expect(catalog.objects).toHaveLength(13);
-    expect(catalog.signs).toHaveLength(5);
+    expect(catalog.objects).toHaveLength(20);
+    expect(catalog.signs).toHaveLength(7);
   });
 
   it('gives every template a unique id and required common fields', () => {
@@ -64,6 +64,38 @@ describe('defaultCatalog', () => {
 
     catalog.signs.forEach((template) => {
       expect(template.objectType).toBeTruthy();
+    });
+  });
+
+  /// Every object type the Rust renderer knows must be placeable, otherwise the
+  /// backend can draw shapes the editor has no way to create.
+  it('covers every renderable road-object type', () => {
+    const placeable = new Set<string>([
+      ...catalog.objects.map((template) => template.objectType),
+      ...catalog.signs.map((template) => template.objectType),
+    ]);
+
+    // Mirrors the Rust `ObjectType` enum minus `Custom` and the deprecated
+    // `Pillar` alias (imports still parse it; templates use `Pole`).
+    const renderable = [
+      'Crosswalk', 'StopLine', 'SlowDownToYieldLine', 'StopToYieldLine',
+      'CrossHatchArea', 'SimpleCrossHatch', 'WovenArea', 'ForwardWaitingArea',
+      'TurnLeftWaitingArea', 'ParkingSpace', 'Guardrail', 'Barrier', 'Curb',
+      'SidewalkRail', 'FlowerBed', 'TrashBin', 'Bridge', 'Tunnel', 'TrafficCone',
+      'StreetLightPole', 'Sign', 'SignGantry', 'SimpleSignalPole',
+      'TrafficLightPole', 'LTypeSignalPole', 'TTypeSignalPole', 'Pole',
+    ];
+
+    renderable.forEach((objectType) => {
+      expect(placeable.has(objectType), `missing template for ${objectType}`).toBe(true);
+    });
+  });
+
+  it('points every thumbnail at the shared texture folder', () => {
+    [...catalog.objects, ...catalog.signs].forEach((template) => {
+      if (template.thumbnailUrl) {
+        expect(template.thumbnailUrl).toMatch(/^\/assets\/textures\/Objects\/[\w-]+\.png$/);
+      }
     });
   });
 });

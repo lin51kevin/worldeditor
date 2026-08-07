@@ -500,14 +500,23 @@
       "guardrail": "Guardrail",
       "barrier": "Barrier",
       "trafficCone": "Traffic Cone",
-      "streetLight": "Street Light"
+      "streetLight": "Street Light",
+      "simpleCrossHatch": "Simple Cross-Hatch",
+      "sidewalkRail": "Sidewalk Rail",
+      "curb": "Curb",
+      "flowerBed": "Flower Bed",
+      "trashBin": "Trash Bin",
+      "bridge": "Bridge",
+      "tunnel": "Tunnel"
     },
     "signs": {
       "signPole": "Sign Pole",
       "gantry": "Gantry Sign",
       "simpleSignalPole": "Simple Signal Pole",
       "trafficLightPole": "Traffic Light Pole",
-      "lTypePole": "L-Type Pole"
+      "lTypePole": "L-Type Pole",
+      "tTypePole": "T-Type Pole",
+      "pole": "Plain Pole"
     },
     "roadSigns": {
       "1010100111001111": "Crossroads",

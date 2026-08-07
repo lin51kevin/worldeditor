@@ -344,12 +344,21 @@ const catalog: TemplateCatalog = {
     { id: 'tpl:obj:cross-hatch', labelKey: 'templatePanel.objects.crossHatch', icon: '▦', objectType: 'CrossHatchArea', defaultWidth: 4.0, defaultLength: 4.0, defaultHeight: 0.0, subcategory: 'areaMarkings', thumbnailUrl: '/assets/textures/Objects/CrossHatchArea.png', drawMode: 'polygon' },
     { id: 'tpl:obj:woven', labelKey: 'templatePanel.objects.wovenArea', icon: '▥', objectType: 'WovenArea', defaultWidth: 4.0, defaultLength: 6.0, defaultHeight: 0.0, subcategory: 'areaMarkings', thumbnailUrl: '/assets/textures/Objects/WovenArea.png', drawMode: 'polygon' },
     { id: 'tpl:obj:parking', labelKey: 'templatePanel.objects.parkingSpace', icon: '🅿', objectType: 'ParkingSpace', defaultWidth: 2.5, defaultLength: 5.0, defaultHeight: 0.0, subcategory: 'areaMarkings', thumbnailUrl: '/assets/textures/Objects/ParkingSpace.png', drawMode: 'polygon' },
+    { id: 'tpl:obj:simple-cross-hatch', labelKey: 'templatePanel.objects.simpleCrossHatch', icon: '▤', objectType: 'SimpleCrossHatch', defaultWidth: 3.0, defaultLength: 5.0, defaultHeight: 0.0, subcategory: 'areaMarkings', thumbnailUrl: '/assets/textures/Objects/SimpleCrossHatchArea.png', drawMode: 'polygon' },
 
     // ── Road Furniture (道路设施) ──
-    { id: 'tpl:obj:guardrail', labelKey: 'templatePanel.objects.guardrail', icon: '|', objectType: 'Guardrail', defaultWidth: 0.3, defaultLength: 10.0, defaultHeight: 0.9, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/RoadGuardrail.png' },
-    { id: 'tpl:obj:barrier', labelKey: 'templatePanel.objects.barrier', icon: '▌', objectType: 'Barrier', defaultWidth: 0.5, defaultLength: 5.0, defaultHeight: 1.0, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/SidewalkRail.png' },
+    { id: 'tpl:obj:guardrail', labelKey: 'templatePanel.objects.guardrail', icon: '|', objectType: 'Guardrail', defaultWidth: 0.3, defaultLength: 10.0, defaultHeight: 0.9, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/RoadGuardrail.png', drawMode: 'line' },
+    { id: 'tpl:obj:barrier', labelKey: 'templatePanel.objects.barrier', icon: '▌', objectType: 'Barrier', defaultWidth: 0.5, defaultLength: 5.0, defaultHeight: 1.0, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/SidewalkRail.png', drawMode: 'line' },
+    { id: 'tpl:obj:sidewalk-rail', labelKey: 'templatePanel.objects.sidewalkRail', icon: '⌸', objectType: 'SidewalkRail', defaultWidth: 0.2, defaultLength: 10.0, defaultHeight: 1.1, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/SidewalkRail.png', drawMode: 'line' },
+    { id: 'tpl:obj:curb', labelKey: 'templatePanel.objects.curb', icon: '▃', objectType: 'Curb', defaultWidth: 0.3, defaultLength: 10.0, defaultHeight: 0.15, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/Curb.png', drawMode: 'line' },
+    { id: 'tpl:obj:flower-bed', labelKey: 'templatePanel.objects.flowerBed', icon: '🌿', objectType: 'FlowerBed', defaultWidth: 1.2, defaultLength: 10.0, defaultHeight: 0.5, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/FlowerBed.png', drawMode: 'line' },
+    { id: 'tpl:obj:trash-bin', labelKey: 'templatePanel.objects.trashBin', icon: '🗑', objectType: 'TrashBin', defaultWidth: 0.6, defaultLength: 0.6, defaultHeight: 1.0, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/TrashBin.png' },
     { id: 'tpl:obj:cone', labelKey: 'templatePanel.objects.trafficCone', icon: '🔸', objectType: 'TrafficCone', defaultWidth: 0.4, defaultLength: 0.4, defaultHeight: 0.7, subcategory: 'roadFurniture' },
     { id: 'tpl:obj:street-light', labelKey: 'templatePanel.objects.streetLight', icon: '💡', objectType: 'StreetLightPole', defaultWidth: 0.2, defaultLength: 0.2, defaultHeight: 8.0, subcategory: 'roadFurniture', thumbnailUrl: '/assets/textures/Objects/StreetLightPole.png' },
+
+    // ── Structures (构造物) ──
+    { id: 'tpl:obj:bridge', labelKey: 'templatePanel.objects.bridge', icon: '🌉', objectType: 'Bridge', defaultWidth: 12.0, defaultLength: 30.0, defaultHeight: 0.0, subcategory: 'structures', drawMode: 'line' },
+    { id: 'tpl:obj:tunnel', labelKey: 'templatePanel.objects.tunnel', icon: '🕳', objectType: 'Tunnel', defaultWidth: 12.0, defaultLength: 50.0, defaultHeight: 0.0, subcategory: 'structures', drawMode: 'line' },
   ],
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -362,6 +371,8 @@ const catalog: TemplateCatalog = {
     { id: 'tpl:sign:signal-pole-simple', labelKey: 'templatePanel.signs.simpleSignalPole', icon: '🚦', objectType: 'SimpleSignalPole', defaultWidth: 0.2, defaultHeight: 5.0, thumbnailUrl: '/assets/textures/Objects/SimpleSignalPole.png' },
     { id: 'tpl:sign:traffic-light-pole', labelKey: 'templatePanel.signs.trafficLightPole', icon: '🚦', objectType: 'TrafficLightPole', defaultWidth: 0.2, defaultHeight: 6.0, thumbnailUrl: '/assets/textures/Objects/TrafficLightPole.png' },
     { id: 'tpl:sign:l-pole', labelKey: 'templatePanel.signs.lTypePole', icon: '⌐', objectType: 'LTypeSignalPole', defaultWidth: 0.2, defaultHeight: 5.5, thumbnailUrl: '/assets/textures/Objects/LTypeSignalPole.png' },
+    { id: 'tpl:sign:t-pole', labelKey: 'templatePanel.signs.tTypePole', icon: '⊤', objectType: 'TTypeSignalPole', defaultWidth: 0.2, defaultHeight: 5.5, thumbnailUrl: '/assets/textures/Objects/TTYpeSignalPole.png' },
+    { id: 'tpl:sign:plain-pole', labelKey: 'templatePanel.signs.pole', icon: '│', objectType: 'Pole', defaultWidth: 0.15, defaultHeight: 3.0, thumbnailUrl: '/assets/textures/Objects/Pole.png' },
   ],
 
   // ═══════════════════════════════════════════════════════════════════════════

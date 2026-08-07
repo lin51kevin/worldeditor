@@ -133,12 +133,20 @@ export type RoadObjectTypeKey =
   | 'SlowDownToYieldLine'
   | 'StopToYieldLine'
   | 'CrossHatchArea'
+  | 'SimpleCrossHatch'
   | 'WovenArea'
   | 'ForwardWaitingArea'
   | 'TurnLeftWaitingArea'
   | 'ParkingSpace'
   | 'Guardrail'
   | 'Barrier'
+  | 'Curb'
+  | 'Wall'
+  | 'SidewalkRail'
+  | 'FlowerBed'
+  | 'TrashBin'
+  | 'Bridge'
+  | 'Tunnel'
   | 'TrafficCone'
   | 'StreetLightPole';
 
@@ -174,7 +182,9 @@ export type SignTypeKey =
   | 'SignGantry'
   | 'SimpleSignalPole'
   | 'TrafficLightPole'
-  | 'LTypeSignalPole';
+  | 'LTypeSignalPole'
+  | 'TTypeSignalPole'
+  | 'Pole';
 
 export interface SignTemplateConfig {
   id: string;

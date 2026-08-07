@@ -557,11 +557,12 @@ function userNumber(map: Map<string, string>, key: string, fallback = 0): number
 
 /** Known built-in ObjectType variant names (PascalCase). */
 const OBJECT_TYPE_NAMES = new Set([
-  'Sign', 'Guardrail', 'Barrier', 'Curb', 'Wall', 'Pillar', 'TrafficCone',
-  'ParkingSpace', 'Crosswalk', 'StopLine', 'CrossHatchArea', 'WovenArea',
+  'Sign', 'Guardrail', 'Barrier', 'Curb', 'Wall', 'Pillar', 'Pole', 'TrafficCone',
+  'ParkingSpace', 'Crosswalk', 'StopLine', 'CrossHatchArea', 'SimpleCrossHatch', 'WovenArea',
   'ForwardWaitingArea', 'TurnLeftWaitingArea', 'SlowDownToYieldLine',
   'StopToYieldLine', 'SimpleSignalPole', 'TrafficLightPole', 'StreetLightPole',
-  'SignGantry', 'LTypeSignalPole',
+  'SignGantry', 'LTypeSignalPole', 'TTypeSignalPole', 'SidewalkRail', 'FlowerBed',
+  'TrashBin', 'Bridge', 'Tunnel',
 ]);
 
 /**
