@@ -535,7 +535,17 @@ mod tests {
             d: 0.0,
         }];
 
-        let verts = generate_lane_strip(&section_pts, &widths, 0.0, &[], &[], &[], 0.0, true, [1.0; 4]);
+        let verts = generate_lane_strip(
+            &section_pts,
+            &widths,
+            0.0,
+            &[],
+            &[],
+            &[],
+            0.0,
+            true,
+            [1.0; 4],
+        );
 
         assert_eq!(verts.len(), 6);
         assert_position_close(verts[0].position, [0.0, 0.0, 0.0]);
@@ -556,7 +566,17 @@ mod tests {
             d: 0.0,
         }];
 
-        let verts = generate_lane_strip(&section_pts, &widths, 0.0, &[], &[], &[], 1.0, false, [1.0; 4]);
+        let verts = generate_lane_strip(
+            &section_pts,
+            &widths,
+            0.0,
+            &[],
+            &[],
+            &[],
+            1.0,
+            false,
+            [1.0; 4],
+        );
 
         assert_eq!(verts.len(), 6);
         assert_position_close(verts[0].position, [0.0, -1.0, 0.0]);
