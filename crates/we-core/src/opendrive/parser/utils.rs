@@ -9,10 +9,23 @@ pub(super) fn attr_str(
     Ok(String::from_utf8_lossy(&attr.value).into_owned())
 }
 
+/// Parse a float attribute, falling back to `default` when the value is blank.
+/// Some exporters emit `north=""` / `south=""` for unset header bounds.
+pub(super) fn parse_f64_or(
+    attr: &quick_xml::events::attributes::Attribute,
+    default: f64,
+) -> Result<f64, OpenDriveError> {
+    if attr.value.iter().all(u8::is_ascii_whitespace) {
+        return Ok(default);
+    }
+    parse_f64(attr)
+}
+
 pub(super) fn parse_f64(
     attr: &quick_xml::events::attributes::Attribute,
 ) -> Result<f64, OpenDriveError> {
     let s = String::from_utf8_lossy(&attr.value);
+    let s = s.trim();
     // Fast path: well-formed float
     if let Ok(v) = s.parse::<f64>() {
         return Ok(v);

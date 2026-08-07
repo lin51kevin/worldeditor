@@ -2,7 +2,7 @@ use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
 use super::super::OpenDriveError;
-use super::utils::{attr_str, parse_f64};
+use super::utils::{attr_str, parse_f64_or};
 use crate::model::*;
 
 pub(super) fn parse_header(
@@ -40,10 +40,10 @@ pub(super) fn parse_header_attrs(e: &BytesStart) -> Result<Header, OpenDriveErro
             b"revMinor" => header.rev_minor = attr_str(&attr)?.parse().unwrap_or(0),
             b"name" => header.name = attr_str(&attr)?,
             b"date" => header.date = attr_str(&attr)?,
-            b"north" => header.north = parse_f64(&attr)?,
-            b"south" => header.south = parse_f64(&attr)?,
-            b"east" => header.east = parse_f64(&attr)?,
-            b"west" => header.west = parse_f64(&attr)?,
+            b"north" => header.north = parse_f64_or(&attr, 0.0)?,
+            b"south" => header.south = parse_f64_or(&attr, 0.0)?,
+            b"east" => header.east = parse_f64_or(&attr, 0.0)?,
+            b"west" => header.west = parse_f64_or(&attr, 0.0)?,
             _ => {}
         }
     }
@@ -54,10 +54,10 @@ fn parse_geo_reference(e: &BytesStart) -> Result<GeoReference, OpenDriveError> {
     let mut geo = GeoReference::default();
     for attr in e.attributes().flatten() {
         match attr.key.as_ref() {
-            b"originLat" => geo.origin_lat = parse_f64(&attr)?,
-            b"originLong" => geo.origin_long = parse_f64(&attr)?,
-            b"originAlt" => geo.origin_alt = parse_f64(&attr)?,
-            b"originHdg" => geo.origin_hdg = parse_f64(&attr)?,
+            b"originLat" => geo.origin_lat = parse_f64_or(&attr, 0.0)?,
+            b"originLong" => geo.origin_long = parse_f64_or(&attr, 0.0)?,
+            b"originAlt" => geo.origin_alt = parse_f64_or(&attr, 0.0)?,
+            b"originHdg" => geo.origin_hdg = parse_f64_or(&attr, 0.0)?,
             _ => {}
         }
     }
