@@ -74,9 +74,9 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
     clearPlacementPreview,
     updatePlacementPreview,
     commitPlacement,
-    startSignalDrag,
-    updateSignalDrag,
-    commitSignalDrag,
+    startElementDrag,
+    updateElementDrag,
+    commitElementDrag,
   } = deps.signalPlacement;
   const {
     handleLaneLineMouseDown,
@@ -155,7 +155,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
     if (!worldPos) return;
 
     if (updateMoveRotateDrag(worldPos)) return;
-    if (await updateSignalDrag(worldPos)) return;
+    if (await updateElementDrag(worldPos)) return;
     if (await updateAdjustEdgeDrag(worldPos)) return;
     if (handleLaneLineMouseMove(worldPos, canvas, e)) return;
     if (handleSplitModeMouseMove(worldPos)) {
@@ -299,7 +299,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
 
     emitCursorMove(worldPos.x, worldPos.y);
     pendingCursorRef.current = worldPos;
-  }, [getVisibleProject, handleArcDrawMouseMove, handleGeometryEditMouseMove, handleLaneLineMouseMove, handleSpiralDrawMouseMove, handleSplitModeMouseMove, handleSplineDrawMouseMove, updatePlacementPreview, updateSignalDrag]);
+  }, [getVisibleProject, handleArcDrawMouseMove, handleGeometryEditMouseMove, handleLaneLineMouseMove, handleSpiralDrawMouseMove, handleSplitModeMouseMove, handleSplineDrawMouseMove, updatePlacementPreview, updateElementDrag]);
 
   const handleMouseDown = useCallback(async (e: React.MouseEvent) => {
     mouseGestureRef.current = {
@@ -325,7 +325,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
       ) {
         return;
       }
-      if (await startSignalDrag(e, renderer, canvas)) return;
+      if (await startElementDrag(e, renderer, canvas)) return;
       if (handleLaneLineMouseDown(e, canvas, renderer)) return;
       if (startMoveRotateDrag(e, renderer, canvas)) return;
       if (await startAdjustEdgeDrag(e)) return;
@@ -339,7 +339,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
     } catch (err) {
       console.error('[Viewport] handleMouseDown error:', err);
     }
-  }, [handleArcDrawMouseDown, handleGeometryEditMouseDown, handleLaneLineMouseDown, handleSpiralDrawMouseDown, handleSplineDrawMouseDown, startMoveRotateDrag, startAdjustEdgeDrag, startRubberBand, startSignalDrag]);
+  }, [handleArcDrawMouseDown, handleGeometryEditMouseDown, handleLaneLineMouseDown, handleSpiralDrawMouseDown, handleSplineDrawMouseDown, startMoveRotateDrag, startAdjustEdgeDrag, startRubberBand, startElementDrag]);
 
   const handleClick = useCallback(async (e: React.MouseEvent) => {
     const cameraMode = useTrajectoryStore.getState().cameraMode;
@@ -586,7 +586,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
 
   const handleMouseUp = useCallback(async (e: React.MouseEvent) => {
     if (commitRubberBand(e)) return;
-    if (commitSignalDrag()) return;
+    if (commitElementDrag()) return;
     if (commitMoveRotateDrag()) return;
     if (commitAdjustEdgeDrag()) return;
     if (handleLaneLineMouseUp()) return;
@@ -594,7 +594,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
     if (handleArcDrawMouseUp()) return;
     if (handleSpiralDrawMouseUp()) return;
     handleSplineDrawMouseUp();
-  }, [commitMoveRotateDrag, commitAdjustEdgeDrag, commitRubberBand, handleArcDrawMouseUp, handleGeometryEditMouseUp, handleLaneLineMouseUp, handleSpiralDrawMouseUp, handleSplineDrawMouseUp, commitSignalDrag]);
+  }, [commitMoveRotateDrag, commitAdjustEdgeDrag, commitRubberBand, handleArcDrawMouseUp, handleGeometryEditMouseUp, handleLaneLineMouseUp, handleSpiralDrawMouseUp, handleSplineDrawMouseUp, commitElementDrag]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

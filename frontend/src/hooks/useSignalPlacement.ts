@@ -10,6 +10,7 @@ import {
 } from '../stores/viewportStore';
 import type { ViewportRenderer } from '../viewport/renderer';
 import { genId } from '../plugins/editing/templates/engine';
+import { moveRoadObjectTo } from '../utils/roadObjectTransform';
 
 export interface SignalPaletteOption {
   type: string;
@@ -47,6 +48,7 @@ interface PreviewState {
 }
 
 interface SignalDragState {
+  kind: 'signal';
   roadId: string;
   signalId: string;
   initialSignal: RoadSignal;
@@ -56,6 +58,19 @@ interface SignalDragState {
   startHeading: number;
   axis: 's' | 't' | null;
 }
+
+interface ObjectDragState {
+  kind: 'object';
+  roadId: string;
+  objectId: string;
+  initialObject: RoadObjectItem;
+  previewObject: RoadObjectItem;
+  startWorldX: number;
+  startWorldY: number;
+  startHeading: number;
+}
+
+type ElementDragState = SignalDragState | ObjectDragState;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -166,7 +181,7 @@ export function useSignalPlacement({
 }: UseSignalPlacementParams) {
   const previewRef = useRef<PreviewState | null>(null);
   const previewRequestIdRef = useRef(0);
-  const signalDragRef = useRef<SignalDragState | null>(null);
+  const elementDragRef = useRef<ElementDragState | null>(null);
 
   const clearPlacementPreview = useCallback(() => {
     previewRequestIdRef.current += 1;
@@ -303,7 +318,7 @@ export function useSignalPlacement({
     return true;
   }, [clearPlacementPreview]);
 
-  const startSignalDrag = useCallback(async (
+  const startElementDrag = useCallback(async (
     e: React.MouseEvent,
     renderer: ViewportRenderer,
     canvas: HTMLCanvasElement,
@@ -318,7 +333,7 @@ export function useSignalPlacement({
     }
 
     const selectedSceneNode = useProjectStore.getState().selectedSceneNode;
-    if (selectedSceneNode?.type !== 'signal') {
+    if (selectedSceneNode?.type !== 'signal' && selectedSceneNode?.type !== 'object') {
       return false;
     }
 
@@ -333,33 +348,65 @@ export function useSignalPlacement({
 
     try {
       const service = await getPlatformService();
-      const hit = await service.pickSignalAtPointCached(worldPos.x, worldPos.y, 4.0);
-      if (!hit || hit.roadId !== selectedSceneNode.roadId || hit.signalId !== selectedSceneNode.signalId) {
-        return false;
-      }
-
       const project = useProjectStore.getState().project;
-      const road = project.roads.find((candidate) => candidate.id === hit.roadId);
-      const signal = road?.signals?.find((candidate) => candidate.id === hit.signalId);
-      if (!road || !signal) {
+      const road = project.roads.find((candidate) => candidate.id === selectedSceneNode.roadId);
+      if (!road) {
         return false;
       }
 
-      const signalWorldPos = await service.getSignalWorldPosCached(hit.roadId, hit.signalId);
-      const headingSample = signalWorldPos
-        ? await service.snapPointOnRoad(road, signalWorldPos.x, signalWorldPos.y)
-        : await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
+      if (selectedSceneNode.type === 'signal') {
+        const hit = await service.pickSignalAtPointCached(worldPos.x, worldPos.y, 4.0);
+        if (!hit || hit.roadId !== selectedSceneNode.roadId || hit.signalId !== selectedSceneNode.signalId) {
+          return false;
+        }
+        const signal = road.signals?.find((candidate) => candidate.id === hit.signalId);
+        if (!signal) {
+          return false;
+        }
 
-      signalDragRef.current = {
-        roadId: hit.roadId,
-        signalId: hit.signalId,
-        initialSignal: signal,
-        previewSignal: signal,
-        startWorldX: worldPos.x,
-        startWorldY: worldPos.y,
-        startHeading: headingSample.hdg,
-        axis: null,
-      };
+        const signalWorldPos = await service.getSignalWorldPosCached(hit.roadId, hit.signalId);
+        const headingSample = signalWorldPos
+          ? await service.snapPointOnRoad(road, signalWorldPos.x, signalWorldPos.y)
+          : await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
+
+        elementDragRef.current = {
+          kind: 'signal',
+          roadId: hit.roadId,
+          signalId: hit.signalId,
+          initialSignal: signal,
+          previewSignal: signal,
+          startWorldX: worldPos.x,
+          startWorldY: worldPos.y,
+          startHeading: headingSample.hdg,
+          axis: null,
+        };
+      } else {
+        const hit = await service.pickObjectAtPointCached(worldPos.x, worldPos.y, 4.0);
+        if (!hit || hit.roadId !== selectedSceneNode.roadId || hit.objectId !== selectedSceneNode.objectId) {
+          return false;
+        }
+        const obj = road.objects?.find((candidate) => candidate.id === hit.objectId);
+        if (!obj) {
+          return false;
+        }
+
+        const objectWorldPos = await service.getObjectWorldPosCached(hit.roadId, hit.objectId);
+        const headingSample = objectWorldPos
+          ? await service.snapPointOnRoad(road, objectWorldPos.x, objectWorldPos.y)
+          : await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
+
+        elementDragRef.current = {
+          kind: 'object',
+          roadId: hit.roadId,
+          objectId: hit.objectId,
+          initialObject: obj,
+          previewObject: obj,
+          startWorldX: worldPos.x,
+          startWorldY: worldPos.y,
+          startHeading: headingSample.hdg,
+        };
+      }
+
       renderer.lockCamera();
       canvas.style.cursor = 'grabbing';
       return true;
@@ -368,8 +415,8 @@ export function useSignalPlacement({
     }
   }, []);
 
-  const updateSignalDrag = useCallback(async (worldPos: { x: number; y: number }) => {
-    const drag = signalDragRef.current;
+  const updateElementDrag = useCallback(async (worldPos: { x: number; y: number }) => {
+    const drag = elementDragRef.current;
     if (!drag) {
       return false;
     }
@@ -385,20 +432,35 @@ export function useSignalPlacement({
       const dy = worldPos.y - drag.startWorldY;
       const along = dx * Math.cos(drag.startHeading) + dy * Math.sin(drag.startHeading);
       const lateral = -dx * Math.sin(drag.startHeading) + dy * Math.cos(drag.startHeading);
-      if (drag.axis === null && (Math.abs(along) > 0.05 || Math.abs(lateral) > 0.05)) {
-        drag.axis = Math.abs(along) >= Math.abs(lateral) ? 's' : 't';
+
+      if (drag.kind === 'object') {
+        // Objects keep their offset from the cursor and move freely in (s, t):
+        // snapping the centre onto the cursor would tear an area marking away
+        // from the outline the user grabbed.
+        const previewObject = moveRoadObjectTo(
+          drag.initialObject,
+          clamp(drag.initialObject.position.x + along, 0, road.length),
+          drag.initialObject.position.y + lateral,
+        );
+        drag.previewObject = previewObject;
+        await uploadPreview(road.id, { kind: 'object', roadId: road.id, object: previewObject });
+      } else {
+        if (drag.axis === null && (Math.abs(along) > 0.05 || Math.abs(lateral) > 0.05)) {
+          drag.axis = Math.abs(along) >= Math.abs(lateral) ? 's' : 't';
+        }
+
+        const service = await getPlatformService();
+        const snap = await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
+        const previewSignal: RoadSignal = {
+          ...drag.initialSignal,
+          s: drag.axis === 't' ? drag.initialSignal.s : clamp(snap.s, 0, road.length),
+          t: drag.axis === 's' ? drag.initialSignal.t : snap.t,
+        };
+
+        drag.previewSignal = previewSignal;
+        await uploadPreview(road.id, { kind: 'signal', roadId: road.id, signal: previewSignal });
       }
 
-      const service = await getPlatformService();
-      const snap = await service.snapPointOnRoad(road, worldPos.x, worldPos.y);
-      const previewSignal: RoadSignal = {
-        ...drag.initialSignal,
-        s: drag.axis === 't' ? drag.initialSignal.s : clamp(snap.s, 0, road.length),
-        t: drag.axis === 's' ? drag.initialSignal.t : snap.t,
-      };
-
-      drag.previewSignal = previewSignal;
-      await uploadPreview(road.id, { kind: 'signal', roadId: road.id, signal: previewSignal });
       pendingCursorRef.current = worldPos;
       return true;
     } catch {
@@ -406,18 +468,32 @@ export function useSignalPlacement({
     }
   }, [pendingCursorRef, uploadPreview]);
 
-  const commitSignalDrag = useCallback(() => {
-    const drag = signalDragRef.current;
+  const commitElementDrag = useCallback(() => {
+    const drag = elementDragRef.current;
     if (!drag) {
       return false;
     }
 
-    signalDragRef.current = null;
+    elementDragRef.current = null;
     rendererRef.current?.unlockCamera();
     if (canvasRef.current) {
       canvasRef.current.style.cursor = '';
     }
     clearPlacementPreview();
+
+    if (drag.kind === 'object') {
+      const { position } = drag.previewObject;
+      if (
+        position.x !== drag.initialObject.position.x ||
+        position.y !== drag.initialObject.position.y
+      ) {
+        useProjectStore.getState().updateObject(drag.objectId, {
+          position,
+          corners: drag.previewObject.corners,
+        });
+      }
+      return true;
+    }
 
     if (
       drag.previewSignal.s !== drag.initialSignal.s ||
@@ -433,7 +509,7 @@ export function useSignalPlacement({
 
   useEffect(() => {
     const { editMode } = useViewportStore.getState();
-    if (editMode !== 'placeSignal' && editMode !== 'placeObject' && !signalDragRef.current) {
+    if (editMode !== 'placeSignal' && editMode !== 'placeObject' && !elementDragRef.current) {
       clearPlacementPreview();
     }
   });
@@ -442,8 +518,8 @@ export function useSignalPlacement({
     clearPlacementPreview,
     updatePlacementPreview,
     commitPlacement,
-    startSignalDrag,
-    updateSignalDrag,
-    commitSignalDrag,
+    startElementDrag,
+    updateElementDrag,
+    commitElementDrag,
   };
 }

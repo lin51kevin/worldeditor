@@ -152,7 +152,9 @@ export function useViewportHoverPick({
         if (signalHit !== null) {
           hoveredSignalRef.current = signalHit;
           if (!renderer.pointerDragging) {
-            canvas.style.cursor = 'pointer';
+            const selected = useProjectStore.getState().selectedSceneNode;
+            const isSelected = selected?.type === 'signal' && selected.signalId === signalHit.signalId;
+            canvas.style.cursor = isSelected ? 'grab' : 'pointer';
           }
           return;
         }
@@ -162,7 +164,9 @@ export function useViewportHoverPick({
         if (objectHit !== null) {
           hoveredObjectRef.current = objectHit;
           if (!renderer.pointerDragging) {
-            canvas.style.cursor = 'pointer';
+            const selected = useProjectStore.getState().selectedSceneNode;
+            const isSelected = selected?.type === 'object' && selected.objectId === objectHit.objectId;
+            canvas.style.cursor = isSelected ? 'grab' : 'pointer';
           }
           return;
         }
