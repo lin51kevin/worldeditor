@@ -30,7 +30,7 @@ export interface RoadSlice {
   updateSignal: (id: string, updates: Partial<RoadSignal>) => void;
   addObject: (obj: RoadObject) => void;
   removeObject: (id: string) => void;
-  updateObject: (id: string, updates: Partial<RoadObject>) => void;
+  updateObject: (id: string, updates: Partial<RoadObjectItem>) => void;
   /** Place a RoadObjectItem directly onto a road's objects[] array. */
   addRoadObjectItem: (roadId: string, obj: RoadObjectItem) => void;
   /** Place a RoadSignal directly onto a road's signals[] array. */
@@ -582,7 +582,7 @@ export const createRoadSlice: SliceCreator<RoadSlice> = (set, get) => ({
       project: {
         ...state.project,
         objects: (state.project.objects || []).map((o) =>
-          o.id === id ? { ...o, ...updates } : o,
+          o.id === id ? { ...o, ...(updates as Partial<RoadObject>) } : o,
         ),
         roads: state.project.roads.map((road) => ({
           ...road,

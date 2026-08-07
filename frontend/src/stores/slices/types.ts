@@ -101,7 +101,8 @@ export interface EditorState {
   updateSignal: (id: string, updates: Partial<RoadSignal>) => void;
   addObject: (obj: RoadObject) => void;
   removeObject: (id: string) => void;
-  updateObject: (id: string, updates: Partial<RoadObject>) => void;
+  /** Updates target `road.objects[]` entries; the project-level mirror takes the overlapping fields. */
+  updateObject: (id: string, updates: Partial<RoadObjectItem>) => void;
   /** Place a RoadObjectItem directly onto a road's objects[] array. */
   addRoadObjectItem: (roadId: string, obj: RoadObjectItem) => void;
   /** Place a RoadSignal directly onto a road's signals[] array. */

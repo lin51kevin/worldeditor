@@ -4,9 +4,9 @@ import { emitCursorMove } from '../viewport/cursorEvents';
 import { useProjectStore } from '../stores/projectStore';
 import { useViewportStore } from '../stores/viewportStore';
 import { getPlatformService } from '../services';
-import type { Project } from '../services/platform';
+import type { Project, RoadObjectItem } from '../services/platform';
 import type { MoveRotateDragState, MoveRotateElementDragState } from '../components/viewportUtils';
-import { MAX_UNDO } from '../stores/slices/types';
+import { moveRoadObjectTo, replaceRoadObject, rotateRoadObjectTo } from '../utils/roadObjectTransform';
 
 /**
  * Handles move-road / rotate-road drag interaction.
@@ -315,8 +315,7 @@ export function useMoveRotateMode(
       if (drag.elementType === 'signal') {
         store.updateSignal(drag.elementId, { s: drag.currentS, t: drag.currentT });
       } else {
-        // Update road-level object position (position.x=s, position.y=t)
-        moveRoadObject(store, drag.roadId, drag.elementId, drag.currentS, drag.currentT);
+        commitObjectTransform(drag, (obj) => moveRoadObjectTo(obj, drag.currentS, drag.currentT));
       }
     } else {
       // Rotate: update heading
@@ -325,7 +324,7 @@ export function useMoveRotateMode(
       if (drag.elementType === 'signal') {
         store.updateSignal(drag.elementId, { h_offset: drag.currentHdg });
       } else {
-        rotateRoadObject(store, drag.roadId, drag.elementId, drag.currentHdg);
+        commitObjectTransform(drag, (obj) => rotateRoadObjectTo(obj, drag.currentHdg));
       }
     }
   };
@@ -362,94 +361,31 @@ function applySignalPreview(
   };
 }
 
-/** Build a project copy with the object's preview position applied. */
+/** Build a project copy with the object's preview transform applied. */
 function applyObjectPreview(
   project: Project,
   drag: MoveRotateElementDragState,
 ): Project {
+  const transform = drag.mode === 'move-road'
+    ? (obj: RoadObjectItem) => moveRoadObjectTo(obj, drag.currentS, drag.currentT)
+    : (obj: RoadObjectItem) => rotateRoadObjectTo(obj, drag.currentHdg);
   return {
     ...project,
-    roads: project.roads.map((road) => {
-      if (road.id !== drag.roadId) return road;
-      return {
-        ...road,
-        objects: (road.objects ?? []).map((o) => {
-          if (o.id !== drag.elementId) return o;
-          if (drag.mode === 'move-road') {
-            return { ...o, position: { ...o.position, x: drag.currentS, y: drag.currentT } };
-          }
-          return { ...o, hdg: drag.currentHdg };
-        }),
-      };
-    }),
+    roads: project.roads.map((road) =>
+      road.id === drag.roadId ? replaceRoadObject(road, drag.elementId, transform) : road,
+    ),
   };
 }
 
-/** Directly update a road object's position on the road. */
-function moveRoadObject(
-  _store: ReturnType<typeof useProjectStore.getState>,
-  roadId: string,
-  objectId: string,
-  newS: number,
-  newT: number,
+/** Persist a road-object transform through the store so undo and export stay in sync. */
+function commitObjectTransform(
+  drag: MoveRotateElementDragState,
+  transform: (obj: RoadObjectItem) => RoadObjectItem,
 ) {
-  useProjectStore.setState((state) => {
-    const road = state.project.roads.find((r) => r.id === roadId);
-    if (!road) return state;
-    const obj = road.objects?.find((o) => o.id === objectId);
-    if (!obj) return state;
-
-    return {
-      undoStack: [...state.undoStack, state.project].slice(-MAX_UNDO),
-      redoStack: [],
-      project: {
-        ...state.project,
-        roads: state.project.roads.map((r) => {
-          if (r.id !== roadId) return r;
-          return {
-            ...r,
-            objects: (r.objects ?? []).map((o) =>
-              o.id === objectId
-                ? { ...o, position: { ...o.position, x: newS, y: newT } }
-                : o,
-            ),
-          };
-        }),
-      },
-      isDirty: true,
-    };
-  });
-}
-
-/** Directly update a road object's heading on the road. */
-function rotateRoadObject(
-  _store: ReturnType<typeof useProjectStore.getState>,
-  roadId: string,
-  objectId: string,
-  newHdg: number,
-) {
-  useProjectStore.setState((state) => {
-    const road = state.project.roads.find((r) => r.id === roadId);
-    if (!road) return state;
-    const obj = road.objects?.find((o) => o.id === objectId);
-    if (!obj) return state;
-
-    return {
-      undoStack: [...state.undoStack, state.project].slice(-MAX_UNDO),
-      redoStack: [],
-      project: {
-        ...state.project,
-        roads: state.project.roads.map((r) => {
-          if (r.id !== roadId) return r;
-          return {
-            ...r,
-            objects: (r.objects ?? []).map((o) =>
-              o.id === objectId ? { ...o, hdg: newHdg } : o,
-            ),
-          };
-        }),
-      },
-      isDirty: true,
-    };
-  });
+  const store = useProjectStore.getState();
+  const road = store.project.roads.find((r) => r.id === drag.roadId);
+  const obj = road?.objects?.find((o) => o.id === drag.elementId);
+  if (!obj) return;
+  const { id: _id, ...updates } = transform(obj);
+  store.updateObject(drag.elementId, updates);
 }
