@@ -153,6 +153,14 @@ fn normalize_object_type(our_type: &ObjectType) -> String {
         ObjectType::StreetLightPole => "streetlightpole".to_string(),
         ObjectType::SignGantry => "signgantry".to_string(),
         ObjectType::LTypeSignalPole => "ltypesignalpole".to_string(),
+        ObjectType::TTypeSignalPole => "ttypesignalpole".to_string(),
+        ObjectType::Pole => "pole".to_string(),
+        ObjectType::SidewalkRail => "sidewalkrail".to_string(),
+        ObjectType::FlowerBed => "flowerbed".to_string(),
+        ObjectType::TrashBin => "trashbin".to_string(),
+        ObjectType::SimpleCrossHatch => "simplecrosshatch".to_string(),
+        ObjectType::Bridge => "bridge".to_string(),
+        ObjectType::Tunnel => "tunnel".to_string(),
         ObjectType::Custom(s) => s.to_lowercase(),
     }
 }

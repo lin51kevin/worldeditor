@@ -837,6 +837,14 @@ fn object_type_to_string(object_type: &ObjectType) -> String {
         ObjectType::StreetLightPole => "StreetLightPole",
         ObjectType::SignGantry => "SignGantry",
         ObjectType::LTypeSignalPole => "LTypeSignalPole",
+        ObjectType::TTypeSignalPole => "TTypeSignalPole",
+        ObjectType::Pole => "Pole",
+        ObjectType::SidewalkRail => "SidewalkRail",
+        ObjectType::FlowerBed => "FlowerBed",
+        ObjectType::TrashBin => "TrashBin",
+        ObjectType::SimpleCrossHatch => "SimpleCrossHatch",
+        ObjectType::Bridge => "Bridge",
+        ObjectType::Tunnel => "Tunnel",
         ObjectType::Custom(name) => return name.clone(),
     }
     .to_string()

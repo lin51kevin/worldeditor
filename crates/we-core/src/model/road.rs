@@ -483,6 +483,30 @@ pub enum ObjectType {
     /// Simple (L-type) signal pole
     #[serde(alias = "lTypeSignalPole", alias = "l_type_signal_pole")]
     LTypeSignalPole,
+    /// T-type signal pole
+    #[serde(alias = "tTypeSignalPole", alias = "t_type_signal_pole")]
+    TTypeSignalPole,
+    /// Generic pole (distinct from a structural pillar)
+    #[serde(alias = "pole")]
+    Pole,
+    /// Railing separating the sidewalk from the carriageway
+    #[serde(alias = "sidewalkRail", alias = "sidewalk_rail")]
+    SidewalkRail,
+    /// Planted median / flower bed
+    #[serde(alias = "flowerBed", alias = "flower_bed")]
+    FlowerBed,
+    /// Trash bin
+    #[serde(alias = "trashBin", alias = "trash_bin")]
+    TrashBin,
+    /// Cross-hatch area with wide stripe spacing
+    #[serde(alias = "simpleCrossHatch", alias = "simple_cross_hatch")]
+    SimpleCrossHatch,
+    /// Bridge deck span
+    #[serde(alias = "bridge")]
+    Bridge,
+    /// Tunnel span
+    #[serde(alias = "tunnel")]
+    Tunnel,
     /// Custom object
     #[serde(alias = "custom")]
     Custom(String),

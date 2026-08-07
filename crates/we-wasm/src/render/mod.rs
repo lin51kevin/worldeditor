@@ -1,5 +1,6 @@
 use wasm_bindgen::prelude::*;
 
+mod area_fill;
 mod bridge_mesh;
 mod colors;
 mod helpers;
@@ -7,6 +8,7 @@ mod junction_mesh;
 mod line_gen;
 mod marking_mesh;
 mod object_gen;
+mod object_palette;
 mod road_gen;
 mod road_mesh;
 mod signal_arrows;

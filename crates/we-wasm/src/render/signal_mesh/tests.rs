@@ -1,8 +1,11 @@
 //! Tests for signal/crosswalk/polygon mesh emission.
 
 use super::*;
+use crate::render::area_fill::{
+    area_world_polygon, fill_angled_stripes, local_corners_world_polygon,
+};
 use we_core::geometry::eval::RefLinePoint;
-use we_core::model::{Elevation, Point3D};
+use we_core::model::{CornerType, ObjectType, Point3D, RoadObject};
 
 /// Helper: straight road along +x with ref_pts at s=0..10 (1m steps).
 fn straight_road_pts() -> Vec<RefLinePoint> {
@@ -16,9 +19,35 @@ fn straight_road_pts() -> Vec<RefLinePoint> {
         .collect()
 }
 
-fn offset_pt_flat(rp: &RefLinePoint, t: f64, _: f64) -> (f64, f64, f64) {
-    // For a straight road along +x, lateral t is in +y direction.
-    (rp.x, rp.y + t, 0.0)
+/// Build a crosswalk footprint through the production dispatch so these tests
+/// cover the same heading-convention detection the renderer uses.
+fn crosswalk_poly(
+    corners: &[Point3D],
+    ref_pt: &RefLinePoint,
+    obj_t: f64,
+    obj_hdg: f64,
+    obj_length: f64,
+    obj_width: f64,
+) -> Vec<(f64, f64)> {
+    let obj = RoadObject {
+        id: "cw".to_string(),
+        object_type: ObjectType::Crosswalk,
+        name: String::new(),
+        position: Point3D::new(ref_pt.s, obj_t, 0.0),
+        orientation: 0.0,
+        hdg: obj_hdg,
+        pitch: 0.0,
+        roll: 0.0,
+        width: obj_width,
+        height: 0.0,
+        length: obj_length,
+        corners: corners.to_vec(),
+        corner_type: CornerType::Local,
+        validity: None,
+        from_object_ref: false,
+        user_data: vec![],
+    };
+    area_world_polygon(&obj, ref_pt, &[])
 }
 
 /// Verify that stripes are generated even when obj_s + alpha > road length.
@@ -57,24 +86,17 @@ fn test_crosswalk_stripes_past_road_end_produces_output() {
             id: None,
         },
     ];
-    let elevations: Vec<Elevation> = vec![];
     let mut out = Vec::new();
-    let offset_fn = &offset_pt_flat;
 
-    emit_crosswalk_stripes(
-        &corners,
-        &ref_pts[9],
-        &elevations,
-        9.0,
+    let poly = crosswalk_poly(&corners, &ref_pts[9], 0.0, 0.0, 4.0, 2.0);
+    fill_angled_stripes(
+        &poly,
+        ref_pts[9].hdg,
         0.0,
         0.0,
         0.0,
-        offset_fn,
         0.0,
-        0.0,
-        0.0,
-        4.0,
-        2.0,
+        [1.0, 1.0, 1.0, 1.0],
         &mut out,
     );
 
@@ -137,25 +159,25 @@ fn test_crosswalk_stripes_hdg_pi_half_perpendicular_to_road() {
             id: None,
         },
     ];
-    let elevations: Vec<Elevation> = vec![];
     let mut out = Vec::new();
-    let offset_fn = &offset_pt_flat;
 
     // length=0, width=0 → apply hdg rotation
-    emit_crosswalk_stripes(
+    let poly = crosswalk_poly(
         &corners,
         &ref_pts[5],
-        &elevations,
-        5.0,
         0.0,
         std::f64::consts::FRAC_PI_2,
         0.0,
-        offset_fn,
+        0.0,
+    );
+    fill_angled_stripes(
+        &poly,
+        ref_pts[5].hdg,
         0.0,
         0.0,
         0.0,
         0.0,
-        0.0,
+        [1.0, 1.0, 1.0, 1.0],
         &mut out,
     );
 
@@ -220,25 +242,25 @@ fn test_crosswalk_stripes_hdg_pi_half_cityscape_style() {
             id: None,
         },
     ];
-    let elevations: Vec<Elevation> = vec![];
     let mut out = Vec::new();
-    let offset_fn = &offset_pt_flat;
 
     // length=3.64, width=10.99 → don't apply hdg rotation
-    emit_crosswalk_stripes(
+    let poly = crosswalk_poly(
         &corners,
         &ref_pts[5],
-        &elevations,
-        5.0,
         0.0,
         std::f64::consts::FRAC_PI_2,
-        0.0,
-        offset_fn,
-        0.0,
-        0.0,
-        0.0,
         3.64,
         10.99,
+    );
+    fill_angled_stripes(
+        &poly,
+        ref_pts[5].hdg,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        [1.0, 1.0, 1.0, 1.0],
         &mut out,
     );
 
@@ -308,25 +330,25 @@ fn test_crosswalk_stripes_51world_convention_length_gt_zero() {
             id: None,
         },
     ];
-    let elevations: Vec<Elevation> = vec![];
     let mut out = Vec::new();
-    let offset_fn = &offset_pt_flat;
 
     // length=10.64, width=4.67 (both > 0) but u-extent > v-extent → apply hdg
-    emit_crosswalk_stripes(
+    let poly = crosswalk_poly(
         &corners,
         &ref_pts[5],
-        &elevations,
-        5.0,
         0.0,
         std::f64::consts::FRAC_PI_2,
-        0.0,
-        offset_fn,
+        10.64,
+        4.67,
+    );
+    fill_angled_stripes(
+        &poly,
+        ref_pts[5].hdg,
         0.0,
         0.45,
         0.6,
-        10.64,
-        4.67,
+        0.0,
+        [1.0, 1.0, 1.0, 1.0],
         &mut out,
     );
 
@@ -403,26 +425,26 @@ fn test_crosswalk_stripes_hdg_pi_51world_applies_rotation() {
             id: None,
         },
     ];
-    let elevations: Vec<Elevation> = vec![];
     let mut out = Vec::new();
-    let offset_fn = &offset_pt_flat;
 
     // u_span=2.04 < v_span=17.42 — old code would give apply_hdg=false.
     // hdg≈π → new code must use apply_hdg=true.
-    emit_crosswalk_stripes(
+    let poly = crosswalk_poly(
         &corners,
         &ref_pts[5],
-        &elevations,
-        5.0,
         0.0, // obj_t = 0 → ref at road centre
         std::f64::consts::PI,
-        0.0,
-        offset_fn,
+        2.04,  // obj_length > 0
+        17.42, // obj_width > 0
+    );
+    fill_angled_stripes(
+        &poly,
+        ref_pts[5].hdg,
         0.0,
         0.45,
         0.6,
-        2.04,  // obj_length > 0
-        17.42, // obj_width > 0
+        0.0,
+        [1.0, 1.0, 1.0, 1.0],
         &mut out,
     );
 
@@ -468,8 +490,6 @@ fn test_polygon_outline_adjacent_spaces_touch_not_overlap() {
             }
         })
         .collect();
-    let elevations: Vec<Elevation> = vec![];
-    let offset_fn = &offset_pt_flat;
 
     // Space 50: s=0.81, v_span(3.45) > u_span(2.27), hdg=π/2
     let corners_50 = vec![
@@ -506,21 +526,16 @@ fn test_polygon_outline_adjacent_spaces_touch_not_overlap() {
     ];
 
     let mut out50 = Vec::new();
-    emit_polygon_outline(
-        &corners_50,
-        &ref_pts[8],
-        &elevations,
-        0.81,
-        0.0,
-        std::f64::consts::FRAC_PI_2,
-        0.0,
-        0.10,
-        [0.0, 1.0, 0.0, 1.0],
-        offset_fn,
-        &mut out50,
-        0.0,
-        0.0,
-    ); // length=0, width=0 → road-frame → no rotation
+    {
+        let poly = local_corners_world_polygon(
+            &corners_50,
+            &ref_pts[8],
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            false,
+        );
+        emit_world_polygon_outline(&poly, 0.0, 0.10, [0.0, 1.0, 0.0, 1.0], &mut out50);
+    } // length=0, width=0 → road-frame → no rotation
 
     assert!(
         !out50.is_empty(),
@@ -581,8 +596,6 @@ fn test_polygon_outline_spec_compliant_hdg_rotation() {
             }
         })
         .collect();
-    let elevations: Vec<Elevation> = vec![];
-    let offset_fn = &offset_pt_flat;
 
     // Space at s=4.57: u∈[-3.156, 2.094] (uSpan=5.25), v∈[-1.491, 0.994] (vSpan=2.485)
     // uSpan > vSpan → rotation applied.  alpha = -v ∈ [-0.994, 1.491]
@@ -624,37 +637,27 @@ fn test_polygon_outline_spec_compliant_hdg_rotation() {
     let corners_b = corners_a.clone();
 
     let mut out_a = Vec::new();
-    emit_polygon_outline(
-        &corners_a,
-        &ref_pts[46],
-        &elevations,
-        4.57,
-        0.0,
-        std::f64::consts::FRAC_PI_2,
-        0.0,
-        0.10,
-        [0.0, 1.0, 0.0, 1.0],
-        offset_fn,
-        &mut out_a,
-        5.25,
-        2.48,
-    ); // non-zero length/width → spec-compliant → rotation applied
+    {
+        let poly = local_corners_world_polygon(
+            &corners_a,
+            &ref_pts[46],
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            true,
+        );
+        emit_world_polygon_outline(&poly, 0.0, 0.10, [0.0, 1.0, 0.0, 1.0], &mut out_a);
+    } // non-zero length/width → spec-compliant → rotation applied
     let mut out_b = Vec::new();
-    emit_polygon_outline(
-        &corners_b,
-        &ref_pts[71],
-        &elevations,
-        7.07,
-        0.0,
-        std::f64::consts::FRAC_PI_2,
-        0.0,
-        0.10,
-        [0.0, 1.0, 0.0, 1.0],
-        offset_fn,
-        &mut out_b,
-        5.25,
-        2.48,
-    );
+    {
+        let poly = local_corners_world_polygon(
+            &corners_b,
+            &ref_pts[71],
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+            true,
+        );
+        emit_world_polygon_outline(&poly, 0.0, 0.10, [0.0, 1.0, 0.0, 1.0], &mut out_b);
+    }
 
     assert!(!out_a.is_empty(), "Space A should produce vertices");
     assert!(!out_b.is_empty(), "Space B should produce vertices");
@@ -698,8 +701,6 @@ fn test_polygon_outline_u_wider_than_v_no_rotation_when_length_zero() {
             }
         })
         .collect();
-    let elevations: Vec<Elevation> = vec![];
-    let offset_fn = &offset_pt_flat;
 
     // Space 58 (Road 10): u∈[-0.68, 2.75] (u_span=3.43), v∈[-1.16, 1.18] (v_span=2.34)
     // u_span > v_span, but length=0 width=0 → road-frame → NO rotation.
@@ -731,21 +732,16 @@ fn test_polygon_outline_u_wider_than_v_no_rotation_when_length_zero() {
     ];
 
     let mut out = Vec::new();
-    emit_polygon_outline(
-        &corners_58,
-        &ref_pts[11],
-        &elevations,
-        1.11,
-        3.62,
-        std::f64::consts::FRAC_PI_2,
-        0.0,
-        0.15,
-        [0.424, 0.549, 0.278, 1.0],
-        offset_fn,
-        &mut out,
-        0.0,
-        0.0,
-    ); // length=0, width=0 → road-frame → no rotation
+    {
+        let poly = local_corners_world_polygon(
+            &corners_58,
+            &ref_pts[11],
+            3.62,
+            std::f64::consts::FRAC_PI_2,
+            false,
+        );
+        emit_world_polygon_outline(&poly, 0.0, 0.15, [0.424, 0.549, 0.278, 1.0], &mut out);
+    } // length=0, width=0 → road-frame → no rotation
 
     assert!(!out.is_empty(), "Space 58 should produce outline vertices");
 

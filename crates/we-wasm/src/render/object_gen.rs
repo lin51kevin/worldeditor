@@ -1,27 +1,207 @@
 use wasm_bindgen::prelude::*;
 
-use super::helpers::road_point_at_s;
-use super::signal_mesh::{
-    crosswalk_world_polygon, emit_crosswalk_stripes, emit_longitudinal_strip, emit_polygon_outline,
-    emit_polygon_outline_road_corners, emit_rect_outline, emit_square_marker, emit_transverse_bar,
-    emit_world_polygon_outline,
+use we_core::model::ObjectType;
+
+use super::area_fill::{
+    AREA_OUTLINE_Z_LIFT, HATCH_ANGLE_DEG, SIMPLE_HATCH_LINE_GAP, area_default_size,
+    area_world_polygon, corner_world_points, emit_area_arrows, fill_angled_stripes,
+    fill_cross_hatch, oriented_rect_world_polygon,
 };
+use super::helpers::road_point_at_s;
+use super::object_palette::{object_color, object_line_width};
+use super::signal_mesh::{
+    emit_thick_segment, emit_transverse_bar, emit_world_polygon_outline, emit_world_polyline,
+};
+
+/// The selection highlight is drawn slightly wider than the object outline so
+/// it fully covers it instead of leaving coloured fringes.
+const HIGHLIGHT_WIDTH_FACTOR: f64 = 1.5;
+
+/// C# `ObjectTessellator.BuildHeader` paints the orientation indicator red.
+const HEADING_INDICATOR_COLOR: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
+
+/// Smallest footprint edge for marker objects (C# `Placable.GetDisplaySize`
+/// floors both dimensions at 1 m so hair-thin poles stay visible).
+const MIN_MARKER_EXTENT: f64 = 1.0;
+
+/// Surface pattern painted inside an area object's outline.
+enum AreaFill {
+    /// Outline only (parking spaces).
+    None,
+    /// One set of parallel stripes at `angle_deg` to the road tangent.
+    Stripes { angle_deg: f64, line_gap: f64 },
+    /// Two perpendicular stripe sets forming a hatch grid.
+    CrossHatch { angle_deg: f64, line_gap: f64 },
+    /// Directional paint arrow(s), by `signal_arrows` template name.
+    Arrow(&'static str),
+}
+
+/// Objects the legacy editor stores as `type="AlongRoad"`: their corner list is
+/// a path to stroke, not a footprint to close.
+fn is_along_road(object_type: &ObjectType) -> bool {
+    matches!(
+        object_type,
+        ObjectType::Guardrail
+            | ObjectType::Barrier
+            | ObjectType::Curb
+            | ObjectType::Wall
+            | ObjectType::SidewalkRail
+            | ObjectType::FlowerBed
+            | ObjectType::Bridge
+            | ObjectType::Tunnel
+    )
+}
+
+/// Read the `Angle` / `LineWidth` / `LineGap` userData knobs, falling back to
+/// the supplied per-type defaults.
+fn stripe_user_data(
+    obj: &we_core::model::RoadObject,
+    default_angle_deg: f64,
+    default_gap: f64,
+) -> (f64, f64, f64) {
+    let mut angle_deg = default_angle_deg;
+    let mut line_width = 0.0;
+    let mut line_gap = default_gap;
+    for (code, value) in &obj.user_data {
+        match code.as_str() {
+            "Angle" => angle_deg = value.parse().unwrap_or(default_angle_deg),
+            "LineWidth" => line_width = value.parse().unwrap_or(0.0),
+            "LineGap" => line_gap = value.parse().unwrap_or(default_gap),
+            _ => {}
+        }
+    }
+    (angle_deg, line_width, line_gap)
+}
+
+/// Render an area road object as a filled surface pattern plus a thin outline.
+///
+/// The footprint comes from `cornerLocal` / `cornerRoad` data when present and
+/// is otherwise synthesised from `length` / `width`, so template-placed objects
+/// (which never carry corners) get the same fill as imported OpenDRIVE ones.
+fn emit_area_object(
+    obj: &we_core::model::RoadObject,
+    ref_pt: &we_core::geometry::eval::RefLinePoint,
+    plan_view: &[we_core::model::Geometry],
+    z: f32,
+    fill: AreaFill,
+    out: &mut Vec<f32>,
+) {
+    let poly = area_world_polygon(obj, ref_pt, plan_view);
+    if poly.len() < 3 {
+        return;
+    }
+    let color = object_color(&obj.object_type);
+
+    match fill {
+        AreaFill::None => {}
+        AreaFill::Stripes {
+            angle_deg,
+            line_gap,
+        } => {
+            let (angle_deg, line_width, line_gap) = stripe_user_data(obj, angle_deg, line_gap);
+            fill_angled_stripes(
+                &poly,
+                ref_pt.hdg,
+                angle_deg,
+                line_width,
+                line_gap,
+                z,
+                stripe_color(&obj.object_type, color),
+                out,
+            );
+        }
+        AreaFill::CrossHatch {
+            angle_deg,
+            line_gap,
+        } => {
+            let (angle_deg, line_width, line_gap) = stripe_user_data(obj, angle_deg, line_gap);
+            fill_cross_hatch(
+                &poly,
+                ref_pt.hdg,
+                angle_deg,
+                line_width,
+                line_gap,
+                z,
+                stripe_color(&obj.object_type, color),
+                out,
+            );
+        }
+        AreaFill::Arrow(subtype) => {
+            emit_area_arrows(&poly, ref_pt.hdg + obj.hdg, subtype, z, color, out)
+        }
+    }
+
+    emit_world_polygon_outline(
+        &poly,
+        z + AREA_OUTLINE_Z_LIFT,
+        object_line_width(&obj.object_type),
+        color,
+        out,
+    );
+}
+
+/// Crosswalk stripes are painted white regardless of the outline colour
+/// (C# fills them with the "Stop Line" colour); hatches use their own colour.
+fn stripe_color(object_type: &ObjectType, outline: [f32; 4]) -> [f32; 4] {
+    match object_type {
+        ObjectType::Crosswalk => [1.0, 1.0, 1.0, 1.0],
+        _ => outline,
+    }
+}
+
+/// Render a marker object the way C# `BuildObjectGeneral` does: a thin oriented
+/// rectangle outline plus a red heading indicator.
+fn emit_marker_object(
+    obj: &we_core::model::RoadObject,
+    ref_pt: &we_core::geometry::eval::RefLinePoint,
+    z: f32,
+    out: &mut Vec<f32>,
+) {
+    let color = object_color(&obj.object_type);
+    let line_width = object_line_width(&obj.object_type);
+    let length = obj.length.max(MIN_MARKER_EXTENT);
+    let width = obj.width.max(MIN_MARKER_EXTENT);
+    let poly = oriented_rect_world_polygon(ref_pt, obj.position.y, obj.hdg, length, width);
+    emit_world_polygon_outline(&poly, z, line_width, color, out);
+    emit_heading_indicator(obj, ref_pt, z, line_width, out);
+}
+
+/// Draw the object's forward direction as a red stub, so its heading is
+/// readable even for square footprints (C# `BuildObjectTessellator.BuildHeader`).
+///
+/// The stub runs from the centre to the front edge of the marker rectangle, so
+/// it never grows past the footprint the selection highlight traces.
+fn emit_heading_indicator(
+    obj: &we_core::model::RoadObject,
+    ref_pt: &we_core::geometry::eval::RefLinePoint,
+    z: f32,
+    line_width: f64,
+    out: &mut Vec<f32>,
+) {
+    use we_core::geometry::eval::offset_point;
+
+    let len = obj.length.max(MIN_MARKER_EXTENT) / 2.0;
+    let hdg = ref_pt.hdg + obj.hdg;
+    let (ox, oy, _) = offset_point(ref_pt, obj.position.y, 0.0);
+    let tip = (ox + hdg.cos() * len, oy + hdg.sin() * len);
+    emit_thick_segment((ox, oy), tip, z, line_width, HEADING_INDICATOR_COLOR, out);
+}
 
 /// Generate road object vertices from a project JSON. Returns vertex data as Float32Array.
 ///
 /// Each vertex is 7 floats: [x, y, z, r, g, b, a].
 ///
-/// Renders the following object types:
-/// - `StopLine`: white transverse bar (0.4 m thick) across the road.
-/// - `Crosswalk`: navy-blue zebra stripes (0.45 m stripes / 0.6 m gaps) or outline box.
-/// - `ParkingSpace`: olive-green boundary polygon.
-/// - `CrossHatchArea`: orange boundary polygon.
-/// - `WovenArea`: hot-pink boundary polygon.
-/// - `ForwardWaitingArea`, `TurnLeftWaitingArea`: white boundary box.
-/// - `SlowDownToYieldLine`: sky-blue transverse bar.
-/// - `StopToYieldLine`: red transverse bar.
-/// - `Guardrail`, `Barrier`: colored thin strip along the road direction.
-/// - Other: small colored square marker.
+/// Object types fall into four families:
+/// - **Painted lines** (`StopLine`, `SlowDownToYieldLine`, `StopToYieldLine`):
+///   a transverse bar across the road.
+/// - **Areas** (`Crosswalk`, `ParkingSpace`, `CrossHatchArea`, `SimpleCrossHatch`,
+///   `WovenArea`, waiting areas): a stripe / hatch / arrow fill plus a thin outline.
+/// - **Along-road objects** (`Guardrail`, `Curb`, `Wall`, `FlowerBed`,
+///   `SidewalkRail`, `Bridge`, `Tunnel`): their corner list stroked as a polyline.
+/// - **Markers** (signs, poles, gantries, bins): an oriented rectangle outline
+///   plus a red heading indicator.
+///
+/// Colours and stroke widths come from [`super::object_palette`].
 #[wasm_bindgen]
 pub fn generate_object_vertices(project_json: &str) -> Result<Vec<f32>, JsError> {
     use we_core::model::Project;
@@ -49,7 +229,6 @@ pub(super) fn generate_object_vertices_from_project(
     project: &we_core::model::Project,
 ) -> Result<Vec<f32>, JsError> {
     use we_core::geometry::eval::{evaluate_elevation, offset_point, sample_road_reference_line};
-    use we_core::model::{CornerType, ObjectType};
 
     let mut all_floats = Vec::new();
 
@@ -148,373 +327,106 @@ pub(super) fn generate_object_vertices_from_project(
                         bar_t,
                         stop_z,
                         bar_w,
-                        0.4,
-                        [1.0, 1.0, 1.0, 1.0],
+                        object_line_width(&ObjectType::StopLine),
+                        object_color(&ObjectType::StopLine),
                         &offset_point,
                         &mut all_floats,
                     );
                 }
-                ObjectType::SlowDownToYieldLine => {
-                    // Sky-blue transverse bar
+                ObjectType::SlowDownToYieldLine | ObjectType::StopToYieldLine => {
+                    // Painted yield bands: keep a visible width rather than the
+                    // 0.1 m outline stroke the C# type table declares.
                     let bar_w = if obj.width > 0.0 { obj.width } else { 3.5 };
-                    emit_transverse_bar(
-                        &ref_pt,
-                        t,
-                        z_road,
-                        bar_w,
-                        0.4,
-                        [0.000, 0.749, 1.000, 1.0], // (0,191,255)
-                        &offset_point,
-                        &mut all_floats,
-                    );
-                }
-                ObjectType::StopToYieldLine => {
-                    // Red transverse bar
-                    let bar_w = if obj.width > 0.0 { obj.width } else { 3.5 };
-                    emit_transverse_bar(
-                        &ref_pt,
-                        t,
-                        z_road,
-                        bar_w,
-                        0.3,
-                        [0.816, 0.008, 0.106, 1.0], // (208,2,27)
-                        &offset_point,
-                        &mut all_floats,
-                    );
-                }
-                ObjectType::Crosswalk => {
-                    if !obj.corners.is_empty() {
-                        match obj.corner_type {
-                            CornerType::Road => {
-                                // cornerRoad: render as polygon outline (stripe fill not supported
-                                // for absolute coordinates — would need per-corner interpolation).
-                                emit_polygon_outline_road_corners(
-                                    &obj.corners,
-                                    &road.plan_view,
-                                    &road.elevation_profile,
-                                    0.3,
-                                    [1.0, 1.0, 1.0, 1.0],
-                                    &offset_point,
-                                    &road_point_at_s,
-                                    &mut all_floats,
-                                );
-                            }
-                            CornerType::Local => {
-                                // Extract userData: Angle, LineWidth, LineGap
-                                let mut angle_deg = 0.0_f64;
-                                let mut line_width = 0.0_f64;
-                                let mut line_gap = 0.0_f64;
-                                for (code, value) in &obj.user_data {
-                                    match code.as_str() {
-                                        "Angle" => angle_deg = value.parse().unwrap_or(0.0),
-                                        "LineWidth" => line_width = value.parse().unwrap_or(0.0),
-                                        "LineGap" => line_gap = value.parse().unwrap_or(0.0),
-                                        _ => {}
-                                    }
-                                }
-                                // Corner-based zebra stripe generation with correct heading rotation.
-                                // ref_pt is the tangent-extended position at obj.s — for crosswalks
-                                // with s slightly beyond road.length (common in 51World exports) this
-                                // correctly places the stripes at the junction entrance, consistent
-                                // with the selection-highlight box drawn by generate_single_object_vertices.
-                                emit_crosswalk_stripes(
-                                    &obj.corners,
-                                    &ref_pt,
-                                    &road.elevation_profile,
-                                    s,
-                                    t,
-                                    obj.hdg,
-                                    z_road,
-                                    &offset_point,
-                                    angle_deg,
-                                    line_width,
-                                    line_gap,
-                                    obj.length,
-                                    obj.width,
-                                    &mut all_floats,
-                                );
-                            }
-                        }
+                    let thickness = if obj.object_type == ObjectType::StopToYieldLine {
+                        0.3
                     } else {
-                        // Fallback: navy rectangle outline
-                        let len = if obj.length > 0.0 { obj.length } else { 4.0 };
-                        let wid = if obj.width > 0.0 { obj.width } else { 3.5 };
-                        emit_rect_outline(
-                            &ref_pt,
-                            t,
-                            z_road,
-                            wid,
-                            len,
-                            0.3,
-                            [0.000, 0.000, 0.502, 1.0], // navy
-                            obj.hdg,
-                            &offset_point,
-                            &mut all_floats,
-                        );
-                    }
+                        0.4
+                    };
+                    emit_transverse_bar(
+                        &ref_pt,
+                        t,
+                        z_road,
+                        bar_w,
+                        thickness,
+                        object_color(&obj.object_type),
+                        &offset_point,
+                        &mut all_floats,
+                    );
+                }
+                ObjectType::Crosswalk | ObjectType::WovenArea => {
+                    emit_area_object(
+                        obj,
+                        &ref_pt,
+                        &road.plan_view,
+                        z_road,
+                        AreaFill::Stripes {
+                            angle_deg: 0.0,
+                            line_gap: 0.0,
+                        },
+                        &mut all_floats,
+                    );
                 }
                 ObjectType::ParkingSpace => {
-                    // Olive-green boundary
-                    if !obj.corners.is_empty() {
-                        match obj.corner_type {
-                            CornerType::Road => {
-                                emit_polygon_outline_road_corners(
-                                    &obj.corners,
-                                    &road.plan_view,
-                                    &road.elevation_profile,
-                                    0.15,
-                                    [0.424, 0.549, 0.278, 1.0],
-                                    &offset_point,
-                                    &road_point_at_s,
-                                    &mut all_floats,
-                                );
-                            }
-                            CornerType::Local => {
-                                emit_polygon_outline(
-                                    &obj.corners,
-                                    &ref_pt,
-                                    &road.elevation_profile,
-                                    s,
-                                    t,
-                                    obj.hdg,
-                                    z_road,
-                                    0.15,
-                                    [0.424, 0.549, 0.278, 1.0],
-                                    &offset_point,
-                                    &mut all_floats,
-                                    obj.length,
-                                    obj.width,
-                                );
-                            }
-                        }
-                    } else {
-                        let len = if obj.length > 0.0 { obj.length } else { 5.0 };
-                        let wid = if obj.width > 0.0 { obj.width } else { 2.5 };
-                        emit_rect_outline(
-                            &ref_pt,
-                            t,
-                            z_road,
-                            wid,
-                            len,
-                            0.12,
-                            [0.424, 0.549, 0.278, 1.0],
-                            obj.hdg,
-                            &offset_point,
-                            &mut all_floats,
-                        );
-                    }
+                    emit_area_object(
+                        obj,
+                        &ref_pt,
+                        &road.plan_view,
+                        z_road,
+                        AreaFill::None,
+                        &mut all_floats,
+                    );
                 }
-                ObjectType::CrossHatchArea => {
-                    // Orange boundary
-                    if !obj.corners.is_empty() {
-                        match obj.corner_type {
-                            CornerType::Road => {
-                                emit_polygon_outline_road_corners(
-                                    &obj.corners,
-                                    &road.plan_view,
-                                    &road.elevation_profile,
-                                    0.15,
-                                    [0.965, 0.651, 0.137, 1.0],
-                                    &offset_point,
-                                    &road_point_at_s,
-                                    &mut all_floats,
-                                );
-                            }
-                            CornerType::Local => {
-                                emit_polygon_outline(
-                                    &obj.corners,
-                                    &ref_pt,
-                                    &road.elevation_profile,
-                                    s,
-                                    t,
-                                    obj.hdg,
-                                    z_road,
-                                    0.15,
-                                    [0.965, 0.651, 0.137, 1.0],
-                                    &offset_point,
-                                    &mut all_floats,
-                                    obj.length,
-                                    obj.width,
-                                );
-                            }
-                        }
+                ObjectType::CrossHatchArea | ObjectType::SimpleCrossHatch => {
+                    let line_gap = if obj.object_type == ObjectType::SimpleCrossHatch {
+                        SIMPLE_HATCH_LINE_GAP
                     } else {
-                        let len = if obj.length > 0.0 { obj.length } else { 5.0 };
-                        let wid = if obj.width > 0.0 { obj.width } else { 3.0 };
-                        emit_rect_outline(
-                            &ref_pt,
-                            t,
-                            z_road,
-                            wid,
-                            len,
-                            0.15,
-                            [0.965, 0.651, 0.137, 1.0],
-                            obj.hdg,
-                            &offset_point,
-                            &mut all_floats,
-                        );
-                    }
-                }
-                ObjectType::WovenArea => {
-                    // Hot-pink boundary
-                    let color = [1.000, 0.051, 0.651, 1.0]; // (255,13,166)
-                    if !obj.corners.is_empty() {
-                        match obj.corner_type {
-                            CornerType::Road => {
-                                emit_polygon_outline_road_corners(
-                                    &obj.corners,
-                                    &road.plan_view,
-                                    &road.elevation_profile,
-                                    0.15,
-                                    color,
-                                    &offset_point,
-                                    &road_point_at_s,
-                                    &mut all_floats,
-                                );
-                            }
-                            CornerType::Local => {
-                                emit_polygon_outline(
-                                    &obj.corners,
-                                    &ref_pt,
-                                    &road.elevation_profile,
-                                    s,
-                                    t,
-                                    obj.hdg,
-                                    z_road,
-                                    0.15,
-                                    color,
-                                    &offset_point,
-                                    &mut all_floats,
-                                    obj.length,
-                                    obj.width,
-                                );
-                            }
-                        }
-                    } else {
-                        let len = if obj.length > 0.0 { obj.length } else { 5.0 };
-                        let wid = if obj.width > 0.0 { obj.width } else { 3.5 };
-                        emit_rect_outline(
-                            &ref_pt,
-                            t,
-                            z_road,
-                            wid,
-                            len,
-                            0.15,
-                            color,
-                            obj.hdg,
-                            &offset_point,
-                            &mut all_floats,
-                        );
-                    }
+                        0.0
+                    };
+                    emit_area_object(
+                        obj,
+                        &ref_pt,
+                        &road.plan_view,
+                        z_road,
+                        AreaFill::CrossHatch {
+                            angle_deg: HATCH_ANGLE_DEG,
+                            line_gap,
+                        },
+                        &mut all_floats,
+                    );
                 }
                 ObjectType::ForwardWaitingArea | ObjectType::TurnLeftWaitingArea => {
-                    // White boundary box
-                    let len = if obj.length > 0.0 { obj.length } else { 4.0 };
-                    let wid = if obj.width > 0.0 { obj.width } else { 3.5 };
-                    emit_rect_outline(
-                        &ref_pt,
-                        t,
-                        z_road,
-                        wid,
-                        len,
-                        0.15,
-                        [1.0, 1.0, 1.0, 0.9],
-                        obj.hdg,
-                        &offset_point,
-                        &mut all_floats,
-                    );
-                }
-                ObjectType::Guardrail => {
-                    // Dark thin strip along road direction
-                    let len = if obj.length > 0.0 { obj.length } else { 5.0 };
-                    emit_longitudinal_strip(
-                        &ref_pts,
-                        &road.elevation_profile,
-                        s,
-                        t,
-                        z_road,
-                        len,
-                        0.2,
-                        [0.173, 0.173, 0.173, 1.0], // (44,44,44)
-                        &evaluate_elevation,
-                        &offset_point,
-                        &mut all_floats,
-                    );
-                }
-                ObjectType::Barrier => {
-                    let len = if obj.length > 0.0 { obj.length } else { 5.0 };
-                    emit_longitudinal_strip(
-                        &ref_pts,
-                        &road.elevation_profile,
-                        s,
-                        t,
-                        z_road,
-                        len,
-                        0.3,
-                        [0.800, 0.600, 0.200, 1.0], // orange
-                        &evaluate_elevation,
-                        &offset_point,
-                        &mut all_floats,
-                    );
-                }
-                ObjectType::SimpleSignalPole | ObjectType::TrafficLightPole => {
-                    // Cyan / blue-purple small square marker
-                    let color = match &obj.object_type {
-                        ObjectType::TrafficLightPole => [0.400, 0.251, 1.000, 1.0],
-                        _ => [0.000, 1.000, 1.000, 1.0],
-                    };
-                    emit_square_marker(
-                        &ref_pt,
-                        t,
-                        z_road,
-                        0.6,
-                        color,
-                        &offset_point,
-                        &mut all_floats,
-                    );
-                }
-                ObjectType::StreetLightPole => {
-                    emit_square_marker(
-                        &ref_pt,
-                        t,
-                        z_road,
-                        0.6,
-                        [0.612, 0.553, 0.839, 1.0], // lavender (156,141,214)
-                        &offset_point,
-                        &mut all_floats,
-                    );
-                }
-                ObjectType::SignGantry => {
-                    emit_square_marker(
-                        &ref_pt,
-                        t,
-                        z_road,
-                        1.0,
-                        [0.071, 0.455, 0.212, 1.0], // dark green (18,116,54)
-                        &offset_point,
-                        &mut all_floats,
-                    );
-                }
-                ObjectType::Sign
-                | ObjectType::Pillar
-                | ObjectType::TrafficCone
-                | ObjectType::LTypeSignalPole => {
-                    let size = if obj.width > 0.0 {
-                        obj.width.min(1.0)
+                    let arrow = if obj.object_type == ObjectType::TurnLeftWaitingArea {
+                        "LeftTurnArrow"
                     } else {
-                        0.5
+                        "StraightAheadArrow"
                     };
-                    emit_square_marker(
+                    emit_area_object(
+                        obj,
                         &ref_pt,
-                        t,
+                        &road.plan_view,
                         z_road,
-                        size,
-                        [0.9, 0.9, 0.9, 1.0],
-                        &offset_point,
+                        AreaFill::Arrow(arrow),
                         &mut all_floats,
                     );
                 }
-                _ => {} // Curb, Wall, Custom — omit for now
+                object_type if is_along_road(object_type) => {
+                    let path = corner_world_points(obj, &ref_pt, &road.plan_view);
+                    if path.len() >= 2 {
+                        emit_world_polyline(
+                            &path,
+                            z_road,
+                            object_line_width(object_type),
+                            object_color(object_type),
+                            &mut all_floats,
+                        );
+                    } else {
+                        emit_marker_object(obj, &ref_pt, z_road, &mut all_floats);
+                    }
+                }
+                _ => {
+                    // Signs, poles, gantries, bins, cones and unknown types.
+                    emit_marker_object(obj, &ref_pt, z_road, &mut all_floats);
+                }
             }
         }
     }
@@ -522,15 +434,87 @@ pub(super) fn generate_object_vertices_from_project(
     Ok(all_floats)
 }
 
-/// Generate highlight vertices for a single road object.
+/// Build the selection-highlight outline for a single road object.
 ///
+/// Every branch traces the exact footprint the render path draws — area objects
+/// reuse [`area_world_polygon`], along-road objects their corner polyline and
+/// markers their oriented rectangle — so the highlight can never drift from
+/// what is on screen.
+pub(super) fn object_highlight_vertices(
+    road: &we_core::model::Road,
+    obj: &we_core::model::RoadObject,
+    color: [f32; 4],
+) -> Vec<f32> {
+    use we_core::geometry::eval::evaluate_elevation;
+
+    let s = obj.position.x;
+    let t = obj.position.y;
+    let Some(ref_pt) = road_point_at_s(&road.plan_view, s) else {
+        return Vec::new();
+    };
+
+    let z_base = evaluate_elevation(&road.elevation_profile, s) as f32 + 0.08;
+    let thickness = object_line_width(&obj.object_type) * HIGHLIGHT_WIDTH_FACTOR;
+    let mut floats: Vec<f32> = Vec::new();
+
+    // Stop lines are drawn as a transverse bar whose position is corrected by
+    // the corner data (see the render path above); replicate that correction.
+    if obj.object_type == ObjectType::StopLine {
+        let (bar_ref, bar_t, bar_w) = if obj.corners.len() >= 2 {
+            let (cos_h, sin_h) = (obj.hdg.cos(), obj.hdg.sin());
+            let ds0 = obj.corners[0].x * cos_h - obj.corners[0].y * sin_h;
+            let ds1 = obj.corners[1].x * cos_h - obj.corners[1].y * sin_h;
+            let dt0 = obj.corners[0].x * sin_h + obj.corners[0].y * cos_h;
+            let dt1 = obj.corners[1].x * sin_h + obj.corners[1].y * cos_h;
+            let w = (dt1 - dt0).abs();
+            let actual_s = (s + (ds0 + ds1) / 2.0).clamp(0.0, road.length);
+            let rp = road_point_at_s(&road.plan_view, actual_s).unwrap_or(ref_pt);
+            (
+                rp,
+                t + (dt0 + dt1) / 2.0,
+                if w > 0.01 { w } else { obj.width.max(3.5) },
+            )
+        } else {
+            (ref_pt, t, if obj.width > 0.0 { obj.width } else { 3.5 })
+        };
+        let z = evaluate_elevation(&road.elevation_profile, bar_ref.s) as f32 + 0.08;
+        let bar_thickness = object_line_width(&ObjectType::StopLine);
+        let poly = oriented_rect_world_polygon(&bar_ref, bar_t, 0.0, bar_thickness, bar_w);
+        emit_world_polygon_outline(&poly, z, thickness, color, &mut floats);
+        return floats;
+    }
+
+    if area_default_size(&obj.object_type).is_some() {
+        let poly = area_world_polygon(obj, &ref_pt, &road.plan_view);
+        emit_world_polygon_outline(&poly, z_base, thickness, color, &mut floats);
+        return floats;
+    }
+
+    if is_along_road(&obj.object_type) {
+        let path = corner_world_points(obj, &ref_pt, &road.plan_view);
+        if path.len() >= 2 {
+            emit_world_polyline(&path, z_base, thickness, color, &mut floats);
+            return floats;
+        }
+    } else if obj.corners.len() >= 3 {
+        let poly = corner_world_points(obj, &ref_pt, &road.plan_view);
+        emit_world_polygon_outline(&poly, z_base, thickness, color, &mut floats);
+        return floats;
+    }
+
+    // Markers: box them at the same footprint `emit_marker_object` draws.
+    let poly = oriented_rect_world_polygon(
+        &ref_pt,
+        t,
+        obj.hdg,
+        obj.length.max(MIN_MARKER_EXTENT),
+        obj.width.max(MIN_MARKER_EXTENT),
+    );
+    emit_world_polygon_outline(&poly, z_base, thickness, color, &mut floats);
+    floats
+}
+
 /// Generate a selection-highlight mesh for a single road object.
-///
-/// For objects that have corner data (crosswalks, parking spaces, etc.) the
-/// highlight is rendered as an outline of the object polygon so the user can
-/// see exactly what was selected.  Objects without corners fall back to a
-/// labelled rectangle sized from the object's `length` / `width` attributes,
-/// or a small square when neither is provided.
 ///
 /// Each vertex is 7 floats: [x, y, z, r, g, b, a].
 #[wasm_bindgen]
@@ -543,122 +527,19 @@ pub fn generate_single_object_vertices(
     b: f32,
     a: f32,
 ) -> Result<Vec<f32>, JsError> {
-    use we_core::geometry::eval::{evaluate_elevation, offset_point};
-    use we_core::model::{CornerType, ObjectType, Project};
+    use we_core::model::Project;
 
     let project: Project =
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
 
-    let road = project.roads.iter().find(|rd| rd.id == road_id);
-    let obj = road.and_then(|rd| rd.objects.iter().find(|o| o.id == object_id));
-
-    let (road, obj) = match (road, obj) {
-        (Some(road), Some(obj)) => (road, obj),
-        _ => return Ok(Vec::new()),
+    let Some(road) = project.roads.iter().find(|rd| rd.id == road_id) else {
+        return Ok(Vec::new());
     };
-
-    let s = obj.position.x;
-    let t = obj.position.y;
-    let Some(ref_pt) = road_point_at_s(&road.plan_view, s) else {
+    let Some(obj) = road.objects.iter().find(|o| o.id == object_id) else {
         return Ok(Vec::new());
     };
 
-    let color = [r, g, b, a];
-    let z_base = evaluate_elevation(&road.elevation_profile, s) as f32 + 0.08;
-    let mut floats: Vec<f32> = Vec::new();
-
-    if !obj.corners.is_empty() {
-        // The highlight outline must hug the same geometry the object actually
-        // renders as. Crosswalks (cornerLocal) are drawn as zebra stripes via
-        // `emit_crosswalk_stripes`, which uses `crosswalk_world_polygon` for its
-        // heading-convention detection — so the highlight reuses that exact
-        // polygon. All other area objects share `emit_polygon_outline`.
-        let is_crosswalk_local =
-            obj.object_type == ObjectType::Crosswalk && obj.corner_type == CornerType::Local;
-        if is_crosswalk_local {
-            let world_poly = crosswalk_world_polygon(
-                &obj.corners,
-                &ref_pt,
-                t,
-                obj.hdg,
-                &offset_point,
-                obj.length,
-                obj.width,
-            );
-            emit_world_polygon_outline(&world_poly, z_base, 0.35, color, &mut floats);
-        } else {
-            emit_polygon_outline(
-                &obj.corners,
-                &ref_pt,
-                &road.elevation_profile,
-                s,
-                t,
-                obj.hdg,
-                z_base,
-                0.35,
-                color,
-                &offset_point,
-                &mut floats,
-                obj.length,
-                obj.width,
-            );
-        }
-    } else {
-        // No corner data — render a rect outline sized from length/width, or a
-        // default square for objects that carry neither dimension.
-        let (mx, my, _) = offset_point(&ref_pt, t, 0.0);
-        let mx = mx as f32;
-        let my = my as f32;
-        let half_l = if obj.length > 0.0 {
-            (obj.length / 2.0) as f32
-        } else {
-            0.6
-        };
-        let half_w = if obj.width > 0.0 {
-            (obj.width / 2.0) as f32
-        } else {
-            0.6
-        };
-        let z = z_base;
-        let (cos_h, sin_h) = (obj.hdg.cos() as f32, obj.hdg.sin() as f32);
-        // Four corners of the oriented rectangle.
-        let corners = [
-            (
-                mx + cos_h * half_l - sin_h * half_w,
-                my + sin_h * half_l + cos_h * half_w,
-            ),
-            (
-                mx + cos_h * half_l + sin_h * half_w,
-                my + sin_h * half_l - cos_h * half_w,
-            ),
-            (
-                mx - cos_h * half_l + sin_h * half_w,
-                my - sin_h * half_l - cos_h * half_w,
-            ),
-            (
-                mx - cos_h * half_l - sin_h * half_w,
-                my - sin_h * half_l + cos_h * half_w,
-            ),
-        ];
-        let hw = 0.18f32;
-        let [cr, cg, cb, ca] = color;
-        for i in 0..4 {
-            let (ax, ay) = corners[i];
-            let (bx, by) = corners[(i + 1) % 4];
-            let dx = bx - ax;
-            let dy = by - ay;
-            let len = (dx * dx + dy * dy).sqrt().max(1e-5);
-            let nx = -dy / len * hw;
-            let ny = dx / len * hw;
-            floats.extend_from_slice(&[ax + nx, ay + ny, z, cr, cg, cb, ca]);
-            floats.extend_from_slice(&[ax - nx, ay - ny, z, cr, cg, cb, ca]);
-            floats.extend_from_slice(&[bx - nx, by - ny, z, cr, cg, cb, ca]);
-            floats.extend_from_slice(&[ax + nx, ay + ny, z, cr, cg, cb, ca]);
-            floats.extend_from_slice(&[bx - nx, by - ny, z, cr, cg, cb, ca]);
-            floats.extend_from_slice(&[bx + nx, by + ny, z, cr, cg, cb, ca]);
-        }
-    }
-    Ok(floats)
+    Ok(object_highlight_vertices(road, obj, [r, g, b, a]))
 }
 
 #[cfg(test)]
@@ -709,8 +590,8 @@ mod tests {
 
     #[test]
     fn test_generate_single_object_vertices_returns_colored_square_marker() {
-        // Sign object: no corners, length=0 → falls back to default 0.6m half-size rect outline.
-        // Rect outline = 4 edges × 6 verts × 7 floats = 168 floats.
+        // Sign object: no corners, length=0 and width=0.5 → both floored at
+        // MIN_MARKER_EXTENT (1.0 m), giving a 1 m × 1 m oriented rect outline.
         let project = road_with_object(road_object("obj-1", ObjectType::Sign, 5.0, 2.0), None);
         let json = serde_json::to_string(&project).unwrap();
 
@@ -726,19 +607,19 @@ mod tests {
                 && (v[5] - 0.3).abs() < 1e-4
                 && (v[6] - 0.4).abs() < 1e-4
         }));
-        // At least one vertex is near the centre x (road s=5) + t_lateral=2
-        // and within the expected half-extents (0.6 × default half, 0.25 from width=0.5).
         let xs: Vec<f32> = verts.chunks(7).map(|v| v[0]).collect();
         let ys: Vec<f32> = verts.chunks(7).map(|v| v[1]).collect();
         let xmin = xs.iter().copied().fold(f32::INFINITY, f32::min);
         let xmax = xs.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         let ymin = ys.iter().copied().fold(f32::INFINITY, f32::min);
         let ymax = ys.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-        // half_l = 0.6, half_w = 0.25, plus outline half-width = 0.18
-        assert!((xmin - (5.0 - 0.6 - 0.18)).abs() < 0.05, "xmin={xmin}");
-        assert!((xmax - (5.0 + 0.6 + 0.18)).abs() < 0.05, "xmax={xmax}");
-        assert!((ymin - (2.0 - 0.25 - 0.18)).abs() < 0.05, "ymin={ymin}");
-        assert!((ymax - (2.0 + 0.25 + 0.18)).abs() < 0.05, "ymax={ymax}");
+        // half extents 0.5 each way, plus the highlight stroke half-width
+        // (DEFAULT_LINE_WIDTH 0.1 × HIGHLIGHT_WIDTH_FACTOR 1.5 / 2 = 0.075).
+        let hw = 0.075;
+        assert!((xmin - (5.0 - 0.5 - hw)).abs() < 0.05, "xmin={xmin}");
+        assert!((xmax - (5.0 + 0.5 + hw)).abs() < 0.05, "xmax={xmax}");
+        assert!((ymin - (2.0 - 0.5 - hw)).abs() < 0.05, "ymin={ymin}");
+        assert!((ymax - (2.0 + 0.5 + hw)).abs() < 0.05, "ymax={ymax}");
     }
 
     #[test]
@@ -826,5 +707,369 @@ mod tests {
 
         assert_eq!(from_json, from_cache);
         assert!(!from_cache.is_empty());
+    }
+
+    /// Template-placed area objects carry no corner data (`corners: []`), only
+    /// `length`/`width`.  They must still be filled with their surface pattern,
+    /// not drawn as a bare outline box.
+    #[test]
+    fn test_corner_less_area_objects_emit_surface_fill() {
+        // Outline alone is 4 edges × 6 verts × 7 floats = 168 floats.
+        const OUTLINE_FLOATS: usize = 4 * 6 * 7;
+
+        for object_type in [
+            ObjectType::Crosswalk,
+            ObjectType::CrossHatchArea,
+            ObjectType::WovenArea,
+            ObjectType::ForwardWaitingArea,
+            ObjectType::TurnLeftWaitingArea,
+        ] {
+            let mut obj = road_object("area-1", object_type.clone(), 5.0, 0.0);
+            obj.length = 4.0;
+            obj.width = 3.0;
+            let project = road_with_object(obj, None);
+            let json = serde_json::to_string(&project).unwrap();
+
+            let verts = generate_object_vertices(&json).unwrap();
+
+            assert!(
+                verts.len() > OUTLINE_FLOATS,
+                "{object_type:?} emitted {} floats — expected outline plus interior fill",
+                verts.len()
+            );
+
+            // Every vertex must stay inside the 4 m × 3 m footprint (plus outline
+            // half-width) centred at s=5 on a straight east-bound road.
+            for chunk in verts.chunks(7) {
+                assert!(
+                    (chunk[0] - 5.0).abs() < 2.1 && chunk[1].abs() < 1.6,
+                    "{object_type:?} vertex ({}, {}) escaped the footprint",
+                    chunk[0],
+                    chunk[1]
+                );
+            }
+        }
+    }
+
+    /// Parking spaces keep the outline-only look (no surface pattern).
+    #[test]
+    fn test_corner_less_parking_space_stays_outline_only() {
+        let mut obj = road_object("ps-1", ObjectType::ParkingSpace, 5.0, 0.0);
+        obj.length = 5.0;
+        obj.width = 2.5;
+        let project = road_with_object(obj, None);
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts = generate_object_vertices(&json).unwrap();
+
+        assert_eq!(verts.len(), 4 * 6 * 7);
+    }
+
+    /// The selection highlight must trace the object's real footprint.  On a
+    /// road whose heading is not zero the highlight used to be rotated by
+    /// `obj.hdg` alone, leaving a visible gap against the rendered area.
+    #[test]
+    fn test_area_object_highlight_matches_rendered_footprint() {
+        fn bounds(verts: &[f32]) -> (f32, f32, f32, f32) {
+            verts.chunks(7).fold(
+                (f32::MAX, f32::MIN, f32::MAX, f32::MIN),
+                |(x0, x1, y0, y1), v| (x0.min(v[0]), x1.max(v[0]), y0.min(v[1]), y1.max(v[1])),
+            )
+        }
+
+        for object_type in [
+            ObjectType::Crosswalk,
+            ObjectType::CrossHatchArea,
+            ObjectType::ParkingSpace,
+        ] {
+            let mut obj = road_object("area-1", object_type.clone(), 6.0, 1.5);
+            obj.length = 4.0;
+            obj.width = 3.0;
+            obj.hdg = std::f64::consts::FRAC_PI_2;
+
+            // Road heading 0.7 rad — the case the old highlight got wrong.
+            let mut road = Road::from_centerline(
+                "road-1",
+                vec![Geometry {
+                    s: 0.0,
+                    x: 10.0,
+                    y: -4.0,
+                    hdg: 0.7,
+                    length: 20.0,
+                    geo_type: GeometryType::Line,
+                }],
+            );
+            road.objects.push(obj);
+            let project = Project {
+                roads: vec![road],
+                ..Project::default()
+            };
+            let json = serde_json::to_string(&project).unwrap();
+
+            let fill = generate_object_vertices(&json).unwrap();
+            let highlight =
+                generate_single_object_vertices(&json, "road-1", "area-1", 1.0, 0.0, 0.0, 1.0)
+                    .unwrap();
+
+            let (fx0, fx1, fy0, fy1) = bounds(&fill);
+            let (hx0, hx1, hy0, hy1) = bounds(&highlight);
+
+            // Both strokes straddle the same polygon edges, so the bounding
+            // boxes agree to within half the (thicker) highlight stroke.
+            const TOL: f32 = 0.2;
+            for (f, h, axis) in [
+                (fx0, hx0, "xmin"),
+                (fx1, hx1, "xmax"),
+                (fy0, hy0, "ymin"),
+                (fy1, hy1, "ymax"),
+            ] {
+                assert!(
+                    (f - h).abs() < TOL,
+                    "{object_type:?} {axis}: rendered {f:.3} vs highlight {h:.3}"
+                );
+            }
+        }
+    }
+
+    /// Objects the legacy editor stores as `type="AlongRoad"` stroke their
+    /// corner list as an open path — one quad per segment, never a closed loop.
+    #[test]
+    fn test_along_road_objects_stroke_their_corner_path() {
+        for object_type in [
+            ObjectType::Guardrail,
+            ObjectType::Curb,
+            ObjectType::Wall,
+            ObjectType::SidewalkRail,
+            ObjectType::FlowerBed,
+            ObjectType::Bridge,
+            ObjectType::Tunnel,
+        ] {
+            let mut obj = road_object("rail-1", object_type.clone(), 2.0, 0.0);
+            obj.corners = vec![
+                Point3D::new(0.0, 0.0, 0.0),
+                Point3D::new(2.0, 0.5, 0.0),
+                Point3D::new(4.0, 0.5, 0.0),
+                Point3D::new(6.0, 0.0, 0.0),
+            ];
+            let project = road_with_object(obj, None);
+            let json = serde_json::to_string(&project).unwrap();
+
+            let verts = generate_object_vertices(&json).unwrap();
+
+            // 3 segments × 2 triangles × 3 verts × 7 floats (an open polyline;
+            // a closed outline would emit a fourth segment).
+            assert_eq!(
+                verts.len(),
+                3 * 6 * 7,
+                "{object_type:?} emitted {} floats",
+                verts.len()
+            );
+        }
+    }
+
+    /// Regression guard: these types used to fall into a `_ => {}` arm and
+    /// render nothing at all.
+    #[test]
+    fn test_every_object_type_emits_geometry() {
+        for object_type in [
+            ObjectType::Sign,
+            ObjectType::Guardrail,
+            ObjectType::Barrier,
+            ObjectType::Curb,
+            ObjectType::Wall,
+            ObjectType::Pillar,
+            ObjectType::Pole,
+            ObjectType::TrafficCone,
+            ObjectType::ParkingSpace,
+            ObjectType::Crosswalk,
+            ObjectType::StopLine,
+            ObjectType::CrossHatchArea,
+            ObjectType::SimpleCrossHatch,
+            ObjectType::WovenArea,
+            ObjectType::ForwardWaitingArea,
+            ObjectType::TurnLeftWaitingArea,
+            ObjectType::SlowDownToYieldLine,
+            ObjectType::StopToYieldLine,
+            ObjectType::SimpleSignalPole,
+            ObjectType::TrafficLightPole,
+            ObjectType::StreetLightPole,
+            ObjectType::SignGantry,
+            ObjectType::LTypeSignalPole,
+            ObjectType::TTypeSignalPole,
+            ObjectType::SidewalkRail,
+            ObjectType::TrashBin,
+            ObjectType::Bridge,
+            ObjectType::Tunnel,
+            ObjectType::Custom("unknown-kind".into()),
+        ] {
+            let mut obj = road_object("any-1", object_type.clone(), 5.0, 0.0);
+            obj.length = 4.0;
+            obj.width = 3.0;
+            let project = road_with_object(obj, None);
+            let json = serde_json::to_string(&project).unwrap();
+
+            let verts = generate_object_vertices(&json).unwrap();
+
+            assert!(!verts.is_empty(), "{object_type:?} rendered nothing");
+            assert_eq!(
+                verts.len() % 7,
+                0,
+                "{object_type:?} emitted a partial vertex"
+            );
+        }
+    }
+
+    /// Markers get an oriented rectangle plus a red heading stub so their
+    /// facing direction is readable (C# `BuildHeader`).
+    #[test]
+    fn test_marker_objects_emit_a_red_heading_indicator() {
+        let mut obj = road_object("pole-1", ObjectType::TrafficLightPole, 5.0, 1.0);
+        obj.length = 1.5;
+        obj.width = 1.5;
+        let project = road_with_object(obj, None);
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts = generate_object_vertices(&json).unwrap();
+
+        // 4 outline edges + 1 heading stub = 5 quads.
+        assert_eq!(verts.len(), 5 * 6 * 7);
+        let red = verts
+            .chunks(7)
+            .filter(|v| v[3] > 0.99 && v[4] < 0.01 && v[5] < 0.01)
+            .count();
+        assert_eq!(red, 6, "expected exactly one red heading quad");
+    }
+
+    /// `SimpleCrossHatch` uses a 3 m gap versus `CrossHatchArea`'s 0.6 m, so it
+    /// must produce visibly fewer stripes over the same footprint.
+    #[test]
+    fn test_simple_cross_hatch_is_sparser_than_cross_hatch_area() {
+        let area_floats = |object_type: ObjectType| {
+            let mut obj = road_object("hatch-1", object_type, 5.0, 0.0);
+            obj.length = 8.0;
+            obj.width = 4.0;
+            let project = road_with_object(obj, None);
+            let json = serde_json::to_string(&project).unwrap();
+            generate_object_vertices(&json).unwrap().len()
+        };
+
+        let dense = area_floats(ObjectType::CrossHatchArea);
+        let sparse = area_floats(ObjectType::SimpleCrossHatch);
+        assert!(sparse < dense, "sparse={sparse} dense={dense}");
+    }
+
+    /// Woven areas keep a single stripe direction; hatch areas cross two sets,
+    /// so the hatch emits roughly twice the fill geometry.
+    #[test]
+    fn test_woven_area_uses_a_single_stripe_direction() {
+        let fill_floats = |object_type: ObjectType| {
+            let mut obj = road_object("area-1", object_type, 5.0, 0.0);
+            obj.length = 8.0;
+            obj.width = 4.0;
+            let project = road_with_object(obj, None);
+            let json = serde_json::to_string(&project).unwrap();
+            // Subtract the 4-edge outline to compare fill geometry only.
+            generate_object_vertices(&json).unwrap().len() - 4 * 6 * 7
+        };
+
+        let woven = fill_floats(ObjectType::WovenArea);
+        let hatch = fill_floats(ObjectType::CrossHatchArea);
+        assert!(woven > 0 && hatch > woven, "woven={woven} hatch={hatch}");
+    }
+
+    /// Crosswalk stripes are painted white even though the outline is navy.
+    #[test]
+    fn test_crosswalk_stripes_are_white_over_a_navy_outline() {
+        let mut obj = road_object("cw-1", ObjectType::Crosswalk, 5.0, 0.0);
+        obj.length = 4.0;
+        obj.width = 3.0;
+        let project = road_with_object(obj, None);
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts = generate_object_vertices(&json).unwrap();
+
+        let white = verts
+            .chunks(7)
+            .filter(|v| v[3] > 0.99 && v[4] > 0.99 && v[5] > 0.99)
+            .count();
+        let navy = verts
+            .chunks(7)
+            .filter(|v| v[3] < 0.01 && v[4] < 0.01 && v[5] > 0.4)
+            .count();
+        assert!(white > 0, "no white stripe vertices");
+        assert_eq!(navy, 4 * 6, "outline should be one navy quad per edge");
+    }
+
+    /// The highlight must trace the rendered footprint for markers and
+    /// along-road objects too, not just areas.
+    #[test]
+    fn test_marker_and_along_road_highlights_match_rendered_footprint() {
+        fn bounds(verts: &[f32]) -> (f32, f32, f32, f32) {
+            verts.chunks(7).fold(
+                (f32::MAX, f32::MIN, f32::MAX, f32::MIN),
+                |(x0, x1, y0, y1), v| (x0.min(v[0]), x1.max(v[0]), y0.min(v[1]), y1.max(v[1])),
+            )
+        }
+
+        for (object_type, with_corners) in [
+            (ObjectType::TrafficLightPole, false),
+            (ObjectType::SignGantry, false),
+            (ObjectType::TrashBin, false),
+            (ObjectType::Guardrail, true),
+            (ObjectType::FlowerBed, true),
+        ] {
+            let mut obj = road_object("obj-1", object_type.clone(), 6.0, 1.5);
+            obj.length = 3.0;
+            obj.width = 2.0;
+            obj.hdg = 0.4;
+            if with_corners {
+                obj.corners = vec![
+                    Point3D::new(0.0, 0.0, 0.0),
+                    Point3D::new(3.0, 1.0, 0.0),
+                    Point3D::new(6.0, 1.0, 0.0),
+                ];
+            }
+
+            let mut road = Road::from_centerline(
+                "road-1",
+                vec![Geometry {
+                    s: 0.0,
+                    x: 10.0,
+                    y: -4.0,
+                    hdg: 0.7,
+                    length: 20.0,
+                    geo_type: GeometryType::Line,
+                }],
+            );
+            road.objects.push(obj);
+            let project = Project {
+                roads: vec![road],
+                ..Project::default()
+            };
+            let json = serde_json::to_string(&project).unwrap();
+
+            let rendered = generate_object_vertices(&json).unwrap();
+            let highlight =
+                generate_single_object_vertices(&json, "road-1", "obj-1", 1.0, 0.0, 0.0, 1.0)
+                    .unwrap();
+
+            let (fx0, fx1, fy0, fy1) = bounds(&rendered);
+            let (hx0, hx1, hy0, hy1) = bounds(&highlight);
+
+            // The rendered marker also carries the heading stub, which stays
+            // inside the footprint, so both boxes agree to within the stroke.
+            const TOL: f32 = 0.2;
+            for (f, h, axis) in [
+                (fx0, hx0, "xmin"),
+                (fx1, hx1, "xmax"),
+                (fy0, hy0, "ymin"),
+                (fy1, hy1, "ymax"),
+            ] {
+                assert!(
+                    (f - h).abs() < TOL,
+                    "{object_type:?} {axis}: rendered {f:.3} vs highlight {h:.3}"
+                );
+            }
+        }
     }
 }

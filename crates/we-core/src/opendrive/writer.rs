@@ -754,6 +754,14 @@ fn write_objects(writer: &mut Writer<W>, objects: &[RoadObject]) -> Result<(), O
             ObjectType::StreetLightPole => "streetLightPole".to_string(),
             ObjectType::SignGantry => "signGantry".to_string(),
             ObjectType::LTypeSignalPole => "lTypeSignalPole".to_string(),
+            ObjectType::TTypeSignalPole => "tTypeSignalPole".to_string(),
+            ObjectType::Pole => "pole".to_string(),
+            ObjectType::SidewalkRail => "sidewalkRail".to_string(),
+            ObjectType::FlowerBed => "flowerBed".to_string(),
+            ObjectType::TrashBin => "trashBin".to_string(),
+            ObjectType::SimpleCrossHatch => "simpleCrossHatch".to_string(),
+            ObjectType::Bridge => "bridge".to_string(),
+            ObjectType::Tunnel => "tunnel".to_string(),
             ObjectType::Custom(s) => s.clone(),
         };
         let mut attrs = vec![

@@ -349,22 +349,34 @@ fn parse_road_object_attrs(e: &BytesStart) -> Result<RoadObject, OpenDriveError>
         }
     }
 
+    // The legacy C# editor writes a *category* in `type` ("AlongRoad",
+    // "WaitingArea", …) and the concrete kind in `name` ("Road Guardrail",
+    // "Flower Bed", …), so fall back to the name when the type is unknown.
+    if matches!(&obj.object_type, ObjectType::Custom(_)) && !obj.name.is_empty() {
+        let from_name = parse_object_type(&obj.name);
+        if !matches!(from_name, ObjectType::Custom(_)) {
+            obj.object_type = from_name;
+        }
+    }
+
     Ok(obj)
 }
 
 fn parse_object_type(s: &str) -> ObjectType {
-    match s.to_lowercase().as_str() {
+    match normalize_object_key(s).as_str() {
         "barrier" => ObjectType::Barrier,
         "guardrail" | "roadguardrail" => ObjectType::Guardrail,
         "sign" | "signal" => ObjectType::Sign,
         "curb" => ObjectType::Curb,
         "wall" => ObjectType::Wall,
-        "pole" | "pillar" => ObjectType::Pillar,
+        "pillar" => ObjectType::Pillar,
+        "pole" => ObjectType::Pole,
         "trafficcone" | "cone" => ObjectType::TrafficCone,
         "parkingspace" | "slotspace" => ObjectType::ParkingSpace,
         "crosswalk" | "zebrastripsarea" | "zebra" => ObjectType::Crosswalk,
         "stopline" => ObjectType::StopLine,
-        "crosshatcharea" | "simplecrosshatch" => ObjectType::CrossHatchArea,
+        "crosshatcharea" => ObjectType::CrossHatchArea,
+        "simplecrosshatch" => ObjectType::SimpleCrossHatch,
         "wovenarea" => ObjectType::WovenArea,
         "forwardwaitingarea" => ObjectType::ForwardWaitingArea,
         "turnleftwaitingarea" => ObjectType::TurnLeftWaitingArea,
@@ -375,6 +387,106 @@ fn parse_object_type(s: &str) -> ObjectType {
         "streetlightpole" => ObjectType::StreetLightPole,
         "signgantry" => ObjectType::SignGantry,
         "ltypesignalpole" => ObjectType::LTypeSignalPole,
+        "ttypesignalpole" => ObjectType::TTypeSignalPole,
+        "sidewalkrail" => ObjectType::SidewalkRail,
+        "flowerbed" => ObjectType::FlowerBed,
+        "trashbin" => ObjectType::TrashBin,
+        "bridge" => ObjectType::Bridge,
+        "tunnel" => ObjectType::Tunnel,
         _ => ObjectType::Custom(s.to_string()), // preserve original casing in fallback
+    }
+}
+
+/// Lower-case and strip separators so `"L-Type Signal Pole"`, `"lTypeSignalPole"`
+/// and `"ltype_signal_pole"` all resolve to the same key.
+fn normalize_object_key(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
+}
+
+#[cfg(test)]
+mod object_type_tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_object_type_ignores_case_and_separators() {
+        for spelling in [
+            "L-Type Signal Pole",
+            "lTypeSignalPole",
+            "ltype_signal_pole",
+            "LTYPESIGNALPOLE",
+        ] {
+            assert_eq!(
+                parse_object_type(spelling),
+                ObjectType::LTypeSignalPole,
+                "spelling={spelling}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_object_type_covers_every_legacy_kind() {
+        let table = [
+            ("tTypeSignalPole", ObjectType::TTypeSignalPole),
+            ("pole", ObjectType::Pole),
+            ("pillar", ObjectType::Pillar),
+            ("sidewalkRail", ObjectType::SidewalkRail),
+            ("flowerBed", ObjectType::FlowerBed),
+            ("trashBin", ObjectType::TrashBin),
+            ("simpleCrossHatch", ObjectType::SimpleCrossHatch),
+            ("crossHatchArea", ObjectType::CrossHatchArea),
+            ("bridge", ObjectType::Bridge),
+            ("tunnel", ObjectType::Tunnel),
+            ("Zebra Strips Area", ObjectType::Crosswalk),
+            ("Road Guardrail", ObjectType::Guardrail),
+        ];
+        for (spelling, expected) in table {
+            assert_eq!(parse_object_type(spelling), expected, "spelling={spelling}");
+        }
+    }
+
+    #[test]
+    fn test_parse_object_type_falls_back_to_custom_with_original_casing() {
+        assert_eq!(
+            parse_object_type("MyThing"),
+            ObjectType::Custom("MyThing".to_string())
+        );
+    }
+
+    /// The legacy C# editor writes a *category* in `type` and the concrete kind
+    /// in `name`, so an unknown `type` must be resolved from the name.
+    #[test]
+    fn test_parse_road_object_resolves_type_from_name_when_type_is_a_category() {
+        let mut reader = quick_xml::Reader::from_str(
+            r#"<object type="AlongRoad" name="Road Guardrail" id="7" s="1" t="2"/>"#,
+        );
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+        let ev = reader.read_event_into(&mut buf).unwrap();
+        let e = match &ev {
+            quick_xml::events::Event::Empty(e) => e,
+            other => panic!("unexpected event: {other:?}"),
+        };
+        let obj = parse_road_object_attrs(e).unwrap();
+        assert_eq!(obj.object_type, ObjectType::Guardrail);
+    }
+
+    /// A recognised `type` must win over the name.
+    #[test]
+    fn test_parse_road_object_prefers_an_explicit_known_type() {
+        let mut reader = quick_xml::Reader::from_str(
+            r#"<object type="crosswalk" name="Road Guardrail" id="8" s="1" t="2"/>"#,
+        );
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+        let ev = reader.read_event_into(&mut buf).unwrap();
+        let e = match &ev {
+            quick_xml::events::Event::Empty(e) => e,
+            other => panic!("unexpected event: {other:?}"),
+        };
+        let obj = parse_road_object_attrs(e).unwrap();
+        assert_eq!(obj.object_type, ObjectType::Crosswalk);
     }
 }

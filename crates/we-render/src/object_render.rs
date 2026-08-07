@@ -30,6 +30,14 @@ pub fn object_color(obj_type: &ObjectType) -> [f32; 4] {
         ObjectType::StreetLightPole => [0.612, 0.553, 0.839, 1.0],
         ObjectType::SignGantry => [0.071, 0.455, 0.212, 1.0],
         ObjectType::LTypeSignalPole => [0.502, 0.000, 0.000, 1.0],
+        ObjectType::TTypeSignalPole => [0.502, 0.251, 0.000, 1.0],
+        ObjectType::Pole => [0.000, 1.000, 1.000, 1.0],
+        ObjectType::SidewalkRail => [0.502, 0.502, 0.502, 1.0],
+        ObjectType::FlowerBed => [0.196, 0.804, 0.196, 1.0],
+        ObjectType::TrashBin => [0.275, 0.510, 0.706, 1.0],
+        ObjectType::SimpleCrossHatch => [0.965, 0.651, 0.137, 1.0],
+        ObjectType::Bridge => [0.627, 0.322, 0.176, 1.0],
+        ObjectType::Tunnel => [0.412, 0.412, 0.412, 1.0],
         ObjectType::Custom(_) => [0.7, 0.7, 0.7, 1.0],
     }
 }

@@ -168,6 +168,14 @@ fn test_write_objects_all_types() {
         (ObjectType::Wall, "wall"),
         (ObjectType::Pillar, "pillar"),
         (ObjectType::TrafficCone, "trafficCone"),
+        (ObjectType::TTypeSignalPole, "tTypeSignalPole"),
+        (ObjectType::Pole, "pole"),
+        (ObjectType::SidewalkRail, "sidewalkRail"),
+        (ObjectType::FlowerBed, "flowerBed"),
+        (ObjectType::TrashBin, "trashBin"),
+        (ObjectType::SimpleCrossHatch, "simpleCrossHatch"),
+        (ObjectType::Bridge, "bridge"),
+        (ObjectType::Tunnel, "tunnel"),
         (ObjectType::Custom("myObj".into()), "myObj"),
     ];
     for (ot, expected) in types_and_expected {
@@ -205,6 +213,83 @@ fn test_write_objects_all_types() {
         assert!(
             xml.contains(&format!(r#"type="{expected}""#)),
             "Failed for object type {expected}"
+        );
+    }
+}
+
+/// Every object type must survive a write → parse cycle unchanged, otherwise
+/// saving a project silently downgrades objects to `Custom`.
+#[test]
+fn test_object_type_write_parse_round_trip() {
+    let all_types = vec![
+        ObjectType::Sign,
+        ObjectType::Guardrail,
+        ObjectType::Barrier,
+        ObjectType::Curb,
+        ObjectType::Wall,
+        ObjectType::Pillar,
+        ObjectType::Pole,
+        ObjectType::TrafficCone,
+        ObjectType::ParkingSpace,
+        ObjectType::Crosswalk,
+        ObjectType::StopLine,
+        ObjectType::CrossHatchArea,
+        ObjectType::SimpleCrossHatch,
+        ObjectType::WovenArea,
+        ObjectType::ForwardWaitingArea,
+        ObjectType::TurnLeftWaitingArea,
+        ObjectType::SlowDownToYieldLine,
+        ObjectType::StopToYieldLine,
+        ObjectType::SimpleSignalPole,
+        ObjectType::TrafficLightPole,
+        ObjectType::StreetLightPole,
+        ObjectType::SignGantry,
+        ObjectType::LTypeSignalPole,
+        ObjectType::TTypeSignalPole,
+        ObjectType::SidewalkRail,
+        ObjectType::FlowerBed,
+        ObjectType::TrashBin,
+        ObjectType::Bridge,
+        ObjectType::Tunnel,
+        ObjectType::Custom("myObj".into()),
+    ];
+
+    for ot in all_types {
+        let p = project_with(
+            vec![{
+                let mut r = base_road();
+                r.objects = vec![RoadObject {
+                    id: "o1".into(),
+                    name: String::new(),
+                    object_type: ot.clone(),
+                    position: Point3D {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 0.0,
+                        id: None,
+                    },
+                    orientation: 0.0,
+                    hdg: 0.0,
+                    pitch: 0.0,
+                    roll: 0.0,
+                    width: 1.0,
+                    height: 1.0,
+                    length: 0.0,
+                    corners: vec![],
+                    corner_type: CornerType::Local,
+                    validity: None,
+                    from_object_ref: false,
+                    user_data: Vec::new(),
+                }];
+                r
+            }],
+            vec![],
+        );
+        let xml = write_xodr(&p).unwrap();
+        let reparsed = crate::opendrive::parser::parse(&xml).expect("re-parse should succeed");
+        assert_eq!(
+            reparsed.roads[0].objects[0].object_type, ot,
+            "round trip lost object type {ot:?}"
         );
     }
 }

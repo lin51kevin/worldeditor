@@ -31,13 +31,15 @@ enum PropPrototype {
 fn classify(object_type: &ObjectType) -> Option<PropPrototype> {
     use ObjectType::*;
     match object_type {
-        TrafficCone | Pillar | Sign | SimpleSignalPole | TrafficLightPole | StreetLightPole
-        | SignGantry | LTypeSignalPole => Some(PropPrototype::Pole),
-        Guardrail | Barrier | Wall => Some(PropPrototype::Wall),
+        TrafficCone | Pillar | Pole | Sign | SimpleSignalPole | TrafficLightPole
+        | StreetLightPole | SignGantry | LTypeSignalPole | TTypeSignalPole | TrashBin => {
+            Some(PropPrototype::Pole)
+        }
+        Guardrail | Barrier | Wall | SidewalkRail | Bridge | Tunnel => Some(PropPrototype::Wall),
         // Flat markings / areas — handled by object_render tessellation.
-        Curb | ParkingSpace | Crosswalk | StopLine | CrossHatchArea | WovenArea
-        | ForwardWaitingArea | TurnLeftWaitingArea | SlowDownToYieldLine | StopToYieldLine
-        | Custom(_) => None,
+        Curb | FlowerBed | ParkingSpace | Crosswalk | StopLine | CrossHatchArea
+        | SimpleCrossHatch | WovenArea | ForwardWaitingArea | TurnLeftWaitingArea
+        | SlowDownToYieldLine | StopToYieldLine | Custom(_) => None,
     }
 }
 

@@ -129,6 +129,22 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_header_empty_bounds_defaults_to_zero() {
+        let xml = r#"<?xml version="1.0"?>
+<OpenDRIVE>
+  <header revMajor="1" revMinor="4" name="converted" date="" north="" south="" east="" west="">
+    <geoReference>+proj=ortho +lat_0=44.8 +lon_0=89.2 +datum=WGS84 +units=m +no_defs</geoReference>
+  </header>
+</OpenDRIVE>"#;
+
+        let project = parse(xml).expect("empty header bounds must not fail parsing");
+        assert_eq!(project.header.north, 0.0);
+        assert_eq!(project.header.south, 0.0);
+        assert_eq!(project.header.east, 0.0);
+        assert_eq!(project.header.west, 0.0);
+    }
+
+    #[test]
     fn test_parse_road_mark_self_closing_still_works() {
         let xml = r#"<?xml version="1.0"?>
 <OpenDRIVE>
@@ -261,7 +277,9 @@ mod tests {
         let obj0 = &road.objects[0];
         assert_eq!(obj0.id, "1");
         assert_eq!(obj0.name, "pole");
-        assert_eq!(obj0.object_type, ObjectType::Pillar);
+        // "pole" is now a first-class type of its own (it used to fold into
+        // `Pillar`), matching the legacy C# editor's object catalogue.
+        assert_eq!(obj0.object_type, ObjectType::Pole);
         assert!((obj0.position.x - 10.0).abs() < 1e-6);
         assert!((obj0.position.y - (-3.5)).abs() < 1e-6);
         assert!((obj0.position.z).abs() < 1e-6);

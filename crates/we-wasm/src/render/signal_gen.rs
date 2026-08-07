@@ -354,7 +354,7 @@ pub fn generate_single_signal_vertices_cached(
     })
 }
 
-/// Cached version of `generate_single_object_vertices` — reads from PROJECT_CACHE
+/// Cached version of `generate_single_object_vertices` ¡ª reads from PROJECT_CACHE
 /// to avoid JSON re-serialization (~1.3s savings on large maps).
 #[wasm_bindgen]
 pub fn generate_single_object_vertices_cached(
@@ -365,182 +365,18 @@ pub fn generate_single_object_vertices_cached(
     b: f32,
     a: f32,
 ) -> Result<Vec<f32>, JsError> {
-    use we_core::geometry::eval::{evaluate_elevation, offset_point};
-    use we_core::model::{CornerType, ObjectType};
-
     crate::picking::with_project_cache(|cache| {
         let project = cache.project();
-        let road = project.roads.iter().find(|rd| rd.id == road_id);
-        let obj = road.and_then(|rd| rd.objects.iter().find(|o| o.id == object_id));
-
-        let (road, obj) = match (road, obj) {
-            (Some(road), Some(obj)) => (road, obj),
-            _ => return Ok(Vec::new()),
-        };
-
-        let s = obj.position.x;
-        let t = obj.position.y;
-        let Some(ref_pt) = road_point_at_s(&road.plan_view, s) else {
+        let Some(road) = project.roads.iter().find(|rd| rd.id == road_id) else {
             return Ok(Vec::new());
         };
-
-        let color = [r, g, b, a];
-        let z_base = evaluate_elevation(&road.elevation_profile, s) as f32 + 0.08;
-        let mut floats: Vec<f32> = Vec::new();
-
-        // StopLine: highlight as a transverse-bar rect outline at the corrected position.
-        // The renderer shifts the bar by ds/dt derived from corner data (see object_gen.rs),
-        // so the highlight must replicate that same position correction.
-        if obj.object_type == ObjectType::StopLine {
-            let (stop_ref, bar_t, bar_w) = if obj.corners.len() >= 2 {
-                let (cos_h, sin_h) = (obj.hdg.cos(), obj.hdg.sin());
-                let ds0 = obj.corners[0].x * cos_h - obj.corners[0].y * sin_h;
-                let ds1 = obj.corners[1].x * cos_h - obj.corners[1].y * sin_h;
-                let dt0 = obj.corners[0].x * sin_h + obj.corners[0].y * cos_h;
-                let dt1 = obj.corners[1].x * sin_h + obj.corners[1].y * cos_h;
-                let w = (dt1 - dt0).abs();
-                let center = t + (dt0 + dt1) / 2.0;
-                let actual_s = (s + (ds0 + ds1) / 2.0).clamp(0.0, road.length);
-                let rp = road_point_at_s(&road.plan_view, actual_s).unwrap_or(ref_pt);
-                (rp, center, if w > 0.01 { w } else { obj.width.max(3.5) })
-            } else {
-                (ref_pt, t, if obj.width > 0.0 { obj.width } else { 3.5 })
-            };
-            let z = evaluate_elevation(&road.elevation_profile, stop_ref.s) as f32 + 0.08;
-            let half_w = bar_w / 2.0;
-            let half_thick = 0.2; // half of 0.4 m bar thickness
-            let (cx, cy, _) = offset_point(&stop_ref, bar_t, 0.0);
-            let cos_h = stop_ref.hdg.cos();
-            let sin_h = stop_ref.hdg.sin();
-            // cos/sin of (hdg + PI/2): perpendicular direction
-            let cos_p = -sin_h;
-            let sin_p = cos_h;
-            let bar_corners = [
-                (
-                    cx + cos_h * half_thick + cos_p * half_w,
-                    cy + sin_h * half_thick + sin_p * half_w,
-                ),
-                (
-                    cx - cos_h * half_thick + cos_p * half_w,
-                    cy - sin_h * half_thick + sin_p * half_w,
-                ),
-                (
-                    cx - cos_h * half_thick - cos_p * half_w,
-                    cy - sin_h * half_thick - sin_p * half_w,
-                ),
-                (
-                    cx + cos_h * half_thick - cos_p * half_w,
-                    cy + sin_h * half_thick - sin_p * half_w,
-                ),
-            ];
-            let hw = 0.18f64;
-            let [cr, cg, cb, ca] = color;
-            for i in 0..4 {
-                let (ax, ay) = bar_corners[i];
-                let (bx, by) = bar_corners[(i + 1) % 4];
-                let dx = bx - ax;
-                let dy = by - ay;
-                let len = (dx * dx + dy * dy).sqrt().max(1e-5);
-                let nx = -dy / len * hw;
-                let ny = dx / len * hw;
-                floats.extend_from_slice(&[(ax + nx) as f32, (ay + ny) as f32, z, cr, cg, cb, ca]);
-                floats.extend_from_slice(&[(ax - nx) as f32, (ay - ny) as f32, z, cr, cg, cb, ca]);
-                floats.extend_from_slice(&[(bx - nx) as f32, (by - ny) as f32, z, cr, cg, cb, ca]);
-                floats.extend_from_slice(&[(ax + nx) as f32, (ay + ny) as f32, z, cr, cg, cb, ca]);
-                floats.extend_from_slice(&[(bx - nx) as f32, (by - ny) as f32, z, cr, cg, cb, ca]);
-                floats.extend_from_slice(&[(bx + nx) as f32, (by + ny) as f32, z, cr, cg, cb, ca]);
-            }
-            return Ok(floats);
-        }
-
-        if !obj.corners.is_empty() {
-            use crate::render::signal_mesh::{
-                crosswalk_world_polygon, emit_polygon_outline, emit_world_polygon_outline,
-            };
-            // Crosswalks (cornerLocal) render as zebra stripes; reuse the same
-            // world polygon so the highlight outline hugs the stripe area.
-            let is_crosswalk_local =
-                obj.object_type == ObjectType::Crosswalk && obj.corner_type == CornerType::Local;
-            if is_crosswalk_local {
-                let world_poly = crosswalk_world_polygon(
-                    &obj.corners,
-                    &ref_pt,
-                    t,
-                    obj.hdg,
-                    &offset_point,
-                    obj.length,
-                    obj.width,
-                );
-                emit_world_polygon_outline(&world_poly, z_base, 0.35, color, &mut floats);
-            } else {
-                emit_polygon_outline(
-                    &obj.corners,
-                    &ref_pt,
-                    &road.elevation_profile,
-                    s,
-                    t,
-                    obj.hdg,
-                    z_base,
-                    0.35,
-                    color,
-                    &offset_point,
-                    &mut floats,
-                    obj.length,
-                    obj.width,
-                );
-            }
-        } else {
-            let (mx, my, _) = offset_point(&ref_pt, t, 0.0);
-            let mx = mx as f32;
-            let my = my as f32;
-            let half_l = if obj.length > 0.0 {
-                (obj.length / 2.0) as f32
-            } else {
-                0.6
-            };
-            let half_w = if obj.width > 0.0 {
-                (obj.width / 2.0) as f32
-            } else {
-                0.6
-            };
-            let z = z_base;
-            let (cos_h, sin_h) = (obj.hdg.cos() as f32, obj.hdg.sin() as f32);
-            let corners = [
-                (
-                    mx + cos_h * half_l - sin_h * half_w,
-                    my + sin_h * half_l + cos_h * half_w,
-                ),
-                (
-                    mx + cos_h * half_l + sin_h * half_w,
-                    my + sin_h * half_l - cos_h * half_w,
-                ),
-                (
-                    mx - cos_h * half_l + sin_h * half_w,
-                    my - sin_h * half_l - cos_h * half_w,
-                ),
-                (
-                    mx - cos_h * half_l - sin_h * half_w,
-                    my - sin_h * half_l + cos_h * half_w,
-                ),
-            ];
-            let hw = 0.18f32;
-            let [cr, cg, cb, ca] = color;
-            for i in 0..4 {
-                let (ax, ay) = corners[i];
-                let (bx, by) = corners[(i + 1) % 4];
-                let dx = bx - ax;
-                let dy = by - ay;
-                let len = (dx * dx + dy * dy).sqrt().max(1e-5);
-                let nx = -dy / len * hw;
-                let ny = dx / len * hw;
-                floats.extend_from_slice(&[ax + nx, ay + ny, z, cr, cg, cb, ca]);
-                floats.extend_from_slice(&[ax - nx, ay - ny, z, cr, cg, cb, ca]);
-                floats.extend_from_slice(&[bx - nx, by - ny, z, cr, cg, cb, ca]);
-                floats.extend_from_slice(&[ax + nx, ay + ny, z, cr, cg, cb, ca]);
-                floats.extend_from_slice(&[bx - nx, by - ny, z, cr, cg, cb, ca]);
-                floats.extend_from_slice(&[bx + nx, by + ny, z, cr, cg, cb, ca]);
-            }
-        }
-        Ok(floats)
+        let Some(obj) = road.objects.iter().find(|o| o.id == object_id) else {
+            return Ok(Vec::new());
+        };
+        Ok(crate::render::object_gen::object_highlight_vertices(
+            road,
+            obj,
+            [r, g, b, a],
+        ))
     })
 }
