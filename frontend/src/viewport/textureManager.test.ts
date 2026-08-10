@@ -132,6 +132,32 @@ describe('TextureManager — resolveObjectThumbnail', () => {
   });
 });
 
+describe('TextureManager — getAllTextureUrls', () => {
+  it('returns empty array when manifest is not loaded', () => {
+    const device = makeMockDevice();
+    const fresh = new TextureManager(device as unknown as GPUDevice);
+    expect(fresh.getAllTextureUrls()).toEqual([]);
+  });
+
+  it('collects every concrete texture path and skips roadSigns meta keys', () => {
+    const mgr = makeManagerWithManifest(SAMPLE_MANIFEST);
+    const urls = mgr.getAllTextureUrls();
+    expect(urls).toEqual(
+      expect.arrayContaining([
+        '/assets/textures/traffic_light.png',
+        '/assets/textures/traffic_light_all.png',
+        '/assets/textures/paint_default.png',
+        '/assets/textures/arrow_forward.png',
+        '/assets/textures/guardrail_thumb.png',
+        '/assets/textures/crosswalk_thumb.png',
+      ]),
+    );
+    // roadSigns in SAMPLE_MANIFEST only has meta keys, so none should appear.
+    expect(urls).not.toContain('/assets/textures/undefined');
+    expect(urls.length).toBe(6);
+  });
+});
+
 describe('TextureManager — cache and state', () => {
   it('isLoaded returns false initially for any URL', () => {
     const device = makeMockDevice();
@@ -237,6 +263,26 @@ describe('TextureManager — cache and state', () => {
     await mgr.preload(['/missing.png']);
     // Should cache the placeholder, not throw
     expect(mgr.isLoaded('/missing.png')).toBe(true);
+
+    vi.unstubAllGlobals();
+  });
+
+  it('hasPendingLoads reflects in-flight fetches so the render loop keeps polling', async () => {
+    const device = makeMockDevice();
+    const mgr = new TextureManager(device as unknown as GPUDevice);
+    expect(mgr.hasPendingLoads()).toBe(false);
+
+    let resolveFetch: (value: unknown) => void = () => {};
+    vi.stubGlobal('fetch', () => new Promise((resolve) => { resolveFetch = resolve; }));
+
+    mgr.getTexture('/icon.png');
+    expect(mgr.hasPendingLoads()).toBe(true);
+
+    resolveFetch({ ok: false, status: 404 });
+    // Let the microtask queue flush the rejected/failed load path.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mgr.hasPendingLoads()).toBe(false);
 
     vi.unstubAllGlobals();
   });

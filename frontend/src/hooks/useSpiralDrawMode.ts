@@ -205,6 +205,7 @@ export function useSpiralDrawMode({
     editorState.addRoad(road);
     editorState.selectRoad(roadId);
     viewState.clearSplineKnots();
+    viewState.setEditMode('move-road');
   }, []);
 
   useEffect(() => {

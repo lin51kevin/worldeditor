@@ -152,6 +152,7 @@ export function useArcDrawMode({
     editorState.addRoad(road);
     editorState.selectRoad(roadId);
     useViewportStore.getState().clearSplineKnots();
+    useViewportStore.getState().setEditMode('move-road');
   }, []);
 
   useEffect(() => {

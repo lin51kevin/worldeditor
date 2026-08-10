@@ -119,6 +119,7 @@ export function useSplineOperations() {
       }
       editorState.selectRoad(roadId);
       viewState.clearSplineKnots();
+      viewState.setEditMode('move-road');
     } catch (err) {
       console.error('[Viewport] Failed to create road from spline:', err);
       // Clear knots so the user isn't stuck in draw mode on error

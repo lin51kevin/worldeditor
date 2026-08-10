@@ -103,6 +103,20 @@ export class TextureManager {
     return path ? `${this.manifest.basePath}/${path}` : null;
   }
 
+  /** All concrete texture URLs from the manifest (skips roadSigns' `_prefix`/`_suffix`/`_speedLimitBase` meta keys). */
+  getAllTextureUrls(): string[] {
+    if (!this.manifest) return [];
+    const { basePath, trafficLights, roadPaints, roadSigns, objects } = this.manifest;
+    const metaKeys = new Set(['_prefix', '_suffix', '_speedLimitBase']);
+    const paths = [
+      ...Object.values(trafficLights),
+      ...Object.values(roadPaints),
+      ...Object.entries(roadSigns).filter(([key]) => !metaKeys.has(key)).map(([, path]) => path),
+      ...Object.values(objects),
+    ];
+    return paths.map((path) => `${basePath}/${path}`);
+  }
+
   /** Get or load a texture by URL path. Returns placeholder while loading. */
   getTexture(url: string): GPUTexture {
     const cached = this.cache.get(url);
@@ -119,6 +133,11 @@ export class TextureManager {
   /** Check if a texture URL is fully loaded and available. */
   isLoaded(url: string): boolean {
     return this.cache.has(url);
+  }
+
+  /** True while any texture fetch/decode is in flight (keeps the render loop awake so icons pop in once loaded). */
+  hasPendingLoads(): boolean {
+    return this.loading.size > 0;
   }
 
   /** Preload a batch of texture URLs. Returns when all are loaded. */

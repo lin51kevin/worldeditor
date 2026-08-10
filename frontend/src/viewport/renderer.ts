@@ -1279,6 +1279,10 @@ export class ViewportRenderer {
         if (this.cameraController.isFlyMode && this.flyKeyboard.isAnyKeyPressed()) {
           return true;
         }
+        // Keep polling while icon/sign textures are still fetching so they pop in without user input.
+        if (this.textureManager?.hasPendingLoads()) {
+          return true;
+        }
         return this.sceneDirty || this.cameraController.isViewDirty;
       },
       onRender: () => {
@@ -1432,6 +1436,9 @@ export class ViewportRenderer {
       textureManager.loadManifest()
     ).then(() => {
       console.info('[Renderer] Texture manifest loaded');
+      // Warm the cache for every known icon so first-time placement doesn't
+      // stall on a cold fetch; runs in the background, not awaited here.
+      textureManager.preload(textureManager.getAllTextureUrls()).then(() => this.markSceneDirty());
     });
   }
 
