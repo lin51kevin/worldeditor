@@ -29,6 +29,7 @@ import {
   buildSignalFromConfig,
   buildRoadObjectFromConfig,
   buildSignFromConfig,
+  genId,
 } from './index';
 import type {
   RoadTemplateConfig,
@@ -82,24 +83,35 @@ function junctionConfigToItem(config: JunctionTemplateConfig): TemplateItemDef {
   };
 }
 
-// ── Signal / road-sign naming convention ─────────────────────────────────────
+// ── Element naming convention ────────────────────────────────────────────────
 //
 // Names follow the pattern: <PascalCaseKey>_<NNN> where:
-//   - PascalCaseKey is derived from the template id
+//   - PascalCaseKey is derived from the template id (kebab-case → PascalCase)
 //       e.g. 'tpl:sig:traffic-light'  → 'TrafficLight'
-//            'tpl:sig:arrow-straight' → 'ArrowStraight'
-//   - For numeric GB codes (road signs) a 'Sign_' prefix is added
-//       e.g. 'tpl:rsign:1010200100001914' → 'Sign_1010200100001914'
-//            'tpl:rsign:1010203800001413_30' → 'Sign_1010203800001413_30'
-//   - NNN is 1-based serial of signals already on the road, zero-padded to 3 digits
+//            'tpl:obj:crosswalk'      → 'Crosswalk'
+//            'tpl:sign:gantry'        → 'Gantry'
+//   - For GB 5768 road signs, a short category prefix replaces the full numeric code
+//       e.g. 'tpl:rsign:1010100111001111' → 'WarnSign'   (警告标志 10101…)
+//            'tpl:rsign:1010200100001914' → 'ProhibSign'  (禁令标志 10102…)
+//            'tpl:rsign:1010300100002413' → 'MandSign'    (指示标志 10103…)
+//            'tpl:rsign:1010400214132516' → 'SupplSign'   (辅助标志 10104…)
+//            'tpl:rsign:1010203800001413_30' → 'SpeedLimit30'
+//   - NNN is 1-based serial of existing elements in the same list, zero-padded to 3 digits
 
-function deriveSignalName(templateId: string, existingSignalCount: number): string {
-  const serial = String(existingSignalCount + 1).padStart(3, '0');
-  // Strip template type prefix
-  const key = templateId.replace(/^tpl:(?:sig|rsign):/, '');
+function deriveElementName(templateId: string, existingCount: number): string {
+  const serial = String(existingCount + 1).padStart(3, '0');
+  // Strip any template namespace prefix
+  const key = templateId.replace(/^tpl:(?:sig|rsign|sign|obj):/, '');
   if (/^\d/.test(key)) {
-    // Numeric code — GB road sign or speed-limit variant
-    return `Sign_${key}_${serial}`;
+    // Speed-limit variant: <code>_<speed> (e.g. 1010203800001413_30)
+    const speedMatch = key.match(/^\d+_(\d+)$/);
+    if (speedMatch) return `SpeedLimit${speedMatch[1]}_${serial}`;
+    // GB 5768 category from first 5 digits
+    if (key.startsWith('10101')) return `WarnSign_${serial}`;
+    if (key.startsWith('10102')) return `ProhibSign_${serial}`;
+    if (key.startsWith('10103')) return `MandSign_${serial}`;
+    if (key.startsWith('10104')) return `SupplSign_${serial}`;
+    return `Sign_${serial}`;
   }
   // Named key: kebab-case → PascalCase (e.g. 'arrow-straight' → 'ArrowStraight')
   const pascal = key.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
@@ -120,8 +132,8 @@ function signalConfigToItem(config: SignalTemplateConfig): TemplateItemDef {
       if (!targetRoadId) return;
       const road = store.project.roads.find((r) => r.id === targetRoadId);
       const signal = {
-        ...buildSignalFromConfig(config),
-        name: deriveSignalName(config.id, road?.signals?.length ?? 0),
+        ...buildSignalFromConfig(config, road?.signals?.map((s) => String(s.id)) ?? undefined),
+        name: deriveElementName(config.id, road?.signals?.length ?? 0),
         s: opts?.x ?? 0,
         t: opts?.y ?? 0,
       };
@@ -144,8 +156,8 @@ function roadSignConfigToItem(config: RoadSignTemplateConfig): TemplateItemDef {
       if (!targetRoadId) return;
       const road = store.project.roads.find((r) => r.id === targetRoadId);
       const signal = {
-        id: crypto.randomUUID(),
-        name: deriveSignalName(config.id, road?.signals?.length ?? 0),
+        id: genId(road?.signals?.map((s) => String(s.id)) ?? undefined),
+        name: deriveElementName(config.id, road?.signals?.length ?? 0),
         s: opts?.x ?? 0,
         t: opts?.y ?? 0,
         z_offset: 3.5,
@@ -258,15 +270,17 @@ function objectConfigToItem(config: RoadObjectTemplateConfig): TemplateItemDef {
     drawMode: config.drawMode,
     onApply: (opts) => {
       if (opts?.roadId === undefined) return;
+      const store = useProjectStore.getState();
+      const road = store.project.roads.find((r) => r.id === opts.roadId);
       const s = opts.x ?? 0;
       const t = opts.y ?? 0;
       const obj = buildRoadObjectFromConfig(config, s, t, opts.hdg ?? 0);
+      obj.name = deriveElementName(config.id, road?.objects?.length ?? 0);
       // If polygon corners were provided, attach them as Road-frame corners
       if (opts.corners && opts.corners.length >= 3) {
         obj.corners = opts.corners.map((c) => ({ x: c.x, y: c.y, z: c.z, id: null }));
         obj.corner_type = 'Road';
       }
-      const store = useProjectStore.getState();
       store.addRoadObjectItem(opts.roadId, obj);
     },
   };
@@ -282,10 +296,12 @@ function signConfigToItem(config: SignTemplateConfig): TemplateItemDef {
     thumbnailUrl: config.thumbnailUrl,
     onApply: (opts) => {
       if (opts?.roadId === undefined) return;
+      const store = useProjectStore.getState();
+      const road = store.project.roads.find((r) => r.id === opts.roadId);
       const s = opts.x ?? 0;
       const t = opts.y ?? 0;
       const obj = buildSignFromConfig(config, s, t, opts.hdg ?? 0);
-      const store = useProjectStore.getState();
+      obj.name = deriveElementName(config.id, road?.objects?.length ?? 0);
       store.addRoadObjectItem(opts.roadId, obj);
     },
   };
