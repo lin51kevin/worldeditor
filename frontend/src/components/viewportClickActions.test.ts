@@ -21,6 +21,7 @@ const mockViewportStore = vi.hoisted(() => ({
   pendingTemplateId: null as string | null,
   pendingObjectTemplateId: null as string | null,
   clearPendingTemplate: vi.fn(),
+  clearPendingObjectTemplate: vi.fn(),
   objectDrawTemplateId: null as string | null,
   objectDrawRoadId: null as string | null,
   objectDrawVertices: [] as any[],

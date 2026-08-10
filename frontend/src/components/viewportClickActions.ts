@@ -114,8 +114,6 @@ export async function handlePlaceObjectClick(
   const viewState = useViewportStore.getState();
   if (!viewState.pendingObjectTemplateId) return false;
   const templateId = viewState.pendingObjectTemplateId;
-  // Keep template selected for multi-placement (C# behaviour).
-  // User cancels via right-click or ESC.
   try {
     const service = await getPlatformService();
     const visibleProject = getVisibleProject();
@@ -205,9 +203,12 @@ export async function handlePlaceObjectClick(
             }
           }
           item.onApply({ roadId, x: s, y: t, hdg });
+          // One-shot: return to select mode; onApply already selects the new item.
+          useViewportStore.getState().clearPendingObjectTemplate();
         }
       } else {
         // No road found within pickup threshold — placement silently skipped.
+        // Keep the template pending so the user can retry the click.
       }
     }
   } catch (err) {
@@ -350,9 +351,10 @@ export function finalizeObjectDraw(): boolean {
       hdg: 0,
       corners,
     });
+    // One-shot: return to select mode; onApply already selects the new item.
+    viewState.clearPendingObjectTemplate();
   }
 
-  // Clear draw state but keep template pending for next drawing
   viewState.clearObjectDraw();
   return true;
 }

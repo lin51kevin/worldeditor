@@ -138,6 +138,7 @@ function signalConfigToItem(config: SignalTemplateConfig): TemplateItemDef {
         t: opts?.y ?? 0,
       };
       store.addRoadSignalItem(targetRoadId, signal);
+      store.selectSignal(targetRoadId, signal.id);
     },
   };
 }
@@ -174,6 +175,7 @@ function roadSignConfigToItem(config: RoadSignTemplateConfig): TemplateItemDef {
         validities: [] as Array<{ from_lane: number; to_lane: number }>,
       };
       store.addRoadSignalItem(targetRoadId, signal);
+      store.selectSignal(targetRoadId, signal.id);
     },
   };
 }
@@ -282,6 +284,7 @@ function objectConfigToItem(config: RoadObjectTemplateConfig): TemplateItemDef {
         obj.corner_type = 'Road';
       }
       store.addRoadObjectItem(opts.roadId, obj);
+      store.selectObject(opts.roadId, obj.id);
     },
   };
 }
@@ -303,6 +306,7 @@ function signConfigToItem(config: SignTemplateConfig): TemplateItemDef {
       const obj = buildSignFromConfig(config, s, t, opts.hdg ?? 0);
       obj.name = deriveElementName(config.id, road?.objects?.length ?? 0);
       store.addRoadObjectItem(opts.roadId, obj);
+      store.selectObject(opts.roadId, obj.id);
     },
   };
 }

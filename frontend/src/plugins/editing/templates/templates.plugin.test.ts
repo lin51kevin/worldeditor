@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
     selectRoad: vi.fn(),
     executePluginCommand: vi.fn(),
     selectJunction: vi.fn(),
+    selectSignal: vi.fn(),
+    selectObject: vi.fn(),
     addRoadSignalItem: vi.fn(),
     addRoadObjectItem: vi.fn(),
     setProject: vi.fn(),
@@ -145,6 +147,8 @@ describe('templates.plugin', () => {
     projectState.selectRoad = vi.fn();
     projectState.executePluginCommand = vi.fn();
     projectState.selectJunction = vi.fn();
+    projectState.selectSignal = vi.fn();
+    projectState.selectObject = vi.fn();
     projectState.addRoadSignalItem = vi.fn();
     projectState.addRoadObjectItem = vi.fn();
     projectState.setProject = vi.fn();

@@ -227,10 +227,11 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
       if (snapEl) snapEl.style.display = 'none';
     }
 
+    // move-road/rotate-road stay in the select-mode hover/click path (unlike
+    // adjust-edge/editLaneLine) so a different road/signal/object can be
+    // re-picked without leaving the mode first.
     const isInSelectMode =
       !isDrawMode(viewState.editMode) &&
-      viewState.editMode !== 'move-road' &&
-      viewState.editMode !== 'rotate-road' &&
       viewState.editMode !== 'adjust-edge' &&
       viewState.editMode !== 'editLaneLine' &&
       !viewState.geometryEditSpline &&
@@ -409,7 +410,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
     if (await handleSplitModeClick(worldPos)) {
       return;
     }
-    if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road' || viewState.editMode === 'adjust-edge' || viewState.editMode === 'editLaneLine') {
+    if (viewState.editMode === 'adjust-edge' || viewState.editMode === 'editLaneLine') {
       return;
     }
 
