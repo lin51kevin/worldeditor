@@ -11,9 +11,9 @@ import type {
 } from './schema';
 import { genId, markConfigToRoadMark } from './engine';
 
-export function buildSignalFromConfig(config: SignalTemplateConfig): RoadSignal {
+export function buildSignalFromConfig(config: SignalTemplateConfig, existingIds?: string[]): RoadSignal {
   return {
-    id: genId(),
+    id: genId(existingIds),
     name: '',
     s: 0,
     t: 0,

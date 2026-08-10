@@ -52,15 +52,20 @@ vi.mock('../../../stores/projectStore', () => ({
   },
 }));
 
-vi.mock('./index', () => ({
-  loadCatalog: mocks.loadCatalog,
-  buildRoadFromConfig: mocks.buildRoadFromConfig,
-  buildJunctionFromConfig: mocks.buildJunctionFromConfig,
-  buildSignalFromConfig: mocks.buildSignalFromConfig,
-  buildMarkFromConfig: mocks.buildMarkFromConfig,
-  buildRoadObjectFromConfig: mocks.buildRoadObjectFromConfig,
-  buildSignFromConfig: mocks.buildSignFromConfig,
-}));
+vi.mock('./index', () => {
+  // incremental genId mock to simulate unique numeric IDs in tests
+  let _mockGenSeq = 0;
+  return {
+    loadCatalog: mocks.loadCatalog,
+    buildRoadFromConfig: mocks.buildRoadFromConfig,
+    buildJunctionFromConfig: mocks.buildJunctionFromConfig,
+    buildSignalFromConfig: mocks.buildSignalFromConfig,
+    buildMarkFromConfig: mocks.buildMarkFromConfig,
+    buildRoadObjectFromConfig: mocks.buildRoadObjectFromConfig,
+    buildSignFromConfig: mocks.buildSignFromConfig,
+    genId: vi.fn(() => String(++_mockGenSeq)),
+  };
+});
 
 import { mountTemplatesPlugin } from './templates.plugin';
 
@@ -195,7 +200,7 @@ describe('templates.plugin', () => {
     expect(projectState.selectJunction).toHaveBeenCalledWith('junction-built');
 
     signalSection.items[0].onApply({ x: 3, y: 4 });
-    expect(buildSignalFromConfig).toHaveBeenCalledWith(mockCatalog.signals[0]);
+    expect(buildSignalFromConfig).toHaveBeenCalledWith(mockCatalog.signals[0], undefined);
     expect(projectState.addRoadSignalItem).toHaveBeenCalledWith(
       'road-1',
       expect.objectContaining({ id: 'signal-built', s: 3, t: 4 }),
@@ -203,15 +208,136 @@ describe('templates.plugin', () => {
 
     // Paint items create signals via the same mechanism as signal templates
     paintSection.items[0].onApply({ x: 5, y: 6 });
-    expect(buildSignalFromConfig).toHaveBeenCalledWith(mockCatalog.paints[0]);
+    expect(buildSignalFromConfig).toHaveBeenCalledWith(mockCatalog.paints[0], undefined);
     expect(projectState.addRoadSignalItem).toHaveBeenCalledTimes(2);
 
     objectSection.items[0].onApply({ roadId: 'road-1', x: 7, y: 8, hdg: 0.25 });
     expect(buildRoadObjectFromConfig).toHaveBeenCalledWith(mockCatalog.objects[0], 7, 8, 0.25);
-    expect(projectState.addRoadObjectItem).toHaveBeenCalledWith('road-1', builtObject);
+    expect(projectState.addRoadObjectItem).toHaveBeenCalledWith(
+      'road-1',
+      expect.objectContaining({ id: 'object-built', name: 'Test_001' }),
+    );
 
     signSection.items[0].onApply({ roadId: 'road-1', x: 9, y: 10, hdg: 0.75 });
     expect(buildSignFromConfig).toHaveBeenCalledWith(mockCatalog.signs[0], 9, 10, 0.75);
-    expect(projectState.addRoadObjectItem).toHaveBeenCalledWith('road-1', builtSign);
+    expect(projectState.addRoadObjectItem).toHaveBeenCalledWith(
+      'road-1',
+      expect.objectContaining({ id: 'sign-built', name: 'Test_001' }),
+    );
+  });
+
+  describe('element naming', () => {
+    it('derives PascalCase names from signal template ids', () => {
+      const catalog = {
+        ...mockCatalog,
+        signals: [
+          { id: 'tpl:sig:traffic-light', labelKey: 'l', icon: '', signalType: '1000001' },
+          { id: 'tpl:sig:arrow-straight', labelKey: 'l', icon: '', signalType: 'Graphics', signalSubtype: 'straight' },
+        ],
+      };
+      loadCatalog.mockReturnValue(catalog);
+      buildSignalFromConfig.mockReturnValue({ id: 'sig', name: '', s: 0, t: 0 });
+
+      mountTemplatesPlugin();
+      const [, , signalSection] = getRegisteredSections();
+
+      signalSection.items[0].onApply({ x: 0, y: 0 });
+      expect(projectState.addRoadSignalItem).toHaveBeenCalledWith(
+        'road-1',
+        expect.objectContaining({ name: 'TrafficLight_001' }),
+      );
+
+      projectState.addRoadSignalItem.mockClear();
+      signalSection.items[1].onApply({ x: 0, y: 0 });
+      expect(projectState.addRoadSignalItem).toHaveBeenCalledWith(
+        'road-1',
+        expect.objectContaining({ name: 'ArrowStraight_001' }),
+      );
+    });
+
+    it('derives short category names for GB 5768 road signs', () => {
+      const catalog = {
+        ...mockCatalog,
+        roadSigns: [
+          { id: 'tpl:rsign:1010100111001111', labelKey: 'l', icon: '', signCode: '1010100111001111', signalType: '1010100111001111', subcategory: 'warning', defaultWidth: 0.8, defaultHeight: 0.8 },
+          { id: 'tpl:rsign:1010200100001914', labelKey: 'l', icon: '', signCode: '1010200100001914', signalType: '1010200100001914', subcategory: 'prohibitory', defaultWidth: 0.8, defaultHeight: 0.8 },
+          { id: 'tpl:rsign:1010300100002413', labelKey: 'l', icon: '', signCode: '1010300100002413', signalType: '1010300100002413', subcategory: 'mandatory', defaultWidth: 0.8, defaultHeight: 0.8 },
+          { id: 'tpl:rsign:1010400214132516', labelKey: 'l', icon: '', signCode: '1010400214132516', signalType: '1010400214132516', subcategory: 'supplementary', defaultWidth: 0.8, defaultHeight: 0.8 },
+          { id: 'tpl:rsign:1010203800001413_30', labelKey: 'l', icon: '', signCode: '1010203800001413_30', signalType: '1010203800001413', subcategory: 'prohibitory', defaultWidth: 0.8, defaultHeight: 0.8 },
+        ],
+      };
+      loadCatalog.mockReturnValue(catalog);
+
+      mountTemplatesPlugin();
+      // Road sign sections start after index 5 (roads/junctions/signals/paints/objects/signs)
+      const sections = getRegisteredSections();
+      const warnSection = sections.find((s) => s.id === 'builtin-templates:roadSigns:warning')!;
+      const prohibSection = sections.find((s) => s.id === 'builtin-templates:roadSigns:prohibitory')!;
+      const mandSection = sections.find((s) => s.id === 'builtin-templates:roadSigns:mandatory')!;
+      const supplSection = sections.find((s) => s.id === 'builtin-templates:roadSigns:supplementary')!;
+
+      const cases = [
+        [warnSection.items[0], 'WarnSign_001'],
+        [prohibSection.items[0], 'ProhibSign_001'],
+        [mandSection.items[0], 'MandSign_001'],
+        [supplSection.items[0], 'SupplSign_001'],
+        [prohibSection.items[1], 'SpeedLimit30_001'],
+      ] as const;
+
+      for (const [item, expectedName] of cases) {
+        projectState.addRoadSignalItem.mockClear();
+        item.onApply({ roadId: 'road-1', x: 0, y: 0 });
+        expect(projectState.addRoadSignalItem).toHaveBeenCalledWith(
+          'road-1',
+          expect.objectContaining({ name: expectedName }),
+        );
+      }
+    });
+
+    it('derives PascalCase names for road objects and sign poles', () => {
+      const catalog = {
+        ...mockCatalog,
+        objects: [{ id: 'tpl:obj:crosswalk', labelKey: 'l', icon: '', objectType: 'Crosswalk' }],
+        signs: [{ id: 'tpl:sign:gantry', labelKey: 'l', icon: '', objectType: 'SignGantry', defaultWidth: 8.0, defaultHeight: 6.0 }],
+      };
+      loadCatalog.mockReturnValue(catalog);
+      buildRoadObjectFromConfig.mockReturnValue({ id: 'obj-1', name: '' });
+      buildSignFromConfig.mockReturnValue({ id: 'sign-1', name: '' });
+
+      mountTemplatesPlugin();
+      const [, , , , objectSection, signSection] = getRegisteredSections();
+
+      objectSection.items[0].onApply({ roadId: 'road-1', x: 0, y: 0, hdg: 0 });
+      expect(projectState.addRoadObjectItem).toHaveBeenCalledWith(
+        'road-1',
+        expect.objectContaining({ name: 'Crosswalk_001' }),
+      );
+
+      projectState.addRoadObjectItem.mockClear();
+      signSection.items[0].onApply({ roadId: 'road-1', x: 0, y: 0, hdg: 0 });
+      expect(projectState.addRoadObjectItem).toHaveBeenCalledWith(
+        'road-1',
+        expect.objectContaining({ name: 'Gantry_001' }),
+      );
+    });
+
+    it('increments serial based on existing element count', () => {
+      loadCatalog.mockReturnValue(mockCatalog);
+      buildSignalFromConfig.mockReturnValue({ id: 'sig', name: '', s: 0, t: 0 });
+      // Project road already has 2 signals
+      projectState.project = {
+        ...makeProjectForMarking(),
+        roads: [{ id: 'road-1', signals: [{ id: 's1' }, { id: 's2' }] }],
+      };
+
+      mountTemplatesPlugin();
+      const [, , signalSection] = getRegisteredSections();
+
+      signalSection.items[0].onApply({ x: 0, y: 0 });
+      expect(projectState.addRoadSignalItem).toHaveBeenCalledWith(
+        'road-1',
+        expect.objectContaining({ name: 'Test_003' }),
+      );
+    });
   });
 });
