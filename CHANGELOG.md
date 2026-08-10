@@ -5,6 +5,26 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ---
 
+<a name="0.4.3"></a>
+## [0.4.3] — 2026-08-10
+
+### Features
+
+- point cloud full-path hover tooltip + trajectory info popup ([`2f70d0a`])
+- **inspector**: editable transform fields for signals and objects ([`afc9ffe`])
+- **objects**: C#-parity road object types, geometry and palette ([`8b9f956`])
+- **templates**: add C#-parity object and sign templates ([`e6eeeb5`])
+- **viewport**: drag placed objects directly, not just signals ([`00e47b7`])
+
+### Fixes
+
+- **objects**: keep drawn outlines in sync when moving or rotating objects ([`78e9441`])
+- **opendrive**: tolerate blank numeric attributes in header parsing ([`0337313`])
+- **templates**: unify template element naming; use genId(existingIds) for safe numeric IDs; auto-name objects/signs; update tests ([`19be0c8`])
+- **trajectory**: lower playback bar to avoid covering the status bar ([`e517886`])
+
+---
+
 <a name="0.4.2"></a>
 ## [0.4.2] — 2026-08-06
 
@@ -651,3 +671,12 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 [`affc02d`]: https://github.com/lin51kevin/worldeditor/commit/affc02d
 [`0f86c6d`]: https://github.com/lin51kevin/worldeditor/commit/0f86c6d
 [`ea2322f`]: https://github.com/lin51kevin/worldeditor/commit/ea2322f
+[`2f70d0a`]: https://github.com/lin51kevin/worldeditor/commit/2f70d0a
+[`afc9ffe`]: https://github.com/lin51kevin/worldeditor/commit/afc9ffe
+[`8b9f956`]: https://github.com/lin51kevin/worldeditor/commit/8b9f956
+[`e6eeeb5`]: https://github.com/lin51kevin/worldeditor/commit/e6eeeb5
+[`00e47b7`]: https://github.com/lin51kevin/worldeditor/commit/00e47b7
+[`78e9441`]: https://github.com/lin51kevin/worldeditor/commit/78e9441
+[`0337313`]: https://github.com/lin51kevin/worldeditor/commit/0337313
+[`19be0c8`]: https://github.com/lin51kevin/worldeditor/commit/19be0c8
+[`e517886`]: https://github.com/lin51kevin/worldeditor/commit/e517886

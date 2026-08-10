@@ -6,7 +6,7 @@
 
 WorldEditor Next is an autonomous driving road network editor that supports creating, editing, and exporting OpenDRIVE-format HD maps. It runs as a native desktop application (Tauri 2.0) and in web browsers (WebAssembly / WebGPU).
 
-**Current Version**: 0.4.2 (Phase 2 — Point Cloud, 3D Gaussian Splatting, Trajectory Playback & Collaboration)
+**Current Version**: 0.4.3 (Phase 2 — Point Cloud, 3D Gaussian Splatting, Trajectory Playback & Collaboration)
 
 ### System Requirements
 
