@@ -190,27 +190,29 @@ export function PropertyPanel() {
                 </div>
                 <div className="property-row">
                   <span className="property-label">{t('propertyPanel.speed')}</span>
-                  <input
-                    className="property-input property-input-narrow"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={selectedRoad.speed ?? ''}
-                    placeholder="—"
-                    aria-label={t('propertyPanel.speed')}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      if (raw === '') {
-                        useProjectStore.getState().updateRoad(selectedRoad.id, { speed: undefined });
-                        return;
-                      }
-                      const value = parseFloat(raw);
-                      if (!Number.isNaN(value) && value >= 0) {
-                        useProjectStore.getState().updateRoad(selectedRoad.id, { speed: value });
-                      }
-                    }}
-                  />
-                  <span className="property-unit">m/s</span>
+                  <div className="property-value-group">
+                    <input
+                      className="property-input property-input-narrow"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={selectedRoad.speed ?? ''}
+                      placeholder="—"
+                      aria-label={t('propertyPanel.speed')}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === '') {
+                          useProjectStore.getState().updateRoad(selectedRoad.id, { speed: undefined });
+                          return;
+                        }
+                        const value = parseFloat(raw);
+                        if (!Number.isNaN(value) && value >= 0) {
+                          useProjectStore.getState().updateRoad(selectedRoad.id, { speed: value });
+                        }
+                      }}
+                    />
+                    <span className="property-unit">m/s</span>
+                  </div>
                 </div>
               </CardSection>
 

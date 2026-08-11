@@ -188,9 +188,8 @@
 }
 
 .property-input-narrow {
-  width: 56px;
-  min-width: 56px;
-  margin-left: 0;
+  width: 64px;
+  min-width: 64px;
 }
 
 .property-select {
@@ -213,6 +212,16 @@
   font-size: 11px;
   color: var(--color-text-muted);
   margin-left: 2px;
+}
+
+/* Groups a value input with its trailing unit so `.property-row`'s
+   space-between only ever splits the row into [label, this group] — keeping
+   the input and unit snug together instead of spread apart. */
+.property-value-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .property-hint {

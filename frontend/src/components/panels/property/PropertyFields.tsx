@@ -99,21 +99,23 @@ export const NumberField = memo(function NumberField({
   return (
     <div className="property-row">
       <span className="property-label">{label}</span>
-      <input
-        className="property-input property-input-narrow"
-        type="number"
-        aria-label={label}
-        title={title}
-        step={step}
-        min={min}
-        disabled={disabled}
-        value={Number(value.toFixed(3))}
-        onChange={(event) => {
-          const next = Number(event.target.value);
-          if (!Number.isNaN(next)) onChange(min === undefined ? next : Math.max(min, next));
-        }}
-      />
-      <span className="property-unit">{unit}</span>
+      <div className="property-value-group">
+        <input
+          className="property-input property-input-narrow"
+          type="number"
+          aria-label={label}
+          title={title}
+          step={step}
+          min={min}
+          disabled={disabled}
+          value={Number(value.toFixed(3))}
+          onChange={(event) => {
+            const next = Number(event.target.value);
+            if (!Number.isNaN(next)) onChange(min === undefined ? next : Math.max(min, next));
+          }}
+        />
+        <span className="property-unit">{unit}</span>
+      </div>
     </div>
   );
 });

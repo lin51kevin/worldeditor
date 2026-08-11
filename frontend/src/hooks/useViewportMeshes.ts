@@ -408,6 +408,12 @@ export function useViewportMeshes({
             renderer.uploadSpriteData(spriteInstances);
           }
         }
+      } else if (spriteData && display.showSignals) {
+        // Recomputed this frame (spriteData non-null) but there are no signals left
+        // (e.g. all signals were removed along with their road) — drop the stale cache
+        // instead of falling through to the "re-upload cached" branch below.
+        cachedSpriteInstancesRef.current = [];
+        renderer.uploadSpriteData([]);
       } else if (display.showSignals && cachedSpriteInstancesRef.current.length > 0) {
         // Re-upload cached sprite billboards when signals are toggled back on
         renderer.uploadSpriteData(cachedSpriteInstancesRef.current);
