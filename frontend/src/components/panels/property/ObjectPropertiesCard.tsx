@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../../stores/projectStore';
 import type { Road, RoadObjectItem } from '../../../services/platform';
 import { hasCornerFootprint, moveRoadObjectTo, rotateRoadObjectTo } from '../../../utils/roadObjectTransform';
+import { showConfirm } from '../../../utils/dialog';
 import {
   NumberField,
   ReadOnlyField,
@@ -42,6 +43,13 @@ export const ObjectPropertiesCard = memo(function ObjectPropertiesCard({
 
   const update = (updates: Partial<RoadObjectItem>) =>
     useProjectStore.getState().updateObject(object.id, updates);
+
+  const handleDelete = async () => {
+    const confirmed = await showConfirm(t('dialog.confirmDeleteObject'));
+    if (confirmed) {
+      useProjectStore.getState().removeObject(object.id);
+    }
+  };
 
   return (
     <>
@@ -124,7 +132,7 @@ export const ObjectPropertiesCard = memo(function ObjectPropertiesCard({
       <div className="property-row">
         <button
           className="property-btn property-btn-danger"
-          onClick={() => useProjectStore.getState().removeObject(object.id)}
+          onClick={() => { void handleDelete(); }}
         >
           {t('propertyPanel.deleteObject')}
         </button>

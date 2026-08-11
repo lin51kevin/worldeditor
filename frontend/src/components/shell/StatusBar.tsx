@@ -18,6 +18,9 @@ const SCALE_BAR_PX = 100;
 export function StatusBar() {
   const viewportMpp = useProjectStore((s) => s.viewportMpp);
   const selectedRoadId = useProjectStore((s) => s.selectedRoadId);
+  const selectedJunctionId = useProjectStore((s) => s.selectedJunctionId);
+  const selectedRoadIds = useProjectStore((s) => s.selectedRoadIds);
+  const selectedJunctionIds = useProjectStore((s) => s.selectedJunctionIds);
   const selectedLaneSectionIndex = useProjectStore((s) => s.selectedLaneSectionIndex);
   const selectedLaneId = useProjectStore((s) => s.selectedLaneId);
   const { t } = useTranslation();
@@ -34,13 +37,20 @@ export function StatusBar() {
 
   const scaleDist = useMemo(() => SCALE_BAR_PX * viewportMpp, [viewportMpp]);
 
-  const selectionLabel = !selectedRoadId
-    ? t('statusBar.selectionLevels.none')
-    : selectedLaneId !== null
-      ? t('statusBar.selectionLevels.lane', { laneId: selectedLaneId })
-      : selectedLaneSectionIndex !== null
-        ? t('statusBar.selectionLevels.laneSection', { sectionIndex: selectedLaneSectionIndex + 1 })
-        : t('statusBar.selectionLevels.road', { roadId: selectedRoadId });
+  const multiSelectCount = selectedRoadIds.length + selectedJunctionIds.length;
+
+  const selectionLabel =
+    multiSelectCount > 1
+      ? t('statusBar.selectionLevels.multiple', { count: multiSelectCount })
+      : !selectedRoadId
+        ? selectedJunctionId
+          ? t('statusBar.selectionLevels.junction', { junctionId: selectedJunctionId })
+          : t('statusBar.selectionLevels.none')
+        : selectedLaneId !== null
+          ? t('statusBar.selectionLevels.lane', { laneId: selectedLaneId })
+          : selectedLaneSectionIndex !== null
+            ? t('statusBar.selectionLevels.laneSection', { sectionIndex: selectedLaneSectionIndex + 1 })
+            : t('statusBar.selectionLevels.road', { roadId: selectedRoadId });
 
   return (
     <div className="statusbar">

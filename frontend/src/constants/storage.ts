@@ -23,6 +23,9 @@ export const STORAGE_KEYS = {
   DISPLAY_SETTINGS: 'we-display-settings',
   USER_PREFERENCES: 'we-user-prefs',
 
+  // Autosave
+  AUTOSAVE_DRAFT: 'we-autosave-draft',
+
   // Events (read-only, not stored)
   LOG_EVENT: 'we-log',
 } as const;

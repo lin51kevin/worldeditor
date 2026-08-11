@@ -54,6 +54,13 @@ vi.mock('../stores/pluginContribStore', () => ({
   usePluginContribStore: { getState: () => mockPluginContribStore },
 }));
 
+const mockToast = vi.hoisted(() => ({
+  toastInfo: vi.fn(),
+  toastError: vi.fn(),
+}));
+
+vi.mock('../utils/toast', () => mockToast);
+
 import {
   handleMeasureClick,
   handleEditJunctionClick,
@@ -242,6 +249,22 @@ describe('handlePlaceObjectClick', () => {
     await handlePlaceObjectClick({ x: 1, y: 1 }, () => project as any);
     expect(onApply).toHaveBeenCalledWith({ roadId: 'R2', x: 10, y: 3, hdg: 0 });
   });
+
+  it('shows an info toast when no road is found near the click', async () => {
+    mockViewportStore.pendingObjectTemplateId = 'obj-tpl';
+    mockPluginContribStore.templateSections = [{ items: [{ id: 'obj-tpl', onApply: vi.fn() }] }];
+    const project = { roads: [], junctions: [] };
+    mockService.pickRoadAtPointCached.mockResolvedValue(null);
+    await handlePlaceObjectClick({ x: 1, y: 1 }, () => project as any);
+    expect(mockToast.toastInfo).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows an error toast when placement throws', async () => {
+    mockViewportStore.pendingObjectTemplateId = 'obj-tpl';
+    mockService.pickRoadAtPointCached.mockRejectedValue(new Error('boom'));
+    await handlePlaceObjectClick({ x: 1, y: 1 }, () => ({ roads: [], junctions: [] } as any));
+    expect(mockToast.toastError).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('handleObjectDrawClick', () => {
@@ -285,6 +308,17 @@ describe('handleObjectDrawClick', () => {
     const result = await handleObjectDrawClick({ x: 5, y: 6 }, () => project as any);
     expect(result).toBe(true);
     expect(mockViewportStore.appendObjectDrawVertex).toHaveBeenCalled();
+  });
+
+  it('shows an info toast when no road is nearby on first click', async () => {
+    mockViewportStore.pendingObjectTemplateId = 'draw-tpl';
+    mockPluginContribStore.templateSections = [
+      { items: [{ id: 'draw-tpl', drawMode: 'polygon', onApply: vi.fn() }] },
+    ];
+    mockService.pickRoadAtPointCached.mockResolvedValue(null);
+    const result = await handleObjectDrawClick({ x: 1, y: 1 }, () => ({ roads: [], junctions: [] } as any));
+    expect(result).toBe(true);
+    expect(mockToast.toastInfo).toHaveBeenCalledTimes(1);
   });
 });
 

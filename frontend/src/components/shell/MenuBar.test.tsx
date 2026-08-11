@@ -7,6 +7,7 @@ import { usePluginContribStore } from '../../stores/pluginContribStore';
 import { getPlatformService } from '../../services';
 import { emitViewportEvent } from '../../viewport/viewportEvents';
 import { showAlert, showConfirm, showPrompt } from '../../utils/dialog';
+import { toastSuccess } from '../../utils/toast';
 import { MenuBar } from './MenuBar';
 
 vi.mock('../../utils/platformDetect', () => ({
@@ -26,6 +27,12 @@ vi.mock('../../utils/dialog', () => ({
   showAlert: vi.fn().mockResolvedValue(undefined),
   showConfirm: vi.fn().mockResolvedValue(true),
   showPrompt: vi.fn().mockResolvedValue('renamed.xodr'),
+}));
+
+vi.mock('../../utils/toast', () => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+  toastInfo: vi.fn(),
 }));
 
 const { TEST_BUILD_INFO } = vi.hoisted(() => ({
@@ -331,6 +338,19 @@ describe('MenuBar', () => {
     expect(screen.getByTitle(/另存为/)).toBeInTheDocument();
   });
 
+  it('quick-action icon buttons expose aria-label matching their title for screen readers', () => {
+    render(<MenuBar />);
+
+    const saveAsButton = screen.getByTitle(/另存为/);
+    expect(saveAsButton).toHaveAttribute('aria-label', saveAsButton.getAttribute('title'));
+
+    const undoButton = screen.getByTitle(/撤销/);
+    expect(undoButton).toHaveAttribute('aria-label', undoButton.getAttribute('title'));
+
+    const gridButton = screen.getByTitle(/网格/);
+    expect(gridButton).toHaveAttribute('aria-label', gridButton.getAttribute('title'));
+  });
+
   it('opens recent files directly by stored path', async () => {
     const platform = createPlatformMock();
     platform.openFileByPath.mockResolvedValue({ name: 'recent.xodr', content: '<OpenDRIVE />' });
@@ -419,6 +439,7 @@ describe('MenuBar', () => {
     await waitFor(() => expect(platform.writeOpenDrive).toHaveBeenCalled());
     await waitFor(() => expect(platform.saveFile).toHaveBeenCalledWith('SaveTarget', '<OpenDRIVE />'));
     await waitFor(() => expect(useProjectStore.getState().isDirty).toBe(false));
+    expect(toastSuccess).toHaveBeenCalled();
 
     act(() => {
       useProjectStore.setState({ project: makeProject([], 'SaveTarget'), isDirty: true });
@@ -429,6 +450,7 @@ describe('MenuBar', () => {
     dispatchWindowKey({ key: 's', ctrlKey: true, shiftKey: true });
     await waitFor(() => expect(platform.saveFile).toHaveBeenCalledWith('SaveTarget', '<OpenDRIVE />'));
     await waitFor(() => expect(useProjectStore.getState().project.name).toBe('renamed.xodr'));
+    expect(toastSuccess).toHaveBeenCalledTimes(2);
 
     act(() => {
       useProjectStore.setState({

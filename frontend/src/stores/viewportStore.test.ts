@@ -483,6 +483,22 @@ describe('viewportStore', () => {
       });
       expect(useViewportStore.getState().cursorPreviewPos).toBeNull();
     });
+
+    it('setAngleSnapActive toggles the angle-snap flag', () => {
+      expect(useViewportStore.getState().isAngleSnapActive).toBe(false);
+      act(() => { useViewportStore.getState().setAngleSnapActive(true); });
+      expect(useViewportStore.getState().isAngleSnapActive).toBe(true);
+      act(() => { useViewportStore.getState().setAngleSnapActive(false); });
+      expect(useViewportStore.getState().isAngleSnapActive).toBe(false);
+    });
+
+    it('clearSplineKnots resets isAngleSnapActive', () => {
+      act(() => {
+        useViewportStore.getState().setAngleSnapActive(true);
+        useViewportStore.getState().clearSplineKnots();
+      });
+      expect(useViewportStore.getState().isAngleSnapActive).toBe(false);
+    });
   });
 
   describe('tangent overrides', () => {

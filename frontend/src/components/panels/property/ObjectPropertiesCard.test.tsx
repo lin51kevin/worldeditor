@@ -1,8 +1,13 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LaneSection, Project, Road, RoadObjectItem } from '../../../services/platform';
 import { useProjectStore } from '../../../stores/projectStore';
+import { showConfirm } from '../../../utils/dialog';
 import { ObjectPropertiesCard } from './ObjectPropertiesCard';
+
+vi.mock('../../../utils/dialog', () => ({
+  showConfirm: vi.fn().mockResolvedValue(true),
+}));
 
 function makeSection(): LaneSection {
   const width = [{ s_offset: 0, a: 3.5, b: 0, c: 0, d: 0 }];
@@ -128,11 +133,23 @@ describe('ObjectPropertiesCard', () => {
     expect(currentObject().name).toBe('crossing');
   });
 
-  it('deletes the object', () => {
+  it('deletes the object after confirmation', async () => {
+    vi.mocked(showConfirm).mockResolvedValueOnce(true);
     renderCard();
     fireEvent.click(screen.getByText('删除物体'));
 
-    expect(useProjectStore.getState().project.roads[0]!.objects).toHaveLength(0);
+    await waitFor(() =>
+      expect(useProjectStore.getState().project.roads[0]!.objects).toHaveLength(0),
+    );
+  });
+
+  it('keeps the object when deletion is declined', async () => {
+    vi.mocked(showConfirm).mockResolvedValueOnce(false);
+    renderCard();
+    fireEvent.click(screen.getByText('删除物体'));
+
+    await waitFor(() => expect(showConfirm).toHaveBeenCalled());
+    expect(useProjectStore.getState().project.roads[0]!.objects).toHaveLength(1);
   });
 
   it('keeps size inputs editable when there is no drawn outline', () => {

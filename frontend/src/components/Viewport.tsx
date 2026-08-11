@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ViewportRenderer } from '../viewport/renderer';
 import { useProjectStore } from '../stores/projectStore';
+import { useViewportStore } from '../stores/viewportStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import { useViewportDrop } from '../hooks/useViewportDrop';
 import { ViewportLoadingOverlay } from './ViewportLoadingOverlay';
@@ -43,6 +44,7 @@ export function Viewport() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
   const { isDragOver, isFileDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useViewportDrop(rendererRef, canvasRef);
   const { t } = useTranslation();
+  const isAngleSnapActive = useViewportStore((s) => s.isAngleSnapActive);
   const mouseGestureRef = useRef<MouseGestureState | null>(null);
   const isPreviewingRoadRef = useRef(false);
   const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
@@ -231,6 +233,10 @@ export function Viewport() {
       {/* Snap indicator: shown when cursor snaps to a nearby point */}
       <div ref={snapIndicatorDomRef} className="snap-indicator" style={{ display: 'none' }} />
       <div ref={splitIndicatorDomRef} className="split-indicator" style={{ display: 'none' }} />
+      {/* Angle-snap badge: shown while Shift-snapping a draw segment to 15° increments */}
+      {isAngleSnapActive && (
+        <div className="angle-snap-badge">{t('viewport.angleSnapActive')}</div>
+      )}
       {status !== 'ready' && (
         <div className="viewport-overlay">
           <span className="viewport-label">

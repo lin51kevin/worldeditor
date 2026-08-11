@@ -18,6 +18,7 @@ import { SelectionDetailsPanel } from './components/panels/SelectionDetailsPanel
 import { PluginPanels } from './components/layout/PluginPanel';
 import { PluginRootWidgets } from './components/layout/PluginRootWidgets';
 import { DialogHost } from './components/common/Dialog';
+import { ToastHost } from './components/common/Toast';
 import { TextContextMenu } from './components/common/TextContextMenu';
 import { WelcomePage } from './components/shell/WelcomePage';
 import { ShortcutHelpOverlay } from './components/dialogs/ShortcutHelpOverlay';
@@ -47,10 +48,13 @@ import { BUILTIN_PLUGINS } from './plugins/builtinRegistry';
 import { bootstrapExternalPlugins } from './plugins/core/externalBootstrap';
 import { getPlatformService } from './services';
 import { useLoadingProgressStore } from './stores/loadingProgressStore';
-import { showAlert } from './utils/dialog';
+import { showAlert, showConfirm } from './utils/dialog';
+import { toastError } from './utils/toast';
 import { emitViewportEvent } from './viewport/viewportEvents';
 import { STORAGE_KEYS } from './constants/storage';
 import { useFileLoader } from './hooks/useFileLoader';
+import { useAutosave } from './hooks/useAutosave';
+import { loadDraft, clearDraft } from './utils/autosave';
 
 const STARTUP_WELCOME_KEY = STORAGE_KEYS.SHOW_WELCOME_ON_STARTUP;
 
@@ -98,6 +102,28 @@ export function App() {
 
   const disabledBuiltins = useBuiltinPluginStore((s) => s.disabledBuiltins);
   const templatePluginEnabled = !disabledBuiltins.includes('builtin-templates');
+
+  useAutosave();
+
+  // On startup, offer to restore an unsaved autosave draft left behind by a
+  // crash or accidental close. Runs once; the draft is cleared either way.
+  useEffect(() => {
+    const draft = loadDraft();
+    if (!draft) return;
+    void (async () => {
+      const savedAt = new Date(draft.savedAt).toLocaleString();
+      const restore = await showConfirm(
+        t('dialog.confirmRestoreDraft', { defaultValue: `Restore unsaved changes from ${savedAt}?`, savedAt }),
+      );
+      if (restore) {
+        useProjectStore.getState().setProject(draft.project);
+        useProjectStore.getState().markDirty();
+        setIsEditorOpen(true);
+      }
+      clearDraft();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Minimum y a top-anchored floating panel may be dragged to — keeps its title bar
   // below the fixed menubar/toolbar (which sit at a higher z-index and would hide it).
@@ -160,12 +186,13 @@ export function App() {
           return p.mount();
         } catch (err) {
           console.error(`[Plugin] Failed to mount "${p.id}":`, err);
+          toastError(t('toast.pluginMountFailed', { name: p.id }));
           return () => {};
         }
       });
     flush(); // batch-register all panels in one state update
     return () => cleanups.forEach((fn) => fn());
-  }, [disabledBuiltins]);
+  }, [disabledBuiltins, t]);
 
   // Discover and load external filesystem plugins (Tauri desktop only; no-op on web).
   useEffect(() => {
@@ -516,6 +543,8 @@ export function App() {
     )}
     {/* Themed dialog host — always mounted so dialogs show on WelcomePage too */}
     <DialogHost />
+    {/* Toast notification host — transient success/error/info feedback */}
+    <ToastHost />
     {/* Custom text context menu (Cut/Copy/Paste/SelectAll) for inputs and selected text */}
     <TextContextMenu />
     </ErrorBoundary>

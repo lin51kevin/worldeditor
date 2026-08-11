@@ -143,6 +143,7 @@
   --z-overlay: 200;
   --z-modal: 300;
   --z-command-palette: 400;
+  --z-toast: 500;
 }
 
 [data-theme="light"] {

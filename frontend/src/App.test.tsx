@@ -1,13 +1,27 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import type { Project, Road } from './services/platform';
 import { useProjectStore } from './stores/projectStore';
 import { usePluginContribStore } from './stores/pluginContribStore';
 import { onViewportEvent } from './viewport/viewportEvents';
+import { showConfirm } from './utils/dialog';
 
 vi.mock('./components/dialogs/PluginManager', () => ({
   PluginManager: () => null,
+}));
+
+const mockAutosave = vi.hoisted(() => ({
+  loadDraft: vi.fn(() => null as { project: Project; savedAt: string } | null),
+  clearDraft: vi.fn(),
+}));
+
+vi.mock('./utils/autosave', () => mockAutosave);
+
+vi.mock('./utils/dialog', () => ({
+  showAlert: vi.fn().mockResolvedValue(undefined),
+  showConfirm: vi.fn().mockResolvedValue(false),
+  showPrompt: vi.fn().mockResolvedValue(null),
 }));
 
 function makeProject(name: string): Project {
@@ -48,6 +62,9 @@ describe('App', () => {
   beforeEach(() => {
     // jsdom doesn't implement scrollIntoView; mock it
     Element.prototype.scrollIntoView = vi.fn();
+    vi.mocked(mockAutosave.loadDraft).mockReturnValue(null);
+    vi.mocked(mockAutosave.clearDraft).mockClear();
+    vi.mocked(showConfirm).mockReset().mockResolvedValue(false);
     act(() => {
       useProjectStore.setState({
         project: makeProject('Current'),
@@ -157,5 +174,35 @@ describe('App', () => {
     fireEvent.keyDown(window, { key: '?' });
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(document.querySelector('.shortcut-help-overlay')).toBeNull();
+  });
+
+  it('does nothing on startup when there is no autosave draft', () => {
+    render(<App />);
+    expect(showConfirm).not.toHaveBeenCalled();
+  });
+
+  it('prompts to restore an autosave draft and applies it when confirmed', async () => {
+    const draftProject = makeProject('RecoveredProject');
+    mockAutosave.loadDraft.mockReturnValue({ project: draftProject, savedAt: '2026-01-01T00:00:00.000Z' });
+    vi.mocked(showConfirm).mockResolvedValue(true);
+
+    render(<App />);
+
+    await waitFor(() => expect(showConfirm).toHaveBeenCalled());
+    await waitFor(() => expect(useProjectStore.getState().project.name).toBe('RecoveredProject'));
+    expect(useProjectStore.getState().isDirty).toBe(true);
+    expect(mockAutosave.clearDraft).toHaveBeenCalled();
+  });
+
+  it('discards the autosave draft when the user declines to restore it', async () => {
+    const draftProject = makeProject('RecoveredProject');
+    mockAutosave.loadDraft.mockReturnValue({ project: draftProject, savedAt: '2026-01-01T00:00:00.000Z' });
+    vi.mocked(showConfirm).mockResolvedValue(false);
+
+    render(<App />);
+
+    await waitFor(() => expect(showConfirm).toHaveBeenCalled());
+    await waitFor(() => expect(mockAutosave.clearDraft).toHaveBeenCalled());
+    expect(useProjectStore.getState().project.name).toBe('Current');
   });
 });

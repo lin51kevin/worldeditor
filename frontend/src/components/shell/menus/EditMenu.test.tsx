@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useProjectStore } from '../../../stores/projectStore';
 import { showConfirm } from '../../../utils/dialog';
 import { EditMenu } from './EditMenu';
 
@@ -29,9 +30,12 @@ const t = (key: string) => ({
   'menu.undo': 'Undo',
   'menu.redo': 'Redo',
   'menu.deleteSelected': 'Delete Selected',
-  'menu.cut': 'Cut',
+  'menu.selectAll': 'Select All',
   'menu.copy': 'Copy',
   'menu.paste': 'Paste',
+  'menu.pluginCut': 'Plugin Cut',
+  'menu.pluginCopy': 'Plugin Copy',
+  'menu.pluginPaste': 'Plugin Paste',
   'dialog.confirmDelete': 'Confirm delete?',
 }[key] ?? key);
 
@@ -50,15 +54,15 @@ describe('EditMenu', () => {
     vi.mocked(showConfirm).mockResolvedValue(true);
   });
 
-  it('renders undo, redo, and appended cut/copy/paste menu items', () => {
+  it('renders undo, redo, delete, select-all/copy/paste, and appended plugin cut/copy/paste menu items', () => {
     render(
       <EditMenu
         {...interactionProps}
         t={t}
         editMenuItems={[
-          { id: 'cut', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.cut', onClick: vi.fn() },
-          { id: 'copy', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.copy', onClick: vi.fn() },
-          { id: 'paste', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.paste', onClick: vi.fn() },
+          { id: 'cut', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.pluginCut', onClick: vi.fn() },
+          { id: 'copy', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.pluginCopy', onClick: vi.fn() },
+          { id: 'paste', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.pluginPaste', onClick: vi.fn() },
         ]}
         canUndo={true}
         canRedo={true}
@@ -71,9 +75,43 @@ describe('EditMenu', () => {
     expect(screen.getByText('Edit')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Redo' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Cut' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select All' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Paste' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Plugin Cut' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Plugin Copy' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Plugin Paste' })).toBeInTheDocument();
+  });
+
+  it('triggers select all / copy / paste on the project store', () => {
+    const selectAll = vi.spyOn(useProjectStore.getState(), 'selectAll').mockImplementation(() => {});
+    const copySelected = vi.spyOn(useProjectStore.getState(), 'copySelected').mockImplementation(() => {});
+    const pasteFromClipboard = vi.spyOn(useProjectStore.getState(), 'pasteFromClipboard').mockImplementation(() => {});
+
+    render(
+      <EditMenu
+        {...interactionProps}
+        t={t}
+        editMenuItems={[]}
+        canUndo={true}
+        canRedo={true}
+        onUndo={vi.fn()}
+        onRedo={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select All' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Paste' }));
+
+    expect(selectAll).toHaveBeenCalledTimes(1);
+    expect(copySelected).toHaveBeenCalledTimes(1);
+    expect(pasteFromClipboard).toHaveBeenCalledTimes(1);
+
+    selectAll.mockRestore();
+    copySelected.mockRestore();
+    pasteFromClipboard.mockRestore();
   });
 
   it('triggers edit actions and respects disabled undo/redo state', async () => {
@@ -89,9 +127,9 @@ describe('EditMenu', () => {
         {...interactionProps}
         t={t}
         editMenuItems={[
-          { id: 'cut', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.cut', onClick: onCut },
-          { id: 'copy', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.copy', onClick: onCopy },
-          { id: 'paste', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.paste', onClick: onPaste },
+          { id: 'cut', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.pluginCut', onClick: onCut },
+          { id: 'copy', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.pluginCopy', onClick: onCopy },
+          { id: 'paste', pluginId: 'plugin', menu: 'edit', labelKey: 'menu.pluginPaste', onClick: onPaste },
         ]}
         canUndo={true}
         canRedo={true}
@@ -103,9 +141,9 @@ describe('EditMenu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cut' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Paste' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin Cut' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin Copy' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin Paste' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete Selected' }));
 
     expect(onUndo).toHaveBeenCalledTimes(1);

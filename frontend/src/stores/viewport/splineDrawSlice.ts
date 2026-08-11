@@ -20,6 +20,8 @@ export interface SplineDrawSlice {
   tangentCoupling: TangentCoupling;
   draggingKnot: DraggingKnot | null;
   cursorPreviewPos: [number, number, number] | null;
+  /** True while the user holds Shift during a draw mode, snapping the current segment to 15° increments. */
+  isAngleSnapActive: boolean;
   /** Polygon-draw state for area-type road objects */
   objectDrawVertices: Array<[number, number, number]>;
   objectDrawRoadId: string | null;
@@ -38,6 +40,7 @@ export interface SplineDrawSlice {
   clearSplineKnots: () => void;
   setDraggingKnot: (info: DraggingKnot | null) => void;
   setCursorPreviewPos: (pos: [number, number, number] | null) => void;
+  setAngleSnapActive: (active: boolean) => void;
   setSplineTangentOverride: (index: number, tangent: [number, number, number]) => void;
   setSplineTangentInOverride: (index: number, tangent: [number, number, number]) => void;
   setSplineTangentOverrides: (overrides: Record<number, [number, number, number]>) => void;
@@ -68,6 +71,7 @@ export const createSplineDrawSlice: StateCreator<EditorViewState, [], [], Spline
   tangentCoupling: 'mirror',
   draggingKnot: null,
   cursorPreviewPos: null,
+  isAngleSnapActive: false,
   objectDrawVertices: [],
   objectDrawRoadId: null,
   objectDrawTemplateId: null,
@@ -83,9 +87,10 @@ export const createSplineDrawSlice: StateCreator<EditorViewState, [], [], Spline
   setSplineKnots: (splineKnots) => set({ splineKnots }),
   appendSplineKnot: (knot) => set((state) => ({ splineKnots: [...state.splineKnots, knot] })),
   popSplineKnot: () => set((state) => ({ splineKnots: state.splineKnots.slice(0, -1) })),
-  clearSplineKnots: () => set({ splineKnots: [], splineTangentOverrides: {}, splineTangentInOverrides: {}, tangentCoupling: 'mirror', draggingKnot: null, cursorPreviewPos: null, drawSnapResult: null, snappedEndpoints: [] }),
+  clearSplineKnots: () => set({ splineKnots: [], splineTangentOverrides: {}, splineTangentInOverrides: {}, tangentCoupling: 'mirror', draggingKnot: null, cursorPreviewPos: null, drawSnapResult: null, snappedEndpoints: [], isAngleSnapActive: false }),
   setDraggingKnot: (draggingKnot) => set({ draggingKnot }),
   setCursorPreviewPos: (cursorPreviewPos) => set({ cursorPreviewPos }),
+  setAngleSnapActive: (isAngleSnapActive) => set({ isAngleSnapActive }),
   setSplineTangentOverride: (index, tangent) =>
     set((state) => ({ splineTangentOverrides: { ...state.splineTangentOverrides, [index]: tangent } })),
   setSplineTangentInOverride: (index, tangent) =>

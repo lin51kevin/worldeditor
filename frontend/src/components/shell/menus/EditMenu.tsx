@@ -1,4 +1,5 @@
 import type { MenuItemContrib } from '../../../stores/pluginContribStore';
+import { useProjectStore } from '../../../stores/projectStore';
 import { showConfirm } from '../../../utils/dialog';
 import { appendEditPluginItems, type TranslateFn } from '../menuDefinitions';
 import { MenuSection, type MenuSectionInteractionProps } from './MenuSection';
@@ -52,6 +53,28 @@ export function EditMenu({
           action: async () => {
             const confirmed = await showConfirm(t('dialog.confirmDelete'));
             if (confirmed) void onDelete();
+          },
+        },
+        { separator: true, label: '' },
+        {
+          label: t('menu.selectAll'),
+          shortcut: 'Ctrl+A',
+          action: () => {
+            useProjectStore.getState().selectAll();
+          },
+        },
+        {
+          label: t('menu.copy'),
+          shortcut: 'Ctrl+C',
+          action: () => {
+            useProjectStore.getState().copySelected();
+          },
+        },
+        {
+          label: t('menu.paste'),
+          shortcut: 'Ctrl+V',
+          action: () => {
+            useProjectStore.getState().pasteFromClipboard();
           },
         },
       ],

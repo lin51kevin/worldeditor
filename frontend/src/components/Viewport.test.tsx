@@ -178,6 +178,24 @@ describe('Viewport', () => {
     expect(screen.getByText('3D 视口 — 不支持 WebGPU')).toBeInTheDocument();
   });
 
+  it('shows the angle-snap badge when isAngleSnapActive is true', () => {
+    rendererMocks.isSupported.mockReturnValue(false);
+    act(() => { useViewportStore.setState({ editMode: 'spline', isAngleSnapActive: true }); });
+
+    render(<Viewport />);
+
+    expect(screen.getByText('15° 角度吸附')).toBeInTheDocument();
+  });
+
+  it('hides the angle-snap badge when isAngleSnapActive is false', () => {
+    rendererMocks.isSupported.mockReturnValue(false);
+    act(() => { useViewportStore.setState({ isAngleSnapActive: false }); });
+
+    render(<Viewport />);
+
+    expect(screen.queryByText('15° 角度吸附')).not.toBeInTheDocument();
+  });
+
   it('initializes the renderer, uploads vertices, resizes, and disposes cleanly', async () => {
     const vertices = new Float32Array([1, 2, 3, 0.3, 0.3, 0.3, 1]);
     const platform = createPlatformMock(vertices);
@@ -591,6 +609,41 @@ describe('Viewport', () => {
     });
 
     expect(rendererMocks.applyZoomFactor).toHaveBeenCalled();
+  });
+
+  it('clears stale signal sprite billboards after the road carrying them is deleted', async () => {
+    const platform = createPlatformMock();
+    (platform.generateSpriteData as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        sprites: [{ pos: [0, 0, 0], signal_type: '274', subtype: '-1', value: '', w: 1, h: 1 }],
+        paints: [],
+      })
+      .mockResolvedValue({ sprites: [], paints: [] });
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    rendererMocks.getTextureManager.mockReturnValue({
+      resolveSignalTexture: vi.fn().mockReturnValue('/signs/274.png'),
+    });
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+
+    act(() => {
+      useProjectStore.setState({ project: makeProjectWithRoad() });
+    });
+
+    const { rerender } = render(<Viewport />);
+    await waitFor(() =>
+      expect(rendererMocks.uploadSpriteData).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ textureUrl: '/signs/274.png' })]),
+      ),
+    );
+
+    // Simulate road deletion — the road (and its signals) is removed from the project.
+    act(() => {
+      useProjectStore.setState({ project: makeProject() });
+    });
+    rerender(<Viewport />);
+
+    await waitFor(() => expect(rendererMocks.uploadSpriteData).toHaveBeenLastCalledWith([]));
   });
 });
 

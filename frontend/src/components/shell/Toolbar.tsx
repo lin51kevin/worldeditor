@@ -185,6 +185,7 @@ export const Toolbar = memo(function Toolbar() {
                 disabled={btn.isDisabled?.() ?? false}
                 onClick={btn.onClick}
                 title={t(btn.tooltipKey ?? btn.labelKey)}
+                aria-label={t(btn.tooltipKey ?? btn.labelKey)}
               >
                 <span className="tb-icon tb-plugin-icon">{resolveIcon(btn.icon)}</span>
               </button>

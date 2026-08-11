@@ -258,6 +258,7 @@ export function useSplineDrawMode({
 
     if (viewState.splineKnots.length === 0) {
       clearSplineDrawHover();
+      if (viewState.isAngleSnapActive) viewState.setAngleSnapActive(false);
       canvas.style.cursor = 'crosshair';
       return false;
     }
@@ -265,9 +266,13 @@ export function useSplineDrawMode({
     // Update the live cursor preview position for real-time road mesh preview
     let previewX = worldPos.x;
     let previewY = worldPos.y;
-    if (mouseEvent?.shiftKey && viewState.splineKnots.length > 0) {
+    const angleSnapping = !!mouseEvent?.shiftKey && viewState.splineKnots.length > 0;
+    if (angleSnapping) {
       const prev = viewState.splineKnots[viewState.splineKnots.length - 1]!;
       [previewX, previewY] = snapAngleFromPrev([prev[0], prev[1]], [previewX, previewY]);
+    }
+    if (viewState.isAngleSnapActive !== angleSnapping) {
+      viewState.setAngleSnapActive(angleSnapping);
     }
     viewState.setCursorPreviewPos([previewX, previewY, 0]);
 

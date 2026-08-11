@@ -11,6 +11,10 @@ describe('StatusBar', () => {
         cursorWorldPos: { x: 0, y: 0 },
         gridSpacing: 10.0,
         viewportMpp: 0.1,
+        selectedRoadId: null,
+        selectedJunctionId: null,
+        selectedRoadIds: [],
+        selectedJunctionIds: [],
       });
     });
   });
@@ -80,5 +84,29 @@ describe('StatusBar', () => {
     const { container } = render(<StatusBar />);
     const bar = container.querySelector('.scale-bar-track') as HTMLElement;
     expect(bar.style.width).toBe('100px');
+  });
+
+  it('shows a multi-select count when multiple roads are selected', () => {
+    act(() => {
+      useProjectStore.setState({ selectedRoadIds: ['r1', 'r2', 'r3'], selectedJunctionIds: [] });
+    });
+    render(<StatusBar />);
+    expect(screen.getByText(/已选择 3 项/)).toBeInTheDocument();
+  });
+
+  it('shows a multi-select count when roads and junctions are both selected', () => {
+    act(() => {
+      useProjectStore.setState({ selectedRoadIds: ['r1'], selectedJunctionIds: ['j1'] });
+    });
+    render(<StatusBar />);
+    expect(screen.getByText(/已选择 2 项/)).toBeInTheDocument();
+  });
+
+  it('shows the junction label for a single junction selection', () => {
+    act(() => {
+      useProjectStore.setState({ selectedJunctionId: 'j1', selectedRoadId: null });
+    });
+    render(<StatusBar />);
+    expect(screen.getByText(/交叉口 j1/)).toBeInTheDocument();
   });
 });

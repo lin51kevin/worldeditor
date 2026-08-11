@@ -5,6 +5,7 @@ import { useViewportStore } from '../stores/viewportStore';
 import { emitViewportEvent } from '../viewport/viewportEvents';
 import { getPlatformService } from '../services';
 import { showAlert, showConfirm } from '../utils/dialog';
+import { toastSuccess } from '../utils/toast';
 import { saveExport } from '../utils/download';
 import { isExportCancelled } from '../utils/exportErrors';
 import { useRecentFilesStore } from '../stores/recentFilesStore';
@@ -92,6 +93,7 @@ export function useMenuActions() {
       const savedPath = await platform.saveFile(project.name, xml);
       if (!savedPath) return;
       useProjectStore.getState().markClean();
+      toastSuccess(t('toast.saveSuccess'));
     } catch (err) {
       console.error('[MenuBar] Failed to save file:', err);
       await showAlert(t('dialog.saveError'));
@@ -108,6 +110,7 @@ export function useMenuActions() {
       const bare = savedPath.replace(/\\/g, '/').split('/').pop() ?? savedPath;
       setProject({ ...project, name: bare });
       useProjectStore.getState().markClean();
+      toastSuccess(t('toast.saveSuccess'));
     } catch (err) {
       console.error('[MenuBar] Failed to save file as:', err);
       await showAlert(t('dialog.saveError'));

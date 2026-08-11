@@ -4,6 +4,7 @@ import { useProjectStore } from '../../../stores/projectStore';
 import type { RoadSignal, Road } from '../../../services/platform';
 import { COMMON_SIGNAL_TYPES } from '../../../hooks/useSignalPlacement';
 import { NumberField, ReadOnlyField, SliderField, TextField, roadLateralRange } from './PropertyFields';
+import { showConfirm } from '../../../utils/dialog';
 
 const RAD_TO_DEG = 180 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180;
@@ -20,6 +21,13 @@ export const SignalPropertiesCard = memo(function SignalPropertiesCard({ signal,
 
   const update = (updates: Partial<RoadSignal>) =>
     useProjectStore.getState().updateSignal(signal.id, updates);
+
+  const handleDelete = async () => {
+    const confirmed = await showConfirm(t('dialog.confirmDeleteSignal'));
+    if (confirmed) {
+      useProjectStore.getState().removeSignal(signal.id);
+    }
+  };
 
   const signalTypeOptions = (() => {
     const currentType = signal.signal_type;
@@ -130,7 +138,7 @@ export const SignalPropertiesCard = memo(function SignalPropertiesCard({ signal,
       <div className="property-row">
         <button
           className="property-btn property-btn-danger"
-          onClick={() => useProjectStore.getState().removeSignal(signal.id)}
+          onClick={() => { void handleDelete(); }}
         >
           {t('propertyPanel.deleteSignal')}
         </button>

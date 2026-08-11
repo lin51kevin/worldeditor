@@ -443,35 +443,37 @@ export function MenuBar({
         <div className="menubar-action-separator" />
 
         <div className="menubar-quick-actions">
-          <button className="menubar-action-btn" onClick={() => { void handleNew(); }} title={t('toolbar.newTitle', { key: shortcutLabel('newProject') })}>
+          <button className="menubar-action-btn" onClick={() => { void handleNew(); }} title={t('toolbar.newTitle', { key: shortcutLabel('newProject') })} aria-label={t('toolbar.newTitle', { key: shortcutLabel('newProject') })}>
             <FileText size={14} />
           </button>
-          <button className="menubar-action-btn" onClick={() => { void handleOpen(); }} title={t('toolbar.openTitle')}>
+          <button className="menubar-action-btn" onClick={() => { void handleOpen(); }} title={t('toolbar.openTitle')} aria-label={t('toolbar.openTitle')}>
             <FolderOpen size={14} />
           </button>
-          <button className="menubar-action-btn" onClick={() => { void handleSave(); }} title={t('toolbar.saveTitle')} disabled={!isDirty}>
+          <button className="menubar-action-btn" onClick={() => { void handleSave(); }} title={t('toolbar.saveTitle')} aria-label={t('toolbar.saveTitle')} disabled={!isDirty}>
             <Save size={14} />
           </button>
           <button
             className="menubar-action-btn"
             onClick={() => { void handleSaveAs(); }}
             title={t('toolbar.saveAsTitle')}
+            aria-label={t('toolbar.saveAsTitle')}
           >
             <Copy size={14} />
           </button>
 
           <div className="menubar-action-separator" />
 
-          <button className="menubar-action-btn" onClick={undo} title={t('toolbar.undoTitle')} disabled={!canUndo()}>
+          <button className="menubar-action-btn" onClick={undo} title={t('toolbar.undoTitle')} aria-label={t('toolbar.undoTitle')} disabled={!canUndo()}>
             <Undo2 size={14} />
           </button>
-          <button className="menubar-action-btn" onClick={redo} title={t('toolbar.redoTitle')} disabled={!canRedo()}>
+          <button className="menubar-action-btn" onClick={redo} title={t('toolbar.redoTitle')} aria-label={t('toolbar.redoTitle')} disabled={!canRedo()}>
             <Redo2 size={14} />
           </button>
           <button
             className="menubar-action-btn"
             onClick={() => { void handleResetToSaved(); }}
             title={t('toolbar.resetTitle')}
+            aria-label={t('toolbar.resetTitle')}
             disabled={!isDirty || !savedProject}
           >
             <RotateCcw size={14} />
@@ -483,6 +485,7 @@ export function MenuBar({
             className={`menubar-action-btn ${dimension === '3d' ? 'active' : ''}`}
             onClick={handleView3D}
             title={t('toolbar.view3dTitle')}
+            aria-label={t('toolbar.view3dTitle')}
           >
             <span className="menubar-view-label">3D</span>
           </button>
@@ -490,6 +493,7 @@ export function MenuBar({
             className={`menubar-action-btn ${dimension === '2d' ? 'active' : ''}`}
             onClick={handleView2D}
             title={t('toolbar.view2dTitle')}
+            aria-label={t('toolbar.view2dTitle')}
           >
             <span className="menubar-view-label">2D</span>
           </button>
@@ -498,6 +502,7 @@ export function MenuBar({
             className={`menubar-action-btn ${showGrid ? 'active' : ''}`}
             onClick={handleToggleGrid}
             title={t('toolbar.gridTitle')}
+            aria-label={t('toolbar.gridTitle')}
           >
             <Grid size={14} />
           </button>
@@ -505,6 +510,7 @@ export function MenuBar({
             className={`menubar-action-btn ${showAxis ? 'active' : ''}`}
             onClick={handleToggleAxis}
             title={t('toolbar.axisTitle')}
+            aria-label={t('toolbar.axisTitle')}
           >
             <Crosshair size={14} />
           </button>
@@ -512,6 +518,7 @@ export function MenuBar({
             className="menubar-action-btn"
             onClick={() => setSnapshotDialogOpen(true)}
             title={t('toolbar.snapshotTitle')}
+            aria-label={t('toolbar.snapshotTitle')}
           >
             <Camera size={14} />
           </button>
@@ -523,6 +530,7 @@ export function MenuBar({
               className={`menubar-action-btn ${snapEnabled ? 'active' : ''}`}
               onClick={toggleSnap}
               title={t('toolbar.snapTitle')}
+              aria-label={t('toolbar.snapTitle')}
             >
               <Magnet size={14} />
             </button>
@@ -542,6 +550,7 @@ export function MenuBar({
             className={`menubar-action-btn ${measureMode !== 'none' ? 'active' : ''}`}
             onClick={() => setMeasureMode(measureMode !== 'none' ? 'none' : 'distance')}
             title={t('toolbar.measureTitle')}
+            aria-label={t('toolbar.measureTitle')}
           >
             <Ruler size={14} />
           </button>

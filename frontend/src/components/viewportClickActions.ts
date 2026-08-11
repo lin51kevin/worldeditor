@@ -11,6 +11,10 @@ import { useProjectStore } from '../stores/projectStore';
 import { usePluginContribStore } from '../stores/pluginContribStore';
 import { getPlatformService } from '../services';
 import type { Project } from '../services/platform';
+import { toastError, toastInfo } from '../utils/toast';
+import i18n from '../i18n';
+
+const tr = (key: string, fallback?: string): string => i18n.t(key, fallback ?? key);
 
 /** Handle a click in measurement mode. Returns true if measurement is active. */
 export async function handleMeasureClick(worldPos: { x: number; y: number }): Promise<boolean> {
@@ -207,12 +211,14 @@ export async function handlePlaceObjectClick(
           useViewportStore.getState().clearPendingObjectTemplate();
         }
       } else {
-        // No road found within pickup threshold — placement silently skipped.
-        // Keep the template pending so the user can retry the click.
+        // No road found within pickup threshold — keep the template pending
+        // so the user can retry the click, but let them know why nothing happened.
+        toastInfo(tr('toast.placementNoRoad'));
       }
     }
   } catch (err) {
     console.error('[Viewport] Failed to place road object:', err);
+    toastError(tr('toast.placementFailed'));
   }
   return true;
 }
@@ -254,7 +260,10 @@ export async function handleObjectDrawClick(
     // First click: pick the target road
     if (!roadId) {
       const pickedId = await service.pickRoadAtPointCached(worldPos.x, worldPos.y, 10.0);
-      if (!pickedId) return true; // no road nearby — ignore click
+      if (!pickedId) {
+        toastInfo(tr('toast.placementNoRoad'));
+        return true; // no road nearby — ignore click
+      }
 
       const pickedRoad = visibleProject.roads.find((r) => r.id === pickedId);
       // If junction connector, find incoming main road (same logic as handlePlaceObjectClick)
@@ -303,6 +312,7 @@ export async function handleObjectDrawClick(
     }
   } catch (err) {
     console.error('[Viewport] Object draw click failed:', err);
+    toastError(tr('toast.placementFailed'));
   }
   return true;
 }

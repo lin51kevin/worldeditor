@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useViewportStore } from '../../stores/viewportStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useProjectStore } from '../../stores/projectStore';
+import { usePluginContribStore } from '../../stores/pluginContribStore';
 import { Toolbar } from './Toolbar';
 
 describe('Toolbar', () => {
@@ -90,5 +91,41 @@ describe('Toolbar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '回旋线' }));
     expect(useViewportStore.getState().editMode).toBe('drawSpiral');
+  });
+
+  it('move and rotate buttons expose aria-label for screen readers', () => {
+    render(<Toolbar />);
+
+    expect(screen.getByRole('button', { name: '移动道路' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '旋转道路' })).toBeInTheDocument();
+  });
+
+  it('plugin action toolbar buttons expose aria-label for screen readers', () => {
+    const onClick = vi.fn();
+    act(() => {
+      usePluginContribStore.setState({
+        toolbarButtons: [
+          {
+            id: 'test-plugin-btn',
+            pluginId: 'test-plugin',
+            icon: null,
+            labelKey: 'toolbar.testAction',
+            group: 'action',
+            onClick,
+          },
+        ],
+      });
+    });
+
+    render(<Toolbar />);
+
+    const button = screen.getByRole('button', { name: 'toolbar.testAction' });
+    expect(button).toHaveAttribute('aria-label', 'toolbar.testAction');
+    fireEvent.click(button);
+    expect(onClick).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      usePluginContribStore.setState({ toolbarButtons: [] });
+    });
   });
 });

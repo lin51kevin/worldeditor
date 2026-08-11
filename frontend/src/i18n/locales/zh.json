@@ -39,6 +39,9 @@
     "undo": "撤销",
     "redo": "重做",
     "deleteSelected": "删除选中",
+    "selectAll": "全选",
+    "copy": "复制",
+    "paste": "粘贴",
     "view3D": "3D视图",
     "view2D": "2D视图",
     "zoomToFit": "缩放到全部",
@@ -189,8 +192,10 @@
     "selectionLevels": {
       "none": "无",
       "road": "道路 {{roadId}}",
+      "junction": "交叉口 {{junctionId}}",
       "laneSection": "车道段 #{{sectionIndex}}",
-      "lane": "车道 {{laneId}}"
+      "lane": "车道 {{laneId}}",
+      "multiple": "已选择 {{count}} 项"
     }
   },
   "propertyPanel": {
@@ -764,7 +769,8 @@
   "viewport": {
     "initializing": "3D 视口 — 正在初始化 WebGPU...",
     "unsupported": "3D 视口 — 不支持 WebGPU",
-    "dropToOpen": "拖放文件以打开"
+    "dropToOpen": "拖放文件以打开",
+    "angleSnapActive": "15° 角度吸附"
   },
   "snapshot": {
     "title": "导出快照",
@@ -803,6 +809,9 @@
     "confirmNew": "当前项目有未保存的更改，确定要新建项目吗？",
     "confirmClose": "当前项目有未保存的更改，确定要关闭文件吗？",
     "confirmReset": "重置会丢失所有未保存的修改，确定要重置吗？",
+    "confirmRestoreDraft": "是否恢复 {{savedAt}} 的未保存更改？",
+    "confirmDeleteSignal": "删除此信号？",
+    "confirmDeleteObject": "删除此物体？",
     "projectName": "输入项目名称:",
     "fileName": "输入文件名:",
     "roadLength": "道路总长度",
@@ -831,6 +840,12 @@
     "successTitle": "成功",
     "errorTitle": "错误",
     "warningTitle": "警告"
+  },
+  "toast": {
+    "saveSuccess": "项目已保存",
+    "placementNoRoad": "此处未找到道路，请靠近道路点击",
+    "placementFailed": "放置失败",
+    "pluginMountFailed": "插件 \"{{name}}\" 加载失败"
   },
   "snapping": {
     "enabled": "吸附",
