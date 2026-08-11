@@ -299,6 +299,55 @@ describe("SplatRenderer", () => {
     expect(r.hasContent).toBe(false);
   });
 
+  it("draws the depth occluder only when enabled and a depth pipeline exists", () => {
+    const depthPipeline = {} as GPURenderPipeline;
+    function makeRenderer(pipeline: GPURenderPipeline | null) {
+      const r = new SplatRenderer(
+        fakeDevice(),
+        {} as GPUBindGroupLayout,
+        {} as GPURenderPipeline,
+        syncSorter(),
+        undefined,
+        undefined,
+        undefined,
+        pipeline,
+      );
+      r.upload(
+        new Uint32Array(2 * splatStrideForDegree(1)),
+        1,
+        GAUSSIAN_SPLAT_LAYOUT_VERSION,
+      );
+      return r;
+    }
+    function fakePass() {
+      return {
+        setPipeline: vi.fn(),
+        setBindGroup: vi.fn(),
+        draw: vi.fn(),
+      } as unknown as GPURenderPassEncoder & { setPipeline: ReturnType<typeof vi.fn> };
+    }
+
+    // Disabled by default.
+    const off = makeRenderer(depthPipeline);
+    const passOff = fakePass();
+    off.drawDepthOnly(passOff);
+    expect(passOff.setPipeline).not.toHaveBeenCalled();
+
+    // Enabled with a pipeline: draws with the depth pipeline.
+    const on = makeRenderer(depthPipeline);
+    on.setOccluderDepth(true);
+    const passOn = fakePass();
+    on.drawDepthOnly(passOn);
+    expect(passOn.setPipeline).toHaveBeenCalledWith(depthPipeline);
+
+    // Enabled on a bundle built without the depth pipeline: silently skipped.
+    const missing = makeRenderer(null);
+    missing.setOccluderDepth(true);
+    const passMissing = fakePass();
+    missing.drawDepthOnly(passMissing);
+    expect(passMissing.setPipeline).not.toHaveBeenCalled();
+  });
+
   it("updates the uniform and sorts on camera changes", () => {
     const device = fakeDevice();
     const writeSpy = device.queue.writeBuffer as ReturnType<typeof vi.fn>;

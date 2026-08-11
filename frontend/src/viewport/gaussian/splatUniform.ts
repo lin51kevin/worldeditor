@@ -26,7 +26,9 @@ import type { CameraState } from "../cameraController";
  * [42]     projection_kind : f32 (0 = perspective, 1 = orthographic)
  * [43]     clamp_anisotropy : f32 (1 = cap splat aspect ratio; decimated preview)
  * [44]     near_plane : f32 (view-space centre culling distance)
- * [45..48) padding
+ * [45]     occluder_alpha_min : f32 (depth-occluder pass: min splat opacity)
+ * [46]     occluder_sigma : f32 (depth-occluder pass: core radius, quad units)
+ * [47]     occluder_depth_bias : f32 (relative reverse-Z push away from the eye)
  * ```
  */
 export const SPLAT_UNIFORM_FLOATS = 48;
@@ -34,6 +36,13 @@ export const SPLAT_UNIFORM_FLOATS = 48;
 export const SPLAT_UNIFORM_BYTES = SPLAT_UNIFORM_FLOATS * 4;
 /** Reference EWA low-pass variance in screen-space pixels squared. */
 export const DEFAULT_SPLAT_DILATION = 0.3;
+
+/** Splats below this opacity are too translucent to act as depth occluders. */
+export const DEFAULT_OCCLUDER_ALPHA_MIN = 0.5;
+/** Occluder core radius in quad units (2 = full footprint, 1 = ~1σ core). */
+export const DEFAULT_OCCLUDER_SIGMA = 1.0;
+/** Relative reverse-Z push of the occluder depth away from the eye. */
+export const DEFAULT_OCCLUDER_DEPTH_BIAS = 0.002;
 
 /** Pixel focal length for a symmetric perspective: `(height/2) / tan(fovY/2)`. */
 export function splatFocal(fovY: number, height: number): number {
@@ -51,6 +60,9 @@ export function buildSplatUniform(
   dilation = DEFAULT_SPLAT_DILATION,
   encodeLinearToSrgb = false,
   clampAnisotropy = false,
+  occluderAlphaMin = DEFAULT_OCCLUDER_ALPHA_MIN,
+  occluderSigma = DEFAULT_OCCLUDER_SIGMA,
+  occluderDepthBias = DEFAULT_OCCLUDER_DEPTH_BIAS,
 ): Float32Array<ArrayBuffer> {
   const out = new Float32Array(SPLAT_UNIFORM_FLOATS);
   const viewProj = buildViewProjMatrix(
@@ -83,5 +95,8 @@ export function buildSplatUniform(
   out[42] = dimensionMode === "2d" ? 1 : 0;
   out[43] = clampAnisotropy ? 1 : 0;
   out[44] = camera.near;
+  out[45] = occluderAlphaMin;
+  out[46] = occluderSigma;
+  out[47] = occluderDepthBias;
   return out;
 }

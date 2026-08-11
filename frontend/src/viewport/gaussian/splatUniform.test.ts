@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   buildSplatUniform,
+  DEFAULT_OCCLUDER_ALPHA_MIN,
+  DEFAULT_OCCLUDER_DEPTH_BIAS,
+  DEFAULT_OCCLUDER_SIGMA,
   DEFAULT_SPLAT_DILATION,
   SPLAT_UNIFORM_FLOATS,
   splatFocal,
@@ -59,6 +62,19 @@ describe("buildSplatUniform", () => {
     expect(off[43]).toBe(0);
     const on = buildSplatUniform(camera, "3d", 50, 800, 600, 1, 0.3, false, true);
     expect(on[43]).toBe(1);
+  });
+
+  it("packs the depth-occluder parameters in the former padding slots", () => {
+    const def = buildSplatUniform(camera, "3d", 50, 800, 600, 1);
+    expect(def[45]).toBeCloseTo(DEFAULT_OCCLUDER_ALPHA_MIN, 6);
+    expect(def[46]).toBeCloseTo(DEFAULT_OCCLUDER_SIGMA, 6);
+    expect(def[47]).toBeCloseTo(DEFAULT_OCCLUDER_DEPTH_BIAS, 6);
+    const tuned = buildSplatUniform(
+      camera, "3d", 50, 800, 600, 1, 0.3, false, false, 0.8, 1.5, 0.01,
+    );
+    expect(tuned[45]).toBeCloseTo(0.8, 6);
+    expect(tuned[46]).toBeCloseTo(1.5, 6);
+    expect(tuned[47]).toBeCloseTo(0.01, 6);
   });
 
   it("packs camera position, sh degree, projection-derived scale and viewport", () => {

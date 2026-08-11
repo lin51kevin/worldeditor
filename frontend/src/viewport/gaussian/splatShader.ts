@@ -29,9 +29,9 @@ struct SplatUniforms {
   projection_kind : f32,
   clamp_anisotropy : f32,
   near_plane : f32,
-  _pad1 : f32,
-  _pad2 : f32,
-  _pad3 : f32,
+  occluder_alpha_min : f32,
+  occluder_sigma : f32,
+  occluder_depth_bias : f32,
 };
 
 @group(0) @binding(0) var<uniform> u : SplatUniforms;
@@ -182,11 +182,33 @@ fn evalSH(si : u32, degree : u32, dir : vec3<f32>) -> vec3<f32> {
   return clamp(c + vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
-@vertex
-fn vs_main(@builtin(vertex_index) vtx : u32,
-           @builtin(instance_index) inst : u32) -> VSOut {
-  let degree = u32(u.sh_degree);
-  let si = order[inst];
+struct SplatQuad {
+  culled  : bool,
+  center  : vec3<f32>,
+  ndc     : vec2<f32>,
+  offset  : vec2<f32>,
+  depth   : f32,
+  opacity : f32,
+  quad    : vec2<f32>,
+};
+
+fn culledQuad() -> SplatQuad {
+  var q : SplatQuad;
+  q.culled = true;
+  q.center = vec3<f32>(0.0);
+  q.ndc = vec2<f32>(0.0);
+  q.offset = vec2<f32>(0.0);
+  q.depth = 0.0;
+  q.opacity = 0.0;
+  q.quad = vec2<f32>(0.0);
+  return q;
+}
+
+// EWA projection shared by the colour and depth-occluder vertex stages.
+// A positive radiusLimit caps the quad radius (in quad units, where the colour
+// pass' falloff cutoff sits at 2) so the depth pass covers only the splat's
+// opaque core.
+fn projectSplat(si : u32, vtx : u32, radiusLimit : f32) -> SplatQuad {
   let t0 = transformAt(si, 0u);
   let t1 = transformAt(si, 1u);
   let t2 = transformAt(si, 2u);
@@ -201,14 +223,10 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
   // Reject only centers at or behind the eye. The true view depth drives the
   // perspective Jacobian so close splats keep their real projected size
   // (SuperSplat parity); a per-axis screen cap below bounds the footprint.
-  if (viewDepth <= 1e-6 || clip.w <= 1e-6) { return culled(); }
+  if (viewDepth <= 1e-6 || clip.w <= 1e-6) { return culledQuad(); }
   // Keep the Gaussian center inside WebGPU's reverse-Z depth range instead of
   // clipping the whole footprint when it crosses a near/far plane.
   let clipDepth = clamp(clip.z / clip.w, 0.0, 1.0);
-
-  // View-dependent colour (dir points from camera to the splat mean).
-  let dir = normalize(center - u.cam_pos);
-  let color = evalSH(si, degree, dir);
 
   let Vrk = covarianceFromTransform(scale, quaternion);
 
@@ -245,7 +263,7 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
   cov2d[0][0] = cov2d[0][0] + u.dilation;
   cov2d[1][1] = cov2d[1][1] + u.dilation;
   let opacity = opacityRaw;
-  if (opacity <= ALPHA_CUTOFF) { return culled(); }
+  if (opacity <= ALPHA_CUTOFF) { return culledQuad(); }
 
   // Eigendecomposition of the 2×2 covariance.
   let a = cov2d[0][0];
@@ -254,7 +272,7 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
   let mid = 0.5 * (a + cc);
   let disc = sqrt(max(0.0, mid * mid - (a * cc - bc * bc)));
   let lambda1 = mid + disc;
-  if (lambda1 <= 0.0) { return culled(); }
+  if (lambda1 <= 0.0) { return culledQuad(); }
   // Floor the minor eigenvalue at 0.1 px² (matches PlayCanvas/SuperSplat). Without
   // it, edge-on / highly anisotropic splats collapse to zero-width needles that
   // render as bright hairy spikes; 0.1 keeps a ~0.45px minimum thickness.
@@ -271,7 +289,8 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
   // Solve the normalized falloff for alpha=1/255 so low-opacity splats use a
   // smaller quad while retaining the exact same fragment result.
   let alphaEdge = EXP4 + ALPHA_CUTOFF * (1.0 - EXP4) / opacity;
-  let quadRadius = sqrt(clamp(-log(clamp(alphaEdge, EXP4, 1.0)), 0.0, 4.0));
+  var quadRadius = sqrt(clamp(-log(clamp(alphaEdge, EXP4, 1.0)), 0.0, 4.0));
+  if (radiusLimit > 0.0) { quadRadius = min(quadRadius, radiusLimit); }
   // Cap each screen-space axis independently at the smaller viewport dimension
   // (max 1024 px), exactly like SuperSplat/PlayCanvas. This bounds a near-camera
   // splat without distorting the covariances that remain on screen.
@@ -281,7 +300,7 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
   let majorAxis = ev * r1;
   let minorAxis = vec2<f32>(-ev.y, ev.x) * r2;
   let diameter = 2.0 * quadRadius * max(r1, r2);
-  if (diameter < 2.0) { return culled(); }
+  if (diameter < 2.0) { return culledQuad(); }
 
   var corners = array<vec2<f32>, 4>(
     vec2<f32>(-1.0, -1.0),
@@ -300,15 +319,71 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
   let ndcRadius = pixelRadius / (u.viewport * 0.5);
   if (ndc.x + ndcRadius.x < -1.0 || ndc.x - ndcRadius.x > 1.0 ||
       ndc.y + ndcRadius.y < -1.0 || ndc.y - ndcRadius.y > 1.0) {
-    return culled();
+    return culledQuad();
   }
   let offset = (q.x * majorAxis + q.y * minorAxis) / (u.viewport * 0.5);
 
-  var out : VSOut;
-  out.pos = vec4<f32>(ndc + offset, clipDepth, 1.0);
-  out.color = vec4<f32>(color, opacity);
+  var out : SplatQuad;
+  out.culled = false;
+  out.center = center;
+  out.ndc = ndc;
+  out.offset = offset;
+  out.depth = clipDepth;
+  out.opacity = opacity;
   out.quad = q;
   return out;
+}
+
+@vertex
+fn vs_main(@builtin(vertex_index) vtx : u32,
+           @builtin(instance_index) inst : u32) -> VSOut {
+  let si = order[inst];
+  let s = projectSplat(si, vtx, 0.0);
+  if (s.culled) { return culled(); }
+
+  // View-dependent colour (dir points from camera to the splat mean).
+  let dir = normalize(s.center - u.cam_pos);
+  let color = evalSH(si, u32(u.sh_degree), dir);
+
+  var out : VSOut;
+  out.pos = vec4<f32>(s.ndc + s.offset, s.depth, 1.0);
+  out.color = vec4<f32>(color, s.opacity);
+  out.quad = s.quad;
+  return out;
+}
+
+struct DepthVSOut {
+  @builtin(position) pos : vec4<f32>,
+  @location(0) quad : vec2<f32>,
+};
+
+// Depth-only occluder pass: writes the depth of each splat's opaque core so
+// geometry drawn afterwards (dynamic actor splats) is hidden behind walls,
+// trees and buildings. Colour writes are masked off by the pipeline, so this
+// never alters the scene's own appearance.
+@vertex
+fn vs_depth(@builtin(vertex_index) vtx : u32,
+            @builtin(instance_index) inst : u32) -> DepthVSOut {
+  var out : DepthVSOut;
+  out.pos = vec4<f32>(0.0, 0.0, 2.0, 1.0);
+  out.quad = vec2<f32>(0.0);
+  let si = order[inst];
+  // Translucent splats (foliage edges, haze) must not occlude.
+  if (featureAt(si, 0u) < u.occluder_alpha_min) { return out; }
+  let s = projectSplat(si, vtx, u.occluder_sigma);
+  if (s.culled) { return out; }
+  // Reverse-Z: scaling the depth down pushes the occluder slightly away from
+  // the eye, so a surface never clips actors resting against it.
+  out.pos = vec4<f32>(s.ndc + s.offset, s.depth * (1.0 - u.occluder_depth_bias), 1.0);
+  out.quad = s.quad;
+  return out;
+}
+
+@fragment
+fn fs_depth(in : DepthVSOut) {
+  // Elliptical core only — the quad corners outside it must not write depth or
+  // thin splats would occlude as full rectangles.
+  if (dot(in.quad, in.quad) > u.occluder_sigma * u.occluder_sigma) { discard; }
 }
 
 @fragment

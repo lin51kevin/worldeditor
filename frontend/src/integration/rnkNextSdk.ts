@@ -339,6 +339,15 @@ export interface WorldEditorRenderer {
    * gracefully.
    */
   setSplatGpuSort?(enabled: boolean): void;
+  /**
+   * Enable/disable the static scene's depth-only occluder pass, which makes
+   * dynamic actor (NPC/ego) splats hide behind the scene's opaque surfaces
+   * (buildings, trees, walls) instead of always compositing on top.
+   */
+  setSplatOccluderDepth?(
+    enabled: boolean,
+    options?: { alphaMin?: number; sigma?: number; depthBias?: number },
+  ): void;
 }
 
 /** WASM compute contract consumed by rnk-next. */
@@ -804,6 +813,9 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     },
     setSplatGpuSort: (enabled: boolean) => {
       renderer.setSplatGpuSort(enabled);
+    },
+    setSplatOccluderDepth: (enabled, options) => {
+      renderer.setSplatOccluderDepth(enabled, options);
     },
   };
 }

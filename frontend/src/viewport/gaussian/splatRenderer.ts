@@ -18,7 +18,7 @@ import {
 import { SplatSortController, type SplatSorter } from "./splatSortController";
 import { createWorkerSplatSorter } from "./splatSorterBackends";
 import { GpuSplatSorter } from "./splatSortCompute";
-import { buildSplatUniform, DEFAULT_SPLAT_DILATION } from "./splatUniform";
+import { buildSplatUniform, DEFAULT_SPLAT_DILATION, DEFAULT_OCCLUDER_ALPHA_MIN, DEFAULT_OCCLUDER_SIGMA, DEFAULT_OCCLUDER_DEPTH_BIAS } from "./splatUniform";
 import { frustumSidePlanes, type Vec3 } from "./splatSort";
 import type { CameraState } from "../cameraController";
 
@@ -362,6 +362,15 @@ export class SplatRenderer {
    * project into bright needles once their small neighbours are gone.
    */
   private clampAnisotropy = false;
+  /**
+   * When true, a colour-masked depth pass runs after this cloud's colour draw
+   * so later translucent geometry (the dynamic actor splats) is occluded by the
+   * scene's opaque surfaces instead of always compositing on top.
+   */
+  private occluderDepth = false;
+  private occluderAlphaMin = DEFAULT_OCCLUDER_ALPHA_MIN;
+  private occluderSigma = DEFAULT_OCCLUDER_SIGMA;
+  private occluderDepthBias = DEFAULT_OCCLUDER_DEPTH_BIAS;
   /** Optional GPU compute sorter; lazily built the first time GPU sort runs. */
   private gpuSorter: GpuSplatSorter | null = null;
   /** When true and the texture-array path is active, sort on the GPU each frame. */
@@ -418,6 +427,8 @@ export class SplatRenderer {
     private readonly onOrderChanged?: () => void,
     packedFallbackBindGroupLayout: GPUBindGroupLayout = bindGroupLayout,
     private readonly packedFallbackPipeline: GPURenderPipeline = pipeline,
+    /** Colour-masked depth pass; absent on bundles built without it. */
+    private readonly depthPipeline: GPURenderPipeline | null = null,
   ) {
     const maxBufferBytes =
       this.device.limits?.maxBufferSize ?? DEFAULT_MAX_BUFFER_BYTES;
@@ -678,6 +689,32 @@ export class SplatRenderer {
     this.sort.setRefreshFps(fps);
   }
 
+  /**
+   * Enable/disable the depth-only occluder pass for this cloud.
+   *
+   * @param options.alphaMin - Minimum splat opacity that may occlude (higher =
+   *   fewer leaks through translucent foliage, more see-through gaps).
+   * @param options.sigma - Occluder core radius in quad units (2 = the full
+   *   footprint, 1 ≈ 1σ). Larger closes gaps but eats into nearby actors.
+   * @param options.depthBias - Relative reverse-Z push away from the eye.
+   */
+  setOccluderDepth(
+    enabled: boolean,
+    options?: { alphaMin?: number; sigma?: number; depthBias?: number },
+  ): void {
+    this.occluderDepth = enabled;
+    if (options?.alphaMin !== undefined) {
+      this.occluderAlphaMin = Math.max(0, options.alphaMin);
+    }
+    if (options?.sigma !== undefined) {
+      this.occluderSigma = Math.max(0.01, options.sigma);
+    }
+    if (options?.depthBias !== undefined) {
+      this.occluderDepthBias = Math.max(0, options.depthBias);
+    }
+    this.onOrderChanged?.();
+  }
+
   /** Per-frame update: refresh the camera uniform and re-sort if needed. */
   onCamera(
     camera: CameraState,
@@ -698,6 +735,9 @@ export class SplatRenderer {
       this.dilation,
       this.encodeLinearToSrgb,
       this.clampAnisotropy,
+      this.occluderAlphaMin,
+      this.occluderSigma,
+      this.occluderDepthBias,
     );
     this.resources.updateUniform(uniform);
     const viewDir = computeViewDir(camera.position, camera.target);
@@ -907,6 +947,16 @@ export class SplatRenderer {
     this.resources.draw(pass, this.pipeline, this.packedFallbackPipeline);
   }
 
+  /**
+   * Write this cloud's opaque-core depth (no colour). Call right after
+   * {@link draw} so splats drawn later in the same pass are depth-tested
+   * against this scene.
+   */
+  drawDepthOnly(pass: GPURenderPassEncoder): void {
+    if (!this.occluderDepth || !this.depthPipeline) return;
+    this.resources.drawDepthOnly(pass, this.depthPipeline);
+  }
+
   /** Remove the current cloud. */
   clear(): void {
     this.resources.clear();
@@ -951,6 +1001,7 @@ export function createSplatRenderer(
   const {
     pipeline,
     bindGroupLayout,
+    depthPipeline,
     packedFallbackPipeline,
     packedFallbackBindGroupLayout,
   } = createGaussianSplatPipeline(
@@ -966,5 +1017,6 @@ export function createSplatRenderer(
     onOrderChanged,
     packedFallbackBindGroupLayout,
     packedFallbackPipeline,
+    depthPipeline,
   );
 }

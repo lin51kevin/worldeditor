@@ -53,7 +53,9 @@ describe("GAUSSIAN_SPLAT_SHADER", () => {
       );
       expect(shader).toContain("let r1 = min(sqrt(2.0 * lambda1), vmin)");
       expect(shader).toContain("let r2 = min(sqrt(2.0 * lambda2), vmin)");
-      expect(shader).toContain("if (diameter < 2.0) { return culled(); }");
+      // The texture-array shader shares its projection with the depth pass and
+      // returns a SplatQuad; the packed fallback still returns VSOut directly.
+      expect(shader).toMatch(/if \(diameter < 2\.0\) \{ return culled(Quad)?\(\); \}/);
       expect(shader).not.toContain("radiusScale");
       expect(shader).not.toContain("diameter > maxViewportDim");
     },
@@ -81,8 +83,25 @@ describe("GAUSSIAN_SPLAT_SHADER", () => {
 
   it("shrinks the quad to the 1/255 alpha threshold", () => {
     expect(GAUSSIAN_SPLAT_SHADER).toContain("const ALPHA_CUTOFF : f32 = 0.00392156862745");
-    expect(GAUSSIAN_SPLAT_SHADER).toContain("let quadRadius = sqrt");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("var quadRadius = sqrt");
     expect(GAUSSIAN_SPLAT_SHADER).toContain("corners[vtx] * quadRadius");
+  });
+
+  it("exposes a colour-free depth-occluder stage gated on opacity and core radius", () => {
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("fn vs_depth(");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("fn fs_depth(");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain(
+      "if (featureAt(si, 0u) < u.occluder_alpha_min) { return out; }",
+    );
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("projectSplat(si, vtx, u.occluder_sigma)");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain(
+      "s.depth * (1.0 - u.occluder_depth_bias)",
+    );
+    expect(GAUSSIAN_SPLAT_SHADER).toContain(
+      "if (dot(in.quad, in.quad) > u.occluder_sigma * u.occluder_sigma) { discard; }",
+    );
+    // The colour pass must keep its full footprint (no radius limit).
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("projectSplat(si, vtx, 0.0)");
   });
 
   it("only applies linear-to-sRGB encoding as an explicit diagnostic", () => {

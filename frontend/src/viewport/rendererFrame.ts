@@ -289,6 +289,10 @@ export function renderFrame(r: RendererFrameInternals): void {
   // them correctly. Scene splats first, then actor (NPC/ego) splats on top so
   // dynamic vehicles composite over the static reconstructed scene.
   if (r.staticSceneVisible) r.splatRenderer?.draw(pass);
+  // Seed the depth buffer with the static scene's opaque cores so the actor
+  // splats below are hidden where a building/tree stands between them and the
+  // camera. Colour writes are masked, so the scene's own render is untouched.
+  if (r.staticSceneVisible) r.splatRenderer?.drawDepthOnly(pass);
   r.actorSplatRenderer?.draw(pass);
   r.actorSplatInstancer?.draw(pass);
 

@@ -237,6 +237,12 @@ export class ViewportRenderer {
   // renderers in setSplatGpuSort(), so the toggle is never silently dropped.
   private splatGpuSortEnabled = false;
 
+  // Desired static-scene occluder-depth state, remembered for the same lazy
+  // creation reason as `splatGpuSortEnabled`. Scene-only: the actor clouds must
+  // not occlude each other or themselves.
+  private splatOccluderDepthEnabled = false;
+  private splatOccluderOptions: { alphaMin?: number; sigma?: number; depthBias?: number } = {};
+
   // When false, the static scene (point cloud + splats + ground mesh) is not
   // drawn, WITHOUT discarding its GPU buffers — so a host can hide/show the scene
   // or toggle 2D/3D with no re-decode/re-upload. Dynamic actors (NPC/ego) are
@@ -923,6 +929,10 @@ export class ViewportRenderer {
         this.markSceneDirty(),
       );
       this.splatRenderer.setGpuSort(this.splatGpuSortEnabled);
+      this.splatRenderer.setOccluderDepth(
+        this.splatOccluderDepthEnabled,
+        this.splatOccluderOptions,
+      );
     }
     const uploadStatus = this.splatRenderer.upload(
       splatData,
@@ -1092,6 +1102,22 @@ export class ViewportRenderer {
     this.splatGpuSortEnabled = enabled;
     this.splatRenderer?.setGpuSort(enabled);
     this.actorSplatRenderer?.setGpuSort(enabled);
+    this.markSceneDirty();
+  }
+
+  /**
+   * Enable/disable the static scene's depth-only occluder pass. With it on, the
+   * scene's opaque splat cores write depth after their colour draw, so dynamic
+   * actor (NPC/ego) splats behind buildings, trees or walls are correctly hidden
+   * instead of always compositing on top.
+   */
+  setSplatOccluderDepth(
+    enabled: boolean,
+    options?: { alphaMin?: number; sigma?: number; depthBias?: number },
+  ): void {
+    this.splatOccluderDepthEnabled = enabled;
+    if (options) this.splatOccluderOptions = { ...this.splatOccluderOptions, ...options };
+    this.splatRenderer?.setOccluderDepth(enabled, this.splatOccluderOptions);
     this.markSceneDirty();
   }
 

@@ -27,6 +27,8 @@ export type GaussianResourceMode =
 export interface GaussianSplatPipelines {
   pipeline: GPURenderPipeline;
   bindGroupLayout: GPUBindGroupLayout;
+  /** Colour-masked pass that writes the opaque core depth of each splat. */
+  depthPipeline: GPURenderPipeline;
   packedFallbackPipeline: GPURenderPipeline;
   packedFallbackBindGroupLayout: GPUBindGroupLayout;
 }
@@ -58,6 +60,38 @@ function createRenderPipeline(
     depthStencil: {
       format: "depth32float",
       depthWriteEnabled: false,
+      depthCompare: "greater",
+    },
+    multisample: { count: sampleCount },
+    primitive: { topology: "triangle-strip", stripIndexFormat: undefined },
+  });
+}
+
+/**
+ * Depth-only companion of {@link createRenderPipeline}: same instanced quads,
+ * but colour writes are masked off and the splat core writes depth. Drawn after
+ * the scene's colour pass so it seeds occlusion for later (actor) splats without
+ * altering the scene's own blended result.
+ */
+function createDepthOnlyPipeline(
+  device: GPUDevice,
+  shaderCode: string,
+  bindGroupLayout: GPUBindGroupLayout,
+  format: GPUTextureFormat,
+  sampleCount: number,
+): GPURenderPipeline {
+  const shader = device.createShaderModule({ code: shaderCode });
+  return device.createRenderPipeline({
+    layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+    vertex: { module: shader, entryPoint: "vs_depth" },
+    fragment: {
+      module: shader,
+      entryPoint: "fs_depth",
+      targets: [{ format, writeMask: 0 }],
+    },
+    depthStencil: {
+      format: "depth32float",
+      depthWriteEnabled: true,
       depthCompare: "greater",
     },
     multisample: { count: sampleCount },
@@ -130,6 +164,13 @@ export function createGaussianSplatPipeline(
       sampleCount,
     ),
     bindGroupLayout,
+    depthPipeline: createDepthOnlyPipeline(
+      device,
+      GAUSSIAN_SPLAT_SHADER,
+      bindGroupLayout,
+      format,
+      sampleCount,
+    ),
     packedFallbackPipeline: createRenderPipeline(
       device,
       GAUSSIAN_SPLAT_PACKED_SHADER,
@@ -550,6 +591,19 @@ export class GaussianSplatResources {
         ? texturePipeline
         : packedFallbackPipeline,
     );
+    pass.setBindGroup(0, this.bindGroup);
+    pass.draw(4, this._visibleCount);
+  }
+
+  /**
+   * Record the depth-only occluder draw. Only the texture-array path has a
+   * `vs_depth` stage; the packed compatibility shader has none, so that mode
+   * silently skips occlusion rather than mis-rendering.
+   */
+  drawDepthOnly(pass: GPURenderPassEncoder, depthPipeline: GPURenderPipeline): void {
+    if (!this.hasContent || !this.bindGroup) return;
+    if (this._resourceMode !== "texture-array") return;
+    pass.setPipeline(depthPipeline);
     pass.setBindGroup(0, this.bindGroup);
     pass.draw(4, this._visibleCount);
   }
