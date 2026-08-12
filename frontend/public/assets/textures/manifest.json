@@ -12,6 +12,7 @@
         "1000002": "TrafficLights/WalkingTrafficLight.png",
         "1000011": "TrafficLights/ForwardTrafficLight.png",
         "1000013": "TrafficLights/BikingTrafficLight.png",
+        "2000011:60": "TrafficLights/TurnUTrafficLight.png",
         "_default": "TrafficLights/StandardTrafficLight.png"
     },
     "roadPaints": {

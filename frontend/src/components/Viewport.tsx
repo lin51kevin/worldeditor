@@ -29,6 +29,7 @@ import { useViewportEvents } from '../hooks/useViewportEvents';
 import { useViewportInit } from '../hooks/useViewportInit';
 import { useViewportSync } from '../hooks/useViewportSync';
 import { usePointCloudViewport } from '../hooks/usePointCloudViewport';
+import { useTemplateTexturePreload } from '../hooks/useTemplateTexturePreload';
 import { useViewportPointerHandlers } from '../hooks/useViewportPointerHandlers';
 import './Viewport.css';
 
@@ -63,6 +64,7 @@ export function Viewport() {
   useViewportSync(rendererRef, status);
   useViewportEvents(rendererRef, canvasRef);
   usePointCloudViewport({ rendererRef, status });
+  useTemplateTexturePreload({ rendererRef, status });
 
   // ── Mesh lifecycle (surface + lines + visible project + WASM cache) ──
   const { getVisibleProject, updateSurfaceMesh, updateLineMesh, getCachedLineVertices } = useViewportMeshes({
