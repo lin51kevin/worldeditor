@@ -76,7 +76,14 @@ export function useViewportKeyboard(): void {
         if (viewState.geometryEditRoadId || inDrawMode) {
           return;
         }
-        if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road' || viewState.editMode === 'editLaneLine') {
+        if (viewState.editMode === 'move-road' || viewState.editMode === 'rotate-road') {
+          // Stay in move/rotate mode (matches the re-pick-without-leaving-mode
+          // behavior in useViewportPointerHandlers) so the toolbar button and
+          // move cursor stay in sync when the user selects a new element next.
+          useProjectStore.getState().selectRoad(null);
+          return;
+        }
+        if (viewState.editMode === 'editLaneLine') {
           viewState.setEditMode('default');
           useProjectStore.getState().selectRoad(null);
           return;

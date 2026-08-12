@@ -60,4 +60,22 @@ describe('useViewportKeyboard', () => {
     keydown('Delete');
     expect(useProjectStore.getState().project.roads).toHaveLength(1);
   });
+
+  it('deselects but stays in move-road mode on Escape, so the toolbar button and cursor stay in sync for the next selection', () => {
+    useProjectStore.getState().addRoad(makeRoad());
+    useProjectStore.getState().selectRoad('r1');
+    useViewportStore.setState({ editMode: 'move-road' });
+    keydown('Escape');
+    expect(useProjectStore.getState().selectedRoadId).toBeNull();
+    expect(useViewportStore.getState().editMode).toBe('move-road');
+  });
+
+  it('exits editLaneLine mode and deselects on Escape', () => {
+    useProjectStore.getState().addRoad(makeRoad());
+    useProjectStore.getState().selectRoad('r1');
+    useViewportStore.setState({ editMode: 'editLaneLine' });
+    keydown('Escape');
+    expect(useProjectStore.getState().selectedRoadId).toBeNull();
+    expect(useViewportStore.getState().editMode).toBe('default');
+  });
 });
