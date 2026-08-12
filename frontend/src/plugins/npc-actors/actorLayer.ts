@@ -11,8 +11,13 @@ import { buildBoxVertices, buildPathVertices } from './actorGeometry';
 import { pickActorAt, pointInBoxFootprint } from './actorPicker';
 import { CaseActorBox } from './actorTypes';
 
-/** Default trajectory ribbon half-width, meters. */
-const DEFAULT_PATH_HALF_WIDTH = 0.25;
+/**
+ * Default trajectory ribbon half-width, meters.
+ *
+ * Kept well under a lane-marking width: the ribbon is an editing aid drawn over
+ * the road surface, so a heavy band buries the geometry it annotates.
+ */
+const DEFAULT_PATH_HALF_WIDTH = 0.1;
 
 export class CaseActorLayer {
   private boxes: CaseActorBox[] = [];
