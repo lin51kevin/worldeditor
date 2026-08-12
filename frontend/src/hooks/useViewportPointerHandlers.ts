@@ -30,6 +30,16 @@ import type { useGeometryEditMode } from './useGeometryEditMode';
 import type { useViewportHoverPick } from './useViewportHoverPick';
 import type { useViewportMeshes } from './useViewportMeshes';
 
+// Selecting a road/signal/object while no explicit tool is active arms the
+// Move tool immediately, so the toolbar button and move cursor reflect that
+// the just-selected element can be dragged right away.
+function activateMoveModeIfDefault() {
+  const viewState = useViewportStore.getState();
+  if (viewState.editMode === 'default') {
+    viewState.setEditMode('move-road');
+  }
+}
+
 /**
  * Dependencies for {@link useViewportPointerHandlers}.
  *
@@ -515,6 +525,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
         const signalHit = await service.pickSignalAtPointCached(worldPos.x, worldPos.y, 4.0);
         if (signalHit !== null) {
           useProjectStore.getState().selectSignal(signalHit.roadId, signalHit.signalId);
+          activateMoveModeIfDefault();
           const rendererInst = rendererRef.current;
           if (rendererInst) rendererInst.clearHover();
           hoveredRoadRef.current = null;
@@ -525,6 +536,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
         const objectHit = await service.pickObjectAtPointCached(worldPos.x, worldPos.y, 4.0);
         if (objectHit !== null) {
           useProjectStore.getState().selectObject(objectHit.roadId, objectHit.objectId);
+          activateMoveModeIfDefault();
           const rendererInst = rendererRef.current;
           if (rendererInst) rendererInst.clearHover();
           hoveredRoadRef.current = null;
@@ -564,6 +576,7 @@ export function useViewportPointerHandlers(deps: ViewportPointerHandlerDeps) {
 
       if (roadId) {
         useProjectStore.getState().selectRoad(roadId);
+        activateMoveModeIfDefault();
         const rendererInst = rendererRef.current;
         if (rendererInst) rendererInst.clearHover();
         hoveredRoadRef.current = null;

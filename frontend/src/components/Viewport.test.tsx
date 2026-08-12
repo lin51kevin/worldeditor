@@ -291,6 +291,27 @@ describe('Viewport', () => {
     expect(useProjectStore.getState().selectedRoadId).toBe('road-1');
   });
 
+  it('arms move-road mode when selecting a road while in default mode', async () => {
+    const platform = createPlatformMock();
+    (platform.pickRoadAtPointCached as ReturnType<typeof vi.fn>).mockResolvedValue('road-1');
+    rendererMocks.isSupported.mockReturnValue(true);
+    rendererMocks.init.mockResolvedValue(true);
+    rendererMocks.unprojectToGround.mockReturnValue({ x: 10, y: 20 });
+    vi.mocked(getPlatformService).mockResolvedValue(platform);
+    act(() => { useViewportStore.setState({ editMode: 'default' }); });
+
+    render(<Viewport />);
+
+    await waitFor(() => expect(rendererMocks.init).toHaveBeenCalled());
+    const canvas = document.querySelector('.viewport-canvas') as HTMLCanvasElement;
+
+    fireEvent.mouseDown(canvas, { button: 0, clientX: 24, clientY: 32 });
+    fireEvent.click(canvas, { button: 0, clientX: 24, clientY: 32 });
+
+    await waitFor(() => expect(useProjectStore.getState().selectedRoadId).toBe('road-1'));
+    expect(useViewportStore.getState().editMode).toBe('move-road');
+  });
+
   it('does not select a road after a modified left-button drag', async () => {
     const platform = createPlatformMock();
     rendererMocks.isSupported.mockReturnValue(true);
