@@ -200,6 +200,8 @@ export class GaussianSplatResources {
   private bindGroup: GPUBindGroup | null = null;
   private _count = 0;
   private _visibleCount = 0;
+  /** GPU-written `[4, visibleCount, 0, 0]` draw arguments; `null` = CPU count. */
+  private indirectBuffer: GPUBuffer | null = null;
   private _shDegree = 0;
   private _resourceMode: GaussianResourceMode = "none";
   private _textureLayout: GaussianTextureArrayLayout | null = null;
@@ -249,10 +251,21 @@ export class GaussianSplatResources {
   /**
    * Mark every splat drawable. Used by the GPU compute sort, which orders the
    * whole cloud each frame (behind-eye splats are culled in the vertex shader),
-   * so the CPU front-prefix `visibleCount` no longer applies.
+   * so the CPU front-prefix `visibleCount` no longer applies. When an indirect
+   * draw buffer is attached via {@link setIndirectDraw} the instance count comes
+   * from the GPU instead and this value is only the inert fallback.
    */
   markAllVisible(): void {
     this._visibleCount = this._count;
+  }
+
+  /**
+   * Attach the GPU sort's `drawIndirect` argument buffer, whose `instanceCount`
+   * is the number of splats the sort found in front of the eye. Pass `null` to
+   * go back to a CPU-supplied instance count.
+   */
+  setIndirectDraw(buffer: GPUBuffer | null): void {
+    this.indirectBuffer = buffer;
   }
 
   /** The one global sorted index buffer. */
@@ -559,6 +572,8 @@ export class GaussianSplatResources {
   /** Replace the global sorted order with a fresh back-to-front order. */
   updateOrder(indices: Uint32Array, visibleCount = this._count): void {
     if (!this.orderBuffer || indices.length !== this._count) return;
+    // A CPU-supplied order supersedes any GPU sort result, including its count.
+    this.indirectBuffer = null;
     this._visibleCount = Math.max(
       0,
       Math.min(this._count, Math.floor(visibleCount)),
@@ -592,6 +607,10 @@ export class GaussianSplatResources {
         : packedFallbackPipeline,
     );
     pass.setBindGroup(0, this.bindGroup);
+    if (this.indirectBuffer) {
+      pass.drawIndirect(this.indirectBuffer, 0);
+      return;
+    }
     pass.draw(4, this._visibleCount);
   }
 
@@ -605,6 +624,10 @@ export class GaussianSplatResources {
     if (this._resourceMode !== "texture-array") return;
     pass.setPipeline(depthPipeline);
     pass.setBindGroup(0, this.bindGroup);
+    if (this.indirectBuffer) {
+      pass.drawIndirect(this.indirectBuffer, 0);
+      return;
+    }
     pass.draw(4, this._visibleCount);
   }
 
@@ -636,5 +659,8 @@ export class GaussianSplatResources {
     this.positionsBuffer = null;
     this.bindGroup = null;
     this._textureLayout = null;
+    // Owned by the GPU sorter, which is resized/disposed alongside the cloud —
+    // never draw indirect from arguments computed for a different cloud.
+    this.indirectBuffer = null;
   }
 }

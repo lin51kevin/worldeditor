@@ -75,6 +75,37 @@ export const DEFAULT_MAX_STORAGE_BINDING_BYTES = 134_217_728;
 export const GPU_SORT_MIN_INTERVAL_MS = 50;
 
 /**
+ * Throughput of the GPU radix sort, calibrated on real hardware via
+ * `frontend/public/gpu-sort-harness.html` (~28 ms at 12,000,000 splats). The cost
+ * is linear in the splat count, so this scales the estimate to any cloud size.
+ */
+const GPU_SORT_SPLATS_PER_MS = 430_000;
+
+/**
+ * Re-sort no more often than this multiple of the sort's own estimated cost, so
+ * the sort stays at roughly a 1/N GPU duty cycle and leaves the rest of the frame
+ * budget to rasterization. Without it a 20M+ cloud re-sorts every 50 ms while each
+ * sort itself costs ~50 ms, i.e. the GPU does nothing but sort.
+ */
+const GPU_SORT_DUTY_FACTOR = 2;
+
+/** Ceiling so even a huge cloud still re-sorts several times per second. */
+const GPU_SORT_MAX_INTERVAL_MS = 200;
+
+/**
+ * Minimum interval between GPU depth re-sorts for a cloud of `count` splats.
+ * Constant {@link GPU_SORT_MIN_INTERVAL_MS} for ordinary clouds (≤ ~10M) and
+ * proportional to the sort cost beyond that.
+ */
+export function gpuSortIntervalMs(count: number): number {
+  const estimatedSortMs = Math.max(0, count) / GPU_SORT_SPLATS_PER_MS;
+  return Math.min(
+    GPU_SORT_MAX_INTERVAL_MS,
+    Math.max(GPU_SORT_MIN_INTERVAL_MS, estimatedSortMs * GPU_SORT_DUTY_FACTOR),
+  );
+}
+
+/**
  * Safety ceiling for the explicit packed fallback buffer (2 GiB). Its budget is
  * `min(device.maxStorageBufferBindingSize, this)`, so the renderer uses the
  * the minimum of the device's buffer limits and this guard. The normal full
@@ -790,6 +821,7 @@ export class SplatRenderer {
       this.resources.markAllVisible();
     } else {
       // Back to the CPU path: force a fresh worker sort on the next frame.
+      this.resources.setIndirectDraw(null);
       this.sort.unsuppress();
       this.sort.invalidate();
     }
@@ -870,16 +902,25 @@ export class SplatRenderer {
       return true;
     }
     // Rate-cap the expensive re-sort: under continuous motion re-sort at most
-    // every GPU_SORT_MIN_INTERVAL_MS and reuse the still-valid order buffer in
+    // every gpuSortIntervalMs() and reuse the still-valid order buffer in
     // between, so the frame rate is not bound to the sort cost.
     const now = performance.now();
-    if (!this.gpuSortDirty && now - this.lastGpuSortMs < GPU_SORT_MIN_INTERVAL_MS) {
+    if (
+      !this.gpuSortDirty &&
+      now - this.lastGpuSortMs < gpuSortIntervalMs(this.resources.count)
+    ) {
       // Keep the render loop ticking so a trailing sort still runs once the
       // interval elapses after the camera settles (else the resting order stays
       // one interval stale).
       this.onOrderChanged?.();
       return true;
     }
+    // Encoding faults (e.g. an over-limit dispatch) are reported asynchronously and
+    // invalidate the entire command encoder, so the frame would render nothing at
+    // all. Scope them so the next frame falls back to the CPU sort instead of
+    // white-screening forever.
+    const scoped = typeof this.device.pushErrorScope === "function";
+    if (scoped) this.device.pushErrorScope("validation");
     try {
       if (!this.gpuSorter) {
         this.gpuSorter = new GpuSplatSorter(this.device);
@@ -898,19 +939,39 @@ export class SplatRenderer {
       // Remember the pose we just sorted for so identical subsequent frames skip.
       this.lastSortedCamPos = [this.lastCamPos[0], this.lastCamPos[1], this.lastCamPos[2]];
       this.lastSortedViewDir = [this.lastViewDir[0], this.lastViewDir[1], this.lastViewDir[2]];
+      // The sort parked behind-eye splats at the tail of the order and counted the
+      // survivors into its indirect draw arguments — draw only that prefix.
+      this.resources.setIndirectDraw(this.gpuSorter.drawArgsBuffer);
       this.gpuSortDirty = false;
       this.lastGpuSortMs = now;
       this.logGpuSortOnce(`ACTIVE (${this.resources.count.toLocaleString()} splats)`);
-      return true;
     } catch (error) {
-      console.error("[Splat] GPU sort failed; reverting to CPU sort", error);
-      this.useGpuSort = false;
-      this.gpuSorter?.dispose();
-      this.gpuSorter = null;
-      this.sort.unsuppress();
-      this.sort.invalidate();
+      if (scoped) void this.device.popErrorScope().catch(() => undefined);
+      this.revertToCpuSort(error);
       return false;
     }
+    if (scoped) {
+      void this.device
+        .popErrorScope()
+        .then((err) => {
+          if (err) this.revertToCpuSort(err.message);
+        })
+        .catch(() => undefined);
+    }
+    return true;
+  }
+
+  /** Permanently fall back to the CPU worker sort after a GPU sort failure. */
+  private revertToCpuSort(error: unknown): void {
+    if (!this.useGpuSort) return;
+    console.error("[Splat] GPU sort failed; reverting to CPU sort", error);
+    this.useGpuSort = false;
+    this.resources.setIndirectDraw(null);
+    this.gpuSorter?.dispose();
+    this.gpuSorter = null;
+    this.sort.unsuppress();
+    this.sort.invalidate();
+    this.onOrderChanged?.();
   }
 
   /**

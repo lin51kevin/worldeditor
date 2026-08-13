@@ -8,6 +8,8 @@ import {
   importanceDecimateSplatBuffer,
   sampleSplatBuffer,
   repackAsBand0,
+  gpuSortIntervalMs,
+  GPU_SORT_MIN_INTERVAL_MS,
   SplatRenderer,
 } from "./splatRenderer";
 import { splatStrideForDegree } from "./splatPipeline";
@@ -17,6 +19,32 @@ import type { CameraState } from "../cameraController";
 
 // Degree-0 packed u32 stride used throughout these tests.
 const STRIDE0 = splatStrideForDegree(0);
+
+describe("gpuSortIntervalMs", () => {
+  it("keeps the baseline interval for ordinary clouds", () => {
+    for (const count of [0, 1_000, 1_000_000, 8_000_000]) {
+      expect(gpuSortIntervalMs(count)).toBe(GPU_SORT_MIN_INTERVAL_MS);
+    }
+  });
+
+  it("stretches the interval past the sort's own cost for huge clouds", () => {
+    // A 22.1M cloud costs ~50 ms per sort, so re-sorting every 50 ms would leave
+    // the GPU doing nothing but sorting.
+    const huge = gpuSortIntervalMs(22_111_000);
+    expect(huge).toBeGreaterThan(GPU_SORT_MIN_INTERVAL_MS * 1.5);
+    expect(huge).toBeLessThanOrEqual(200);
+  });
+
+  it("is monotonic and bounded", () => {
+    let previous = 0;
+    for (let count = 0; count <= 60_000_000; count += 2_000_000) {
+      const interval = gpuSortIntervalMs(count);
+      expect(interval).toBeGreaterThanOrEqual(previous);
+      expect(interval).toBeLessThanOrEqual(200);
+      previous = interval;
+    }
+  });
+});
 
 describe("extractSplatPositions", () => {
   it("pulls the leading xyz of each splat record", () => {

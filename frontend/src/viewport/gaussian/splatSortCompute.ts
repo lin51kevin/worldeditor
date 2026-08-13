@@ -17,7 +17,23 @@
  *   3. scatter   — each splat to base[digit,group] + stable local rank.
  * The scatter position comes from a prefix sum (never an atomic race), so the
  * order is a deterministic, stable function of the keys — identical every frame
- * for the same camera, smooth under motion (no twinkle).
+ * for the same camera, smooth under motion (no twinkle). The local rank comes
+ * from a per-digit lane bitmask + popcount ({@link MASK_WORDS}), which is the
+ * same value the obvious "count earlier lanes with my digit" loop produces but
+ * reads ~8 words instead of walking up to 256 lanes — that loop was the single
+ * most expensive part of the sort (~128 shared reads per splat on average).
+ *
+ * ## Behind-camera culling (lossless)
+ * The key pass already computes each splat's view depth, so it also parks every
+ * splat at or behind the eye plane at the reserved maximum key: a stable ascending
+ * sort then packs them contiguously at the TAIL of the order buffer. A
+ * workgroup-aggregated counter records how many splats survived and writes it as
+ * the `instanceCount` of a `drawIndirect` argument buffer, so the render pass
+ * rasterizes only the front-of-eye prefix. This is exactly the set the vertex
+ * stage already discarded (`viewDepth <= 1e-6`), so nothing that used to be drawn
+ * stops being drawn — it only stops paying the per-instance vertex cost
+ * (order fetch + three RGBA32F transform fetches + covariance reconstruction).
+ * On a chase/front camera in a street-level cloud that is typically half the cloud.
  *
  * ## Validation
  * The exact WGSL + orchestration were verified on real hardware via
@@ -34,15 +50,47 @@ const SCAN_BLOCK = WORKGROUP_SIZE * 2;
 /** Digit radix (8 bits) and the number of passes to cover the 24-bit key. */
 const RADIX = 256;
 const KEY_PASSES = 3;
+/**
+ * u32 words needed for a one-bit-per-lane occupancy mask of a workgroup. The
+ * scatter keeps one such mask per digit and derives each lane's stable rank by
+ * popcounting the bits below it, instead of scanning all {@link WORKGROUP_SIZE}
+ * lanes serially. Costs `RADIX * MASK_WORDS * 4` = 8 KiB of workgroup storage,
+ * within the 16 KiB WebGPU guarantees.
+ */
+const MASK_WORDS = WORKGROUP_SIZE / 32;
 /** Max value of the 24-bit normalized depth key (2^24 − 1). */
 const KEY_MAX_24 = 16777215;
 /** Odd pass count → seed the identity permutation into scratch so the final
  *  (even-indexed) pass still lands in the external order buffer. */
 const INIT_TO_SCRATCH = KEY_PASSES % 2 === 1;
+/**
+ * WebGPU's guaranteed `maxComputeWorkgroupsPerDimension`. A 1-D dispatch wider
+ * than this is a validation error that kills the whole command encoder (a >16.7M
+ * splat cloud needs >65535 groups of 256), so every dispatch is folded into a 2-D
+ * grid of exactly this width and the shaders re-linearize `workgroup_id`. Using a
+ * fixed width (not the dispatch size) keeps `wid.x + wid.y * GRID` exact in both
+ * cases: below the limit the grid is `(groups, 1)` so `wid.y` is always 0.
+ */
+export const MAX_WORKGROUPS_PER_DIM = 65535;
+
+/**
+ * `drawIndirect` argument buffer contents at the start of every sort:
+ * `[vertexCount, instanceCount, firstVertex, firstInstance]`. The four corners of
+ * the splat quad are fixed; `instanceCount` is accumulated by the key pass.
+ */
+const DRAW_ARGS_RESET = new Uint32Array([4, 0, 0, 0]);
 
 const ceilDiv = (a: number, b: number): number => Math.floor((a + b - 1) / b);
 
-// ─── WGSL (verbatim from the validated harness) ──────────────────────────────
+/** Dispatch `groups` workgroups as a 2-D grid within the per-dimension limit. */
+function dispatchLinear(pass: GPUComputePassEncoder, groups: number): void {
+  pass.dispatchWorkgroups(
+    Math.min(groups, MAX_WORKGROUPS_PER_DIM),
+    ceilDiv(groups, MAX_WORKGROUPS_PER_DIM),
+  );
+}
+
+// ─── WGSL (as validated in the harness, plus 2-D workgroup-grid linearization) ──
 
 const INIT_SHADER = /* wgsl */ `
 struct DepthParams { cam:vec3<f32>, count:u32, view:vec3<f32>, _pad:u32, dmin:f32, dmax:f32, _pad2:vec2<f32> };
@@ -50,22 +98,46 @@ struct DepthParams { cam:vec3<f32>, count:u32, view:vec3<f32>, _pad:u32, dmin:f3
 @group(0) @binding(1) var<storage, read> positions : array<f32>;
 @group(0) @binding(2) var<storage, read_write> keys : array<u32>;
 @group(0) @binding(3) var<storage, read_write> order : array<u32>;
+@group(0) @binding(4) var<storage, read_write> draw_args : array<atomic<u32>, 4>;
+var<workgroup> wg_visible : atomic<u32>;
 @compute @workgroup_size(${WORKGROUP_SIZE})
-fn init_keys(@builtin(global_invocation_id) gid : vec3<u32>) {
-  let i = gid.x;
-  if (i >= params.count) { return; }
-  let b = i * 3u;
-  let dx = positions[b] - params.cam.x;
-  let dy = positions[b+1u] - params.cam.y;
-  let dz = positions[b+2u] - params.cam.z;
-  let depth = dx*params.view.x + dy*params.view.y + dz*params.view.z;
-  // Normalize depth into a 24-bit fixed-point key over [dmin,dmax], then INVERT so
-  // an ASCENDING sort draws the FARTHEST splat (t=1) first (back-to-front).
-  let range = max(params.dmax - params.dmin, 1e-9);
-  let t = clamp((depth - params.dmin) / range, 0.0, 1.0);
-  let n = u32(t * ${KEY_MAX_24}.0 + 0.5);
-  keys[i] = ${KEY_MAX_24}u - n;
-  order[i] = i;
+fn init_keys(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>) {
+  if (lid.x == 0u) { atomicStore(&wg_visible, 0u); }
+  workgroupBarrier();
+  let i = (wid.x + wid.y * ${MAX_WORKGROUPS_PER_DIM}u) * ${WORKGROUP_SIZE}u + lid.x;
+  // No early return: the two barriers below must stay workgroup-uniform.
+  if (i < params.count) {
+    let b = i * 3u;
+    let dx = positions[b] - params.cam.x;
+    let dy = positions[b+1u] - params.cam.y;
+    let dz = positions[b+2u] - params.cam.z;
+    let depth = dx*params.view.x + dy*params.view.y + dz*params.view.z;
+    order[i] = i;
+    if (depth <= 1e-6) {
+      // At or behind the eye plane — the vertex stage discards these anyway.
+      // The reserved maximum key parks them at the tail of the sorted order so
+      // the indirect instance count can stop short of them.
+      keys[i] = ${KEY_MAX_24}u;
+    } else {
+      // Normalize depth into a 24-bit fixed-point key over [dmin,dmax], then INVERT
+      // so an ASCENDING sort draws the FARTHEST splat (t=1) first (back-to-front).
+      // Everything keyed here is in front of the eye, so a negative dmin (cloud
+      // AABB straddling the camera) only wastes key range — clamp it away.
+      let lo = max(params.dmin, 0.0);
+      let range = max(params.dmax - lo, 1e-9);
+      let t = clamp((depth - lo) / range, 0.0, 1.0);
+      // n in [1,KEY_MAX] keeps every visible key strictly below the culled key.
+      let n = 1u + u32(t * ${KEY_MAX_24 - 1}.0 + 0.5);
+      keys[i] = ${KEY_MAX_24}u - n;
+      atomicAdd(&wg_visible, 1u);
+    }
+  }
+  workgroupBarrier();
+  // One global atomic per workgroup instead of one per splat (256x less contention).
+  if (lid.x == 0u) {
+    let v = atomicLoad(&wg_visible);
+    if (v > 0u) { atomicAdd(&draw_args[1u], v); }
+  }
 }`;
 
 const HIST_SHADER = /* wgsl */ `
@@ -76,17 +148,21 @@ struct RParams { count:u32, shift:u32, num_groups:u32, _pad:u32 };
 @group(0) @binding(3) var<storage, read_write> group_hist : array<u32>;
 var<workgroup> counts : array<atomic<u32>, ${RADIX}>;
 @compute @workgroup_size(${WORKGROUP_SIZE})
-fn histogram(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>, @builtin(global_invocation_id) gid : vec3<u32>) {
+fn histogram(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>) {
+  // Padding groups of the 2-D grid own no group_hist slot; writing from them would
+  // clobber another digit's counts. Workgroup-uniform, so barrier-safe.
+  let g = wid.x + wid.y * ${MAX_WORKGROUPS_PER_DIM}u;
+  if (g >= rp.num_groups) { return; }
   atomicStore(&counts[lid.x], 0u);
   workgroupBarrier();
-  let i = gid.x;
+  let i = g * ${WORKGROUP_SIZE}u + lid.x;
   if (i < rp.count) {
     let d = (keys[order[i]] >> rp.shift) & 0xFFu;
     atomicAdd(&counts[d], 1u);
   }
   workgroupBarrier();
   // Digit-major layout: [digit * num_groups + group].
-  group_hist[lid.x * rp.num_groups + wid.x] = atomicLoad(&counts[lid.x]);
+  group_hist[lid.x * rp.num_groups + g] = atomicLoad(&counts[lid.x]);
 }`;
 
 const SCATTER_SHADER = /* wgsl */ `
@@ -96,20 +172,36 @@ struct RParams { count:u32, shift:u32, num_groups:u32, _pad:u32 };
 @group(0) @binding(2) var<storage, read> order_src : array<u32>;
 @group(0) @binding(3) var<storage, read> group_base : array<u32>;
 @group(0) @binding(4) var<storage, read_write> order_dst : array<u32>;
-var<workgroup> sdig : array<u32, ${WORKGROUP_SIZE}>;
+// One 256-bit occupancy mask per digit: bit L is set when lane L holds that digit.
+var<workgroup> lane_masks : array<atomic<u32>, ${RADIX * MASK_WORDS}>;
 @compute @workgroup_size(${WORKGROUP_SIZE})
-fn scatter(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>, @builtin(global_invocation_id) gid : vec3<u32>) {
-  let i = gid.x;
-  var d = 0xFFFFFFFFu;
+fn scatter(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>) {
+  let g = wid.x + wid.y * ${MAX_WORKGROUPS_PER_DIM}u;
+  if (g >= rp.num_groups) { return; }
+  // Each lane clears its own contiguous slice; ${RADIX * MASK_WORDS} words / ${WORKGROUP_SIZE} lanes.
+  for (var k = 0u; k < ${MASK_WORDS}u; k = k + 1u) {
+    atomicStore(&lane_masks[lid.x * ${MASK_WORDS}u + k], 0u);
+  }
+  let i = g * ${WORKGROUP_SIZE}u + lid.x;
+  let in_range = i < rp.count;
+  var d = 0u;
   var e = 0u;
-  if (i < rp.count) { e = order_src[i]; d = (keys[e] >> rp.shift) & 0xFFu; }
-  sdig[lid.x] = d;
+  if (in_range) { e = order_src[i]; d = (keys[e] >> rp.shift) & 0xFFu; }
+  let word = lid.x >> 5u;
+  let bit = lid.x & 31u;
   workgroupBarrier();
-  if (i >= rp.count) { return; }
-  // Stable local rank: # of earlier threads in this group with the same digit.
+  if (in_range) { atomicOr(&lane_masks[d * ${MASK_WORDS}u + word], 1u << bit); }
+  workgroupBarrier();
+  if (!in_range) { return; }
+  // Stable local rank = same-digit lanes strictly before this one. Popcounting an
+  // occupancy bitmask reads at most ${MASK_WORDS} words instead of walking all
+  // ${WORKGROUP_SIZE} lanes serially (that loop was the sort's dominant cost).
   var rank = 0u;
-  for (var t = 0u; t < lid.x; t = t + 1u) { if (sdig[t] == d) { rank = rank + 1u; } }
-  order_dst[group_base[d * rp.num_groups + wid.x] + rank] = e;
+  for (var k = 0u; k < word; k = k + 1u) {
+    rank = rank + countOneBits(atomicLoad(&lane_masks[d * ${MASK_WORDS}u + k]));
+  }
+  rank = rank + countOneBits(atomicLoad(&lane_masks[d * ${MASK_WORDS}u + word]) & ((1u << bit) - 1u));
+  order_dst[group_base[d * rp.num_groups + g] + rank] = e;
 }`;
 
 const SCAN_SHADER = /* wgsl */ `
@@ -122,7 +214,9 @@ const BLOCK : u32 = ${SCAN_BLOCK}u;
 var<workgroup> shmem : array<u32, ${SCAN_BLOCK}>;
 @compute @workgroup_size(${WORKGROUP_SIZE})
 fn scan_blocks(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>) {
-  let block_offset = wid.x * BLOCK;
+  let b = wid.x + wid.y * ${MAX_WORKGROUPS_PER_DIM}u;
+  if (b >= (prefix_params.n + BLOCK - 1u) / BLOCK) { return; }
+  let block_offset = b * BLOCK;
   let idx0 = block_offset + lid.x;
   let idx1 = block_offset + lid.x + WG_SIZE;
   shmem[lid.x] = select(0u, data[idx0], idx0 < prefix_params.n);
@@ -138,7 +232,7 @@ fn scan_blocks(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup
     }
     offset <<= 1u;
   }
-  if (lid.x == 0u) { block_sums[wid.x] = shmem[BLOCK - 1u]; shmem[BLOCK - 1u] = 0u; }
+  if (lid.x == 0u) { block_sums[b] = shmem[BLOCK - 1u]; shmem[BLOCK - 1u] = 0u; }
   workgroupBarrier();
   for (var d = 1u; d < BLOCK; d <<= 1u) {
     offset >>= 1u;
@@ -162,10 +256,11 @@ struct PrefixParams { n:u32, _pad:vec3<u32> };
 @group(0) @binding(1) var<storage, read_write> data : array<u32>;
 @group(0) @binding(2) var<storage, read> block_sums : array<u32>;
 @compute @workgroup_size(${WORKGROUP_SIZE})
-fn add_offsets(@builtin(global_invocation_id) gid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>) {
-  let idx = gid.x;
+fn add_offsets(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>) {
+  let g = wid.x + wid.y * ${MAX_WORKGROUPS_PER_DIM}u;
+  let idx = g * ${WORKGROUP_SIZE}u + lid.x;
   if (idx >= prefix_params.n) { return; }
-  data[idx] += block_sums[wid.x / 2u];
+  data[idx] += block_sums[g / 2u];
 }`;
 
 const DEPTH_PARAMS_SIZE = 48;
@@ -195,6 +290,7 @@ export class GpuSplatSorter {
   private bs1: GPUBuffer | null = null;
   private bs2: GPUBuffer | null = null;
   private depthParams: GPUBuffer | null = null;
+  private drawArgs: GPUBuffer | null = null; // [4, visibleCount, 0, 0] for drawIndirect
   private ppN: GPUBuffer | null = null;
   private ppNb0: GPUBuffer | null = null;
   private ppNb1: GPUBuffer | null = null;
@@ -217,6 +313,15 @@ export class GpuSplatSorter {
   private nb2 = 0;
 
   constructor(private readonly device: GPUDevice) {}
+
+  /**
+   * `drawIndirect` argument buffer whose `instanceCount` is the number of splats
+   * in front of the eye, written by the most recent {@link sort}. Valid only
+   * together with the order buffer that same sort produced.
+   */
+  get drawArgsBuffer(): GPUBuffer | null {
+    return this.drawArgs;
+  }
 
   private ensureInit(): SortPipelines {
     if (this.pipelines) return this.pipelines;
@@ -283,6 +388,11 @@ export class GpuSplatSorter {
       size: DEPTH_PARAMS_SIZE,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    this.drawArgs = this.device.createBuffer({
+      size: DRAW_ARGS_RESET.byteLength,
+      usage:
+        GPUBufferUsage.INDIRECT | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
 
     // Size-dependent uniforms: written ONCE here, never per-frame.
     this.ppN = this.makeUniform([this.histLen]);
@@ -340,7 +450,7 @@ export class GpuSplatSorter {
       const pass = encoder.beginComputePass();
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, group);
-      pass.dispatchWorkgroups(groups);
+      dispatchLinear(pass, groups);
       pass.end();
     };
     step(pipes.scan, this.scanHistBG!, this.nb0);
@@ -380,6 +490,9 @@ export class GpuSplatSorter {
     f[4] = viewDir[0]; f[5] = viewDir[1]; f[6] = viewDir[2];
     f[8] = minDepth; f[9] = maxDepth;
     this.device.queue.writeBuffer(this.depthParams!, 0, dp);
+    // Queue writes are ordered before command buffers submitted afterwards, so the
+    // counter is guaranteed zero when the key pass below starts accumulating.
+    this.device.queue.writeBuffer(this.drawArgs!, 0, DRAW_ARGS_RESET);
 
     // init: seed keys + reset the identity permutation into pass 0's source
     // buffer (scratch when KEY_PASSES is odd, else the order buffer) so the final
@@ -392,19 +505,20 @@ export class GpuSplatSorter {
         { binding: 1, resource: { buffer: positionsBuffer } },
         { binding: 2, resource: { buffer: this.keys } },
         { binding: 3, resource: { buffer: initTarget } },
+        { binding: 4, resource: { buffer: this.drawArgs! } },
       ],
     });
     const initPass = encoder.beginComputePass();
     initPass.setPipeline(pipes.init);
     initPass.setBindGroup(0, initBG);
-    initPass.dispatchWorkgroups(ceilDiv(this.count, WORKGROUP_SIZE));
+    dispatchLinear(initPass, ceilDiv(this.count, WORKGROUP_SIZE));
     initPass.end();
 
     for (let p = 0; p < KEY_PASSES; p++) {
       const histPass = encoder.beginComputePass();
       histPass.setPipeline(pipes.hist);
       histPass.setBindGroup(0, this.histBG[p]!);
-      histPass.dispatchWorkgroups(this.numGroups);
+      dispatchLinear(histPass, this.numGroups);
       histPass.end();
 
       this.encodeScan(encoder, pipes);
@@ -412,19 +526,20 @@ export class GpuSplatSorter {
       const scatterPass = encoder.beginComputePass();
       scatterPass.setPipeline(pipes.scatter);
       scatterPass.setBindGroup(0, this.scatterBG[p]!);
-      scatterPass.dispatchWorkgroups(this.numGroups);
+      dispatchLinear(scatterPass, this.numGroups);
       scatterPass.end();
     }
     // Parity is chosen in ensureOrderBindGroups so the final pass lands in `orderBuffer`.
   }
 
   private releaseBuffers(): void {
-    for (const buf of [this.keys, this.scratch, this.groupHist, this.bs0, this.bs1, this.bs2, this.depthParams, this.ppN, this.ppNb0, this.ppNb1, ...this.rParams]) {
+    for (const buf of [this.keys, this.scratch, this.groupHist, this.bs0, this.bs1, this.bs2, this.depthParams, this.drawArgs, this.ppN, this.ppNb0, this.ppNb1, ...this.rParams]) {
       buf?.destroy();
     }
     this.keys = this.scratch = this.groupHist = null;
     this.bs0 = this.bs1 = this.bs2 = null;
-    this.depthParams = this.ppN = this.ppNb0 = this.ppNb1 = null;
+    this.depthParams = this.drawArgs = null;
+    this.ppN = this.ppNb0 = this.ppNb1 = null;
     this.rParams = [];
     this.scanHistBG = this.scanBs0BG = this.scanBs1BG = null;
     this.addBs0BG = this.addHistBG = null;

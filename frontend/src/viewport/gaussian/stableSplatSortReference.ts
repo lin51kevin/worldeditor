@@ -144,3 +144,39 @@ export function simulateGpuStableSort(
   }
   return order;
 }
+
+/** Lanes per sort workgroup; matches the WGSL `@workgroup_size`. */
+export const SORT_WORKGROUP_SIZE = 256;
+
+function popcount(value: number): number {
+  let v = value >>> 0;
+  v = v - ((v >>> 1) & 0x55555555);
+  v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
+  return (((v + (v >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
+}
+
+/**
+ * Stable rank of every lane among the lanes of the same digit, computed the way
+ * the WGSL scatter does: one lane-occupancy bitmask per digit, then a popcount of
+ * the bits below the lane. Mirrored here so the bit math can be locked against
+ * its obvious serial definition without a WebGPU device.
+ */
+export function workgroupDigitRanks(digits: Uint32Array): Uint32Array {
+  const lanes = digits.length;
+  const words = Math.ceil(lanes / 32);
+  const masks = new Uint32Array(256 * words);
+  for (let lane = 0; lane < lanes; lane++) {
+    masks[digits[lane]! * words + (lane >>> 5)]! |= 1 << (lane & 31);
+  }
+  const ranks = new Uint32Array(lanes);
+  for (let lane = 0; lane < lanes; lane++) {
+    const base = digits[lane]! * words;
+    const word = lane >>> 5;
+    const bit = lane & 31;
+    let rank = 0;
+    for (let k = 0; k < word; k++) rank += popcount(masks[base + k]!);
+    const below = bit === 0 ? 0 : 0xffffffff >>> (32 - bit);
+    ranks[lane] = rank + popcount(masks[base + word]! & below);
+  }
+  return ranks;
+}

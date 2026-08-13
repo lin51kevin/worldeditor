@@ -17,6 +17,7 @@ import { useViewportStore } from '../stores/viewportStore';
 import { getPlatformService } from '../services';
 import { buildRenderableProject } from '../utils/sceneGraph';
 import { mergeFloat32Arrays } from '../components/viewportUtils';
+import { createEmptyProject } from '../plugins/core/emptyProject';
 import type { Project } from '../services/platform';
 
 /**
@@ -185,8 +186,11 @@ export function useViewportMeshes({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const vp = getVisibleProject();
-      if (!vp || cancelled) return;
+      // With no project (e.g. a point cloud alone) the cache must still be seeded:
+      // the cached pick entry points throw when it was never initialised, which
+      // aborts the whole viewport click handler.
+      const vp = getVisibleProject() ?? createEmptyProject();
+      if (cancelled) return;
       try {
         const service = await getPlatformService();
         await service.setProjectCache(vp);

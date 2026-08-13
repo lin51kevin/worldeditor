@@ -186,6 +186,63 @@ describe("GaussianSplatResources", () => {
     expect(pass.draw).not.toHaveBeenCalled();
   });
 
+  it("takes the instance count from the GPU sort's indirect arguments", () => {
+    const { device } = fakeDevice();
+    const res = new GaussianSplatResources(device, {} as GPUBindGroupLayout);
+    res.upload(splats(5), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+    const args = {} as GPUBuffer;
+    res.setIndirectDraw(args);
+    const pass = {
+      setPipeline: vi.fn(),
+      setBindGroup: vi.fn(),
+      draw: vi.fn(),
+      drawIndirect: vi.fn(),
+    } as unknown as GPURenderPassEncoder;
+
+    res.draw(pass, {} as GPURenderPipeline);
+
+    expect(pass.drawIndirect).toHaveBeenCalledWith(args, 0);
+    expect(pass.draw).not.toHaveBeenCalled();
+  });
+
+  it("drops the indirect arguments when a CPU order supersedes the GPU sort", () => {
+    const { device } = fakeDevice();
+    const res = new GaussianSplatResources(device, {} as GPUBindGroupLayout);
+    res.upload(splats(5), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+    res.setIndirectDraw({} as GPUBuffer);
+    res.updateOrder(new Uint32Array([4, 3, 2, 1, 0]), 3);
+    const pass = {
+      setPipeline: vi.fn(),
+      setBindGroup: vi.fn(),
+      draw: vi.fn(),
+      drawIndirect: vi.fn(),
+    } as unknown as GPURenderPassEncoder;
+
+    res.draw(pass, {} as GPURenderPipeline);
+
+    expect(pass.draw).toHaveBeenCalledWith(4, 3);
+    expect(pass.drawIndirect).not.toHaveBeenCalled();
+  });
+
+  it("drops indirect arguments computed for a previous cloud on re-upload", () => {
+    const { device } = fakeDevice();
+    const res = new GaussianSplatResources(device, {} as GPUBindGroupLayout);
+    res.upload(splats(5), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+    res.setIndirectDraw({} as GPUBuffer);
+    res.upload(splats(3), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+    const pass = {
+      setPipeline: vi.fn(),
+      setBindGroup: vi.fn(),
+      draw: vi.fn(),
+      drawIndirect: vi.fn(),
+    } as unknown as GPURenderPassEncoder;
+
+    res.draw(pass, {} as GPURenderPipeline);
+
+    expect(pass.draw).toHaveBeenCalledWith(4, 3);
+    expect(pass.drawIndirect).not.toHaveBeenCalled();
+  });
+
   it("frees buffers on clear", () => {
     const { device, created } = fakeDevice();
     const res = new GaussianSplatResources(device, {} as GPUBindGroupLayout);

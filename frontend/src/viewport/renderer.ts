@@ -353,6 +353,11 @@ export class ViewportRenderer {
       console.warn('[Renderer] WebGPU device lost:', info.message);
       this.deviceLost = true;
     });
+    // Encoding/validation faults are async: they silently invalidate the command
+    // encoder (blank frame) unless something reports them.
+    this.device.addEventListener?.('uncapturederror', (event) => {
+      console.error('[Renderer] WebGPU error:', (event as GPUUncapturedErrorEvent).error.message);
+    });
     this.context = canvas.getContext('webgpu') as GPUCanvasContext;
     this.format = navigator.gpu.getPreferredCanvasFormat();
 
