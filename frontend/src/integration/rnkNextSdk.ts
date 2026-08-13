@@ -1002,7 +1002,9 @@ export async function createWorldEditorSdk(
   options?: CreateWorldEditorSdkOptions,
 ): Promise<WorldEditorSdk> {
   const wasm = (await import('../../wasm/pkg/we_wasm')) as WasmModule;
-  await (wasm.default as unknown as (input?: unknown) => Promise<void>)(options?.wasmInput);
+  // wasm-bindgen's init now only accepts a single `{ module_or_path }` object, not a bare input.
+  const initInput = options?.wasmInput !== undefined ? { module_or_path: options.wasmInput } : undefined;
+  await (wasm.default as unknown as (input?: unknown) => Promise<void>)(initInput);
 
   return {
     createRenderer: () => adaptRenderer(wasm),
