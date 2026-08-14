@@ -76,6 +76,7 @@ export class CameraController {
   private cachedViewProjForRender: Float32Array | null = null;
   private onScaleChange: ((info: ScaleInfo) => void) | null = null;
   private onScaleMetricsChanged: ((info: ScaleInfo) => void) | null = null;
+  private onLineWidthScaleChange: ((info: ScaleInfo) => void) | null = null;
   /** Callback invoked every time viewDirty is set to true. Used to wake the render loop. */
   private onViewBecameDirty: (() => void) | null = null;
   private lastReportedMpp = -1;
@@ -316,6 +317,13 @@ export class CameraController {
     this.onScaleMetricsChanged = cb;
   }
 
+  /** Register a callback invoked whenever the reported scale changes, dedicated
+   *  to consumers that derive a screen-space-relative world size (e.g. the
+   *  minimum on-screen line width) so they don't fight over the other two slots. */
+  setLineWidthScaleCallback(cb: ((info: ScaleInfo) => void) | null): void {
+    this.onLineWidthScaleChange = cb;
+  }
+
   /** Register a callback called whenever the view becomes dirty (needs re-render). */
   setViewDirtyCallback(cb: (() => void) | null): void {
     this.onViewBecameDirty = cb;
@@ -350,6 +358,7 @@ export class CameraController {
     this.lastReportedGridSpacing = info.gridSpacing;
     this.onScaleChange?.(info);
     this.onScaleMetricsChanged?.(info);
+    this.onLineWidthScaleChange?.(info);
   }
 
   setDimension(dimension: '3d' | '2d'): void {

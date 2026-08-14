@@ -308,6 +308,12 @@ export class ViewportRenderer {
     this.cameraController.setScaleChangeCallback(cb);
   }
 
+  /** Register a callback invoked whenever meters-per-pixel changes, dedicated to
+   *  consumers deriving a screen-space-relative world size (e.g. minimum line width). */
+  setLineWidthScaleCallback(cb: ((info: { gridSpacing: number; mpp: number }) => void) | null): void {
+    this.cameraController.setLineWidthScaleCallback(cb);
+  }
+
   /** Compute current meters-per-pixel (perspective approximation at target distance). */
   getMetersPerPixel(): number {
     return this.cameraController.getMetersPerPixel();

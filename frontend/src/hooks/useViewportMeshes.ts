@@ -142,6 +142,9 @@ interface UseViewportMeshesReturn {
   updateOverlayMesh: () => Promise<void>;
   /** Get the last-uploaded merged line vertices for existing roads (used by draw preview). */
   getCachedLineVertices: () => Float32Array;
+  /** Force the object layer + line mesh to regenerate on the next call (used after the
+   *  viewport's minimum line width changes, since that doesn't otherwise touch cache keys). */
+  notifyScaleChanged: () => Promise<void>;
 }
 
 export function useViewportMeshes({
@@ -218,6 +221,12 @@ export function useViewportMeshes({
   // Reset on file load and whenever we fall back to / leave the merged path, so the
   // next incremental upload rebuilds every road buffer from scratch.
   const incrementalRoadsActiveRef = useRef(false);
+  // Set by notifyScaleChanged() when the minimum on-screen line width changes
+  // (see useMinLineWidthSync). Forces the object layer (crosswalk/parking/hatch
+  // fills + stop/yield lines) and the line mesh to regenerate even though no
+  // road/junction/display data actually changed, since only the WASM-side
+  // clamp width did. Road surfaces are untouched — they aren't thin geometry.
+  const minLineWidthDirtyRef = useRef(false);
 
   const updateSurfaceMesh = useCallback(async () => {
     const renderer = rendererRef.current;
@@ -268,7 +277,7 @@ export function useViewportMeshes({
       const needRoads = roadsChanged || colorModeChanged || registryIncomplete || cachedRoadVertsRef.current.length === 0;
       const needJunctions = junctionsChanged || roadsChanged || cachedJunctionVertsRef.current.length === 0;
       const needSignals = roadsChanged || junctionsChanged || cachedSignalVertsRef.current.length === 0;
-      const needObjects = roadsChanged || junctionsChanged || cachedObjectVertsRef.current.length === 0;
+      const needObjects = roadsChanged || junctionsChanged || cachedObjectVertsRef.current.length === 0 || minLineWidthDirtyRef.current;
 
       surfaceDepsRef.current = { roadRefs: newRoadRefs, junctionRefs: newJunctionRefs };
       surfaceColorModeRef.current = display.colorMode;
@@ -575,7 +584,10 @@ export function useViewportMeshes({
 
       // Check if underlying data changed — viewMode NOT included (all layers cached regardless)
       const lineKey = dataDisplayKey + ':' + projectLoadVersion;
-      const dataChanged = lineKey !== lineDepsKeyRef.current || visibleProject !== lineProjectRef.current;
+      const dataChanged =
+        lineKey !== lineDepsKeyRef.current ||
+        visibleProject !== lineProjectRef.current ||
+        minLineWidthDirtyRef.current;
 
       if (dataChanged) {
         lineDepsKeyRef.current = lineKey;
@@ -688,10 +700,27 @@ export function useViewportMeshes({
     return lastUploadedLineVertsRef.current;
   }, []);
 
+  // ── Force a regen after the minimum line width changes ─────────────────
+  const notifyScaleChanged = useCallback(async () => {
+    minLineWidthDirtyRef.current = true;
+    try {
+      await Promise.all([updateSurfaceMesh(), updateLineMesh()]);
+    } finally {
+      minLineWidthDirtyRef.current = false;
+    }
+  }, [updateSurfaceMesh, updateLineMesh]);
+
   // ── Trigger mesh updates when deps change ──────────────────────────────
   useEffect(() => { updateSurfaceMesh(); }, [updateSurfaceMesh]);
   useEffect(() => { updateLineMesh(); }, [updateLineMesh]);
   useEffect(() => { void updateOverlayMesh(); }, [updateOverlayMesh]);
 
-  return { getVisibleProject, updateSurfaceMesh, updateLineMesh, updateOverlayMesh, getCachedLineVertices };
+  return {
+    getVisibleProject,
+    updateSurfaceMesh,
+    updateLineMesh,
+    updateOverlayMesh,
+    getCachedLineVertices,
+    notifyScaleChanged,
+  };
 }

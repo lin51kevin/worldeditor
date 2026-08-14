@@ -133,6 +133,11 @@ export abstract class BasePlatformService implements PlatformService {
     return wasm.generate_center_line_vertices(JSON.stringify(project), sampleStep);
   }
 
+  async setMinLineWidthM(widthM: number): Promise<void> {
+    const wasm = await this.getWasm();
+    wasm.set_min_line_width_m(widthM);
+  }
+
   async generateSignalPaintVertices(project: Project, sampleStep: number): Promise<Float32Array> {
     const wasm = await this.getWasm();
     return wasm.generate_signal_paint_vertices(JSON.stringify(project), sampleStep);

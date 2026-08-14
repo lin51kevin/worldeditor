@@ -7,6 +7,7 @@ mod helpers;
 mod junction_mesh;
 mod line_gen;
 mod marking_mesh;
+mod min_width;
 mod object_gen;
 mod object_palette;
 mod road_gen;
@@ -15,6 +16,7 @@ mod signal_arrows;
 mod signal_gen;
 mod signal_mesh;
 
+pub use min_width::set_min_line_width_m;
 pub use road_gen::*;
 pub use signal_gen::*;
 

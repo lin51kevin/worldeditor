@@ -1,5 +1,6 @@
 use super::colors::{mark_color, mark_line_width};
 use super::helpers::eval_lane_offset;
+use super::min_width::min_line_width_m;
 
 /// Emit all road-mark line vertices for a single `RoadMark` into `out`.
 ///
@@ -176,7 +177,7 @@ pub(super) fn gen_road_mark_line(
 ) -> Vec<[f32; 7]> {
     let mut verts = Vec::new();
     let z_lift = 0.015f32; // 15mm above road surface (matches C# RoadMarkConfig)
-    let half_w = (line_width * 0.5) as f64;
+    let half_w = (line_width.max(min_line_width_m() as f32) * 0.5) as f64;
     let dash_len = 4.0f64; // 4m solid segment (C# standard)
     let cycle = 10.0f64; // 4m dash + 6m gap = 10m period
     let [r, g, b, a] = color;

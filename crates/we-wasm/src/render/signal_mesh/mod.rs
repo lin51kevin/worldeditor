@@ -1,3 +1,5 @@
+use super::min_width::min_line_width_m;
+
 /// Marker color for vertical sign types.
 pub(crate) fn sign_marker_color(signal_type: &str) -> [f32; 4] {
     match signal_type {
@@ -23,7 +25,7 @@ pub(super) fn emit_transverse_bar(
 ) {
     let [r, g, b, a] = color;
     let half_w = width / 2.0;
-    let half_t = thickness / 2.0;
+    let half_t = thickness.max(min_line_width_m()) / 2.0;
     // Generate a rotated rectangle: 2 points per lateral edge × 2 along-road edges
     // Use heading perpendicular: the road heading gives forward; ±90° gives lateral.
     let hdg = ref_pt.hdg;
@@ -174,7 +176,7 @@ pub(crate) fn emit_thick_segment(
     out: &mut Vec<f32>,
 ) {
     let [r, g, bl, al] = color;
-    let hw = thickness / 2.0;
+    let hw = thickness.max(min_line_width_m()) / 2.0;
     let (ax, ay) = a;
     let (bx, by) = b;
     let dx = bx - ax;

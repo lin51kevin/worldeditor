@@ -18,6 +18,7 @@ import { useGeometryEditMode } from '../hooks/useGeometryEditMode';
 import { useLaneLineEdit } from '../hooks/useLaneLineEdit';
 import { useViewportKeyboard } from '../hooks/useViewportKeyboard';
 import { useViewportMeshes } from '../hooks/useViewportMeshes';
+import { useMinLineWidthSync } from '../hooks/useMinLineWidthSync';
 import { useSelectionHighlight } from '../hooks/useSelectionHighlight';
 import { useRoadLinkHighlight } from '../hooks/useRoadLinkHighlight';
 import { useMeasureOverlay } from '../hooks/useMeasureOverlay';
@@ -67,10 +68,13 @@ export function Viewport() {
   useTemplateTexturePreload({ rendererRef, status });
 
   // ── Mesh lifecycle (surface + lines + visible project + WASM cache) ──
-  const { getVisibleProject, updateSurfaceMesh, updateLineMesh, getCachedLineVertices } = useViewportMeshes({
+  const { getVisibleProject, updateSurfaceMesh, updateLineMesh, getCachedLineVertices, notifyScaleChanged } = useViewportMeshes({
     rendererRef,
     status,
   });
+
+  // Keep thin lane-mark/crosswalk/outline geometry at least ~1.5px wide on screen.
+  useMinLineWidthSync({ rendererRef, status, notifyScaleChanged });
 
   const arcDraw = useArcDrawMode({
     canvasRef,

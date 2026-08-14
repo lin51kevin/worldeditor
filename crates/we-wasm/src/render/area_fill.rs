@@ -10,6 +10,7 @@ use we_core::geometry::eval::{RefLinePoint, offset_point};
 use we_core::model::{CornerType, Geometry, ObjectType, Point3D, RoadObject};
 
 use super::helpers::road_point_at_s;
+use super::min_width::min_line_width_m;
 use super::signal_arrows::arrow_triangles;
 
 /// Outline is lifted slightly above the fill so it stays visible on top of it.
@@ -198,6 +199,7 @@ pub(crate) fn fill_polygon_stripes(
     if world_poly.len() < 3 || stripe_width <= 0.0 {
         return;
     }
+    let stripe_width = stripe_width.max(min_line_width_m());
     // Clamp the period so malformed userData cannot spin the sweep loop.
     let stripe_period = stripe_period.max(stripe_width).max(0.05);
 

@@ -348,6 +348,21 @@ export interface WorldEditorRenderer {
     enabled: boolean,
     options?: { alphaMin?: number; sigma?: number; depthBias?: number },
   ): void;
+
+  /**
+   * Subscribe to "the minimum on-screen line width changed, re-generate and
+   * re-upload lane-line/object geometry" notifications, fired (debounced)
+   * whenever the camera zoom changes enough to require a different minimum
+   * width for thin lane marks / crosswalk stripes / area outlines to stay
+   * visible (MSAA is disabled, so sub-pixel geometry can otherwise drop out
+   * at low zoom). The adapter keeps the underlying WASM minimum-width value
+   * in sync automatically; this callback only exists so the host knows when
+   * to re-call `generate_lane_line_vertices` / `generate_object_vertices` and
+   * re-upload, since the SDK doesn't own the host's project data to do this
+   * itself. Pass `null` to unsubscribe. Optional so hosts bundling an older
+   * SDK degrade gracefully (no gap-avoidance without this wiring).
+   */
+  onLineWidthRefreshNeeded?(callback: (() => void) | null): void;
 }
 
 /** WASM compute contract consumed by rnk-next. */
@@ -387,6 +402,16 @@ export interface WorldEditorWasm {
   generate_object_vertices(projectJson: string): Float32Array;
   /** Sprite/paint metadata for textured billboard rendering (signs / lights). */
   generate_sprite_data(projectJson: string): SpriteDataResult;
+  /**
+   * Set the minimum world-space width (metres) enforced on thin lane-mark /
+   * crosswalk-stripe / area-outline geometry so it doesn't drop below the
+   * rasterizer's single-sample coverage at low zoom (MSAA is disabled). The
+   * adapter's renderer already keeps this synced to camera zoom automatically
+   * (see {@link WorldEditorRenderer.onLineWidthRefreshNeeded}); call this
+   * directly only for manual control. Optional so hosts bundling an older
+   * SDK degrade gracefully.
+   */
+  set_min_line_width_m?(width_m: number): void;
 
   // ── Point cloud parsing (logsim scene mesh) ─────────────────────────
   /** Parse a point-cloud file (`pcd`/`ply`/`xyz`) and return an opaque handle. */
@@ -518,6 +543,38 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     return [clientX - rect.left, clientY - rect.top];
   };
 
+  // ── Minimum on-screen line width (mirrors useMinLineWidthSync.ts) ─────────
+  // Keeps the WASM-side minimum enforced on thin lane-mark / crosswalk-stripe /
+  // area-outline geometry in sync with zoom, same target/bucket/debounce as the
+  // main app. Unlike the main app, this adapter doesn't own the host's project
+  // data, so it can't regenerate/reupload geometry itself — it only keeps the
+  // WASM value current and notifies via `onLineWidthRefreshNeeded` so the host
+  // can re-call `generate_lane_line_vertices` / `generate_object_vertices`.
+  const MIN_LINE_PIXELS = 1.5;
+  const LINE_WIDTH_DEBOUNCE_MS = 200;
+  let lineWidthBucket: number | null = null;
+  let lineWidthTimer: ReturnType<typeof setTimeout> | null = null;
+  let onLineWidthRefreshNeeded: (() => void) | null = null;
+  const bucketOfMpp = (mpp: number) => Math.round(Math.log2(Math.max(mpp, 1e-6)));
+  const applyMinLineWidth = (mpp: number) => {
+    wasm.set_min_line_width_m(MIN_LINE_PIXELS * mpp);
+    onLineWidthRefreshNeeded?.();
+  };
+  renderer.setLineWidthScaleCallback(({ mpp }) => {
+    const bucket = bucketOfMpp(mpp);
+    if (bucket === lineWidthBucket) return;
+    lineWidthBucket = bucket;
+    if (lineWidthTimer) clearTimeout(lineWidthTimer);
+    lineWidthTimer = setTimeout(() => {
+      lineWidthTimer = null;
+      applyMinLineWidth(mpp);
+    }, LINE_WIDTH_DEBOUNCE_MS);
+  });
+  // Seed immediately (no debounce) so the first host-side generation already
+  // uses the right width instead of waiting for a subsequent zoom change.
+  lineWidthBucket = bucketOfMpp(renderer.getMetersPerPixel());
+  applyMinLineWidth(renderer.getMetersPerPixel());
+
   return {
     async init(canvas: HTMLCanvasElement): Promise<boolean> {
       // Match the backing store to the element's layout size so the first frame
@@ -531,7 +588,12 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
       if (ok) renderer.setDimension('2d');
       return ok;
     },
-    dispose: () => renderer.dispose(),
+    dispose: () => {
+      renderer.setLineWidthScaleCallback(null);
+      if (lineWidthTimer) clearTimeout(lineWidthTimer);
+      onLineWidthRefreshNeeded = null;
+      renderer.dispose();
+    },
     render: () => renderer.render(),
     markSceneDirty: () => renderer.markSceneDirty(),
     resize: (width, height) => {
@@ -817,6 +879,9 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     setSplatOccluderDepth: (enabled, options) => {
       renderer.setSplatOccluderDepth(enabled, options);
     },
+    onLineWidthRefreshNeeded: (callback) => {
+      onLineWidthRefreshNeeded = callback;
+    },
   };
 }
 
@@ -964,6 +1029,8 @@ function adaptWasm(wasm: WasmModule): WorldEditorWasm {
 
     generate_sprite_data: (projectJson) =>
       wasm.generate_sprite_data(projectJson) as SpriteDataResult,
+
+    set_min_line_width_m: (width_m) => wasm.set_min_line_width_m(width_m),
 
     // ── Point cloud parsing (WASM registry; JS loads once, reads buffer, frees) ──
     load_point_cloud: (bytes, format) => wasm.load_point_cloud(bytes, format),

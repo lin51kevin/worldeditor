@@ -56,6 +56,7 @@ declare module '../../wasm/pkg/we_wasm' {
   export function generate_junction_vertices(project_json: string): Float32Array;
   export function generate_lane_line_vertices(project_json: string, sample_step: number): Float32Array;
   export function generate_center_line_vertices(project_json: string, sample_step: number): Float32Array;
+  export function set_min_line_width_m(width_m: number): void;
   export function generate_signal_paint_vertices(project_json: string, sample_step: number): Float32Array;
   export function generate_object_vertices(project_json: string): Float32Array;
   export function generate_object_vertices_cached(): Float32Array;

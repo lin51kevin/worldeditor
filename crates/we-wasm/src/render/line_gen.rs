@@ -2,6 +2,7 @@ use wasm_bindgen::prelude::*;
 
 use super::helpers::sum_widths_at_ds;
 use super::marking_mesh::emit_road_mark;
+use super::min_width::min_line_width_m;
 
 /// Generate lane boundary line vertices from a project JSON. Returns Float32Array.
 ///
@@ -202,7 +203,7 @@ pub fn generate_center_line_vertices(
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
 
     let mut all_floats = Vec::new();
-    let line_half_w = 0.10f64; // 0.2m wide ribbon
+    let line_half_w = (0.10f64).max(min_line_width_m() * 0.5); // 0.2m wide ribbon
     let z_lift = 0.02f32;
 
     for road in &project.roads {
@@ -269,7 +270,7 @@ pub fn generate_lane_boundary_vertices(
         serde_json::from_str(project_json).map_err(|e| JsError::new(&e.to_string()))?;
 
     let mut all_floats = Vec::new();
-    let line_half_w = 0.08f64; // ~0.16 m thin ribbon
+    let line_half_w = (0.08f64).max(min_line_width_m() * 0.5); // ~0.16 m thin ribbon
     let z_lift = 0.04f32;
     let [r, g, b, a]: [f32; 4] = [0.45, 0.45, 0.50, 0.85]; // mid-gray, visible on both dark & light themes
 
