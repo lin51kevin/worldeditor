@@ -348,6 +348,22 @@ export interface WorldEditorRenderer {
     enabled: boolean,
     options?: { alphaMin?: number; sigma?: number; depthBias?: number },
   ): void;
+  /**
+   * Budget the merged actor (NPC/ego) splat total across all instances; beyond
+   * it every instance is thinned proportionally. `0` (the default) derives a
+   * budget from the device's WebGPU buffer limits, so opponents keep their
+   * source resolution whenever the hardware can hold the merged cloud.
+   */
+  setActorSplatBudget?(maxTotal: number): void;
+  /**
+   * Subscribe to "an asynchronous splat depth sort just landed" notifications.
+   * The CPU worker sort delivers its order (and frustum-visible count) one or
+   * more frames after the camera moved, so a host that renders on demand keeps
+   * showing the pre-sort frame (wrong blend order, stale visible count) until
+   * something else repaints — the "nudge the mouse and it looks right again"
+   * symptom. Repaint one frame from this callback. Pass `null` to unsubscribe.
+   */
+  onSplatOrderChanged?(callback: (() => void) | null): void;
 
   /**
    * Subscribe to "the minimum on-screen line width changed, re-generate and
@@ -878,6 +894,12 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     },
     setSplatOccluderDepth: (enabled, options) => {
       renderer.setSplatOccluderDepth(enabled, options);
+    },
+    setActorSplatBudget: (maxTotal: number) => {
+      renderer.setActorSplatBudget(maxTotal);
+    },
+    onSplatOrderChanged: (callback) => {
+      renderer.onSplatOrderChanged(callback);
     },
     onLineWidthRefreshNeeded: (callback) => {
       onLineWidthRefreshNeeded = callback;

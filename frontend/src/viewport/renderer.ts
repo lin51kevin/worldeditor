@@ -230,6 +230,13 @@ export class ViewportRenderer {
   private actorSplatRenderer: SplatRenderer | null = null;
   private actorSplatInstancer: import('./gaussian/actorSplatInstancer').ActorSplatInstancer | null = null;
 
+  // Desired merged actor-splat budget (0 = derive from the device limits),
+  // remembered for the same lazy-creation reason as `splatGpuSortEnabled`.
+  private actorSplatBudget = 0;
+
+  // Host notification fired when an async splat sort lands (see onSplatOrderChanged).
+  private splatOrderChangedCallback: (() => void) | null = null;
+
   // Desired per-frame GPU compute depth-sort state. Remembered here because the
   // splat renderers are created LAZILY on first upload — long after the host
   // calls setSplatGpuSort() (typically right after init, when both renderers are
@@ -937,7 +944,7 @@ export class ViewportRenderer {
     }
     if (!this.splatRenderer) {
       this.splatRenderer = createSplatRenderer(this.device, this.format, MSAA_SAMPLE_COUNT, () =>
-        this.markSceneDirty(),
+        this.notifySplatOrderChanged(),
       );
       this.splatRenderer.setGpuSort(this.splatGpuSortEnabled);
       this.splatRenderer.setOccluderDepth(
@@ -1019,7 +1026,7 @@ export class ViewportRenderer {
     }
     if (!this.actorSplatRenderer) {
       this.actorSplatRenderer = createSplatRenderer(this.device, this.format, MSAA_SAMPLE_COUNT, () =>
-        this.markSceneDirty(),
+        this.notifySplatOrderChanged(),
       );
       this.actorSplatRenderer.setGpuSort(this.splatGpuSortEnabled);
     }
@@ -1057,8 +1064,10 @@ export class ViewportRenderer {
       this.actorSplatInstancer = new ActorSplatInstancer(
         this.device,
         this.format,
-        () => this.markSceneDirty(),
+        () => this.notifySplatOrderChanged(),
       );
+      // Lazy creation: re-apply the desired budget (see setActorSplatBudget).
+      this.actorSplatInstancer.setSplatBudget(this.actorSplatBudget);
     }
     this.actorSplatInstancer.uploadModel(url, data, degree);
   }
@@ -1078,6 +1087,20 @@ export class ViewportRenderer {
   clearActorSplatInstances(): void {
     this.actorSplatInstancer?.dispose();
     this.actorSplatInstancer = null;
+    this.markSceneDirty();
+  }
+
+  /**
+   * Budget the merged actor (NPC/ego) splat total; beyond it every instance is
+   * thinned proportionally. `0` (the default) lets the instancer derive a budget
+   * from the device's WebGPU buffer limits, so opponents keep their source
+   * resolution whenever the hardware can hold the merged cloud.
+   */
+  setActorSplatBudget(maxTotal: number): void {
+    // Persist so an instancer created LATER (lazy, on first model upload) still
+    // picks up the desired budget at its creation site.
+    this.actorSplatBudget = maxTotal;
+    this.actorSplatInstancer?.setSplatBudget(maxTotal);
     this.markSceneDirty();
   }
 
@@ -1239,6 +1262,24 @@ export class ViewportRenderer {
   markSceneDirty(): void {
     this.sceneDirty = true;
     this.renderLoop?.wakeUp();
+  }
+
+  /**
+   * Subscribe to "an asynchronous splat depth sort just landed" notifications.
+   * The CPU worker sort delivers its order (and frustum-visible count) one or
+   * more frames after the camera moved, and `markSceneDirty()` only wakes an
+   * internal render loop — which embedding hosts never start. Without this hook
+   * such a host keeps showing the pre-sort frame (wrong blend order, stale
+   * visible count) until something else happens to repaint, the classic "nudge
+   * the mouse and it looks right again" symptom. Pass `null` to unsubscribe.
+   */
+  onSplatOrderChanged(callback: (() => void) | null): void {
+    this.splatOrderChangedCallback = callback;
+  }
+
+  private notifySplatOrderChanged(): void {
+    this.markSceneDirty();
+    this.splatOrderChangedCallback?.();
   }
 
   /**

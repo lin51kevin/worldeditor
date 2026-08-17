@@ -30,15 +30,19 @@ import { MSAA_SAMPLE_COUNT } from '../rendererResources';
 const TRANSFORM_FLOATS = 8;
 
 /**
- * Global cap on the total number of actor splats merged across every instance.
- * Each model is already capped individually, but the sum across all mapped
- * actors is not — an unbounded total makes the per-frame world-position buffer
- * (and the merged/order buffers) exceed the engine's `ArrayBuffer` limit and
- * throw `RangeError: Array buffer allocation failed`. When the raw total exceeds
- * this budget every instance is thinned proportionally so the total stays
- * bounded. 2,000,000 splats ≈ 96 MB merged + 24 MB world positions.
+ * Fallback budget on the total number of actor splats merged across every
+ * instance, used only when the device reports no buffer limits. Normally the
+ * budget is derived from `maxStorageBufferBindingSize` / `maxBufferSize` (see
+ * `effectiveSplatBudget`) so opponents keep their source resolution whenever the
+ * hardware can hold the merged cloud; a host may pin an explicit budget via
+ * `setSplatBudget`. Beyond the budget every instance is thinned proportionally,
+ * because an unbounded total makes the merged / order / world-position buffers
+ * exceed the allocation limit and throw `RangeError`.
  */
-const MAX_ACTOR_SPLAT_TOTAL = 2_000_000;
+const FALLBACK_ACTOR_SPLAT_TOTAL = 2_000_000;
+
+/** Below this a further halving retry is pointless; give up instead. */
+const MIN_ACTOR_SPLAT_TOTAL = 50_000;
 
 /** One actor instance posed in the render frame (world minus scene origin). */
 export interface ActorInstance {
@@ -84,6 +88,9 @@ export class ActorSplatInstancer {
    * ordering stays consistent with the sort's index buffer.
    */
   private instancePlan: { model: ModelEntry; instanceIndex: number; effCount: number }[] = [];
+
+  /** Host-pinned merged splat budget; 0 = derive it from the device limits. */
+  private splatBudget = 0;
 
   // Per-frame tiny write
   private transformsBuffer: GPUBuffer | null = null;
@@ -316,6 +323,29 @@ export class ActorSplatInstancer {
     pass.draw(4, drawCount);
   }
 
+  /**
+   * Pin the merged splat budget across all actor instances; `0` (the default)
+   * derives it from the device's WebGPU buffer limits. Forces a merged-buffer
+   * rebuild on the next instance update.
+   */
+  setSplatBudget(maxTotal: number): void {
+    const next = Number.isFinite(maxTotal) && maxTotal > 0 ? Math.floor(maxTotal) : 0;
+    if (next === this.splatBudget) return;
+    this.splatBudget = next;
+    this.lastInstanceKey = '';
+  }
+
+  /** Splats the device's buffer limits can hold at `stride` u32 words per splat. */
+  private effectiveSplatBudget(stride: number): number {
+    if (this.splatBudget > 0) return this.splatBudget;
+    const maxBytes = Math.min(
+      this.device.limits?.maxStorageBufferBindingSize ?? 0,
+      this.device.limits?.maxBufferSize ?? Number.MAX_SAFE_INTEGER,
+    );
+    if (!Number.isFinite(maxBytes) || maxBytes <= 0) return FALLBACK_ACTOR_SPLAT_TOTAL;
+    return Math.max(1, Math.floor(maxBytes / (stride * Uint32Array.BYTES_PER_ELEMENT)));
+  }
+
   /** Release all GPU resources and terminate the sort worker. */
   dispose(): void {
     for (const m of this.models.values()) m.gpuBuffer.destroy();
@@ -350,48 +380,62 @@ export class ActorSplatInstancer {
 
     // Raw (uncapped) total across all present actor models.
     let rawTotal = 0;
-    for (const inst of instances) rawTotal += this.models.get(inst.url)?.count ?? 0;
+    let maxDegree = 0;
+    for (const inst of instances) {
+      const model = this.models.get(inst.url);
+      if (!model) continue;
+      rawTotal += model.count;
+      if (model.degree > maxDegree) maxDegree = model.degree;
+    }
     if (rawTotal === 0) {
       this.totalCount = 0;
       return;
     }
-
-    // Thin each model proportionally when the raw total exceeds the global
-    // budget so the merged / order / world-position allocations stay bounded.
-    const scale = rawTotal > MAX_ACTOR_SPLAT_TOTAL ? MAX_ACTOR_SPLAT_TOTAL / rawTotal : 1;
-    let total = 0;
-    let maxDegree = 0;
-    for (let i = 0; i < instances.length; i++) {
-      const model = this.models.get(instances[i]!.url);
-      if (!model) continue;
-      const effCount = scale === 1 ? model.count : Math.max(1, Math.floor(model.count * scale));
-      this.instancePlan.push({ model, instanceIndex: i, effCount });
-      total += effCount;
-      if (model.degree > maxDegree) maxDegree = model.degree;
-    }
-    this.totalCount = total;
     this.mergedDegree = maxDegree;
-    if (total === 0) return;
     // Merge every instance at the max degree present; lower-degree models get
     // their higher SH bands zero-extended (a zero coefficient contributes nothing).
     const outStride = splatStrideForDegree(maxDegree);
 
+    // Thin each model proportionally only when the raw total exceeds what the
+    // device can hold, halving the budget and retrying if the host's pinned
+    // budget still turns out to be too large to allocate.
+    let budget = this.effectiveSplatBudget(outStride);
     let merged: Uint32Array<ArrayBuffer>;
     let instanceIds: Uint32Array<ArrayBuffer>;
     let order: Uint32Array<ArrayBuffer>;
-    try {
-      merged = new Uint32Array(total * outStride);
-      instanceIds = new Uint32Array(total);
-      order = new Uint32Array(total);
-    } catch (err) {
-      console.warn(
-        '[actorSplats] merged buffer allocation failed; skipping actor splats',
-        err,
-      );
-      this.totalCount = 0;
+    for (;;) {
+      const scale = rawTotal > budget ? budget / rawTotal : 1;
+      let total = 0;
       this.instancePlan = [];
-      return;
+      for (let i = 0; i < instances.length; i++) {
+        const model = this.models.get(instances[i]!.url);
+        if (!model) continue;
+        const effCount = scale === 1 ? model.count : Math.max(1, Math.floor(model.count * scale));
+        this.instancePlan.push({ model, instanceIndex: i, effCount });
+        total += effCount;
+      }
+      this.totalCount = total;
+      if (total === 0) return;
+      try {
+        merged = new Uint32Array(total * outStride);
+        instanceIds = new Uint32Array(total);
+        order = new Uint32Array(total);
+        break;
+      } catch (err) {
+        if (budget <= MIN_ACTOR_SPLAT_TOTAL) {
+          console.warn(
+            '[actorSplats] merged buffer allocation failed; skipping actor splats',
+            err,
+          );
+          this.totalCount = 0;
+          this.instancePlan = [];
+          return;
+        }
+        budget = Math.max(MIN_ACTOR_SPLAT_TOTAL, Math.floor(budget / 2));
+      }
     }
+
+    const total = this.totalCount;
 
     let splatWord = 0;
     let splatIndex = 0;
