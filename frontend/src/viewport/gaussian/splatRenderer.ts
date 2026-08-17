@@ -1074,7 +1074,7 @@ export function createSplatRenderer(
     device,
     bindGroupLayout,
     pipeline,
-    createWorkerSplatSorter(),
+    createWorkerSplatSorter('scene'),
     onOrderChanged,
     packedFallbackBindGroupLayout,
     packedFallbackPipeline,

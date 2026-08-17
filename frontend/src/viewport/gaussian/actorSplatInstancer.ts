@@ -104,6 +104,8 @@ export class ActorSplatInstancer {
   // Sort (off-thread CPU worker)
   private readonly sort: SplatSortController;
   private _visibleCount = 0;
+  /** False while a positions upload + sort round-trip is still outstanding. */
+  private sortIdle = true;
 
   // Pipeline + layouts
   private readonly pipeline: GPURenderPipeline;
@@ -114,7 +116,7 @@ export class ActorSplatInstancer {
     private readonly device: GPUDevice,
     format: GPUTextureFormat,
     private readonly onOrderChanged?: () => void,
-    sorter: SplatSorter = createWorkerSplatSorter(),
+    sorter: SplatSorter = createWorkerSplatSorter('actor'),
   ) {
     this.bgl0 = device.createBindGroupLayout({
       entries: [
@@ -170,11 +172,19 @@ export class ActorSplatInstancer {
     });
 
     this.sort = new SplatSortController(sorter, (indices, visibleCount) => {
-      if (this.orderBuffer && indices.length <= this.totalCount) {
+      this.sortIdle = true;
+      // A sort answered against a superseded cloud is sized for that cloud;
+      // applying it would leave the order partly identity (visibly unsorted).
+      if (this.orderBuffer && indices.length === this.totalCount) {
         this.device.queue.writeBuffer(
           this.orderBuffer, 0, indices.buffer, 0, indices.length * 4,
         );
         this._visibleCount = visibleCount;
+      } else {
+        console.info(
+          `[actorSplats] sort result not applied: got ${indices.length}, ` +
+            `expected ${this.totalCount}, orderBuffer=${this.orderBuffer ? 'yes' : 'no'}`,
+        );
       }
       this.onOrderChanged?.();
     });
@@ -262,8 +272,16 @@ export class ActorSplatInstancer {
     // Compute world-space XYZ only (O(N×3)) and hand off to sort worker. The
     // plan drives the same thinned subset the merged buffer was built from, so
     // world-position index k maps to merged splat k (and thus the sort order).
+    //
+    // Only re-arm once the previous round-trip landed: this runs every frame
+    // during playback, and `setSplats` restarts the whole sort cycle, so
+    // re-arming unconditionally cancels the in-flight sort before a cloud this
+    // large can finish one — the order buffer then never leaves its identity
+    // (visibly unsorted) state for as long as playback runs. Sorting against
+    // positions from a frame or two ago only ages the depth order slightly.
     // Guarded: an over-large allocation must degrade (stale sort this frame)
     // rather than crash the app.
+    if (!this.sortIdle) return;
     try {
       const worldPositions = new Float32Array(this.totalCount * 3);
       let out = 0;
@@ -283,6 +301,7 @@ export class ActorSplatInstancer {
       }
       // setSplats resets lastPose so the next onCamera always re-sorts.
       this.sort.setSplats(worldPositions);
+      this.sortIdle = false;
     } catch (err) {
       console.warn(
         '[actorSplats] world-position allocation failed; skipping sort this frame',
@@ -365,6 +384,7 @@ export class ActorSplatInstancer {
     this.totalCount = 0;
     this.lastInstanceKey = '';
     this.instancePlan = [];
+    this.sortIdle = true;
   }
 
   private rebuildMergedBuffers(instances: readonly ActorInstance[]): void {
@@ -377,6 +397,9 @@ export class ActorSplatInstancer {
     this.group0 = null;
     this._visibleCount = 0;
     this.instancePlan = [];
+    // The cloud changed, so any outstanding sort is now length-mismatched and
+    // will be discarded; re-arm so the new one is pushed on this same frame.
+    this.sortIdle = true;
 
     // Raw (uncapped) total across all present actor models.
     let rawTotal = 0;
@@ -400,6 +423,13 @@ export class ActorSplatInstancer {
     // device can hold, halving the budget and retrying if the host's pinned
     // budget still turns out to be too large to allocate.
     let budget = this.effectiveSplatBudget(outStride);
+    if (rawTotal > budget) {
+      console.info(
+        `[actorSplats] thinning: raw=${rawTotal} budget=${budget} degree=${maxDegree} ` +
+          `stride=${outStride} (device maxStorageBufferBindingSize=` +
+          `${this.device.limits?.maxStorageBufferBindingSize ?? 'n/a'})`,
+      );
+    }
     let merged: Uint32Array<ArrayBuffer>;
     let instanceIds: Uint32Array<ArrayBuffer>;
     let order: Uint32Array<ArrayBuffer>;

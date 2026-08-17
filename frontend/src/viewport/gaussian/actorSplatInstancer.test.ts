@@ -53,6 +53,34 @@ function instance(url: string): ActorInstance {
   return { url, cos_yaw: 1, sin_yaw: 0, hw: 1, hz: 0, px: 0, py: 0, pz: 0 };
 }
 
+/** Sorter stub whose sort completes only when the test calls `finish`. */
+function deferredSorter(): {
+  sorter: SplatSorter;
+  initCount: () => number;
+  finish: () => void;
+} {
+  let inits = 0;
+  let pending: (() => void) | null = null;
+  const sorter: SplatSorter = {
+    init: () => {
+      inits++;
+    },
+    sort: (_camPos, _viewDir, generation, done) => {
+      pending = () => done(new Uint32Array(0), 0, generation);
+    },
+    dispose: () => {},
+  };
+  return {
+    sorter,
+    initCount: () => inits,
+    finish: () => {
+      const run = pending;
+      pending = null;
+      run?.();
+    },
+  };
+}
+
 describe('ActorSplatInstancer capping', () => {
   beforeEach(() => vi.spyOn(console, 'warn').mockImplementation(() => {}));
   afterEach(() => vi.restoreAllMocks());
@@ -129,5 +157,46 @@ describe('ActorSplatInstancer capping', () => {
 
     expect(() => inst.updateInstances(many)).not.toThrow();
     expect(inst.count).toBeLessThanOrEqual(2_000_000);
+  });
+});
+
+describe('ActorSplatInstancer sort scheduling', () => {
+  beforeEach(() => vi.spyOn(console, 'warn').mockImplementation(() => {}));
+  afterEach(() => vi.restoreAllMocks());
+
+  it('does not restart the sort cycle while one is outstanding', () => {
+    const { sorter, initCount, finish } = deferredSorter();
+    const inst = new ActorSplatInstancer(fakeDevice(), 'rgba8unorm', undefined, sorter);
+    inst.uploadModel('a', makeModel(1000));
+
+    // Playback drives updateInstances every frame; without gating, each call
+    // re-inits the worker and cancels the in-flight sort, so it never lands.
+    inst.updateInstances([instance('a')]);
+    expect(initCount()).toBe(1);
+    for (let frame = 0; frame < 10; frame++) inst.updateInstances([instance('a')]);
+    expect(initCount()).toBe(1);
+
+    // Once the round-trip lands the next frame re-arms with fresh positions.
+    inst.onCamera(
+      { position: [0, 0, 10], target: [0, 0, 0], up: [0, 1, 0] } as never,
+      '2d', 1, 100, 100,
+    );
+    finish();
+    inst.updateInstances([instance('a')]);
+    expect(initCount()).toBe(2);
+  });
+
+  it('re-arms immediately when the instance set changes', () => {
+    const { sorter, initCount } = deferredSorter();
+    const inst = new ActorSplatInstancer(fakeDevice(), 'rgba8unorm', undefined, sorter);
+    inst.uploadModel('a', makeModel(1000));
+
+    inst.updateInstances([instance('a')]);
+    expect(initCount()).toBe(1);
+
+    // A different actor set rebuilds the merged buffer, so the outstanding
+    // sort is discarded and fresh positions must go out at once.
+    inst.updateInstances([instance('a'), instance('a')]);
+    expect(initCount()).toBe(2);
   });
 });
