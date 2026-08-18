@@ -252,13 +252,6 @@ export function renderFrame(r: RendererFrameInternals): void {
   // Draw bridge/tunnel overlays (above road surface, below lane lines)
   drawBatched(pass, r.overlayMeshes, r.basicPipeline, r.basicBindGroup, 'basic');
 
-  // Draw case-actor trajectory ribbons, then bounding boxes on top. These use a
-  // translucent, non-depth-writing pipeline so the box's own faces blend in a
-  // stable order (classic see-through bounding-box fill) instead of
-  // self-occluding under reverse-Z depth writes.
-  drawBatched(pass, r.pathMeshes, r.actorPipeline, r.basicBindGroup, 'basic');
-  drawBatched(pass, r.actorMeshes, r.actorPipeline, r.basicBindGroup, 'basic');
-
   // Draw lane lines (between road surface and markings)
   drawBatched(pass, r.laneLineMeshes, r.highlightPipeline, r.basicBindGroup, 'highlight');
 
@@ -295,6 +288,15 @@ export function renderFrame(r: RendererFrameInternals): void {
   if (r.staticSceneVisible) r.splatRenderer?.drawDepthOnly(pass);
   r.actorSplatRenderer?.draw(pass);
   r.actorSplatInstancer?.draw(pass);
+
+  // Case-actor trajectory ribbons + bounding boxes are editor overlays, so they
+  // are drawn AFTER every splat pass. Their pipeline never writes depth (the
+  // translucent box fill must not self-occlude under reverse-Z), which means a
+  // splat drawn later would blend straight over them — the box survived only
+  // where a splat happened to be depth-rejected by the OpenDRIVE road surface,
+  // so it looked fragmentary and vanished entirely once the map was hidden.
+  drawBatched(pass, r.pathMeshes, r.actorPipeline, r.basicBindGroup, 'basic');
+  drawBatched(pass, r.actorMeshes, r.actorPipeline, r.basicBindGroup, 'basic');
 
   pass.end();
   try {
