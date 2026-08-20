@@ -6,6 +6,7 @@ import {
   buildEgoBox,
   buildTrajSegments,
   interpPose,
+  isEntityActiveAt,
   getEntityInfoAt,
   playTraj,
 } from '../trajViewer';
@@ -104,11 +105,23 @@ describe('npc-actors/trajViewer.buildTrajBoxes', () => {
     expect(Math.abs(pose.yaw)).toBeCloseTo(180, 5);
   });
 
-  it('clamps to the last pose past the end time', () => {
+  it('excludes an entity once past its own last row time', () => {
     const data = parseTraj(CSV);
+    // ego's rows end at t=1, so t=100 is well past its own lifecycle.
     const boxes = buildTrajBoxes(data, 100);
-    const ego = boxes.find((b) => b.id === 'traj:ego')!;
-    expect(ego.position[0]).toBeCloseTo(10, 5);
+    expect(boxes.some((b) => b.id === 'traj:ego')).toBe(false);
+  });
+
+  it('excludes an entity before its own first row time', () => {
+    const data = parseTraj(CSV);
+    // npc1's rows start at t=0, ego's start at t=0 too — use a shifted entity.
+    const shifted = parseTraj([
+      'ID,Time,PositionX,PositionY,PositionZ,Yaw,Ego',
+      'late,5,0,0,0,0,N',
+      'late,6,1,0,0,0,N',
+    ].join('\n'));
+    const boxes = buildTrajBoxes(shifted, 1);
+    expect(boxes.some((b) => b.id === 'traj:late')).toBe(false);
   });
 
   it('includes the ego box by default', () => {
@@ -143,6 +156,33 @@ describe('npc-actors/trajViewer.buildEgoBox', () => {
   it('returns null when the trajectory has no ego entity', () => {
     const data = parseTraj('ID,Time,PositionX,PositionY,PositionZ,Yaw,Ego\nnpc,0,0,0,0,0,N');
     expect(buildEgoBox(data, 0)).toBeNull();
+  });
+
+  it('returns null once past the ego\'s own last row time', () => {
+    const data = parseTraj(CSV);
+    expect(buildEgoBox(data, 100)).toBeNull();
+  });
+});
+
+describe('npc-actors/trajViewer.isEntityActiveAt', () => {
+  it('is inactive for an entity with no rows', () => {
+    expect(isEntityActiveAt([], 0)).toBe(false);
+  });
+
+  it('is active only at the exact timestamp for a single-row entity', () => {
+    const rows = [{ time: 5 }];
+    expect(isEntityActiveAt(rows, 5)).toBe(true);
+    expect(isEntityActiveAt(rows, 4.999)).toBe(false);
+    expect(isEntityActiveAt(rows, 5.001)).toBe(false);
+  });
+
+  it('is active within (inclusive) a multi-row entity\'s own span', () => {
+    const rows = [{ time: 2 }, { time: 3 }, { time: 5 }];
+    expect(isEntityActiveAt(rows, 2)).toBe(true);
+    expect(isEntityActiveAt(rows, 4)).toBe(true);
+    expect(isEntityActiveAt(rows, 5)).toBe(true);
+    expect(isEntityActiveAt(rows, 1.999)).toBe(false);
+    expect(isEntityActiveAt(rows, 5.001)).toBe(false);
   });
 });
 

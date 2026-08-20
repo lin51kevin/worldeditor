@@ -29,7 +29,7 @@ import {
   splatBoundsCenter,
   mergePackedSplats,
 } from './gaussian/splatTransform';
-import { interpPose } from '../plugins/npc-actors';
+import { interpPose, isEntityActiveAt } from '../plugins/npc-actors';
 import type { TrajData } from '../plugins/npc-actors';
 import type { ActorInstance } from './gaussian/actorSplatInstancer';
 import { getViewportRenderer } from './viewportRef';
@@ -198,7 +198,7 @@ export function buildActorSplatFrame(
   const pieces: Uint32Array[] = [];
   for (const entity of data.entities) {
     const model = loadedModels[entity.id];
-    if (!model || entity.rows.length === 0) continue;
+    if (!model || !isEntityActiveAt(entity.rows, t)) continue;
     const pose = interpPose(entity.rows, t);
     const h = entity.height || 1.6;
     const translate: [number, number, number] = [
@@ -243,7 +243,7 @@ export function buildActorInstances(
   const instances: ActorInstance[] = [];
   for (const entity of data.entities) {
     const model = loadedModels[entity.id];
-    if (!model || entity.rows.length === 0) continue;
+    if (!model || !isEntityActiveAt(entity.rows, t)) continue;
     const pose = interpPose(entity.rows, t);
     const h = entity.height || 1.6;
     const yawRad = pose.yaw * DEG_TO_RAD;

@@ -179,9 +179,21 @@ export function interpPose(rows: TrajRow[], t: number): TrajRow {
   };
 }
 
+/**
+ * Whether an entity's own recorded rows cover absolute time `t` — its
+ * lifecycle window, as opposed to the trajectory's global time span. A
+ * single-row entity has no real span, so it is only "active" at that exact
+ * timestamp.
+ */
+export function isEntityActiveAt(rows: readonly { time: number }[], t: number): boolean {
+  if (rows.length === 0) return false;
+  if (rows.length === 1) return t === rows[0]!.time;
+  return t >= rows[0]!.time && t <= rows[rows.length - 1]!.time;
+}
+
 /** Build the oriented bounding box for a single entity at absolute time `t`. */
 function entityBox(entity: TrajEntity, t: number): CaseActorBox | null {
-  if (entity.rows.length === 0) return null;
+  if (!isEntityActiveAt(entity.rows, t)) return null;
   const pose = interpPose(entity.rows, t);
   const l = entity.length || 4.5;
   const w = entity.width || 2;

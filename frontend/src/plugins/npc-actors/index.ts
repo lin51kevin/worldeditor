@@ -30,6 +30,7 @@ export {
   trajBounds,
   trajTimeSpan,
   interpPose,
+  isEntityActiveAt,
   getEntityInfoAt,
   PATH_HALF_WIDTH,
   PATH_Z,
