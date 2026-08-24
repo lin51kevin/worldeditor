@@ -194,19 +194,19 @@ describe('SpriteRenderer batch grouping', () => {
 // ── updateUniforms ────────────────────────────────────────────────────────────
 
 describe('SpriteRenderer.updateUniforms', () => {
-  it('writes uniform buffer with viewport and scale values', () => {
+  it('writes uniform buffer with the projection scale terms', () => {
     const { renderer, device } = makeRenderer();
     const viewProj = new Float32Array(16).fill(0);
     viewProj[0] = 1; viewProj[5] = 1; viewProj[10] = 1; viewProj[15] = 1;
 
-    renderer.updateUniforms(viewProj, 1920, 1080, 2.5);
+    renderer.updateUniforms(viewProj, 1.5, 2.5);
 
     expect(device.queue.writeBuffer).toHaveBeenCalledOnce();
     const [, , data] = (device.queue.writeBuffer as ReturnType<typeof vi.fn>).mock.calls[0] as [unknown, unknown, Float32Array];
-    // data[16] = viewportWidth, data[17] = viewportHeight, data[18] = spriteScale
-    expect(data[16]).toBe(1920);
-    expect(data[17]).toBe(1080);
-    expect(data[18]).toBe(2.5);
+    // data[16] = projScaleX, data[17] = projScaleY, data[18..19] = padding
+    expect(data[16]).toBe(1.5);
+    expect(data[17]).toBe(2.5);
+    expect(data[18]).toBe(0);
   });
 });
 

@@ -6,7 +6,7 @@ import {
   niceNumber,
 } from './viewportMath';
 import { createFlyState, flyEnter, flyExit, flyLook, flyMove, flyAdjustSpeed, type FlyState } from './flyCamera';
-import { buildViewProjMatrix, unprojectGround, unprojectPlane, projectToScreen } from './cameraProjection';
+import { buildProjectionMatrix, buildViewProjMatrix, unprojectGround, unprojectPlane, projectToScreen } from './cameraProjection';
 
 export interface CameraState {
   position: [number, number, number];
@@ -349,6 +349,24 @@ export class CameraController {
     const camDist = this.getEffectiveCameraDistance();
     const halfWorldWidth = camDist * Math.tan(this.camera.fovY / 2);
     return (halfWorldWidth * 2) / Math.max(1, this.width);
+  }
+
+  /**
+   * Projection x/y scale terms (P00, P11) of the current projection matrix:
+   * clip-space units per world meter, before the perspective divide. Consumers
+   * that expand geometry in clip space (billboard sprites) use these to keep a
+   * true world size at any depth, unlike {@link getMetersPerPixel} which is a
+   * single approximation taken at the camera target distance.
+   */
+  getProjectionScale(): [number, number] {
+    const proj = buildProjectionMatrix(
+      this.camera,
+      this.dimensionMode,
+      this.numPixelsPerMeter,
+      this.width,
+      this.height,
+    );
+    return [proj[0] ?? 1, proj[5] ?? 1];
   }
 
   reportScale(): void {

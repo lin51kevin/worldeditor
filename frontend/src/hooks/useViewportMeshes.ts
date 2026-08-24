@@ -407,12 +407,11 @@ export function useViewportMeshes({
           const spriteInstances = spriteData.sprites.map((s) => ({
             position: s.pos as [number, number, number],
             textureUrl: texMgr.resolveSignalTexture(s.signal_type, s.subtype, s.value) ?? '',
-            // Size in world units (meters). The renderer passes pixelsPerMeter as
-            // sprite_scale so the billboard scales proportionally with zoom, just
-            // like road geometry. Use at least 0.5 m to keep tiny signals visible.
+            // Size in world units (meters); the shader keeps it world-sized at any
+            // depth. Use at least 0.5 m per axis to keep tiny signals visible.
             size: [
-              Math.max(s.w, s.h, 0.5),
-              Math.max(s.w, s.h, 0.5),
+              Math.max(s.w, 0.5),
+              Math.max(s.h, 0.5),
             ] as [number, number],
           })).filter((s) => s.textureUrl !== '');
 

@@ -15,7 +15,7 @@ export interface SpriteInstance {
   position: [number, number, number];
   /** Texture URL path (resolved from manifest). */
   textureUrl: string;
-  /** Display size in world units [width, height] (meters). Renderer converts to pixels via pixelsPerMeter. */
+  /** Display size in world units [width, height] (meters). */
   size: [number, number];
 }
 
@@ -258,14 +258,18 @@ export class SpriteRenderer {
     }
   }
 
-  /** Update uniform buffer with current frame's view-projection matrix. */
-  updateUniforms(viewProj: Float32Array, viewportWidth: number, viewportHeight: number, spriteScale: number): void {
+  /**
+   * Update uniform buffer with current frame's view-projection matrix and the
+   * projection's x/y scale terms (P00, P11), which convert the billboard's
+   * world-meter corner offsets into clip space.
+   */
+  updateUniforms(viewProj: Float32Array, projScaleX: number, projScaleY: number): void {
     if (!this.spriteUniformBuffer) return;
-    const data = new Float32Array(20); // 16 (mat4) + 2 (viewport) + 1 (scale) + 1 (pad)
+    const data = new Float32Array(20); // 16 (mat4) + 2 (proj scale) + 2 (pad)
     data.set(viewProj, 0);
-    data[16] = viewportWidth;
-    data[17] = viewportHeight;
-    data[18] = spriteScale;
+    data[16] = projScaleX;
+    data[17] = projScaleY;
+    data[18] = 0; // padding
     data[19] = 0; // padding
     this.device.queue.writeBuffer(this.spriteUniformBuffer, 0, data);
   }

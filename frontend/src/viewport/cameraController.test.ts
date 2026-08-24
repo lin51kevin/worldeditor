@@ -180,9 +180,27 @@ describe('CameraController', () => {
       expect(center!.x).toBeCloseTo(cam.state.target[0], 0);
       expect(center!.y).toBeCloseTo(cam.state.target[1], 0);
     });
+
+    it('getProjectionScale matches the ortho pixels-per-meter zoom', () => {
+      const [sx, sy] = cam.getProjectionScale();
+      // Ortho: one world meter spans (2 / viewportPixels) * pixelsPerMeter in NDC.
+      const pxPerMeter = 1 / cam.getMetersPerPixel();
+      expect(sx).toBeCloseTo((2 / 800) * pxPerMeter, 6);
+      expect(sy).toBeCloseTo((2 / 600) * pxPerMeter, 6);
+    });
   });
 
   describe('3D perspective mode', () => {
+    it('getProjectionScale returns the perspective focal terms', () => {
+      const [sx, sy] = cam.getProjectionScale();
+      const f = 1 / Math.tan(cam.state.fovY / 2);
+      expect(sy).toBeCloseTo(f, 6);
+      expect(sx).toBeCloseTo(f / (800 / 600), 6);
+      // Unlike the meters-per-pixel approximation, this is depth-independent:
+      // the shader divides by clip w, so sprites shrink with distance.
+      expect(sx).toBeGreaterThan(0);
+    });
+
     it('ignores pointer and wheel navigation while chase-camera input is active', () => {
       const before = [...cam.state.position];
       cam.setChaseCameraActive(true);

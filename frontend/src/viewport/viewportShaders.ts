@@ -102,12 +102,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
  * Vertex input (per-instance quad, 6 verts):
  *   position: vec3<f32>  — world center of the sprite
  *   uv: vec2<f32>        — texture coordinate (0-1)
- *   offset: vec2<f32>    — billboard corner offset in clip-space pixels
+ *   offset: vec2<f32>    — billboard corner offset in world meters
  *
  * Uniforms (group 0):
  *   view_proj: mat4x4    — combined view-projection matrix
- *   viewport_size: vec2  — canvas pixel dimensions (for screen-space sizing)
- *   sprite_scale: f32    — global scale multiplier
+ *   proj_scale: vec2     — projection x/y scale terms (P00, P11)
  *
  * Texture (group 1):
  *   texture + sampler    — the sprite PNG
@@ -115,9 +114,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 export const SPRITE_SHADER = `
 struct Uniforms {
   view_proj: mat4x4<f32>,
-  viewport_size: vec2<f32>,
-  sprite_scale: f32,
-  _pad: f32,
+  proj_scale: vec2<f32>,
+  _pad: vec2<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -140,10 +138,13 @@ fn vs_main(vertex: VertexInput) -> VertexOutput {
   var out: VertexOutput;
   // Project center to clip space
   let clip_center = uniforms.view_proj * vec4<f32>(vertex.position, 1.0);
-  // Apply screen-space offset (billboard expansion) — offset is in NDC pixels
-  let pixel_scale = uniforms.sprite_scale * 2.0 / uniforms.viewport_size;
+  // Expand the quad in clip space by the projection's x/y scale. The offset is in
+  // world meters, so after the perspective divide the on-screen size is
+  // offset * proj_scale / w — i.e. the billboard keeps its real-world size and
+  // shrinks with distance. Under the 2D orthographic camera w is 1, which
+  // reproduces the previous zoom-proportional sizing exactly.
   out.clip_position = vec4<f32>(
-    clip_center.xy + vertex.offset * pixel_scale * clip_center.w,
+    clip_center.xy + vertex.offset * uniforms.proj_scale,
     clip_center.z,
     clip_center.w,
   );
@@ -172,9 +173,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 export const ROAD_PAINT_SHADER = `
 struct Uniforms {
   view_proj: mat4x4<f32>,
-  viewport_size: vec2<f32>,
-  sprite_scale: f32,
-  _pad: f32,
+  proj_scale: vec2<f32>,
+  _pad: vec2<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;

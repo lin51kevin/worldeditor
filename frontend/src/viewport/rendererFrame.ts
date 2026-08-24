@@ -263,9 +263,9 @@ export function renderFrame(r: RendererFrameInternals): void {
     }
     r.spriteRenderer.updateUniforms(
       r.cameraController.computeViewProj(),
-      r.width, r.height,
-      // Pass pixels-per-meter so billboard offsets (in world units) scale with zoom.
-      1.0 / r.cameraController.getMetersPerPixel(),
+      // Projection x/y scale: billboard offsets are world meters, so sprites keep
+      // their real size and shrink with distance instead of a fixed pixel size.
+      ...r.cameraController.getProjectionScale(),
     );
     r.spriteRenderer.renderPaints(pass);
     r.spriteRenderer.renderSprites(pass);
