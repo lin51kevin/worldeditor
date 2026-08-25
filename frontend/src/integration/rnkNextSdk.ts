@@ -646,10 +646,12 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     uploadActorBoxes: (boxes: CaseActorBox[]) => {
       actorLayer.setBoxes(boxes);
       renderer.uploadActorVertices(actorLayer.boxVertices());
+      renderer.uploadActorOverlayVertices(actorLayer.overlayBoxVertices());
     },
     clearActorBoxes: () => {
       actorLayer.clear();
       renderer.uploadActorVertices(new Float32Array(0));
+      renderer.uploadActorOverlayVertices(new Float32Array(0));
       renderer.uploadPathVertices(new Float32Array(0));
     },
     setActorBoxWireframe: (enabled: boolean) => {
@@ -711,6 +713,7 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
         const origin: [number, number, number] = [0, 0, 0];
         actorLayer.setSceneOrigin(origin);
         renderer.uploadActorVertices(actorLayer.boxVertices());
+        renderer.uploadActorOverlayVertices(actorLayer.overlayBoxVertices());
         renderer.uploadPathVertices(actorLayer.pathVertices());
         renderer.render();
         return { count: mesh.vertexCount, min: mesh.min, max: mesh.max, origin };
@@ -742,6 +745,7 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
         // re-render into the cloud's origin-relative frame and stay aligned.
         actorLayer.setSceneOrigin(origin);
         renderer.uploadActorVertices(actorLayer.boxVertices());
+        renderer.uploadActorOverlayVertices(actorLayer.overlayBoxVertices());
         renderer.uploadPathVertices(actorLayer.pathVertices());
         renderer.render();
 
@@ -764,6 +768,7 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
       // Drop the scene origin so actors return to their absolute frame.
       actorLayer.setSceneOrigin([0, 0, 0]);
       renderer.uploadActorVertices(actorLayer.boxVertices());
+      renderer.uploadActorOverlayVertices(actorLayer.overlayBoxVertices());
       renderer.uploadPathVertices(actorLayer.pathVertices());
       renderer.render();
     },

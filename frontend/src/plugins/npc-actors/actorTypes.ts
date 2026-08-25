@@ -27,6 +27,14 @@ export interface CaseActorBox {
   color: Rgba;
   /** Whether to render the selected/highlighted style. */
   selected?: boolean;
+  /**
+   * Draw on top of the whole scene with the depth test disabled.
+   *
+   * Editor manipulators (transform gizmos) must stay grabbable wherever they
+   * are placed, so they may not be buried by the OpenDRIVE road surface, a
+   * point cloud or the reconstructed Gaussian-splat scene.
+   */
+  overlay?: boolean;
 }
 
 /** Number of floats per vertex in the renderer's basic pipeline (pos3 + rgba). */

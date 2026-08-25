@@ -64,6 +64,7 @@ export interface BasicPipelineResult {
   pipeline: GPURenderPipeline;
   highlightPipeline: GPURenderPipeline;
   actorPipeline: GPURenderPipeline;
+  actorOverlayPipeline: GPURenderPipeline;
   bindGroup: GPUBindGroup;
   bindGroupLayout: GPUBindGroupLayout;
   uniformBuffer: GPUBuffer;
@@ -170,7 +171,40 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
     primitive: { topology: 'triangle-list' },
   });
 
-  return { shaderModule, pipeline, highlightPipeline, actorPipeline, bindGroup, bindGroupLayout, uniformBuffer };
+  // Editor manipulators (transform gizmos). Identical to `actorPipeline` except
+  // the depth test always passes, so the gizmo is never occluded by the road
+  // surface, a point cloud or the Gaussian-splat scene. Within this pass draw
+  // order — not depth — decides overlap, so the caller must emit its parts from
+  // lowest to highest priority.
+  const actorOverlayPipeline = device.createRenderPipeline({
+    layout: pipelineLayout,
+    vertex: { module: shaderModule, entryPoint: 'vs_main', buffers: [BASIC_VERTEX_LAYOUT] },
+    fragment: {
+      module: shaderModule,
+      entryPoint: 'fs_main',
+      targets: [{
+        format,
+        blend: {
+          color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+        },
+      }],
+    },
+    depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'always' },
+    multisample: { count: MSAA_SAMPLE_COUNT },
+    primitive: { topology: 'triangle-list' },
+  });
+
+  return {
+    shaderModule,
+    pipeline,
+    highlightPipeline,
+    actorPipeline,
+    actorOverlayPipeline,
+    bindGroup,
+    bindGroupLayout,
+    uniformBuffer,
+  };
 }
 
 /** Create lane line pipeline (LineVertex: 10 floats, stride 40). */

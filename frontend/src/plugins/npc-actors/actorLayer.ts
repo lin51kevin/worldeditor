@@ -74,7 +74,17 @@ export class CaseActorLayer {
 
   /** Triangle vertices for the current boxes (7 floats/vertex). */
   boxVertices(): Float32Array {
-    return buildBoxVertices(this.boxes, this.sceneOrigin, this.wireframe);
+    return buildBoxVertices(this.boxes.filter((b) => !b.overlay), this.sceneOrigin, this.wireframe);
+  }
+
+  /**
+   * Triangle vertices for the boxes flagged `overlay` (7 floats/vertex).
+   *
+   * Drawn by the renderer in a separate, depth-test-free pass. Wireframe never
+   * applies: these are manipulators, not playback actors.
+   */
+  overlayBoxVertices(): Float32Array {
+    return buildBoxVertices(this.boxes.filter((b) => b.overlay), this.sceneOrigin, false);
   }
 
   /** Triangle vertices for the current trajectories (7 floats/vertex). */

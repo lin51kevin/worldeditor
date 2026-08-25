@@ -164,6 +164,24 @@ describe('CaseActorLayer facade', () => {
     expect(layer.pickAt(3, 4)).toBeNull();
   });
 
+  it('routes overlay boxes to their own buffer and keeps them pickable', () => {
+    const layer = new CaseActorLayer();
+    const gizmo = box({ id: 'gz:hub', kind: 'waypoint', position: [3, 4, 0], overlay: true });
+    layer.setBoxes([box({ id: 'el:7', position: [3, 4, 0] }), gizmo]);
+    // The regular lane sees only the element; the overlay lane only the gizmo.
+    expect(layer.boxVertices().length).toBe(13 * 36 * ACTOR_VERTEX_STRIDE);
+    expect(layer.overlayBoxVertices().length).toBe(36 * ACTOR_VERTEX_STRIDE);
+    // Picking still walks the full set, so the gizmo (last) wins.
+    expect(layer.pickAt(3, 4)).toBe('gz:hub');
+  });
+
+  it('never wireframes overlay boxes', () => {
+    const layer = new CaseActorLayer();
+    layer.setBoxes([box({ id: 'gz:hub', overlay: true })]);
+    layer.setWireframe(true);
+    expect(layer.overlayBoxVertices().length).toBe(13 * 36 * ACTOR_VERTEX_STRIDE);
+  });
+
   it('shifts boxes/paths and picking by the scene origin (road-mesh alignment)', () => {
     const layer = new CaseActorLayer();
     layer.setBoxes([box({ id: 'el:9', position: [1010, 2020, 0.8], size: [4, 2, 1.6] })]);

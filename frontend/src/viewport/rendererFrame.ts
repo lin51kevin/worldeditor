@@ -46,12 +46,14 @@ export interface RendererFrameInternals {
   junctionMeshes: RenderableMesh[];
   basicPipeline: GPURenderPipeline;
   actorPipeline: GPURenderPipeline;
+  actorOverlayPipeline: GPURenderPipeline;
   hoverMeshes: RenderableMesh[];
   highlightPipeline: GPURenderPipeline;
   linkHighlightMeshes: RenderableMesh[];
   highlightMeshes: RenderableMesh[];
   overlayMeshes: RenderableMesh[];
   actorMeshes: RenderableMesh[];
+  actorOverlayMeshes: RenderableMesh[];
   pathMeshes: RenderableMesh[];
   laneLineMeshes: RenderableMesh[];
   spriteRenderer: SpriteRenderer | null;
@@ -297,6 +299,11 @@ export function renderFrame(r: RendererFrameInternals): void {
   // so it looked fragmentary and vanished entirely once the map was hidden.
   drawBatched(pass, r.pathMeshes, r.actorPipeline, r.basicBindGroup, 'basic');
   drawBatched(pass, r.actorMeshes, r.actorPipeline, r.basicBindGroup, 'basic');
+
+  // Editor manipulators (transform gizmos) go last with the depth test off, so
+  // they stay visible — and therefore grabbable — through the road surface, the
+  // point cloud and the reconstructed splat scene.
+  drawBatched(pass, r.actorOverlayMeshes, r.actorOverlayPipeline, r.basicBindGroup, 'basic');
 
   pass.end();
   try {

@@ -117,6 +117,7 @@ export class ViewportRenderer {
   basicPipeline!: GPURenderPipeline;
   highlightPipeline!: GPURenderPipeline;
   actorPipeline!: GPURenderPipeline;
+  actorOverlayPipeline!: GPURenderPipeline;
   private basicShaderModule!: GPUShaderModule;
   basicBindGroup!: GPUBindGroup;
   // Read by the extracted point-cloud helper module to build its pipeline.
@@ -150,6 +151,9 @@ export class ViewportRenderer {
   // waypoint handles / triggers) and trajectory ribbons. Feature-agnostic
   // colored-triangle lanes; the case semantics live in the npc-actors plugin.
   private actorMeshes: RenderableMesh[] = [];
+  // Manipulator (gizmo) boxes flagged `overlay`, drawn last with the depth test
+  // disabled so nothing in the scene can bury them.
+  private actorOverlayMeshes: RenderableMesh[] = [];
   private pathMeshes: RenderableMesh[] = [];
 
   // Callback for hover detection on spline control points
@@ -733,6 +737,19 @@ export class ViewportRenderer {
       return;
     }
     uploadMeshData(this.device, this.actorMeshes, vertexData);
+    this.markSceneDirty();
+  }
+
+  /** Upload manipulator overlay triangle vertices (7 floats/vertex). Empty clears. */
+  uploadActorOverlayVertices(vertexData: Float32Array): void {
+    if (vertexData.length === 0) {
+      if (this.actorOverlayMeshes.length === 0) return;
+      for (const m of this.actorOverlayMeshes) { m.vertexBuffer.destroy(); }
+      this.actorOverlayMeshes = [];
+      this.markSceneDirty();
+      return;
+    }
+    uploadMeshData(this.device, this.actorOverlayMeshes, vertexData);
     this.markSceneDirty();
   }
 
@@ -1426,6 +1443,7 @@ export class ViewportRenderer {
     disposeMeshes(this.laneLineMeshes);
     disposeMeshes(this.overlayMeshes);
     disposeMeshes(this.actorMeshes);
+    disposeMeshes(this.actorOverlayMeshes);
     disposeMeshes(this.pathMeshes);
     this.clearPointCloudModeBuffers();
     disposeMeshes(this.actorPointCloudMeshes);
@@ -1476,6 +1494,7 @@ export class ViewportRenderer {
     this.basicPipeline = result.pipeline;
     this.highlightPipeline = result.highlightPipeline;
     this.actorPipeline = result.actorPipeline;
+    this.actorOverlayPipeline = result.actorOverlayPipeline;
     this.basicBindGroup = result.bindGroup;
     this.basicBindGroupLayout = result.bindGroupLayout;
     this.basicUniformBuffer = result.uniformBuffer;
