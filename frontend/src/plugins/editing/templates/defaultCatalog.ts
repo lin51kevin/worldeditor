@@ -325,7 +325,7 @@ const catalog: TemplateCatalog = {
     { id: 'tpl:sig:bicycle-paint', labelKey: 'templatePanel.paints.bicyclePaint', icon: '🚲', signalType: 'Graphics', signalSubtype: 'bicycle', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/BycyclePaint.png' },
     { id: 'tpl:sig:pedestrian-paint', labelKey: 'templatePanel.paints.pedestrianPaint', icon: '🚶', signalType: 'Graphics', signalSubtype: 'pedestrian', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/PedestrianPaint.png' },
     { id: 'tpl:sig:disabled-paint', labelKey: 'templatePanel.paints.disabledPaint', icon: '♿', signalType: 'Graphics', signalSubtype: 'disabled', subcategory: 'roadPaints', thumbnailUrl: '/assets/textures/RoadPaints/DisabledPaint.png' },
-    { id: 'tpl:sig:crosswalk-warning-diamond', labelKey: 'templatePanel.paints.crosswalkWarningDiamond', icon: '◇', signalType: 'Graphics', signalSubtype: 'CrosswalkWarningDiamond', subcategory: 'roadPaints' },
+    { id: 'tpl:sig:crosswalk-warning-diamond', labelKey: 'templatePanel.paints.crosswalkWarningDiamond', icon: '◇', signalType: 'Graphics', signalSubtype: 'CrosswalkWarningDiamond', subcategory: 'roadPaints', width: 1.5 },
   ],
 
   // ═══════════════════════════════════════════════════════════════════════════
