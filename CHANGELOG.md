@@ -5,6 +5,38 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ---
 
+<a name="0.4.4"></a>
+## [0.4.4] — 2026-08-26
+
+### Features
+
+- add CrosswalkWarningDiamond road paint marking ([`d13d174`])
+- toast notifications, autosave, angle-snap indicator, and UX polish ([`72c702d`])
+- **frontend**: occlude actor splats behind the static gaussian scene ([`0dee13c`])
+- **splat**: lift actor splat decimation cap and notify host on async sort ([`fa8535b`])
+
+### Performance
+
+- preload all template thumbnail textures on viewport ready ([`532cefc`])
+- **gaussian**: optimize 3DGS rendering and sorting performance for 2GB+ datasets ([`873b3af`])
+
+### Fixes
+
+- recognize type="woven" shorthand and paint woven-area fill white ([`2918917`])
+- hide trajectory actors outside their own lifecycle window ([`62fc417`])
+- enforce min on-screen width for thin lane marks/stripes/outlines ([`8ac0c55`])
+- auto-activate move-road mode when selecting a road, signal, or object ([`157fc82`])
+- keep move/rotate-road mode active after Esc deselect ([`d6ed417`])
+- shrink default trajectory ribbon half-width ([`b005087`])
+- clear stale signal sprites on road delete; fix property panel unit spacing ([`f9f4d19`])
+- **rnk-next**: pass module_or_path object to wasm init ([`cfbef4a`])
+- **splat**: resolve multiple causes of actor splat blurry rendering during playback ([`9e111a2`])
+- **viewport**: render gizmos above scene geometry ([`ce803ac`])
+- **viewport**: keep sign/traffic-light billboards world-sized in 3D ([`1406b70`])
+- **viewport**: draw case-actor overlays after splat passes ([`07683e9`])
+
+---
+
 <a name="0.4.3"></a>
 ## [0.4.3] — 2026-08-10
 
@@ -680,3 +712,21 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 [`0337313`]: https://github.com/lin51kevin/worldeditor/commit/0337313
 [`19be0c8`]: https://github.com/lin51kevin/worldeditor/commit/19be0c8
 [`e517886`]: https://github.com/lin51kevin/worldeditor/commit/e517886
+[`d13d174`]: https://github.com/lin51kevin/worldeditor/commit/d13d174
+[`72c702d`]: https://github.com/lin51kevin/worldeditor/commit/72c702d
+[`0dee13c`]: https://github.com/lin51kevin/worldeditor/commit/0dee13c
+[`fa8535b`]: https://github.com/lin51kevin/worldeditor/commit/fa8535b
+[`532cefc`]: https://github.com/lin51kevin/worldeditor/commit/532cefc
+[`873b3af`]: https://github.com/lin51kevin/worldeditor/commit/873b3af
+[`2918917`]: https://github.com/lin51kevin/worldeditor/commit/2918917
+[`62fc417`]: https://github.com/lin51kevin/worldeditor/commit/62fc417
+[`8ac0c55`]: https://github.com/lin51kevin/worldeditor/commit/8ac0c55
+[`157fc82`]: https://github.com/lin51kevin/worldeditor/commit/157fc82
+[`d6ed417`]: https://github.com/lin51kevin/worldeditor/commit/d6ed417
+[`b005087`]: https://github.com/lin51kevin/worldeditor/commit/b005087
+[`f9f4d19`]: https://github.com/lin51kevin/worldeditor/commit/f9f4d19
+[`cfbef4a`]: https://github.com/lin51kevin/worldeditor/commit/cfbef4a
+[`9e111a2`]: https://github.com/lin51kevin/worldeditor/commit/9e111a2
+[`ce803ac`]: https://github.com/lin51kevin/worldeditor/commit/ce803ac
+[`1406b70`]: https://github.com/lin51kevin/worldeditor/commit/1406b70
+[`07683e9`]: https://github.com/lin51kevin/worldeditor/commit/07683e9
