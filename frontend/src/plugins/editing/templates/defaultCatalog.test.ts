@@ -8,7 +8,7 @@ describe('defaultCatalog', () => {
     expect(catalog.junctions).toHaveLength(8);
     expect(catalog.signals).toHaveLength(7);
     expect(catalog.markings).toHaveLength(0);
-    expect(catalog.paints).toHaveLength(15);
+    expect(catalog.paints).toHaveLength(16);
     expect(catalog.objects).toHaveLength(20);
     expect(catalog.signs).toHaveLength(7);
   });

@@ -126,6 +126,30 @@ mod tests {
         );
     }
 
+    /// Crosswalk warning diamond must be a hollow frame (8 triangles, 24 verts,
+    /// 168 floats), not a filled centroid fan — so no vertex should sit at the
+    /// local origin (the fan's centroid point) once transformed back.
+    #[test]
+    fn test_crosswalk_warning_diamond_is_hollow_frame() {
+        let verts = arrow_triangles("CrosswalkWarningDiamond", 0.0, 0.0, 0.0, 0.0_f32, 3.0);
+        assert_eq!(verts.len(), 168, "Expected 24 vertices (8 triangles × 3 × 7 floats)");
+
+        let has_origin_vertex = verts.chunks(7).any(|v| v[0].abs() < 1e-4 && v[1].abs() < 1e-4);
+        assert!(!has_origin_vertex, "Hollow diamond must not have a centroid vertex");
+    }
+
+    /// At scale=3.0 the outer diamond should span ±1.5 (forward, world x at
+    /// heading=0) and ±0.75 (lateral, world y), matching the reference
+    /// implementation's 3m×1.5m real size.
+    #[test]
+    fn test_crosswalk_warning_diamond_outer_bounds() {
+        let verts = arrow_triangles("CrosswalkWarningDiamond", 0.0, 0.0, 0.0, 0.0_f32, 3.0);
+        let max_x = verts.chunks(7).map(|v| v[0]).fold(f32::MIN, f32::max);
+        let max_y = verts.chunks(7).map(|v| v[1]).fold(f32::MIN, f32::max);
+        assert!((max_x - 1.5).abs() < 1e-3, "Outer half-length should be 1.5, got {max_x}");
+        assert!((max_y - 0.75).abs() < 1e-3, "Outer half-width should be 0.75, got {max_y}");
+    }
+
     // ── StopLine position tests ───────────────────────────────────────────────
 
     /// A minimal project JSON with one straight east-going road (hdg=0, length=20)

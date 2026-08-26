@@ -498,7 +498,8 @@
       "mergeRight": "向右合流箭头",
       "bicyclePaint": "自行车标识",
       "pedestrianPaint": "行人标识",
-      "disabledPaint": "残疾人标识"
+      "disabledPaint": "残疾人标识",
+      "crosswalkWarningDiamond": "人行横道预告标线（菱形块）"
     },
     "objects": {
       "crosswalk": "人行横道",

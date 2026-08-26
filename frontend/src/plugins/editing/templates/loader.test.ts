@@ -33,9 +33,9 @@ describe('loadCatalog', () => {
     expect(catalog.markings).toHaveLength(0);
   });
 
-  it('should contain 15 paint templates', () => {
+  it('should contain 16 paint templates', () => {
     const catalog = loadCatalog();
-    expect(catalog.paints).toHaveLength(15);
+    expect(catalog.paints).toHaveLength(16);
   });
 
   it('should have version string', () => {

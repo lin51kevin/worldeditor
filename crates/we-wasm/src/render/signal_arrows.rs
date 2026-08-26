@@ -2,6 +2,9 @@
 //!
 //! Builds filled triangle geometry for directional paint arrows (straight,
 //! turn, U-turn, and combined variants) from normalized polygon templates.
+//! The crosswalk warning diamond ("CrosswalkWarningDiamond") is a hollow
+//! frame rather than a filled outline, so it is triangulated separately
+//! instead of going through the centroid-fan path below.
 
 /// Build filled triangle geometry for a paint arrow, using a centroid fan.
 ///
@@ -15,6 +18,10 @@ pub(crate) fn arrow_triangles(
     heading: f32,
     scale: f32,
 ) -> Vec<f32> {
+    if subtype == "CrosswalkWarningDiamond" {
+        return crosswalk_warning_diamond_triangles(cx, cy, z, heading, scale);
+    }
+
     // Normalized arrow polygons (local space, y-axis = forward):
     // Coordinates are pre-scaled to approx. ±0.5 range.
     // All are closed outlines (last point equals first).
@@ -139,6 +146,51 @@ pub(crate) fn arrow_triangles(
         out.extend_from_slice(&[ccx, ccy, z, r, g, b, a]);
         out.extend_from_slice(&[px0, py0, z, r, g, b, a]);
         out.extend_from_slice(&[px1, py1, z, r, g, b, a]);
+    }
+
+    out
+}
+
+/// Build filled triangle geometry for the crosswalk warning diamond
+/// ("菱形预告标线"), a hollow rhombus frame placed on the road surface ahead
+/// of a crosswalk. Unlike the arrow templates above, this shape has a hole
+/// in the middle, so it is triangulated as 4 trapezoid segments between an
+/// outer and an inner diamond outline rather than fanned from a centroid.
+///
+/// Outer/inner proportions and the 0.5527864045000421 inner-scale ratio match
+/// the reference implementation (WorldEditorOnline `CrosswalkWarningDiamond`).
+fn crosswalk_warning_diamond_triangles(cx: f32, cy: f32, z: f32, heading: f32, scale: f32) -> Vec<f32> {
+    const INNER_RATIO: f32 = 0.5527864045000421;
+    // Outer diamond: half-length 0.5 (forward axis), half-width 0.25 (lateral axis).
+    let outer: [(f32, f32); 4] = [(0.0, 0.5), (0.25, 0.0), (0.0, -0.5), (-0.25, 0.0)];
+    let inner: [(f32, f32); 4] = outer.map(|(x, y)| (x * INNER_RATIO, y * INNER_RATIO));
+
+    let cos_h = heading.cos();
+    let sin_h = heading.sin();
+    let transform = |vx: f32, vy: f32| -> (f32, f32) {
+        let wx = (vx * sin_h + vy * cos_h) * scale + cx;
+        let wy = (-vx * cos_h + vy * sin_h) * scale + cy;
+        (wx, wy)
+    };
+
+    let [r, g, b, a] = [1.0f32, 1.0, 1.0, 0.95];
+    let mut out = Vec::with_capacity(4 * 2 * 3 * 7);
+
+    for i in 0..4 {
+        let j = (i + 1) % 4;
+        let (ox0, oy0) = transform(outer[i].0, outer[i].1);
+        let (ox1, oy1) = transform(outer[j].0, outer[j].1);
+        let (ix0, iy0) = transform(inner[i].0, inner[i].1);
+        let (ix1, iy1) = transform(inner[j].0, inner[j].1);
+
+        // Trapezoid segment split into 2 triangles: (outer0, outer1, inner1), (outer0, inner1, inner0)
+        out.extend_from_slice(&[ox0, oy0, z, r, g, b, a]);
+        out.extend_from_slice(&[ox1, oy1, z, r, g, b, a]);
+        out.extend_from_slice(&[ix1, iy1, z, r, g, b, a]);
+
+        out.extend_from_slice(&[ox0, oy0, z, r, g, b, a]);
+        out.extend_from_slice(&[ix1, iy1, z, r, g, b, a]);
+        out.extend_from_slice(&[ix0, iy0, z, r, g, b, a]);
     }
 
     out

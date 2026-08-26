@@ -498,7 +498,8 @@
       "mergeRight": "Merge Right",
       "bicyclePaint": "Bicycle Mark",
       "pedestrianPaint": "Pedestrian Mark",
-      "disabledPaint": "Disabled Mark"
+      "disabledPaint": "Disabled Mark",
+      "crosswalkWarningDiamond": "Crosswalk Warning Diamond"
     },
     "objects": {
       "crosswalk": "Crosswalk",
