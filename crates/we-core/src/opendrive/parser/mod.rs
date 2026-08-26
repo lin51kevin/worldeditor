@@ -418,6 +418,58 @@ mod tests {
         assert_eq!(obj.corners.len(), 4);
     }
 
+    /// `type="woven"` (vendor shorthand) plus a `name` carrying an instance
+    /// counter must still resolve to `ObjectType::WovenArea`, and its full
+    /// `<outline>` (with a duplicated closing vertex) must survive parsing.
+    #[test]
+    fn test_parse_woven_area_shorthand_type_with_outline() {
+        let xml = r#"<?xml version="1.0"?>
+<OpenDRIVE>
+  <road name="r" length="200" id="1" junction="-1">
+    <planView>
+      <geometry s="0" x="0" y="0" hdg="0" length="200">
+        <line/>
+      </geometry>
+    </planView>
+    <lanes>
+      <laneSection s="0">
+        <center><lane id="0" type="none" level="false"/></center>
+      </laneSection>
+    </lanes>
+    <objects>
+      <object type="woven" name="Woven Area(11)" id="11" s="11.39" t="-0.24" zOffset="0.01"
+              validLength="0" orientation="none" length="124.5" width="19.85" radius="63.0"
+              height="0" hdg="-0.0216" pitch="0" roll="0">
+        <outline>
+          <cornerLocal height="0" u="36.29" v="10.27" z="-0.01" />
+          <cornerLocal height="0" u="-85.88" v="-9.59" z="-0.01" />
+          <cornerLocal height="0" u="-11.58" v="1.09" z="-0.01" />
+          <cornerLocal height="0" u="36.29" v="10.27" z="-0.01" />
+        </outline>
+        <userData code="Angle" value="120" />
+        <userData code="LineWidth" value="0.45" />
+        <userData code="LineGap" value="0.6" />
+      </object>
+    </objects>
+  </road>
+</OpenDRIVE>"#;
+
+        let project = parse(xml).expect("parse should succeed");
+        let obj = &project.roads[0].objects[0];
+
+        assert_eq!(obj.object_type, ObjectType::WovenArea);
+        // The closing vertex duplicating the first corner is dropped.
+        assert_eq!(obj.corners.len(), 3);
+        assert_eq!(
+            obj.user_data,
+            vec![
+                ("Angle".to_string(), "120".to_string()),
+                ("LineWidth".to_string(), "0.45".to_string()),
+                ("LineGap".to_string(), "0.6".to_string()),
+            ]
+        );
+    }
+
     /// `<objectReference>` elements are parsed but do NOT produce copies.
     /// Objects stay on their defining road only.  The renderer handles
     /// out-of-range objects by extrapolating the road geometry.

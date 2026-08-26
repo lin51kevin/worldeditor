@@ -140,11 +140,12 @@ fn emit_area_object(
     );
 }
 
-/// Crosswalk stripes are painted white regardless of the outline colour
-/// (C# fills them with the "Stop Line" colour); hatches use their own colour.
+/// Crosswalk and woven-area stripes are painted white regardless of the
+/// outline colour (real-world woven/gore areas are painted with white
+/// channelizing lines); cross-hatch areas use their own colour.
 fn stripe_color(object_type: &ObjectType, outline: [f32; 4]) -> [f32; 4] {
     match object_type {
-        ObjectType::Crosswalk => [1.0, 1.0, 1.0, 1.0],
+        ObjectType::Crosswalk | ObjectType::WovenArea => [1.0, 1.0, 1.0, 1.0],
         _ => outline,
     }
 }
@@ -998,6 +999,30 @@ mod tests {
             .count();
         assert!(white > 0, "no white stripe vertices");
         assert_eq!(navy, 4 * 6, "outline should be one navy quad per edge");
+    }
+
+    /// Woven-area stripes are painted white (real-world channelizing-line
+    /// paint) even though the outline keeps its amber palette colour.
+    #[test]
+    fn test_woven_area_stripes_are_white_over_an_amber_outline() {
+        let mut obj = road_object("woven-1", ObjectType::WovenArea, 5.0, 0.0);
+        obj.length = 8.0;
+        obj.width = 4.0;
+        let project = road_with_object(obj, None);
+        let json = serde_json::to_string(&project).unwrap();
+
+        let verts = generate_object_vertices(&json).unwrap();
+
+        let white = verts
+            .chunks(7)
+            .filter(|v| v[3] > 0.99 && v[4] > 0.99 && v[5] > 0.99)
+            .count();
+        let amber = verts
+            .chunks(7)
+            .filter(|v| v[3] > 0.9 && v[4] > 0.6 && v[4] < 0.68 && v[5] < 0.15)
+            .count();
+        assert!(white > 0, "no white stripe vertices");
+        assert_eq!(amber, 4 * 6, "outline should be one amber quad per edge");
     }
 
     /// The highlight must trace the rendered footprint for markers and

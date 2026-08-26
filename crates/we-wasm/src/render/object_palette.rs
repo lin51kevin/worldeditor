@@ -28,9 +28,9 @@ pub(crate) fn object_color(object_type: &ObjectType) -> [f32; 4] {
         ObjectType::ParkingSpace => rgb(108, 140, 71),
         ObjectType::CrossHatchArea => rgb(246, 166, 35),
         ObjectType::SimpleCrossHatch => rgb(245, 166, 35),
-        // C# paints woven areas hot pink (255, 13, 166); this editor
-        // deliberately shares the cross-hatch palette, so only the stripe
-        // direction tells the two apart.
+        // C# paints woven areas hot pink (255, 13, 166); this editor shares
+        // the cross-hatch outline colour, but the stripe fill itself is white
+        // (see `stripe_color`) to match real-world channelizing-line paint.
         ObjectType::WovenArea => rgb(246, 166, 35),
         ObjectType::SlowDownToYieldLine => rgb(0, 191, 255),
         ObjectType::StopToYieldLine => rgb(208, 2, 27),

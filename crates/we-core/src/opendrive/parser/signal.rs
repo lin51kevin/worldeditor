@@ -377,7 +377,7 @@ fn parse_object_type(s: &str) -> ObjectType {
         "stopline" => ObjectType::StopLine,
         "crosshatcharea" => ObjectType::CrossHatchArea,
         "simplecrosshatch" => ObjectType::SimpleCrossHatch,
-        "wovenarea" => ObjectType::WovenArea,
+        "wovenarea" | "woven" => ObjectType::WovenArea,
         "forwardwaitingarea" => ObjectType::ForwardWaitingArea,
         "turnleftwaitingarea" => ObjectType::TurnLeftWaitingArea,
         "slowdowntoyieldline" => ObjectType::SlowDownToYieldLine,
@@ -399,9 +399,13 @@ fn parse_object_type(s: &str) -> ObjectType {
 
 /// Lower-case and strip separators so `"L-Type Signal Pole"`, `"lTypeSignalPole"`
 /// and `"ltype_signal_pole"` all resolve to the same key.
+///
+/// Digits are stripped too (no recognized key contains one), so vendor names
+/// with an instance-numbering suffix like `"Woven Area(11)"` still match
+/// their base type via the name-fallback in `parse_road_object_attrs`.
 fn normalize_object_key(s: &str) -> String {
     s.chars()
-        .filter(|c| c.is_ascii_alphanumeric())
+        .filter(|c| c.is_ascii_alphabetic())
         .map(|c| c.to_ascii_lowercase())
         .collect()
 }
@@ -453,6 +457,27 @@ mod object_type_tests {
             parse_object_type("MyThing"),
             ObjectType::Custom("MyThing".to_string())
         );
+    }
+
+    /// `type="woven"` is a shorthand some vendor exports use instead of the
+    /// canonical `"wovenArea"`.
+    #[test]
+    fn test_parse_object_type_accepts_woven_shorthand() {
+        assert_eq!(parse_object_type("woven"), ObjectType::WovenArea);
+    }
+
+    /// The name-based fallback in `parse_road_object_attrs` must still resolve
+    /// the base type when the name carries a vendor instance-numbering suffix,
+    /// e.g. `"Woven Area(11)"`.
+    #[test]
+    fn test_parse_object_type_ignores_instance_numbering_suffix_in_name() {
+        for (spelling, expected) in [
+            ("Woven Area(11)", ObjectType::WovenArea),
+            ("Crosswalk(3)", ObjectType::Crosswalk),
+            ("Parking Space 07", ObjectType::ParkingSpace),
+        ] {
+            assert_eq!(parse_object_type(spelling), expected, "spelling={spelling}");
+        }
     }
 
     /// The legacy C# editor writes a *category* in `type` and the concrete kind
