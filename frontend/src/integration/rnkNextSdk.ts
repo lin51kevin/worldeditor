@@ -292,6 +292,13 @@ export interface WorldEditorRenderer {
    */
   setStaticSceneVisible?(visible: boolean): void;
   /**
+   * Show/hide ONLY the static scene's Gaussian splats, leaving its point cloud
+   * and ground mesh subject to {@link setStaticSceneVisible}. Lets a host keep a
+   * 2D ground mesh on screen while hiding the reconstructed cloud, without
+   * discarding the splats' GPU buffers (so re-showing needs no re-decode).
+   */
+  setSceneSplatsVisible?(visible: boolean): void;
+  /**
    * Upload the dynamic actor (NPC + ego) Gaussian splat cloud into a buffer
    * separate from the static scene cloud ({@link uploadGaussianSplats}), so
    * per-frame actor updates never re-upload/re-sort the (large) scene splats.
@@ -864,6 +871,9 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     },
     setStaticSceneVisible: (visible: boolean) => {
       renderer.setStaticSceneVisible(visible);
+    },
+    setSceneSplatsVisible: (visible: boolean) => {
+      renderer.setSceneSplatsVisible(visible);
     },
     uploadActorGaussianSplats: (
       data: Uint32Array,

@@ -64,6 +64,7 @@ export interface RendererFrameInternals {
   overlayCanvas: HTMLCanvasElement | null;
   sceneDirty: boolean;
   staticSceneVisible: boolean;
+  sceneSplatsVisible: boolean;
   lastVertexData: Float32Array | null;
   markSceneDirty(): void;
 }
@@ -283,11 +284,12 @@ export function renderFrame(r: RendererFrameInternals): void {
   // depth-tested (reverse-Z 'greater', no write) so opaque geometry occludes
   // them correctly. Scene splats first, then actor (NPC/ego) splats on top so
   // dynamic vehicles composite over the static reconstructed scene.
-  if (r.staticSceneVisible) r.splatRenderer?.draw(pass);
+  const sceneSplats = r.staticSceneVisible && r.sceneSplatsVisible;
+  if (sceneSplats) r.splatRenderer?.draw(pass);
   // Seed the depth buffer with the static scene's opaque cores so the actor
   // splats below are hidden where a building/tree stands between them and the
   // camera. Colour writes are masked, so the scene's own render is untouched.
-  if (r.staticSceneVisible) r.splatRenderer?.drawDepthOnly(pass);
+  if (sceneSplats) r.splatRenderer?.drawDepthOnly(pass);
   r.actorSplatRenderer?.draw(pass);
   r.actorSplatInstancer?.draw(pass);
 

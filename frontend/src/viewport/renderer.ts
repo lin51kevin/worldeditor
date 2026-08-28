@@ -260,6 +260,12 @@ export class ViewportRenderer {
   // unaffected. Read by rendererFrame's draw pass.
   staticSceneVisible = true;
 
+  // Narrower companion to `staticSceneVisible` covering ONLY the scene Gaussian
+  // splats, so a host can show the ground mesh while hiding the splats (e.g. a 2D
+  // top-down view wanting the road mesh but not the reconstructed cloud) without
+  // discarding the splats' GPU buffers.
+  sceneSplatsVisible = true;
+
   // Last uploaded vertex data (needed for zoomToFit re-trigger)
   private lastVertexData: Float32Array | null = null;
 
@@ -1179,6 +1185,16 @@ export class ViewportRenderer {
    */
   setStaticSceneVisible(visible: boolean): void {
     this.staticSceneVisible = visible;
+    this.markSceneDirty();
+  }
+
+  /**
+   * Show/hide ONLY the static scene's Gaussian splats; its point cloud and ground
+   * mesh stay subject to {@link setStaticSceneVisible}. GPU buffers are retained,
+   * so re-showing needs no re-decode/re-upload.
+   */
+  setSceneSplatsVisible(visible: boolean): void {
+    this.sceneSplatsVisible = visible;
     this.markSceneDirty();
   }
 
