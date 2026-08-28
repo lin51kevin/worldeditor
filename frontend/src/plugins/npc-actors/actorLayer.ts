@@ -17,7 +17,7 @@ import { CaseActorBox } from './actorTypes';
  * Kept well under a lane-marking width: the ribbon is an editing aid drawn over
  * the road surface, so a heavy band buries the geometry it annotates.
  */
-const DEFAULT_PATH_HALF_WIDTH = 0.1;
+const DEFAULT_PATH_HALF_WIDTH = 0.05;
 
 export class CaseActorLayer {
   private boxes: CaseActorBox[] = [];

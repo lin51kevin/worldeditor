@@ -40,9 +40,14 @@ const SELECTED_FILL_ALPHA = 0.75;
 const EDGE_COLOR: Rgba = [1, 1, 1, 1];
 /** Half-thickness of an edge bar, meters. Edges protrude slightly past faces to
  *  avoid z-fighting with the translucent fill. */
-const EDGE_HALF = 0.04;
+const EDGE_HALF = 0.02;
 /** Translucency applied to the fill of boxed actors (bodies / triggers). */
 const FILL_ALPHA = 0.5;
+
+/** Facet count of a cone's base circle. */
+const CONE_SEGMENTS = 10;
+/** Vertices emitted per cone: one side + one base-cap triangle per facet. */
+const CONE_VERTEX_COUNT = CONE_SEGMENTS * 6;
 
 /**
  * Emit the 12 triangles of a local axis-aligned box [minL, maxL], rotated by
@@ -85,18 +90,72 @@ function emitBox(
 }
 
 /**
+ * Emit a cone whose axis is local +X: a `radius` circle at x=0 (base) tapering
+ * to an apex at x=`length`, rotated by (cos, sin) about Z and translated to
+ * (cx, cy, cz), into `out` at `off` (7 floats/vertex). Returns the next write
+ * offset. Used for the gizmo's translate-arm arrowheads.
+ */
+function emitCone(
+  out: Float32Array,
+  off: number,
+  length: number,
+  radius: number,
+  cos: number,
+  sin: number,
+  cx: number,
+  cy: number,
+  cz: number,
+  color: Rgba,
+): number {
+  const toWorld = (lx: number, ly: number, lz: number): readonly [number, number, number] => [
+    cx + (lx * cos - ly * sin),
+    cy + (lx * sin + ly * cos),
+    cz + lz,
+  ];
+  const apex = toWorld(length, 0, 0);
+  const base = toWorld(0, 0, 0);
+  const ring: Array<readonly [number, number, number]> = [];
+  for (let i = 0; i < CONE_SEGMENTS; i++) {
+    const a = (i / CONE_SEGMENTS) * Math.PI * 2;
+    ring.push(toWorld(0, radius * Math.cos(a), radius * Math.sin(a)));
+  }
+  const push = (p: readonly [number, number, number]): void => {
+    out[off++] = p[0];
+    out[off++] = p[1];
+    out[off++] = p[2];
+    out[off++] = color[0];
+    out[off++] = color[1];
+    out[off++] = color[2];
+    out[off++] = color[3];
+  };
+  for (let i = 0; i < CONE_SEGMENTS; i++) {
+    const a = ring[i]!;
+    const b = ring[(i + 1) % CONE_SEGMENTS]!;
+    push(apex);
+    push(a);
+    push(b);
+    push(base);
+    push(b);
+    push(a);
+  }
+  return off;
+}
+
+/**
  * Build triangle vertices for a set of oriented bounding boxes.
  *
  * "Boxed" actors (bodies / triggers) render as a translucent colored fill with
  * white wireframe edges — the classic bounding-box look. Waypoint handles stay
  * as small solid opaque cubes (no edges) so they remain crisp grab targets.
+ * `"cone"` boxes render as a solid opaque cone (no edges either) instead of a
+ * cube — used for the gizmo's translate-arm arrowheads.
  *
  * `origin` shifts every box into an origin-relative render frame (subtracted
  * from each center) so authored (absolute) boxes align with an origin-relative
  * point cloud. Defaults to no shift.
  *
  * When `wireframe` is set, boxed actors drop the translucent fill and render as
- * edge bars only (cuts overdraw during playback). Waypoint handles are
+ * edge bars only (cuts overdraw during playback). Waypoint/cone handles are
  * unaffected.
  */
 export function buildBoxVertices(
@@ -109,6 +168,10 @@ export function buildBoxVertices(
   // box: fill (unless wireframe-skipped) + 12 edge bars (432) when boxed.
   let vertexCount = 0;
   for (const box of boxes) {
+    if (box.kind === 'cone') {
+      vertexCount += CONE_VERTEX_COUNT;
+      continue;
+    }
     const withEdges = box.kind !== 'waypoint';
     if (!wireframe || !withEdges) vertexCount += 36;
     if (withEdges) vertexCount += 432;
@@ -117,6 +180,15 @@ export function buildBoxVertices(
   let off = 0;
 
   for (const box of boxes) {
+    if (box.kind === 'cone') {
+      const cos = Math.cos(box.heading);
+      const sin = Math.sin(box.heading);
+      const cx = box.position[0] - origin[0];
+      const cy = box.position[1] - origin[1];
+      const cz = box.position[2] - origin[2];
+      off = emitCone(out, off, box.size[0], box.size[1] / 2, cos, sin, cx, cy, cz, box.color);
+      continue;
+    }
     const hl = box.size[0] / 2;
     const hw = box.size[1] / 2;
     const hh = box.size[2] / 2;

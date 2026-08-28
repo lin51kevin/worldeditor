@@ -15,13 +15,20 @@ export type Rgba = [number, number, number, number];
 export interface CaseActorBox {
   /** Stable identifier (host-defined; e.g. "el:<id>" or "wp:<id>:<index>"). */
   id: string;
-  /** Role, so rendering/picking can weight handles above bodies. */
-  kind: 'element' | 'waypoint' | 'trigger';
-  /** World-space center [x, y, z] in meters. */
+  /**
+   * Role, so rendering/picking can weight handles above bodies. `'cone'`
+   * renders a solid cone (apex at local +X) instead of a cube — used for the
+   * gizmo's translate-arm arrowheads.
+   */
+  kind: 'element' | 'waypoint' | 'trigger' | 'cone';
+  /** World-space center [x, y, z] in meters. For `'cone'`, the base center. */
   position: [number, number, number];
   /** Heading around the world Z axis, in radians. */
   heading: number;
-  /** Extents [length(x), width(y), height(z)] in meters. */
+  /**
+   * Extents [length(x), width(y), height(z)] in meters. For `'cone'`,
+   * [axis length, base diameter, unused].
+   */
   size: [number, number, number];
   /** Fill color. */
   color: Rgba;

@@ -30,6 +30,44 @@ describe('npc-actors geometry', () => {
     expect(buildBoxVertices([box({ kind: 'element' })]).length).toBe(13 * 36 * ACTOR_VERTEX_STRIDE);
   });
 
+  it('emits a cone with no edge bars (2 triangles per facet, 10 facets)', () => {
+    const v = buildBoxVertices([box({ kind: 'cone', size: [1, 0.5, 0.5] })]);
+    expect(v.length).toBe(60 * ACTOR_VERTEX_STRIDE);
+  });
+
+  it('places a cone apex `length` ahead of its base along local +X, base circle sized by diameter', () => {
+    const v = buildBoxVertices([
+      box({ kind: 'cone', position: [10, 20, 0], heading: 0, size: [2, 1, 1] }),
+    ]);
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < v.length; i += ACTOR_VERTEX_STRIDE) {
+      minX = Math.min(minX, v[i]!); maxX = Math.max(maxX, v[i]!);
+      minY = Math.min(minY, v[i + 1]!); maxY = Math.max(maxY, v[i + 1]!);
+    }
+    // Base at x=10 (position), apex at x=12 (position + length 2).
+    expect(minX).toBeCloseTo(10, 5);
+    expect(maxX).toBeCloseTo(12, 5);
+    // Base circle radius 0.5 (diameter 1) spans y ∈ [19.5, 20.5].
+    expect(minY).toBeCloseTo(19.5, 5);
+    expect(maxY).toBeCloseTo(20.5, 5);
+  });
+
+  it('rotates a cone axis by heading', () => {
+    const v = buildBoxVertices([
+      box({ kind: 'cone', position: [0, 0, 0], heading: Math.PI / 2, size: [2, 1, 1] }),
+    ]);
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < v.length; i += ACTOR_VERTEX_STRIDE) {
+      minX = Math.min(minX, v[i]!); maxX = Math.max(maxX, v[i]!);
+      minY = Math.min(minY, v[i + 1]!); maxY = Math.max(maxY, v[i + 1]!);
+    }
+    // 90° heading swaps the axis onto Y: apex at y=2, base circle spans x ∈ [-0.5, 0.5].
+    expect(minY).toBeCloseTo(0, 5);
+    expect(maxY).toBeCloseTo(2, 5);
+    expect(minX).toBeCloseTo(-0.5, 5);
+    expect(maxX).toBeCloseTo(0.5, 5);
+  });
+
   it('centers box vertices on the box position', () => {
     const v = buildBoxVertices([box({ kind: 'waypoint', position: [10, 20, 5], heading: 0, size: [4, 2, 2] })]);
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
