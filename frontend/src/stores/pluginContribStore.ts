@@ -72,6 +72,13 @@ export interface TemplateItemDef {
    */
   drawMode?: 'point' | 'line' | 'polygon';
   /**
+   * Preferred road-drawing mode for road cross-section templates.
+   * When set, clicking the item switches the viewport into this draw mode.
+   */
+  roadDrawMode?: 'spline' | 'drawArc' | 'drawSpiral';
+  /** When true, the item is placed by a single viewport click instead of drawing. */
+  clickToPlace?: boolean;
+  /**
    * Called when the user clicks or activates the item.
    * @param opts optional drop position in world coordinates, or roadId for road-object placement
    */

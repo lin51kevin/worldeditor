@@ -4,8 +4,8 @@ import catalog from './defaultCatalog';
 describe('defaultCatalog', () => {
   it('exposes the expected catalog structure and section sizes', () => {
     expect(catalog.version).toBe('1.0.0');
-    expect(catalog.roads).toHaveLength(7);
-    expect(catalog.junctions).toHaveLength(8);
+    expect(catalog.roads).toHaveLength(23);
+    expect(catalog.junctions).toHaveLength(20);
     expect(catalog.signals).toHaveLength(7);
     expect(catalog.markings).toHaveLength(0);
     expect(catalog.paints).toHaveLength(16);

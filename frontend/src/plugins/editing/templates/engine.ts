@@ -159,7 +159,7 @@ export function buildRoadFromConfig(
   y: number,
   hdg = 0,
 ): Road {
-  const section = buildLaneSection(config.left, config.right);
+  const section = buildLaneSection(config.left, config.right, config.centerMark);
   return buildRoad(section, { x, y, hdg, length: config.length ?? DEFAULT_ROAD_LENGTH });
 }
 

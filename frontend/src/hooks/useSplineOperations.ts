@@ -86,7 +86,7 @@ export function useSplineOperations() {
         const catalog = loadCatalog();
         const tplConfig = catalog.roads.find((t) => t.id === viewState.splineTemplateId);
         if (tplConfig) {
-          newRoad.lane_sections = [buildLaneSection(tplConfig.left, tplConfig.right)];
+          newRoad.lane_sections = [buildLaneSection(tplConfig.left, tplConfig.right, tplConfig.centerMark)];
         }
         // Preserve original user-placed control point positions for edit-mode restoration.
         // This avoids re-sampling the geometry (which would produce many intermediate knots).

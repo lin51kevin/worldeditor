@@ -13,14 +13,14 @@ describe('loadCatalog', () => {
     expect(catalog.paints.length).toBeGreaterThan(0);
   });
 
-  it('should contain 7 road templates', () => {
+  it('should contain 23 road templates', () => {
     const catalog = loadCatalog();
-    expect(catalog.roads).toHaveLength(7);
+    expect(catalog.roads).toHaveLength(23);
   });
 
-  it('should contain 8 junction templates', () => {
+  it('should contain 20 junction templates', () => {
     const catalog = loadCatalog();
-    expect(catalog.junctions).toHaveLength(8);
+    expect(catalog.junctions).toHaveLength(20);
   });
 
   it('should contain 7 signal templates', () => {

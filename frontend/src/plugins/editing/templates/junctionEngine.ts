@@ -14,9 +14,12 @@ import type {
   LaneConfig, SectionConfig,
   JunctionTemplateConfig, JunctionTopology,
 } from './schema';
+import { evalGeometryAtS } from '../../../utils/road/geometryOps';
 import { addTurnArrows, addCrosswalks, solidateBrokenLinesNearJunction } from './decorators';
 import { genId, buildRoad, buildLaneSection, buildLaneSectionFromConfig } from './engine';
 import { buildRoundaboutFromConfig } from './roundabout';
+import { buildPlaygroundFromConfig } from './playground';
+import { buildOverpassFromConfig } from './overpass';
 
 const DEFAULT_LANE_WIDTH = 3.5;
 
@@ -45,26 +48,32 @@ const DEFAULT_ARM_SECTION: SectionConfig = {
 /**
  * Compute the gap distance from junction center to arm road endpoints.
  *
- * Uses armLength/2 as the standard gap (matching C# reference which uses gap=50
- * for armLength=100 uniformly for all arm counts). A minimum overlap-prevention
- * check ensures very wide roads or high arm counts don't cause overlap.
+ * Honours the template's explicit `armOffset` (C# `RoadToCenter`) when present,
+ * otherwise falls back to armLength/2 (C# uses gap=50 for armLength=100). A
+ * minimum overlap-prevention check ensures very wide roads or high arm counts
+ * don't cause overlap.
  */
-function computeArmGap(section: SectionConfig, armCount: number, armLength: number): number {
+function computeArmGap(
+  section: SectionConfig,
+  armCount: number,
+  armLength: number,
+  armOffset?: number,
+): number {
   const totalWidth = [...section.left, ...section.right]
     .reduce((sum, lane) => sum + (lane.width ?? DEFAULT_LANE_WIDTH), 0);
   const n = Math.max(armCount, 3);
   const angularFactor = 1 / Math.sin(Math.PI / n);
   // Minimum gap to prevent adjacent arm edges from overlapping
   const minForNonOverlap = totalWidth * angularFactor * 1.0;
-  // C# uses armLength/2 as standard gap (50m for 100m arms)
-  const standardGap = armLength * 0.5;
+  // C# `RoadToCenter`, falling back to armLength/2 (50m for 100m arms)
+  const standardGap = armOffset && armOffset > 0 ? armOffset : armLength * 0.5;
   return Math.max(minForNonOverlap, standardGap);
 }
 
-function radialArms(cx: number, cy: number, gap: number, count: number): ArmDef[] {
+function radialArms(cx: number, cy: number, gap: number, count: number, startAngle = 0): ArmDef[] {
   const arms: ArmDef[] = [];
   for (let i = 0; i < count; i++) {
-    const angle = (i * 2 * Math.PI) / count;
+    const angle = startAngle + (i * 2 * Math.PI) / count;
     arms.push({
       x: cx + gap * Math.cos(angle),
       y: cy + gap * Math.sin(angle),
@@ -74,24 +83,29 @@ function radialArms(cx: number, cy: number, gap: number, count: number): ArmDef[
   return arms;
 }
 
-function tArms(cx: number, cy: number, gap: number): ArmDef[] {
+function tArms(cx: number, cy: number, gap: number, startAngle = 0): ArmDef[] {
   // Classic T-shape: stem at 0° (east), arms at 90° (north) and -90° (south)
   const angles = [0, Math.PI / 2, -Math.PI / 2];
   return angles.map(angle => ({
-    x: cx + gap * Math.cos(angle),
-    y: cy + gap * Math.sin(angle),
-    hdg: angle,
+    x: cx + gap * Math.cos(startAngle + angle),
+    y: cy + gap * Math.sin(startAngle + angle),
+    hdg: startAngle + angle,
   }));
 }
 
-function resolveArms(topology: JunctionTopology, cx: number, cy: number, gap: number, armCount?: number): ArmDef[] {
+function resolveArms(
+  topology: JunctionTopology,
+  cx: number,
+  cy: number,
+  gap: number,
+  armCount?: number,
+  startAngle = 0,
+): ArmDef[] {
   switch (topology) {
-    case 'T': return tArms(cx, cy, gap);
-    case 'Cross': return radialArms(cx, cy, gap, 4);
-    case 'Radial':
-      return radialArms(cx, cy, gap, armCount ?? 4);
-    case 'Roundabout':
-      return radialArms(cx, cy, gap, armCount ?? 4);
+    case 'T': return tArms(cx, cy, gap, startAngle);
+    case 'Cross': return radialArms(cx, cy, gap, 4, startAngle);
+    default:
+      return radialArms(cx, cy, gap, armCount ?? 4, startAngle);
   }
 }
 
@@ -100,23 +114,24 @@ function resolveArmCount(topology: JunctionTopology, armCount?: number): number 
   switch (topology) {
     case 'T': return 3;
     case 'Cross': return 4;
-    case 'Radial': return armCount ?? 4;
-    case 'Roundabout': return armCount ?? 4;
+    default: return armCount ?? 4;
   }
 }
 
 // ── Connector road builder ───────────────────────────────────────────────────
 
 /**
- * Compute the end point of a road (junction edge for inward-pointing arm roads).
+ * Compute the end pose of a road (junction edge for inward-pointing arm roads).
+ *
+ * Evaluates the final plan-view geometry segment so multi-segment / curved
+ * reference lines (ParamPoly3 corner curves, arcs, spirals) resolve correctly.
  */
 export function roadEndPoint(road: Road): { x: number; y: number; hdg: number } {
-  const geo = road.plan_view[0]!;
-  return {
-    x: geo.x + Math.cos(geo.hdg) * road.length,
-    y: geo.y + Math.sin(geo.hdg) * road.length,
-    hdg: geo.hdg,
-  };
+  const last = road.plan_view[road.plan_view.length - 1];
+  if (!last) {
+    return { x: 0, y: 0, hdg: 0 };
+  }
+  return evalGeometryAtS(last, last.length);
 }
 
 /**
@@ -376,11 +391,18 @@ export function buildJunctionFromConfig(
   if (config.topology === 'Roundabout') {
     return buildRoundaboutFromConfig(config, cx, cy);
   }
+  if (config.topology === 'Playground') {
+    return buildPlaygroundFromConfig(config, cx, cy);
+  }
+  if (config.topology === 'Overpass') {
+    return buildOverpassFromConfig(config, cx, cy);
+  }
 
   const section = config.armSection ?? DEFAULT_ARM_SECTION;
   const armCount = resolveArmCount(config.topology, config.armCount);
-  const gap = computeArmGap(section, armCount, config.armLength);
-  const arms = resolveArms(config.topology, cx, cy, gap, config.armCount);
+  const gap = computeArmGap(section, armCount, config.armLength, config.armOffset);
+  const startAngle = ((config.startAngleDeg ?? 0) * Math.PI) / 180;
+  const arms = resolveArms(config.topology, cx, cy, gap, config.armCount, startAngle);
   // Road length = armLength (gap is additional space beyond road, matching C# reference)
   const effLength = config.armLength;
   const junctionId = genId();

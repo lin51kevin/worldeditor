@@ -8,11 +8,81 @@
  * To add a new template: just add an entry to the appropriate array.
  * The template engine + plugin wiring will pick it up automatically.
  */
-import type { TemplateCatalog } from './schema';
+import type {
+  TemplateCatalog, LaneConfig, MarkConfig, SectionConfig, RoadTemplateConfig,
+} from './schema';
 import { roadSignEntries } from './roadSignEntries';
 
 const W = 3.5;   // standard driving lane width (m)
 const SW = 2.0;  // shoulder width (m) — matching C# reference
+
+// ── C# mark presets (RoadMarkLane* / RoadMarkBorder*) ────────────────────────
+
+const LANE_MARK: MarkConfig = { type: 'Broken', width: 0.12, laneChange: 'Both' };
+const BORDER_SOLID: MarkConfig = { type: 'Solid', width: 0.15 };
+const BORDER_NONE: MarkConfig = { type: 'None' };
+const CENTER_YELLOW: MarkConfig = { type: 'Solid', color: 'Yellow', width: 0.15 };
+const CENTER_WHITE: MarkConfig = { type: 'Solid', width: 0.15 };
+
+/**
+ * Build one side of a cross-section following C# `BuildRoad.BuildRoadSideSection`:
+ * the outermost lane carries the border mark, every inner lane the lane mark.
+ * When `hasShoulder` is false no shoulder lane is emitted at all.
+ */
+function side(nDriving: number, hasShoulder: boolean, borderMark: MarkConfig): LaneConfig[] {
+  const total = nDriving + (hasShoulder ? 1 : 0);
+  return Array.from({ length: total }, (_, i) => {
+    const isOutermost = i === total - 1;
+    const isShoulder = hasShoulder && isOutermost;
+    return {
+      laneType: isShoulder ? 'Shoulder' : 'Driving',
+      width: isShoulder ? SW : W,
+      mark: isOutermost ? borderMark : LANE_MARK,
+    };
+  });
+}
+
+/** Symmetric two-way cross-section. */
+function twoWay(nDriving: number, hasShoulder: boolean, borderMark: MarkConfig): SectionConfig {
+  return {
+    left: side(nDriving, hasShoulder, borderMark),
+    right: side(nDriving, hasShoulder, borderMark),
+  };
+}
+
+/** Standard junction arm: N driving lanes + shoulder per side (C# junction templates). */
+function armSection(nDriving: number): SectionConfig {
+  return twoWay(nDriving, true, BORDER_NONE);
+}
+
+/** Cross-section shared by the arc / spiral road templates (C# 2-way 4-lane + shoulder). */
+const CURVED_SECTION = twoWay(2, true, BORDER_NONE);
+
+/**
+ * Lane-count transition template (C# `CreateChangedRoads*`).
+ *
+ * 2-step sequences use 33 m straights + a 34 m taper (total 100 m);
+ * 3-step sequences use 16 m straights + 18 m tapers.
+ */
+function laneChangeRoad(key: string, sequence: number[], thumbnail: string): RoadTemplateConfig {
+  const threeStep = sequence.length > 2;
+  return {
+    id: `tpl:road:lc:${key}`,
+    labelKey: `templatePanel.roads.laneChange.${key}`,
+    icon: '⋉',
+    thumbnailUrl: `/assets/textures/Roads/${thumbnail}`,
+    subcategory: 'laneChange',
+    left: [],
+    right: side(sequence[0] ?? 1, false, BORDER_SOLID),
+    centerMark: CENTER_YELLOW,
+    laneChange: {
+      sequence,
+      laneWidth: W,
+      straightLength: threeStep ? 16 : 33,
+      transitionLength: threeStep ? 18 : 34,
+    },
+  };
+}
 
 const catalog: TemplateCatalog = {
   version: '1.0.0',
@@ -22,93 +92,142 @@ const catalog: TemplateCatalog = {
   // ═══════════════════════════════════════════════════════════════════════════
 
   roads: [
+    // ── Basic cross-sections (C# Roads) ──────────────────────────────────────
     {
       id: 'tpl:road:single',
       labelKey: 'templatePanel.roads.singleLane',
       icon: '╺',
       thumbnailUrl: '/assets/textures/Roads/OneLane.png',
+      subcategory: 'basic',
       left: [],
-      right: [
-        { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
-      ],
+      right: side(1, false, BORDER_SOLID),
+      centerMark: CENTER_WHITE,
+    },
+    {
+      id: 'tpl:road:oneway2',
+      labelKey: 'templatePanel.roads.oneWay2Lane',
+      icon: '╺╺',
+      thumbnailUrl: '/assets/textures/Roads/TwoLane.png',
+      subcategory: 'basic',
+      left: [],
+      right: side(2, false, BORDER_SOLID),
+      centerMark: CENTER_YELLOW,
+    },
+    {
+      id: 'tpl:road:oneway3',
+      labelKey: 'templatePanel.roads.oneWay3Lane',
+      icon: '╺╺╺',
+      thumbnailUrl: '/assets/textures/Roads/ThreeLane.png',
+      subcategory: 'basic',
+      left: [],
+      right: side(3, false, BORDER_SOLID),
+      centerMark: CENTER_YELLOW,
     },
     {
       id: 'tpl:road:dual2',
       labelKey: 'templatePanel.roads.dual2Lane',
       icon: '┃┃',
       thumbnailUrl: '/assets/textures/Roads/TwoWayTwoLane.png',
-      left: [
-        { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
-      ],
-      right: [
-        { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
-      ],
+      subcategory: 'basic',
+      ...twoWay(1, false, BORDER_NONE),
+      centerMark: CENTER_YELLOW,
     },
     {
       id: 'tpl:road:dual4',
       labelKey: 'templatePanel.roads.dual4Lane',
       icon: '┃┃┃┃',
       thumbnailUrl: '/assets/textures/Roads/TwoWayFourLaneWithShoulder.png',
-      left: [
-        { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
-        { laneType: 'Shoulder', width: SW, mark: { type: 'Solid' } },
-      ],
-      right: [
-        { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
-        { laneType: 'Shoulder', width: SW, mark: { type: 'Solid' } },
-      ],
+      subcategory: 'basic',
+      ...twoWay(2, true, BORDER_NONE),
+      centerMark: CENTER_YELLOW,
     },
     {
       id: 'tpl:road:dual6',
       labelKey: 'templatePanel.roads.dual6Lane',
       icon: '┃┃┃┃┃┃',
       thumbnailUrl: '/assets/textures/Roads/TwoWaySixLaneWithShoulder.png',
-      left: [
-        { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
-        { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
-        { laneType: 'Shoulder', width: SW, mark: { type: 'Solid' } },
-      ],
-      right: [
-        { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
-        { laneType: 'Driving', width: W, mark: { type: 'Solid', color: 'Yellow' } },
-        { laneType: 'Shoulder', width: SW, mark: { type: 'Solid' } },
-      ],
+      subcategory: 'basic',
+      ...twoWay(3, true, BORDER_NONE),
+      centerMark: CENTER_YELLOW,
     },
+
+    // ── Curved reference lines (C# Curvatur / Spiral) ────────────────────────
+    {
+      id: 'tpl:road:arc',
+      labelKey: 'templatePanel.roads.arcRoad',
+      icon: '◜',
+      thumbnailUrl: '/assets/textures/Roads/ArcRoad.png',
+      subcategory: 'curved',
+      drawMode: 'drawArc',
+      defaultCurvature: -1 / 200,
+      ...CURVED_SECTION,
+      centerMark: CENTER_YELLOW,
+    },
+    {
+      id: 'tpl:road:spiral',
+      labelKey: 'templatePanel.roads.spiralRoad',
+      icon: '◠',
+      thumbnailUrl: '/assets/textures/Roads/SpiralRoad.png',
+      subcategory: 'curved',
+      drawMode: 'drawSpiral',
+      spiralCurvature: { start: 1 / 400, end: 1 / 100 },
+      ...CURVED_SECTION,
+      centerMark: CENTER_YELLOW,
+    },
+
+    // ── Lane-count transitions (C# Changed A–L) ──────────────────────────────
+    laneChangeRoad('1to2', [1, 2], 'Changed1To2.png'),
+    laneChangeRoad('2to1', [2, 1], 'Changed2To1.png'),
+    laneChangeRoad('1to2to1', [1, 2, 1], 'Changed1To2To1.png'),
+    laneChangeRoad('2to1to2', [2, 1, 2], 'Changed2To1To2.png'),
+    laneChangeRoad('2to3', [2, 3], 'Changed2To3.png'),
+    laneChangeRoad('3to2', [3, 2], 'Changed3To2.png'),
+    laneChangeRoad('2to3to2', [2, 3, 2], 'Changed2To3To2.png'),
+    laneChangeRoad('3to2to3', [3, 2, 3], 'Changed3To2To3.png'),
+    laneChangeRoad('3to4', [3, 4], 'Changed3To4.png'),
+    laneChangeRoad('4to3', [4, 3], 'Changed4To3.png'),
+    laneChangeRoad('3to4to3', [3, 4, 3], 'Changed3To4To3.png'),
+    laneChangeRoad('4to3to4', [4, 3, 4], 'Changed4To3To4.png'),
+
+    // ── WorldEditor Next extensions (no C# counterpart) ──────────────────────
     {
       id: 'tpl:road:highway',
       labelKey: 'templatePanel.roads.highway',
       icon: '🛣',
+      subcategory: 'extended',
       left: [
-        { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
-        { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
-        { laneType: 'Driving', width: W, mark: { type: 'Solid' } },
+        { laneType: 'Driving', width: W, mark: LANE_MARK },
+        { laneType: 'Driving', width: W, mark: LANE_MARK },
+        { laneType: 'Driving', width: W, mark: LANE_MARK },
         { laneType: 'Shoulder', width: SW, mark: { type: 'Solid' } },
         { laneType: 'Median', width: 1.5, mark: { type: 'Solid' } },
       ],
       right: [
-        { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
-        { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.12, laneChange: 'Both' } },
-        { laneType: 'Driving', width: W, mark: { type: 'Solid' } },
+        { laneType: 'Driving', width: W, mark: LANE_MARK },
+        { laneType: 'Driving', width: W, mark: LANE_MARK },
+        { laneType: 'Driving', width: W, mark: LANE_MARK },
         { laneType: 'Shoulder', width: SW, mark: { type: 'Solid' } },
         { laneType: 'Median', width: 1.5, mark: { type: 'Solid' } },
       ],
+      centerMark: CENTER_YELLOW,
     },
     {
       id: 'tpl:road:ramp',
       labelKey: 'templatePanel.roads.ramp',
       icon: '↗',
-      thumbnailUrl: '/assets/textures/Roads/TwoLane.png',
+      subcategory: 'extended',
       left: [],
       right: [
-        { laneType: 'Driving', width: W, mark: { type: 'Solid' } },
+        { laneType: 'Driving', width: W, mark: LANE_MARK },
         { laneType: 'Shoulder', width: SW, mark: { type: 'Solid' } },
       ],
+      centerMark: CENTER_WHITE,
     },
     {
       id: 'tpl:road:urban',
       labelKey: 'templatePanel.roads.urbanRoad',
       icon: '🏙',
-      thumbnailUrl: '/assets/textures/Roads/ThreeLane.png',
+      subcategory: 'extended',
       left: [
         { laneType: 'Driving', width: W, mark: { type: 'Solid' } },
         { laneType: 'Parking', width: 2.5, mark: { type: 'Solid' } },
@@ -119,6 +238,7 @@ const catalog: TemplateCatalog = {
         { laneType: 'Parking', width: 2.5, mark: { type: 'Solid' } },
         { laneType: 'Sidewalk', width: 2.0, mark: { type: 'Solid' } },
       ],
+      centerMark: CENTER_YELLOW,
     },
   ],
 
@@ -127,47 +247,20 @@ const catalog: TemplateCatalog = {
   // ═══════════════════════════════════════════════════════════════════════════
 
   junctions: [
+    // ── Cross roads 3–7 (C# JunctionCrossRoads*) ─────────────────────────────
     {
-      id: 'tpl:jct:t',
-      labelKey: 'templatePanel.junctions.tIntersection',
-      icon: '⊤',
+      id: 'tpl:jct:cross3',
+      labelKey: 'templatePanel.junctions.crossRoads3',
+      icon: '⑂',
       thumbnailUrl: '/assets/textures/Junctions/JunctionThreeRoads.png',
-      topology: 'T',
+      topology: 'Radial',
+      armCount: 3,
       armLength: 100,
-      name: 'T-Intersection',
-      armSection: {
-        left: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-        right: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-      },
+      armOffset: 50,
+      name: 'Cross Roads 3',
+      armSection: armSection(2),
       connectionPattern: 'all-pairs',
-    },
-    {
-      id: 'tpl:jct:t-single',
-      labelKey: 'templatePanel.junctions.tSingleLane',
-      icon: '⊤',
-      thumbnailUrl: '/assets/textures/Junctions/DefaultJunction.png',
-      topology: 'T',
-      armLength: 60,
-      name: 'T-Intersection Single',
-      armSection: {
-        left: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-        right: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-      },
-      connectionPattern: 'all-pairs',
+      subcategory: 'crossRoads',
     },
     {
       id: 'tpl:jct:cross',
@@ -176,43 +269,11 @@ const catalog: TemplateCatalog = {
       thumbnailUrl: '/assets/textures/Junctions/JunctionCrossRoad.png',
       topology: 'Cross',
       armLength: 100,
-      name: 'Cross Intersection',
-      armSection: {
-        left: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-        right: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-      },
+      armOffset: 50,
+      name: 'Cross Roads 4',
+      armSection: armSection(2),
       connectionPattern: 'all-pairs',
-    },
-    {
-      id: 'tpl:jct:fork',
-      labelKey: 'templatePanel.junctions.fork',
-      icon: '⑂',
-      thumbnailUrl: '/assets/textures/Junctions/VirtualJunction.png',
-      topology: 'Radial',
-      armCount: 3,
-      armLength: 100,
-      name: 'Fork',
-      armSection: {
-        left: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-        right: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-      },
-      connectionPattern: 'all-pairs',
+      subcategory: 'crossRoads',
     },
     {
       id: 'tpl:jct:5way',
@@ -222,43 +283,42 @@ const catalog: TemplateCatalog = {
       topology: 'Radial',
       armCount: 5,
       armLength: 100,
-      name: '5-Way Intersection',
-      armSection: {
-        left: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-        right: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-      },
+      armOffset: 50,
+      name: 'Cross Roads 5',
+      armSection: armSection(2),
       connectionPattern: 'all-pairs',
+      subcategory: 'crossRoads',
     },
     {
       id: 'tpl:jct:6way',
       labelKey: 'templatePanel.junctions.sixWay',
       icon: '✴',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionSixRoads.png',
       topology: 'Radial',
       armCount: 6,
       armLength: 100,
-      name: '6-Way Intersection',
-      armSection: {
-        left: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-        right: [
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Driving', width: W, mark: { type: 'Broken', width: 0.15, laneChange: 'Both' } },
-          { laneType: 'Shoulder', width: SW, mark: { type: 'None' } },
-        ],
-      },
+      armOffset: 50,
+      name: 'Cross Roads 6',
+      armSection: armSection(2),
       connectionPattern: 'all-pairs',
+      subcategory: 'crossRoads',
     },
+    {
+      id: 'tpl:jct:7way',
+      labelKey: 'templatePanel.junctions.sevenWay',
+      icon: '✷',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionSevenRoads.png',
+      topology: 'Radial',
+      armCount: 7,
+      armLength: 100,
+      armOffset: 50,
+      name: 'Cross Roads 7',
+      armSection: armSection(2),
+      connectionPattern: 'all-pairs',
+      subcategory: 'crossRoads',
+    },
+
+    // ── Roundabouts 3–7 (C# JunctionRoundAbout*) ─────────────────────────────
     {
       id: 'tpl:jct:roundabout3',
       labelKey: 'templatePanel.junctions.roundabout',
@@ -267,9 +327,12 @@ const catalog: TemplateCatalog = {
       topology: 'Roundabout',
       armCount: 3,
       armLength: 100,
+      armOffset: 20,
       roundaboutRadius: 50,
       name: 'Roundabout 3',
+      armSection: armSection(1),
       connectionPattern: 'all-pairs',
+      subcategory: 'roundabout',
     },
     {
       id: 'tpl:jct:roundabout4',
@@ -279,9 +342,196 @@ const catalog: TemplateCatalog = {
       topology: 'Roundabout',
       armCount: 4,
       armLength: 100,
+      armOffset: 20,
       roundaboutRadius: 50,
       name: 'Roundabout 4',
+      armSection: armSection(1),
       connectionPattern: 'all-pairs',
+      subcategory: 'roundabout',
+    },
+    {
+      id: 'tpl:jct:roundabout5',
+      labelKey: 'templatePanel.junctions.roundabout5',
+      icon: '⭕',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionRoundaboutFive.png',
+      topology: 'Roundabout',
+      armCount: 5,
+      armLength: 100,
+      armOffset: 20,
+      roundaboutRadius: 50,
+      name: 'Roundabout 5',
+      armSection: armSection(1),
+      connectionPattern: 'all-pairs',
+      subcategory: 'roundabout',
+    },
+    {
+      id: 'tpl:jct:roundabout6',
+      labelKey: 'templatePanel.junctions.roundabout6',
+      icon: '⭕',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionRoundaboutSix.png',
+      topology: 'Roundabout',
+      armCount: 6,
+      armLength: 100,
+      armOffset: 20,
+      roundaboutRadius: 50,
+      name: 'Roundabout 6',
+      armSection: armSection(1),
+      connectionPattern: 'all-pairs',
+      subcategory: 'roundabout',
+    },
+    {
+      id: 'tpl:jct:roundabout7',
+      labelKey: 'templatePanel.junctions.roundabout7',
+      icon: '⭕',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionRoundaboutSeven.png',
+      topology: 'Roundabout',
+      armCount: 7,
+      armLength: 100,
+      armOffset: 20,
+      roundaboutRadius: 50,
+      name: 'Roundabout 7',
+      armSection: armSection(1),
+      connectionPattern: 'all-pairs',
+      subcategory: 'roundabout',
+    },
+
+    // ── Playground loops 2–6 (C# JunctionPlayground*) ────────────────────────
+    {
+      id: 'tpl:jct:playground2',
+      labelKey: 'templatePanel.junctions.playground2',
+      icon: '⬭',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionPlaygroundTwo.png',
+      topology: 'Playground',
+      armCount: 2,
+      armLength: 30,
+      name: 'Playground 2',
+      armSection: armSection(1),
+      roundaboutLaneCount: 2,
+      subcategory: 'playground',
+    },
+    {
+      id: 'tpl:jct:playground3',
+      labelKey: 'templatePanel.junctions.playground3',
+      icon: '⬭',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionPlaygroundThree.png',
+      topology: 'Playground',
+      armCount: 3,
+      armLength: 30,
+      name: 'Playground 3',
+      armSection: armSection(1),
+      roundaboutLaneCount: 2,
+      subcategory: 'playground',
+    },
+    {
+      id: 'tpl:jct:playground4',
+      labelKey: 'templatePanel.junctions.playground4',
+      icon: '⬭',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionPlaygroundFour.png',
+      topology: 'Playground',
+      armCount: 4,
+      armLength: 30,
+      name: 'Playground 4',
+      armSection: armSection(2),
+      roundaboutLaneCount: 2,
+      subcategory: 'playground',
+    },
+    {
+      id: 'tpl:jct:playground5',
+      labelKey: 'templatePanel.junctions.playground5',
+      icon: '⬭',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionPlaygroundFive.png',
+      topology: 'Playground',
+      armCount: 5,
+      armLength: 30,
+      name: 'Playground 5',
+      armSection: armSection(2),
+      roundaboutLaneCount: 2,
+      subcategory: 'playground',
+    },
+    {
+      id: 'tpl:jct:playground6',
+      labelKey: 'templatePanel.junctions.playground6',
+      icon: '⬭',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionPlaygroundSix.png',
+      topology: 'Playground',
+      armCount: 6,
+      armLength: 30,
+      name: 'Playground 6',
+      armSection: armSection(3),
+      roundaboutLaneCount: 3,
+      subcategory: 'playground',
+    },
+
+    // ── Overpasses 1–3 (C# JunctionXOverpass*) ───────────────────────────────
+    {
+      id: 'tpl:jct:overpass1',
+      labelKey: 'templatePanel.junctions.overpass1',
+      icon: '⤫',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionOverpassOne.png',
+      topology: 'Overpass',
+      variant: 1,
+      armLength: 100,
+      heightDelta: -6,
+      rampRadius: 50,
+      name: 'Overpass 1',
+      armSection: armSection(2),
+      subcategory: 'overpass',
+    },
+    {
+      id: 'tpl:jct:overpass2',
+      labelKey: 'templatePanel.junctions.overpass2',
+      icon: '⤬',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionOverpassTwo.png',
+      topology: 'Overpass',
+      variant: 2,
+      armLength: 100,
+      heightDelta: -6,
+      rampRadius: 50,
+      name: 'Overpass 2',
+      armSection: armSection(2),
+      subcategory: 'overpass',
+    },
+    {
+      id: 'tpl:jct:overpass3',
+      labelKey: 'templatePanel.junctions.overpass3',
+      icon: '⤪',
+      thumbnailUrl: '/assets/textures/Junctions/JunctionOverpassThree.png',
+      topology: 'Overpass',
+      variant: 3,
+      armLength: 100,
+      heightDelta: -6,
+      rampRadius: 50,
+      name: 'Overpass 3',
+      armSection: armSection(2),
+      subcategory: 'overpass',
+    },
+
+    // ── WorldEditor Next extensions (no C# counterpart) ──────────────────────
+    {
+      id: 'tpl:jct:t',
+      labelKey: 'templatePanel.junctions.tIntersection',
+      icon: '⊤',
+      thumbnailUrl: '/assets/textures/Junctions/VirtualJunction.png',
+      topology: 'T',
+      armLength: 100,
+      armOffset: 50,
+      name: 'T-Intersection',
+      armSection: armSection(2),
+      connectionPattern: 'all-pairs',
+      subcategory: 'extended',
+    },
+    {
+      id: 'tpl:jct:t-single',
+      labelKey: 'templatePanel.junctions.tSingleLane',
+      icon: '⊤',
+      thumbnailUrl: '/assets/textures/Junctions/DefaultJunction.png',
+      topology: 'T',
+      armLength: 60,
+      armOffset: 30,
+      name: 'T-Intersection Single',
+      armSection: armSection(1),
+      connectionPattern: 'all-pairs',
+      subcategory: 'extended',
     },
   ],
 

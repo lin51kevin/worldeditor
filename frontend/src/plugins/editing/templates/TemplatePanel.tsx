@@ -96,13 +96,21 @@ export const TemplatePanel = memo(function TemplatePanel() {
     if (!item) return;
     const viewStore = useViewportStore.getState();
     viewStore.setSplineTemplateId(itemId);
-    if (itemId.startsWith('tpl:road:')) {
+    if (item.clickToPlace) {
+      // Composite road templates (e.g. lane-change chains) are instantiated by a
+      // single viewport click rather than by drawing a reference line.
+      viewStore.clearPendingObjectTemplate();
+      viewStore.setPendingTemplate(itemId);
+    } else if (itemId.startsWith('tpl:road:')) {
       // Road cross-section templates: enter draw mode.
-      // Respect whichever draw mode is currently active in the toolbar;
-      // default to 'spline' (Hermite cubic spline) if none is active.
+      // Prefer the template's own draw mode; otherwise respect whichever draw
+      // mode is currently active in the toolbar, defaulting to 'spline'.
       viewStore.clearPendingTemplate();
       const current = viewStore.editMode;
-      if (!isDrawMode(current)) {
+      if (item.roadDrawMode) {
+        if (current === item.roadDrawMode) viewStore.clearSplineKnots();
+        else viewStore.setEditMode(item.roadDrawMode);
+      } else if (!isDrawMode(current)) {
         viewStore.setEditMode('spline');
       } else {
         // Already in a draw mode — start fresh with new template, keep same mode
@@ -175,7 +183,9 @@ export const TemplatePanel = memo(function TemplatePanel() {
           displayedItems.map((item) => {
             const isSelected = selectedTemplateId === item.id &&
               (!item.id.startsWith('tpl:jct:') || pendingTemplateId === item.id) &&
-              (!item.id.startsWith('tpl:road:') || isDrawMode(editMode));
+              (item.clickToPlace
+                ? pendingTemplateId === item.id
+                : !item.id.startsWith('tpl:road:') || isDrawMode(editMode));
             const isObjPending = pendingObjectTemplateId === item.id;
             const isPending = pendingTemplateId === item.id || isObjPending;
             return (

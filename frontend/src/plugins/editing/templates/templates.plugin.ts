@@ -25,6 +25,7 @@ import type { TemplateSectionContrib, TemplateItemDef } from '../../../stores/pl
 import {
   loadCatalog,
   buildRoadFromConfig,
+  buildLaneChangeRoads,
   buildJunctionFromConfig,
   buildSignalFromConfig,
   buildRoadObjectFromConfig,
@@ -50,10 +51,26 @@ function roadConfigToItem(config: RoadTemplateConfig): TemplateItemDef {
     labelKey: config.labelKey,
     icon: config.icon,
     thumbnailUrl: config.thumbnailUrl,
+    roadDrawMode: config.drawMode,
+    clickToPlace: config.laneChange !== undefined,
     onApply: (opts) => {
       if (opts?.x === undefined || opts?.y === undefined) return;
-      const road = buildRoadFromConfig(config, opts.x, opts.y, opts.hdg ?? 0);
       const store = useProjectStore.getState();
+
+      // Lane-change templates expand into a chain of linked roads, so they are
+      // placed as a single undoable command rather than a single addRoad.
+      if (config.laneChange) {
+        const { roads } = buildLaneChangeRoads(config, opts.x, opts.y, opts.hdg ?? 0);
+        if (roads.length === 0) return;
+        store.executePluginCommand('Add lane-change road template', (project) => ({
+          ...project,
+          roads: [...project.roads, ...roads],
+        }));
+        store.selectRoad(roads[0]!.id);
+        return;
+      }
+
+      const road = buildRoadFromConfig(config, opts.x, opts.y, opts.hdg ?? 0);
       store.addRoad(road);
       store.selectRoad(road.id);
     },

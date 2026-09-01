@@ -43,6 +43,29 @@ export interface SectionConfig {
 
 // ── Road Template ────────────────────────────────────────────────────────────
 
+/** Viewport draw mode entered when a road template is picked */
+export type RoadDrawMode = 'spline' | 'drawArc' | 'drawSpiral';
+
+/** UI grouping for the roads section */
+export type RoadSubcategory = 'basic' | 'curved' | 'laneChange' | 'extended';
+
+/**
+ * Lane-count transition spec for "changed lane" templates.
+ *
+ * The sequence lists the driving-lane count of each straight segment; a
+ * tapered transition road is inserted between every consecutive pair.
+ * e.g. `[1, 2]` → 1→2 lanes, `[1, 2, 1]` → 1→2→1 lanes.
+ */
+export interface LaneChangeConfig {
+  sequence: number[];
+  /** Driving lane width in metres. Defaults to 3.5 */
+  laneWidth?: number;
+  /** Length of each constant-width straight segment. Defaults to 33 */
+  straightLength?: number;
+  /** Length of each tapered transition segment. Defaults to 34 */
+  transitionLength?: number;
+}
+
 export interface RoadTemplateConfig {
   id: string;
   labelKey: string;
@@ -55,6 +78,21 @@ export interface RoadTemplateConfig {
   left: LaneConfig[];
   /** Right-side lanes (negative IDs, ordered from center outward) */
   right: LaneConfig[];
+  /** Mark on the road centre line. Defaults to solid yellow. */
+  centerMark?: MarkConfig;
+  /** Draw mode to activate when this template is selected. Defaults to 'spline'. */
+  drawMode?: RoadDrawMode;
+  /** Signed curvature hint (1/radius) for 'drawArc' templates */
+  defaultCurvature?: number;
+  /** Start/end curvature hints (1/radius) for 'drawSpiral' templates */
+  spiralCurvature?: { start: number; end: number };
+  /** UI grouping */
+  subcategory?: RoadSubcategory;
+  /**
+   * When present the template builds a multi-road lane-count transition chain
+   * at the click point instead of entering a draw mode.
+   */
+  laneChange?: LaneChangeConfig;
 }
 
 // ── Junction Template ────────────────────────────────────────────────────────
@@ -63,11 +101,17 @@ export type JunctionTopology =
   | 'T'          // 3-arm T-shape (east, west, north)
   | 'Cross'      // 4-arm orthogonal (east, west, north, south)
   | 'Radial'     // N arms equally spaced
-  | 'Roundabout'; // N arms equally spaced (placeholder, same geometry for now)
+  | 'Roundabout' // N arms around a circular ring road
+  | 'Playground' // N arms around a rounded-rectangle closed loop
+  | 'Overpass';  // grade-separated interchange with elevated ramps
 
 export type ConnectionPattern =
   | 'all-pairs'  // Every pair of arms in both directions: N*(N-1) connections
   | 'none';      // No connections (legacy behaviour)
+
+/** UI grouping for the junctions section */
+export type JunctionSubcategory =
+  | 'crossRoads' | 'roundabout' | 'playground' | 'overpass' | 'extended';
 
 export interface JunctionTemplateConfig {
   id: string;
@@ -81,6 +125,14 @@ export interface JunctionTemplateConfig {
   armCount?: number;
   /** Arm road length in metres (gap from center is computed automatically and is additional) */
   armLength: number;
+  /**
+   * Distance from the junction centre to the near end of each arm road
+   * (C# `RoadToCenter`). Defaults to `armLength / 2`, clamped up to avoid
+   * adjacent arms overlapping.
+   */
+  armOffset?: number;
+  /** Angle of the first arm in degrees (CCW from +X). Defaults to 0. */
+  startAngleDeg?: number;
   /** Cross-section applied to each arm road. Defaults to dual-2-lane driving. */
   armSection?: SectionConfig;
   /** How junction connections are generated. Defaults to 'all-pairs'. */
@@ -90,6 +142,20 @@ export interface JunctionTemplateConfig {
   /** Roundabout: radius of the circular ring road in metres. Defaults to 15. */
   roundaboutRadius?: number;
   roundaboutArcCount?: number;
+  /**
+   * Number of driving lanes on the ring / loop carriageway (C#
+   * `RoundaboutDrivingLanesCount`). Independent of the arm lane count.
+   * Defaults to the arm's driving lane count.
+   */
+  roundaboutLaneCount?: number;
+  /** Overpass: elevation offset of the lower carriageway in metres (negative). */
+  heightDelta?: number;
+  /** Overpass: radius of the loop ramps in metres. */
+  rampRadius?: number;
+  /** Layout variant index (Overpass 1/2/3). Defaults to 1. */
+  variant?: number;
+  /** UI grouping */
+  subcategory?: JunctionSubcategory;
 }
 
 // ── Signal Template ──────────────────────────────────────────────────────────

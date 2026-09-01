@@ -23,7 +23,11 @@ const VALID_MARK_TYPES = new Set([
 
 const VALID_MARK_COLORS = new Set(['Standard', 'Yellow', 'Blue', 'Green', 'Red']);
 
-const VALID_TOPOLOGIES = new Set(['T', 'Cross', 'Radial', 'Roundabout']);
+const VALID_TOPOLOGIES = new Set([
+  'T', 'Cross', 'Radial', 'Roundabout', 'Playground', 'Overpass',
+]);
+
+const VALID_DRAW_MODES = new Set(['spline', 'drawArc', 'drawSpiral']);
 
 function validateMark(mark: MarkConfig, path: string): string[] {
   const errors: string[] = [];
@@ -59,6 +63,27 @@ function validateRoad(road: RoadTemplateConfig, idx: number): string[] {
   if (!road.id) errors.push(`${path}.id: required`);
   if (!road.labelKey) errors.push(`${path}.labelKey: required`);
   if (road.length !== undefined && road.length <= 0) errors.push(`${path}.length: must be > 0`);
+  if (road.drawMode !== undefined && !VALID_DRAW_MODES.has(road.drawMode)) {
+    errors.push(`${path}.drawMode: unknown draw mode '${road.drawMode}'`);
+  }
+  if (road.centerMark) errors.push(...validateMark(road.centerMark, `${path}.centerMark`));
+  if (road.laneChange) {
+    const lc = road.laneChange;
+    if (!Array.isArray(lc.sequence) || lc.sequence.length < 2) {
+      errors.push(`${path}.laneChange.sequence: must have at least 2 entries`);
+    } else if (lc.sequence.some((n) => !Number.isInteger(n) || n < 1)) {
+      errors.push(`${path}.laneChange.sequence: entries must be integers >= 1`);
+    }
+    if (lc.laneWidth !== undefined && lc.laneWidth <= 0) {
+      errors.push(`${path}.laneChange.laneWidth: must be > 0`);
+    }
+    if (lc.straightLength !== undefined && lc.straightLength <= 0) {
+      errors.push(`${path}.laneChange.straightLength: must be > 0`);
+    }
+    if (lc.transitionLength !== undefined && lc.transitionLength <= 0) {
+      errors.push(`${path}.laneChange.transitionLength: must be > 0`);
+    }
+  }
   road.left.forEach((l, i) => errors.push(...validateLane(l, `${path}.left[${i}]`)));
   road.right.forEach((l, i) => errors.push(...validateLane(l, `${path}.right[${i}]`)));
   return errors;
@@ -71,7 +96,19 @@ function validateJunction(jct: JunctionTemplateConfig, idx: number): string[] {
   if (!jct.labelKey) errors.push(`${path}.labelKey: required`);
   if (!VALID_TOPOLOGIES.has(jct.topology)) errors.push(`${path}.topology: unknown '${jct.topology}'`);
   if (jct.armLength <= 0) errors.push(`${path}.armLength: must be > 0`);
-  if (jct.armCount !== undefined && jct.armCount < 3) errors.push(`${path}.armCount: must be >= 3`);
+  const minArms = jct.topology === 'Playground' || jct.topology === 'Overpass' ? 1 : 3;
+  if (jct.armCount !== undefined && jct.armCount < minArms) {
+    errors.push(`${path}.armCount: must be >= ${minArms}`);
+  }
+  if (jct.armOffset !== undefined && jct.armOffset <= 0) errors.push(`${path}.armOffset: must be > 0`);
+  if (jct.rampRadius !== undefined && jct.rampRadius <= 0) errors.push(`${path}.rampRadius: must be > 0`);
+  if (jct.roundaboutLaneCount !== undefined
+    && (!Number.isInteger(jct.roundaboutLaneCount) || jct.roundaboutLaneCount < 1)) {
+    errors.push(`${path}.roundaboutLaneCount: must be an integer >= 1`);
+  }
+  if (jct.variant !== undefined && (!Number.isInteger(jct.variant) || jct.variant < 1)) {
+    errors.push(`${path}.variant: must be an integer >= 1`);
+  }
   if (jct.armSection) {
     jct.armSection.left.forEach((l, i) => errors.push(...validateLane(l, `${path}.armSection.left[${i}]`)));
     jct.armSection.right.forEach((l, i) => errors.push(...validateLane(l, `${path}.armSection.right[${i}]`)));
