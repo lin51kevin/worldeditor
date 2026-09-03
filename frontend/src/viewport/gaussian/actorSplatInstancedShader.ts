@@ -46,14 +46,18 @@ struct SplatUniforms {
 };
 
 struct ActorTransform {
-  cos_yaw : f32,  // cos(heading) — for XY position rotation
-  sin_yaw : f32,  // sin(heading)
-  hw      : f32,  // cos(heading/2) — yaw quaternion w
-  hz      : f32,  // sin(heading/2) — yaw quaternion z  (q = (hw,0,0,hz))
-  pos_x   : f32,  // world position minus scene origin, x
-  pos_y   : f32,  // world position minus scene origin, y
-  pos_z   : f32,  // world position minus scene origin, z
-  _pad    : f32,
+  cos_yaw     : f32,  // cos(heading) — for XY position rotation
+  sin_yaw     : f32,  // sin(heading)
+  hw          : f32,  // cos(heading/2) — yaw quaternion w
+  hz          : f32,  // sin(heading/2) — yaw quaternion z  (q = (hw,0,0,hz))
+  pos_x       : f32,  // world position minus scene origin, x
+  pos_y       : f32,  // world position minus scene origin, y
+  pos_z       : f32,  // world position minus scene origin, z
+  temperature : f32,  // colour grading; neutral is (0, 1, 0)
+  saturation  : f32,
+  brightness  : f32,
+  _pad0       : f32,
+  _pad1       : f32,
 };
 
 @group(0) @binding(0) var<uniform> u : SplatUniforms;
@@ -162,6 +166,18 @@ fn evalActorSH(b : u32, degree : u32, dir : vec3<f32>) -> vec3<f32> {
   return clamp(c + vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
+// Per-instance colour grading. Temperature shifts red against blue, brightness is
+// additive and saturation interpolates against the luminance grey; the neutral
+// (0, 1, 0) triple returns the SH colour unchanged. Applied here in the vertex
+// stage because that is where the splat's colour is resolved.
+fn gradeColor(c : vec3<f32>, xf : ActorTransform) -> vec3<f32> {
+  var rgb = c * vec3<f32>(1.0 + xf.temperature, 1.0, 1.0 - xf.temperature)
+          + vec3<f32>(xf.brightness);
+  let grey = dot(rgb, vec3<f32>(0.299, 0.587, 0.114));
+  rgb = vec3<f32>(grey) + (rgb - vec3<f32>(grey)) * xf.saturation;
+  return clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
 @vertex
 fn vs_main(@builtin(vertex_index) vtx : u32,
            @builtin(instance_index) inst : u32) -> VSOut {
@@ -216,7 +232,7 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
     -dirWorld.x * xf.sin_yaw + dirWorld.y * xf.cos_yaw,
     dirWorld.z,
   );
-  let color = evalActorSH(b, deg, dirModel);
+  let color = gradeColor(evalActorSH(b, deg, dirModel), xf);
 
   // Standard EWA splatting from here — identical to packed fallback shader.
   let cam    = u.view * vec4<f32>(center, 1.0);

@@ -325,14 +325,18 @@ export interface WorldEditorRenderer {
    */
   uploadActorModel?(url: string, data: Uint32Array, degree?: number): void;
   /**
-   * Per-frame instanced actor update.  Only M×32 bytes written to GPU per
+   * Per-frame instanced actor update.  Only M×48 bytes written to GPU per
    * frame (transforms buffer) plus an off-thread O(N×3) sort.
+   *
+   * `temperature` / `saturation` / `brightness` grade the model's colour in the
+   * vertex stage; omitting them (or passing 0 / 1 / 0) renders it as authored.
    */
   updateActorSplatInstances?(instances: readonly {
     url: string;
     cos_yaw: number; sin_yaw: number;
     hw: number; hz: number;
     px: number; py: number; pz: number;
+    temperature?: number; saturation?: number; brightness?: number;
   }[]): void;
   /** Release all instanced actor GPU buffers. */
   clearActorSplatInstances?(): void;

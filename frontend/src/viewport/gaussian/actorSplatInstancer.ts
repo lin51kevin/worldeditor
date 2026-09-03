@@ -26,8 +26,8 @@ import { computeViewDir } from './splatRenderer';
 import { frustumSidePlanes } from './splatSort';
 import { MSAA_SAMPLE_COUNT } from '../rendererResources';
 
-/** Float32 elements per instance in the transforms GPU buffer (padded to 8). */
-const TRANSFORM_FLOATS = 8;
+/** Float32 elements per instance in the transforms GPU buffer (padded to 12). */
+const TRANSFORM_FLOATS = 12;
 
 /**
  * Fallback budget on the total number of actor splats merged across every
@@ -54,6 +54,10 @@ export interface ActorInstance {
   px: number;  // render-frame position x (world x − scene_origin.x)
   py: number;
   pz: number;
+  /** Colour grading; omitted means neutral (0, 1, 0), i.e. the model as authored. */
+  temperature?: number;
+  saturation?: number;
+  brightness?: number;
 }
 
 interface ModelEntry {
@@ -258,7 +262,12 @@ export class ActorSplatInstancer {
       transforms[b + 4] = inst.px;
       transforms[b + 5] = inst.py;
       transforms[b + 6] = inst.pz;
-      // [b+7] = 0 (padding; Float32Array is zero-initialised)
+      transforms[b + 7] = inst.temperature ?? 0;
+      // Saturation is neutral at 1, so it must be written even when ungraded — the
+      // zero-initialised default would render the instance fully grey.
+      transforms[b + 8] = inst.saturation ?? 1;
+      transforms[b + 9] = inst.brightness ?? 0;
+      // [b+10], [b+11] = 0 (padding; Float32Array is zero-initialised)
     }
     this.device.queue.writeBuffer(this.transformsBuffer, 0, transforms);
 
