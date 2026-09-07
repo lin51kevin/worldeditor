@@ -715,8 +715,16 @@ export class ViewportRenderer {
   }
 
   /** Position the camera in a chase-cam view behind a moving entity. */
-  setChaseCam3D(x: number, y: number, z: number, yaw: number): void {
-    this.cameraController.setChaseCam(x, y, z, yaw);
+  setChaseCam3D(
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    behindDist?: number,
+    height?: number,
+    lookAheadDist?: number,
+  ): void {
+    this.cameraController.setChaseCam(x, y, z, yaw, behindDist, height, lookAheadDist);
     this.markSceneDirty();
   }
 

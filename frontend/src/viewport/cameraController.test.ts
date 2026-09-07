@@ -236,6 +236,22 @@ describe('CameraController', () => {
       expect(cam.state.target).toEqual([20, 20, 5]);
     });
 
+    it('derives the requested depression angle from the explicit offsets', () => {
+      // The rnk-next host frames the ego at 8 m behind / 5 m up / 20° down.
+      const behind = 8;
+      const height = 5;
+      const lookAhead = height / Math.tan((20 * Math.PI) / 180) - behind;
+
+      cam.setChaseCam(0, 0, 0, 0, behind, height, lookAhead);
+
+      const [px, py, pz] = cam.state.position;
+      const [tx, ty, tz] = cam.state.target;
+      const horiz = Math.hypot(tx - px, ty - py);
+      const depressionDeg = (Math.atan2(pz - tz, horiz) * 180) / Math.PI;
+      expect(depressionDeg).toBeCloseTo(20, 6);
+      expect(cam.state.position).toEqual([-behind, 0, height]);
+    });
+
     it('keeps chase-camera clip planes independent of absolute elevation', () => {
       cam.setChaseCam(10, 20, 0, 0);
       const groundNear = cam.state.near;
@@ -433,6 +449,32 @@ describe('CameraController', () => {
       expect(cam.state.target).not.toEqual(targetBefore);
     });
 
+    it('flyLook turns the view right when the mouse moves right', () => {
+      // Face +X (yaw 0): with Z up, "right" is -Y, so a positive dx must push
+      // the look direction to negative Y. Matches Unreal/Unity mouselook.
+      cam.setChaseCam(0, 0, 0, 0);
+      cam.enterFlyMode();
+
+      cam.flyLook(100, 0);
+
+      const [px, py] = cam.state.position;
+      const [tx, ty] = cam.state.target;
+      expect(tx - px).toBeGreaterThan(0);
+      expect(ty - py).toBeLessThan(0);
+    });
+
+    it('flyLook turns the view left when the mouse moves left', () => {
+      cam.setChaseCam(0, 0, 0, 0);
+      cam.enterFlyMode();
+
+      cam.flyLook(-100, 0);
+
+      const [px, py] = cam.state.position;
+      const [tx, ty] = cam.state.target;
+      expect(tx - px).toBeGreaterThan(0);
+      expect(ty - py).toBeGreaterThan(0);
+    });
+
     it('flyLook is no-op when not in fly mode', () => {
       const targetBefore = [...cam.state.target];
       cam.flyLook(100, 50);
@@ -532,6 +574,17 @@ describe('CameraController', () => {
       expect(cam.state.position).toEqual(posBefore);
     });
 
+    it('setChaseCam cancels an in-flight dimension-transition animation (regression: reset needed after 2D->3D)', () => {
+      // setDimension('3d') is synchronous about dimensionMode but leaves the
+      // camera position animating toward it over several rAF frames. A chase-cam
+      // call landing during that window must not be clobbered by the next frame.
+      cam.resetCamera('2d');
+      cam.setDimension('3d');
+      expect((cam as unknown as { _animatingDimension: boolean })._animatingDimension).toBe(true);
+      cam.setChaseCam(10, 20, 0, 0);
+      expect((cam as unknown as { _animatingDimension: boolean })._animatingDimension).toBe(false);
+    });
+
     it('setFrontCam looks forward from the entity with a level gaze', () => {
       // Entity at origin heading +X: camera slightly ahead + raised, gaze level.
       cam.setFrontCam(0, 0, 0, 0);
@@ -556,6 +609,14 @@ describe('CameraController', () => {
       const posBefore = [...cam.state.position];
       cam.setFrontCam(10, 20, 0, 0);
       expect(cam.state.position).toEqual(posBefore);
+    });
+
+    it('setFrontCam cancels an in-flight dimension-transition animation', () => {
+      cam.resetCamera('2d');
+      cam.setDimension('3d');
+      expect((cam as unknown as { _animatingDimension: boolean })._animatingDimension).toBe(true);
+      cam.setFrontCam(10, 20, 0, 0);
+      expect((cam as unknown as { _animatingDimension: boolean })._animatingDimension).toBe(false);
     });
 
     it('setChaseCameraActive locks manual navigation', () => {

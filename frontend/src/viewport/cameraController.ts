@@ -221,6 +221,9 @@ export class CameraController {
     const targetX = x + cosY * lookAheadDist;
     const targetY = y + sinY * lookAheadDist;
     this.dimensionMode = '3d';
+    // A setDimension('3d') just before this call may still be mid-transition;
+    // its rAF loop would otherwise keep overwriting position/up next frame.
+    this._animatingDimension = false;
     this.camera.target = [targetX, targetY, z];
     this.camera.position = [camX, camY, camZ];
     this.camera.up = [0, 0, 1];
@@ -272,6 +275,8 @@ export class CameraController {
     const targetX = x + cosY * (forwardDist + lookAheadDist);
     const targetY = y + sinY * (forwardDist + lookAheadDist);
     this.dimensionMode = '3d';
+    // See setChaseCam: cancel any in-flight dimension-transition animation.
+    this._animatingDimension = false;
     this.camera.target = [targetX, targetY, camZ];
     this.camera.position = [camX, camY, camZ];
     this.camera.up = [0, 0, 1];

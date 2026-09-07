@@ -95,7 +95,9 @@ export function flyExit(fly: FlyState, camera: CameraState, onChange: () => void
 export function flyLook(fly: FlyState, camera: CameraState, dx: number, dy: number, onChange: () => void): void {
   if (!fly.mode) return;
 
-  fly.yaw += dx * FLY_LOOK_SENSITIVITY;
+  // Yaw is CCW-positive, so dragging right must decrease it to turn the view
+  // right — matching Unreal/Unity and every other mainstream flythrough.
+  fly.yaw -= dx * FLY_LOOK_SENSITIVITY;
   fly.pitch -= dy * FLY_LOOK_SENSITIVITY;
   fly.pitch = Math.max(-FLY_MAX_PITCH, Math.min(FLY_MAX_PITCH, fly.pitch));
 

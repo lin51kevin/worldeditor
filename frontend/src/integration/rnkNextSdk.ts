@@ -192,8 +192,18 @@ export interface WorldEditorRenderer {
   /**
    * Position the camera in a racing-game chase view behind a moving entity
    * (`yaw` in radians, 0 = +X, CCW). Used for the "跟车视角" preview mode.
+   * The optional offsets let the host pick its own framing (metres); omitted
+   * values fall back to the controller's chase-cam defaults.
    */
-  setChaseCam3D?(x: number, y: number, z: number, yaw: number): void;
+  setChaseCam3D?(
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    behindDist?: number,
+    height?: number,
+    lookAheadDist?: number,
+  ): void;
   /**
    * Position the camera in a first-person / front-facing view from an entity
    * (`yaw` in radians). Used for the "前置摄像头视角" preview mode.
@@ -688,7 +698,8 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     cameraWheel: (deltaY) => renderer.cameraWheel(deltaY),
     frameScene3D: (minX, minY, maxX, maxY) => renderer.frameScene3D(minX, minY, maxX, maxY),
     centerCamera3D: (x, y) => renderer.centerCamera3D(x, y),
-    setChaseCam3D: (x, y, z, yaw) => renderer.setChaseCam3D(x, y, z, yaw),
+    setChaseCam3D: (x, y, z, yaw, behindDist, height, lookAheadDist) =>
+      renderer.setChaseCam3D(x, y, z, yaw, behindDist, height, lookAheadDist),
     setFrontCam3D: (x, y, z, yaw) => renderer.setFrontCam3D(x, y, z, yaw),
     setChaseCameraActive: (active) => renderer.setChaseCameraActive(active),
 
