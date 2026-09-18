@@ -361,9 +361,10 @@ describe("SplatRenderer", () => {
     off.drawDepthOnly(passOff);
     expect(passOff.setPipeline).not.toHaveBeenCalled();
 
-    // Enabled with a pipeline: draws with the depth pipeline.
+    // Enabled with a pipeline: draws with the depth pipeline. alphaMin: 0 keeps
+    // every splat occluder-eligible regardless of the dummy zero-opacity data.
     const on = makeRenderer(depthPipeline);
-    on.setOccluderDepth(true);
+    on.setOccluderDepth(true, { alphaMin: 0 });
     const passOn = fakePass();
     on.drawDepthOnly(passOn);
     expect(passOn.setPipeline).toHaveBeenCalledWith(depthPipeline);

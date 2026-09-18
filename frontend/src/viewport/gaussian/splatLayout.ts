@@ -96,6 +96,16 @@ export function splatStrideForDegree(shDegree: number): number {
   return GAUSSIAN_SPLAT_TRANSFORM_WORDS + Math.ceil((1 + coeffs * 3) / 2);
 }
 
+/** IEEE-754 binary16 (half) bit pattern → `f32`. */
+export function halfToFloat(h: number): number {
+  const sign = h & 0x8000 ? -1 : 1;
+  const exp = (h >> 10) & 0x1f;
+  const frac = h & 0x3ff;
+  if (exp === 0) return sign * frac * 2 ** -24; // signed zero / subnormal
+  if (exp === 0x1f) return frac ? NaN : sign * Infinity;
+  return sign * (1 + frac / 1024) * 2 ** (exp - 15);
+}
+
 /** Reject metadata or bytes that do not match the current packed layout. */
 export function assertGaussianSplatLayout(
   meta: GaussianSplatLayoutMeta,

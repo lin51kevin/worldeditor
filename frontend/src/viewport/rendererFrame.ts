@@ -289,6 +289,8 @@ export function renderFrame(r: RendererFrameInternals): void {
   // Seed the depth buffer with the static scene's opaque cores so the actor
   // splats below are hidden where a building/tree stands between them and the
   // camera. Colour writes are masked, so the scene's own render is untouched.
+  // Note: the trajectory-ribbon/bounding-box passes below also depth-test
+  // ('greater'), so this depth is load-bearing even with no actor splats.
   if (sceneSplats) r.splatRenderer?.drawDepthOnly(pass);
   r.actorSplatRenderer?.draw(pass);
   r.actorSplatInstancer?.draw(pass);

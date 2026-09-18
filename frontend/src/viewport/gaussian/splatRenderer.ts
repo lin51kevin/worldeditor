@@ -14,6 +14,7 @@ import {
 } from "./splatPipeline";
 import {
   assertGaussianSplatBuffer,
+  halfToFloat,
 } from "./splatLayout";
 import { SplatSortController, type SplatSorter } from "./splatSortController";
 import { createWorkerSplatSorter } from "./splatSorterBackends";
@@ -164,15 +165,7 @@ export function decimateSplatBuffer(
   return d * stride === out.length ? out : out.subarray(0, d * stride);
 }
 
-/** IEEE-754 binary16 (half) bit pattern → `f32`. */
-export function halfToFloat(h: number): number {
-  const sign = h & 0x8000 ? -1 : 1;
-  const exp = (h >> 10) & 0x1f;
-  const frac = h & 0x3ff;
-  if (exp === 0) return sign * frac * 2 ** -24; // signed zero / subnormal
-  if (exp === 0x1f) return frac ? NaN : sign * Infinity;
-  return sign * (1 + frac / 1024) * 2 ** (exp - 15);
-}
+export { halfToFloat } from "./splatLayout";
 
 /**
  * Per-splat rendering importance ≈ `opacity × splat size`, used to keep the most
@@ -658,6 +651,7 @@ export class SplatRenderer {
     // to the worker, which neuters the main-thread view (length -> 0). Doing this
     // first keeps the GPU-sort positions buffer populated instead of empty.
     this.resources.setPositions(positions);
+    this.resources.setOccluderSource(data, stride, this.occluderAlphaMin);
     this.updateBounds(positions);
     this.gpuSorter?.resize(this.resources.count);
     this.sort.setSplats(positions);
@@ -735,7 +729,13 @@ export class SplatRenderer {
   ): void {
     this.occluderDepth = enabled;
     if (options?.alphaMin !== undefined) {
-      this.occluderAlphaMin = Math.max(0, options.alphaMin);
+      const alphaMin = Math.max(0, options.alphaMin);
+      if (alphaMin !== this.occluderAlphaMin) {
+        this.occluderAlphaMin = alphaMin;
+        // Threshold changed: rebuild the fixed occluder index against the
+        // already-cached opacities (no-op until a cloud has been uploaded).
+        this.resources.rebuildOccluderIndex(alphaMin);
+      }
     }
     if (options?.sigma !== undefined) {
       this.occluderSigma = Math.max(0.01, options.sigma);

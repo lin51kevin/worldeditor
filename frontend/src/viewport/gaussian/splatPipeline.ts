@@ -13,6 +13,7 @@ import { SPLAT_UNIFORM_BYTES } from "./splatUniform";
 import {
   GAUSSIAN_SPLAT_TRANSFORM_WORDS,
   assertGaussianSplatBuffer,
+  halfToFloat,
   planGaussianTextureArray,
   type GaussianTextureArrayLayout,
 } from "./splatLayout";
@@ -205,6 +206,14 @@ export class GaussianSplatResources {
   private _shDegree = 0;
   private _resourceMode: GaussianResourceMode = "none";
   private _textureLayout: GaussianTextureArrayLayout | null = null;
+  // Depth-only occluder pass state: a fixed, opacity-filtered index buffer built
+  // once per upload/threshold-change instead of every frame. The pass is order-
+  // independent (it only writes depth), so it need not track the per-frame sort.
+  /** Raw f16 opacity bits, one per uploaded splat; source for {@link rebuildOccluderIndex}. */
+  private opacityHalfBits: Uint16Array | null = null;
+  private occluderIndexBuffer: GPUBuffer | null = null;
+  private occluderBindGroup: GPUBindGroup | null = null;
+  private _occluderCount = 0;
 
   constructor(
     private readonly device: GPUDevice,
@@ -281,6 +290,72 @@ export class GaussianSplatResources {
    */
   get gpuPositionsBuffer(): GPUBuffer | null {
     return this.positionsBuffer;
+  }
+
+  /**
+   * Cache each splat's opacity from the just-uploaded source buffer and build
+   * the initial depth-only occluder index for it. Call once right after
+   * {@link upload} succeeds, passing the SAME `splatData`/`stride`. Cheap to
+   * keep around: 2 bytes/splat, vs. re-scanning the full source buffer (tens of
+   * bytes/splat) on every {@link rebuildOccluderIndex} call.
+   */
+  setOccluderSource(splatData: Uint32Array, stride: number, alphaMin: number): void {
+    const bits = new Uint16Array(this._count);
+    for (let i = 0; i < this._count; i++) {
+      bits[i] = splatData[i * stride + GAUSSIAN_SPLAT_TRANSFORM_WORDS]! & 0xffff;
+    }
+    this.opacityHalfBits = bits;
+    this.rebuildOccluderIndex(alphaMin);
+  }
+
+  /**
+   * Rebuild the depth-only occluder pass's compacted "opaque enough to occlude"
+   * index buffer for a new alpha threshold. The pass only writes depth and never
+   * reads colour order, so — unlike the colour draw — its instance list can be
+   * computed once per upload/threshold-change instead of every frame, and need
+   * not track the per-frame (GPU- or CPU-)sorted order at all.
+   */
+  rebuildOccluderIndex(alphaMin: number): void {
+    this.occluderIndexBuffer?.destroy();
+    this.occluderIndexBuffer = null;
+    this.occluderBindGroup = null;
+    this._occluderCount = 0;
+    const bits = this.opacityHalfBits;
+    if (!bits || this._resourceMode !== "texture-array") return;
+    if (!this.transformTexture || !this.featureTexture) return;
+    const kept = new Uint32Array(bits.length);
+    let n = 0;
+    for (let i = 0; i < bits.length; i++) {
+      if (halfToFloat(bits[i]!) >= alphaMin) kept[n++] = i;
+    }
+    if (n === 0) return;
+    const indices = kept.subarray(0, n);
+    this.occluderIndexBuffer = this.device.createBuffer({
+      label: "Gaussian occluder index (opacity-compacted)",
+      size: indices.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(
+      this.occluderIndexBuffer,
+      0,
+      indices as GPUAllowSharedBufferSource,
+    );
+    this.occluderBindGroup = this.device.createBindGroup({
+      layout: this.bindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuffer } },
+        {
+          binding: 1,
+          resource: this.transformTexture.createView({ dimension: "2d-array" }),
+        },
+        {
+          binding: 2,
+          resource: this.featureTexture.createView({ dimension: "2d-array" }),
+        },
+        { binding: 3, resource: { buffer: this.occluderIndexBuffer } },
+      ],
+    });
+    this._occluderCount = n;
   }
 
   /**
@@ -615,20 +690,19 @@ export class GaussianSplatResources {
   }
 
   /**
-   * Record the depth-only occluder draw. Only the texture-array path has a
-   * `vs_depth` stage; the packed compatibility shader has none, so that mode
-   * silently skips occlusion rather than mis-rendering.
+   * Record the depth-only occluder draw. Uses the fixed, opacity-compacted
+   * index built by {@link rebuildOccluderIndex} rather than the per-frame
+   * sorted order — the pass is order-independent, so this shrinks its instance
+   * count to just the splats that actually write depth instead of the whole
+   * cloud. Only the texture-array path has a `vs_depth` stage; the packed
+   * compatibility shader has none, so that mode silently skips occlusion rather
+   * than mis-rendering (as before).
    */
   drawDepthOnly(pass: GPURenderPassEncoder, depthPipeline: GPURenderPipeline): void {
-    if (!this.hasContent || !this.bindGroup) return;
-    if (this._resourceMode !== "texture-array") return;
+    if (!this.occluderBindGroup || this._occluderCount === 0) return;
     pass.setPipeline(depthPipeline);
-    pass.setBindGroup(0, this.bindGroup);
-    if (this.indirectBuffer) {
-      pass.drawIndirect(this.indirectBuffer, 0);
-      return;
-    }
-    pass.draw(4, this._visibleCount);
+    pass.setBindGroup(0, this.occluderBindGroup);
+    pass.draw(4, this._occluderCount);
   }
 
   /** Clear the current cloud while retaining the reusable uniform buffer. */
@@ -652,6 +726,7 @@ export class GaussianSplatResources {
     this.packedSplatBuffer?.destroy();
     this.orderBuffer?.destroy();
     this.positionsBuffer?.destroy();
+    this.occluderIndexBuffer?.destroy();
     this.transformTexture = null;
     this.featureTexture = null;
     this.packedSplatBuffer = null;
@@ -659,6 +734,10 @@ export class GaussianSplatResources {
     this.positionsBuffer = null;
     this.bindGroup = null;
     this._textureLayout = null;
+    this.opacityHalfBits = null;
+    this.occluderIndexBuffer = null;
+    this.occluderBindGroup = null;
+    this._occluderCount = 0;
     // Owned by the GPU sorter, which is resized/disposed alongside the cloud —
     // never draw indirect from arguments computed for a different cloud.
     this.indirectBuffer = null;
