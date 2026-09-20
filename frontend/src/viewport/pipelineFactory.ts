@@ -64,6 +64,7 @@ export interface BasicPipelineResult {
   pipeline: GPURenderPipeline;
   highlightPipeline: GPURenderPipeline;
   actorPipeline: GPURenderPipeline;
+  actorDepthWritePipeline: GPURenderPipeline;
   actorOverlayPipeline: GPURenderPipeline;
   bindGroup: GPUBindGroup;
   bindGroupLayout: GPUBindGroupLayout;
@@ -171,6 +172,28 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
     primitive: { topology: 'triangle-list' },
   });
 
+  // Same, but writing depth: a box's own near faces then reject the edge bars
+  // on its far side, so the wireframe reads as a solid volume rather than
+  // showing all 12 edges at once. Selected per frame via `actorDepthWrite`.
+  const actorDepthWritePipeline = device.createRenderPipeline({
+    layout: pipelineLayout,
+    vertex: { module: shaderModule, entryPoint: 'vs_main', buffers: [BASIC_VERTEX_LAYOUT] },
+    fragment: {
+      module: shaderModule,
+      entryPoint: 'fs_main',
+      targets: [{
+        format,
+        blend: {
+          color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+        },
+      }],
+    },
+    depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' },
+    multisample: { count: MSAA_SAMPLE_COUNT },
+    primitive: { topology: 'triangle-list' },
+  });
+
   // Editor manipulators (transform gizmos). Identical to `actorPipeline` except
   // the depth test always passes, so the gizmo is never occluded by the road
   // surface, a point cloud or the Gaussian-splat scene. Within this pass draw
@@ -200,6 +223,7 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
     pipeline,
     highlightPipeline,
     actorPipeline,
+    actorDepthWritePipeline,
     actorOverlayPipeline,
     bindGroup,
     bindGroupLayout,

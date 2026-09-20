@@ -43,6 +43,11 @@ const DEFAULT_SCALE = 1;
 /** Target grid cell size in screen pixels (same as C# GridSizePerSquare). */
 const GRID_TARGET_PX = 50;
 
+/** WASD roam speed, in orbit radii per second at full stick deflection. */
+const ROAM_SPEED_PER_DIST = 1.5;
+/** Roam speed multiplier while the sprint modifier is held. */
+const ROAM_SPRINT = 3;
+
 /** Camera state, transforms, and orbit/pan/zoom input handling for the viewport. */
 export class CameraController {
   private camera: CameraState = {
@@ -55,6 +60,7 @@ export class CameraController {
   };
 
   private _animatingDimension = false;
+  private rightDragAction: 'fly' | 'orbit' = 'fly';
   private _animStartPos: [number, number, number] = [0, 0, 0];
   private _animEndPos: [number, number, number] = [0, 0, 0];
   private _animStartUp: [number, number, number] = [0, 0, 0];
@@ -305,6 +311,20 @@ export class CameraController {
 
   get dimension(): '3d' | '2d' {
     return this.dimensionMode;
+  }
+
+  /**
+   * Whether the 2D<->3D transition is still driving camera.position/up each
+   * frame. A host that wants to aim the camera must wait for this to clear, or
+   * the animation overwrites the result for the rest of its run.
+   */
+  get isDimensionAnimating(): boolean {
+    return this._animatingDimension;
+  }
+
+  /** Right-button drag behaviour in 3D: Unreal-style fly, or centre orbit. */
+  setRightDragAction(action: 'fly' | 'orbit'): void {
+    this.rightDragAction = action;
   }
 
   get currentGridSpacing(): number {
@@ -669,7 +689,7 @@ export class CameraController {
 
   beginPointerDrag(button: number, event: Pick<MouseEvent, 'clientX' | 'clientY' | 'ctrlKey' | 'shiftKey' | 'altKey'>): boolean {
     if (this.locked) return false;
-    const action = resolveMouseDragAction(button, event, this.dimensionMode);
+    const action = resolveMouseDragAction(button, event, this.dimensionMode, this.rightDragAction);
     if (!action) return false;
 
     // Enter fly mode on right-click in 3D
@@ -707,7 +727,7 @@ export class CameraController {
 
     const previousMouse = this.lastMouse;
     this.lastMouse = [event.clientX, event.clientY];
-    const dragAction = resolveMouseDragAction(this.activeMouseButton, event, this.dimensionMode) ?? this.activeDragAction;
+    const dragAction = resolveMouseDragAction(this.activeMouseButton, event, this.dimensionMode, this.rightDragAction) ?? this.activeDragAction;
     this.activeDragAction = dragAction;
 
     if (dragAction === 'fly') {
@@ -734,6 +754,58 @@ export class CameraController {
       this.exitFlyMode();
     }
     this.stopDragging();
+  }
+
+  /**
+   * Translate position and target together along the current view basis
+   * (WASD/QE roaming), so roaming keeps the current orientation and composes
+   * with orbit instead of replacing it like fly mode does. `forward`/`right`/
+   * `up` are in [-1, 1], `dt` in seconds. Speed scales with camera distance so
+   * it feels the same close up and far out. No-op in 2D.
+   */
+  roamMove(forward: number, right: number, up: number, dt: number, sprint = false): void {
+    if (this.dimensionMode === '2d') return;
+    const [px, py, pz] = this.camera.position;
+    const [tx, ty, tz] = this.camera.target;
+    // Ground-projected view basis: roaming stays level regardless of pitch.
+    let fx = tx - px;
+    let fy = ty - py;
+    const flen = Math.hypot(fx, fy) || 1;
+    fx /= flen;
+    fy /= flen;
+    const rx = fy;
+    const ry = -fx;
+    const speed = this.getEffectiveCameraDistance() * ROAM_SPEED_PER_DIST * (sprint ? ROAM_SPRINT : 1) * dt;
+    const dx = (fx * forward + rx * right) * speed;
+    const dy = (fy * forward + ry * right) * speed;
+    const dz = up * speed;
+    this.camera.position = [px + dx, py + dy, pz + dz];
+    this.camera.target = [tx + dx, ty + dy, tz + dz];
+    this.cachedViewProj = null;
+    this.cachedInverseViewProj = null;
+    this.viewDirty = true;
+    this.onViewBecameDirty?.();
+    this.reportScale();
+  }
+
+  /** Look-at target plus the world units one pixel covers at that depth. */
+  getOrbitPivot(): [number, number, number, number] {
+    const [tx, ty, tz] = this.camera.target;
+    const [px, py, pz] = this.camera.position;
+    const dist = Math.hypot(tx - px, ty - py, tz - pz) || 1;
+    const worldPerPixel = (2 * dist * Math.tan(this.camera.fovY / 2)) / Math.max(1, this.height);
+    return [tx, ty, tz, worldPerPixel];
+  }
+
+  /**
+   * Camera position plus the world units one pixel covers PER METER of depth,
+   * so a host can size screen-stable overlays against each object's own
+   * distance instead of one scene-wide estimate.
+   */
+  getCameraPose(): [number, number, number, number] {
+    const [px, py, pz] = this.camera.position;
+    const unitsPerPixelPerMeter = (2 * Math.tan(this.camera.fovY / 2)) / Math.max(1, this.height);
+    return [px, py, pz, unitsPerPixelPerMeter];
   }
 
   lock(): void {

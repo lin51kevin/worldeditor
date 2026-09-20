@@ -9,7 +9,7 @@
 
 import { buildBoxVertices, buildPathVertices } from './actorGeometry';
 import { pickActorAt, pointInBoxFootprint } from './actorPicker';
-import { CaseActorBox } from './actorTypes';
+import { ActorBoxStyle, CaseActorBox, DEFAULT_ACTOR_BOX_STYLE } from './actorTypes';
 
 /**
  * Default trajectory ribbon half-width, meters.
@@ -32,10 +32,24 @@ export class CaseActorLayer {
   // When set, boxed (non-waypoint) actors render as wireframe (edge bars only,
   // no translucent fill) to cut overdraw during playback.
   private wireframe = false;
+  private style: ActorBoxStyle = { ...DEFAULT_ACTOR_BOX_STYLE };
 
   /** Replace the current actor boxes. */
   setBoxes(boxes: CaseActorBox[]): void {
     this.boxes = boxes;
+  }
+
+  /**
+   * Override part of the actor look (selection colours, edge thickness, handle
+   * shape). Unset fields keep their current value.
+   */
+  setBoxStyle(style: Partial<ActorBoxStyle>): void {
+    this.style = { ...this.style, ...style };
+  }
+
+  /** Current actor look (diagnostics / tests). */
+  getBoxStyle(): ActorBoxStyle {
+    return { ...this.style };
   }
 
   /** Drop the translucent box fill (wireframe-only) to cut overdraw. */
@@ -51,6 +65,17 @@ export class CaseActorLayer {
   /** Set the trajectory ribbon half-width in meters. */
   setPathHalfWidth(halfWidth: number): void {
     if (halfWidth > 0 && isFinite(halfWidth)) this.pathHalfWidth = halfWidth;
+  }
+
+  /**
+   * Set the wireframe edge bar half-width in meters.
+   *
+   * A fixed metric thickness goes sub-pixel when zoomed out and MSAA then
+   * renders the wireframe as a dashed outline, so hosts that care drive a
+   * screen-stable value from the current camera scale.
+   */
+  setEdgeHalfWidth(halfWidth: number): void {
+    if (halfWidth > 0 && isFinite(halfWidth)) this.style = { ...this.style, edgeHalf: halfWidth };
   }
 
   /**
@@ -74,7 +99,7 @@ export class CaseActorLayer {
 
   /** Triangle vertices for the current boxes (7 floats/vertex). */
   boxVertices(): Float32Array {
-    return buildBoxVertices(this.boxes.filter((b) => !b.overlay), this.sceneOrigin, this.wireframe);
+    return buildBoxVertices(this.boxes.filter((b) => !b.overlay), this.sceneOrigin, this.wireframe, this.style);
   }
 
   /**
@@ -84,7 +109,7 @@ export class CaseActorLayer {
    * applies: these are manipulators, not playback actors.
    */
   overlayBoxVertices(): Float32Array {
-    return buildBoxVertices(this.boxes.filter((b) => b.overlay), this.sceneOrigin, false);
+    return buildBoxVertices(this.boxes.filter((b) => b.overlay), this.sceneOrigin, false, this.style);
   }
 
   /** Triangle vertices for the current trajectories (7 floats/vertex). */

@@ -33,10 +33,13 @@ export function resolveMouseDragAction(
   button: number,
   modifiers: Pick<MouseEvent, 'ctrlKey' | 'shiftKey' | 'altKey'>,
   dimension?: '3d' | '2d',
+  rightButton3d: 'fly' | 'orbit' = 'fly',
 ): MouseDragAction | null {
   const is3d = dimension !== '2d';
-  // Right-click: fly mode in 3D (hold RMB — Unreal style), orbit in 2D
-  if (button === 2) return is3d ? 'fly' : 'orbit';
+  // Right-click: fly mode in 3D (hold RMB — Unreal style) unless the embedder
+  // asked for orbit, which pivots on camera.target at the viewport centre and
+  // so gives drag-rotate a predictable centre; orbit in 2D.
+  if (button === 2) return is3d ? rightButton3d : 'orbit';
   if (button === 1) return 'pan';
   if (button !== 0) return null;
   // Alt + Left-click: orbit

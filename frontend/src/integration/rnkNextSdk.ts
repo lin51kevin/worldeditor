@@ -31,7 +31,7 @@ import type {
 } from '../viewport/gaussian/splatRenderer';
 import { assertGaussianSplatLayout } from '../viewport/gaussian/splatLayout';
 import { parseGlbMesh, isGlb } from '../viewport/glbMesh';
-import { CaseActorLayer, parsePlyFirstVertex, type CaseActorBox } from '../plugins/npc-actors';
+import { CaseActorLayer, parsePlyFirstVertex, type ActorBoxStyle, type CaseActorBox } from '../plugins/npc-actors';
 
 type WasmModule = typeof import('../../wasm/pkg/we_wasm');
 
@@ -140,6 +140,12 @@ export interface WorldEditorRenderer {
   unprojectToGround(screenX: number, screenY: number): { x: number; y: number } | null;
   /** Unproject a screen pixel to world XY on the horizontal plane at z = worldZ. */
   unprojectToPlane(screenX: number, screenY: number, worldZ: number): { x: number; y: number } | null;
+  /**
+   * Project a world point to a PAGE-space pixel (canvas rect offset included),
+   * or null when it is behind the camera. Hosts position DOM overlays and
+   * hit-test screen-space manipulators against this.
+   */
+  projectWorldToScreen(worldX: number, worldY: number, worldZ?: number): { x: number; y: number } | null;
   fitToVertices(data: Float32Array): void;
   toDataURL(): string;
 
@@ -170,6 +176,21 @@ export interface WorldEditorRenderer {
   clearActorBoxes(): void;
   /** Render non-waypoint actor boxes as wireframe (no fill) to cut overdraw. */
   setActorBoxWireframe(enabled: boolean): void;
+  /**
+   * Override the actor look (selection colours, edge thickness, handle shape)
+   * so the host can match its own design language. Unset fields are kept.
+   */
+  setActorBoxStyle(style: Partial<ActorBoxStyle>): void;
+  /**
+   * Wireframe edge bar width in meters. A fixed metric thickness goes sub-pixel
+   * when zoomed out and MSAA then draws the wireframe dashed, so hosts that care
+   * drive a screen-stable value from the current camera scale.
+   */
+  setActorBoxEdgeWidth(meters: number): void;
+  /** Trajectory ribbon width in meters. */
+  setPathWidth(meters: number): void;
+  /** Make translucent actor geometry write depth (solid-volume wireframe). */
+  setActorDepthWrite(enabled: boolean): void;
   /** Upload trajectory segments (flat pairs: 14 floats per segment: 2 × xyz+rgba). */
   uploadPathLines(segments: Float32Array): void;
   /** Pick the top-most actor box under a page-space point, or null. */
@@ -185,6 +206,20 @@ export interface WorldEditorRenderer {
   cameraEndDrag(): void;
   /** Zoom the 3D camera by a wheel delta. */
   cameraWheel(deltaY: number): void;
+  /**
+   * Translate the camera along its current view basis (WASD/QE roaming).
+   * Components are in [-1, 1], `dt` in seconds; speed scales with camera
+   * distance. Unlike fly mode this keeps the current orientation.
+   */
+  roamMove(forward: number, right: number, up: number, dt: number, sprint?: boolean): void;
+  /** Orbit pivot in the render frame + world units per pixel at that depth. */
+  getOrbitPivot(): [number, number, number, number];
+  /** Camera position + world units per pixel per meter of depth. */
+  getCameraPose(): [number, number, number, number];
+  /** True once the viewport is in 3D and the 2D<->3D transition has finished. */
+  is3DCameraReady(): boolean;
+  /** Right-button drag behaviour in 3D: Unreal-style fly, or centre orbit. */
+  setRightDragAction(action: 'fly' | 'orbit'): void;
   /** Frame the 3D camera to fit a planar bounds (world meters). */
   frameScene3D(minX: number, minY: number, maxX: number, maxY: number): void;
   /** Recenter the 3D camera on a ground point, preserving zoom/orientation. */
@@ -651,6 +686,14 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
       const [sx, sy] = toCanvasXY(screenX, screenY);
       return renderer.unprojectToPlane(sx, sy, worldZ);
     },
+    projectWorldToScreen: (worldX, worldY, worldZ) => {
+      // The renderer answers in canvas-relative pixels; hosts position DOM
+      // overlays in page space, so add the canvas rect offset back.
+      const p = renderer.projectWorldToScreen(worldX, worldY, worldZ);
+      if (!p) return null;
+      const rect = canvasRef?.getBoundingClientRect();
+      return rect ? { x: p.x + rect.left, y: p.y + rect.top } : p;
+    },
     fitToVertices: (data) => renderer.fitToVertices(data),
     toDataURL: () => renderer.toDataURL(),
 
@@ -680,6 +723,19 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
       renderer.uploadActorVertices(actorLayer.boxVertices());
       renderer.render();
     },
+    setActorBoxStyle: (style: Partial<ActorBoxStyle>) => {
+      actorLayer.setBoxStyle(style);
+      renderer.uploadActorVertices(actorLayer.boxVertices());
+      renderer.uploadActorOverlayVertices(actorLayer.overlayBoxVertices());
+      renderer.markSceneDirty();
+    },
+    setActorBoxEdgeWidth: (meters: number) => {
+      actorLayer.setEdgeHalfWidth(meters / 2);
+    },
+    setPathWidth: (meters: number) => {
+      actorLayer.setPathHalfWidth(meters / 2);
+    },
+    setActorDepthWrite: (enabled: boolean) => renderer.setActorDepthWrite(enabled),
     uploadPathLines: (segments: Float32Array) => {
       actorLayer.setPathSegments(segments);
       renderer.uploadPathVertices(actorLayer.pathVertices());
@@ -696,6 +752,11 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     cameraUpdateDrag: (event) => renderer.cameraUpdateDrag(event),
     cameraEndDrag: () => renderer.cameraEndDrag(),
     cameraWheel: (deltaY) => renderer.cameraWheel(deltaY),
+    roamMove: (forward, right, up, dt, sprint) => renderer.roamMove(forward, right, up, dt, sprint),
+    getOrbitPivot: () => renderer.getOrbitPivot(),
+    getCameraPose: () => renderer.getCameraPose(),
+    is3DCameraReady: () => renderer.is3DCameraReady(),
+    setRightDragAction: (action) => renderer.setRightDragAction(action),
     frameScene3D: (minX, minY, maxX, maxY) => renderer.frameScene3D(minX, minY, maxX, maxY),
     centerCamera3D: (x, y) => renderer.centerCamera3D(x, y),
     setChaseCam3D: (x, y, z, yaw, behindDist, height, lookAheadDist) =>

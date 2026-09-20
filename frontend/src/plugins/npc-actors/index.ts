@@ -9,8 +9,8 @@
 export { CaseActorLayer } from './actorLayer';
 export { buildBoxVertices, buildPathVertices } from './actorGeometry';
 export { pickActorAt, pickActorAtScreen } from './actorPicker';
-export type { CaseActorBox, Rgba } from './actorTypes';
-export { ACTOR_VERTEX_STRIDE } from './actorTypes';
+export type { ActorBoxStyle, CaseActorBox, Rgba } from './actorTypes';
+export { ACTOR_VERTEX_STRIDE, DEFAULT_ACTOR_BOX_STYLE } from './actorTypes';
 export {
   spawnSampleActors,
   clearSampleActors,

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { buildBoxVertices, buildPathVertices } from '../actorGeometry';
 import { pickActorAt, pickActorAtScreen } from '../actorPicker';
 import { CaseActorLayer } from '../actorLayer';
-import { ACTOR_VERTEX_STRIDE, CaseActorBox } from '../actorTypes';
+import { ACTOR_VERTEX_STRIDE, CaseActorBox, DEFAULT_ACTOR_BOX_STYLE } from '../actorTypes';
 import {
   buildSampleActors,
   buildSampleSegments,
@@ -66,6 +66,76 @@ describe('npc-actors geometry', () => {
     expect(maxY).toBeCloseTo(2, 5);
     expect(minX).toBeCloseTo(-0.5, 5);
     expect(maxX).toBeCloseTo(0.5, 5);
+  });
+
+  it('emits a +Z cone whose apex is `length` above its base, independent of heading', () => {
+    const v = buildBoxVertices([
+      box({ kind: 'conez', position: [10, 20, 3], heading: 1.2, size: [2, 1, 1] }),
+    ]);
+    expect(v.length).toBe(60 * ACTOR_VERTEX_STRIDE);
+    let minZ = Infinity, maxZ = -Infinity, minX = Infinity, maxX = -Infinity;
+    for (let i = 0; i < v.length; i += ACTOR_VERTEX_STRIDE) {
+      minX = Math.min(minX, v[i]!); maxX = Math.max(maxX, v[i]!);
+      minZ = Math.min(minZ, v[i + 2]!); maxZ = Math.max(maxZ, v[i + 2]!);
+    }
+    expect(minZ).toBeCloseTo(3, 5);
+    expect(maxZ).toBeCloseTo(5, 5);
+    expect(minX).toBeCloseTo(9.5, 5);
+    expect(maxX).toBeCloseTo(10.5, 5);
+  });
+
+  it('emits a solid sphere sized by size[0] as a diameter', () => {
+    const v = buildBoxVertices([box({ kind: 'sphere', position: [1, 2, 3], size: [4, 4, 4] })]);
+    expect(v.length).toBe(8 * 12 * 6 * ACTOR_VERTEX_STRIDE);
+    for (let i = 0; i < v.length; i += ACTOR_VERTEX_STRIDE) {
+      const dx = v[i]! - 1, dy = v[i + 1]! - 2, dz = v[i + 2]! - 3;
+      expect(Math.hypot(dx, dy, dz)).toBeLessThanOrEqual(2 + 1e-5);
+    }
+  });
+
+  it('emits a bar as a single opaque box with no edge bars', () => {
+    const v = buildBoxVertices([box({ kind: 'bar', color: [1, 0, 0, 1] })]);
+    expect(v.length).toBe(36 * ACTOR_VERTEX_STRIDE);
+    // Opaque: the fill is NOT dimmed by the style's fill alpha.
+    expect(v[6]).toBeCloseTo(1, 5);
+  });
+
+  it('renders waypoints as spheres when the host selects the round handle shape', () => {
+    const v = buildBoxVertices([box({ kind: 'waypoint' })], [0, 0, 0], false, {
+      ...DEFAULT_ACTOR_BOX_STYLE,
+      waypointShape: 'sphere',
+    });
+    expect(v.length).toBe(4 * 8 * 6 * ACTOR_VERTEX_STRIDE);
+  });
+
+  it('applies host style overrides to selected fill, edge colour and edge width', () => {
+    const selected = box({ kind: 'element', selected: true });
+    const thin = buildBoxVertices([selected]);
+    const thick = buildBoxVertices([selected], [0, 0, 0], false, {
+      ...DEFAULT_ACTOR_BOX_STYLE,
+      selectedFill: [1, 0.5, 0, 1],
+      selectedFillAlpha: 0.25,
+      selectedEdgeColor: [0, 1, 0, 1],
+      edgeHalf: 0.1,
+      selectedEdgeGain: 2,
+    });
+    // Same vertex budget, different colours / edge extents.
+    expect(thick.length).toBe(thin.length);
+    // First fill vertex carries `selectedFill × selectedFillAlpha`.
+    expect(thick[3]).toBeCloseTo(1, 5);
+    expect(thick[4]).toBeCloseTo(0.5, 5);
+    expect(thick[6]).toBeCloseTo(0.25, 5);
+    // First edge-bar vertex (after the 36 fill verts) carries `selectedEdgeColor`.
+    const e = 36 * ACTOR_VERTEX_STRIDE;
+    expect(thick[e + 3]).toBeCloseTo(0, 5);
+    expect(thick[e + 4]).toBeCloseTo(1, 5);
+    // 0.1 × 2 half-width pushes the edge bars further out than the 0.02 default.
+    let maxZThin = -Infinity, maxZThick = -Infinity;
+    for (let i = 0; i < thin.length; i += ACTOR_VERTEX_STRIDE) {
+      maxZThin = Math.max(maxZThin, thin[i + 2]!);
+      maxZThick = Math.max(maxZThick, thick[i + 2]!);
+    }
+    expect(maxZThick - maxZThin).toBeCloseTo(0.18, 5);
   });
 
   it('centers box vertices on the box position', () => {

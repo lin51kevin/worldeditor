@@ -46,6 +46,8 @@ export interface RendererFrameInternals {
   junctionMeshes: RenderableMesh[];
   basicPipeline: GPURenderPipeline;
   actorPipeline: GPURenderPipeline;
+  actorDepthWritePipeline: GPURenderPipeline;
+  actorDepthWrite: boolean;
   actorOverlayPipeline: GPURenderPipeline;
   hoverMeshes: RenderableMesh[];
   highlightPipeline: GPURenderPipeline;
@@ -301,8 +303,9 @@ export function renderFrame(r: RendererFrameInternals): void {
   // splat drawn later would blend straight over them — the box survived only
   // where a splat happened to be depth-rejected by the OpenDRIVE road surface,
   // so it looked fragmentary and vanished entirely once the map was hidden.
-  drawBatched(pass, r.pathMeshes, r.actorPipeline, r.basicBindGroup, 'basic');
-  drawBatched(pass, r.actorMeshes, r.actorPipeline, r.basicBindGroup, 'basic');
+  const actorPipeline = r.actorDepthWrite ? r.actorDepthWritePipeline : r.actorPipeline;
+  drawBatched(pass, r.pathMeshes, actorPipeline, r.basicBindGroup, 'basic');
+  drawBatched(pass, r.actorMeshes, actorPipeline, r.basicBindGroup, 'basic');
 
   // Editor manipulators (transform gizmos) go last with the depth test off, so
   // they stay visible — and therefore grabbable — through the road surface, the

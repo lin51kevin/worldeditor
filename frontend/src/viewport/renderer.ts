@@ -117,7 +117,10 @@ export class ViewportRenderer {
   basicPipeline!: GPURenderPipeline;
   highlightPipeline!: GPURenderPipeline;
   actorPipeline!: GPURenderPipeline;
+  actorDepthWritePipeline!: GPURenderPipeline;
   actorOverlayPipeline!: GPURenderPipeline;
+  /** Selects between {@link actorPipeline} and {@link actorDepthWritePipeline}. */
+  actorDepthWrite = false;
   private basicShaderModule!: GPUShaderModule;
   basicBindGroup!: GPUBindGroup;
   // Read by the extracted point-cloud helper module to build its pipeline.
@@ -848,6 +851,50 @@ export class ViewportRenderer {
     this.renderFrame();
   }
 
+  /** WASD/QE roam the camera along its current view basis (see
+   *  {@link CameraController.roamMove}). */
+  roamMove(forward: number, right: number, up: number, dt: number, sprint = false): void {
+    this.cameraController.roamMove(forward, right, up, dt, sprint);
+    this.markSceneDirty();
+  }
+
+  /** Orbit pivot in the render frame plus world units per pixel at that depth:
+   *  `[x, y, z, worldPerPixel]`. */
+  getOrbitPivot(): [number, number, number, number] {
+    return this.cameraController.getOrbitPivot();
+  }
+
+  /** Camera position in the render frame plus world units per pixel per meter
+   *  of depth: `[x, y, z, unitsPerPixelPerMeter]`. */
+  getCameraPose(): [number, number, number, number] {
+    return this.cameraController.getCameraPose();
+  }
+
+  /** True once the viewport is in 3D and the 2D<->3D transition has stopped
+   *  driving the camera, so aiming it will stick. */
+  is3DCameraReady(): boolean {
+    return this.cameraController.dimension === '3d' && !this.cameraController.isDimensionAnimating;
+  }
+
+  /** Right-button drag behaviour in 3D: Unreal-style fly, or centre orbit. */
+  setRightDragAction(action: 'fly' | 'orbit'): void {
+    this.cameraController.setRightDragAction(action);
+  }
+
+  /**
+   * Make translucent actor geometry write depth.
+   *
+   * Off (default) gives the classic see-through bounding box: every face blends
+   * in a stable order. On, a box's own near faces reject the edge bars on its
+   * far side, so the wireframe reads as a solid volume instead of showing all
+   * 12 edges at once.
+   */
+  setActorDepthWrite(enabled: boolean): void {
+    if (this.actorDepthWrite === enabled) return;
+    this.actorDepthWrite = enabled;
+    this.markSceneDirty();
+  }
+
 
   /** Upload junction fill vertex data (7 floats per vertex: x,y,z,r,g,b,a).
    * Drawn as its own layer with the depth-biased highlight pipeline so the
@@ -1518,6 +1565,7 @@ export class ViewportRenderer {
     this.basicPipeline = result.pipeline;
     this.highlightPipeline = result.highlightPipeline;
     this.actorPipeline = result.actorPipeline;
+    this.actorDepthWritePipeline = result.actorDepthWritePipeline;
     this.actorOverlayPipeline = result.actorOverlayPipeline;
     this.basicBindGroup = result.bindGroup;
     this.basicBindGroupLayout = result.bindGroupLayout;

@@ -6,7 +6,13 @@
  * b, a). Pure functions — no GPU or renderer state.
  */
 
-import { ACTOR_VERTEX_STRIDE, CaseActorBox, Rgba } from './actorTypes';
+import {
+  ACTOR_VERTEX_STRIDE,
+  ActorBoxStyle,
+  CaseActorBox,
+  DEFAULT_ACTOR_BOX_STYLE,
+  Rgba,
+} from './actorTypes';
 
 /** Local unit-cube corners scaled per-box at build time. */
 const CUBE_CORNERS: ReadonlyArray<readonly [number, number, number]> = [
@@ -31,23 +37,20 @@ const CUBE_TRIS: ReadonlyArray<number> = [
   3, 7, 4, 3, 4, 0, // -x
 ];
 
-/** Selection highlight fill — wine red, so selected actors stand out. */
-const SELECTED_FILL: Rgba = [0.62, 0.12, 0.2, 1];
-/** More opaque fill for selected actors than the default translucency. */
-const SELECTED_FILL_ALPHA = 0.75;
-
-/** White edge color for the bounding-box wireframe. */
-const EDGE_COLOR: Rgba = [1, 1, 1, 1];
-/** Half-thickness of an edge bar, meters. Edges protrude slightly past faces to
- *  avoid z-fighting with the translucent fill. */
-const EDGE_HALF = 0.02;
-/** Translucency applied to the fill of boxed actors (bodies / triggers). */
-const FILL_ALPHA = 0.5;
-
 /** Facet count of a cone's base circle. */
 const CONE_SEGMENTS = 10;
 /** Vertices emitted per cone: one side + one base-cap triangle per facet. */
 const CONE_VERTEX_COUNT = CONE_SEGMENTS * 6;
+
+/** Tessellation of a `'sphere'` actor (pivot markers, gizmo hub). */
+const SPHERE_LAT = 8;
+const SPHERE_LON = 12;
+const SPHERE_VERTEX_COUNT = SPHERE_LAT * SPHERE_LON * 6;
+
+/** Coarser tessellation for round waypoint dots — there are many per path. */
+const WAYPOINT_LAT = 4;
+const WAYPOINT_LON = 8;
+const WAYPOINT_VERTEX_COUNT = WAYPOINT_LAT * WAYPOINT_LON * 6;
 
 /**
  * Emit the 12 triangles of a local axis-aligned box [minL, maxL], rotated by
@@ -142,65 +145,192 @@ function emitCone(
 }
 
 /**
+ * Emit a cone whose axis is world +Z: a `radius` circle at (cx, cy, cz) (base)
+ * tapering to an apex `length` above it. The local-X {@link emitCone} cannot be
+ * aimed straight up by a Z rotation, so the vertical gizmo arrowhead needs its
+ * own primitive. Returns the next write offset.
+ */
+function emitConeZ(
+  out: Float32Array,
+  off: number,
+  length: number,
+  radius: number,
+  cx: number,
+  cy: number,
+  cz: number,
+  color: Rgba,
+): number {
+  const apex: readonly [number, number, number] = [cx, cy, cz + length];
+  const base: readonly [number, number, number] = [cx, cy, cz];
+  const ring: Array<readonly [number, number, number]> = [];
+  for (let i = 0; i < CONE_SEGMENTS; i++) {
+    const a = (i / CONE_SEGMENTS) * Math.PI * 2;
+    ring.push([cx + radius * Math.cos(a), cy + radius * Math.sin(a), cz]);
+  }
+  const push = (p: readonly [number, number, number]): void => {
+    out[off++] = p[0];
+    out[off++] = p[1];
+    out[off++] = p[2];
+    out[off++] = color[0];
+    out[off++] = color[1];
+    out[off++] = color[2];
+    out[off++] = color[3];
+  };
+  for (let i = 0; i < CONE_SEGMENTS; i++) {
+    const a = ring[i]!;
+    const b = ring[(i + 1) % CONE_SEGMENTS]!;
+    push(apex);
+    push(a);
+    push(b);
+    push(base);
+    push(b);
+    push(a);
+  }
+  return off;
+}
+
+/**
+ * Emit a low-poly UV sphere of `radius` centred at (cx, cy, cz). Used for the
+ * rotation-pivot marker and — at the coarser waypoint tessellation — for round
+ * trajectory handles. Returns the next write offset.
+ */
+function emitSphere(
+  out: Float32Array,
+  off: number,
+  radius: number,
+  cx: number,
+  cy: number,
+  cz: number,
+  color: Rgba,
+  lat = SPHERE_LAT,
+  lon = SPHERE_LON,
+): number {
+  const vertex = (theta: number, phi: number): readonly [number, number, number] => {
+    const st = Math.sin(theta);
+    return [cx + radius * st * Math.cos(phi), cy + radius * st * Math.sin(phi), cz + radius * Math.cos(theta)];
+  };
+  const push = (p: readonly [number, number, number]): void => {
+    out[off++] = p[0];
+    out[off++] = p[1];
+    out[off++] = p[2];
+    out[off++] = color[0];
+    out[off++] = color[1];
+    out[off++] = color[2];
+    out[off++] = color[3];
+  };
+  for (let i = 0; i < lat; i++) {
+    const t0 = (i / lat) * Math.PI;
+    const t1 = ((i + 1) / lat) * Math.PI;
+    for (let j = 0; j < lon; j++) {
+      const p0 = (j / lon) * 2 * Math.PI;
+      const p1 = ((j + 1) / lon) * 2 * Math.PI;
+      const a = vertex(t0, p0);
+      const b = vertex(t1, p0);
+      const c = vertex(t1, p1);
+      const d = vertex(t0, p1);
+      push(a);
+      push(b);
+      push(c);
+      push(a);
+      push(c);
+      push(d);
+    }
+  }
+  return off;
+}
+
+/**
  * Build triangle vertices for a set of oriented bounding boxes.
  *
  * "Boxed" actors (bodies / triggers) render as a translucent colored fill with
- * white wireframe edges — the classic bounding-box look. Waypoint handles stay
- * as small solid opaque cubes (no edges) so they remain crisp grab targets.
- * `"cone"` boxes render as a solid opaque cone (no edges either) instead of a
- * cube — used for the gizmo's translate-arm arrowheads.
+ * wireframe edges — the classic bounding-box look. Waypoint handles are solid
+ * and edge-less so they remain crisp grab targets; `style.waypointShape` picks
+ * a cube or a round dot. The manipulator kinds bypass the box path entirely:
+ * `'cone'`/`'conez'`/`'sphere'` render as their solid primitive, and `'bar'`
+ * renders as a solid box in its literal colour (no edges, no fill dimming).
  *
  * `origin` shifts every box into an origin-relative render frame (subtracted
  * from each center) so authored (absolute) boxes align with an origin-relative
  * point cloud. Defaults to no shift.
  *
  * When `wireframe` is set, boxed actors drop the translucent fill and render as
- * edge bars only (cuts overdraw during playback). Waypoint/cone handles are
+ * edge bars only (cuts overdraw during playback). Handles and manipulators are
  * unaffected.
+ *
+ * `style` overrides the editor-default look (see {@link DEFAULT_ACTOR_BOX_STYLE}).
  */
 export function buildBoxVertices(
   boxes: readonly CaseActorBox[],
   origin: readonly [number, number, number] = [0, 0, 0],
   wireframe = false,
+  style: ActorBoxStyle = DEFAULT_ACTOR_BOX_STYLE,
 ): Float32Array {
+  const roundWaypoints = style.waypointShape === 'sphere';
   // Precompute the vertex count and write into one preallocated Float32Array —
   // avoids growing a JS array + a full copy every frame. 36 verts per emitted
   // box: fill (unless wireframe-skipped) + 12 edge bars (432) when boxed.
   let vertexCount = 0;
   for (const box of boxes) {
-    if (box.kind === 'cone') {
+    if (box.kind === 'cone' || box.kind === 'conez') {
       vertexCount += CONE_VERTEX_COUNT;
       continue;
     }
-    const withEdges = box.kind !== 'waypoint';
-    if (!wireframe || !withEdges) vertexCount += 36;
-    if (withEdges) vertexCount += 432;
+    if (box.kind === 'sphere') {
+      vertexCount += SPHERE_VERTEX_COUNT;
+      continue;
+    }
+    if (box.kind === 'bar') {
+      vertexCount += 36;
+      continue;
+    }
+    if (box.kind === 'waypoint') {
+      vertexCount += roundWaypoints ? WAYPOINT_VERTEX_COUNT : 36;
+      continue;
+    }
+    if (!wireframe) vertexCount += 36;
+    vertexCount += 432;
   }
   const out = new Float32Array(vertexCount * ACTOR_VERTEX_STRIDE);
   let off = 0;
 
   for (const box of boxes) {
-    if (box.kind === 'cone') {
-      const cos = Math.cos(box.heading);
-      const sin = Math.sin(box.heading);
-      const cx = box.position[0] - origin[0];
-      const cy = box.position[1] - origin[1];
-      const cz = box.position[2] - origin[2];
-      off = emitCone(out, off, box.size[0], box.size[1] / 2, cos, sin, cx, cy, cz, box.color);
-      continue;
-    }
-    const hl = box.size[0] / 2;
-    const hw = box.size[1] / 2;
-    const hh = box.size[2] / 2;
-    const cos = Math.cos(box.heading);
-    const sin = Math.sin(box.heading);
     const cx = box.position[0] - origin[0];
     const cy = box.position[1] - origin[1];
     const cz = box.position[2] - origin[2];
+    const cos = Math.cos(box.heading);
+    const sin = Math.sin(box.heading);
+    // Selected actors render in the highlight fill instead of their own colour.
+    const base: Rgba = box.selected ? style.selectedFill : box.color;
+
+    if (box.kind === 'cone') {
+      off = emitCone(out, off, box.size[0], box.size[1] / 2, cos, sin, cx, cy, cz, box.color);
+      continue;
+    }
+    if (box.kind === 'conez') {
+      off = emitConeZ(out, off, box.size[0], box.size[1] / 2, cx, cy, cz, box.color);
+      continue;
+    }
+    if (box.kind === 'sphere') {
+      off = emitSphere(out, off, box.size[0] / 2, cx, cy, cz, box.color);
+      continue;
+    }
+    if (box.kind === 'bar') {
+      const bl = box.size[0] / 2;
+      const bw = box.size[1] / 2;
+      const bh = box.size[2] / 2;
+      off = emitBox(out, off, [-bl, -bw, -bh], [bl, bw, bh], cos, sin, cx, cy, cz, box.color);
+      continue;
+    }
+    if (box.kind === 'waypoint' && roundWaypoints) {
+      off = emitSphere(out, off, box.size[0] / 2, cx, cy, cz, base, WAYPOINT_LAT, WAYPOINT_LON);
+      continue;
+    }
+
+    const hl = box.size[0] / 2;
+    const hw = box.size[1] / 2;
+    const hh = box.size[2] / 2;
     const withEdges = box.kind !== 'waypoint';
-    // Selected actors render as a more opaque wine-red fill to stand out.
-    const base = box.selected ? SELECTED_FILL : box.color;
-    const fillAlpha = box.selected ? SELECTED_FILL_ALPHA : FILL_ALPHA;
+    const fillAlpha = box.selected ? style.selectedFillAlpha : style.fillAlpha;
 
     // Fill (translucent for boxed actors so the road shows through). Skipped for
     // boxed actors in wireframe mode.
@@ -211,19 +341,20 @@ export function buildBoxVertices(
 
     if (!withEdges) continue;
 
-    // 12 white edge bars (thin boxes) along the cube's edges.
-    const t = EDGE_HALF;
+    // 12 edge bars (thin boxes) along the cube's edges.
+    const t = box.selected ? style.edgeHalf * style.selectedEdgeGain : style.edgeHalf;
+    const edge = box.selected ? style.selectedEdgeColor : style.edgeColor;
     // 4 edges parallel to local X (vary Y, Z at ±half).
     for (const [Y, Z] of [[hw, hh], [hw, -hh], [-hw, hh], [-hw, -hh]] as const) {
-      off = emitBox(out, off, [-hl, Y - t, Z - t], [hl, Y + t, Z + t], cos, sin, cx, cy, cz, EDGE_COLOR);
+      off = emitBox(out, off, [-hl, Y - t, Z - t], [hl, Y + t, Z + t], cos, sin, cx, cy, cz, edge);
     }
     // 4 edges parallel to local Y (vary X, Z).
     for (const [X, Z] of [[hl, hh], [hl, -hh], [-hl, hh], [-hl, -hh]] as const) {
-      off = emitBox(out, off, [X - t, -hw, Z - t], [X + t, hw, Z + t], cos, sin, cx, cy, cz, EDGE_COLOR);
+      off = emitBox(out, off, [X - t, -hw, Z - t], [X + t, hw, Z + t], cos, sin, cx, cy, cz, edge);
     }
     // 4 edges parallel to local Z (vary X, Y).
     for (const [X, Y] of [[hl, hw], [hl, -hw], [-hl, hw], [-hl, -hw]] as const) {
-      off = emitBox(out, off, [X - t, Y - t, -hh], [X + t, Y + t, hh], cos, sin, cx, cy, cz, EDGE_COLOR);
+      off = emitBox(out, off, [X - t, Y - t, -hh], [X + t, Y + t, hh], cos, sin, cx, cy, cz, edge);
     }
   }
 
