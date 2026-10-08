@@ -72,18 +72,21 @@ export function unprojectGround(
   const ndcX = (screenX / width) * 2 - 1;
   const ndcY = 1 - (screenY / height) * 2;
 
-  const nearPt = transformPoint(invViewProj, [ndcX, ndcY, 0]);
-  const farPt = transformPoint(invViewProj, [ndcX, ndcY, 1]);
-  const dx = farPt[0] - nearPt[0];
-  const dy = farPt[1] - nearPt[1];
-  const dz = farPt[2] - nearPt[2];
+  // Reverse-Z (see DEPTH_CORRECTION): ndc z = 1 is the NEAR plane and 0 the FAR
+  // one, so t runs far -> near and leaving [0, 1] means the crossing is outside
+  // the frustum: beyond the far plane (t < 0) or behind the eye (t > 1).
+  const farPt = transformPoint(invViewProj, [ndcX, ndcY, 0]);
+  const nearPt = transformPoint(invViewProj, [ndcX, ndcY, 1]);
+  const dx = nearPt[0] - farPt[0];
+  const dy = nearPt[1] - farPt[1];
+  const dz = nearPt[2] - farPt[2];
   if (Math.abs(dz) < 1e-10) return null;
 
-  const t = -nearPt[2] / dz;
-  if (t < 0) return null;
+  const t = -farPt[2] / dz;
+  if (t < 0 || t > 1) return null;
   return {
-    x: nearPt[0] + dx * t,
-    y: nearPt[1] + dy * t,
+    x: farPt[0] + dx * t,
+    y: farPt[1] + dy * t,
   };
 }
 
@@ -105,18 +108,21 @@ export function unprojectPlane(
   const ndcX = (screenX / width) * 2 - 1;
   const ndcY = 1 - (screenY / height) * 2;
 
-  const nearPt = transformPoint(invViewProj, [ndcX, ndcY, 0]);
-  const farPt = transformPoint(invViewProj, [ndcX, ndcY, 1]);
-  const dx = farPt[0] - nearPt[0];
-  const dy = farPt[1] - nearPt[1];
-  const dz = farPt[2] - nearPt[2];
+  // Reverse-Z: see unprojectGround. Accepting t > 1 handed callers the crossing
+  // *behind* the eye whenever the cursor was above the horizon, which hit tests
+  // then turned into a ray aimed away from the scene.
+  const farPt = transformPoint(invViewProj, [ndcX, ndcY, 0]);
+  const nearPt = transformPoint(invViewProj, [ndcX, ndcY, 1]);
+  const dx = nearPt[0] - farPt[0];
+  const dy = nearPt[1] - farPt[1];
+  const dz = nearPt[2] - farPt[2];
   if (Math.abs(dz) < 1e-10) return null;
 
-  const t = (worldZ - nearPt[2]) / dz;
-  if (t < 0) return null;
+  const t = (worldZ - farPt[2]) / dz;
+  if (t < 0 || t > 1) return null;
   return {
-    x: nearPt[0] + dx * t,
-    y: nearPt[1] + dy * t,
+    x: farPt[0] + dx * t,
+    y: farPt[1] + dy * t,
   };
 }
 
@@ -136,7 +142,9 @@ export function projectToScreen(
   const px = viewProj[0]! * x + viewProj[4]! * y + viewProj[8]! * z + viewProj[12]! * w;
   const py = viewProj[1]! * x + viewProj[5]! * y + viewProj[9]! * z + viewProj[13]! * w;
   const pw = viewProj[3]! * x + viewProj[7]! * y + viewProj[11]! * z + viewProj[15]! * w;
-  if (Math.abs(pw) < 1e-10) return null;
+  // A point behind the eye has w < 0: the divide still yields finite pixels, but
+  // mirrored, so callers would place it somewhere plausible instead of nowhere.
+  if (pw < 1e-10) return null;
 
   const ndcX = px / pw;
   const ndcY = py / pw;

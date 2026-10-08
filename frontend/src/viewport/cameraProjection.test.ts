@@ -92,6 +92,22 @@ describe('cameraProjection', () => {
       expect(result!.x).toBeCloseTo(0, 0);
       expect(result!.y).toBeCloseTo(0, 0);
     });
+
+    it('rejects a plane the cursor only crosses behind the camera', () => {
+      // Tilted up from 10 m: the ground plane's crossing for a pixel above the
+      // horizon lies behind the eye. Returning it made callers aim their pick
+      // ray backwards and hit whatever was behind the viewer.
+      const cam: CameraState = {
+        ...defaultCamera(),
+        position: [0, 0, 10] as [number, number, number],
+        target: [0, 100, 30] as [number, number, number],
+        up: [0, 0, 1] as [number, number, number],
+      };
+      const vp = buildViewProjMatrix(cam, '3d', 100, 800, 600);
+      const inv = invertMatrix4(vp)!;
+      expect(unprojectPlane(inv, 800, 600, 400, 100, 0)).toBeNull();
+      expect(unprojectGround(inv, 800, 600, 400, 100)).toBeNull();
+    });
   });
 
   describe('projectToScreen', () => {
@@ -108,6 +124,18 @@ describe('cameraProjection', () => {
       const zero = new Float32Array(16);
       const result = projectToScreen(zero, 800, 600, 1, 1);
       expect(result).toBeNull();
+    });
+
+    it('returns null behind the camera instead of a mirrored pixel', () => {
+      const cam: CameraState = {
+        ...defaultCamera(),
+        position: [0, 0, 10] as [number, number, number],
+        target: [0, 100, 10] as [number, number, number],
+        up: [0, 0, 1] as [number, number, number],
+      };
+      const vp = buildViewProjMatrix(cam, '3d', 100, 800, 600);
+      expect(projectToScreen(vp, 800, 600, 0, 100, 10)).not.toBeNull();
+      expect(projectToScreen(vp, 800, 600, 0, -100, 10)).toBeNull();
     });
   });
 });
