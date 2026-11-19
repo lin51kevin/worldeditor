@@ -87,6 +87,7 @@ export class CameraController {
   private onViewBecameDirty: (() => void) | null = null;
   private lastReportedMpp = -1;
   private lastReportedGridSpacing = -1;
+  private lastReportedLineMpp = -1;
 
   /** 2D mode: pixels per meter (controls zoom level in orthographic projection). */
   private numPixelsPerMeter = DEFAULT_SCALE;
@@ -344,7 +345,8 @@ export class CameraController {
 
   /** Register a callback invoked whenever the reported scale changes, dedicated
    *  to consumers that derive a screen-space-relative world size (e.g. the
-   *  minimum on-screen line width) so they don't fight over the other two slots. */
+   *  minimum on-screen line width) so they don't fight over the other two slots.
+   *  Its `mpp` is {@link getLineMetersPerPixel}, not {@link getMetersPerPixel}. */
   setLineWidthScaleCallback(cb: ((info: ScaleInfo) => void) | null): void {
     this.onLineWidthScaleChange = cb;
   }
@@ -377,6 +379,20 @@ export class CameraController {
   }
 
   /**
+   * Meters per pixel at the orbit target, for sizing thin geometry so it stays
+   * visible. Unlike {@link getMetersPerPixel} (grid/marker scale, keyed to
+   * camera height so fly mode stays continuous) this uses the true view
+   * distance and the vertical FOV, which a tilted camera would otherwise
+   * underestimate several-fold.
+   */
+  getLineMetersPerPixel(): number {
+    if (this.dimensionMode === '2d') {
+      return 1 / this.numPixelsPerMeter;
+    }
+    return this.getOrbitPivot()[3];
+  }
+
+  /**
    * Projection x/y scale terms (P00, P11) of the current projection matrix:
    * clip-space units per world meter, before the perspective divide. Consumers
    * that expand geometry in clip space (billboard sprites) use these to keep a
@@ -396,12 +412,17 @@ export class CameraController {
 
   reportScale(): void {
     const info = { gridSpacing: this.currentGridSpacing, mpp: this.getMetersPerPixel() };
-    if (info.mpp === this.lastReportedMpp && info.gridSpacing === this.lastReportedGridSpacing) return;
-    this.lastReportedMpp = info.mpp;
-    this.lastReportedGridSpacing = info.gridSpacing;
-    this.onScaleChange?.(info);
-    this.onScaleMetricsChanged?.(info);
-    this.onLineWidthScaleChange?.(info);
+    if (info.mpp !== this.lastReportedMpp || info.gridSpacing !== this.lastReportedGridSpacing) {
+      this.lastReportedMpp = info.mpp;
+      this.lastReportedGridSpacing = info.gridSpacing;
+      this.onScaleChange?.(info);
+      this.onScaleMetricsChanged?.(info);
+    }
+    const lineMpp = this.getLineMetersPerPixel();
+    if (lineMpp !== this.lastReportedLineMpp) {
+      this.lastReportedLineMpp = lineMpp;
+      this.onLineWidthScaleChange?.({ gridSpacing: info.gridSpacing, mpp: lineMpp });
+    }
   }
 
   setDimension(dimension: '3d' | '2d'): void {

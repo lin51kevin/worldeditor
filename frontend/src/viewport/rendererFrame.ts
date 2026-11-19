@@ -7,6 +7,7 @@
  * owned by ViewportRenderer; this module only orchestrates the per-frame GPU work.
  */
 import { batchMeshes } from './meshBatcher';
+import { LANE_RIBBON_MIN_HALF_PX } from './pipelineFactory';
 import type { RenderableMesh } from './markerRenderer';
 import type { CameraController } from './cameraController';
 import type { MarkerRenderer } from './markerRenderer';
@@ -58,9 +59,16 @@ export interface RendererFrameInternals {
   actorOverlayMeshes: RenderableMesh[];
   pathMeshes: RenderableMesh[];
   laneLineMeshes: RenderableMesh[];
+  laneRibbonMeshes: RenderableMesh[];
+  laneRibbonPipeline: GPURenderPipeline;
+  laneRibbonBindGroup: GPUBindGroup;
+  laneRibbonUniformBuffer: GPUBuffer;
+  laneRibbonUniformData: Float32Array<ArrayBuffer>;
   spriteRenderer: SpriteRenderer | null;
   width: number;
   height: number;
+  /** Device pixels per CSS pixel; `width`/`height` are device pixels. */
+  pixelRatio: number;
   markerRenderer: MarkerRenderer;
   overlayRenderers: Array<(ctx: { device?: GPUDevice; canvas?: HTMLCanvasElement }) => void>;
   overlayCanvas: HTMLCanvasElement | null;
@@ -126,6 +134,14 @@ export function renderFrame(r: RendererFrameInternals): void {
     // Identity model matrix
     basicData[16] = 1; basicData[21] = 1; basicData[26] = 1; basicData[31] = 1;
     r.device.queue.writeBuffer(r.basicUniformBuffer, 0, basicData);
+
+    // Lane ribbons (80 bytes: mat4x4 view_proj + vec2 viewport_px + min_half_px + pad)
+    const ribbonData = r.laneRibbonUniformData;
+    ribbonData.set(viewProj, 0);
+    ribbonData[16] = r.width;
+    ribbonData[17] = r.height;
+    ribbonData[18] = LANE_RIBBON_MIN_HALF_PX;
+    r.device.queue.writeBuffer(r.laneRibbonUniformBuffer, 0, ribbonData);
   }
 
   // Refresh the Gaussian splat camera uniform + schedule a depth re-sort. The
@@ -135,7 +151,7 @@ export function renderFrame(r: RendererFrameInternals): void {
     r.splatRenderer.onCamera(
       camera,
       r.cameraController.dimension,
-      1 / r.cameraController.getMetersPerPixel(),
+      r.pixelRatio / r.cameraController.getMetersPerPixel(),
       r.width,
       r.height,
       viewProj,
@@ -145,7 +161,7 @@ export function renderFrame(r: RendererFrameInternals): void {
     r.actorSplatRenderer.onCamera(
       camera,
       r.cameraController.dimension,
-      1 / r.cameraController.getMetersPerPixel(),
+      r.pixelRatio / r.cameraController.getMetersPerPixel(),
       r.width,
       r.height,
       viewProj,
@@ -155,7 +171,7 @@ export function renderFrame(r: RendererFrameInternals): void {
     r.actorSplatInstancer.onCamera(
       camera,
       r.cameraController.dimension,
-      1 / r.cameraController.getMetersPerPixel(),
+      r.pixelRatio / r.cameraController.getMetersPerPixel(),
       r.width,
       r.height,
       viewProj,
@@ -259,6 +275,7 @@ export function renderFrame(r: RendererFrameInternals): void {
 
   // Draw lane lines (between road surface and markings)
   drawBatched(pass, r.laneLineMeshes, r.highlightPipeline, r.basicBindGroup, 'highlight');
+  drawBatched(pass, r.laneRibbonMeshes, r.laneRibbonPipeline, r.laneRibbonBindGroup, 'highlight');
 
   // Draw road paint textured quads (arrows on road surface)
   if (r.spriteRenderer?.hasContent()) {

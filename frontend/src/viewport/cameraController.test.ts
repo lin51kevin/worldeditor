@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { CameraController } from './cameraController';
 
 /** Build a minimal 7-float-per-vertex buffer with a single point. */
@@ -624,6 +624,26 @@ describe('CameraController', () => {
       expect(cam.locked).toBe(true);
       cam.setChaseCameraActive(false);
       expect(cam.locked).toBe(false);
+    });
+  });
+
+  describe('getLineMetersPerPixel', () => {
+    it('uses the view distance and vertical FOV in 3D', () => {
+      const { position, target, fovY } = cam.state;
+      const dist = Math.hypot(target[0] - position[0], target[1] - position[1], target[2] - position[2]);
+      expect(cam.getLineMetersPerPixel()).toBeCloseTo((2 * dist * Math.tan(fovY / 2)) / 600, 9);
+    });
+
+    it('equals getMetersPerPixel in 2D', () => {
+      cam.setDimension('2d');
+      expect(cam.getLineMetersPerPixel()).toBe(cam.getMetersPerPixel());
+    });
+
+    it('is what the line-width callback receives', () => {
+      const cb = vi.fn();
+      cam.setLineWidthScaleCallback(cb);
+      cam.reportScale();
+      expect(cb).toHaveBeenCalledWith(expect.objectContaining({ mpp: cam.getLineMetersPerPixel() }));
     });
   });
 });

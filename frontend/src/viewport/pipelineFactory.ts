@@ -3,7 +3,7 @@
  * Creates render pipelines for the viewport renderer without class coupling.
  */
 
-import { GRID_SHADER, BASIC_SHADER } from './viewportShaders';
+import { GRID_SHADER, BASIC_SHADER, LANE_RIBBON_SHADER } from './viewportShaders';
 import { MSAA_SAMPLE_COUNT } from './rendererResources';
 
 export interface GridPipelineResult {
@@ -229,6 +229,79 @@ export function createBasicPipelines(device: GPUDevice, format: GPUTextureFormat
     bindGroupLayout,
     uniformBuffer,
   };
+}
+
+/** Floats per lane-ribbon vertex: edge xyz, rgba, center xyz, side. */
+export const LANE_RIBBON_FLOATS = 11;
+/** Half of the minimum on-screen lane-mark width, in device pixels. */
+export const LANE_RIBBON_MIN_HALF_PX = 0.75;
+/** Uniform floats: mat4 view_proj + vec2 viewport_px + f32 min_half_px + pad. */
+export const LANE_RIBBON_UNIFORM_FLOATS = 20;
+
+export interface LaneRibbonPipelineResult {
+  pipeline: GPURenderPipeline;
+  bindGroup: GPUBindGroup;
+  uniformBuffer: GPUBuffer;
+}
+
+/**
+ * Screen-space-widened lane marks. Depth state matches `highlightPipeline`
+ * (coplanar with the road: biased, no depth write).
+ */
+export function createLaneRibbonPipeline(device: GPUDevice, format: GPUTextureFormat): LaneRibbonPipelineResult {
+  const shader = device.createShaderModule({ code: LANE_RIBBON_SHADER });
+  const bindGroupLayout = device.createBindGroupLayout({
+    entries: [{
+      binding: 0,
+      visibility: GPUShaderStage.VERTEX,
+      buffer: { type: 'uniform' },
+    }],
+  });
+  const uniformBuffer = device.createBuffer({
+    size: LANE_RIBBON_UNIFORM_FLOATS * 4,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  const bindGroup = device.createBindGroup({
+    layout: bindGroupLayout,
+    entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
+  });
+  const pipeline = device.createRenderPipeline({
+    layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+    vertex: {
+      module: shader,
+      entryPoint: 'vs_main',
+      buffers: [{
+        arrayStride: LANE_RIBBON_FLOATS * 4,
+        attributes: [
+          { shaderLocation: 0, offset: 0, format: 'float32x3' },
+          { shaderLocation: 1, offset: 12, format: 'float32x4' },
+          { shaderLocation: 2, offset: 28, format: 'float32x3' },
+          { shaderLocation: 3, offset: 40, format: 'float32' },
+        ],
+      }],
+    },
+    fragment: {
+      module: shader,
+      entryPoint: 'fs_main',
+      targets: [{
+        format,
+        blend: {
+          color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
+          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+        },
+      }],
+    },
+    depthStencil: {
+      format: 'depth32float',
+      depthWriteEnabled: false,
+      depthCompare: 'greater-equal',
+      depthBias: 2,
+      depthBiasSlopeScale: 2.0,
+    },
+    multisample: { count: MSAA_SAMPLE_COUNT },
+    primitive: { topology: 'triangle-list' },
+  });
+  return { pipeline, bindGroup, uniformBuffer };
 }
 
 /** Create lane line pipeline (LineVertex: 10 floats, stride 40). */

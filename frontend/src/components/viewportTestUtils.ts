@@ -212,6 +212,7 @@ export function createRendererMocks() {
     setClearColor: vi.fn(),
     setGridColor: vi.fn(),
     getMetersPerPixel: vi.fn().mockReturnValue(0.1),
+    getLineMetersPerPixel: vi.fn().mockReturnValue(0.1),
     applyPan: vi.fn(),
     applyZoomFactor: vi.fn(),
     clearLinkHighlight: vi.fn(),

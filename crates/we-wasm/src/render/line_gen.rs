@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 
 use super::helpers::sum_widths_at_ds;
-use super::marking_mesh::emit_road_mark;
+use super::marking_mesh::{MarkVertexFormat, emit_road_mark};
 use super::min_width::min_line_width_m;
 
 /// Generate lane boundary line vertices from a project JSON. Returns Float32Array.
@@ -13,6 +13,27 @@ use super::min_width::min_line_width_m;
 pub fn generate_lane_line_vertices(
     project_json: &str,
     sample_step: f64,
+) -> Result<Vec<f32>, JsError> {
+    lane_line_vertices(project_json, sample_step, MarkVertexFormat::Triangles)
+}
+
+/// Same road markings as [`generate_lane_line_vertices`], at native width, for
+/// the renderer's screen-space lane-line pipeline (no zoom-driven regeneration).
+///
+/// Each vertex is 11 floats: [edge x, y, z, r, g, b, a, center x, y, z, side],
+/// where `side` is +1 for the left edge and -1 for the right edge.
+#[wasm_bindgen]
+pub fn generate_lane_line_ribbon_vertices(
+    project_json: &str,
+    sample_step: f64,
+) -> Result<Vec<f32>, JsError> {
+    lane_line_vertices(project_json, sample_step, MarkVertexFormat::Ribbon)
+}
+
+fn lane_line_vertices(
+    project_json: &str,
+    sample_step: f64,
+    format: MarkVertexFormat,
 ) -> Result<Vec<f32>, JsError> {
     use we_core::geometry::eval::{
         TessellationParams, evaluate_lane_width, sample_road_reference_line_adaptive,
@@ -69,6 +90,7 @@ pub fn generate_lane_line_vertices(
                     &section_pts,
                     &center_lane.road_marks,
                     |_| 0.0,
+                    format,
                     &mut all_floats,
                 );
             }
@@ -91,6 +113,7 @@ pub fn generate_lane_line_vertices(
                         &section_pts,
                         &lane.road_marks,
                         |ds| -sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
+                        format,
                         &mut all_floats,
                     );
                 }
@@ -115,6 +138,7 @@ pub fn generate_lane_line_vertices(
                         &section_pts,
                         &lane.road_marks,
                         |ds| sum_widths_at_ds(&boundary_widths, ds, &evaluate_lane_width),
+                        format,
                         &mut all_floats,
                     );
                 }
@@ -142,6 +166,7 @@ fn emit_lane_marks<F: Fn(f64) -> f64>(
     section_pts: &[&we_core::geometry::eval::RefLinePoint],
     road_marks: &[we_core::model::RoadMark],
     lateral_fn: F,
+    format: MarkVertexFormat,
     out: &mut Vec<f32>,
 ) {
     use we_core::model::RoadMarkType;
@@ -176,9 +201,12 @@ fn emit_lane_marks<F: Fn(f64) -> f64>(
             rm,
             &mark_pts,
             &road.elevation_profile,
+            &road.lateral_profile.superelevations,
+            &road.lateral_profile.crossfalls,
             section_s,
             &road.lane_offsets,
             &lateral_fn,
+            format,
             out,
         );
     }

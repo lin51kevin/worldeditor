@@ -32,6 +32,9 @@ import {
   createBasicPipelines,
   createLaneLinePipeline as createLaneLinePipelineFn,
   createBillboardPipeline as createBillboardPipelineFn,
+  createLaneRibbonPipeline,
+  LANE_RIBBON_FLOATS,
+  LANE_RIBBON_UNIFORM_FLOATS,
 } from './pipelineFactory';
 import { CameraController } from './cameraController';
 import { MarkerRenderer } from './markerRenderer';
@@ -126,6 +129,10 @@ export class ViewportRenderer {
   // Read by the extracted point-cloud helper module to build its pipeline.
   basicBindGroupLayout!: GPUBindGroupLayout;
   private basicUniformBuffer!: GPUBuffer;
+  laneRibbonPipeline!: GPURenderPipeline;
+  laneRibbonBindGroup!: GPUBindGroup;
+  private laneRibbonUniformBuffer!: GPUBuffer;
+  laneRibbonUniformData = new Float32Array(LANE_RIBBON_UNIFORM_FLOATS);
 
   private cameraController = new CameraController();
   private markerRenderer = new MarkerRenderer();
@@ -147,6 +154,8 @@ export class ViewportRenderer {
   private junctionMeshes: RenderableMesh[] = [];
   // Lane line meshes
   private laneLineMeshes: RenderableMesh[] = [];
+  // Native-width lane marks widened in screen space (LANE_RIBBON_SHADER)
+  private laneRibbonMeshes: RenderableMesh[] = [];
   // Bridge/tunnel overlay meshes (rendered above road surface)
   private overlayMeshes: RenderableMesh[] = [];
 
@@ -161,8 +170,15 @@ export class ViewportRenderer {
 
   // Callback for hover detection on spline control points
   private onControlPointHovered: ((ref: ControlPointRef | null) => void) | null = null;
+  // Render-target (device pixel) size; the camera works in CSS px (`cssWidth`).
   private width = 0;
   private height = 0;
+  private cssWidth = 0;
+  private cssHeight = 0;
+  private pixelRatio = 1;
+  // Ratio the host asked for; `pixelRatio` is what is currently applied.
+  private requestedPixelRatio = 1;
+  private lineWidthScaleCallback: ((info: { gridSpacing: number; mpp: number }) => void) | null = null;
   private renderLoop: RenderLoop | null = null;
   // True while the host-facing camera facade started the render loop to drive
   // fly-mode movement (host embedding never calls start() itself). Guards
@@ -329,14 +345,61 @@ export class ViewportRenderer {
   }
 
   /** Register a callback invoked whenever meters-per-pixel changes, dedicated to
-   *  consumers deriving a screen-space-relative world size (e.g. minimum line width). */
+   *  consumers deriving a screen-space-relative world size (e.g. minimum line width).
+   *  `mpp` is per device pixel. */
   setLineWidthScaleCallback(cb: ((info: { gridSpacing: number; mpp: number }) => void) | null): void {
-    this.cameraController.setLineWidthScaleCallback(cb);
+    this.lineWidthScaleCallback = cb;
+    this.cameraController.setLineWidthScaleCallback(
+      cb ? (info) => cb({ ...info, mpp: info.mpp / this.pixelRatio }) : null,
+    );
   }
 
   /** Compute current meters-per-pixel (perspective approximation at target distance). */
   getMetersPerPixel(): number {
     return this.cameraController.getMetersPerPixel();
+  }
+
+  /** Meters per device pixel used to size thin line/stripe geometry (see CameraController). */
+  getLineMetersPerPixel(): number {
+    return this.cameraController.getLineMetersPerPixel() / this.pixelRatio;
+  }
+
+  /**
+   * Device pixels per CSS pixel for the render targets (e.g. `devicePixelRatio`).
+   * Screen-space APIs (pointer input, projection, `resize`) stay in CSS px.
+   * Rendering stays at 1x while Gaussian splats are drawn (see
+   * {@link effectivePixelRatio}).
+   */
+  setPixelRatio(ratio: number): void {
+    if (!(ratio > 0) || !Number.isFinite(ratio)) return;
+    this.requestedPixelRatio = ratio;
+    this.applyPixelRatio(this.effectivePixelRatio());
+  }
+
+  /** Splat fill cost scales with pixel count and is already the bottleneck, so splats never upscale. */
+  private effectivePixelRatio(): number {
+    const sceneSplats =
+      !!this.splatRenderer?.hasContent && this.staticSceneVisible && this.sceneSplatsVisible;
+    const drawsSplats =
+      sceneSplats || !!this.actorSplatRenderer?.hasContent || !!this.actorSplatInstancer?.hasContent;
+    return drawsSplats ? 1 : this.requestedPixelRatio;
+  }
+
+  private applyPixelRatio(ratio: number): void {
+    if (ratio === this.pixelRatio) return;
+    this.pixelRatio = ratio;
+    if (this.device && this.cssWidth > 0 && this.cssHeight > 0) {
+      this.resize(this.cssWidth, this.cssHeight);
+    }
+    this.lineWidthScaleCallback?.({
+      gridSpacing: this.cameraController.currentGridSpacing,
+      mpp: this.getLineMetersPerPixel(),
+    });
+  }
+
+  /** Device pixels per CSS pixel currently in use (differs from the requested ratio while splats draw). */
+  getPixelRatio(): number {
+    return this.pixelRatio;
   }
 
   /** Check if WebGPU is available. */
@@ -395,7 +458,9 @@ export class ViewportRenderer {
 
     this.width = canvas.width;
     this.height = canvas.height;
-    this.cameraController.setViewportSize(this.width, this.height);
+    this.cssWidth = canvas.width / this.pixelRatio;
+    this.cssHeight = canvas.height / this.pixelRatio;
+    this.cameraController.setViewportSize(this.cssWidth, this.cssHeight);
     this.markerRenderer.setDevice(this.device);
 
     const tConfigure = performance.now();
@@ -701,7 +766,7 @@ export class ViewportRenderer {
 
   /** World-space ground point (Z=0) under the viewport center. Null if unavailable. */
   getGroundCenter(): { x: number; y: number } | null {
-    return this.cameraController.unprojectToGround(this.width / 2, this.height / 2);
+    return this.cameraController.unprojectToGround(this.cssWidth / 2, this.cssHeight / 2);
   }
 
   /** Frame the 3D camera to fit a planar bounds (world meters). */
@@ -1267,6 +1332,22 @@ export class ViewportRenderer {
   }
 
   /**
+   * Upload native-width lane-mark ribbons (11 floats per vertex, from
+   * `generate_lane_line_ribbon_vertices`). Unlike {@link uploadLaneLineVertices}
+   * these stay visible at any zoom without regeneration.
+   */
+  uploadLaneLineRibbonVertices(vertexData: Float32Array): void {
+    if (vertexData.length === 0) {
+      if (this.laneRibbonMeshes.length === 0) return;
+      disposeMeshes(this.laneRibbonMeshes);
+      this.markSceneDirty();
+      return;
+    }
+    uploadMeshData(this.device, this.laneRibbonMeshes, vertexData, LANE_RIBBON_FLOATS);
+    this.markSceneDirty();
+  }
+
+  /**
    * Upload spline knot preview geometry: Catmull-Rom smooth curve + tangent handles + knot markers.
    * Pass an empty array to clear the preview.
    * Vertex format: 7 floats per vertex (x, y, z, r, g, b, a), triangle-list.
@@ -1327,11 +1408,18 @@ export class ViewportRenderer {
     this.cameraController.panToCenter(vertexData);
   }
 
-  /** Resize the viewport. */
+  /** Resize the viewport (CSS px; render targets are scaled by the pixel ratio). */
   resize(width: number, height: number): void {
     if (width <= 0 || height <= 0) return;
-    this.width = width;
-    this.height = height;
+    this.cssWidth = width;
+    this.cssHeight = height;
+    this.width = Math.max(1, Math.round(width * this.pixelRatio));
+    this.height = Math.max(1, Math.round(height * this.pixelRatio));
+    const canvas = this.context?.canvas as HTMLCanvasElement | OffscreenCanvas | undefined;
+    if (canvas && (canvas.width !== this.width || canvas.height !== this.height)) {
+      canvas.width = this.width;
+      canvas.height = this.height;
+    }
     this.markSceneDirty();
     this.cameraController.setViewportSize(width, height);
     this.depthTexture?.destroy();
@@ -1389,6 +1477,8 @@ export class ViewportRenderer {
     if (this.deviceLost || this.disposed || !this.device) return;
     this.sceneDirty = true;
     this.cameraController.isViewDirty = true;
+    // Host-driven frames bypass the render loop's onRender, so feed the FPS stats here.
+    this.frameStats = updateFrameStats(this.frameStats, performance.now());
     this.renderFrame();
   }
 
@@ -1512,6 +1602,7 @@ export class ViewportRenderer {
     disposeMeshes(this.meshes);
     disposeMeshes(this.junctionMeshes);
     disposeMeshes(this.laneLineMeshes);
+    disposeMeshes(this.laneRibbonMeshes);
     disposeMeshes(this.overlayMeshes);
     disposeMeshes(this.actorMeshes);
     disposeMeshes(this.actorOverlayMeshes);
@@ -1538,6 +1629,7 @@ export class ViewportRenderer {
     this.msaaTexture?.destroy();
     this.gridUniformBuffer?.destroy();
     this.basicUniformBuffer?.destroy();
+    this.laneRibbonUniformBuffer?.destroy();
     this.spriteRenderer?.destroy();
     this.textureManager?.destroy();
     // Release the canvas from this device so a subsequent renderer can
@@ -1549,6 +1641,8 @@ export class ViewportRenderer {
   // --- Private ---
 
   private renderFrame(): void {
+    // Splat content can appear/disappear or be toggled at any time; settle the ratio before drawing.
+    this.applyPixelRatio(this.effectivePixelRatio());
     renderFrameImpl(this as unknown as RendererFrameInternals);
   }
 
@@ -1570,6 +1664,11 @@ export class ViewportRenderer {
     this.basicBindGroup = result.bindGroup;
     this.basicBindGroupLayout = result.bindGroupLayout;
     this.basicUniformBuffer = result.uniformBuffer;
+
+    const ribbon = createLaneRibbonPipeline(this.device, this.format);
+    this.laneRibbonPipeline = ribbon.pipeline;
+    this.laneRibbonBindGroup = ribbon.bindGroup;
+    this.laneRibbonUniformBuffer = ribbon.uniformBuffer;
   }
 
   // @internal Pipeline factories available for future use

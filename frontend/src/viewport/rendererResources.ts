@@ -45,6 +45,7 @@ export function uploadMeshData(
   device: GPUDevice,
   meshes: RenderableMesh[],
   vertexData: Float32Array,
+  floatsPerVertex = 7,
 ): void {
   const requiredBytes = vertexData.byteLength;
   const buffer = getOrCreateBuffer(device, meshes[0]?.vertexBuffer, requiredBytes);
@@ -57,7 +58,7 @@ export function uploadMeshData(
   meshes.length = 0;
   meshes.push({
     vertexBuffer: buffer,
-    vertexCount: vertexData.length / 7,
+    vertexCount: vertexData.length / floatsPerVertex,
   });
 }
 

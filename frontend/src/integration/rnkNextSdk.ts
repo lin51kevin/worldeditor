@@ -23,6 +23,7 @@
  */
 import { importGeoZ } from '../plugins/io/geoz/parser';
 import { ViewportRenderer } from '../viewport/renderer';
+import { createMinLineWidthSync } from '../viewport/minLineWidthSync';
 import type { SpriteInstance, PaintInstance } from '../viewport/spriteRenderer';
 import type {
   SplatRenderMode,
@@ -131,10 +132,22 @@ export interface WorldEditorRenderer {
   render(): void;
   markSceneDirty(): void;
   resize(width: number, height: number): Promise<void>;
+  /**
+   * Render at `ratio` device pixels per CSS pixel (e.g. `devicePixelRatio`).
+   * `resize`, pointer coordinates and projection results stay in CSS px. May be
+   * called before `init`.
+   */
+  setPixelRatio?(ratio: number): void;
   setDimension(dimension: '2d' | '3d'): void;
   set2DView(centerX: number, centerY: number, metersPerPixel: number): void;
   uploadRoadVertices(data: Float32Array): void;
   uploadLaneLineVertices(data: Float32Array): void;
+  /**
+   * Upload native-width lane-mark ribbons from
+   * {@link WorldEditorWasm.generate_lane_line_ribbon_vertices}. Widened to a
+   * minimum on-screen width in the shader, so zoom changes need no regeneration.
+   */
+  uploadLaneLineRibbonVertices?(data: Float32Array): void;
   uploadHighlightVertices(data: Float32Array): void;
   clearHighlight(): void;
   unprojectToGround(screenX: number, screenY: number): { x: number; y: number } | null;
@@ -442,6 +455,8 @@ export interface WorldEditorWasm {
   parse_opendrive(xml: string): WorldEditorProject;
   generate_road_vertices(projectJson: string, sampleStep: number, colorMode: string): Float32Array;
   generate_lane_line_vertices(projectJson: string, sampleStep: number): Float32Array;
+  /** Lane marks at native width, 11 floats per vertex (see `uploadLaneLineRibbonVertices`). */
+  generate_lane_line_ribbon_vertices?(projectJson: string, sampleStep: number): Float32Array;
   generate_single_road_vertices(
     roadJson: string,
     sampleStep: number,
@@ -615,54 +630,41 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     return [clientX - rect.left, clientY - rect.top];
   };
 
-  // ── Minimum on-screen line width (mirrors useMinLineWidthSync.ts) ─────────
-  // Keeps the WASM-side minimum enforced on thin lane-mark / crosswalk-stripe /
-  // area-outline geometry in sync with zoom, same target/bucket/debounce as the
-  // main app. Unlike the main app, this adapter doesn't own the host's project
-  // data, so it can't regenerate/reupload geometry itself — it only keeps the
-  // WASM value current and notifies via `onLineWidthRefreshNeeded` so the host
-  // can re-call `generate_lane_line_vertices` / `generate_object_vertices`.
-  const MIN_LINE_PIXELS = 1.5;
-  const LINE_WIDTH_DEBOUNCE_MS = 200;
-  let lineWidthBucket: number | null = null;
-  let lineWidthTimer: ReturnType<typeof setTimeout> | null = null;
+  // ── Minimum on-screen line width (shared with useMinLineWidthSync.ts) ─────────
+  // Keeps the WASM-side minimum enforced on thin crosswalk-stripe / area-outline
+  // (and legacy 7-float lane-mark) geometry in sync with zoom. This adapter
+  // doesn't own the host's project data, so it only keeps the WASM value
+  // current and notifies via `onLineWidthRefreshNeeded` so the host can re-call
+  // `generate_object_vertices` / `generate_lane_line_vertices`.
   let onLineWidthRefreshNeeded: (() => void) | null = null;
-  const bucketOfMpp = (mpp: number) => Math.round(Math.log2(Math.max(mpp, 1e-6)));
-  const applyMinLineWidth = (mpp: number) => {
-    wasm.set_min_line_width_m(MIN_LINE_PIXELS * mpp);
+  const lineWidthSync = createMinLineWidthSync((widthM) => {
+    wasm.set_min_line_width_m(widthM);
     onLineWidthRefreshNeeded?.();
-  };
-  renderer.setLineWidthScaleCallback(({ mpp }) => {
-    const bucket = bucketOfMpp(mpp);
-    if (bucket === lineWidthBucket) return;
-    lineWidthBucket = bucket;
-    if (lineWidthTimer) clearTimeout(lineWidthTimer);
-    lineWidthTimer = setTimeout(() => {
-      lineWidthTimer = null;
-      applyMinLineWidth(mpp);
-    }, LINE_WIDTH_DEBOUNCE_MS);
   });
+  renderer.setLineWidthScaleCallback(({ mpp }) => lineWidthSync.update(mpp));
   // Seed immediately (no debounce) so the first host-side generation already
   // uses the right width instead of waiting for a subsequent zoom change.
-  lineWidthBucket = bucketOfMpp(renderer.getMetersPerPixel());
-  applyMinLineWidth(renderer.getMetersPerPixel());
+  lineWidthSync.seed(renderer.getLineMetersPerPixel());
 
   return {
     async init(canvas: HTMLCanvasElement): Promise<boolean> {
       // Match the backing store to the element's layout size so the first frame
       // is correctly sized (the host drives subsequent resizes).
       if (canvas.clientWidth > 0 && canvas.clientHeight > 0) {
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
+        canvas.width = Math.max(1, Math.round(canvas.clientWidth * renderer.getPixelRatio()));
+        canvas.height = Math.max(1, Math.round(canvas.clientHeight * renderer.getPixelRatio()));
       }
       canvasRef = canvas;
       const ok = await renderer.init(canvas);
-      if (ok) renderer.setDimension('2d');
+      if (ok) {
+        renderer.setDimension('2d');
+        lineWidthSync.seed(renderer.getLineMetersPerPixel());
+      }
       return ok;
     },
     dispose: () => {
       renderer.setLineWidthScaleCallback(null);
-      if (lineWidthTimer) clearTimeout(lineWidthTimer);
+      lineWidthSync.dispose();
       onLineWidthRefreshNeeded = null;
       renderer.dispose();
     },
@@ -672,10 +674,12 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
       renderer.resize(width, height);
       return Promise.resolve();
     },
+    setPixelRatio: (ratio) => renderer.setPixelRatio(ratio),
     setDimension: (dimension) => renderer.setDimension(dimension),
     set2DView: (centerX, centerY, metersPerPixel) => renderer.set2DView(centerX, centerY, metersPerPixel),
     uploadRoadVertices: (data) => renderer.uploadRoadVertices(data),
     uploadLaneLineVertices: (data) => renderer.uploadLaneLineVertices(data),
+    uploadLaneLineRibbonVertices: (data) => renderer.uploadLaneLineRibbonVertices(data),
     uploadHighlightVertices: (data) => renderer.uploadHighlightVertices(data),
     clearHighlight: () => renderer.clearHighlight(),
     unprojectToGround: (screenX, screenY) => {
@@ -1047,6 +1051,9 @@ function adaptWasm(wasm: WasmModule): WorldEditorWasm {
 
     generate_lane_line_vertices: (projectJson, sampleStep) =>
       wasm.generate_lane_line_vertices(projectJson, sampleStep),
+
+    generate_lane_line_ribbon_vertices: (projectJson, sampleStep) =>
+      wasm.generate_lane_line_ribbon_vertices(projectJson, sampleStep),
 
     generate_single_road_vertices: (roadJson, sampleStep, r, g, b, a) =>
       wasm.generate_single_road_vertices(roadJson, sampleStep, r, g, b, a),

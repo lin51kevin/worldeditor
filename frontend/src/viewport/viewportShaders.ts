@@ -97,6 +97,78 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 `;
 
 /**
+ * Lane-mark ribbon shader — native-width road marks that never drop below
+ * `min_half_px` on screen. MSAA is off, so a sub-pixel ribbon would otherwise
+ * break into gaps; instead it is widened around its centerline in screen space
+ * and faded by the coverage it lost, and its long edges are feathered.
+ *
+ * Vertex input (11 floats, see `generate_lane_line_ribbon_vertices`):
+ *   edge: vec3    — this corner at native width
+ *   color: vec4
+ *   center: vec3  — matching centerline point
+ *   side: f32     — +1 left edge, -1 right edge
+ */
+export const LANE_RIBBON_SHADER = `
+struct Uniforms {
+  view_proj: mat4x4<f32>,
+  viewport_px: vec2<f32>,
+  min_half_px: f32,
+  _pad: f32,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+struct VertexInput {
+  @location(0) edge: vec3<f32>,
+  @location(1) color: vec4<f32>,
+  @location(2) center: vec3<f32>,
+  @location(3) side: f32,
+};
+
+struct VertexOutput {
+  @builtin(position) clip_position: vec4<f32>,
+  @location(0) color: vec4<f32>,
+  @location(1) side: f32,
+  @location(2) half_px: f32,
+};
+
+@vertex
+fn vs_main(v: VertexInput) -> VertexOutput {
+  var out: VertexOutput;
+  let clip_edge = uniforms.view_proj * vec4<f32>(v.edge, 1.0);
+  let clip_center = uniforms.view_proj * vec4<f32>(v.center, 1.0);
+  out.clip_position = clip_edge;
+  out.color = v.color;
+  out.side = v.side;
+  out.half_px = uniforms.min_half_px;
+  if (clip_edge.w <= 0.0 || clip_center.w <= 0.0) {
+    return out;
+  }
+
+  let half_viewport = 0.5 * uniforms.viewport_px;
+  let ndc_center = clip_center.xy / clip_center.w;
+  let offset_px = (clip_edge.xy / clip_edge.w - ndc_center) * half_viewport;
+  let half_px = length(offset_px);
+  out.half_px = max(half_px, uniforms.min_half_px);
+  out.color.a = v.color.a * min(half_px / uniforms.min_half_px, 1.0);
+  if (half_px < uniforms.min_half_px) {
+    let dir = select(vec2<f32>(0.0, v.side), offset_px / half_px, half_px > 1e-6);
+    let ndc = ndc_center + dir * uniforms.min_half_px / half_viewport;
+    out.clip_position = vec4<f32>(ndc * clip_edge.w, clip_edge.z, clip_edge.w);
+  }
+  return out;
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+  // Approximate pixel coverage across the long edges (distance to edge + 0.5 px).
+  let edge_px = (1.0 - abs(in.side)) * in.half_px;
+  let coverage = clamp(edge_px + 0.5, 0.0, 1.0);
+  return vec4<f32>(in.color.rgb, in.color.a * coverage);
+}
+`;
+
+/**
  * Sprite billboard shader — renders textured quads that always face the camera.
  *
  * Vertex input (per-instance quad, 6 verts):
