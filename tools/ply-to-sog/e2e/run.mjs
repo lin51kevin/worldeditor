@@ -75,7 +75,8 @@ const executablePath =
 const browser = await chromium.launch({
   executablePath,
   headless: false,
-  args: ['--enable-unsafe-webgpu', '--disable-gpu-sandbox', '--enable-features=Vulkan', ...(process.env.NO_VSYNC ? ['--disable-gpu-vsync', '--disable-frame-rate-limit'] : [])],
+  ...(process.env.DEVTOOLS ? { devtools: true } : {}),
+  args: ['--enable-unsafe-webgpu', '--disable-gpu-sandbox', ...(process.env.NO_VULKAN ? [] : ['--enable-features=Vulkan']), ...(process.env.NO_VSYNC ? ['--disable-gpu-vsync', '--disable-frame-rate-limit'] : [])],
 });
 try {
   // Peak dedicated GPU memory in use (whole system, so run on an otherwise idle GPU).
