@@ -1,7 +1,7 @@
 export { getSplineHandlePoints } from './splineUtils';
 export type { SignalData, ObjectData, MarkingData, MouseDragAction } from './viewportTypes';
 export { resolveMouseDragAction, computeGroundPanOffset } from './viewportTypes';
-import { takePrewarmedGPU, returnPrewarmedGPU, buildRequiredLimits } from './gpuDeviceCache';
+import { takePrewarmedGPU, returnPrewarmedGPU, buildRequiredLimits, buildRequiredFeatures } from './gpuDeviceCache';
 import type { PrewarmedGPU } from './gpuDeviceCache';
 import { createRenderLoop } from './renderLoop';
 import type { RenderLoop } from './renderLoop';
@@ -434,6 +434,7 @@ export class ViewportRenderer {
       if (this.disposed || !adapter) return false;
       device = await adapter.requestDevice({
         requiredLimits: buildRequiredLimits(adapter),
+        requiredFeatures: buildRequiredFeatures(adapter),
       });
       if (this.disposed) {
         // Return fresh device to cache for next mount
@@ -1134,15 +1135,72 @@ export class ViewportRenderer {
     shDegree: number,
     layoutVersion: number,
     sourceCount?: number,
+    splatModel?: string,
+    progressive?: boolean,
   ): SplatUploadStatus {
     const status = this.ensureSceneSplatRenderer().beginUpload(
       totalCount,
       shDegree,
       layoutVersion,
       sourceCount,
+      splatModel,
+      progressive,
     );
     this.markSceneDirty();
     return status;
+  }
+
+  /** Whether the chunked Gaussian upload in progress is drawn before it finishes. */
+  isGaussianUploadProgressive(): boolean {
+    return this.splatRenderer?.progressiveUpload ?? false;
+  }
+
+  /** Smoothed GPU time of the scene splat depth sort in ms (needs timestamp queries), else `null`. */
+  getSplatSortMs(): number | null {
+    return this.splatRenderer?.sortMs ?? null;
+  }
+
+  /**
+   * Allocate a fixed-capacity store of splat slots for LOD streaming and make
+   * the scene drawable (GPU depth sort required). Fill slots with
+   * {@link writeGaussianResident}; `bounds` is the whole scene's AABB.
+   */
+  beginGaussianResidentStore(
+    capacity: number,
+    shDegree: number,
+    layoutVersion: number,
+    bounds: SplatUploadBounds,
+    splatModel?: string,
+  ): SplatUploadStatus {
+    const status = this.ensureSceneSplatRenderer().beginResidentStore(
+      capacity,
+      shDegree,
+      layoutVersion,
+      bounds,
+      splatModel,
+    );
+    this.markSceneDirty();
+    return status;
+  }
+
+  /** Largest resident store (splat slots) this device can hold for `shDegree`; 0 when unsupported. */
+  gaussianResidentCapacityLimit(shDegree: number): number {
+    return this.ensureSceneSplatRenderer().residentCapacityLimit(shDegree);
+  }
+
+  /** Write prepared splats into slots `[first, first + count)` of the resident store. */
+  writeGaussianResident(prepared: PreparedSplatChunk, first: number): void {
+    this.splatRenderer?.writeResident(prepared, first);
+  }
+
+  /** Empty slots `[first, first + count)` of the resident store. */
+  releaseGaussianResident(first: number, count: number): void {
+    this.splatRenderer?.releaseResident(first, count);
+  }
+
+  /** Report how many splats the resident store currently holds. */
+  setGaussianResidentCount(count: number): void {
+    this.splatRenderer?.setResidentCount(count);
   }
 
   /** Append a chunk of layout-v2 records; `false` once the upload has failed. */

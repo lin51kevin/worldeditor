@@ -71,12 +71,24 @@ describe('loadSogIntoRenderer', () => {
 
     const info = await loadSogIntoRenderer(wasm, target, 'https://h/meta.json');
 
-    expect(target.beginGaussianSplatUpload).toHaveBeenCalledWith(count, 1, 2);
+    expect(target.beginGaussianSplatUpload).toHaveBeenCalledWith(count, 1, 2, undefined, undefined, false);
     expect(appended).toEqual([SOG_UPLOAD_SLICE_SPLATS, SOG_UPLOAD_SLICE_SPLATS, 10]);
     expect(target.endGaussianSplatUpload).toHaveBeenCalledWith({ min: [-1, -2, -3], max: [4, 5, 6] });
     expect(target.render).toHaveBeenCalledTimes(1);
     expect(info).toMatchObject({ count, origin: [1, 2, 3], shDegree: 1, layoutVersion: 2 });
     expect(info.uploadStatus.outcome).toBe('uploaded');
+  });
+
+  it('should pass the SOG training model to the renderer', async () => {
+    decodeSogDataset.mockResolvedValue({
+      buffer: new Uint32Array(STRIDE),
+      meta: meta(1, { splatModel: 'antialiased' }),
+    });
+    const { target } = makeTarget();
+
+    await loadSogIntoRenderer(wasm, target, 'https://h/meta.json');
+
+    expect(target.beginGaussianSplatUpload).toHaveBeenCalledWith(1, 1, 2, undefined, 'antialiased', false);
   });
 
   it('should decode with a zero origin when world aligned and forward the abort signal', async () => {
@@ -154,15 +166,105 @@ describe('loadSogIntoRenderer', () => {
 });
 
 /** Drive a fake streamed load: begin, N appends, end. */
-function fakeStream(chunks: number[], result = { count: 0, shDegree: 1, origin: [9, 9, 9], min: [0, 0, 0], max: [1, 1, 1] }) {
+function fakeStream(
+  chunks: number[],
+  result = { count: 0, shDegree: 1, origin: [9, 9, 9], min: [0, 0, 0], max: [1, 1, 1] },
+  splatModel?: string,
+) {
   loadStreamedSog.mockImplementation(async (_wasm: SogWasm, _url: string, sink: SplatChunkSink) => {
     const total = chunks.reduce((a, b) => a + b, 0);
-    sink.begin({ totalCount: total, shDegree: 1, layoutVersion: 2, shStride: STRIDE, origin: [9, 9, 9] });
+    sink.begin({
+      totalCount: total,
+      shDegree: 1,
+      layoutVersion: 2,
+      shStride: STRIDE,
+      origin: [9, 9, 9],
+      ...(splatModel ? { splatModel } : {}),
+    });
     for (const n of chunks) sink.append(new Uint32Array(n * STRIDE), meta(n));
     sink.end({ min: [0, 0, 0], max: [1, 1, 1] });
     return { ...result, count: total };
   });
 }
+
+describe('progressive display', () => {
+  const progressiveTarget = (progressive: boolean) =>
+    makeTarget({ isGaussianUploadProgressive: vi.fn(() => progressive) });
+
+  it('should render after the first slice and report first-ready once for a single SOG', async () => {
+    const count = SOG_UPLOAD_SLICE_SPLATS * 2 + 10;
+    decodeSogDataset.mockResolvedValue({ buffer: new Uint32Array(count * STRIDE), meta: meta(count) });
+    const { target } = progressiveTarget(true);
+    const events: string[] = [];
+    (target.render as ReturnType<typeof vi.fn>).mockImplementation(() => events.push('render'));
+    const onFirstReady = vi.fn(() => events.push('ready'));
+    const onProgress = vi.fn();
+
+    await loadSogIntoRenderer(wasm, target, 'https://h/meta.json', { progressive: true, onFirstReady, onProgress });
+
+    expect(target.beginGaussianSplatUpload).toHaveBeenCalledWith(count, 1, 2, undefined, undefined, true);
+    expect(onFirstReady).toHaveBeenCalledTimes(1);
+    // A frame is requested before first-ready, and again once the load finishes.
+    expect(events.slice(0, 2)).toEqual(['render', 'ready']);
+    expect(events[events.length - 1]).toBe('render');
+    expect(onProgress.mock.calls.map((c) => c[0])).toEqual([
+      { chunksDone: 1, chunksTotal: 3, splatsDone: SOG_UPLOAD_SLICE_SPLATS, splatsTotal: count },
+      { chunksDone: 2, chunksTotal: 3, splatsDone: SOG_UPLOAD_SLICE_SPLATS * 2, splatsTotal: count },
+      { chunksDone: 3, chunksTotal: 3, splatsDone: count, splatsTotal: count },
+    ]);
+  });
+
+  it('should throttle explicit frames between slices', async () => {
+    const count = SOG_UPLOAD_SLICE_SPLATS * 3;
+    decodeSogDataset.mockResolvedValue({ buffer: new Uint32Array(count * STRIDE), meta: meta(count) });
+    const { target } = progressiveTarget(true);
+
+    await loadSogIntoRenderer(wasm, target, 'https://h/meta.json', { progressive: true });
+
+    // First slice + the final frame; the two later slices land inside the throttle window.
+    expect(target.render).toHaveBeenCalledTimes(2);
+  });
+
+  it('should report first-ready only at completion when the renderer cannot draw partial clouds', async () => {
+    decodeSogDataset.mockResolvedValue({ buffer: new Uint32Array(STRIDE), meta: meta(1) });
+    const { target } = progressiveTarget(false);
+    const onFirstReady = vi.fn();
+
+    await loadSogIntoRenderer(wasm, target, 'https://h/meta.json', { progressive: true, onFirstReady });
+
+    expect(onFirstReady).toHaveBeenCalledTimes(1);
+    expect(target.render).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not render between slices or lose first-ready when progressive is off', async () => {
+    decodeSogDataset.mockResolvedValue({ buffer: new Uint32Array(STRIDE), meta: meta(1) });
+    const { target } = progressiveTarget(true);
+    const onFirstReady = vi.fn();
+
+    await loadSogIntoRenderer(wasm, target, 'https://h/meta.json', { onFirstReady });
+
+    expect(target.render).toHaveBeenCalledTimes(1);
+    expect(onFirstReady).toHaveBeenCalledTimes(1);
+  });
+
+  it('should show a streamed scene after its first chunk', async () => {
+    fakeStream([3, 4]);
+    const { target } = progressiveTarget(true);
+    const order: string[] = [];
+    (target.render as ReturnType<typeof vi.fn>).mockImplementation(() => order.push('render'));
+    (target.appendGaussianSplats as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      order.push('append');
+      return true;
+    });
+    const onFirstReady = vi.fn(() => order.push('ready'));
+
+    await loadStreamedSogIntoRenderer(wasm, target, 'https://h/lod-meta.json', { progressive: true, onFirstReady });
+
+    expect(target.beginGaussianSplatUpload).toHaveBeenCalledWith(7, 1, 2, undefined, undefined, true);
+    expect(order.slice(0, 3)).toEqual(['append', 'render', 'ready']);
+    expect(onFirstReady).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('loadStreamedSogIntoRenderer', () => {
   it('should begin once, append every chunk, then end with the bounds', async () => {
@@ -172,7 +274,7 @@ describe('loadStreamedSogIntoRenderer', () => {
 
     const info = await loadStreamedSogIntoRenderer(wasm, target, 'https://h/lod-meta.json', { lod: 1, onProgress });
 
-    expect(target.beginGaussianSplatUpload).toHaveBeenCalledWith(7, 1, 2);
+    expect(target.beginGaussianSplatUpload).toHaveBeenCalledWith(7, 1, 2, undefined, undefined, false);
     expect(appended).toEqual([3, 4]);
     expect(target.endGaussianSplatUpload).toHaveBeenCalledWith({ min: [0, 0, 0], max: [1, 1, 1] });
     expect(target.render).toHaveBeenCalledTimes(1);
@@ -183,6 +285,15 @@ describe('loadStreamedSogIntoRenderer', () => {
       onProgress,
       origin: undefined,
     });
+  });
+
+  it('should pass the streamed scene training model to the renderer', async () => {
+    fakeStream([2], undefined, 'antialiased');
+    const { target } = makeTarget();
+
+    await loadStreamedSogIntoRenderer(wasm, target, 'https://h/lod-meta.json');
+
+    expect(target.beginGaussianSplatUpload).toHaveBeenCalledWith(2, 1, 2, undefined, 'antialiased', false);
   });
 
   it('should pin the origin to zero when world aligned', async () => {

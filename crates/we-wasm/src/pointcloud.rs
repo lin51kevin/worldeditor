@@ -392,6 +392,9 @@ pub fn gaussian_splat_meta(handle: u32) -> Result<JsValue, JsError> {
         origin: [f64; 3],
         min: [f64; 3],
         max: [f64; 3],
+        /// SOG `meta.model` (`antialiased`, `2dgs`); omitted for ordinary Gaussians.
+        #[serde(rename = "splatModel", skip_serializing_if = "Option::is_none")]
+        splat_model: Option<String>,
     }
     GAUSSIAN_REGISTRY.with(|r| {
         let map = r.borrow();
@@ -408,6 +411,7 @@ pub fn gaussian_splat_meta(handle: u32) -> Result<JsValue, JsError> {
             origin: cloud.origin,
             min: cloud.bounds.min,
             max: cloud.bounds.max,
+            splat_model: cloud.model.clone(),
         };
         serde_wasm_bindgen::to_value(&meta).map_err(|e| JsError::new(&e.to_string()))
     })

@@ -13,12 +13,15 @@ const HELP = `Usage: node ply-to-sog.mjs <input.ply|dir>... [options]
 Directories are scanned recursively for *.ply (road_mesh*.ply and files under --min-mb are skipped).
 
 Options:
-  --format <sog|unbundled|streamed|auto>
+  --format <sog|unbundled|streamed|lod|auto>
                           sog = one bundled .sog (default; fails on very large scenes because a single
                           WebP image gets too big); unbundled = meta.json + WebP images (what the browser
                           loads as a single SOG); streamed = chunked Streamed SOG, LOD 0 only, full
-                          fidelity (lod-meta.json); auto = unbundled up to --streamed-above-m splats,
-                          streamed above
+                          fidelity (lod-meta.json); lod = Streamed SOG with --lod-levels levels, each
+                          decimated to --lod-ratio of the previous one (what lodStreaming loads);
+                          auto = unbundled up to --streamed-above-m splats, streamed above
+  --lod-levels <n>        lod: number of LOD levels including LOD 0 (default: 4)
+  --lod-ratio <r>         lod: splat fraction kept per level, 0 < r < 1 (default: 0.3)
   --streamed-above-m <n>  auto: splat count (millions) above which streamed is used (default: 30)
   --beside                Write next to each input as <input dir>/sog/{meta.json|lod-meta.json}
   --lod-chunk-count <k>   Streamed: gaussians per chunk in K (tool default: 512)
@@ -55,6 +58,8 @@ function parseArgs(argv) {
         beside: false,
         lodChunkCount: undefined,
         lodChunkExtent: undefined,
+        lodLevels: 4,
+        lodRatio: 0.3,
         overwrite: false,
         verifyOnly: false,
         gpu: undefined,
@@ -79,7 +84,7 @@ function parseArgs(argv) {
     const takes = new Set([
         '--out', '--format', '--lod-chunk-count', '--lod-chunk-extent', '--gpu', '--sh-color-error', '--sh-palette-size', '--sh-iterations',
         '--filter-harmonics', '--webp-effort', '--max-workers', '--max-drift', '--max-sh-levels', '--render-max-m', '--render-radius', '--views',
-        '--min-psnr', '--min-mb', '--report', '--streamed-above-m',
+        '--min-psnr', '--min-mb', '--report', '--streamed-above-m', '--lod-levels', '--lod-ratio',
     ]);
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
@@ -97,10 +102,18 @@ function parseArgs(argv) {
             switch (a) {
                 case '--out': opts.out = resolve(v); break;
                 case '--format':
-                    if (!['sog', 'unbundled', 'streamed', 'auto'].includes(v)) {
-                        throw new Error('--format must be sog, unbundled, streamed or auto');
+                    if (!['sog', 'unbundled', 'streamed', 'lod', 'auto'].includes(v)) {
+                        throw new Error('--format must be sog, unbundled, streamed, lod or auto');
                     }
                     opts.format = v;
+                    break;
+                case '--lod-levels':
+                    opts.lodLevels = Number(v);
+                    if (!Number.isInteger(opts.lodLevels) || opts.lodLevels < 2) throw new Error('--lod-levels must be an integer >= 2');
+                    break;
+                case '--lod-ratio':
+                    opts.lodRatio = Number(v);
+                    if (!(opts.lodRatio > 0 && opts.lodRatio < 1)) throw new Error('--lod-ratio must be between 0 and 1');
                     break;
                 case '--streamed-above-m': opts.streamedAboveM = Number(v); break;
                 case '--lod-chunk-count': opts.lodChunkCount = v; break;
@@ -206,7 +219,7 @@ function outputStem(input) {
     return basename(dir) === 'point_cloud' ? basename(dirname(dir)) : basename(input, extname(input));
 }
 
-function convertArgs(opts, format, input, output) {
+function convertArgs(opts, format, input, output, extraLods = []) {
     const args = ['-w'];
     if (opts.gpu !== undefined) args.push('-g', opts.gpu);
     if (opts.webpEffort !== undefined) args.push('--webp-effort', opts.webpEffort);
@@ -218,11 +231,29 @@ function convertArgs(opts, format, input, output) {
     if (opts.lodChunkCount !== undefined) args.push('--lod-chunk-count', opts.lodChunkCount);
     if (opts.lodChunkExtent !== undefined) args.push('--lod-chunk-extent', opts.lodChunkExtent);
     args.push('--memory', input);
-    if (format === 'streamed') args.push('-l', '0');
+    if (format === 'streamed' || format === 'lod') args.push('-l', '0');
+    // Coarser levels are separate PLY files, tagged with their level.
+    extraLods.forEach((file, i) => args.push(file, '-l', String(i + 1)));
     args.push('--filter-nan');
     if (opts.filterHarmonics !== undefined) args.push('-H', opts.filterHarmonics);
     args.push(output);
     return args;
+}
+
+/**
+ * Write LOD levels 1..n-1 next to `output` as PLY files, each decimated from the previous level, so the
+ * final Streamed SOG can tag them. Returns the files in level order.
+ */
+async function writeLodLevels(opts, input, dir) {
+    const files = [];
+    let previous = input;
+    for (let level = 1; level < opts.lodLevels; level++) {
+        const file = join(dir, `lod${level}.ply`);
+        await runCli(['-w', ...(opts.gpu !== undefined ? ['-g', opts.gpu] : []), previous, '--filter-nan', '--decimate', `${opts.lodRatio * 100}%`, file]);
+        files.push(file);
+        previous = file;
+    }
+    return files;
 }
 
 /** Largest SH-band-1 basis magnitude, converting an SH coefficient error into colour levels. */
@@ -334,7 +365,7 @@ function resolveFormat(opts, splatCount) {
 
 function outputPath(opts, format, input, stem) {
     const dir = opts.beside ? join(dirname(input), 'sog') : join(opts.out, stem);
-    if (format === 'streamed') return join(dir, 'lod-meta.json');
+    if (format === 'streamed' || format === 'lod') return join(dir, 'lod-meta.json');
     if (format === 'unbundled') return join(dir, 'meta.json');
     return opts.beside ? join(dir, `${stem}.sog`) : join(opts.out, `${stem}.sog`);
 }
@@ -367,9 +398,20 @@ async function processOne(opts, input) {
     if (!opts.verifyOnly && (opts.overwrite || !exists)) {
         const t0 = Date.now();
         await mkdir(dirname(output), { recursive: true });
-        const log = await runCli(convertArgs(opts, format, input, output));
+        let levelDir = null;
+        let levelFiles = [];
+        try {
+            if (format === 'lod') {
+                levelDir = join(opts.out, `.lod-${stem}`);
+                await mkdir(levelDir, { recursive: true });
+                levelFiles = await writeLodLevels(opts, input, levelDir);
+            }
+            const log = await runCli(convertArgs(opts, format, input, output, levelFiles));
+            row.peak = /\[(peak[^\]]*)\]/.exec(log)?.[1];
+        } finally {
+            if (levelDir) await rm(levelDir, { recursive: true, force: true });
+        }
         row.convertSeconds = Math.round((Date.now() - t0) / 100) / 10;
-        row.peak = /\[(peak[^\]]*)\]/.exec(log)?.[1];
     } else if (!exists) {
         throw new Error(`${output} does not exist (--verify-only)`);
     }
@@ -388,6 +430,13 @@ async function processOne(opts, input) {
     if (outInfo.shBands !== expectedBands) fail(`SH bands ${inInfo.shBands} -> ${outInfo.shBands}`);
     else note(`SH bands ${outInfo.shBands}`);
     if (outInfo.model !== inInfo.model) fail(`model ${inInfo.model} -> ${outInfo.model}`);
+
+    if (format === 'lod') {
+        const lodMeta = JSON.parse(await readFile(output, 'utf8'));
+        if (lodMeta.lodLevels !== opts.lodLevels) fail(`LOD levels ${opts.lodLevels} -> ${lodMeta.lodLevels}`);
+        else note(`${lodMeta.lodLevels} LOD levels${lodMeta.counts ? ` (${lodMeta.counts.map((c) => c.toLocaleString()).join(' / ')} splats)` : ''}`);
+        row.lodCounts = lodMeta.counts;
+    }
 
     const [sIn, sOut] = await Promise.all([stats(input), stats(output)]);
     const worst = compareStats(sIn, sOut);

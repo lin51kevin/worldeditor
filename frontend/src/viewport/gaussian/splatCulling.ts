@@ -19,7 +19,7 @@ const MIN_LAMBDA = 0.1;
 
 /**
  * WGSL helper for a compute shader that declares `var<uniform> cu : SplatUniforms`
- * (the splat render uniform, 192 bytes) and passes the NDC guard band.
+ * (the splat render uniform, 208 bytes) and passes the NDC guard band.
  */
 export const SPLAT_FRUSTUM_CULL_WGSL = /* wgsl */ `
 struct SplatUniforms {

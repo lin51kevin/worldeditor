@@ -31,6 +31,14 @@ export function buildRequiredLimits(adapter: GPUAdapter): Record<string, number>
   };
 }
 
+/**
+ * Optional device features worth having when the adapter offers them:
+ * `timestamp-query` lets the Gaussian sort measure its own GPU time and pace itself.
+ */
+export function buildRequiredFeatures(adapter: GPUAdapter): GPUFeatureName[] {
+  return adapter.features?.has('timestamp-query') ? ['timestamp-query'] : [];
+}
+
 function startPrewarm(): void {
   if (!('gpu' in navigator)) return;
 
@@ -41,6 +49,7 @@ function startPrewarm(): void {
       if (!adapter) return;
       const device = await adapter.requestDevice({
         requiredLimits: buildRequiredLimits(adapter),
+        requiredFeatures: buildRequiredFeatures(adapter),
       });
       cachedGPU = { adapter, device };
       console.info(

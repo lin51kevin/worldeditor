@@ -31,7 +31,7 @@ describe("buildSplatUniform", () => {
   it("produces the fixed-size uniform array", () => {
     const u = buildSplatUniform(camera, "3d", 50, 800, 600, 1);
     expect(u.length).toBe(SPLAT_UNIFORM_FLOATS);
-    expect(SPLAT_UNIFORM_FLOATS).toBe(48);
+    expect(SPLAT_UNIFORM_FLOATS).toBe(52);
   });
 
   it("packs the perspective near plane for splat-centre culling", () => {
@@ -75,6 +75,16 @@ describe("buildSplatUniform", () => {
     expect(tuned[45]).toBeCloseTo(0.8, 6);
     expect(tuned[46]).toBeCloseTo(1.5, 6);
     expect(tuned[47]).toBeCloseTo(0.01, 6);
+  });
+
+  it("packs the splat model flag at index 48 and leaves the padding zero", () => {
+    const standard = buildSplatUniform(camera, "3d", 50, 800, 600, 1);
+    expect(standard[48]).toBe(0);
+    const antialiased = buildSplatUniform(
+      camera, "3d", 50, 800, 600, 1, 0.3, false, false, 0.5, 1, 0.002, 1,
+    );
+    expect(antialiased[48]).toBe(1);
+    expect(Array.from(antialiased.slice(49))).toEqual([0, 0, 0]);
   });
 
   it("packs camera position, sh degree, projection-derived scale and viewport", () => {

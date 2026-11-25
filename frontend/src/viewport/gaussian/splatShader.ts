@@ -12,11 +12,12 @@
  * EWA projection ported from antimatter15/splat; SH evaluation follows the
  * reference 3DGS decode (Kerbl et al. / INRIA).
  *
- * The upload transposes packed layout v2 into paged texture arrays: three
- * RGBA32F transform layers and `ceil((1 + SH_RGB_values) / 4)` RGBA16F feature
- * layers per page. The only storage buffer is the single global sorted order.
+ * The upload transposes packed layout v2 into paged texture arrays: one
+ * RGBA32UI transform layer (position f32 bits + smallest-three quaternion) and
+ * `ceil((4 + SH_RGB_values) / 4)` RGBA16F feature layers per page (log-scale,
+ * opacity, then SH). The only storage buffer is the single global sorted order.
  */
-const FEATURE_LAYERS_MAX = 13;
+const FEATURE_LAYERS_MAX = 20;
 const featureLayers = Array.from({ length: FEATURE_LAYERS_MAX }, (_, i) => i);
 const FEATURE_PRIVATES = featureLayers
   .map((i) => `var<private> feat${i} : vec4<f32>;`)
@@ -45,14 +46,15 @@ struct SplatUniforms {
   occluder_alpha_min : f32,
   occluder_sigma : f32,
   occluder_depth_bias : f32,
+  splat_model : f32,
 };
 
 @group(0) @binding(0) var<uniform> u : SplatUniforms;
-@group(0) @binding(1) var transforms : texture_2d_array<f32>;
+@group(0) @binding(1) var transforms : texture_2d_array<u32>;
 @group(0) @binding(2) var features   : texture_2d_array<f32>;
 @group(0) @binding(3) var<storage, read> order : array<u32>;
 
-// Spherical-harmonic basis constants (bands 0..3).
+// Spherical-harmonic basis constants (bands 0..4).
 const SH_C0 : f32 = 0.28209479177387814;
 const SH_C1 : f32 = 0.4886025119029199;
 const SH_C2_0 : f32 = 1.0925484305920792;
@@ -67,8 +69,23 @@ const SH_C3_3 : f32 = 0.3731763325901154;
 const SH_C3_4 : f32 = -0.4570457994644658;
 const SH_C3_5 : f32 = 1.445305721320277;
 const SH_C3_6 : f32 = -0.5900435899266435;
+const SH_C4_0 : f32 = 2.5033429417967046;
+const SH_C4_1 : f32 = -1.7701307697799304;
+const SH_C4_2 : f32 = 0.9461746957575601;
+const SH_C4_3 : f32 = -0.6690465435572892;
+const SH_C4_4 : f32 = 0.10578554691520431;
+const SH_C4_5 : f32 = -0.6690465435572892;
+const SH_C4_6 : f32 = 0.47308734787878004;
+const SH_C4_7 : f32 = -1.7701307697799304;
+const SH_C4_8 : f32 = 0.6258357354491761;
 const ALPHA_CUTOFF : f32 = 0.00392156862745;
 const EXP4 : f32 = 0.01831563889;
+// SOG v3 opaque-core profile for opacity > 1 at this renderer's cutoff of 2*sqrt(2)
+// sigma: core radius u0 = sqrt(R0^2 + Q*(A-1)) - R0 (fraction of the footprint).
+const CORE_R0 : f32 = 0.53839315;
+const CORE_Q : f32 = 0.62504992;
+// Mip-Splatting screen-space filter of SOG models trained with antialiasing.
+const ANTIALIAS_FILTER : f32 = 0.1;
 // Decimated previews use an 8:1 guard because missing neighbours expose
 // needles. Full-quality data keeps SuperSplat's natural anisotropy.
 const PREVIEW_ANISO_MIN_RATIO : f32 = 0.015625;
@@ -77,6 +94,8 @@ struct VSOut {
   @builtin(position) pos : vec4<f32>,
   @location(0) color : vec4<f32>,
   @location(1) quad  : vec2<f32>,
+  // Opaque-core radius (fraction of the footprint) for opacity > 1; 0 otherwise.
+  @location(2) core  : f32,
 };
 
 fn culled() -> VSOut {
@@ -85,6 +104,7 @@ fn culled() -> VSOut {
   out.pos = vec4<f32>(0.0, 0.0, 2.0, 1.0);
   out.color = vec4<f32>(0.0);
   out.quad = vec2<f32>(0.0);
+  out.core = 0.0;
   return out;
 }
 
@@ -97,24 +117,35 @@ fn splatAddress(si : u32) -> vec3<u32> {
   return vec3<u32>(local % dimensions.x, local / dimensions.x, page);
 }
 
-fn transformAt(address : vec3<u32>, chunk : u32) -> vec4<f32> {
-  return textureLoad(
-    transforms,
-    vec2<i32>(address.xy),
-    i32(address.z * 3u + chunk),
-    0,
-  );
+fn transformAt(address : vec3<u32>) -> vec4<u32> {
+  return textureLoad(transforms, vec2<i32>(address.xy), i32(address.z), 0);
 }
 
-// Opacity + SH halves of the current splat, four per RGBA16F layer (at most 13
-// layers for degree 3). Each layer is fetched once, not once per coefficient.
+// Inverse of the smallest-three packing: 2-bit index of the dropped (largest)
+// component, then the other three as 10-bit values (511 = 0) in [-1/sqrt2, 1/sqrt2].
+// Returns (w, x, y, z).
+fn unpackQuaternion(p : u32) -> vec4<f32> {
+  let idx = p >> 30u;
+  let k = 0.7071067811865476 / 511.0;
+  let a = (f32(p & 1023u) - 511.0) * k;
+  let b = (f32((p >> 10u) & 1023u) - 511.0) * k;
+  let c = (f32((p >> 20u) & 1023u) - 511.0) * k;
+  let m = sqrt(max(0.0, 1.0 - a * a - b * b - c * c));
+  if (idx == 0u) { return vec4<f32>(m, a, b, c); }
+  if (idx == 1u) { return vec4<f32>(a, m, b, c); }
+  if (idx == 2u) { return vec4<f32>(a, b, m, c); }
+  return vec4<f32>(a, b, c, m);
+}
+
+// Log-scale(3), opacity and SH halves of the current splat, four per RGBA16F layer (at most 20
+// layers for degree 4). Each layer is fetched once, not once per coefficient.
 // Plain privates, not an array: indexing a private array dynamically spills it to
 // local memory, which made the colour stage ~12x slower than the whole rest of the draw.
 ${FEATURE_PRIVATES}
 
 fn featureLayerCount() -> u32 {
   let coeffs = (u32(u.sh_degree) + 1u) * (u32(u.sh_degree) + 1u);
-  return (1u + coeffs * 3u + 3u) / 4u;
+  return (4u + coeffs * 3u + 3u) / 4u;
 }
 
 fn loadFeatureLayer(address : vec3<u32>, layer : u32) {
@@ -136,9 +167,9 @@ fn featureAt(e : u32) -> f32 {
   return v[e & 3u];
 }
 
-// Read SH coefficient k (a per-channel RGB triple) after opacity element 0.
+// Read SH coefficient k (a per-channel RGB triple) after the 4-element header.
 fn shCoeff(k : u32) -> vec3<f32> {
-  let e = 1u + k * 3u;
+  let e = 4u + k * 3u;
   return vec3<f32>(featureAt(e), featureAt(e + 1u), featureAt(e + 2u));
 }
 
@@ -193,6 +224,17 @@ fn evalSH(degree : u32, dir : vec3<f32>) -> vec3<f32> {
               + SH_C3_4 * x * (4.0 * zz - xx - yy) * shCoeff(13u)
               + SH_C3_5 * z * (xx - yy) * shCoeff(14u)
               + SH_C3_6 * x * (xx - 3.0 * yy) * shCoeff(15u);
+        if (degree >= 4u) {
+          c = c + SH_C4_0 * xy * (xx - yy) * shCoeff(16u)
+                + SH_C4_1 * yz * (3.0 * xx - yy) * shCoeff(17u)
+                + SH_C4_2 * xy * (7.0 * zz - 1.0) * shCoeff(18u)
+                + SH_C4_3 * yz * (7.0 * zz - 3.0) * shCoeff(19u)
+                + SH_C4_4 * (zz * (35.0 * zz - 30.0) + 3.0) * shCoeff(20u)
+                + SH_C4_5 * xz * (7.0 * zz - 3.0) * shCoeff(21u)
+                + SH_C4_6 * (xx - yy) * (7.0 * zz - 1.0) * shCoeff(22u)
+                + SH_C4_7 * xz * (xx - 3.0 * yy) * shCoeff(23u)
+                + SH_C4_8 * (xx * (xx - 3.0 * yy) - yy * (3.0 * xx - yy)) * shCoeff(24u);
+        }
       }
     }
   }
@@ -226,14 +268,12 @@ fn culledQuad() -> SplatQuad {
 // pass' falloff cutoff sits at 2) so the depth pass covers only the splat's
 // opaque core.
 fn projectSplat(address : vec3<u32>, vtx : u32, radiusLimit : f32) -> SplatQuad {
-  let t0 = transformAt(address, 0u);
-  let t1 = transformAt(address, 1u);
-  let t2 = transformAt(address, 2u);
-  let center = t0.xyz;
-  let scale = vec3<f32>(t0.w, t1.x, t1.y);
-  let quaternion = vec4<f32>(t1.z, t1.w, t2.x, t2.y);
+  let t = transformAt(address);
+  let center = bitcast<vec3<f32>>(t.xyz);
+  let quaternion = unpackQuaternion(t.w);
   loadFeatureLayer(address, 0u);
-  let opacityRaw = featureAt(0u);
+  let scale = exp(vec3<f32>(featureAt(0u), featureAt(1u), featureAt(2u)));
+  let opacityRaw = featureAt(3u);
 
   let cam = u.view * vec4<f32>(center, 1.0);
   let clip = u.view_proj * vec4<f32>(center, 1.0);
@@ -277,10 +317,20 @@ fn projectSplat(address : vec3<u32>, vtx : u32, radiusLimit : f32) -> SplatQuad 
 
   // 2D low-pass keeps splats >= ~1px (anti-aliasing). NO opacity compensation:
   // thin flat surface splats keep full opacity so they blend into a SOLID
-  // surface instead of fading into a furry haze.
-  cov2d[0][0] = cov2d[0][0] + u.dilation;
-  cov2d[1][1] = cov2d[1][1] + u.dilation;
-  let opacity = opacityRaw;
+  // surface instead of fading into a furry haze. Models trained with the
+  // Mip-Splatting filter (SOG model "antialiased") instead use that filter and scale
+  // the opacity by sqrt(det / det(filtered)), as the SOG spec prescribes.
+  var opacity = opacityRaw;
+  if (u.splat_model > 0.5) {
+    let det0 = max(cov2d[0][0] * cov2d[1][1] - cov2d[0][1] * cov2d[0][1], 0.0);
+    cov2d[0][0] = cov2d[0][0] + ANTIALIAS_FILTER;
+    cov2d[1][1] = cov2d[1][1] + ANTIALIAS_FILTER;
+    let det1 = cov2d[0][0] * cov2d[1][1] - cov2d[0][1] * cov2d[0][1];
+    opacity = opacityRaw * sqrt(det0 / max(det1, 1e-12));
+  } else {
+    cov2d[0][0] = cov2d[0][0] + u.dilation;
+    cov2d[1][1] = cov2d[1][1] + u.dilation;
+  }
   if (opacity <= ALPHA_CUTOFF) { return culledQuad(); }
 
   // Eigendecomposition of the 2×2 covariance.
@@ -306,7 +356,7 @@ fn projectSplat(address : vec3<u32>, vtx : u32, radiusLimit : f32) -> SplatQuad 
 
   // Solve the normalized falloff for alpha=1/255 so low-opacity splats use a
   // smaller quad while retaining the exact same fragment result.
-  let alphaEdge = EXP4 + ALPHA_CUTOFF * (1.0 - EXP4) / opacity;
+  let alphaEdge = EXP4 + ALPHA_CUTOFF * (1.0 - EXP4) / min(opacity, 1.0);
   var quadRadius = sqrt(clamp(-log(clamp(alphaEdge, EXP4, 1.0)), 0.0, 4.0));
   if (radiusLimit > 0.0) { quadRadius = min(quadRadius, radiusLimit); }
   // Cap each screen-space axis independently at the smaller viewport dimension
@@ -360,7 +410,7 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
   let s = projectSplat(address, vtx, 0.0);
   if (s.culled) { return culled(); }
 
-  // Layer 0 (opacity + first SH halves) is already loaded; fetch the rest once.
+  // Layer 0 (scale, opacity, first SH halves) is already loaded; fetch the rest once.
   for (var layer = 1u; layer < featureLayerCount(); layer = layer + 1u) {
     loadFeatureLayer(address, layer);
   }
@@ -370,8 +420,14 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
 
   var out : VSOut;
   out.pos = vec4<f32>(s.ndc + s.offset, s.depth, 1.0);
-  out.color = vec4<f32>(color, s.opacity);
+  // Opacity above 1 keeps peak alpha 1 and adds an opaque core of radius u0.
+  var core = 0.0;
+  if (s.opacity > 1.0) {
+    core = sqrt(CORE_R0 * CORE_R0 + CORE_Q * min(s.opacity - 1.0, 0.5625)) - CORE_R0;
+  }
+  out.color = vec4<f32>(color, min(s.opacity, 1.0));
   out.quad = s.quad;
+  out.core = core;
   return out;
 }
 
@@ -394,7 +450,7 @@ fn vs_depth(@builtin(vertex_index) vtx : u32,
   let address = splatAddress(si);
   loadFeatureLayer(address, 0u);
   // Translucent splats (foliage edges, haze) must not occlude.
-  if (featureAt(0u) < u.occluder_alpha_min) { return out; }
+  if (featureAt(3u) < u.occluder_alpha_min) { return out; }
   let s = projectSplat(address, vtx, u.occluder_sigma);
   if (s.culled) { return out; }
   // Reverse-Z: scaling the depth down pushes the occluder slightly away from
@@ -423,7 +479,14 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // boundary value exp(-4) and renormalize so alpha reaches exactly 0 at the
   // r²=4 edge instead of ≈0.018 — removes the faint hard ring for a cleaner,
   // crisper splat edge.
-  let falloff = (exp(-r2) - EXP4) / (1.0 - EXP4);
+  var falloff : f32;
+  if (in.core > 0.0) {
+    // Opaque core: the falloff is stretched over the rest of the footprint.
+    let s = max(0.0, sqrt(r2) - 2.0 * in.core) / (1.0 - in.core);
+    falloff = (exp(-s * s) - EXP4) / (1.0 - EXP4);
+  } else {
+    falloff = (exp(-r2) - EXP4) / (1.0 - EXP4);
+  }
   let alpha = in.color.a * falloff;
   if (alpha < ALPHA_CUTOFF) { discard; }
   // Decoded 3DGS SH is gamma-space, so the reference linear tone-mapping/gamma

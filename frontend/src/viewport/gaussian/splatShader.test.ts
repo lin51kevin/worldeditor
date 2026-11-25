@@ -4,9 +4,9 @@ import { GAUSSIAN_SPLAT_SHADER } from "./splatShader";
 
 describe("GAUSSIAN_SPLAT_SHADER", () => {
   it("addresses each splat through 2D texels and array-page layers", () => {
-    expect(GAUSSIAN_SPLAT_SHADER).toContain("texture_2d_array<f32>");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("texture_2d_array<u32>");
     expect(GAUSSIAN_SPLAT_SHADER).toContain("fn splatAddress");
-    expect(GAUSSIAN_SPLAT_SHADER).toContain("address.z * 3u + chunk");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("i32(address.z), 0)");
     expect(GAUSSIAN_SPLAT_SHADER).toContain("address.z * featureLayerCount() + layer");
     expect(GAUSSIAN_SPLAT_SHADER).toContain("@binding(3) var<storage, read> order");
     expect(GAUSSIAN_SPLAT_SHADER).not.toContain(
@@ -17,16 +17,36 @@ describe("GAUSSIAN_SPLAT_SHADER", () => {
   it("keeps opacity/SH layers in plain privates, never a dynamically indexed array", () => {
     // A private array indexed at runtime spills to local memory: 12x slower on an RTX 3070.
     expect(GAUSSIAN_SPLAT_SHADER).not.toMatch(/var<private>\s+\w+\s*:\s*array</);
-    for (let i = 0; i < 13; i++) expect(GAUSSIAN_SPLAT_SHADER).toContain(`var<private> feat${i} : vec4<f32>;`);
+    for (let i = 0; i < 20; i++) expect(GAUSSIAN_SPLAT_SHADER).toContain(`var<private> feat${i} : vec4<f32>;`);
     expect(GAUSSIAN_SPLAT_SHADER).toContain("fn featureAt(e : u32)");
   });
 
-  it("reconstructs covariance from f32 scale and normalized quaternion", () => {
+  it("reconstructs covariance from log-scale and a smallest-three quaternion", () => {
     expect(GAUSSIAN_SPLAT_SHADER).toContain("fn covarianceFromTransform");
-    expect(GAUSSIAN_SPLAT_SHADER).toContain("let scale = vec3<f32>");
-    expect(GAUSSIAN_SPLAT_SHADER).toContain("let quaternion = vec4<f32>");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("fn unpackQuaternion(p : u32)");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("let scale = exp(vec3<f32>(featureAt(0u), featureAt(1u), featureAt(2u)))");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("let quaternion = unpackQuaternion(t.w)");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("bitcast<vec3<f32>>(t.xyz)");
     expect(GAUSSIAN_SPLAT_SHADER).toContain("let s2 = scale * scale");
     expect(GAUSSIAN_SPLAT_SHADER).not.toContain("let sxx = halfAt");
+  });
+
+  it("evaluates SH up to band 4 and keeps the opaque-core profile for opacity above 1", () => {
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("if (degree >= 4u)");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("shCoeff(24u)");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("const CORE_R0 : f32 = 0.53839315");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("const CORE_Q : f32 = 0.62504992");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("@location(2) core  : f32");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("out.color = vec4<f32>(color, min(s.opacity, 1.0))");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("sqrt(r2) - 2.0 * in.core");
+  });
+
+  it("swaps the dilation for the Mip-Splatting filter and determinant opacity scale on antialiased models", () => {
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("if (u.splat_model > 0.5)");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("const ANTIALIAS_FILTER : f32 = 0.1");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("sqrt(det0 / max(det1, 1e-12))");
+    // Standard models keep the 0.3 px^2 dilation without opacity compensation.
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("cov2d[0][0] = cov2d[0][0] + u.dilation;");
   });
 
   it("has explicit perspective and orthographic EWA projection paths", () => {
@@ -98,7 +118,7 @@ describe("GAUSSIAN_SPLAT_SHADER", () => {
     expect(GAUSSIAN_SPLAT_SHADER).toContain("fn vs_depth(");
     expect(GAUSSIAN_SPLAT_SHADER).toContain("fn fs_depth(");
     expect(GAUSSIAN_SPLAT_SHADER).toContain(
-      "if (featureAt(0u) < u.occluder_alpha_min) { return out; }",
+      "if (featureAt(3u) < u.occluder_alpha_min) { return out; }",
     );
     expect(GAUSSIAN_SPLAT_SHADER).toContain("projectSplat(address, vtx, u.occluder_sigma)");
     expect(GAUSSIAN_SPLAT_SHADER).toContain(

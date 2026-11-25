@@ -4,13 +4,20 @@
  * splat and cost the main thread seconds on multi-million-splat scenes.
  */
 import {
+  GAUSSIAN_FEATURE_HEADER_ELEMENTS,
   GAUSSIAN_SPLAT_TRANSFORM_WORDS,
+  GAUSSIAN_TRANSFORM_TEXELS,
+  floatToHalf,
   gaussianFeatureTexelsForDegree,
+  packQuaternion,
   splatStrideForDegree,
 } from "./splatLayout";
 
-/** Transform texture layers per splat (centre+scale, rotation, remaining words). */
-export const TRANSFORM_LAYERS = 3;
+/** Transform texture layers per splat (position bits + packed quaternion). */
+export const TRANSFORM_LAYERS = GAUSSIAN_TRANSFORM_TEXELS;
+
+/** Smallest activated scale kept before the log, so a zero axis stays finite. */
+const MIN_SCALE = 1e-12;
 
 /**
  * One chunk of splats in the exact element order of the GPU textures. Each
@@ -20,13 +27,16 @@ export const TRANSFORM_LAYERS = 3;
 export interface PreparedSplatChunk {
   count: number;
   shDegree: number;
-  /** `TRANSFORM_LAYERS` planes of `count` RGBA32F texels. */
-  transform: Float32Array;
-  /** One plane of `count` RGBA16F texels (raw half-float bits) per feature layer. */
+  /** `TRANSFORM_LAYERS` planes of `count` RGBA32UI texels: position f32 bits, packed quaternion. */
+  transform: Uint32Array;
+  /**
+   * One plane of `count` RGBA16F texels (raw half-float bits) per feature layer.
+   * Elements: log-scale x/y/z, opacity, then the SH coefficients.
+   */
   features: Uint16Array;
   /** Splat centres, `count * 3`. */
   positions: Float32Array;
-  /** Largest activated scale axis per splat, for the sort's frustum culling. */
+  /** Largest activated scale axis per splat (never zero: a zero radius marks an empty LOD slot). */
   radii: Float32Array;
   /** Half-float opacity bits per splat. */
   opacity: Uint16Array;
@@ -40,9 +50,9 @@ export function prepareSplatChunk(chunk: Uint32Array, shDegree: number): Prepare
   }
   const count = chunk.length / stride;
   const featureLayers = gaussianFeatureTexelsForDegree(shDegree);
-  const featureElements = 1 + (shDegree + 1) ** 2 * 3;
+  const shElements = (shDegree + 1) ** 2 * 3;
 
-  const transform = new Float32Array(count * 4 * TRANSFORM_LAYERS);
+  const transform = new Uint32Array(count * 4 * TRANSFORM_LAYERS);
   const features = new Uint16Array(count * 4 * featureLayers);
   const positions = new Float32Array(count * 3);
   const radii = new Float32Array(count);
@@ -56,32 +66,33 @@ export function prepareSplatChunk(chunk: Uint32Array, shDegree: number): Prepare
   for (let i = 0; i < count; i++) {
     const base = i * stride;
     const t = i * 4;
-    const x = source[base]!;
-    const y = source[base + 1]!;
-    const z = source[base + 2]!;
     const sx = source[base + 3]!;
     const sy = source[base + 4]!;
     const sz = source[base + 5]!;
-    transform[t] = x;
-    transform[t + 1] = y;
-    transform[t + 2] = z;
-    transform[t + 3] = sx;
-    transform[plane + t] = sy;
-    transform[plane + t + 1] = sz;
-    transform[plane + t + 2] = source[base + 6]!;
-    transform[plane + t + 3] = source[base + 7]!;
-    transform[2 * plane + t] = source[base + 8]!;
-    transform[2 * plane + t + 1] = source[base + 9]!;
+    transform[t] = chunk[base]!;
+    transform[t + 1] = chunk[base + 1]!;
+    transform[t + 2] = chunk[base + 2]!;
+    transform[t + 3] = packQuaternion(
+      source[base + 6]!,
+      source[base + 7]!,
+      source[base + 8]!,
+      source[base + 9]!,
+    );
 
-    positions[i * 3] = x;
-    positions[i * 3 + 1] = y;
-    positions[i * 3 + 2] = z;
-    radii[i] = Math.max(sx, sy, sz);
+    positions[i * 3] = source[base]!;
+    positions[i * 3 + 1] = source[base + 1]!;
+    positions[i * 3 + 2] = source[base + 2]!;
+    radii[i] = Math.max(sx, sy, sz, MIN_SCALE);
 
     const half = (base + GAUSSIAN_SPLAT_TRANSFORM_WORDS) * 2;
     opacity[i] = halves[half]!;
-    for (let e = 0; e < featureElements; e++) {
-      features[(e >> 2) * plane + t + (e & 3)] = halves[half + e]!;
+    features[t] = floatToHalf(Math.log(Math.max(sx, MIN_SCALE)));
+    features[t + 1] = floatToHalf(Math.log(Math.max(sy, MIN_SCALE)));
+    features[t + 2] = floatToHalf(Math.log(Math.max(sz, MIN_SCALE)));
+    features[t + 3] = halves[half]!;
+    for (let e = 0; e < shElements; e++) {
+      const slot = GAUSSIAN_FEATURE_HEADER_ELEMENTS + e;
+      features[(slot >> 2) * plane + t + (slot & 3)] = halves[half + 1 + e]!;
     }
   }
 
@@ -108,4 +119,41 @@ export function prepareSplatSlices(
     slices.push(prepareSplatChunk(chunk.subarray(first * stride, end * stride), shDegree));
   }
   return slices;
+}
+
+/**
+ * Splats `[from, to)` of `chunk` as their own prepared chunk (planes are
+ * layer-major, so each layer is copied separately). Returns `chunk` itself when
+ * the range covers it all.
+ */
+export function slicePreparedChunk(chunk: PreparedSplatChunk, from: number, to: number): PreparedSplatChunk {
+  if (!(from >= 0 && to <= chunk.count && from <= to)) {
+    throw new RangeError("Slice range is outside the prepared chunk");
+  }
+  if (from === 0 && to === chunk.count) return chunk;
+  const count = to - from;
+  const transform = new Uint32Array(count * 4 * TRANSFORM_LAYERS);
+  for (let layer = 0; layer < TRANSFORM_LAYERS; layer++) {
+    transform.set(
+      chunk.transform.subarray((layer * chunk.count + from) * 4, (layer * chunk.count + to) * 4),
+      layer * count * 4,
+    );
+  }
+  const layers = chunk.features.length / (chunk.count * 4);
+  const features = new Uint16Array(count * 4 * layers);
+  for (let layer = 0; layer < layers; layer++) {
+    features.set(
+      chunk.features.subarray((layer * chunk.count + from) * 4, (layer * chunk.count + to) * 4),
+      layer * count * 4,
+    );
+  }
+  return {
+    count,
+    shDegree: chunk.shDegree,
+    transform,
+    features,
+    positions: chunk.positions.slice(from * 3, to * 3),
+    radii: chunk.radii.slice(from, to),
+    opacity: chunk.opacity.slice(from, to),
+  };
 }

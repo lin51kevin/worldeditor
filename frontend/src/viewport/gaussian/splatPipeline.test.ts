@@ -3,7 +3,7 @@ import {
   GaussianSplatResources,
   splatStrideForDegree,
 } from "./splatPipeline";
-import { GAUSSIAN_SPLAT_LAYOUT_VERSION } from "./splatLayout";
+import { GAUSSIAN_SPLAT_LAYOUT_VERSION, floatToHalf, packQuaternion } from "./splatLayout";
 
 /** Minimal fake GPUDevice recording buffer writes and draw-relevant calls. */
 function fakeDevice() {
@@ -283,7 +283,7 @@ describe("GaussianSplatResources", () => {
     expect(posBuf.destroyed).toBe(true);
   });
 
-  it("uploads f32 transforms and f16 opacity/SH as aligned texture arrays", () => {
+  it("uploads packed transforms and f16 scale/opacity/SH as texture arrays", () => {
     const { device, textures, textureWrites } = textureDevice();
     const res = new GaussianSplatResources(device, {} as GPUBindGroupLayout);
 
@@ -294,25 +294,27 @@ describe("GaussianSplatResources", () => {
       width: 4,
       height: 3,
       pageCount: 1,
-      transformLayers: 3,
+      transformLayers: 1,
       featureLayers: 13,
     });
 
     expect(textures.map((texture) => texture.descriptor.format)).toEqual([
-      "rgba32float",
+      "rgba32uint",
       "rgba16float",
     ]);
-    expect(textureWrites).toHaveLength(16);
+    // Two rectangles (two whole rows, then a two-splat partial row) x (1 + 13) layers.
+    expect(textureWrites).toHaveLength(28);
     for (const write of textureWrites) {
-      expect(write.layout.bytesPerRow! % 256).toBe(0);
+      const height = (write.size as GPUExtent3DDict).height ?? 1;
+      if (height > 1) expect(write.layout.bytesPerRow! % 256).toBe(0);
       expect((write.size as GPUExtent3DDict).depthOrArrayLayers).toBe(1);
       expect(write.data.byteLength).toBeGreaterThanOrEqual(
-        write.layout.bytesPerRow!,
+        write.layout.bytesPerRow! * (height - 1),
       );
     }
   });
 
-  it("transposes layout-v2 attributes into the shader layer order", () => {
+  it("packs layout-v2 attributes into the transform and feature texels", () => {
     const { device, textureWrites } = textureDevice();
     const data = splats(1, 0);
     const f32 = new Float32Array(data.buffer);
@@ -323,16 +325,28 @@ describe("GaussianSplatResources", () => {
 
     res.upload(data, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
 
-    const firstTransform = new Float32Array(textureWrites[0]!.data.buffer);
-    const secondTransform = new Float32Array(textureWrites[1]!.data.buffer);
-    const thirdTransform = new Float32Array(textureWrites[2]!.data.buffer);
-    const features = new Uint16Array(textureWrites[3]!.data.buffer);
-    expect(Array.from(firstTransform.subarray(0, 4))).toEqual([1, 2, 3, 4]);
-    expect(Array.from(secondTransform.subarray(0, 4))).toEqual([5, 6, 7, 8]);
-    expect(Array.from(thirdTransform.subarray(0, 4))).toEqual([9, 10, 0, 0]);
-    expect(Array.from(features.subarray(0, 4))).toEqual([
-      0x1111, 0x2222, 0x3333, 0x4444,
+    const u32 = (i: number) => {
+      const d = textureWrites[i]!.data;
+      return new Uint32Array(d.buffer, d.byteOffset, d.byteLength / 4);
+    };
+    const u16 = (i: number) => {
+      const d = textureWrites[i]!.data;
+      return new Uint16Array(d.buffer, d.byteOffset, d.byteLength / 2);
+    };
+    const bits = (v: number) => new Uint32Array(new Float32Array([v]).buffer)[0]!;
+    expect(Array.from(u32(0))).toEqual([
+      bits(1),
+      bits(2),
+      bits(3),
+      packQuaternion(7, 8, 9, 10),
     ]);
+    expect(Array.from(u16(1))).toEqual([
+      floatToHalf(Math.log(4)),
+      floatToHalf(Math.log(5)),
+      floatToHalf(Math.log(6)),
+      0x1111,
+    ]);
+    expect(Array.from(u16(2))).toEqual([0x2222, 0x3333, 0x4444, 0]);
   });
 
   it("destroys both texture arrays and the global order buffer", () => {

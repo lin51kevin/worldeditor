@@ -34,7 +34,7 @@ pub const PACKED_GAUSSIAN_LAYOUT_NAME: &str = "transform-f32-opacity-sh-f16";
 /// Full-precision `u32` words before the packed opacity/SH half block.
 pub const PACKED_GAUSSIAN_TRANSFORM_WORDS: usize = 10;
 
-/// `u32` words per packed Gaussian for an SH degree in `0..=3`.
+/// `u32` words per packed Gaussian for an SH degree in `0..=4`.
 pub fn packed_gaussian_stride(sh_degree: u32) -> usize {
     let d = sh_degree as usize + 1;
     let half_count = 1 + d * d * 3;
@@ -651,6 +651,8 @@ pub struct PackedGaussians {
     pub origin: [f64; 3],
     /// Axis-aligned bounds in local coordinates.
     pub bounds: Aabb,
+    /// Training model of a SOG source (`antialiased`, `2dgs`); `None` for ordinary Gaussians.
+    pub model: Option<String>,
 }
 
 /// Parse a 3DGS PLY straight into packed GPU layout version 2.
@@ -737,6 +739,7 @@ pub fn parse_gaussian_ply_packed(
         layout_version: PACKED_GAUSSIAN_LAYOUT_VERSION,
         origin,
         bounds,
+        model: None,
     })
 }
 

@@ -29,6 +29,8 @@ export interface SogSplatMeta {
   shStride: number;
   layoutVersion: number;
   layoutName: string;
+  /** SOG `meta.model` (`antialiased`, `2dgs`); absent for ordinary Gaussians. */
+  splatModel?: string;
   origin: [number, number, number];
   min: [number, number, number];
   max: [number, number, number];
@@ -227,6 +229,7 @@ export interface SplatChunkSink {
     layoutVersion: number;
     shStride: number;
     origin: [number, number, number];
+    splatModel?: string;
   }): void;
   /** Called for every chunk in tree order (including the first). */
   append(chunk: Uint32Array, meta: SogSplatMeta, prepared?: PreparedSplatChunk[]): void;
@@ -316,6 +319,11 @@ function chunkProducer(
   };
 }
 
+/** Download and validate a `lod-meta.json`. */
+export async function fetchLodMeta(lodMetaUrl: string, options: SogLoadOptions = {}): Promise<LodMeta> {
+  return parseLodMeta(await (await fetchChecked(lodMetaUrl, options)).json());
+}
+
 /**
  * Stream a Streamed SOG scene into `sink`, one chunk at a time. Chunk files are
  * downloaded `lookahead` ahead of the (single-threaded) decoder; each decoded
@@ -330,7 +338,7 @@ export async function loadStreamedSog(
 ): Promise<StreamedResult> {
   throwIfAborted(options.signal);
   const lod = options.lod ?? 0;
-  const lodMeta = parseLodMeta(await (await fetchChecked(lodMetaUrl, options)).json());
+  const lodMeta = await fetchLodMeta(lodMetaUrl, options);
   if (lod < 0 || lod >= lodMeta.lodLevels) throw new Error(`LOD ${lod} is not available`);
   const chunks = lodChunks(lodMeta, lod);
   if (chunks.length === 0) throw new Error(`LOD ${lod} has no chunks`);
@@ -359,6 +367,7 @@ export async function loadStreamedSog(
         layoutVersion: decoded.meta.layoutVersion,
         shStride: decoded.meta.shStride,
         origin: decoded.meta.origin,
+        ...(decoded.meta.splatModel ? { splatModel: decoded.meta.splatModel } : {}),
       });
     } else if (decoded.meta.shDegree !== shDegree) {
       throw new Error('Streamed SOG chunks use different SH degrees');

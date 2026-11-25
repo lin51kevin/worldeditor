@@ -84,6 +84,33 @@ describe("GpuSplatSorter dispatch grid", () => {
   });
 });
 
+describe("GpuSplatSorter active prefix", () => {
+  it("dispatches the key pass over only the active splats of a larger buffer", () => {
+    const { device, dispatches, writes } = makeDevice();
+    const sorter = new GpuSplatSorter(device);
+    sorter.resize(100_000);
+    sorter.sort(device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, undefined, 1000);
+
+    // Key pass is the first dispatch: ceil(1000 / 256) = 4 groups, not 391.
+    expect(dispatches[0]).toEqual({ x: 4, y: 1 });
+    const params = writes.find((w) => w.data.byteLength === 48);
+    // The sorter writes the params as a bare ArrayBuffer; word 3 is the element count.
+    expect(new Uint32Array(params!.data as unknown as ArrayBuffer)[3]).toBe(1000);
+  });
+
+  it("clamps the active count to the allocated size and skips an empty prefix", () => {
+    const { device, dispatches } = makeDevice();
+    const sorter = new GpuSplatSorter(device);
+    sorter.resize(512);
+    sorter.sort(device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, undefined, 10_000);
+    expect(dispatches[0]).toEqual({ x: 2, y: 1 });
+
+    dispatches.length = 0;
+    sorter.sort(device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, undefined, 0);
+    expect(dispatches).toHaveLength(0);
+  });
+});
+
 describe("GpuSplatSorter indirect draw arguments", () => {
   it("exposes a draw-args buffer once sized", () => {
     const { device } = makeDevice();
@@ -180,6 +207,36 @@ describe("GpuSplatSorter frustum culling", () => {
       guardNdc: 0.25,
     });
     expect(depthParams(writes).f32[11]).toBe(0);
+  });
+
+  it("can keep only the dead-slot check, with frustum culling and thinning off", () => {
+    const { device, writes } = makeRecordingDevice();
+    const sorter = new GpuSplatSorter(device);
+    sorter.resize(1000);
+    sorter.sort(device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, {
+      uniformBuffer,
+      radiiBuffer,
+      guardNdc: 0.25,
+      enabled: false,
+      deadSplats: true,
+    });
+
+    // Bit 0 = frustum cull, bit 1 = skip splats with a zero radius.
+    expect(depthParams(writes).u32[7]).toBe(2);
+  });
+
+  it("sets both bits when frustum culling and the dead-slot check are on", () => {
+    const { device, writes } = makeRecordingDevice();
+    const sorter = new GpuSplatSorter(device);
+    sorter.resize(1000);
+    sorter.sort(device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, {
+      uniformBuffer,
+      radiiBuffer,
+      guardNdc: 0.25,
+      deadSplats: true,
+    });
+
+    expect(depthParams(writes).u32[7]).toBe(3);
   });
 
   it("disables culling when no cull inputs are given", () => {

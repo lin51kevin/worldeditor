@@ -12,7 +12,7 @@ import { buildProjectionMatrix, buildViewProjMatrix } from "../cameraProjection"
 import type { CameraState } from "../cameraController";
 
 /**
- * Uniform layout (std140, 192 bytes / 48 floats):
+ * Uniform layout (std140, 208 bytes / 52 floats):
  * ```
  * [ 0..16) view_proj : mat4x4  (depth-corrected)
  * [16..32) view      : mat4x4  (look-at)
@@ -29,9 +29,11 @@ import type { CameraState } from "../cameraController";
  * [45]     occluder_alpha_min : f32 (depth-occluder pass: min splat opacity)
  * [46]     occluder_sigma : f32 (depth-occluder pass: core radius, quad units)
  * [47]     occluder_depth_bias : f32 (relative reverse-Z push away from the eye)
+ * [48]     splat_model : f32 (0 = standard 3DGS, 1 = SOG `antialiased`)
+ * [49..52) padding to the 16-byte struct alignment
  * ```
  */
-export const SPLAT_UNIFORM_FLOATS = 48;
+export const SPLAT_UNIFORM_FLOATS = 52;
 /** Byte size of the splat uniform buffer. */
 export const SPLAT_UNIFORM_BYTES = SPLAT_UNIFORM_FLOATS * 4;
 /** Reference EWA low-pass variance in screen-space pixels squared. */
@@ -63,6 +65,7 @@ export function buildSplatUniform(
   occluderAlphaMin = DEFAULT_OCCLUDER_ALPHA_MIN,
   occluderSigma = DEFAULT_OCCLUDER_SIGMA,
   occluderDepthBias = DEFAULT_OCCLUDER_DEPTH_BIAS,
+  splatModel = 0,
 ): Float32Array<ArrayBuffer> {
   const out = new Float32Array(SPLAT_UNIFORM_FLOATS);
   const viewProj = buildViewProjMatrix(
@@ -98,5 +101,6 @@ export function buildSplatUniform(
   out[45] = occluderAlphaMin;
   out[46] = occluderSigma;
   out[47] = occluderDepthBias;
+  out[48] = splatModel;
   return out;
 }

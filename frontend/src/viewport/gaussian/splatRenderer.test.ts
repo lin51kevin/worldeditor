@@ -9,6 +9,7 @@ import {
   sampleSplatBuffer,
   repackAsBand0,
   gpuSortIntervalMs,
+  GPU_SORT_FAST_MIN_INTERVAL_MS,
   GPU_SORT_MIN_INTERVAL_MS,
   SplatRenderer,
 } from "./splatRenderer";
@@ -43,6 +44,29 @@ describe("gpuSortIntervalMs", () => {
       expect(interval).toBeLessThanOrEqual(200);
       previous = interval;
     }
+  });
+
+  describe("with a measured sort time", () => {
+    it("re-sorts every display frame when the sort is cheap, whatever the cloud size", () => {
+      expect(gpuSortIntervalMs(60_000_000, 2)).toBe(GPU_SORT_FAST_MIN_INTERVAL_MS);
+      expect(gpuSortIntervalMs(1_000, 4.5)).toBe(GPU_SORT_FAST_MIN_INTERVAL_MS);
+      expect(GPU_SORT_FAST_MIN_INTERVAL_MS).toBeLessThan(GPU_SORT_MIN_INTERVAL_MS);
+    });
+
+    it("keeps the sort near 30% of the GPU", () => {
+      expect(gpuSortIntervalMs(0, 15)).toBeCloseTo(50, 6);
+      expect(gpuSortIntervalMs(0, 30)).toBeCloseTo(100, 6);
+    });
+
+    it("never exceeds the ceiling, however slow the sort", () => {
+      expect(gpuSortIntervalMs(0, 500)).toBe(200);
+    });
+
+    it("falls back to the estimate without a usable measurement", () => {
+      for (const measured of [null, undefined, 0, -3, Number.NaN]) {
+        expect(gpuSortIntervalMs(22_111_000, measured)).toBe(gpuSortIntervalMs(22_111_000));
+      }
+    });
   });
 });
 

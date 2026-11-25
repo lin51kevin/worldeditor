@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { GaussianSplatResources, splatStrideForDegree } from "./splatPipeline";
 import { GAUSSIAN_SPLAT_LAYOUT_VERSION } from "./splatLayout";
-import { prepareSplatChunk } from "./splatPrepare";
+import { prepareSplatChunk, slicePreparedChunk } from "./splatPrepare";
 
 interface RecordedTexture {
   descriptor: GPUTextureDescriptor;
@@ -81,7 +81,7 @@ function recordingDevice(dimension = 4) {
 function replay(rec: ReturnType<typeof recordingDevice>): Uint8Array[][] {
   return rec.textures.map((texture) => {
     const size = texture.descriptor.size as GPUExtent3DDictStrict;
-    const texelBytes = texture.descriptor.format === "rgba32float" ? 16 : 8;
+    const texelBytes = texture.descriptor.format === "rgba32uint" ? 16 : 8;
     const layers = Array.from(
       { length: size.depthOrArrayLayers ?? 1 },
       () => new Uint8Array(size.width * size.height * texelBytes),
@@ -297,6 +297,197 @@ describe("GaussianSplatResources chunked upload", () => {
 
     expect(firstTextures.every((t) => t.destroyed)).toBe(true);
     expect(resources.hasContent).toBe(false);
+  });
+});
+
+describe("GaussianSplatResources resident store", () => {
+  function storeOf(capacity: number, degree = 0) {
+    const rec = recordingDevice();
+    const resources = new GaussianSplatResources(rec.device, {} as GPUBindGroupLayout);
+    resources.beginResidentStore(capacity, degree, GAUSSIAN_SPLAT_LAYOUT_VERSION);
+    return { rec, resources };
+  }
+
+  it("should be drawable through the GPU sort as soon as it is allocated, with every slot counted", () => {
+    const { resources } = storeOf(16);
+
+    expect(resources.residentStore).toBe(true);
+    expect(resources.hasContent).toBe(true);
+    expect(resources.count).toBe(16);
+    expect(resources.capacity).toBe(16);
+    expect(resources.resourceMode).toBe("texture-array");
+  });
+
+  it("should write prepared splats into the slots it is given", () => {
+    const { rec, resources } = storeOf(40);
+    const data = makeSplats(5, 0);
+
+    resources.writeResident(prepareSplatChunk(data, 0), 12);
+
+    const positionsBuffer = resources.gpuPositionsBuffer as unknown as RecordedBuffer;
+    const write = rec.bufferWrites.find((w) => w.buffer === positionsBuffer)!;
+    expect(write.offset).toBe(12 * 3 * 4);
+    expect((write.data as Float32Array).length).toBe(15);
+  });
+
+  it("should not write an identity order, since the GPU sort produces it", () => {
+    const { rec, resources } = storeOf(40);
+
+    resources.writeResident(prepareSplatChunk(makeSplats(5, 0), 0), 0);
+
+    const orderBuffer = resources.gpuOrderBuffer as unknown as RecordedBuffer;
+    expect(rec.bufferWrites.filter((w) => w.buffer === orderBuffer)).toHaveLength(0);
+  });
+
+  it("should empty released slots by zeroing their radii", () => {
+    const { rec, resources } = storeOf(40);
+    resources.writeResident(prepareSplatChunk(makeSplats(5, 0), 0), 10);
+    const radii = resources.gpuRadiiBuffer as unknown as RecordedBuffer;
+    rec.bufferWrites.length = 0;
+
+    resources.releaseResident(10, 5);
+
+    const write = rec.bufferWrites.find((w) => w.buffer === radii)!;
+    expect(write.offset).toBe(10 * 4);
+    expect(Array.from(write.data as Float32Array)).toEqual([0, 0, 0, 0, 0]);
+  });
+
+  it("should reject writes outside the capacity, with the wrong SH degree, or without a store", () => {
+    const { resources } = storeOf(8);
+
+    expect(() => resources.writeResident(prepareSplatChunk(makeSplats(5, 0), 0), 4)).toThrow(/capacity/);
+    expect(() => resources.writeResident(prepareSplatChunk(makeSplats(2, 1), 1), 0)).toThrow(/SH degree/);
+    expect(() => resources.releaseResident(6, 4)).toThrow(/capacity/);
+
+    const rec = recordingDevice();
+    const plain = new GaussianSplatResources(rec.device, {} as GPUBindGroupLayout);
+    expect(() => plain.writeResident(prepareSplatChunk(makeSplats(1, 0), 0), 0)).toThrow(/No resident/);
+    expect(() => plain.releaseResident(0, 1)).toThrow(/No resident/);
+  });
+
+  it("should refuse sequential chunk appends", () => {
+    const { resources } = storeOf(8);
+
+    expect(() => resources.appendChunkedUpload(makeSplats(2, 0))).toThrow(/slot writes/);
+  });
+
+  it("should write the same texels as a sequential upload, wherever the slots are", () => {
+    const data = makeSplats(12, 1);
+    const sequential = recordingDevice();
+    chunkedUpload(sequential, data, 1, [12]);
+
+    const { rec, resources } = storeOf(12, 1);
+    const prepared = prepareSplatChunk(data, 1);
+    // Out of order and split across two writes.
+    resources.writeResident(slicePreparedChunk(prepared, 5, 12), 5);
+    resources.writeResident(slicePreparedChunk(prepared, 0, 5), 0);
+
+    expect(replay(rec)).toEqual(replay(sequential));
+  });
+
+  it("should free everything when cleared", () => {
+    const { rec, resources } = storeOf(8);
+
+    resources.clear();
+
+    expect(resources.hasContent).toBe(false);
+    expect(resources.residentStore).toBe(false);
+    expect(rec.textures.every((t) => t.destroyed)).toBe(true);
+  });
+});
+
+describe("GaussianSplatResources progressive chunked upload", () => {
+  function drawn(resources: GaussianSplatResources) {
+    const pass = {
+      setPipeline: vi.fn(),
+      setBindGroup: vi.fn(),
+      draw: vi.fn(),
+      drawIndirect: vi.fn(),
+    } as unknown as GPURenderPassEncoder;
+    resources.draw(pass, {} as GPURenderPipeline);
+    return pass;
+  }
+
+  it("should expose the appended prefix as drawable content with the full capacity", () => {
+    const rec = recordingDevice();
+    const resources = new GaussianSplatResources(rec.device, {} as GPUBindGroupLayout);
+    resources.beginChunkedUpload(8, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, true);
+
+    expect(resources.progressive).toBe(true);
+    expect(resources.hasContent).toBe(false);
+    expect(resources.capacity).toBe(8);
+
+    resources.appendChunkedUpload(makeSplats(3, 0));
+    expect(resources.hasContent).toBe(true);
+    expect(resources.count).toBe(3);
+    expect(resources.capacity).toBe(8);
+    expect(resources.resourceMode).toBe("texture-array");
+
+    resources.appendChunkedUpload(makeSplats(5, 0));
+    resources.endChunkedUpload();
+    expect(resources.count).toBe(8);
+    expect(resources.progressive).toBe(false);
+    expect(resources.capacity).toBe(8);
+  });
+
+  it("should draw nothing until the GPU sort has produced an order, then draw its instances", () => {
+    const rec = recordingDevice();
+    const resources = new GaussianSplatResources(rec.device, {} as GPUBindGroupLayout);
+    resources.beginChunkedUpload(8, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, true);
+    resources.appendChunkedUpload(makeSplats(3, 0));
+
+    const before = drawn(resources);
+    expect(before.draw).not.toHaveBeenCalled();
+    expect(before.drawIndirect).not.toHaveBeenCalled();
+
+    const args = {} as GPUBuffer;
+    resources.setIndirectDraw(args);
+    expect(drawn(resources).drawIndirect).toHaveBeenCalledWith(args, 0);
+  });
+
+  it("should keep the bind group created at begin when the upload ends", () => {
+    const rec = recordingDevice();
+    const resources = new GaussianSplatResources(rec.device, {} as GPUBindGroupLayout);
+    resources.beginChunkedUpload(4, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, true);
+    resources.appendChunkedUpload(makeSplats(4, 0));
+    const created = (rec.device.createBindGroup as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    resources.endChunkedUpload();
+
+    expect((rec.device.createBindGroup as ReturnType<typeof vi.fn>).mock.calls.length).toBe(created);
+    expect(resources.hasContent).toBe(true);
+  });
+
+  it("should write the same textures as a non-progressive upload", () => {
+    const data = makeSplats(37, 1);
+    const plain = recordingDevice();
+    chunkedUpload(plain, data, 1, [10, 20, 7]);
+
+    const progressive = recordingDevice();
+    const resources = new GaussianSplatResources(progressive.device, {} as GPUBindGroupLayout);
+    resources.beginChunkedUpload(37, 1, GAUSSIAN_SPLAT_LAYOUT_VERSION, true);
+    const stride = splatStrideForDegree(1);
+    let offset = 0;
+    for (const size of [10, 20, 7]) {
+      resources.appendChunkedUpload(data.slice(offset * stride, (offset + size) * stride));
+      offset += size;
+    }
+    resources.endChunkedUpload();
+
+    expect(replay(progressive)).toEqual(replay(plain));
+  });
+
+  it("should free everything when aborted mid-upload", () => {
+    const rec = recordingDevice();
+    const resources = new GaussianSplatResources(rec.device, {} as GPUBindGroupLayout);
+    resources.beginChunkedUpload(4, 0, GAUSSIAN_SPLAT_LAYOUT_VERSION, true);
+    resources.appendChunkedUpload(makeSplats(2, 0));
+
+    resources.abortChunkedUpload();
+
+    expect(resources.hasContent).toBe(false);
+    expect(resources.progressive).toBe(false);
+    expect(rec.textures.every((t) => t.destroyed)).toBe(true);
   });
 });
 

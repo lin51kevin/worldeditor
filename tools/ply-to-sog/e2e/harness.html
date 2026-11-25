@@ -59,6 +59,11 @@
             progress.push({ t: Math.round(performance.now() - t0), chunks: p.chunksDone, splats: p.splatsDone });
           }
         },
+        // progressive=1: draw splats while the upload is still running; firstReadyMs is when the scene first shows.
+        ...(params.get('progressive') === '1' ? { progressive: true } : {}),
+        onFirstReady: () => { result.firstReadyMs = Math.round(performance.now() - t0); },
+        // mode=lod: keep only the view's LOD units resident (lodBudget = splat budget, default 8M).
+        ...(mode === 'lod' ? { lodStreaming: { budget: Number(params.get('lodBudget') ?? 8000000) } } : {}),
       };
       let info;
       if (mode === 'ply') {
@@ -66,11 +71,15 @@
         info = await r.loadGaussianSplats(url, undefined, undefined, 'full');
         for (let k = 0; k < 3; k++) target[k] -= info.origin[k];
       } else {
-        const load = mode === 'streamed' ? r.loadGaussianSplatsStreamed : r.loadGaussianSplatsSog;
+        const load = mode === 'streamed' || mode === 'lod' ? r.loadGaussianSplatsStreamed : r.loadGaussianSplatsSog;
         if (!load) throw new Error(`SDK has no loader for mode ${mode}`);
         info = await load.call(r, url, options);
         // Same frame as the PLY baseline: shift the target by the origin the loader used.
         for (let k = 0; k < 3; k++) target[k] -= info.origin[k];
+        if (info.lodStream) {
+          await info.lodStream.whenIdle();
+          result.lodStats = info.lodStream.stats();
+        }
       }
       result.loadMs = Math.round(performance.now() - t0);
       result.info = info;
@@ -117,6 +126,8 @@
         result.staticFrameMs = await measure(false);
         result.visibleSplats = await r.getSplatVisibleCount?.();
         result.frameMs = await measure(true);
+        // Measured on the GPU (timestamp queries); null where the device has none.
+        result.sortMs = r.getSplatSortMs?.() ?? null;
         result.ok = true;
       }
     } catch (error) {

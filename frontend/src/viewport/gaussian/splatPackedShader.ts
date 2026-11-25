@@ -174,7 +174,7 @@ fn vs_main(@builtin(vertex_index) vtx : u32,
     bitcast<f32>(splats[b + 8u]),
     bitcast<f32>(splats[b + 9u]),
   );
-  let opacityRaw = halfAt(b, 0u);
+  let opacityRaw = min(halfAt(b, 0u), 1.0);
 
   let cam = u.view * vec4<f32>(center, 1.0);
   let clip = u.view_proj * vec4<f32>(center, 1.0);

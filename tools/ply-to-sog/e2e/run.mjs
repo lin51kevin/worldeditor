@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Loads a SOG / Streamed SOG in headed Chromium (real WebGPU) through the built SDK and reports load time,
 // upload status and frame times. Usage:
-//   node e2e/run.mjs --mode sog|streamed --path <file under out/, e.g. 71c.../lod-meta.json> --target x,y,z [--shot file.png]
+//   node e2e/run.mjs --mode sog|streamed|lod --path <file under out/, e.g. 71c.../lod-meta.json> --target x,y,z [--shot file.png]
+//   lod = view-dependent LOD streaming of a multi-LOD lod-meta.json (ply-to-sog.mjs --format lod); [--lodBudget n]
+//   [--progressive 1] draws splats while uploading and reports firstReadyMs
 //   node e2e/run.mjs --mode ply --path <absolute .ply>   (baseline through the existing whole-file PLY loader)
 import { createServer } from 'node:http';
 import { execFile } from 'node:child_process';
@@ -13,14 +15,15 @@ import { createRequire } from 'node:module';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '..', 'out');
-const SDK = resolve(HERE, '..', '..', '..', 'frontend', 'dist-rnk');
+// SDK_DIR points at another build (e.g. a baseline checkout) for A/B runs.
+const SDK = process.env.SDK_DIR ? resolve(process.env.SDK_DIR) : resolve(HERE, '..', '..', '..', 'frontend', 'dist-rnk');
 const FRONTEND = resolve(HERE, '..', '..', '..', 'frontend');
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]]] : acc), []),
 );
 if (!args.mode || !args.path) {
-  console.error('Usage: node e2e/run.mjs --mode sog|streamed --path <relative to out/> [--target x,y,z] [--shot png] [--frames n]');
+  console.error('Usage: node e2e/run.mjs --mode sog|streamed|lod --path <relative to out/> [--target x,y,z] [--shot png] [--frames n]');
   process.exit(2);
 }
 
@@ -98,7 +101,7 @@ try {
     if (r.status() >= 400) console.log('  [http', r.status() + ']', r.url().slice(0, 150));
   });
   const dataUrl = args.mode === 'ply' ? `${origin}/ply/scene.ply` : `${origin}/data/${args.path}`;
-  const query = new URLSearchParams({ mode: args.mode, url: dataUrl, target: args.target ?? '0,0,0', frames: args.frames ?? '180', ...(args.origin ? { origin: args.origin } : {}), ...(args.cull ? { cull: args.cull } : {}), ...(args.frame ? { frame: args.frame } : {}), ...(args.chase ? { chase: args.chase } : {}), ...(args.occluder ? { occluder: args.occluder } : {}), ...(args.fence ? { fence: args.fence } : {}), ...(args.budget ? { budget: args.budget } : {}) });
+  const query = new URLSearchParams({ mode: args.mode, url: dataUrl, target: args.target ?? '0,0,0', frames: args.frames ?? '180', ...(args.origin ? { origin: args.origin } : {}), ...(args.cull ? { cull: args.cull } : {}), ...(args.frame ? { frame: args.frame } : {}), ...(args.chase ? { chase: args.chase } : {}), ...(args.occluder ? { occluder: args.occluder } : {}), ...(args.fence ? { fence: args.fence } : {}), ...(args.budget ? { budget: args.budget } : {}), ...(args.progressive ? { progressive: args.progressive } : {}), ...(args.lodBudget ? { lodBudget: args.lodBudget } : {}) });
   await page.goto(`${origin}/?${query}`);
   await page.waitForFunction(() => !!window.__result, undefined, { timeout: Number(args.timeout ?? 1_800_000) });
   const result = await page.evaluate(() => window.__result);

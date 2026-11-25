@@ -109,6 +109,10 @@ export interface SplatSortCull {
   readonly uniformBuffer: GPUBuffer;
   /** One f32 per splat: its largest activated scale axis. */
   readonly radiiBuffer: GPUBuffer;
+  /** Frustum/thinning culling (default true); false leaves only the dead-slot check. */
+  readonly enabled?: boolean;
+  /** Treat splats whose radius is zero as absent (slots of an LOD-streamed store). */
+  readonly deadSplats?: boolean;
   /** Extra NDC margin so a re-sort that lags a moving camera shows no empty border. */
   readonly guardNdc: number;
   /**
@@ -154,10 +158,12 @@ fn init_keys(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_i
     let d = pos - params.cam;
     let depth = d.x*params.view.x + d.y*params.view.y + d.z*params.view.z;
     var culled = depth <= 1e-6;
-    if (!culled && params.cull_enabled == 1u) {
+    // Bit 1 of cull_enabled: a radius of zero marks a slot that holds no splat (LOD streaming).
+    if (!culled && (params.cull_enabled & 2u) != 0u) { culled = radii[i] <= 0.0; }
+    if (!culled && (params.cull_enabled & 1u) != 0u) {
       culled = splat_frustum_culled(pos, radii[i], params.guard);
     }
-    if (!culled && params.cull_enabled == 1u) {
+    if (!culled && (params.cull_enabled & 1u) != 0u) {
       culled = splat_thinned(i, pos, radii[i], params.thin_tau);
     }
     if (culled) {
@@ -624,7 +630,9 @@ export class GpuSplatSorter {
    * Encode the stable radix sort into `encoder` (before the render pass).
    * Writes the back-to-front index order of the surviving splats into
    * `orderBuffer`. `minDepth`/`maxDepth` bound the 24-bit normalized depth key
-   * (splats outside clamp to the extremes).
+   * (splats outside clamp to the extremes). `activeCount` limits the sort to the
+   * first splats of the cloud (a progressive upload that is still writing the rest).
+   * `timestamps` stamps the start of the key pass and the end of the last radix pass.
    */
   sort(
     encoder: GPUCommandEncoder,
@@ -635,18 +643,21 @@ export class GpuSplatSorter {
     minDepth: number,
     maxDepth: number,
     cull?: SplatSortCull,
+    activeCount: number = this.count,
+    timestamps?: GPUQuerySet | null,
   ): void {
     const pipes = this.ensureInit();
-    if (this.count === 0 || !this.keys) return;
+    const active = Math.min(this.count, Math.max(0, Math.floor(activeCount)));
+    if (active === 0 || !this.keys) return;
     this.ensureOrderBindGroups(orderBuffer);
 
     const dp = new ArrayBuffer(DEPTH_PARAMS_SIZE);
     const f = new Float32Array(dp);
     const u = new Uint32Array(dp);
     f[0] = camPos[0]; f[1] = camPos[1]; f[2] = camPos[2];
-    u[3] = this.count;
+    u[3] = active;
     f[4] = viewDir[0]; f[5] = viewDir[1]; f[6] = viewDir[2];
-    u[7] = cull ? 1 : 0;
+    u[7] = (cull && cull.enabled !== false ? 1 : 0) | (cull?.deadSplats ? 2 : 0);
     f[8] = minDepth; f[9] = maxDepth;
     f[10] = cull?.guardNdc ?? 0;
     f[11] = cull?.thinTau ?? 0;
@@ -655,9 +666,25 @@ export class GpuSplatSorter {
     // counter is guaranteed zero when the key pass below starts accumulating.
     this.device.queue.writeBuffer(this.drawArgs!, 0, DRAW_ARGS_RESET);
 
-    const groups = ceilDiv(this.count, WORKGROUP_SIZE);
-    const run = (pipeline: GPUComputePipeline, group: GPUBindGroup, size: number | null): void => {
-      const pass = encoder.beginComputePass();
+    const groups = ceilDiv(active, WORKGROUP_SIZE);
+    const run = (
+      pipeline: GPUComputePipeline,
+      group: GPUBindGroup,
+      size: number | null,
+      stamp?: "begin" | "end",
+    ): void => {
+      const pass = encoder.beginComputePass(
+        timestamps && stamp
+          ? {
+              timestampWrites: {
+                querySet: timestamps,
+                ...(stamp === "begin"
+                  ? { beginningOfPassWriteIndex: 0 }
+                  : { endOfPassWriteIndex: 1 }),
+              },
+            }
+          : undefined,
+      );
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, group);
       if (size === null) pass.dispatchWorkgroups(1);
@@ -681,6 +708,7 @@ export class GpuSplatSorter {
         ],
       }),
       groups,
+      "begin",
     );
 
     // Compact the survivors into pass 0's source buffer (scratch when KEY_PASSES
@@ -697,7 +725,7 @@ export class GpuSplatSorter {
     for (let p = 0; p < KEY_PASSES; p++) {
       run(pipes.hist, this.histBG[p]!, this.numGroups);
       this.encodeScan(encoder, pipes, this.histScan!);
-      run(pipes.scatter, this.scatterBG[p]!, this.numGroups);
+      run(pipes.scatter, this.scatterBG[p]!, this.numGroups, p === KEY_PASSES - 1 ? "end" : undefined);
     }
     // Parity is chosen in ensureOrderBindGroups so the final pass lands in `orderBuffer`.
   }

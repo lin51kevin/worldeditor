@@ -32,7 +32,8 @@ import type {
 } from '../viewport/gaussian/splatRenderer';
 import { assertGaussianSplatLayout } from '../viewport/gaussian/splatLayout';
 import type { SogWasm, StreamedProgress } from './sogLoader';
-import { loadSogIntoRenderer, loadStreamedSogIntoRenderer } from './sogRendererBridge';
+import type { LodStreamHandle, LodStreamingOptions } from './lodStreamer';
+import { loadLodStreamedIntoRenderer, loadSogIntoRenderer, loadStreamedSogIntoRenderer } from './sogRendererBridge';
 import { resolveWasmSource, type SogWasmSource } from './sogDecodePool';
 import { openSogDecoderFor } from './sogDecoderSession';
 import { loadSogWorkerFactory } from './sogWorkerFactory';
@@ -118,6 +119,12 @@ export interface GaussianSplatInfo {
   shDegree: number;
   layoutVersion: number;
   uploadStatus: SplatUploadStatus;
+  /**
+   * Present when the scene was loaded with `lodStreaming`: control of the stream
+   * that keeps following the camera. The SDK stops it when another scene replaces
+   * this one, so calling `dispose` is only needed to stop earlier.
+   */
+  lodStream?: LodStreamHandle;
 }
 
 /** Per-load options for {@link WorldEditorRenderer.loadGaussianSplatsSog} / `loadGaussianSplatsStreamed`. */
@@ -137,8 +144,28 @@ export interface GaussianSplatSogOptions {
   signal?: AbortSignal;
   /** Streamed SOG only: LOD level to load (default 0 = full detail). */
   lod?: number;
-  /** Streamed SOG only: called after every decoded chunk. */
+  /** Called after every decoded chunk (streamed) or uploaded slice (single SOG). */
   onProgress?: (progress: StreamedProgress) => void;
+  /**
+   * Draw the splats uploaded so far while the load is still running, instead of
+   * showing the scene only once every splat is on the GPU. Needs the GPU depth
+   * sort (`setSplatGpuSort(true)`); without it the scene still appears at the
+   * end. Default `false`. The returned promise still resolves after the last splat.
+   */
+  progressive?: boolean;
+  /**
+   * Called once when the scene first becomes visible: after the first uploaded
+   * slice when `progressive` is on and supported, otherwise when the load completes.
+   */
+  onFirstReady?: () => void;
+  /**
+   * Streamed SOG only: keep just the LOD levels and regions the camera needs on
+   * the GPU instead of the whole scene, within a splat budget (`true` = defaults,
+   * 8M splats). Needs the GPU depth sort and a `lod-meta.json` with several LOD
+   * levels. The promise resolves once the first view is resident and the returned
+   * `lodStream` handle then follows the camera. Default off.
+   */
+  lodStreaming?: boolean | LodStreamingOptions;
   /**
    * Web Workers that download and decode the scene off the main thread. Default:
    * automatic (up to 6 for a streamed scene, 1 for a single SOG); `0` decodes
@@ -466,6 +493,8 @@ export interface WorldEditorRenderer {
    * culling), or `null` before one ran. Reads back from the GPU, so don't call per frame.
    */
   getSplatVisibleCount?(): Promise<number | null>;
+  /** Smoothed GPU time of the scene splat depth sort in ms; `null` without timestamp-query support. */
+  getSplatSortMs?(): number | null;
   /**
    * Cap the static scene's drawn splats at about `maxSplats` while the camera
    * moves: small on-screen splats are thinned, and a settled camera re-renders
@@ -698,6 +727,12 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
   // Independent npc-actors plugin: owns box/trajectory geometry + ground picking.
   const actorLayer = new CaseActorLayer();
   let canvasRef: HTMLCanvasElement | null = null;
+  // The running LOD stream of the scene splats; any other scene upload replaces and so stops it.
+  let activeLodStream: LodStreamHandle | null = null;
+  const stopLodStream = (): void => {
+    activeLodStream?.dispose();
+    activeLodStream = null;
+  };
 
   /** Convert page-space client coordinates to canvas-relative pixels. */
   const toCanvasXY = (clientX: number, clientY: number): [number, number] => {
@@ -739,6 +774,7 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
       return ok;
     },
     dispose: () => {
+      stopLodStream();
       renderer.setLineWidthScaleCallback(null);
       lineWidthSync.dispose();
       onLineWidthRefreshNeeded = null;
@@ -963,6 +999,7 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
       quality?: number,
       renderMode: SplatRenderMode = 'full',
     ): Promise<GaussianSplatInfo | undefined> => {
+      stopLodStream();
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch Gaussian splats (${response.status}): ${url}`);
@@ -1012,6 +1049,7 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
       quality?: number,
       renderMode?: SplatRenderMode,
     ) => {
+      stopLodStream();
       return renderer.uploadGaussianSplats(
         data,
         shDegree,
@@ -1023,6 +1061,7 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
     },
     getGaussianSplatUploadStatus: () => renderer.getGaussianSplatUploadStatus(),
     loadGaussianSplatsSog: async (metaUrl, options) => {
+      stopLodStream();
       const sogWasm = wasm as unknown as SogWasm;
       const decoding = await openSogDecoderFor(sogWasm, sogWasmSource, false, options ?? {}, loadSogWorkerFactory);
       try {
@@ -1032,8 +1071,34 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
       }
     },
     loadGaussianSplatsStreamed: async (lodMetaUrl, options) => {
+      stopLodStream();
       const sogWasm = wasm as unknown as SogWasm;
       const decoding = await openSogDecoderFor(sogWasm, sogWasmSource, true, options ?? {}, loadSogWorkerFactory);
+      if (options?.lodStreaming) {
+        // The decoder pool serves the stream for as long as it runs, so it is released with it.
+        let info: GaussianSplatInfo;
+        try {
+          info = await loadLodStreamedIntoRenderer(sogWasm, renderer, lodMetaUrl, options, decoding);
+        } catch (error) {
+          decoding.dispose();
+          throw error;
+        }
+        const stream = info.lodStream;
+        if (!stream) {
+          decoding.dispose();
+          return info;
+        }
+        const wrapped: LodStreamHandle = {
+          ...stream,
+          dispose: () => {
+            stream.dispose();
+            decoding.dispose();
+            if (activeLodStream === wrapped) activeLodStream = null;
+          },
+        };
+        activeLodStream = wrapped;
+        return { ...info, lodStream: wrapped };
+      }
       try {
         return await loadStreamedSogIntoRenderer(sogWasm, renderer, lodMetaUrl, options, decoding);
       } finally {
@@ -1041,6 +1106,7 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
       }
     },
     clearGaussianSplats: () => {
+      stopLodStream();
       renderer.clearGaussianSplats();
     },
     setStaticSceneVisible: (visible: boolean) => {
@@ -1085,6 +1151,7 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
       renderer.setSplatFrustumCull(enabled);
     },
     getSplatVisibleCount: () => renderer.getSplatVisibleCount(),
+    getSplatSortMs: () => renderer.getSplatSortMs(),
     setSplatInteractiveBudget: (maxSplats: number) => {
       renderer.setSplatInteractiveBudget(maxSplats);
     },

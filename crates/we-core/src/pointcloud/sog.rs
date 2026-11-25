@@ -6,9 +6,10 @@
 //! ([`PACKED_GAUSSIAN_LAYOUT_VERSION`]) so the renderer needs no SOG-specific
 //! path. File fetching is the caller's job: pass the decoded images by name.
 //!
-//! Only SOG version 3 is supported. Opacity above 1 (merged Gaussians) is
-//! clamped to 1, as the spec prescribes for renderers without an over-unity
-//! profile, and SH bands above 3 are dropped.
+//! Only SOG version 3 is supported. Opacity above 1 (merged Gaussians, up to
+//! 1.5625) is kept as-is for the renderer's opaque-core profile, SH bands 1..=4
+//! are decoded, and `meta.model` is passed through so the renderer can apply the
+//! `antialiased` filter. Blind data and the `2dgs` zero-thickness axis are ignored.
 
 use std::collections::HashMap;
 use std::io::Cursor;
@@ -32,7 +33,7 @@ const SH_PALETTE_ROW: usize = 64;
 const OPACITY_ONE_BYTE: f32 = 204.0;
 
 /// Highest SH degree the packed layout supports.
-const MAX_SH_DEGREE: usize = 3;
+const MAX_SH_DEGREE: usize = 4;
 
 /// `meta.json` of a SOG v3 dataset (fields this decoder needs).
 #[derive(Debug, Clone, Deserialize)]
@@ -41,6 +42,9 @@ pub struct SogMeta {
     pub version: u32,
     /// Number of Gaussians (`<=` pixels per image).
     pub count: usize,
+    /// How the scene was trained (`antialiased`, `2dgs`); absent for ordinary Gaussians.
+    #[serde(default)]
+    pub model: Option<String>,
     /// Position ranges and image names.
     pub means: SogMeans,
     /// Log-scale codebook and image name.
@@ -302,9 +306,7 @@ pub fn decode_sog_packed(
         buffer.extend(rot.iter().map(|v| v.to_bits()));
 
         halves.clear();
-        let opacity = (f32::from(sh0.rgba[p + 3]) / OPACITY_ONE_BYTE)
-            .powi(2)
-            .min(1.0);
+        let opacity = (f32::from(sh0.rgba[p + 3]) / OPACITY_ONE_BYTE).powi(2);
         halves.push(opacity);
         for k in 0..3 {
             halves.push(meta.sh0.codebook[usize::from(sh0.rgba[p + k])]);
@@ -351,6 +353,7 @@ pub fn decode_sog_packed(
         layout_version: PACKED_GAUSSIAN_LAYOUT_VERSION,
         origin: origin.unwrap_or([0.0; 3]),
         bounds,
+        model: meta.model.clone(),
     })
 }
 
@@ -502,5 +505,94 @@ mod tests {
     #[test]
     fn test_decode_webp_rejects_garbage() {
         assert!(decode_webp_rgba(b"not a webp").is_err());
+    }
+
+    fn pixel(rgba: [u8; 4]) -> SogImage {
+        SogImage {
+            width: 1,
+            height: 1,
+            rgba: rgba.to_vec(),
+        }
+    }
+
+    /// One-Gaussian SOG v3 with 4 SH bands, over-unity opacity and a model tag.
+    fn synthetic_sh4(model: Option<&str>) -> (SogMeta, HashMap<String, SogImage>) {
+        let codebook: Vec<f32> = (0..256).map(|i| i as f32 * 0.001).collect();
+        let mut json = serde_json::json!({
+            "version": 3,
+            "count": 1,
+            "means": { "mins": [0.0, 0.0, 0.0], "maxs": [1.0, 1.0, 1.0], "files": ["l", "u"] },
+            "scales": { "codebook": codebook, "files": ["s"] },
+            "quats": { "files": ["q"] },
+            "sh0": { "codebook": codebook, "files": ["c"] },
+            "opacity": { "max": 1.5625 },
+            "shN": { "count": 1, "bands": 4, "codebook": codebook, "files": ["pc", "pl"] },
+        });
+        if let Some(model) = model {
+            json["model"] = serde_json::Value::String(model.to_string());
+        }
+        let meta = SogMeta::parse(&json.to_string()).unwrap();
+
+        let centroids = SogImage {
+            width: 24,
+            height: 1,
+            rgba: (0..24u8).flat_map(|c| [c, c, c, 255]).collect(),
+        };
+        let images = HashMap::from([
+            ("l".to_string(), pixel([0, 0, 0, 255])),
+            ("u".to_string(), pixel([0, 0, 0, 255])),
+            ("s".to_string(), pixel([10, 10, 10, 255])),
+            ("q".to_string(), pixel([128, 128, 128, 255])),
+            ("c".to_string(), pixel([100, 100, 100, 255])),
+            ("pc".to_string(), centroids),
+            ("pl".to_string(), pixel([0, 0, 0, 255])),
+        ]);
+        (meta, images)
+    }
+
+    #[test]
+    fn test_decode_sog_keeps_opacity_above_one() {
+        let (meta, images) = synthetic_sh4(None);
+        let got = decode_sog_packed(&meta, &images, None).unwrap();
+        let opacity = f16_to_f32((got.buffer[10] & 0xffff) as u16);
+        assert_eq!(opacity, 1.5625);
+    }
+
+    #[test]
+    fn test_decode_sog_maps_opacity_byte_through_square() {
+        let (meta, mut images) = synthetic_sh4(None);
+        images.insert("c".to_string(), pixel([100, 100, 100, 102]));
+        let got = decode_sog_packed(&meta, &images, None).unwrap();
+        let opacity = f16_to_f32((got.buffer[10] & 0xffff) as u16);
+        assert!((opacity - 0.25).abs() < 1e-3, "opacity {opacity}");
+    }
+
+    #[test]
+    fn test_decode_sog_four_sh_bands_fill_every_coefficient() {
+        let (meta, images) = synthetic_sh4(None);
+        assert_eq!(meta.sh_degree(), 4);
+        let got = decode_sog_packed(&meta, &images, None).unwrap();
+        assert_eq!(got.sh_degree, 4);
+        assert_eq!(got.stride, packed_gaussian_stride(4));
+        assert_eq!(got.buffer.len(), got.stride);
+
+        // Halves after the transform: opacity, DC rgb, then 24 AC coefficients (rgb each).
+        let half = |k: usize| f16_to_f32(((got.buffer[10 + k / 2] >> ((k % 2) * 16)) & 0xffff) as u16);
+        for c in 0..24 {
+            for ch in 0..3 {
+                let expected = c as f32 * 0.001;
+                let value = half(1 + 3 + c * 3 + ch);
+                assert!((value - expected).abs() < 1e-4, "coeff {c} channel {ch}: {value}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_decode_sog_passes_model_through() {
+        let (meta, images) = synthetic_sh4(Some("antialiased"));
+        let got = decode_sog_packed(&meta, &images, None).unwrap();
+        assert_eq!(got.model.as_deref(), Some("antialiased"));
+        let (plain, images) = synthetic_sh4(None);
+        assert_eq!(decode_sog_packed(&plain, &images, None).unwrap().model, None);
     }
 }
