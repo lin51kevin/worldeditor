@@ -206,4 +206,77 @@ describe("SplatRenderer interactive budget", () => {
     expect(sortSpy).toHaveBeenCalledTimes(2);
     expect(tauOf(1)).toBe(0);
   });
+
+  describe("interactive hold (animation under a still camera)", () => {
+    it("keeps the budgeted order after the camera settles instead of refining", async () => {
+      const { r } = make(2);
+      r.setInteractiveHold(true);
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      now += 1000;
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+
+      const last = sortSpy.mock.calls.length - 1;
+      expect(tauOf(last)).toBeGreaterThan(0);
+    });
+
+    it("re-sorts a still camera at the budget as soon as the hold starts", async () => {
+      const { r } = make(2);
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+      await vi.advanceTimersByTimeAsync(1000);
+      now += 1000;
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+      expect(tauOf(1)).toBe(0); // settled: full quality
+
+      r.setInteractiveHold(true);
+      now += 1000;
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+
+      expect(sortSpy).toHaveBeenCalledTimes(3);
+      expect(tauOf(2)).toBeGreaterThan(0);
+    });
+
+    it("returns to full quality right away when the hold is released", async () => {
+      const { r } = make(2);
+      r.setInteractiveHold(true);
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+
+      r.setInteractiveHold(false);
+      now += 1000;
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+
+      expect(sortSpy).toHaveBeenCalledTimes(2);
+      expect(tauOf(1)).toBe(0);
+    });
+
+    it("keeps correcting the threshold from the measured count while the camera is still", async () => {
+      const { r } = make(2);
+      r.setInteractiveHold(true);
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+      await vi.advanceTimersByTimeAsync(0);
+
+      now += 1000;
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+
+      expect(sortSpy).toHaveBeenCalledTimes(2);
+      expect(tauOf(1)).toBeGreaterThan(tauOf(0));
+    });
+
+    it("does nothing for a cloud that fits the budget", () => {
+      const { r, wake } = make(100);
+      wake.mockClear();
+      r.setInteractiveHold(true);
+      expect(wake).not.toHaveBeenCalled();
+    });
+  });
 });

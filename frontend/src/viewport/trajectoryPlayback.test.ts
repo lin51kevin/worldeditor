@@ -19,6 +19,7 @@ const renderer = vi.hoisted(() => ({
   frameScene3D: vi.fn(),
   setSplatRefreshFps: vi.fn(),
   setSplatGpuSort: vi.fn(),
+  setSplatInteractiveHold: vi.fn(),
 }));
 
 vi.mock('./viewportRef', () => ({
@@ -93,6 +94,20 @@ describe('trajectory follow playback', () => {
 
     useTrajectoryStore.getState().setCameraMode('off');
     expect(renderer.setChaseCameraActive).toHaveBeenLastCalledWith(false);
+  });
+
+  it('holds the splat budget while playing and releases it on pause and stop', () => {
+    startTrajectory(DATA);
+    expect(renderer.setSplatInteractiveHold).toHaveBeenLastCalledWith(true);
+
+    useTrajectoryStore.getState().pause();
+    expect(renderer.setSplatInteractiveHold).toHaveBeenLastCalledWith(false);
+
+    useTrajectoryStore.getState().play();
+    expect(renderer.setSplatInteractiveHold).toHaveBeenLastCalledWith(true);
+
+    stopTrajectory();
+    expect(renderer.setSplatInteractiveHold).toHaveBeenLastCalledWith(false);
   });
 });
 

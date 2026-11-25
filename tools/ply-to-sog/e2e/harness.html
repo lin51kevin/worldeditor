@@ -47,6 +47,8 @@
       if (params.get('cull') === '0') r.setSplatFrustumCull?.(false);
       // budget=<n>: interactive splat budget (thinning while the camera moves).
       if (params.get('budget')) r.setSplatInteractiveBudget?.(Number(params.get('budget')));
+      // hold=1: playback under a still camera keeps the budgeted order instead of refining to full quality.
+      if (params.get('hold') === '1') r.setSplatInteractiveHold?.(true);
       // occluder=1: the host's default depth-only occluder pass (actors hide behind the scene).
       if (params.get('occluder') === '1') r.setSplatOccluderDepth?.(true);
 

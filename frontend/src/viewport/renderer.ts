@@ -272,6 +272,7 @@ export class ViewportRenderer {
   private splatFrustumCullEnabled = true;
   // Same lazy-creation reason: the static scene's visible-splat budget while the camera moves (0 = off).
   private splatInteractiveBudget = 0;
+  private splatInteractiveHold = false;
 
   // Desired static-scene occluder-depth state, remembered for the same lazy
   // creation reason as `splatGpuSortEnabled`. Scene-only: the actor clouds must
@@ -1116,6 +1117,7 @@ export class ViewportRenderer {
       this.splatRenderer.setGpuSort(this.splatGpuSortEnabled);
       this.splatRenderer.setFrustumCull(this.splatFrustumCullEnabled);
       this.splatRenderer.setInteractiveBudget(this.splatInteractiveBudget);
+      this.splatRenderer.setInteractiveHold(this.splatInteractiveHold);
       this.splatRenderer.setOccluderDepth(
         this.splatOccluderDepthEnabled,
         this.splatOccluderOptions,
@@ -1416,6 +1418,17 @@ export class ViewportRenderer {
   setSplatInteractiveBudget(maxSplats: number): void {
     this.splatInteractiveBudget = Math.max(0, Math.floor(maxSplats));
     this.splatRenderer?.setInteractiveBudget(this.splatInteractiveBudget);
+    this.markSceneDirty();
+  }
+
+  /**
+   * Keep the static scene on its budgeted (thinned) order while content animates with
+   * a still camera (e.g. trajectory playback), instead of redrawing every splat each
+   * frame; releasing it re-renders at full quality. See `setSplatInteractiveBudget`.
+   */
+  setSplatInteractiveHold(hold: boolean): void {
+    this.splatInteractiveHold = hold;
+    this.splatRenderer?.setInteractiveHold(hold);
     this.markSceneDirty();
   }
 

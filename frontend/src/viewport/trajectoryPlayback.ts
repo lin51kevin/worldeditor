@@ -347,6 +347,8 @@ function ensureSubscribed(): void {
       cancelAnimationFrame(rafId);
       rafId = 0;
     }
+    // Actors move under a still camera: keep a huge scene on its budgeted order instead of full quality.
+    if (state.isPlaying !== prev.isPlaying) getViewportRenderer()?.setSplatInteractiveHold(state.isPlaying);
   });
 }
 
@@ -464,6 +466,7 @@ export function stopTrajectory(): void {
   // settings that were in effect before follow mode was engaged.
   const wasFollowing = useTrajectoryStore.getState().cameraMode !== 'off';
   if (wasFollowing) applyFollowSortMode(false);
+  getViewportRenderer()?.setSplatInteractiveHold(false);
   // Clear the static-scene point cloud / Gaussian splats and the cached actor
   // models, and close the config panel — closing must wipe everything, not just
   // the trajectory ribbons/boxes.

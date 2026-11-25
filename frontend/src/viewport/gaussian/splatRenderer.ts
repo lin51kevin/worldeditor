@@ -22,7 +22,7 @@ import { SplatSortController, type SplatSorter } from "./splatSortController";
 import { createWorkerSplatSorter } from "./splatSorterBackends";
 import { GpuSplatSorter } from "./splatSortCompute";
 import { GpuSortTimer } from "./splatSortTiming";
-import { nextThinTau, THIN_TAU_INITIAL } from "./splatBudget";
+import { nextHeldThinTau, nextThinTau, THIN_TAU_INITIAL } from "./splatBudget";
 import type { PreparedSplatChunk } from "./splatPrepare";
 import { buildSplatUniform, DEFAULT_SPLAT_DILATION, DEFAULT_OCCLUDER_ALPHA_MIN, DEFAULT_OCCLUDER_SIGMA, DEFAULT_OCCLUDER_DEPTH_BIAS } from "./splatUniform";
 import { frustumSidePlanes, type Vec3 } from "./splatSort";
@@ -116,6 +116,9 @@ export const GPU_SORT_CULL_GUARD_NDC = 0.25;
 
 /** Camera stillness after which an interactive-budget view is re-sorted at full quality. */
 const INTERACTIVE_IDLE_MS = 350;
+
+/** Extra sorts a held (still-camera) view may spend steering the thinning threshold onto the budget. */
+const HOLD_CONVERGE_SORTS = 8;
 
 /** Minimum gap between redraw requests while a progressive upload is still writing chunks. */
 export const PROGRESSIVE_REFRESH_MS = 250;
@@ -493,6 +496,9 @@ export class SplatRenderer {
   /** Set when the camera has settled, so the next sort runs at full quality. */
   private forceFullSort = false;
   private refineTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The host animates content (playback): stay on the budgeted order even with a still camera. */
+  private interactiveHold = false;
+  private holdConvergeLeft = 0;
   /** In-progress chunked upload, or `null`. */
   private chunkedUpload: ChunkedUploadSession | null = null;
   /** Set when a huge cloud made the GPU sort mandatory; ignores `setGpuSort(false)`. */
@@ -1210,11 +1216,22 @@ export class SplatRenderer {
     setTimeout(() => {
       void this.readVisibleCount()
         .then((visible) => {
-          if (visible !== null) this.thinTau = nextThinTau(this.thinTau, visible, budget);
+          if (visible === null) return;
+          const next = this.interactiveHold
+            ? nextHeldThinTau(this.thinTau, visible, budget)
+            : nextThinTau(this.thinTau, visible, budget);
+          const changed = next !== this.thinTau;
+          this.thinTau = next;
+          // A held view has a still camera, so nothing else would re-sort with the corrected threshold.
+          if (changed && this.interactiveHold && this.holdConvergeLeft > 0) {
+            this.holdConvergeLeft--;
+            this.gpuSortDirty = true;
+            this.onOrderChanged?.();
+          }
         })
         .catch(() => undefined);
     }, 0);
-    if (!thinned) return;
+    if (!thinned || this.interactiveHold) return;
     if (this.refineTimer) clearTimeout(this.refineTimer);
     this.refineTimer = setTimeout(() => {
       this.refineTimer = null;
@@ -1238,8 +1255,27 @@ export class SplatRenderer {
     this.onOrderChanged?.();
   }
 
+  /**
+   * While `hold` is set the budgeted (thinned) order stays in force even when the
+   * camera is still, so a huge cloud is not redrawn at full quality every frame of
+   * an animation (trajectory playback moves actors, not the camera). Releasing it
+   * re-sorts at full quality. No effect on a cloud that fits the budget.
+   */
+  setInteractiveHold(hold: boolean): void {
+    if (hold === this.interactiveHold) return;
+    this.interactiveHold = hold;
+    if (this.refineTimer) clearTimeout(this.refineTimer);
+    this.refineTimer = null;
+    if (!(this.interactiveBudget > 0 && this.resources.count > this.interactiveBudget)) return;
+    this.forceFullSort = !hold;
+    this.holdConvergeLeft = hold ? HOLD_CONVERGE_SORTS : 0;
+    this.gpuSortDirty = true;
+    this.onOrderChanged?.();
+  }
+
   /** Start a cloud at the initial threshold when it exceeds the budget, else unthinned. */
   private resetThinning(): void {
+    this.holdConvergeLeft = this.interactiveHold ? HOLD_CONVERGE_SORTS : 0;
     this.thinTau =
       this.interactiveBudget > 0 && this.resources.count > this.interactiveBudget
         ? THIN_TAU_INITIAL
@@ -1379,7 +1415,7 @@ export class SplatRenderer {
       this.gpuSorter.resize(this.resources.capacity);
       const [minD, maxD] = this.projectedDepthRange();
       const radiiBuffer = this.resources.gpuRadiiBuffer;
-      const fullQuality = this.forceFullSort;
+      const fullQuality = this.forceFullSort && !this.interactiveHold;
       const budget = this.interactiveBudget;
       const thinning = budget > 0 && !fullQuality && this.resources.count > budget;
       const thinTau = thinning ? this.thinTau : 0;

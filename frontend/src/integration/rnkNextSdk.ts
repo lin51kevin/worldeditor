@@ -503,6 +503,15 @@ export interface WorldEditorRenderer {
    */
   setSplatInteractiveBudget?(maxSplats: number): void;
   /**
+   * Keep the budgeted (thinned) splat order while content animates under a still
+   * camera, e.g. preview/trajectory playback: without it a settled camera draws
+   * every splat each frame, which on a 60M+ scene costs seconds per frame. Set
+   * `true` when playback starts and `false` when it stops (which re-renders at
+   * full quality). Needs `setSplatInteractiveBudget`; no effect on a cloud that
+   * fits the budget. Optional so hosts bundling an older SDK degrade gracefully.
+   */
+  setSplatInteractiveHold?(hold: boolean): void;
+  /**
    * Enable/disable the static scene's depth-only occluder pass, which makes
    * dynamic actor (NPC/ego) splats hide behind the scene's opaque surfaces
    * (buildings, trees, walls) instead of always compositing on top.
@@ -1154,6 +1163,9 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
     getSplatSortMs: () => renderer.getSplatSortMs(),
     setSplatInteractiveBudget: (maxSplats: number) => {
       renderer.setSplatInteractiveBudget(maxSplats);
+    },
+    setSplatInteractiveHold: (hold: boolean) => {
+      renderer.setSplatInteractiveHold(hold);
     },
     setSplatOccluderDepth: (enabled, options) => {
       renderer.setSplatOccluderDepth(enabled, options);

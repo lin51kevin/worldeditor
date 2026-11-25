@@ -101,7 +101,7 @@ try {
     if (r.status() >= 400) console.log('  [http', r.status() + ']', r.url().slice(0, 150));
   });
   const dataUrl = args.mode === 'ply' ? `${origin}/ply/scene.ply` : `${origin}/data/${args.path}`;
-  const query = new URLSearchParams({ mode: args.mode, url: dataUrl, target: args.target ?? '0,0,0', frames: args.frames ?? '180', ...(args.origin ? { origin: args.origin } : {}), ...(args.cull ? { cull: args.cull } : {}), ...(args.frame ? { frame: args.frame } : {}), ...(args.chase ? { chase: args.chase } : {}), ...(args.occluder ? { occluder: args.occluder } : {}), ...(args.fence ? { fence: args.fence } : {}), ...(args.budget ? { budget: args.budget } : {}), ...(args.progressive ? { progressive: args.progressive } : {}), ...(args.lodBudget ? { lodBudget: args.lodBudget } : {}) });
+  const query = new URLSearchParams({ mode: args.mode, url: dataUrl, target: args.target ?? '0,0,0', frames: args.frames ?? '180', ...(args.origin ? { origin: args.origin } : {}), ...(args.cull ? { cull: args.cull } : {}), ...(args.frame ? { frame: args.frame } : {}), ...(args.chase ? { chase: args.chase } : {}), ...(args.occluder ? { occluder: args.occluder } : {}), ...(args.fence ? { fence: args.fence } : {}), ...(args.budget ? { budget: args.budget } : {}), ...(args.hold ? { hold: args.hold } : {}), ...(args.progressive ? { progressive: args.progressive } : {}), ...(args.lodBudget ? { lodBudget: args.lodBudget } : {}) });
   await page.goto(`${origin}/?${query}`);
   await page.waitForFunction(() => !!window.__result, undefined, { timeout: Number(args.timeout ?? 1_800_000) });
   const result = await page.evaluate(() => window.__result);
