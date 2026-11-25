@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { HELD_TAU_MIN, nextHeldThinTau, nextThinTau, THIN_TAU_INITIAL, THIN_TAU_MAX } from "./splatBudget";
+import {
+  HELD_TAU_MIN,
+  nextHeldThinTau,
+  nextThinTau,
+  seedSettledTau,
+  THIN_TAU_INITIAL,
+  THIN_TAU_MAX,
+} from "./splatBudget";
 
 describe("nextThinTau", () => {
   it("stays off when no budget is set", () => {
@@ -59,5 +66,25 @@ describe("nextHeldThinTau", () => {
   it("keeps the threshold near the budget and stays off without one", () => {
     expect(nextHeldThinTau(3, 3_900_000, 4_000_000)).toBe(3);
     expect(nextHeldThinTau(3, 9_000_000, 0)).toBe(0);
+  });
+});
+
+describe("seedSettledTau", () => {
+  it("is off without a settled budget", () => {
+    expect(seedSettledTau(6, 4_000_000, 0)).toBe(0);
+  });
+
+  it("scales the moving threshold by sqrt(interactive / settled budget), since kept ~ 1/tau^2", () => {
+    expect(seedSettledTau(8, 4_000_000, 16_000_000)).toBeCloseTo(4);
+  });
+
+  it("starts from the initial threshold when the moving view was not thinned", () => {
+    expect(seedSettledTau(0, 0, 16_000_000)).toBe(THIN_TAU_INITIAL);
+    expect(seedSettledTau(0, 4_000_000, 16_000_000)).toBeCloseTo(THIN_TAU_INITIAL / 2);
+  });
+
+  it("stays within the held threshold range", () => {
+    expect(seedSettledTau(0.03, 1_000, 16_000_000)).toBe(HELD_TAU_MIN);
+    expect(seedSettledTau(THIN_TAU_MAX, 16_000_000, 1_000)).toBe(THIN_TAU_MAX);
   });
 });

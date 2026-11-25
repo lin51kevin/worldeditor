@@ -26,7 +26,8 @@ vi.mock('./sogLoader', () => ({
   loadStreamedSog: vi.fn(),
 }));
 
-const { loadLodStreamedIntoRenderer } = await import('./sogRendererBridge');
+const { loadLodStreamedIntoRenderer, supportsLodStreaming } = await import('./sogRendererBridge');
+const { fetchLodMeta } = await import('./sogLoader');
 
 const status = (overrides: Partial<SplatUploadStatus> = {}): SplatUploadStatus => ({
   outcome: 'uploaded',
@@ -134,5 +135,16 @@ describe('loadLodStreamedIntoRenderer', () => {
     await expect(
       loadLodStreamedIntoRenderer({} as never, fakeTarget(), 'https://h/lod-meta.json', { lodStreaming: true }, { decoder: broken }),
     ).rejects.toThrow('boom');
+  });
+});
+
+describe('supportsLodStreaming', () => {
+  it('should accept a scene with coarser LOD levels', async () => {
+    expect(await supportsLodStreaming('https://h/lod-meta.json')).toBe(true);
+  });
+
+  it('should reject a single-level scene, which a budget could only show partially', async () => {
+    vi.mocked(fetchLodMeta).mockResolvedValueOnce({ ...lodMeta, lodLevels: 1 });
+    expect(await supportsLodStreaming('https://h/lod-meta.json')).toBe(false);
   });
 });

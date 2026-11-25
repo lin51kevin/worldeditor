@@ -4,6 +4,8 @@ import { GpuSplatSorter, MAX_WORKGROUPS_PER_DIM } from "./splatSortCompute";
 type Dispatch = { x: number; y: number };
 type Write = { buffer: GPUBuffer; data: ArrayBufferView };
 
+const transforms = { label: "transforms" } as unknown as GPUTextureView;
+
 /** Minimal WebGPU stub that records every `dispatchWorkgroups` call. */
 function makeDevice(): {
   device: GPUDevice;
@@ -41,7 +43,7 @@ function runSort(count: number): Dispatch[] {
   sorter.resize(count);
   sorter.sort(
     device.createCommandEncoder(),
-    {} as GPUBuffer,
+    transforms,
     {} as GPUBuffer,
     [0, 0, 0],
     [0, 0, 1],
@@ -89,7 +91,7 @@ describe("GpuSplatSorter active prefix", () => {
     const { device, dispatches, writes } = makeDevice();
     const sorter = new GpuSplatSorter(device);
     sorter.resize(100_000);
-    sorter.sort(device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, undefined, 1000);
+    sorter.sort(device.createCommandEncoder(), transforms, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, undefined, 1000);
 
     // Key pass is the first dispatch: ceil(1000 / 256) = 4 groups, not 391.
     expect(dispatches[0]).toEqual({ x: 4, y: 1 });
@@ -102,11 +104,11 @@ describe("GpuSplatSorter active prefix", () => {
     const { device, dispatches } = makeDevice();
     const sorter = new GpuSplatSorter(device);
     sorter.resize(512);
-    sorter.sort(device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, undefined, 10_000);
+    sorter.sort(device.createCommandEncoder(), transforms, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, undefined, 10_000);
     expect(dispatches[0]).toEqual({ x: 2, y: 1 });
 
     dispatches.length = 0;
-    sorter.sort(device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, undefined, 0);
+    sorter.sort(device.createCommandEncoder(), transforms, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, undefined, 0);
     expect(dispatches).toHaveLength(0);
   });
 });
@@ -129,7 +131,7 @@ describe("GpuSplatSorter indirect draw arguments", () => {
     const args = sorter.drawArgsBuffer;
     const encoder = device.createCommandEncoder();
     for (let i = 0; i < 2; i++) {
-      sorter.sort(encoder, {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100);
+      sorter.sort(encoder, transforms, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100);
     }
     const resets = writes.filter((w) => w.buffer === args);
     expect(resets).toHaveLength(2);
@@ -173,7 +175,7 @@ describe("GpuSplatSorter frustum culling", () => {
     groups.length = 0;
     sorter.sort(
       device.createCommandEncoder(),
-      {} as GPUBuffer,
+      transforms,
       {} as GPUBuffer,
       [0, 0, 0],
       [0, 0, 1],
@@ -194,14 +196,14 @@ describe("GpuSplatSorter frustum culling", () => {
     const sorter = new GpuSplatSorter(device);
     sorter.resize(1000);
     const encoder = device.createCommandEncoder();
-    sorter.sort(encoder, {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, {
+    sorter.sort(encoder, transforms, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, {
       uniformBuffer,
       radiiBuffer,
       guardNdc: 0.25,
       thinTau: 6.5,
     });
     expect(depthParams(writes).f32[11]).toBeCloseTo(6.5, 5);
-    sorter.sort(encoder, {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, {
+    sorter.sort(encoder, transforms, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, {
       uniformBuffer,
       radiiBuffer,
       guardNdc: 0.25,
@@ -213,7 +215,7 @@ describe("GpuSplatSorter frustum culling", () => {
     const { device, writes } = makeRecordingDevice();
     const sorter = new GpuSplatSorter(device);
     sorter.resize(1000);
-    sorter.sort(device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, {
+    sorter.sort(device.createCommandEncoder(), transforms, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, {
       uniformBuffer,
       radiiBuffer,
       guardNdc: 0.25,
@@ -229,7 +231,7 @@ describe("GpuSplatSorter frustum culling", () => {
     const { device, writes } = makeRecordingDevice();
     const sorter = new GpuSplatSorter(device);
     sorter.resize(1000);
-    sorter.sort(device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, {
+    sorter.sort(device.createCommandEncoder(), transforms, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100, {
       uniformBuffer,
       radiiBuffer,
       guardNdc: 0.25,
@@ -244,11 +246,21 @@ describe("GpuSplatSorter frustum culling", () => {
     const sorter = new GpuSplatSorter(device);
     sorter.resize(1000);
     groups.length = 0;
-    sorter.sort(device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100);
+    sorter.sort(device.createCommandEncoder(), transforms, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100);
     expect(depthParams(writes).u32[7]).toBe(0);
     // The key pass still needs valid (placeholder) bindings 5 and 6.
     const init = groups.find((g) => g.entries.length === 7)!;
     expect(init.entries.map((e) => e.binding)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  });
+
+  it("reads the splat centres from the cloud's transform texture", () => {
+    const { device, groups } = makeRecordingDevice();
+    const sorter = new GpuSplatSorter(device);
+    sorter.resize(1000);
+    groups.length = 0;
+    sorter.sort(device.createCommandEncoder(), transforms, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100);
+    const init = groups.find((g) => g.entries.length === 7)!;
+    expect(init.entries.find((e) => e.binding === 1)!.resource).toBe(transforms);
   });
 });
 
@@ -287,7 +299,7 @@ describe("GpuSplatSorter visible-only sorting", () => {
     const rec = makeOrderedDevice();
     const sorter = new GpuSplatSorter(rec.device);
     sorter.resize(count);
-    sorter.sort(rec.device.createCommandEncoder(), {} as GPUBuffer, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100);
+    sorter.sort(rec.device.createCommandEncoder(), transforms, {} as GPUBuffer, [0, 0, 0], [0, 0, 1], 0, 100);
     return rec;
   }
 

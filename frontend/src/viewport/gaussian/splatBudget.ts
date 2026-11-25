@@ -60,3 +60,16 @@ export function nextHeldThinTau(tau: number, visible: number, budget: number): n
   const step = Math.min(HELD_MAX_STEP, Math.max(1 / HELD_MAX_STEP, Math.sqrt(ratio)));
   return Math.min(THIN_TAU_MAX, Math.max(HELD_TAU_MIN, base * step));
 }
+
+/**
+ * First threshold of a settled view capped at `settledBudget`, derived from the
+ * moving view's threshold so the first full-quality frame already lands near the
+ * cap instead of drawing the whole cloud (kept count ~ 1/tau², hence the sqrt).
+ */
+export function seedSettledTau(interactiveTau: number, interactiveBudget: number, settledBudget: number): number {
+  if (settledBudget <= 0) return 0;
+  const base = interactiveTau > 0 ? interactiveTau : THIN_TAU_INITIAL;
+  if (!(interactiveBudget > 0)) return base;
+  const seeded = base * Math.sqrt(interactiveBudget / settledBudget);
+  return Math.min(THIN_TAU_MAX, Math.max(HELD_TAU_MIN, seeded));
+}

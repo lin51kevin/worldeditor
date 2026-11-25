@@ -279,4 +279,76 @@ describe("SplatRenderer interactive budget", () => {
       expect(wake).not.toHaveBeenCalled();
     });
   });
+
+  describe("settled budget (caps the full-quality frame of a huge cloud)", () => {
+    async function settle(r: SplatRenderer): Promise<void> {
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+      await vi.advanceTimersByTimeAsync(1000);
+      now += 1000;
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+    }
+
+    it("thins a settled camera down to the settled budget instead of drawing everything", async () => {
+      const { r } = make(2);
+      r.setSettledBudget(3);
+      await settle(r);
+      expect(sortSpy).toHaveBeenCalledTimes(2);
+      expect(tauOf(1)).toBeGreaterThan(0);
+    });
+
+    it("keeps full quality for a cloud that fits the settled budget", async () => {
+      const { r } = make(2);
+      r.setSettledBudget(10);
+      await settle(r);
+      expect(tauOf(1)).toBe(0);
+    });
+
+    it("keeps steering a still camera onto the settled budget from the measured count", async () => {
+      const { r, wake } = make(2);
+      r.setSettledBudget(3);
+      await settle(r);
+      wake.mockClear();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(wake).toHaveBeenCalled();
+
+      now += 1000;
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+      expect(sortSpy).toHaveBeenCalledTimes(3);
+      expect(tauOf(2)).toBeGreaterThan(tauOf(1));
+    });
+
+    it("does not re-sort a settled view whose camera has moved on", async () => {
+      const { r, wake } = make(2);
+      r.setSettledBudget(3);
+      await settle(r);
+      now += 1000;
+      at(r, 5);
+      r.sortGpu({} as GPUCommandEncoder);
+      wake.mockClear();
+      await vi.advanceTimersByTimeAsync(0);
+
+      now += 1000;
+      at(r, 5);
+      expect(r.sortGpu({} as GPUCommandEncoder)).toBe(true);
+      expect(sortSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it("applies to the full-quality sort that follows a released hold", () => {
+      const { r } = make(2);
+      r.setSettledBudget(3);
+      r.setInteractiveHold(true);
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+
+      r.setInteractiveHold(false);
+      now += 1000;
+      at(r, 0);
+      r.sortGpu({} as GPUCommandEncoder);
+      expect(sortSpy).toHaveBeenCalledTimes(2);
+      expect(tauOf(1)).toBeGreaterThan(0);
+    });
+  });
 });

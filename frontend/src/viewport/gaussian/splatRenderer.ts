@@ -22,7 +22,7 @@ import { SplatSortController, type SplatSorter } from "./splatSortController";
 import { createWorkerSplatSorter } from "./splatSorterBackends";
 import { GpuSplatSorter } from "./splatSortCompute";
 import { GpuSortTimer } from "./splatSortTiming";
-import { nextHeldThinTau, nextThinTau, THIN_TAU_INITIAL } from "./splatBudget";
+import { nextHeldThinTau, nextThinTau, seedSettledTau, THIN_TAU_INITIAL } from "./splatBudget";
 import type { PreparedSplatChunk } from "./splatPrepare";
 import { buildSplatUniform, DEFAULT_SPLAT_DILATION, DEFAULT_OCCLUDER_ALPHA_MIN, DEFAULT_OCCLUDER_SIGMA, DEFAULT_OCCLUDER_DEPTH_BIAS } from "./splatUniform";
 import { frustumSidePlanes, type Vec3 } from "./splatSort";
@@ -499,6 +499,12 @@ export class SplatRenderer {
   /** The host animates content (playback): stay on the budgeted order even with a still camera. */
   private interactiveHold = false;
   private holdConvergeLeft = 0;
+  /** Visible-splat cap of a settled (full-quality) view (0 = unlimited). */
+  private settledBudget = 0;
+  private settledTau = 0;
+  private settledConvergeLeft = 0;
+  /** Incremented by every GPU sort, so a late readback can tell whether it is still current. */
+  private sortSerial = 0;
   /** In-progress chunked upload, or `null`. */
   private chunkedUpload: ChunkedUploadSession | null = null;
   /** Set when a huge cloud made the GPU sort mandatory; ignores `setGpuSort(false)`. */
@@ -757,11 +763,8 @@ export class SplatRenderer {
     }
 
     const positions = extractSplatPositions(data, stride);
-    // Build the GPU positions buffer and cloud bounds BEFORE handing the array
-    // to the worker sorter: `setSplats` transfers (zero-copies) `positions.buffer`
-    // to the worker, which neuters the main-thread view (length -> 0). Doing this
-    // first keeps the GPU-sort positions buffer populated instead of empty.
-    this.resources.setPositions(positions);
+    // Bounds BEFORE handing the array to the worker sorter: `setSplats` transfers
+    // (zero-copies) `positions.buffer`, which neuters the main-thread view.
     this.resources.setOccluderSource(data, stride, this.occluderAlphaMin);
     this.updateBounds(positions);
     this.gpuSorter?.resize(this.resources.count);
@@ -1212,11 +1215,16 @@ export class SplatRenderer {
    * been submitted) to steer the threshold, and arrange a full-quality re-sort for
    * when the camera stops.
    */
-  private trackInteractiveBudget(budget: number, thinned: boolean): void {
+  private trackInteractiveBudget(budget: number, thinned: boolean, settled: boolean): void {
+    const serial = this.sortSerial;
     setTimeout(() => {
       void this.readVisibleCount()
         .then((visible) => {
           if (visible === null) return;
+          if (settled) {
+            this.steerSettled(visible, budget, serial);
+            return;
+          }
           const next = this.interactiveHold
             ? nextHeldThinTau(this.thinTau, visible, budget)
             : nextThinTau(this.thinTau, visible, budget);
@@ -1231,14 +1239,48 @@ export class SplatRenderer {
         })
         .catch(() => undefined);
     }, 0);
-    if (!thinned || this.interactiveHold) return;
+    if (settled || !thinned || this.interactiveHold) return;
     if (this.refineTimer) clearTimeout(this.refineTimer);
     this.refineTimer = setTimeout(() => {
       this.refineTimer = null;
-      this.forceFullSort = true;
-      this.gpuSortDirty = true;
-      this.onOrderChanged?.();
+      this.requestSettledSort();
     }, INTERACTIVE_IDLE_MS);
+  }
+
+  /** Re-sort the still camera at full quality, capped by the settled budget. */
+  private requestSettledSort(): void {
+    this.forceFullSort = true;
+    this.settledTau = seedSettledTau(this.thinTau, this.interactiveBudget, this.settledBudget);
+    this.settledConvergeLeft = HOLD_CONVERGE_SORTS;
+    this.gpuSortDirty = true;
+    this.onOrderChanged?.();
+  }
+
+  /** Correct a settled view's threshold; only re-sorts while that view is still the latest sort. */
+  private steerSettled(visible: number, budget: number, serial: number): void {
+    if (serial !== this.sortSerial) return;
+    const next = nextHeldThinTau(this.settledTau, visible, budget);
+    if (next === this.settledTau || this.settledConvergeLeft <= 0) return;
+    this.settledTau = next;
+    this.settledConvergeLeft--;
+    this.forceFullSort = true;
+    this.gpuSortDirty = true;
+    this.onOrderChanged?.();
+  }
+
+  /**
+   * Cap the splats a settled camera draws at about `maxSplats` (0 = unlimited,
+   * the default). A huge cloud at full quality can take seconds per frame, long
+   * enough for the OS to reset the GPU; this thins its smallest on-screen splats
+   * instead. Only applies once the interactive budget has thinned the cloud.
+   */
+  setSettledBudget(maxSplats: number): void {
+    const budget = Math.max(0, Math.floor(maxSplats));
+    if (budget === this.settledBudget) return;
+    this.settledBudget = budget;
+    this.settledTau = seedSettledTau(this.thinTau, this.interactiveBudget, budget);
+    this.gpuSortDirty = true;
+    this.onOrderChanged?.();
   }
 
   /**
@@ -1267,8 +1309,12 @@ export class SplatRenderer {
     if (this.refineTimer) clearTimeout(this.refineTimer);
     this.refineTimer = null;
     if (!(this.interactiveBudget > 0 && this.resources.count > this.interactiveBudget)) return;
-    this.forceFullSort = !hold;
     this.holdConvergeLeft = hold ? HOLD_CONVERGE_SORTS : 0;
+    if (!hold) {
+      this.requestSettledSort();
+      return;
+    }
+    this.forceFullSort = false;
     this.gpuSortDirty = true;
     this.onOrderChanged?.();
   }
@@ -1276,6 +1322,8 @@ export class SplatRenderer {
   /** Start a cloud at the initial threshold when it exceeds the budget, else unthinned. */
   private resetThinning(): void {
     this.holdConvergeLeft = this.interactiveHold ? HOLD_CONVERGE_SORTS : 0;
+    this.settledTau = 0;
+    this.settledConvergeLeft = 0;
     this.thinTau =
       this.interactiveBudget > 0 && this.resources.count > this.interactiveBudget
         ? THIN_TAU_INITIAL
@@ -1372,10 +1420,10 @@ export class SplatRenderer {
       this.logGpuSortOnce("inactive — this device/browser has no WebGPU compute");
       return false;
     }
-    const positionsBuffer = this.resources.gpuPositionsBuffer;
+    const transformView = this.resources.gpuTransformView;
     const orderBuffer = this.resources.gpuOrderBuffer;
-    if (!positionsBuffer || !orderBuffer) {
-      this.logGpuSortOnce("inactive — positions/order buffer missing");
+    if (!transformView || !orderBuffer) {
+      this.logGpuSortOnce("inactive — transform texture/order buffer missing");
       return false;
     }
     // Skip the sort when neither the cloud nor the camera pose changed since the
@@ -1416,13 +1464,14 @@ export class SplatRenderer {
       const [minD, maxD] = this.projectedDepthRange();
       const radiiBuffer = this.resources.gpuRadiiBuffer;
       const fullQuality = this.forceFullSort && !this.interactiveHold;
-      const budget = this.interactiveBudget;
-      const thinning = budget > 0 && !fullQuality && this.resources.count > budget;
-      const thinTau = thinning ? this.thinTau : 0;
+      const budget = fullQuality ? this.settledBudget : this.interactiveBudget;
+      const thinning = budget > 0 && this.resources.count > budget;
+      const thinTau = thinning ? (fullQuality ? this.settledTau : this.thinTau) : 0;
+      this.sortSerial++;
       const stamps = this.sortTimer?.begin() ?? null;
       this.gpuSorter.sort(
         encoder,
-        positionsBuffer,
+        transformView,
         orderBuffer,
         this.lastCamPos,
         this.lastViewDir,
@@ -1443,7 +1492,7 @@ export class SplatRenderer {
       );
       this.sortTimer?.end(encoder, stamps !== null);
       this.forceFullSort = false;
-      if (thinning && radiiBuffer && this.frustumCull) this.trackInteractiveBudget(budget, thinTau > 0);
+      if (thinning && radiiBuffer && this.frustumCull) this.trackInteractiveBudget(budget, thinTau > 0, fullQuality);
       // Remember the pose we just sorted for so identical subsequent frames skip.
       this.lastSortedCamPos = [this.lastCamPos[0], this.lastCamPos[1], this.lastCamPos[2]];
       this.lastSortedViewDir = [this.lastViewDir[0], this.lastViewDir[1], this.lastViewDir[2]];

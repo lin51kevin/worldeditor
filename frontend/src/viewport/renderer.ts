@@ -273,6 +273,7 @@ export class ViewportRenderer {
   // Same lazy-creation reason: the static scene's visible-splat budget while the camera moves (0 = off).
   private splatInteractiveBudget = 0;
   private splatInteractiveHold = false;
+  private splatSettledBudget = 0;
 
   // Desired static-scene occluder-depth state, remembered for the same lazy
   // creation reason as `splatGpuSortEnabled`. Scene-only: the actor clouds must
@@ -1118,6 +1119,7 @@ export class ViewportRenderer {
       this.splatRenderer.setFrustumCull(this.splatFrustumCullEnabled);
       this.splatRenderer.setInteractiveBudget(this.splatInteractiveBudget);
       this.splatRenderer.setInteractiveHold(this.splatInteractiveHold);
+      this.splatRenderer.setSettledBudget(this.splatSettledBudget);
       this.splatRenderer.setOccluderDepth(
         this.splatOccluderDepthEnabled,
         this.splatOccluderOptions,
@@ -1429,6 +1431,17 @@ export class ViewportRenderer {
   setSplatInteractiveHold(hold: boolean): void {
     this.splatInteractiveHold = hold;
     this.splatRenderer?.setInteractiveHold(hold);
+    this.markSceneDirty();
+  }
+
+  /**
+   * Cap the static scene's drawn splats at about `maxSplats` even once the camera
+   * settles, so a huge cloud never submits a multi-second frame. `0` (default)
+   * renders a settled camera at full quality. See `setSplatInteractiveBudget`.
+   */
+  setSplatSettledBudget(maxSplats: number): void {
+    this.splatSettledBudget = Math.max(0, Math.floor(maxSplats));
+    this.splatRenderer?.setSettledBudget(this.splatSettledBudget);
     this.markSceneDirty();
   }
 

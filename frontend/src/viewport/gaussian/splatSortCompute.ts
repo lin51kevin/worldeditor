@@ -138,13 +138,22 @@ const INIT_SHADER = /* wgsl */ `
 ${SPLAT_FRUSTUM_CULL_WGSL}
 struct DepthParams { cam:vec3<f32>, count:u32, view:vec3<f32>, cull_enabled:u32, dmin:f32, dmax:f32, guard:f32, thin_tau:f32 };
 @group(0) @binding(0) var<uniform> params : DepthParams;
-@group(0) @binding(1) var<storage, read> positions : array<f32>;
+@group(0) @binding(1) var transforms : texture_2d_array<u32>;
 @group(0) @binding(2) var<storage, read_write> keys : array<u32>;
 @group(0) @binding(3) var<storage, read_write> wg_counts : array<u32>;
 @group(0) @binding(4) var<storage, read_write> draw_args : array<atomic<u32>, 4>;
 @group(0) @binding(5) var<storage, read> radii : array<f32>;
 @group(0) @binding(6) var<uniform> cu : SplatUniforms;
 var<workgroup> wg_visible : atomic<u32>;
+// Same addressing as the render shader's splatAddress: the centre is the xyz bits of the transform texel.
+fn splat_center(i : u32) -> vec3<f32> {
+  let dim = textureDimensions(transforms, 0);
+  let per_page = dim.x * dim.y;
+  let page = i / per_page;
+  let local = i - page * per_page;
+  let t = textureLoad(transforms, vec2<i32>(i32(local % dim.x), i32(local / dim.x)), i32(page), 0);
+  return bitcast<vec3<f32>>(t.xyz);
+}
 @compute @workgroup_size(${WORKGROUP_SIZE})
 fn init_keys(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_id) wid : vec3<u32>) {
   if (lid.x == 0u) { atomicStore(&wg_visible, 0u); }
@@ -153,8 +162,7 @@ fn init_keys(@builtin(local_invocation_id) lid : vec3<u32>, @builtin(workgroup_i
   let i = g * ${WORKGROUP_SIZE}u + lid.x;
   // No early return: the two barriers below must stay workgroup-uniform.
   if (i < params.count) {
-    let b = i * 3u;
-    let pos = vec3<f32>(positions[b], positions[b+1u], positions[b+2u]);
+    let pos = splat_center(i);
     let d = pos - params.cam;
     let depth = d.x*params.view.x + d.y*params.view.y + d.z*params.view.z;
     var culled = depth <= 1e-6;
@@ -629,14 +637,15 @@ export class GpuSplatSorter {
   /**
    * Encode the stable radix sort into `encoder` (before the render pass).
    * Writes the back-to-front index order of the surviving splats into
-   * `orderBuffer`. `minDepth`/`maxDepth` bound the 24-bit normalized depth key
+   * `orderBuffer`. `transforms` is the cloud's RGBA32UI transform texture array,
+   * whose texels carry the splat centres. `minDepth`/`maxDepth` bound the 24-bit normalized depth key
    * (splats outside clamp to the extremes). `activeCount` limits the sort to the
    * first splats of the cloud (a progressive upload that is still writing the rest).
    * `timestamps` stamps the start of the key pass and the end of the last radix pass.
    */
   sort(
     encoder: GPUCommandEncoder,
-    positionsBuffer: GPUBuffer,
+    transforms: GPUTextureView,
     orderBuffer: GPUBuffer,
     camPos: readonly [number, number, number],
     viewDir: readonly [number, number, number],
@@ -692,14 +701,14 @@ export class GpuSplatSorter {
       pass.end();
     };
 
-    // Key pass. Needs `positions`, so its bind group is built here, not in resize().
+    // Key pass. Needs the cloud's transform texture, so its bind group is built here, not in resize().
     run(
       pipes.init,
       this.device.createBindGroup({
         layout: pipes.init.getBindGroupLayout(0),
         entries: [
           { binding: 0, resource: { buffer: this.depthParams! } },
-          { binding: 1, resource: { buffer: positionsBuffer } },
+          { binding: 1, resource: transforms },
           { binding: 2, resource: { buffer: this.keys } },
           { binding: 3, resource: { buffer: this.wgCounts! } },
           { binding: 4, resource: { buffer: this.drawArgs! } },

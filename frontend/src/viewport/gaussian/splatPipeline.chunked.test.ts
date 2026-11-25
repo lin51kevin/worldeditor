@@ -156,22 +156,30 @@ describe("GaussianSplatResources chunked upload", () => {
     }
   });
 
-  it("should write identity order and centres for every splat", () => {
+  it("should write identity order for every splat and keep no separate centre buffer", () => {
     const data = makeSplats(37, 1);
     const rec = recordingDevice();
     const resources = chunkedUpload(rec, data, 1, [10, 20, 7]);
 
     const order = new Uint32Array(37);
-    const positions = new Float32Array(37 * 3);
     for (const w of rec.bufferWrites) {
       if (w.buffer === (resources.gpuOrderBuffer as unknown)) order.set(w.data as Uint32Array, w.offset / 4);
-      if (w.buffer === (resources.gpuPositionsBuffer as unknown)) positions.set(w.data as Float32Array, w.offset / 4);
     }
-    const stride = splatStrideForDegree(1);
-    const f32 = new Float32Array(data.buffer);
     expect(Array.from(order)).toEqual(Array.from({ length: 37 }, (_, i) => i));
+    // Order + radii only: the sort reads centres from the transform texture.
+    expect(rec.buffers.filter((b) => b.size === 37 * 3 * 4)).toHaveLength(0);
+  });
+
+  it("should store each splat's centre bits in its transform texel for the GPU sort", () => {
+    const data = makeSplats(37, 1);
+    const rec = recordingDevice();
+    chunkedUpload(rec, data, 1, [10, 20, 7]);
+
+    const [transformLayers] = replay(rec);
+    const texels = new Uint32Array(transformLayers!.flatMap((layer) => Array.from(new Uint32Array(layer.buffer))));
+    const stride = splatStrideForDegree(1);
     for (let i = 0; i < 37; i++) {
-      expect(Array.from(positions.subarray(i * 3, i * 3 + 3))).toEqual(Array.from(f32.subarray(i * stride, i * stride + 3)));
+      expect(Array.from(texels.subarray(i * 4, i * 4 + 3))).toEqual(Array.from(data.subarray(i * stride, i * stride + 3)));
     }
   });
 
@@ -240,7 +248,7 @@ describe("GaussianSplatResources chunked upload", () => {
     expect(resources.hasContent).toBe(true);
     expect(resources.count).toBe(8);
     expect(resources.resourceMode).toBe("texture-array");
-    expect(resources.gpuPositionsBuffer).not.toBeNull();
+    expect(resources.gpuTransformView).not.toBeNull();
   });
 
   it("should reject append and end without a session", () => {
@@ -324,10 +332,11 @@ describe("GaussianSplatResources resident store", () => {
 
     resources.writeResident(prepareSplatChunk(data, 0), 12);
 
-    const positionsBuffer = resources.gpuPositionsBuffer as unknown as RecordedBuffer;
-    const write = rec.bufferWrites.find((w) => w.buffer === positionsBuffer)!;
-    expect(write.offset).toBe(12 * 3 * 4);
-    expect((write.data as Float32Array).length).toBe(15);
+    const radiiBuffer = resources.gpuRadiiBuffer as unknown as RecordedBuffer;
+    const write = rec.bufferWrites.find((w) => w.buffer === radiiBuffer)!;
+    expect(write.offset).toBe(12 * 4);
+    expect((write.data as Float32Array).length).toBe(5);
+    expect(rec.textureWrites.some((w) => w.origin.x + w.origin.y * 4 + w.origin.z * 16 === 12)).toBe(true);
   });
 
   it("should not write an identity order, since the GPU sort produces it", () => {
@@ -551,7 +560,6 @@ describe("GaussianSplatResources prepared chunk upload", () => {
       return Array.from(out);
     };
     expect(collect(prepared, b.gpuOrderBuffer, 1)).toEqual(collect(packed, a.gpuOrderBuffer, 1));
-    expect(collect(prepared, b.gpuPositionsBuffer, 3)).toEqual(collect(packed, a.gpuPositionsBuffer, 3));
     expect(collect(prepared, b.gpuRadiiBuffer, 1)).toEqual(collect(packed, a.gpuRadiiBuffer, 1));
   });
 

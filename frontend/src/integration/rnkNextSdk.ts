@@ -33,7 +33,12 @@ import type {
 import { assertGaussianSplatLayout } from '../viewport/gaussian/splatLayout';
 import type { SogWasm, StreamedProgress } from './sogLoader';
 import type { LodStreamHandle, LodStreamingOptions } from './lodStreamer';
-import { loadLodStreamedIntoRenderer, loadSogIntoRenderer, loadStreamedSogIntoRenderer } from './sogRendererBridge';
+import {
+  loadLodStreamedIntoRenderer,
+  loadSogIntoRenderer,
+  loadStreamedSogIntoRenderer,
+  supportsLodStreaming,
+} from './sogRendererBridge';
 import { resolveWasmSource, type SogWasmSource } from './sogDecodePool';
 import { openSogDecoderFor } from './sogDecoderSession';
 import { loadSogWorkerFactory } from './sogWorkerFactory';
@@ -162,7 +167,7 @@ export interface GaussianSplatSogOptions {
    * Streamed SOG only: keep just the LOD levels and regions the camera needs on
    * the GPU instead of the whole scene, within a splat budget (`true` = defaults,
    * 8M splats). Needs the GPU depth sort and a `lod-meta.json` with several LOD
-   * levels. The promise resolves once the first view is resident and the returned
+   * levels; a single-level scene ignores it and loads whole. The promise resolves once the first view is resident and the returned
    * `lodStream` handle then follows the camera. Default off.
    */
   lodStreaming?: boolean | LodStreamingOptions;
@@ -511,6 +516,14 @@ export interface WorldEditorRenderer {
    * fits the budget. Optional so hosts bundling an older SDK degrade gracefully.
    */
   setSplatInteractiveHold?(hold: boolean): void;
+  /**
+   * Cap the static scene's drawn splats at about `maxSplats` once the camera
+   * settles too (smallest on-screen splats thinned). A 60M+ scene at full quality
+   * can take seconds per frame, long enough for the OS to reset the GPU. `0`
+   * (default) keeps full quality. Needs `setSplatInteractiveBudget`. Optional so
+   * hosts bundling an older SDK degrade gracefully.
+   */
+  setSplatSettledBudget?(maxSplats: number): void;
   /**
    * Enable/disable the static scene's depth-only occluder pass, which makes
    * dynamic actor (NPC/ego) splats hide behind the scene's opaque surfaces
@@ -1079,8 +1092,13 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
         decoding.dispose();
       }
     },
-    loadGaussianSplatsStreamed: async (lodMetaUrl, options) => {
+    loadGaussianSplatsStreamed: async (lodMetaUrl, requested) => {
       stopLodStream();
+      let options = requested;
+      if (options?.lodStreaming && !(await supportsLodStreaming(lodMetaUrl, options.signal))) {
+        console.info('[Splat] Scene has a single LOD level; loading it whole instead of LOD streaming');
+        options = { ...options, lodStreaming: false };
+      }
       const sogWasm = wasm as unknown as SogWasm;
       const decoding = await openSogDecoderFor(sogWasm, sogWasmSource, true, options ?? {}, loadSogWorkerFactory);
       if (options?.lodStreaming) {
@@ -1166,6 +1184,9 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
     },
     setSplatInteractiveHold: (hold: boolean) => {
       renderer.setSplatInteractiveHold(hold);
+    },
+    setSplatSettledBudget: (maxSplats: number) => {
+      renderer.setSplatSettledBudget(maxSplats);
     },
     setSplatOccluderDepth: (enabled, options) => {
       renderer.setSplatOccluderDepth(enabled, options);

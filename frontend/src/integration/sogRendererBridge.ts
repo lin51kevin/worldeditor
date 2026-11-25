@@ -264,6 +264,15 @@ export async function loadStreamedSogIntoRenderer(
 }
 
 /**
+ * Whether a Streamed SOG has coarser LOD levels to stream. A single-level scene
+ * under a splat budget would only ever show the units nearest the camera.
+ */
+export async function supportsLodStreaming(lodMetaUrl: string, signal?: AbortSignal): Promise<boolean> {
+  const meta = await fetchLodMeta(lodMetaUrl, { signal });
+  return meta.lodLevels > 1;
+}
+
+/**
  * Stream a Streamed SOG scene by view: only the LOD units the camera needs stay
  * resident (see {@link LodStreamer}). Resolves once the first view is on the GPU;
  * the returned `lodStream` keeps following the camera until disposed.
