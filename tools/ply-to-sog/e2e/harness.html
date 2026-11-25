@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>SOG harness</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: #111;
+    }
+
+    canvas {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="c"></canvas>
+  <!-- The SDK bundle expects the host bundler to define process.env. -->
+  <script>window.process = { env: { NODE_ENV: 'production' } };</script>
+  <script type="module">
+    // Drives the built SDK against a SOG / Streamed SOG URL and reports timings; result lands in window.__result.
+    import { createWorldEditorSdk } from '/sdk/we-next-sdk.js';
+
+    const params = new URLSearchParams(location.search);
+    const mode = params.get('mode');
+    const url = params.get('url');
+    const target = (params.get('target') ?? '0,0,0').split(',').map(Number);
+    const frames = Number(params.get('frames') ?? 180);
+    const result = { mode, url, ok: false };
+    window.__result = null;
+
+    try {
+      const sdk = await createWorldEditorSdk({ wasmInput: new URL('/sdk/we-next-sdk.wasm', location.origin) });
+      const canvas = document.getElementById('c');
+      const r = sdk.createRenderer();
+      result.gpu = await r.init(canvas);
+      if (!result.gpu) throw new Error('WebGPU renderer failed to initialise');
+      r.setDimension('3d');
+      r.setSplatGpuSort?.(true);
+      if (params.get('cull') === '0') r.setSplatFrustumCull?.(false);
+      // budget=<n>: interactive splat budget (thinning while the camera moves).
+      if (params.get('budget')) r.setSplatInteractiveBudget?.(Number(params.get('budget')));
+      // occluder=1: the host's default depth-only occluder pass (actors hide behind the scene).
+      if (params.get('occluder') === '1') r.setSplatOccluderDepth?.(true);
+
+      const t0 = performance.now();
+      const progress = [];
+      const options = {
+        ...(params.get('origin') ? { origin: params.get('origin').split(',').map(Number) } : { worldAligned: true }),
+        onProgress: (p) => {
+          if (p.chunksDone % 10 === 0 || p.chunksDone === p.chunksTotal) {
+            progress.push({ t: Math.round(performance.now() - t0), chunks: p.chunksDone, splats: p.splatsDone });
+          }
+        },
+      };
+      let info;
+      if (mode === 'ply') {
+        // Baseline: the existing whole-file PLY path (origin-relative positions).
+        info = await r.loadGaussianSplats(url, undefined, undefined, 'full');
+        for (let k = 0; k < 3; k++) target[k] -= info.origin[k];
+      } else {
+        const load = mode === 'streamed' ? r.loadGaussianSplatsStreamed : r.loadGaussianSplatsSog;
+        if (!load) throw new Error(`SDK has no loader for mode ${mode}`);
+        info = await load.call(r, url, options);
+        // Same frame as the PLY baseline: shift the target by the origin the loader used.
+        for (let k = 0; k < 3; k++) target[k] -= info.origin[k];
+      }
+      result.loadMs = Math.round(performance.now() - t0);
+      result.info = info;
+      result.progress = progress;
+
+      if (info?.uploadStatus?.outcome === 'uploaded') {
+        const [tx, ty] = target;
+        // Frame a fixed 40 m square around the target, then nudge the camera each frame so the sort re-runs.
+        const half = Number(params.get('frame') ?? 20);
+        // chase=<yaw radians>: the case editor's default view (ego chase camera 8 m behind, 5 m up, 20 deg down).
+        const chase = params.get('chase');
+        const ego = (dx) => r.setChaseCam3D(tx + dx, ty, target[2], Number(chase), 8, 5, 5 / Math.tan((20 * Math.PI) / 180) - 8);
+        if (chase !== null) ego(0);
+        else r.frameScene3D(tx - half, ty - half, tx + half, ty + half);
+        result.pose = r.getCameraPose?.();
+        const measure = (moving) =>
+          new Promise((resolve) => {
+            const deltas = [];
+            let last = performance.now();
+            let n = 0;
+            const fence = params.get('fence') === '1';
+            const tick = async () => {
+              // Static frames reuse the sorted order; moving frames force a re-sort.
+              // Static frames must not touch the camera at all, or float noise re-triggers the sort every frame.
+              if (moving) {
+                if (chase !== null) ego((n % 2) * 0.02);
+                else r.centerCamera3D(tx + (n % 2) * 0.02, ty);
+              }
+              r.render();
+              // fence=1: wait for the GPU (a readback is a sync point) so the delta is real GPU frame time, not vsync.
+              if (fence) await r.getSplatVisibleCount?.();
+              const now = performance.now();
+              if (n > 3) deltas.push(now - last);
+              last = now;
+              if (++n < frames) (fence ? setTimeout(tick, 0) : requestAnimationFrame(tick));
+              else {
+                deltas.sort((a, b) => a - b);
+                const pick = (q) => Math.round(deltas[Math.min(deltas.length - 1, Math.floor(deltas.length * q))] * 10) / 10;
+                resolve({ p50: pick(0.5), p95: pick(0.95), max: pick(1) });
+              }
+            };
+            requestAnimationFrame(tick);
+          });
+        result.staticFrameMs = await measure(false);
+        result.visibleSplats = await r.getSplatVisibleCount?.();
+        result.frameMs = await measure(true);
+        result.ok = true;
+      }
+    } catch (error) {
+      result.error = String(error?.stack ?? error);
+    }
+    window.__result = result;
+  </script>
+</body>
+
+</html>

@@ -7,14 +7,17 @@
  * `maxStorageBufferBindingSize`. A packed-storage pipeline remains available as
  * an explicit compatibility fallback and is always reported to callers.
  */
+import { TRANSFORM_LAYERS, type PreparedSplatChunk } from "./splatPrepare";
 import { GAUSSIAN_SPLAT_SHADER } from "./splatShader";
 import { GAUSSIAN_SPLAT_PACKED_SHADER } from "./splatPackedShader";
 import { SPLAT_UNIFORM_BYTES } from "./splatUniform";
 import {
+  GAUSSIAN_SPLAT_LAYOUT_VERSION,
   GAUSSIAN_SPLAT_TRANSFORM_WORDS,
   assertGaussianSplatBuffer,
   halfToFloat,
   planGaussianTextureArray,
+  splatStrideForDegree,
   type GaussianTextureArrayLayout,
 } from "./splatLayout";
 
@@ -197,6 +200,8 @@ export class GaussianSplatResources {
   private packedSplatBuffer: GPUBuffer | null = null;
   private orderBuffer: GPUBuffer | null = null;
   private positionsBuffer: GPUBuffer | null = null;
+  /** One f32 per splat: its largest activated scale axis (frustum-culling bound). */
+  private radiiBuffer: GPUBuffer | null = null;
   private readonly uniformBuffer: GPUBuffer;
   private bindGroup: GPUBindGroup | null = null;
   private _count = 0;
@@ -214,6 +219,9 @@ export class GaussianSplatResources {
   private occluderIndexBuffer: GPUBuffer | null = null;
   private occluderBindGroup: GPUBindGroup | null = null;
   private _occluderCount = 0;
+  /** In-progress chunked upload, or `null`. */
+  private chunked: { count: number; stride: number; written: number } | null =
+    null;
 
   constructor(
     private readonly device: GPUDevice,
@@ -290,6 +298,19 @@ export class GaussianSplatResources {
    */
   get gpuPositionsBuffer(): GPUBuffer | null {
     return this.positionsBuffer;
+  }
+
+  /**
+   * Per-splat largest activated scale axis (one f32 per splat), the radius bound
+   * the GPU sort's key pass needs to cull splats outside the view frustum.
+   */
+  get gpuRadiiBuffer(): GPUBuffer | null {
+    return this.radiiBuffer;
+  }
+
+  /** The splat camera uniform the vertex stage reads; the key pass culls against the same values. */
+  get gpuUniformBuffer(): GPUBuffer {
+    return this.uniformBuffer;
   }
 
   /**
@@ -393,6 +414,7 @@ export class GaussianSplatResources {
       this.createOrderBuffer(count);
       if (selectedMode === "texture-array") {
         this.uploadTextureArrays(splatData, stride, shDegree);
+        this.uploadRadii(splatData, stride, count);
       } else {
         this.uploadPackedFallback(splatData);
       }
@@ -403,6 +425,372 @@ export class GaussianSplatResources {
       this._resourceMode = "none";
       throw error;
     }
+  }
+
+  /**
+   * Begin a chunked texture-array upload of `count` splats in layout v2. The
+   * cloud is not drawable until {@link endChunkedUpload}. Chunks are written
+   * straight into the GPU textures, so no full-size CPU copy is ever needed.
+   * Throws when the device cannot hold the cloud; nothing stays allocated then.
+   */
+  beginChunkedUpload(
+    count: number,
+    shDegree: number,
+    layoutVersion: number,
+  ): void {
+    if (layoutVersion !== GAUSSIAN_SPLAT_LAYOUT_VERSION) {
+      throw new Error(`Unsupported Gaussian layout version ${layoutVersion}`);
+    }
+    if (!Number.isSafeInteger(count) || count <= 0) {
+      throw new RangeError("Chunked upload needs a positive splat count");
+    }
+    const stride = splatStrideForDegree(shDegree);
+    this.releaseCloudResources();
+    this._count = 0;
+    this._visibleCount = 0;
+    this._shDegree = shDegree;
+    this._resourceMode = "none";
+    this.chunked = null;
+    try {
+      this.createTextureArrays(count, shDegree);
+      this.orderBuffer = this.device.createBuffer({
+        size: count * Uint32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      this.positionsBuffer = this.device.createBuffer({
+        size: count * 3 * Float32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      this.radiiBuffer = this.device.createBuffer({
+        size: count * Float32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      this.opacityHalfBits = new Uint16Array(count);
+    } catch (error) {
+      this.releaseCloudResources();
+      throw error;
+    }
+    this.chunked = { count, stride, written: 0 };
+  }
+
+  /** Splats written so far by the in-progress chunked upload. */
+  get chunkedWritten(): number {
+    return this.chunked?.written ?? 0;
+  }
+
+  /**
+   * Write the next `chunk` (whole layout-v2 records) of a chunked upload.
+   * `prepared`, when given, is the same chunk already repacked by
+   * {@link prepareSplatChunk} (typically in a worker), which skips the CPU repack.
+   */
+  appendChunkedUpload(chunk: Uint32Array, prepared?: PreparedSplatChunk): void {
+    const session = this.chunked;
+    if (!session) throw new Error("No chunked Gaussian upload in progress");
+    const { stride, count, written } = session;
+    if (chunk.length % stride !== 0) {
+      throw new RangeError("Chunk is not a whole number of splat records");
+    }
+    const n = chunk.length / stride;
+    if (written + n > count) {
+      throw new RangeError("Chunk exceeds the declared splat count");
+    }
+    if (prepared && (prepared.count !== n || prepared.shDegree !== this._shDegree)) {
+      throw new RangeError("Prepared chunk does not match the appended splats");
+    }
+    try {
+      this.writeSplatRange(chunk, n, written, stride, prepared);
+      this.writeSideBuffers(chunk, n, written, stride, prepared);
+    } catch (error) {
+      this.abortChunkedUpload();
+      throw error;
+    }
+    session.written += n;
+  }
+
+  /** Finish a chunked upload; the cloud becomes drawable. */
+  endChunkedUpload(): void {
+    const session = this.chunked;
+    if (!session) throw new Error("No chunked Gaussian upload in progress");
+    if (session.written !== session.count) {
+      this.abortChunkedUpload();
+      throw new Error(
+        `Chunked upload ended after ${session.written} of ${session.count} splats`,
+      );
+    }
+    this._count = session.count;
+    this._visibleCount = session.count;
+    this._resourceMode = "texture-array";
+    this.createTextureBindGroup();
+    this.chunked = null;
+  }
+
+  /** Discard an in-progress chunked upload and free what it allocated. */
+  abortChunkedUpload(): void {
+    this.chunked = null;
+    this.releaseCloudResources();
+    this._count = 0;
+    this._visibleCount = 0;
+    this._resourceMode = "none";
+  }
+
+  /** Identity order, centres, radii and opacity bits for splats `[first, first+n)`. */
+  private writeSideBuffers(
+    chunk: Uint32Array,
+    n: number,
+    first: number,
+    stride: number,
+    prepared?: PreparedSplatChunk,
+  ): void {
+    const order = new Uint32Array(n);
+    for (let i = 0; i < n; i++) order[i] = first + i;
+    let positions: Float32Array;
+    let radii: Float32Array;
+    if (prepared) {
+      positions = prepared.positions;
+      radii = prepared.radii;
+      this.opacityHalfBits!.set(prepared.opacity, first);
+    } else {
+      const f32 = new Float32Array(chunk.buffer, chunk.byteOffset, chunk.length);
+      positions = new Float32Array(n * 3);
+      radii = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const base = i * stride;
+        positions[i * 3] = f32[base]!;
+        positions[i * 3 + 1] = f32[base + 1]!;
+        positions[i * 3 + 2] = f32[base + 2]!;
+        radii[i] = Math.max(f32[base + 3]!, f32[base + 4]!, f32[base + 5]!);
+        this.opacityHalfBits![first + i] =
+          chunk[base + GAUSSIAN_SPLAT_TRANSFORM_WORDS]! & 0xffff;
+      }
+    }
+    this.device.queue.writeBuffer(
+      this.orderBuffer!,
+      first * Uint32Array.BYTES_PER_ELEMENT,
+      order as GPUAllowSharedBufferSource,
+    );
+    this.device.queue.writeBuffer(
+      this.positionsBuffer!,
+      first * 3 * Float32Array.BYTES_PER_ELEMENT,
+      positions as GPUAllowSharedBufferSource,
+    );
+    this.device.queue.writeBuffer(
+      this.radiiBuffer!,
+      first * Float32Array.BYTES_PER_ELEMENT,
+      radii as GPUAllowSharedBufferSource,
+    );
+  }
+
+  /**
+   * Write splats `[first, first + n)` of `chunk` into the texture arrays as
+   * rectangles of raster-consecutive splats: a partial first/last row, or a run
+   * of whole rows, so an arbitrary chunk size never overwrites its neighbours.
+   */
+  private writeSplatRange(
+    chunk: Uint32Array,
+    n: number,
+    first: number,
+    stride: number,
+    prepared?: PreparedSplatChunk,
+  ): void {
+    const layout = this._textureLayout!;
+    const maxRows = Math.max(
+      1,
+      Math.floor(
+        MAX_STAGING_BYTES / alignTo(layout.width * 16, COPY_ROW_ALIGNMENT),
+      ),
+    );
+    let done = 0;
+    while (done < n) {
+      const global = first + done;
+      const page = Math.floor(global / layout.splatsPerPage);
+      const local = global - page * layout.splatsPerPage;
+      const y = Math.floor(local / layout.width);
+      const x = local - y * layout.width;
+      const left = n - done;
+      let width: number;
+      let rows: number;
+      if (x !== 0 || left < layout.width) {
+        width = Math.min(layout.width - x, left);
+        rows = 1;
+      } else {
+        width = layout.width;
+        const pageRowsLeft = Math.floor(
+          (layout.splatsPerPage - local) / layout.width,
+        );
+        rows = Math.min(Math.floor(left / layout.width), maxRows, pageRowsLeft);
+      }
+      if (prepared) {
+        this.writePreparedRect(prepared, done, layout, page, x, y, width, rows);
+      } else {
+        this.writeRect(chunk, done, stride, layout, page, x, y, width, rows);
+      }
+      done += width * rows;
+    }
+  }
+
+  /**
+   * Repack one rectangle of splats into every transform and feature layer in a
+   * single pass over the chunk (one pass per layer re-reads the whole chunk from
+   * memory several times over), then write each layer as its own texture copy.
+   */
+  private writeRect(
+    chunk: Uint32Array,
+    firstInChunk: number,
+    stride: number,
+    layout: GaussianTextureArrayLayout,
+    page: number,
+    x0: number,
+    y: number,
+    width: number,
+    rows: number,
+  ): void {
+    const transformRow = alignTo(width * 16, COPY_ROW_ALIGNMENT);
+    const featureRow = alignTo(width * 8, COPY_ROW_ALIGNMENT);
+    const transformLayerWords = (transformRow * rows) / 4;
+    const featureLayerHalves = (featureRow * rows) / 2;
+    const featureLayers = layout.featureTexelsPerSplat;
+    const transform = new Float32Array(transformLayerWords * TRANSFORM_LAYERS);
+    const features = new Uint16Array(featureLayerHalves * featureLayers);
+    const featureElements = 1 + (this._shDegree + 1) ** 2 * 3;
+    const source = new Float32Array(chunk.buffer, chunk.byteOffset, chunk.length);
+    // Half-float features are little-endian pairs inside each 32-bit word.
+    const halves = new Uint16Array(chunk.buffer, chunk.byteOffset, chunk.length * 2);
+
+    for (let row = 0; row < rows; row++) {
+      const transformRowWord = (row * transformRow) / 4;
+      const featureRowHalf = (row * featureRow) / 2;
+      for (let x = 0; x < width; x++) {
+        const base = (firstInChunk + row * width + x) * stride;
+        const t = transformRowWord + x * 4;
+        transform[t] = source[base]!;
+        transform[t + 1] = source[base + 1]!;
+        transform[t + 2] = source[base + 2]!;
+        transform[t + 3] = source[base + 3]!;
+        transform[transformLayerWords + t] = source[base + 4]!;
+        transform[transformLayerWords + t + 1] = source[base + 5]!;
+        transform[transformLayerWords + t + 2] = source[base + 6]!;
+        transform[transformLayerWords + t + 3] = source[base + 7]!;
+        transform[2 * transformLayerWords + t] = source[base + 8]!;
+        transform[2 * transformLayerWords + t + 1] = source[base + 9]!;
+
+        const f = featureRowHalf + x * 4;
+        const half = (base + GAUSSIAN_SPLAT_TRANSFORM_WORDS) * 2;
+        for (let e = 0; e < featureElements; e++) {
+          features[(e >> 2) * featureLayerHalves + f + (e & 3)] = halves[half + e]!;
+        }
+      }
+    }
+
+    const transformBytes = transformLayerWords * 4;
+    for (let layer = 0; layer < TRANSFORM_LAYERS; layer++) {
+      this.device.queue.writeTexture(
+        { texture: this.transformTexture!, origin: { x: x0, y, z: page * TRANSFORM_LAYERS + layer } },
+        new Uint8Array(transform.buffer, layer * transformBytes, transformBytes),
+        { bytesPerRow: transformRow, rowsPerImage: rows },
+        { width, height: rows, depthOrArrayLayers: 1 },
+      );
+    }
+    const featureBytes = featureLayerHalves * 2;
+    for (let layer = 0; layer < featureLayers; layer++) {
+      this.device.queue.writeTexture(
+        { texture: this.featureTexture!, origin: { x: x0, y, z: page * featureLayers + layer } },
+        new Uint8Array(features.buffer, layer * featureBytes, featureBytes),
+        { bytesPerRow: featureRow, rowsPerImage: rows },
+        { width, height: rows, depthOrArrayLayers: 1 },
+      );
+    }
+  }
+
+  /**
+   * Write a rectangle straight from the prepared planes: consecutive splats are
+   * contiguous in every layer, so rows go to the GPU without a CPU repack unless
+   * their byte length is not a multiple of the 256-byte row alignment.
+   */
+  private writePreparedRect(
+    prepared: PreparedSplatChunk,
+    firstInChunk: number,
+    layout: GaussianTextureArrayLayout,
+    page: number,
+    x0: number,
+    y: number,
+    width: number,
+    rows: number,
+  ): void {
+    const { count } = prepared;
+    for (let layer = 0; layer < TRANSFORM_LAYERS; layer++) {
+      this.writePlaneRect(
+        this.transformTexture!,
+        prepared.transform,
+        (layer * count + firstInChunk) * 4,
+        { x: x0, y, z: page * TRANSFORM_LAYERS + layer },
+        width,
+        rows,
+      );
+    }
+    for (let layer = 0; layer < layout.featureTexelsPerSplat; layer++) {
+      this.writePlaneRect(
+        this.featureTexture!,
+        prepared.features,
+        (layer * count + firstInChunk) * 4,
+        { x: x0, y, z: page * layout.featureTexelsPerSplat + layer },
+        width,
+        rows,
+      );
+    }
+  }
+
+  private writePlaneRect(
+    texture: GPUTexture,
+    plane: Float32Array | Uint16Array,
+    firstElement: number,
+    origin: { x: number; y: number; z: number },
+    width: number,
+    rows: number,
+  ): void {
+    const rowBytes = width * 4 * plane.BYTES_PER_ELEMENT;
+    const bytes = new Uint8Array(
+      plane.buffer,
+      plane.byteOffset + firstElement * plane.BYTES_PER_ELEMENT,
+      rowBytes * rows,
+    );
+    let data = bytes;
+    let bytesPerRow = rowBytes;
+    if (rows > 1 && rowBytes % COPY_ROW_ALIGNMENT !== 0) {
+      bytesPerRow = alignTo(rowBytes, COPY_ROW_ALIGNMENT);
+      data = new Uint8Array(bytesPerRow * rows);
+      for (let row = 0; row < rows; row++) {
+        data.set(bytes.subarray(row * rowBytes, (row + 1) * rowBytes), row * bytesPerRow);
+      }
+    }
+    this.device.queue.writeTexture(
+      { texture, origin },
+      data as GPUAllowSharedBufferSource,
+      { bytesPerRow, rowsPerImage: rows },
+      { width, height: rows, depthOrArrayLayers: 1 },
+    );
+  }
+
+  /** Largest activated scale axis per splat, for the sort's frustum culling. */
+  private uploadRadii(splatData: Uint32Array, stride: number, count: number): void {
+    const f32 = new Float32Array(
+      splatData.buffer,
+      splatData.byteOffset,
+      splatData.length,
+    );
+    const radii = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      const base = i * stride;
+      radii[i] = Math.max(f32[base + 3]!, f32[base + 4]!, f32[base + 5]!);
+    }
+    this.radiiBuffer = this.device.createBuffer({
+      size: radii.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(
+      this.radiiBuffer,
+      0,
+      radii as GPUAllowSharedBufferSource,
+    );
   }
 
   private createOrderBuffer(count: number): void {
@@ -464,9 +852,20 @@ export class GaussianSplatResources {
     stride: number,
     shDegree: number,
   ): void {
+    const layout = this.createTextureArrays(this._count, shDegree);
+    this.writeTransformTexture(splatData, stride, layout);
+    this.writeFeatureTexture(splatData, stride, layout);
+    this.createTextureBindGroup();
+  }
+
+  /** Allocate the paged transform/feature texture arrays for `count` splats. */
+  private createTextureArrays(
+    count: number,
+    shDegree: number,
+  ): GaussianTextureArrayLayout {
     const limits = this.device.limits;
     const layout = planGaussianTextureArray(
-      this._count,
+      count,
       shDegree,
       limits.maxTextureDimension2D,
       limits.maxTextureArrayLayers,
@@ -495,22 +894,23 @@ export class GaussianSplatResources {
       format: "rgba16float",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
+    return layout;
+  }
 
-    this.writeTransformTexture(splatData, stride, layout);
-    this.writeFeatureTexture(splatData, stride, layout);
+  private createTextureBindGroup(): void {
     this.bindGroup = this.device.createBindGroup({
       layout: this.bindGroupLayout,
       entries: [
         { binding: 0, resource: { buffer: this.uniformBuffer } },
         {
           binding: 1,
-          resource: this.transformTexture.createView({
+          resource: this.transformTexture!.createView({
             dimension: "2d-array",
           }),
         },
         {
           binding: 2,
-          resource: this.featureTexture.createView({
+          resource: this.featureTexture!.createView({
             dimension: "2d-array",
           }),
         },
@@ -699,6 +1099,19 @@ export class GaussianSplatResources {
    * than mis-rendering (as before).
    */
   drawDepthOnly(pass: GPURenderPassEncoder, depthPipeline: GPURenderPipeline): void {
+    // The GPU sort already culled the cloud to what the camera can see, and the
+    // depth stage drops translucent splats itself, so reuse that list: drawing
+    // the fixed whole-cloud index costs every splat of a huge scene each frame.
+    if (
+      this.indirectBuffer &&
+      this.bindGroup &&
+      this._resourceMode === "texture-array"
+    ) {
+      pass.setPipeline(depthPipeline);
+      pass.setBindGroup(0, this.bindGroup);
+      pass.drawIndirect(this.indirectBuffer, 0);
+      return;
+    }
     if (!this.occluderBindGroup || this._occluderCount === 0) return;
     pass.setPipeline(depthPipeline);
     pass.setBindGroup(0, this.occluderBindGroup);
@@ -721,17 +1134,20 @@ export class GaussianSplatResources {
   }
 
   private releaseCloudResources(): void {
+    this.chunked = null;
     this.transformTexture?.destroy();
     this.featureTexture?.destroy();
     this.packedSplatBuffer?.destroy();
     this.orderBuffer?.destroy();
     this.positionsBuffer?.destroy();
+    this.radiiBuffer?.destroy();
     this.occluderIndexBuffer?.destroy();
     this.transformTexture = null;
     this.featureTexture = null;
     this.packedSplatBuffer = null;
     this.orderBuffer = null;
     this.positionsBuffer = null;
+    this.radiiBuffer = null;
     this.bindGroup = null;
     this._textureLayout = null;
     this.opacityHalfBits = null;

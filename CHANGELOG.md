@@ -5,6 +5,24 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ---
 
+## [Unreleased]
+
+### Features
+
+- **splat**: SOG v3 decoding in `we-core` (`pointcloud::sog`, WebP via `image-webp`) with WASM bindings, and `loadGaussianSplatsSog` / `loadGaussianSplatsStreamed` SDK methods with chunked GPU upload for scenes too large to read as a single PLY
+- **tools**: `tools/ply-to-sog` conversion, statistics and render-PSNR verification script, plus a WebGPU browser e2e harness
+
+### Performance
+
+- **splat**: the GPU depth sort culls splats outside the view frustum (conservative, pixel-identical bound) and radix-sorts only the survivors; a 65.9M-splat scene drops from about 1.6 s/frame to 17 ms (10 m framing) or 125 ms (40 m framing) on an RTX 3070; `setSplatFrustumCull` toggle on the SDK
+- **splat**: the splat vertex stage fetches each opacity/SH texture layer once per vertex instead of once per coefficient
+- **splat**: SOG / Streamed SOG scenes download, decode and GPU-repack in a pool of Web Workers (`decodeWorkers`, default up to 6, `0` = main thread) instead of on the main thread; a 65.9M-splat scene loads in 13 s instead of 44 s and the page stays responsive while decoding; the upload writes rows straight from the prepared planes
+- **splat**: `setSplatInteractiveBudget(maxSplats)` caps the static scene to about that many splats while the camera moves (smallest on-screen splats thinned stochastically, threshold steered from the measured visible count) and re-sorts at full quality once the camera rests; a 60M-visible wide view drops from 2.8 s to 43 ms per frame while moving
+- **splat**: the colour stage keeps opacity/SH layers in plain private variables instead of a dynamically indexed array, which spilled to local memory; a 5.3M-splat view drops from 114 ms to 9 ms of GPU time (RTX 3070)
+- **splat**: the depth-only occluder pass draws the GPU sort's visible list instead of every opaque splat; with a 65.9M-splat scene it drops from 457 ms to 24 ms per frame at a 10 m framing
+
+---
+
 <a name="0.4.4"></a>
 ## [0.4.4] — 2026-08-26
 

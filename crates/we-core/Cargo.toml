@@ -11,6 +11,7 @@ thiserror = { workspace = true }
 log = { workspace = true }
 nalgebra = { workspace = true }
 quick-xml = { workspace = true }
+image-webp = "0.2.4"
 
 [dev-dependencies]
 proptest = "1"

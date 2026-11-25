@@ -16,6 +16,19 @@
  * RGBA32F transform layers and `ceil((1 + SH_RGB_values) / 4)` RGBA16F feature
  * layers per page. The only storage buffer is the single global sorted order.
  */
+const FEATURE_LAYERS_MAX = 13;
+const featureLayers = Array.from({ length: FEATURE_LAYERS_MAX }, (_, i) => i);
+const FEATURE_PRIVATES = featureLayers
+  .map((i) => `var<private> feat${i} : vec4<f32>;`)
+  .join("\n");
+const FEATURE_STORE_CHAIN = featureLayers
+  .map((i) => `${i === 0 ? "if" : "else if"} (layer == ${i}u) { feat${i} = v; }`)
+  .join("\n  ");
+const FEATURE_SELECT_CHAIN = featureLayers
+  .slice(1)
+  .map((i) => `${i === 1 ? "if" : "else if"} (l == ${i}u) { v = feat${i}; }`)
+  .join("\n  ");
+
 export const GAUSSIAN_SPLAT_SHADER = /* wgsl */ `
 struct SplatUniforms {
   view_proj : mat4x4<f32>,
@@ -84,45 +97,49 @@ fn splatAddress(si : u32) -> vec3<u32> {
   return vec3<u32>(local % dimensions.x, local / dimensions.x, page);
 }
 
-fn transformAt(si : u32, chunk : u32) -> vec4<f32> {
-  let address = splatAddress(si);
-  let page = address.z;
+fn transformAt(address : vec3<u32>, chunk : u32) -> vec4<f32> {
   return textureLoad(
     transforms,
     vec2<i32>(address.xy),
-    i32(page * 3u + chunk),
+    i32(address.z * 3u + chunk),
     0,
   );
 }
 
-// Read one opacity/SH half element from a four-half RGBA16F layer.
-fn featureAt(si : u32, e : u32) -> f32 {
-  let address = splatAddress(si);
-  let page = address.z;
+// Opacity + SH halves of the current splat, four per RGBA16F layer (at most 13
+// layers for degree 3). Each layer is fetched once, not once per coefficient.
+// Plain privates, not an array: indexing a private array dynamically spills it to
+// local memory, which made the colour stage ~12x slower than the whole rest of the draw.
+${FEATURE_PRIVATES}
+
+fn featureLayerCount() -> u32 {
   let coeffs = (u32(u.sh_degree) + 1u) * (u32(u.sh_degree) + 1u);
-  let featureLayers = (1u + coeffs * 3u + 3u) / 4u;
-  let chunk = e >> 2u;
-  let value = textureLoad(
+  return (1u + coeffs * 3u + 3u) / 4u;
+}
+
+fn loadFeatureLayer(address : vec3<u32>, layer : u32) {
+  let v = textureLoad(
     features,
     vec2<i32>(address.xy),
-    i32(page * featureLayers + chunk),
+    i32(address.z * featureLayerCount() + layer),
     0,
   );
-  let lane = e & 3u;
-  if (lane == 0u) { return value.x; }
-  if (lane == 1u) { return value.y; }
-  if (lane == 2u) { return value.z; }
-  return value.w;
+  ${FEATURE_STORE_CHAIN}
+}
+
+// Opacity/SH half element \`e\` of the layers loaded into the \`feat*\` privates.
+// Every caller passes a constant, so the selects fold away at compile time.
+fn featureAt(e : u32) -> f32 {
+  let l = e >> 2u;
+  var v = feat0;
+  ${FEATURE_SELECT_CHAIN}
+  return v[e & 3u];
 }
 
 // Read SH coefficient k (a per-channel RGB triple) after opacity element 0.
-fn shCoeff(si : u32, k : u32) -> vec3<f32> {
+fn shCoeff(k : u32) -> vec3<f32> {
   let e = 1u + k * 3u;
-  return vec3<f32>(
-    featureAt(si, e),
-    featureAt(si, e + 1u),
-    featureAt(si, e + 2u),
-  );
+  return vec3<f32>(featureAt(e), featureAt(e + 1u), featureAt(e + 2u));
 }
 
 // Reconstruct Σ = R·diag(scale²)·Rᵀ. Rust normalizes the quaternion before
@@ -153,29 +170,29 @@ fn covarianceFromTransform(
 }
 
 // Evaluate view-dependent SH colour for direction \`dir\` (normalized).
-fn evalSH(si : u32, degree : u32, dir : vec3<f32>) -> vec3<f32> {
-  var c = SH_C0 * shCoeff(si, 0u);
+fn evalSH(degree : u32, dir : vec3<f32>) -> vec3<f32> {
+  var c = SH_C0 * shCoeff(0u);
   if (degree >= 1u) {
     let x = dir.x; let y = dir.y; let z = dir.z;
-    c = c - SH_C1 * y * shCoeff(si, 1u)
-          + SH_C1 * z * shCoeff(si, 2u)
-          - SH_C1 * x * shCoeff(si, 3u);
+    c = c - SH_C1 * y * shCoeff(1u)
+          + SH_C1 * z * shCoeff(2u)
+          - SH_C1 * x * shCoeff(3u);
     if (degree >= 2u) {
       let xx = x * x; let yy = y * y; let zz = z * z;
       let xy = x * y; let yz = y * z; let xz = x * z;
-      c = c + SH_C2_0 * xy * shCoeff(si, 4u)
-            + SH_C2_1 * yz * shCoeff(si, 5u)
-            + SH_C2_2 * (2.0 * zz - xx - yy) * shCoeff(si, 6u)
-            + SH_C2_3 * xz * shCoeff(si, 7u)
-            + SH_C2_4 * (xx - yy) * shCoeff(si, 8u);
+      c = c + SH_C2_0 * xy * shCoeff(4u)
+            + SH_C2_1 * yz * shCoeff(5u)
+            + SH_C2_2 * (2.0 * zz - xx - yy) * shCoeff(6u)
+            + SH_C2_3 * xz * shCoeff(7u)
+            + SH_C2_4 * (xx - yy) * shCoeff(8u);
       if (degree >= 3u) {
-        c = c + SH_C3_0 * y * (3.0 * xx - yy) * shCoeff(si, 9u)
-              + SH_C3_1 * xy * z * shCoeff(si, 10u)
-              + SH_C3_2 * y * (4.0 * zz - xx - yy) * shCoeff(si, 11u)
-              + SH_C3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * shCoeff(si, 12u)
-              + SH_C3_4 * x * (4.0 * zz - xx - yy) * shCoeff(si, 13u)
-              + SH_C3_5 * z * (xx - yy) * shCoeff(si, 14u)
-              + SH_C3_6 * x * (xx - 3.0 * yy) * shCoeff(si, 15u);
+        c = c + SH_C3_0 * y * (3.0 * xx - yy) * shCoeff(9u)
+              + SH_C3_1 * xy * z * shCoeff(10u)
+              + SH_C3_2 * y * (4.0 * zz - xx - yy) * shCoeff(11u)
+              + SH_C3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * shCoeff(12u)
+              + SH_C3_4 * x * (4.0 * zz - xx - yy) * shCoeff(13u)
+              + SH_C3_5 * z * (xx - yy) * shCoeff(14u)
+              + SH_C3_6 * x * (xx - 3.0 * yy) * shCoeff(15u);
       }
     }
   }
@@ -208,14 +225,15 @@ fn culledQuad() -> SplatQuad {
 // A positive radiusLimit caps the quad radius (in quad units, where the colour
 // pass' falloff cutoff sits at 2) so the depth pass covers only the splat's
 // opaque core.
-fn projectSplat(si : u32, vtx : u32, radiusLimit : f32) -> SplatQuad {
-  let t0 = transformAt(si, 0u);
-  let t1 = transformAt(si, 1u);
-  let t2 = transformAt(si, 2u);
+fn projectSplat(address : vec3<u32>, vtx : u32, radiusLimit : f32) -> SplatQuad {
+  let t0 = transformAt(address, 0u);
+  let t1 = transformAt(address, 1u);
+  let t2 = transformAt(address, 2u);
   let center = t0.xyz;
   let scale = vec3<f32>(t0.w, t1.x, t1.y);
   let quaternion = vec4<f32>(t1.z, t1.w, t2.x, t2.y);
-  let opacityRaw = featureAt(si, 0u);
+  loadFeatureLayer(address, 0u);
+  let opacityRaw = featureAt(0u);
 
   let cam = u.view * vec4<f32>(center, 1.0);
   let clip = u.view_proj * vec4<f32>(center, 1.0);
@@ -338,12 +356,17 @@ fn projectSplat(si : u32, vtx : u32, radiusLimit : f32) -> SplatQuad {
 fn vs_main(@builtin(vertex_index) vtx : u32,
            @builtin(instance_index) inst : u32) -> VSOut {
   let si = order[inst];
-  let s = projectSplat(si, vtx, 0.0);
+  let address = splatAddress(si);
+  let s = projectSplat(address, vtx, 0.0);
   if (s.culled) { return culled(); }
 
+  // Layer 0 (opacity + first SH halves) is already loaded; fetch the rest once.
+  for (var layer = 1u; layer < featureLayerCount(); layer = layer + 1u) {
+    loadFeatureLayer(address, layer);
+  }
   // View-dependent colour (dir points from camera to the splat mean).
   let dir = normalize(s.center - u.cam_pos);
-  let color = evalSH(si, u32(u.sh_degree), dir);
+  let color = evalSH(u32(u.sh_degree), dir);
 
   var out : VSOut;
   out.pos = vec4<f32>(s.ndc + s.offset, s.depth, 1.0);
@@ -368,9 +391,11 @@ fn vs_depth(@builtin(vertex_index) vtx : u32,
   out.pos = vec4<f32>(0.0, 0.0, 2.0, 1.0);
   out.quad = vec2<f32>(0.0);
   let si = order[inst];
+  let address = splatAddress(si);
+  loadFeatureLayer(address, 0u);
   // Translucent splats (foliage edges, haze) must not occlude.
-  if (featureAt(si, 0u) < u.occluder_alpha_min) { return out; }
-  let s = projectSplat(si, vtx, u.occluder_sigma);
+  if (featureAt(0u) < u.occluder_alpha_min) { return out; }
+  let s = projectSplat(address, vtx, u.occluder_sigma);
   if (s.culled) { return out; }
   // Reverse-Z: scaling the depth down pushes the occluder slightly away from
   // the eye, so a surface never clips actors resting against it.

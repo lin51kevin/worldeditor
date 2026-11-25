@@ -62,10 +62,12 @@ import {
 import {
   createSplatRenderer,
   type SplatRenderer,
+  type SplatUploadBounds,
   type SplatSampleMode,
   type SplatRenderMode,
   type SplatUploadStatus,
 } from './gaussian/splatRenderer';
+import type { PreparedSplatChunk } from './gaussian/splatPrepare';
 import {
   ActorSplatInstancer,
   type ActorInstance,
@@ -266,6 +268,10 @@ export class ViewportRenderer {
   // still null). Applied to each renderer at its creation site AND to any live
   // renderers in setSplatGpuSort(), so the toggle is never silently dropped.
   private splatGpuSortEnabled = false;
+  // Same lazy-creation reason: whether the GPU sort culls splats outside the frustum.
+  private splatFrustumCullEnabled = true;
+  // Same lazy-creation reason: the static scene's visible-splat budget while the camera moves (0 = off).
+  private splatInteractiveBudget = 0;
 
   // Desired static-scene occluder-depth state, remembered for the same lazy
   // creation reason as `splatGpuSortEnabled`. Scene-only: the actor clouds must
@@ -1085,17 +1091,8 @@ export class ViewportRenderer {
         fallbackReason: null,
       };
     }
-    if (!this.splatRenderer) {
-      this.splatRenderer = createSplatRenderer(this.device, this.format, MSAA_SAMPLE_COUNT, () =>
-        this.notifySplatOrderChanged(),
-      );
-      this.splatRenderer.setGpuSort(this.splatGpuSortEnabled);
-      this.splatRenderer.setOccluderDepth(
-        this.splatOccluderDepthEnabled,
-        this.splatOccluderOptions,
-      );
-    }
-    const uploadStatus = this.splatRenderer.upload(
+    const renderer = this.ensureSceneSplatRenderer();
+    const uploadStatus = renderer.upload(
       splatData,
       shDegree,
       layoutVersion,
@@ -1104,9 +1101,68 @@ export class ViewportRenderer {
       renderMode,
       sourceCount,
     );
-    this.splatRenderer.invalidateSort();
+    renderer.invalidateSort();
     this.markSceneDirty();
     return uploadStatus;
+  }
+
+  /** Create the scene splat renderer on first use, applying remembered settings. */
+  private ensureSceneSplatRenderer(): SplatRenderer {
+    if (!this.splatRenderer) {
+      this.splatRenderer = createSplatRenderer(this.device, this.format, MSAA_SAMPLE_COUNT, () =>
+        this.notifySplatOrderChanged(),
+      );
+      this.splatRenderer.setGpuSort(this.splatGpuSortEnabled);
+      this.splatRenderer.setFrustumCull(this.splatFrustumCullEnabled);
+      this.splatRenderer.setInteractiveBudget(this.splatInteractiveBudget);
+      this.splatRenderer.setOccluderDepth(
+        this.splatOccluderDepthEnabled,
+        this.splatOccluderOptions,
+      );
+    }
+    return this.splatRenderer;
+  }
+
+  /**
+   * Begin a chunked, full-fidelity upload of the scene Gaussian cloud. Returns a
+   * `failed` status (and allocates nothing) when the device cannot hold it.
+   * Follow with {@link appendGaussianSplats} per chunk, then
+   * {@link endGaussianSplatUpload}.
+   */
+  beginGaussianSplatUpload(
+    totalCount: number,
+    shDegree: number,
+    layoutVersion: number,
+    sourceCount?: number,
+  ): SplatUploadStatus {
+    const status = this.ensureSceneSplatRenderer().beginUpload(
+      totalCount,
+      shDegree,
+      layoutVersion,
+      sourceCount,
+    );
+    this.markSceneDirty();
+    return status;
+  }
+
+  /** Append a chunk of layout-v2 records; `false` once the upload has failed. */
+  appendGaussianSplats(chunk: Uint32Array, prepared?: PreparedSplatChunk): boolean {
+    return this.splatRenderer?.appendUpload(chunk, prepared) ?? false;
+  }
+
+  /** Finish the chunked upload (`bounds` in the cloud's local frame). */
+  endGaussianSplatUpload(bounds: SplatUploadBounds): SplatUploadStatus {
+    const renderer = this.ensureSceneSplatRenderer();
+    const status = renderer.endUpload(bounds);
+    renderer.invalidateSort();
+    this.markSceneDirty();
+    return status;
+  }
+
+  /** Cancel an in-progress chunked upload. */
+  abortGaussianSplatUpload(): void {
+    this.splatRenderer?.abortUpload();
+    this.markSceneDirty();
   }
 
   /** Structured status of the latest Gaussian upload, if initialized. */
@@ -1172,6 +1228,7 @@ export class ViewportRenderer {
         this.notifySplatOrderChanged(),
       );
       this.actorSplatRenderer.setGpuSort(this.splatGpuSortEnabled);
+      this.actorSplatRenderer.setFrustumCull(this.splatFrustumCullEnabled);
     }
     const uploadStatus = this.actorSplatRenderer.upload(
       splatData,
@@ -1280,6 +1337,33 @@ export class ViewportRenderer {
     this.splatRenderer?.setGpuSort(enabled);
     this.actorSplatRenderer?.setGpuSort(enabled);
     this.markSceneDirty();
+  }
+
+  /**
+   * Enable/disable culling of splats outside the view frustum in the GPU sort
+   * (default on). Lossless for a settled camera; a diagnostic escape hatch.
+   */
+  setSplatFrustumCull(enabled: boolean): void {
+    this.splatFrustumCullEnabled = enabled;
+    this.splatRenderer?.setFrustumCull(enabled);
+    this.actorSplatRenderer?.setFrustumCull(enabled);
+    this.markSceneDirty();
+  }
+
+  /**
+   * Cap the static scene's drawn splats at about `maxSplats` while the camera
+   * moves (small on-screen splats are thinned; a settled camera re-renders at
+   * full quality). `0` keeps every splat always.
+   */
+  setSplatInteractiveBudget(maxSplats: number): void {
+    this.splatInteractiveBudget = Math.max(0, Math.floor(maxSplats));
+    this.splatRenderer?.setInteractiveBudget(this.splatInteractiveBudget);
+    this.markSceneDirty();
+  }
+
+  /** Diagnostic: splats the static scene's last GPU sort kept (see `SplatRenderer.readVisibleCount`). */
+  async getSplatVisibleCount(): Promise<number | null> {
+    return (await this.splatRenderer?.readVisibleCount()) ?? null;
   }
 
   /**

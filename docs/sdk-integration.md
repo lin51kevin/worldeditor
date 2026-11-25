@@ -107,6 +107,35 @@ interface WorldEditorSdk {
   `generate_sprite_data()` for textured billboards.
 - **`geoz`** — `importGeoZ(buffer, fileName?)`.
 
+### Large 3DGS scenes (SOG)
+
+A multi-GB PLY cannot be read with `file.arrayBuffer()` in a browser. The
+renderer instead loads the compressed [SOG](https://github.com/playcanvas/splat-transform)
+format (about 8x smaller, no splat is dropped), decoding WebP images in WASM:
+
+- `loadGaussianSplatsSog(metaUrl, options?)` — unbundled `meta.json` + WebP images.
+- `loadGaussianSplatsStreamed(lodMetaUrl, options?)` — `lod-meta.json` chunk set,
+  decoded chunk by chunk and uploaded to the GPU incrementally, so the whole
+  cloud is never resident in JS memory. Scenes above 16M splats use the GPU sort.
+
+Both accept `GaussianSplatSogOptions` (`worldAligned`, `origin`, `signal`, `decodeWorkers`,
+and for streamed `lod` / `onProgress`) and resolve with `GaussianSplatInfo`. Feature-detect
+them (they are optional on `WorldEditorRenderer`). SOG v3 only; SH bands above 3 are dropped.
+
+Download, WebP decode and GPU repacking run in a pool of Web Workers (up to 6, one
+WASM instance each) so the page stays responsive while a large scene loads. Workers
+need the `wasmInput` location passed to `createWorldEditorSdk` (relative URLs are
+resolved against the page) and a CSP that allows `blob:` workers; otherwise loading
+falls back to the main thread. `decodeWorkers: 0` forces the main thread.
+
+PLY to SOG conversion and fidelity verification live in `tools/ply-to-sog/`
+(`ply-to-sog.mjs --format streamed --verify-only --render-check`).
+
+The GPU depth sort culls splats outside the view frustum (pixel-identical to
+no culling) and sorts only the survivors, so frame time follows what the camera
+sees rather than the cloud size. `setSplatFrustumCull(false)` (optional) turns the
+culling off for diagnosis.
+
 See `frontend/src/integration/rnkNextSdk.ts` for the authoritative type
 definitions and JSDoc.
 

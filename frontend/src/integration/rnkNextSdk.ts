@@ -31,6 +31,11 @@ import type {
   SplatUploadStatus,
 } from '../viewport/gaussian/splatRenderer';
 import { assertGaussianSplatLayout } from '../viewport/gaussian/splatLayout';
+import type { SogWasm, StreamedProgress } from './sogLoader';
+import { loadSogIntoRenderer, loadStreamedSogIntoRenderer } from './sogRendererBridge';
+import { resolveWasmSource, type SogWasmSource } from './sogDecodePool';
+import { openSogDecoderFor } from './sogDecoderSession';
+import { loadSogWorkerFactory } from './sogWorkerFactory';
 import { parseGlbMesh, isGlb } from '../viewport/glbMesh';
 import { CaseActorLayer, parsePlyFirstVertex, type ActorBoxStyle, type CaseActorBox } from '../plugins/npc-actors';
 
@@ -113,6 +118,34 @@ export interface GaussianSplatInfo {
   shDegree: number;
   layoutVersion: number;
   uploadStatus: SplatUploadStatus;
+}
+
+/** Per-load options for {@link WorldEditorRenderer.loadGaussianSplatsSog} / `loadGaussianSplatsStreamed`. */
+export interface GaussianSplatSogOptions {
+  /**
+   * Keep positions in the file's absolute frame (origin `[0,0,0]`) instead of
+   * subtracting a render origin; used when the splats must overlay an
+   * OpenDRIVE map. Default: origin-relative, like {@link WorldEditorRenderer.loadGaussianSplats}.
+   */
+  worldAligned?: boolean;
+  /**
+   * Explicit render origin subtracted from every position (overrides
+   * `worldAligned`); lets several clouds share one frame, e.g. a scene mesh's origin.
+   */
+  origin?: readonly [number, number, number];
+  /** Cancels the download/decode; the pending upload is discarded. */
+  signal?: AbortSignal;
+  /** Streamed SOG only: LOD level to load (default 0 = full detail). */
+  lod?: number;
+  /** Streamed SOG only: called after every decoded chunk. */
+  onProgress?: (progress: StreamedProgress) => void;
+  /**
+   * Web Workers that download and decode the scene off the main thread. Default:
+   * automatic (up to 6 for a streamed scene, 1 for a single SOG); `0` decodes
+   * on the calling thread. Needs the `wasmInput` location given to
+   * {@link createWorldEditorSdk}.
+   */
+  decodeWorkers?: number;
 }
 
 /** Per-load overrides for {@link WorldEditorRenderer.loadPointCloud}. */
@@ -341,6 +374,20 @@ export interface WorldEditorRenderer {
   ): SplatUploadStatus;
   /** Latest structured Gaussian upload/fidelity status. */
   getGaussianSplatUploadStatus?(): Readonly<SplatUploadStatus> | null;
+  /**
+   * Fetch, decode and upload an unbundled SOG (`meta.json` + WebP images) as
+   * full-fidelity splats. SOG is ~8x smaller than the source PLY. Resolves with
+   * the cloud's bounds/origin; `uploadStatus.outcome === 'failed'` when the
+   * device cannot hold it (nothing is drawn then). Optional so hosts bundling an
+   * older SDK degrade gracefully.
+   */
+  loadGaussianSplatsSog?(metaUrl: string, options?: GaussianSplatSogOptions): Promise<GaussianSplatInfo | undefined>;
+  /**
+   * Stream a Streamed SOG scene (`lod-meta.json`) chunk by chunk straight to the
+   * GPU, so scenes of tens of millions of splats load without ever holding the
+   * whole cloud in memory. Same result contract as {@link loadGaussianSplatsSog}.
+   */
+  loadGaussianSplatsStreamed?(lodMetaUrl: string, options?: GaussianSplatSogOptions): Promise<GaussianSplatInfo | undefined>;
   /** Remove the uploaded (scene) Gaussian splat cloud. */
   clearGaussianSplats?(): void;
   /**
@@ -408,6 +455,24 @@ export interface WorldEditorRenderer {
    * gracefully.
    */
   setSplatGpuSort?(enabled: boolean): void;
+  /**
+   * Enable/disable culling of splats outside the view frustum in the GPU sort
+   * (default on; lossless for a settled camera). Optional so hosts bundling an
+   * older SDK degrade gracefully.
+   */
+  setSplatFrustumCull?(enabled: boolean): void;
+  /**
+   * Diagnostic: splats the scene's last GPU sort kept for drawing (after frustum
+   * culling), or `null` before one ran. Reads back from the GPU, so don't call per frame.
+   */
+  getSplatVisibleCount?(): Promise<number | null>;
+  /**
+   * Cap the static scene's drawn splats at about `maxSplats` while the camera
+   * moves: small on-screen splats are thinned, and a settled camera re-renders
+   * at full quality. `0` (default) keeps every splat always. Optional so hosts
+   * bundling an older SDK degrade gracefully.
+   */
+  setSplatInteractiveBudget?(maxSplats: number): void;
   /**
    * Enable/disable the static scene's depth-only occluder pass, which makes
    * dynamic actor (NPC/ego) splats hide behind the scene's opaque surfaces
@@ -540,6 +605,17 @@ export interface WorldEditorWasm {
     min: [number, number, number];
     max: [number, number, number];
   };
+  // ── SOG decoding (WebP images -> packed layout v2; see sogLoader.ts) ──
+  /** Parse a SOG `meta.json` and open a decode session. */
+  sog_open?(metaJson: string): number;
+  /** Image file names the session still needs. */
+  sog_required_files?(handle: number): string[];
+  /** Decode one lossless WebP image of the session. */
+  sog_add_image?(handle: number, name: string, bytes: Uint8Array): void;
+  /** Decode the session; returns a Gaussian handle readable via `gaussian_splat_*`. */
+  sog_decode?(handle: number, origin?: Float64Array | null): number;
+  /** Discard a decode session. */
+  sog_free?(handle: number): void;
 }
 
 /** GeoZ importer contract consumed by rnk-next. */
@@ -617,7 +693,7 @@ function expandPointCloudTo7(src: Float32Array): Float32Array {
 }
 
 /** Wrap a {@link ViewportRenderer} as the rnk-next renderer contract. */
-function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
+function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEditorRenderer {
   const renderer = new ViewportRenderer();
   // Independent npc-actors plugin: owns box/trajectory geometry + ground picking.
   const actorLayer = new CaseActorLayer();
@@ -946,6 +1022,24 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
       );
     },
     getGaussianSplatUploadStatus: () => renderer.getGaussianSplatUploadStatus(),
+    loadGaussianSplatsSog: async (metaUrl, options) => {
+      const sogWasm = wasm as unknown as SogWasm;
+      const decoding = await openSogDecoderFor(sogWasm, sogWasmSource, false, options ?? {}, loadSogWorkerFactory);
+      try {
+        return await loadSogIntoRenderer(sogWasm, renderer, metaUrl, options, decoding);
+      } finally {
+        decoding.dispose();
+      }
+    },
+    loadGaussianSplatsStreamed: async (lodMetaUrl, options) => {
+      const sogWasm = wasm as unknown as SogWasm;
+      const decoding = await openSogDecoderFor(sogWasm, sogWasmSource, true, options ?? {}, loadSogWorkerFactory);
+      try {
+        return await loadStreamedSogIntoRenderer(sogWasm, renderer, lodMetaUrl, options, decoding);
+      } finally {
+        decoding.dispose();
+      }
+    },
     clearGaussianSplats: () => {
       renderer.clearGaussianSplats();
     },
@@ -986,6 +1080,13 @@ function adaptRenderer(wasm: WasmModule): WorldEditorRenderer {
     },
     setSplatGpuSort: (enabled: boolean) => {
       renderer.setSplatGpuSort(enabled);
+    },
+    setSplatFrustumCull: (enabled: boolean) => {
+      renderer.setSplatFrustumCull(enabled);
+    },
+    getSplatVisibleCount: () => renderer.getSplatVisibleCount(),
+    setSplatInteractiveBudget: (maxSplats: number) => {
+      renderer.setSplatInteractiveBudget(maxSplats);
     },
     setSplatOccluderDepth: (enabled, options) => {
       renderer.setSplatOccluderDepth(enabled, options);
@@ -1164,6 +1265,13 @@ function adaptWasm(wasm: WasmModule): WorldEditorWasm {
     free_gaussian_splats: (handle) => wasm.free_gaussian_splats(handle),
     gaussian_splat_buffer_sh: (handle) => wasm.gaussian_splat_buffer_sh(handle),
     gaussian_splat_meta: (handle) => wasm.gaussian_splat_meta(handle),
+
+    // ── SOG decoding ──
+    sog_open: (metaJson) => wasm.sog_open(metaJson),
+    sog_required_files: (handle) => wasm.sog_required_files(handle) as string[],
+    sog_add_image: (handle, name, bytes) => wasm.sog_add_image(handle, name, bytes),
+    sog_decode: (handle, origin) => wasm.sog_decode(handle, origin),
+    sog_free: (handle) => wasm.sog_free(handle),
   };
 }
 
@@ -1194,7 +1302,7 @@ export async function createWorldEditorSdk(
   await (wasm.default as unknown as (input?: unknown) => Promise<void>)(initInput);
 
   return {
-    createRenderer: () => adaptRenderer(wasm),
+    createRenderer: () => adaptRenderer(wasm, resolveWasmSource(options?.wasmInput)),
     wasm: adaptWasm(wasm),
     geoz: adaptGeoZ(),
   };

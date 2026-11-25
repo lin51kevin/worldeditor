@@ -344,8 +344,8 @@ describe("GaussianSplatResources", () => {
 
     expect(textures).toHaveLength(2);
     expect(textures.every((texture) => texture.destroyed)).toBe(true);
-    // Uniform remains alive on clear; the order buffer is destroyed.
-    expect(buffers.filter((buffer) => buffer.destroyed)).toHaveLength(1);
+    // Uniform remains alive on clear; the order and radii buffers are destroyed.
+    expect(buffers.filter((buffer) => buffer.destroyed)).toHaveLength(2);
     res.dispose();
     expect(buffers.every((buffer) => buffer.destroyed)).toBe(true);
   });

@@ -6,12 +6,19 @@ describe("GAUSSIAN_SPLAT_SHADER", () => {
   it("addresses each splat through 2D texels and array-page layers", () => {
     expect(GAUSSIAN_SPLAT_SHADER).toContain("texture_2d_array<f32>");
     expect(GAUSSIAN_SPLAT_SHADER).toContain("fn splatAddress");
-    expect(GAUSSIAN_SPLAT_SHADER).toContain("page * 3u + chunk");
-    expect(GAUSSIAN_SPLAT_SHADER).toContain("page * featureLayers + chunk");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("address.z * 3u + chunk");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("address.z * featureLayerCount() + layer");
     expect(GAUSSIAN_SPLAT_SHADER).toContain("@binding(3) var<storage, read> order");
     expect(GAUSSIAN_SPLAT_SHADER).not.toContain(
       "@binding(1) var<storage, read> splats",
     );
+  });
+
+  it("keeps opacity/SH layers in plain privates, never a dynamically indexed array", () => {
+    // A private array indexed at runtime spills to local memory: 12x slower on an RTX 3070.
+    expect(GAUSSIAN_SPLAT_SHADER).not.toMatch(/var<private>\s+\w+\s*:\s*array</);
+    for (let i = 0; i < 13; i++) expect(GAUSSIAN_SPLAT_SHADER).toContain(`var<private> feat${i} : vec4<f32>;`);
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("fn featureAt(e : u32)");
   });
 
   it("reconstructs covariance from f32 scale and normalized quaternion", () => {
@@ -91,9 +98,9 @@ describe("GAUSSIAN_SPLAT_SHADER", () => {
     expect(GAUSSIAN_SPLAT_SHADER).toContain("fn vs_depth(");
     expect(GAUSSIAN_SPLAT_SHADER).toContain("fn fs_depth(");
     expect(GAUSSIAN_SPLAT_SHADER).toContain(
-      "if (featureAt(si, 0u) < u.occluder_alpha_min) { return out; }",
+      "if (featureAt(0u) < u.occluder_alpha_min) { return out; }",
     );
-    expect(GAUSSIAN_SPLAT_SHADER).toContain("projectSplat(si, vtx, u.occluder_sigma)");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("projectSplat(address, vtx, u.occluder_sigma)");
     expect(GAUSSIAN_SPLAT_SHADER).toContain(
       "s.depth * (1.0 - u.occluder_depth_bias)",
     );
@@ -101,7 +108,7 @@ describe("GAUSSIAN_SPLAT_SHADER", () => {
       "if (dot(in.quad, in.quad) > u.occluder_sigma * u.occluder_sigma) { discard; }",
     );
     // The colour pass must keep its full footprint (no radius limit).
-    expect(GAUSSIAN_SPLAT_SHADER).toContain("projectSplat(si, vtx, 0.0)");
+    expect(GAUSSIAN_SPLAT_SHADER).toContain("projectSplat(address, vtx, 0.0)");
   });
 
   it("only applies linear-to-sRGB encoding as an explicit diagnostic", () => {

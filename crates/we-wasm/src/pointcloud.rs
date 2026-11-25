@@ -14,9 +14,16 @@ use wasm_bindgen::prelude::*;
 
 use we_core::pointcloud::{
     ColorMode, GroundConfig, Heightmap, MarkingConfig, PACKED_GAUSSIAN_LAYOUT_NAME,
-    PackedGaussians, PointCloud, VectorizeConfig, build_render_buffer, extract_ground,
-    extract_markings, gaussian, pcd, ply, polylines_to_roads, xyz,
+    PackedGaussians, PointCloud, SogImage, SogMeta, VectorizeConfig, build_render_buffer,
+    decode_sog_packed, decode_webp_rgba, extract_ground, extract_markings, gaussian, pcd, ply,
+    polylines_to_roads, xyz,
 };
+
+/// A SOG dataset waiting for its images: parsed `meta.json` plus decoded pixels by file name.
+struct PendingSog {
+    meta: SogMeta,
+    images: HashMap<String, SogImage>,
+}
 
 /// A registered cloud plus any derived ground heightmap.
 struct Entry {
@@ -29,6 +36,8 @@ thread_local! {
     static NEXT_HANDLE: RefCell<u32> = const { RefCell::new(1) };
     static GAUSSIAN_REGISTRY: RefCell<HashMap<u32, PackedGaussians>> = RefCell::new(HashMap::new());
     static NEXT_GAUSSIAN_HANDLE: RefCell<u32> = const { RefCell::new(1) };
+    static SOG_REGISTRY: RefCell<HashMap<u32, PendingSog>> = RefCell::new(HashMap::new());
+    static NEXT_SOG_HANDLE: RefCell<u32> = const { RefCell::new(1) };
 }
 
 fn store(cloud: PointCloud) -> u32 {
@@ -245,6 +254,101 @@ pub fn free_gaussian_splats(handle: u32) {
     GAUSSIAN_REGISTRY.with(|r| r.borrow_mut().remove(&handle));
 }
 
+// ---------------------------------------------------------------------------
+// SOG (Spatially Ordered Gaussians) bindings
+//
+// JavaScript fetches `meta.json` and its WebP images, hands them over one by
+// one, then decodes to packed layout v2. The result is registered as an
+// ordinary Gaussian handle, so `gaussian_splat_meta`, `gaussian_splat_buffer_sh`
+// and `free_gaussian_splats` work on it unchanged.
+// ---------------------------------------------------------------------------
+
+fn sog_open_inner(meta_json: &str) -> Result<u32, String> {
+    let meta = SogMeta::parse(meta_json).map_err(|e| e.to_string())?;
+    let handle = NEXT_SOG_HANDLE.with(|n| {
+        let mut n = n.borrow_mut();
+        let h = *n;
+        *n = n.wrapping_add(1).max(1);
+        h
+    });
+    SOG_REGISTRY.with(|r| {
+        r.borrow_mut().insert(
+            handle,
+            PendingSog {
+                meta,
+                images: HashMap::new(),
+            },
+        )
+    });
+    Ok(handle)
+}
+
+fn sog_add_image_inner(handle: u32, name: &str, bytes: &[u8]) -> Result<(), String> {
+    let image = decode_webp_rgba(bytes).map_err(|e| format!("{name}: {e}"))?;
+    SOG_REGISTRY.with(|r| {
+        let mut map = r.borrow_mut();
+        let pending = map.get_mut(&handle).ok_or("invalid SOG handle")?;
+        pending.images.insert(name.to_string(), image);
+        Ok(())
+    })
+}
+
+fn sog_decode_inner(handle: u32, origin: Option<Vec<f64>>) -> Result<u32, String> {
+    let origin = match origin {
+        None => None,
+        Some(v) if v.len() == 3 => Some([v[0], v[1], v[2]]),
+        Some(_) => return Err("origin must have 3 components".to_string()),
+    };
+    // Taking the entry out releases the decoded images as soon as decoding ends.
+    let pending = SOG_REGISTRY
+        .with(|r| r.borrow_mut().remove(&handle))
+        .ok_or("invalid SOG handle")?;
+    let packed =
+        decode_sog_packed(&pending.meta, &pending.images, origin).map_err(|e| e.to_string())?;
+    Ok(store_gaussian(packed))
+}
+
+/// Parse a SOG `meta.json` and open a decode session, returning its handle.
+#[wasm_bindgen]
+pub fn sog_open(meta_json: &str) -> Result<u32, JsError> {
+    sog_open_inner(meta_json).map_err(|e| JsError::new(&e))
+}
+
+/// Names of the image files the session still needs, as a JS string array.
+#[wasm_bindgen]
+pub fn sog_required_files(handle: u32) -> Result<JsValue, JsError> {
+    SOG_REGISTRY.with(|r| {
+        let map = r.borrow();
+        let pending = map
+            .get(&handle)
+            .ok_or_else(|| JsError::new("invalid SOG handle"))?;
+        serde_wasm_bindgen::to_value(&pending.meta.required_files())
+            .map_err(|e| JsError::new(&e.to_string()))
+    })
+}
+
+/// Decode one lossless WebP image of the dataset and keep its pixels.
+#[wasm_bindgen]
+pub fn sog_add_image(handle: u32, name: &str, bytes: &[u8]) -> Result<(), JsError> {
+    sog_add_image_inner(handle, name, bytes).map_err(|e| JsError::new(&e))
+}
+
+/// Decode the session into packed layout v2 and return a Gaussian handle.
+///
+/// `origin` (3 numbers) is subtracted from positions; omit it to use the first
+/// Gaussian. The session is consumed. Streamed scenes pass the first chunk's
+/// origin to every later chunk so all chunks share one frame.
+#[wasm_bindgen]
+pub fn sog_decode(handle: u32, origin: Option<Vec<f64>>) -> Result<u32, JsError> {
+    sog_decode_inner(handle, origin).map_err(|e| JsError::new(&e))
+}
+
+/// Discard a decode session without decoding it.
+#[wasm_bindgen]
+pub fn sog_free(handle: u32) {
+    SOG_REGISTRY.with(|r| r.borrow_mut().remove(&handle));
+}
+
 /// Return packed layout version 2 for view-dependent SH rendering.
 ///
 /// Each record is `position_f32[3], activated_scale_f32[3],
@@ -312,6 +416,56 @@ pub fn gaussian_splat_meta(handle: u32) -> Result<JsValue, JsError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fixture(name: &str) -> std::path::PathBuf {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("we-core")
+            .join("tests")
+            .join("fixtures")
+            .join("sog")
+            .join(name)
+    }
+
+    #[test]
+    fn test_sog_session_decodes_into_gaussian_registry() {
+        let dir = fixture("sh1");
+        let json = std::fs::read_to_string(dir.join("meta.json")).unwrap();
+        let session = sog_open_inner(&json).unwrap();
+        let required = SOG_REGISTRY.with(|r| r.borrow()[&session].meta.required_files());
+        for name in required {
+            let bytes = std::fs::read(dir.join(&name)).unwrap();
+            sog_add_image_inner(session, &name, &bytes).unwrap();
+        }
+        let handle = sog_decode_inner(session, None).unwrap();
+        GAUSSIAN_REGISTRY.with(|r| {
+            let map = r.borrow();
+            let cloud = &map[&handle];
+            assert_eq!(cloud.count, 3000);
+            assert_eq!(cloud.sh_degree, 1);
+            assert_eq!(cloud.buffer.len(), 3000 * cloud.stride);
+        });
+        // The session is consumed by decoding.
+        assert!(sog_decode_inner(session, None).is_err());
+        free_gaussian_splats(handle);
+    }
+
+    #[test]
+    fn test_sog_decode_rejects_bad_origin_length() {
+        let json = std::fs::read_to_string(fixture("sh0").join("meta.json")).unwrap();
+        let session = sog_open_inner(&json).unwrap();
+        assert!(sog_decode_inner(session, Some(vec![1.0, 2.0])).is_err());
+        sog_free(session);
+    }
+
+    #[test]
+    fn test_sog_add_image_rejects_unknown_session_and_bad_webp() {
+        assert!(sog_add_image_inner(u32::MAX, "x.webp", b"junk").is_err());
+        let json = std::fs::read_to_string(fixture("sh0").join("meta.json")).unwrap();
+        let session = sog_open_inner(&json).unwrap();
+        assert!(sog_add_image_inner(session, "means_l.webp", b"junk").is_err());
+        sog_free(session);
+    }
 
     #[test]
     fn test_load_and_summary_roundtrip() {

@@ -19,6 +19,8 @@ import {
 import { SplatSortController, type SplatSorter } from "./splatSortController";
 import { createWorkerSplatSorter } from "./splatSorterBackends";
 import { GpuSplatSorter } from "./splatSortCompute";
+import { nextThinTau, THIN_TAU_INITIAL } from "./splatBudget";
+import type { PreparedSplatChunk } from "./splatPrepare";
 import { buildSplatUniform, DEFAULT_SPLAT_DILATION, DEFAULT_OCCLUDER_ALPHA_MIN, DEFAULT_OCCLUDER_SIGMA, DEFAULT_OCCLUDER_DEPTH_BIAS } from "./splatUniform";
 import { frustumSidePlanes, type Vec3 } from "./splatSort";
 import type { CameraState } from "../cameraController";
@@ -92,6 +94,19 @@ const GPU_SORT_DUTY_FACTOR = 2;
 
 /** Ceiling so even a huge cloud still re-sorts several times per second. */
 const GPU_SORT_MAX_INTERVAL_MS = 200;
+
+/**
+ * NDC margin added around the screen when the GPU sort culls splats outside the
+ * frustum. A moving camera re-sorts at most every {@link gpuSortIntervalMs}, so
+ * the margin keeps splats that just entered the view drawn until the next sort.
+ */
+export const GPU_SORT_CULL_GUARD_NDC = 0.25;
+
+/** Camera stillness after which an interactive-budget view is re-sorted at full quality. */
+const INTERACTIVE_IDLE_MS = 350;
+
+/** Leading floats of the splat uniform that affect culling (everything before the occluder fields). */
+const CULL_KEY_FLOATS = 45;
 
 /**
  * Minimum interval between GPU depth re-sorts for a cloud of `count` splats.
@@ -321,6 +336,7 @@ export type SplatFallbackReason =
   | "texture-array-capacity-decimation"
   | "order-buffer-capacity-decimation"
   | "packed-storage-capacity-exceeded"
+  | "gpu-sort-unavailable"
   | "texture-upload-failed";
 
 /** Structured result for every Gaussian upload attempt. */
@@ -337,6 +353,19 @@ export interface SplatUploadStatus {
 
 const DEFAULT_MAX_BUFFER_BYTES = 268_435_456;
 const MAX_U32_SPLAT_COUNT = 0xffff_ffff;
+
+/**
+ * Largest cloud that may still depend on the CPU worker sort. Above it a chunked
+ * upload keeps no CPU copy of the positions (12 B/splat, doubled by the worker
+ * transfer), so the GPU compute sort is mandatory.
+ */
+export const CPU_SORT_MAX_SPLATS = 16_000_000;
+
+/** Local-frame bounds of a finished chunked upload. */
+export interface SplatUploadBounds {
+  min: readonly [number, number, number];
+  max: readonly [number, number, number];
+}
 
 function textureArrayCapacity(device: GPUDevice, shDegree: number): number {
   if (
@@ -402,6 +431,30 @@ export class SplatRenderer {
   /** Latest camera pose, captured by {@link onCamera} for the GPU sort pass. */
   private lastCamPos: Vec3 = [0, 0, 0];
   private lastViewDir: Vec3 = [0, 0, 1];
+  /** Camera uniform of the latest frame; the key pass culls against its projection. */
+  private lastCullKey: Float32Array = new Float32Array(0);
+  private lastSortedCullKey: Float32Array = new Float32Array(0);
+  private frustumCull = true;
+  /** Visible-splat budget while the camera moves (0 = unlimited / thinning off). */
+  private interactiveBudget = 0;
+  /** Current thinning threshold in pixels, steered by {@link nextThinTau}. */
+  private thinTau = 0;
+  /** Set when the camera has settled, so the next sort runs at full quality. */
+  private forceFullSort = false;
+  private refineTimer: ReturnType<typeof setTimeout> | null = null;
+  /** In-progress chunked upload, or `null`. */
+  private chunkedUpload: {
+    sourceCount: number;
+    shDegree: number;
+    stride: number;
+    total: number;
+    /** Positions for the CPU worker sort; `null` when the GPU sort is mandatory. */
+    cpuPositions: Float32Array | null;
+  } | null = null;
+  /** Set when a huge cloud made the GPU sort mandatory; ignores `setGpuSort(false)`. */
+  private gpuSortForced = false;
+  /** Chunked uploads above this size require the GPU sort (see {@link CPU_SORT_MAX_SPLATS}). */
+  cpuSortMaxSplats = CPU_SORT_MAX_SPLATS;
   /**
    * GPU-sort skip cache. The counting sort orders splats back-to-front for the
    * current camera; that order only changes when the cloud changes (upload/
@@ -505,6 +558,8 @@ export class SplatRenderer {
     renderMode: SplatRenderMode = DEFAULT_SPLAT_RENDER_MODE,
     sourceCount?: number,
   ): SplatUploadStatus {
+    this.abortUpload();
+    this.gpuSortForced = false;
     const stride = assertGaussianSplatBuffer(
       splatData,
       shDegree,
@@ -654,6 +709,7 @@ export class SplatRenderer {
     this.resources.setOccluderSource(data, stride, this.occluderAlphaMin);
     this.updateBounds(positions);
     this.gpuSorter?.resize(this.resources.count);
+    this.resetThinning();
     this.sort.setSplats(positions);
     this._uploadStatus = {
       outcome:
@@ -676,12 +732,143 @@ export class SplatRenderer {
     return this._uploadStatus;
   }
 
+  /**
+   * Begin a chunked, full-fidelity upload of `totalCount` splats in layout v2.
+   * Chunks go straight to the GPU, so the cloud never has to exist as one CPU
+   * buffer. Returns the pending status (`outcome: "empty"`), or a `failed`
+   * status when the device cannot hold the cloud, in which case nothing is
+   * allocated and no chunk should be appended. Always full mode: it never
+   * reduces the splat count or SH degree.
+   */
+  beginUpload(
+    totalCount: number,
+    shDegree: number,
+    layoutVersion: number,
+    sourceCount: number = totalCount,
+  ): SplatUploadStatus {
+    this.abortUpload();
+    const renderMode: SplatRenderMode = "full";
+    this.clampAnisotropy = false;
+    const fail = (reason: SplatFallbackReason) =>
+      this.failUpload(sourceCount, shDegree, renderMode, reason);
+
+    const textureCapacity = textureArrayCapacity(this.device, shDegree);
+    if (textureCapacity <= 0) return fail("texture-arrays-unavailable");
+    if (totalCount > textureCapacity) return fail("texture-array-capacity-exceeded");
+    if (totalCount > this.maxOrderCount) return fail("order-buffer-capacity-exceeded");
+    const needGpuSort = totalCount > this.cpuSortMaxSplats;
+    if (needGpuSort && typeof this.device.createComputePipeline !== "function") {
+      return fail("gpu-sort-unavailable");
+    }
+    try {
+      this.resources.beginChunkedUpload(totalCount, shDegree, layoutVersion);
+    } catch (error) {
+      console.error("[Splat] Chunked upload could not start", error);
+      return fail("texture-upload-failed");
+    }
+    this.sort.setSplats(new Float32Array(0));
+    this.chunkedUpload = {
+      sourceCount,
+      shDegree,
+      stride: splatStrideForDegree(shDegree),
+      total: totalCount,
+      cpuPositions: needGpuSort ? null : new Float32Array(totalCount * 3),
+    };
+    this.gpuSortForced = needGpuSort;
+    this._uploadStatus = {
+      outcome: "empty",
+      sourceCount,
+      uploadedCount: 0,
+      requestedShDegree: shDegree,
+      effectiveShDegree: shDegree,
+      renderMode,
+      resourceMode: "none",
+      fallbackReason: null,
+    };
+    return this._uploadStatus;
+  }
+
+  /** Whether a chunked upload is in progress. */
+  get uploading(): boolean {
+    return this.chunkedUpload !== null;
+  }
+
+  /**
+   * Append the next chunk (whole layout-v2 records) of the upload started by
+   * {@link beginUpload}. Returns `false` after a failure, which also aborts the
+   * upload and leaves a `failed` status.
+   */
+  appendUpload(chunk: Uint32Array, prepared?: PreparedSplatChunk): boolean {
+    const session = this.chunkedUpload;
+    if (!session) throw new Error("No chunked Gaussian upload in progress");
+    const first = this.resources.chunkedWritten;
+    try {
+      this.resources.appendChunkedUpload(chunk, prepared);
+    } catch (error) {
+      console.error("[Splat] Chunked upload failed", error);
+      this.failUpload(session.sourceCount, session.shDegree, "full", "texture-upload-failed");
+      return false;
+    }
+    session.cpuPositions?.set(extractSplatPositions(chunk, session.stride), first * 3);
+    return true;
+  }
+
+  /**
+   * Finish the chunked upload; `bounds` is the cloud's AABB in the same local
+   * frame as the positions. Returns the final upload status.
+   */
+  endUpload(bounds: SplatUploadBounds): SplatUploadStatus {
+    const session = this.chunkedUpload;
+    if (!session) throw new Error("No chunked Gaussian upload in progress");
+    try {
+      this.resources.endChunkedUpload();
+    } catch (error) {
+      console.error("[Splat] Chunked upload could not finish", error);
+      return this.failUpload(session.sourceCount, session.shDegree, "full", "texture-upload-failed");
+    }
+    this.chunkedUpload = null;
+    // A cloud that needs the GPU sort draws its occluder from the sort's visible
+    // list, so the whole-cloud index would only cost memory.
+    if (!this.gpuSortForced) this.resources.rebuildOccluderIndex(this.occluderAlphaMin);
+    this.boundsMin = [bounds.min[0], bounds.min[1], bounds.min[2]];
+    this.boundsMax = [bounds.max[0], bounds.max[1], bounds.max[2]];
+    this.gpuSorter?.resize(this.resources.count);
+    this.resetThinning();
+    this.sort.setSplats(session.cpuPositions ?? new Float32Array(0));
+    if (this.gpuSortForced) this.setGpuSort(true);
+    this._uploadStatus = {
+      outcome: "uploaded",
+      sourceCount: session.sourceCount,
+      uploadedCount: session.total,
+      requestedShDegree: session.shDegree,
+      effectiveShDegree: session.shDegree,
+      renderMode: "full",
+      resourceMode: "texture-array",
+      fallbackReason: null,
+    };
+    console.info(
+      `[Splat] Chunked upload: ${session.total.toLocaleString()} splats, SH ${session.shDegree}, ` +
+        `GPU sort ${this.gpuSortForced ? "required" : "optional"}`,
+    );
+    return this._uploadStatus;
+  }
+
+  /** Cancel an in-progress chunked upload and free what it allocated. */
+  abortUpload(): void {
+    if (!this.chunkedUpload) return;
+    this.chunkedUpload = null;
+    this.gpuSortForced = false;
+    this.resources.abortChunkedUpload();
+  }
+
   private failUpload(
     sourceCount: number,
     shDegree: number,
     renderMode: SplatRenderMode,
     fallbackReason: SplatFallbackReason,
   ): SplatUploadStatus {
+    this.chunkedUpload = null;
+    this.gpuSortForced = false;
     this.resources.clear();
     this.sort.setSplats(new Float32Array(0));
     this._uploadStatus = {
@@ -734,7 +921,7 @@ export class SplatRenderer {
         this.occluderAlphaMin = alphaMin;
         // Threshold changed: rebuild the fixed occluder index against the
         // already-cached opacities (no-op until a cloud has been uploaded).
-        this.resources.rebuildOccluderIndex(alphaMin);
+        if (!this.gpuSortForced) this.resources.rebuildOccluderIndex(alphaMin);
       }
     }
     if (options?.sigma !== undefined) {
@@ -771,6 +958,7 @@ export class SplatRenderer {
       this.occluderDepthBias,
     );
     this.resources.updateUniform(uniform);
+    this.lastCullKey = uniform.slice(0, CULL_KEY_FLOATS);
     const viewDir = computeViewDir(camera.position, camera.target);
     this.lastCamPos = [camera.position[0], camera.position[1], camera.position[2]];
     this.lastViewDir = viewDir;
@@ -806,8 +994,67 @@ export class SplatRenderer {
     );
   }
 
+  /**
+   * Enable/disable culling of splats outside the view frustum in the GPU sort
+   * (default on). Culling is lossless for a settled camera; turn it off to rule
+   * it out when diagnosing edge artifacts under fast camera motion.
+   */
+  /**
+   * After a budgeted sort: read back how many splats survived (once the frame has
+   * been submitted) to steer the threshold, and arrange a full-quality re-sort for
+   * when the camera stops.
+   */
+  private trackInteractiveBudget(budget: number, thinned: boolean): void {
+    setTimeout(() => {
+      void this.readVisibleCount()
+        .then((visible) => {
+          if (visible !== null) this.thinTau = nextThinTau(this.thinTau, visible, budget);
+        })
+        .catch(() => undefined);
+    }, 0);
+    if (!thinned) return;
+    if (this.refineTimer) clearTimeout(this.refineTimer);
+    this.refineTimer = setTimeout(() => {
+      this.refineTimer = null;
+      this.forceFullSort = true;
+      this.gpuSortDirty = true;
+      this.onOrderChanged?.();
+    }, INTERACTIVE_IDLE_MS);
+  }
+
+  /**
+   * Cap the splats drawn while the camera moves at about `maxSplats` by thinning
+   * small on-screen splats in the GPU sort; a settled camera re-sorts at full
+   * quality. `0` (default) keeps every splat at all times.
+   */
+  setInteractiveBudget(maxSplats: number): void {
+    const budget = Math.max(0, Math.floor(maxSplats));
+    if (budget === this.interactiveBudget) return;
+    this.interactiveBudget = budget;
+    this.resetThinning();
+    this.gpuSortDirty = true;
+    this.onOrderChanged?.();
+  }
+
+  /** Start a cloud at the initial threshold when it exceeds the budget, else unthinned. */
+  private resetThinning(): void {
+    this.thinTau =
+      this.interactiveBudget > 0 && this.resources.count > this.interactiveBudget
+        ? THIN_TAU_INITIAL
+        : 0;
+  }
+
+  setFrustumCull(enabled: boolean): void {
+    if (this.frustumCull === enabled) return;
+    this.frustumCull = enabled;
+    this.gpuSortDirty = true;
+    this.onOrderChanged?.();
+  }
+
   /** Enable/disable the per-frame GPU compute sort. Wakes a redraw. */
   setGpuSort(enabled: boolean): void {
+    // A cloud too large for the CPU sort cannot go back to it.
+    if (!enabled && this.gpuSortForced) return;
     if (this.useGpuSort === enabled) return;
     this.useGpuSort = enabled;
     this.gpuSortLogged = false;
@@ -927,6 +1174,11 @@ export class SplatRenderer {
         this.gpuSorter.resize(this.resources.count);
       }
       const [minD, maxD] = this.projectedDepthRange();
+      const radiiBuffer = this.resources.gpuRadiiBuffer;
+      const fullQuality = this.forceFullSort;
+      const budget = this.interactiveBudget;
+      const thinning = budget > 0 && !fullQuality && this.resources.count > budget;
+      const thinTau = thinning ? this.thinTau : 0;
       this.gpuSorter.sort(
         encoder,
         positionsBuffer,
@@ -935,10 +1187,21 @@ export class SplatRenderer {
         this.lastViewDir,
         minD,
         maxD,
+        radiiBuffer && this.frustumCull
+          ? {
+              uniformBuffer: this.resources.gpuUniformBuffer,
+              radiiBuffer,
+              guardNdc: GPU_SORT_CULL_GUARD_NDC,
+              thinTau,
+            }
+          : undefined,
       );
+      this.forceFullSort = false;
+      if (thinning && radiiBuffer && this.frustumCull) this.trackInteractiveBudget(budget, thinTau > 0);
       // Remember the pose we just sorted for so identical subsequent frames skip.
       this.lastSortedCamPos = [this.lastCamPos[0], this.lastCamPos[1], this.lastCamPos[2]];
       this.lastSortedViewDir = [this.lastViewDir[0], this.lastViewDir[1], this.lastViewDir[2]];
+      this.lastSortedCullKey = this.lastCullKey;
       // The sort parked behind-eye splats at the tail of the order and counted the
       // survivors into its indirect draw arguments — draw only that prefix.
       this.resources.setIndirectDraw(this.gpuSorter.drawArgsBuffer);
@@ -959,6 +1222,27 @@ export class SplatRenderer {
         .catch(() => undefined);
     }
     return true;
+  }
+
+  /**
+   * Diagnostic: how many splats the most recent GPU sort kept (the indirect draw's
+   * instance count), or `null` when no GPU sort has produced one. Stalls on a GPU readback.
+   */
+  async readVisibleCount(): Promise<number | null> {
+    const args = this.gpuSorter?.drawArgsBuffer;
+    if (!args) return null;
+    const staging = this.device.createBuffer({
+      size: 16,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = this.device.createCommandEncoder();
+    encoder.copyBufferToBuffer(args, 0, staging, 0, 16);
+    this.device.queue.submit([encoder.finish()]);
+    await staging.mapAsync(1 /* GPUMapMode.READ */);
+    const count = new Uint32Array(staging.getMappedRange().slice(0))[1] ?? 0;
+    staging.unmap();
+    staging.destroy();
+    return count;
   }
 
   /** Permanently fall back to the CPU worker sort after a GPU sort failure. */
@@ -986,6 +1270,11 @@ export class SplatRenderer {
     const e = this.lastSortedViewDir;
     const EPS_POS = 1e-3; // world meters
     const EPS_DIR = 1e-5;
+    const a = this.lastCullKey;
+    const b = this.lastSortedCullKey;
+    // The frustum cull bakes projection, viewport and dilation into the order, so
+    // any change to them (not just camera motion) invalidates it.
+    if (a.length !== b.length || a.some((v, i) => v !== b[i])) return false;
     return (
       Math.abs(p[0] - q[0]) < EPS_POS &&
       Math.abs(p[1] - q[1]) < EPS_POS &&
@@ -1020,6 +1309,8 @@ export class SplatRenderer {
 
   /** Remove the current cloud. */
   clear(): void {
+    this.abortUpload();
+    this.gpuSortForced = false;
     this.resources.clear();
     this.sort.setSplats(new Float32Array(0));
     this._uploadStatus = {
@@ -1042,6 +1333,8 @@ export class SplatRenderer {
 
   /** Release all GPU + worker resources. */
   dispose(): void {
+    if (this.refineTimer) clearTimeout(this.refineTimer);
+    this.refineTimer = null;
     this.resources.dispose();
     this.sort.dispose();
     this.gpuSorter?.dispose();

@@ -16,6 +16,7 @@ pub mod model;
 pub mod pcd;
 pub mod ply;
 pub mod render;
+pub mod sog;
 pub mod vectorize;
 pub mod xyz;
 
@@ -29,6 +30,7 @@ pub use heightmap::Heightmap;
 pub use markings::{MarkingConfig, extract_markings};
 pub use model::{Aabb, PointCloud};
 pub use render::{ColorMode, build_render_buffer};
+pub use sog::{SogImage, SogMeta, decode_sog_packed, decode_webp_rgba};
 pub use vectorize::{VectorizeConfig, polyline_to_road, polylines_to_roads};
 
 use thiserror::Error;
