@@ -41,7 +41,12 @@ import { MarkerRenderer } from './markerRenderer';
 import { FlyKeyboardController } from './flyControls';
 import type { RenderableMesh } from './markerRenderer';
 import { setupRendererInput } from './rendererInputHandler';
-import { renderFrame as renderFrameImpl, captureFrame as captureFrameImpl } from './rendererFrame';
+import {
+  renderFrame as renderFrameImpl,
+  captureFrame as captureFrameImpl,
+  disposeStaticLayerCache,
+  type StaticLayerCache,
+} from './rendererFrame';
 import type { RendererFrameInternals } from './rendererFrame';
 import {
   uploadPointCloudVertices as pcUploadPointCloudVertices,
@@ -186,6 +191,12 @@ export class ViewportRenderer {
   // fly-mode movement (host embedding never calls start() itself). Guards
   // stop() so we only tear down a loop we own.
   private hostFlyLoopActive = false;
+  // When false the host renders after camera gestures itself (one frame per display frame).
+  private cameraInputRenders = true;
+  // Bumped by every change that can alter the static layer (see rendererFrame's StaticLayerCache).
+  private staticRevision = 0;
+  private staticLayerCacheEnabled = false;
+  private staticLayerCache: StaticLayerCache | null = null;
   private deviceLost = false;
   // Set to true by dispose(); guards against async init() completing after cleanup
   private disposed = false;
@@ -463,6 +474,8 @@ export class ViewportRenderer {
       device: this.device,
       format: this.format,
       alphaMode: 'premultiplied',
+      // COPY_DST: the static layer cache is copied into the swap-chain texture.
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST,
     });
 
     this.width = canvas.width;
@@ -824,11 +837,11 @@ export class ViewportRenderer {
       if (this.actorMeshes.length === 0) return;
       for (const m of this.actorMeshes) { m.vertexBuffer.destroy(); }
       this.actorMeshes = [];
-      this.markSceneDirty();
+      this.markDynamicDirty();
       return;
     }
     uploadMeshData(this.device, this.actorMeshes, vertexData);
-    this.markSceneDirty();
+    this.markDynamicDirty();
   }
 
   /** Upload manipulator overlay triangle vertices (7 floats/vertex). Empty clears. */
@@ -837,11 +850,11 @@ export class ViewportRenderer {
       if (this.actorOverlayMeshes.length === 0) return;
       for (const m of this.actorOverlayMeshes) { m.vertexBuffer.destroy(); }
       this.actorOverlayMeshes = [];
-      this.markSceneDirty();
+      this.markDynamicDirty();
       return;
     }
     uploadMeshData(this.device, this.actorOverlayMeshes, vertexData);
-    this.markSceneDirty();
+    this.markDynamicDirty();
   }
 
   /** Upload trajectory ribbon triangle vertices (7 floats/vertex). Empty clears. */
@@ -850,11 +863,11 @@ export class ViewportRenderer {
       if (this.pathMeshes.length === 0) return;
       for (const m of this.pathMeshes) { m.vertexBuffer.destroy(); }
       this.pathMeshes = [];
-      this.markSceneDirty();
+      this.markDynamicDirty();
       return;
     }
     uploadMeshData(this.device, this.pathMeshes, vertexData);
-    this.markSceneDirty();
+    this.markDynamicDirty();
   }
 
   // ── Case-actor plugin: camera gesture passthrough ─────────────────────────
@@ -891,12 +904,35 @@ export class ViewportRenderer {
     return started;
   }
 
+  /**
+   * Whether {@link cameraUpdateDrag} / {@link cameraWheel} draw a frame themselves
+   * (default). A host that already renders once per display frame turns this off
+   * so a gesture does not draw the whole scene a second time in the same frame.
+   */
+  setCameraInputRendersFrame(enabled: boolean): void {
+    this.cameraInputRenders = enabled;
+  }
+
+  /**
+   * Reuse the last frame's static layer (roads, static scene, scene splats) while
+   * the camera and that content are unchanged, redrawing only the actors, paths
+   * and gizmos on top. Turns a huge splat scene into a copy for gizmo drags,
+   * selection changes and playback under a still camera. Default off.
+   */
+  setStaticLayerCache(enabled: boolean): void {
+    if (this.staticLayerCacheEnabled === enabled) return;
+    this.staticLayerCacheEnabled = enabled;
+    if (!enabled) this.staticLayerCache = disposeStaticLayerCache(this.staticLayerCache);
+    this.markSceneDirty();
+  }
+
   /** Update the active camera drag with the current pointer position. */
   cameraUpdateDrag(event: { clientX: number; clientY: number; buttons: number }): void {
     const canvas = this.context?.canvas as HTMLCanvasElement | undefined;
     if (!canvas) return;
     this.cameraController.updatePointerDrag(canvas, event as unknown as MouseEvent);
-    this.renderFrame();
+    if (this.cameraInputRenders) this.renderFrame();
+    else this.markSceneDirty();
   }
 
   /** End the active camera drag. */
@@ -922,7 +958,8 @@ export class ViewportRenderer {
   /** Zoom the camera by a wheel delta (positive deltaY = zoom out). */
   cameraWheel(deltaY: number): void {
     this.cameraController.handleWheel(deltaY);
-    this.renderFrame();
+    if (this.cameraInputRenders) this.renderFrame();
+    else this.markSceneDirty();
   }
 
   /** WASD/QE roam the camera along its current view basis (see
@@ -966,7 +1003,7 @@ export class ViewportRenderer {
   setActorDepthWrite(enabled: boolean): void {
     if (this.actorDepthWrite === enabled) return;
     this.actorDepthWrite = enabled;
-    this.markSceneDirty();
+    this.markDynamicDirty();
   }
 
 
@@ -1195,16 +1232,19 @@ export class ViewportRenderer {
   /** Write prepared splats into slots `[first, first + count)` of the resident store. */
   writeGaussianResident(prepared: PreparedSplatChunk, first: number): void {
     this.splatRenderer?.writeResident(prepared, first);
+    this.staticRevision++;
   }
 
   /** Empty slots `[first, first + count)` of the resident store. */
   releaseGaussianResident(first: number, count: number): void {
     this.splatRenderer?.releaseResident(first, count);
+    this.staticRevision++;
   }
 
   /** Report how many splats the resident store currently holds. */
   setGaussianResidentCount(count: number): void {
     this.splatRenderer?.setResidentCount(count);
+    this.staticRevision++;
   }
 
   /** Append a chunk of layout-v2 records; `false` once the upload has failed. */
@@ -1273,7 +1313,7 @@ export class ViewportRenderer {
   ): SplatUploadStatus {
     if (splatData.length === 0) {
       this.actorSplatRenderer?.clear();
-      this.markSceneDirty();
+      this.markDynamicDirty();
       return {
         outcome: 'empty',
         sourceCount: sourceCount ?? 0,
@@ -1287,7 +1327,7 @@ export class ViewportRenderer {
     }
     if (!this.actorSplatRenderer) {
       this.actorSplatRenderer = createSplatRenderer(this.device, this.format, MSAA_SAMPLE_COUNT, () =>
-        this.notifySplatOrderChanged(),
+        this.notifyActorSplatOrderChanged(),
       );
       this.actorSplatRenderer.setGpuSort(this.splatGpuSortEnabled);
       this.actorSplatRenderer.setFrustumCull(this.splatFrustumCullEnabled);
@@ -1302,7 +1342,7 @@ export class ViewportRenderer {
       sourceCount,
     );
     this.actorSplatRenderer.invalidateSort();
-    this.markSceneDirty();
+    this.markDynamicDirty();
     return uploadStatus;
   }
 
@@ -1310,7 +1350,7 @@ export class ViewportRenderer {
   clearActorGaussianSplats(): void {
     if (!this.actorSplatRenderer) return;
     this.actorSplatRenderer.clear();
-    this.markSceneDirty();
+    this.markDynamicDirty();
   }
 
   // ── Instanced actor splat API (GPU-persistent per-model buffers) ────────
@@ -1326,7 +1366,7 @@ export class ViewportRenderer {
       this.actorSplatInstancer = new ActorSplatInstancer(
         this.device,
         this.format,
-        () => this.notifySplatOrderChanged(),
+        () => this.notifyActorSplatOrderChanged(),
       );
       // Lazy creation: re-apply the desired budget (see setActorSplatBudget).
       this.actorSplatInstancer.setSplatBudget(this.actorSplatBudget);
@@ -1342,14 +1382,14 @@ export class ViewportRenderer {
   updateActorSplatInstances(instances: readonly ActorInstance[]): void {
     if (!this.device || !this.actorSplatInstancer) return;
     this.actorSplatInstancer.updateInstances(instances);
-    this.markSceneDirty();
+    this.markDynamicDirty();
   }
 
   /** Release all instanced actor GPU buffers. */
   clearActorSplatInstances(): void {
     this.actorSplatInstancer?.dispose();
     this.actorSplatInstancer = null;
-    this.markSceneDirty();
+    this.markDynamicDirty();
   }
 
   /**
@@ -1363,7 +1403,7 @@ export class ViewportRenderer {
     // picks up the desired budget at its creation site.
     this.actorSplatBudget = maxTotal;
     this.actorSplatInstancer?.setSplatBudget(maxTotal);
-    this.markSceneDirty();
+    this.markDynamicDirty();
   }
 
   /** Set the Gaussian splat 2D low-pass dilation (fullness). */
@@ -1604,6 +1644,13 @@ export class ViewportRenderer {
    * visibility methods; external code (e.g. overlay updates) can call this too.
    */
   markSceneDirty(): void {
+    this.staticRevision++;
+    this.sceneDirty = true;
+    this.renderLoop?.wakeUp();
+  }
+
+  /** Like {@link markSceneDirty}, for changes confined to actors, paths and gizmos. */
+  private markDynamicDirty(): void {
     this.sceneDirty = true;
     this.renderLoop?.wakeUp();
   }
@@ -1623,6 +1670,11 @@ export class ViewportRenderer {
 
   private notifySplatOrderChanged(): void {
     this.markSceneDirty();
+    this.splatOrderChangedCallback?.();
+  }
+
+  private notifyActorSplatOrderChanged(): void {
+    this.markDynamicDirty();
     this.splatOrderChangedCallback?.();
   }
 
@@ -1795,6 +1847,7 @@ export class ViewportRenderer {
     disposeMeshes(this.hoverMeshes);
     this.depthTexture?.destroy();
     this.msaaTexture?.destroy();
+    this.staticLayerCache = disposeStaticLayerCache(this.staticLayerCache);
     this.gridUniformBuffer?.destroy();
     this.basicUniformBuffer?.destroy();
     this.laneRibbonUniformBuffer?.destroy();

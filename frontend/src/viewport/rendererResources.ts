@@ -87,7 +87,8 @@ export function createDepthTexture(device: GPUDevice, width: number, height: num
     size: [width, height],
     format: 'depth32float',
     sampleCount: MSAA_SAMPLE_COUNT,
-    usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    // COPY_DST: the static layer cache restores its depth into this texture.
+    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST,
   });
 }
 

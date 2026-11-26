@@ -178,6 +178,12 @@ export interface GaussianSplatSogOptions {
    * {@link createWorldEditorSdk}.
    */
   decodeWorkers?: number;
+  /**
+   * Load only the base colour (SH0) of a scene with more than this many splats,
+   * skipping the view-dependent SH download and ~3/4 of its GPU memory, so a huge
+   * scene still fits in VRAM. Not applied to LOD streaming. Default: keep every band.
+   */
+  shMaxSplats?: number;
 }
 
 /** Per-load overrides for {@link WorldEditorRenderer.loadPointCloud}. */
@@ -284,6 +290,18 @@ export interface WorldEditorRenderer {
   cameraEndDrag(): void;
   /** Zoom the 3D camera by a wheel delta. */
   cameraWheel(deltaY: number): void;
+  /**
+   * Whether `cameraUpdateDrag` / `cameraWheel` draw a frame themselves (default
+   * `true`). Hosts that render once per display frame pass `false` and render after
+   * the gesture, so a huge splat scene is not drawn twice per frame.
+   */
+  setCameraInputRendersFrame?(enabled: boolean): void;
+  /**
+   * Reuse the static layer (roads, static scene, scene splats) between frames while
+   * the camera and that content are unchanged, redrawing only actors, paths and
+   * gizmos. Big win for huge splat scenes under a still camera. Default off.
+   */
+  setStaticLayerCache?(enabled: boolean): void;
   /**
    * Translate the camera along its current view basis (WASD/QE roaming).
    * Components are in [-1, 1], `dt` in seconds; speed scales with camera
@@ -890,6 +908,8 @@ function adaptRenderer(wasm: WasmModule, sogWasmSource?: SogWasmSource): WorldEd
     cameraUpdateDrag: (event) => renderer.cameraUpdateDrag(event),
     cameraEndDrag: () => renderer.cameraEndDrag(),
     cameraWheel: (deltaY) => renderer.cameraWheel(deltaY),
+    setCameraInputRendersFrame: (enabled) => renderer.setCameraInputRendersFrame(enabled),
+    setStaticLayerCache: (enabled) => renderer.setStaticLayerCache(enabled),
     roamMove: (forward, right, up, dt, sprint) => renderer.roamMove(forward, right, up, dt, sprint),
     getOrbitPivot: () => renderer.getOrbitPivot(),
     getCameraPose: () => renderer.getCameraPose(),

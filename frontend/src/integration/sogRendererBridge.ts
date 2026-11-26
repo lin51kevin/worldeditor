@@ -12,6 +12,7 @@ import {
   fetchLodMeta,
   loadStreamedSog,
   type SogChunkDecoder,
+  type SogShCap,
   type SogSplatMeta,
   type SogWasm,
   type SplatChunkSink,
@@ -111,6 +112,11 @@ function requestedOrigin(options: GaussianSplatSogOptions): readonly [number, nu
   return options.origin ?? (options.worldAligned ? ZERO : undefined);
 }
 
+function requestedShCap(options: GaussianSplatSogOptions): { shCap?: SogShCap } {
+  const limit = options.shMaxSplats;
+  return limit !== undefined && limit > 0 ? { shCap: { dropShAbove: limit } } : {};
+}
+
 /** Thrown inside a chunk sink to stop the download once the renderer rejected the cloud. */
 class UploadFailure extends Error {
   constructor(
@@ -146,6 +152,7 @@ export async function loadSogIntoRenderer(
   const decoded = await decodeSogDataset(wasm, metaUrl, {
     signal: options.signal,
     origin: requestedOrigin(options),
+    ...requestedShCap(options),
     ...(decoding.decoder ? { decoder: decoding.decoder } : {}),
   });
   const { buffer, meta } = decoded;
@@ -243,6 +250,7 @@ export async function loadStreamedSogIntoRenderer(
       lod: options.lod,
       onProgress: options.onProgress,
       origin: requestedOrigin(options),
+      ...requestedShCap(options),
       ...(decoding.decoder ? { decoder: decoding.decoder, decoderConcurrency: decoding.decoderConcurrency } : {}),
     });
     target.render();

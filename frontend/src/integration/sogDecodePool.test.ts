@@ -66,6 +66,14 @@ describe('SogDecodePool', () => {
     expect(result.meta.count).toBe(2);
   });
 
+  it('should forward the SH cap to the worker', () => {
+    const { pool, workers } = makePool(1);
+
+    void pool.decode('https://h/a/meta.json', undefined, { dropShAbove: 10, sceneCount: 20 });
+
+    expect(workers[0]!.decodes()[0]).toMatchObject({ shCap: { dropShAbove: 10, sceneCount: 20 } });
+  });
+
   it('should hand back the slices a worker prepared', async () => {
     const { pool, workers } = makePool(1);
     const prepared = [{ count: 2 }] as never;

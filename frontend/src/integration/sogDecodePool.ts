@@ -7,7 +7,7 @@
  * at a time; the packed buffer comes back as a transferred `ArrayBuffer`.
  */
 import type { PreparedSplatChunk } from '../viewport/gaussian/splatPrepare';
-import type { DecodedSog, SogChunkDecoder, SogSplatMeta } from './sogLoader';
+import type { DecodedSog, SogChunkDecoder, SogShCap, SogSplatMeta } from './sogLoader';
 
 /** Where a worker loads the WASM binary from (all structured-cloneable). */
 export type SogWasmSource = string | ArrayBuffer | Uint8Array | WebAssembly.Module;
@@ -15,7 +15,7 @@ export type SogWasmSource = string | ArrayBuffer | Uint8Array | WebAssembly.Modu
 /** Main thread -> worker. */
 export type SogWorkerRequest =
   | { type: 'init'; source: SogWasmSource }
-  | { type: 'decode'; id: number; url: string; origin?: number[] };
+  | { type: 'decode'; id: number; url: string; origin?: number[]; shCap?: SogShCap };
 
 /** Worker -> main thread. */
 export type SogWorkerResponse =
@@ -56,6 +56,7 @@ interface Job {
   id: number;
   url: string;
   origin: readonly number[] | undefined;
+  shCap: SogShCap | undefined;
   resolve(decoded: DecodedSog): void;
   reject(reason: unknown): void;
 }
@@ -90,14 +91,14 @@ export class SogDecodePool {
   }
 
   /** Download and decode the SOG at `metaUrl` on the next free worker. */
-  readonly decode: SogChunkDecoder = (url, origin) =>
+  readonly decode: SogChunkDecoder = (url, origin, shCap) =>
     new Promise<DecodedSog>((resolve, reject) => {
       const stopped = this.closed ?? this.unavailable;
       if (stopped) {
         reject(stopped);
         return;
       }
-      this.queue.push({ id: this.nextId++, url, origin, resolve, reject });
+      this.queue.push({ id: this.nextId++, url, origin, shCap, resolve, reject });
       this.pump();
     });
 
@@ -120,6 +121,7 @@ export class SogDecodePool {
         id: job.id,
         url: job.url,
         ...(job.origin ? { origin: Array.from(job.origin) } : {}),
+        ...(job.shCap ? { shCap: job.shCap } : {}),
       });
     }
   }

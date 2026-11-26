@@ -76,7 +76,153 @@ export interface RendererFrameInternals {
   staticSceneVisible: boolean;
   sceneSplatsVisible: boolean;
   lastVertexData: Float32Array | null;
+  format: GPUTextureFormat;
+  staticRevision: number;
+  staticLayerCacheEnabled: boolean;
+  staticLayerCache: StaticLayerCache | null;
   markSceneDirty(): void;
+}
+
+/**
+ * Offscreen copy of the static layer (roads, static scene, scene splats and their
+ * occluder depth) together with what it was drawn for. While none of that
+ * changed, a frame copies it back and draws only the dynamic layer on top.
+ */
+export interface StaticLayerCache {
+  color: GPUTexture;
+  depth: GPUTexture;
+  width: number;
+  height: number;
+  valid: boolean;
+  viewProj: Float32Array;
+  revision: number;
+  sortRevision: number;
+  stateKey: string;
+}
+
+/** Below this many scene splats a full redraw is cheaper than keeping the cache. */
+export const STATIC_LAYER_CACHE_MIN_SPLATS = 1_000_000;
+
+export function disposeStaticLayerCache(cache: StaticLayerCache | null): null {
+  cache?.color.destroy();
+  cache?.depth.destroy();
+  return null;
+}
+
+function createStaticLayerCache(r: RendererFrameInternals): StaticLayerCache {
+  const size = [r.width, r.height];
+  return {
+    color: r.device.createTexture({
+      size,
+      format: r.format,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    }),
+    depth: r.device.createTexture({
+      size,
+      format: 'depth32float',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    }),
+    width: r.width,
+    height: r.height,
+    valid: false,
+    viewProj: new Float32Array(16),
+    revision: -1,
+    sortRevision: -1,
+    stateKey: '',
+  };
+}
+
+/** Static-layer inputs that are toggled without going through `markSceneDirty`. */
+function staticStateKey(r: RendererFrameInternals): string {
+  const c = r.clearColor;
+  return `${c.r},${c.g},${c.b},${c.a}|${r.showGrid}|${r.showAxis}`;
+}
+
+/**
+ * Only worth it for a heavy scene, and only when nothing dynamic is drawn in the
+ * middle of the static layer (actor point clouds / ego mesh sit between the roads).
+ */
+export function isStaticLayerCacheable(r: RendererFrameInternals, texture: GPUTexture): boolean {
+  const scene = r.splatRenderer;
+  return (
+    r.staticLayerCacheEnabled &&
+    !r.msaaTexture &&
+    !!scene?.hasContent &&
+    scene.count >= STATIC_LAYER_CACHE_MIN_SPLATS &&
+    !scene.uploading &&
+    r.staticSceneVisible &&
+    r.sceneSplatsVisible &&
+    r.actorPointCloudMeshes.length === 0 &&
+    !r.egoMesh &&
+    texture.width === r.width &&
+    texture.height === r.height
+  );
+}
+
+function sameMatrix(a: ArrayLike<number>, b: ArrayLike<number>): boolean {
+  for (let i = 0; i < 16; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+function renderWithStaticLayerCache(
+  r: RendererFrameInternals,
+  encoder: GPUCommandEncoder,
+  texture: GPUTexture,
+  viewProj: ArrayLike<number>,
+): void {
+  let cache = r.staticLayerCache;
+  if (cache && (cache.width !== r.width || cache.height !== r.height)) cache = disposeStaticLayerCache(cache);
+  if (!cache) {
+    cache = createStaticLayerCache(r);
+    r.staticLayerCache = cache;
+  }
+  const sortRevision = r.splatRenderer?.orderRevision ?? 0;
+  const stateKey = staticStateKey(r);
+  const fresh =
+    cache.valid &&
+    cache.revision === r.staticRevision &&
+    cache.sortRevision === sortRevision &&
+    cache.stateKey === stateKey &&
+    sameMatrix(cache.viewProj, viewProj);
+  if (!fresh) {
+    // Read before drawing: anything the draw itself dirties must invalidate the next frame.
+    const revision = r.staticRevision;
+    const staticPass = encoder.beginRenderPass({
+      colorAttachments: [{
+        view: cache.color.createView(),
+        clearValue: r.clearColor,
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+      depthStencilAttachment: {
+        view: cache.depth.createView(),
+        depthClearValue: 0.0,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
+    });
+    drawStaticLayer(r, staticPass);
+    staticPass.end();
+    cache.valid = true;
+    cache.revision = revision;
+    cache.sortRevision = sortRevision;
+    cache.stateKey = stateKey;
+    cache.viewProj.set(viewProj);
+  }
+
+  const size = [r.width, r.height];
+  encoder.copyTextureToTexture({ texture: cache.color }, { texture }, size);
+  encoder.copyTextureToTexture({ texture: cache.depth }, { texture: r.depthTexture }, size);
+  const pass = encoder.beginRenderPass({
+    colorAttachments: [{ view: texture.createView(), loadOp: 'load', storeOp: 'store' }],
+    depthStencilAttachment: {
+      view: r.depthTexture.createView(),
+      depthLoadOp: 'load',
+      depthStoreOp: 'store',
+    },
+  });
+  drawDynamicLayer(r, pass);
+  pass.end();
 }
 
 /** Draw a list of meshes with the given pipeline, batched by the supplied key. */
@@ -187,24 +333,50 @@ export function renderFrame(r: RendererFrameInternals): void {
   if (r.actorSplatRenderer?.hasContent) r.actorSplatRenderer.sortGpu(encoder);
   // actorSplatInstancer uses its own CPU-worker sort (no GPU compute sort path yet).
 
-  const swapChainView = texture.createView();
-  const msaaView = r.msaaTexture?.createView() ?? swapChainView;
-  const pass = encoder.beginRenderPass({
-    colorAttachments: [{
-      view: msaaView,
-      resolveTarget: r.msaaTexture ? swapChainView : undefined,
-      clearValue: r.clearColor,
-      loadOp: 'clear',
-      storeOp: r.msaaTexture ? 'discard' : 'store',
-    }],
-    depthStencilAttachment: {
-      view: r.depthTexture.createView(),
-      depthClearValue: 0.0,
-      depthLoadOp: 'clear',
-      depthStoreOp: 'store',
-    },
-  });
+  if (isStaticLayerCacheable(r, texture)) {
+    renderWithStaticLayerCache(r, encoder, texture, viewProj);
+  } else {
+    r.staticLayerCache = disposeStaticLayerCache(r.staticLayerCache);
+    const swapChainView = texture.createView();
+    const msaaView = r.msaaTexture?.createView() ?? swapChainView;
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{
+        view: msaaView,
+        resolveTarget: r.msaaTexture ? swapChainView : undefined,
+        clearValue: r.clearColor,
+        loadOp: 'clear',
+        storeOp: r.msaaTexture ? 'discard' : 'store',
+      }],
+      depthStencilAttachment: {
+        view: r.depthTexture.createView(),
+        depthClearValue: 0.0,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
+    });
+    drawStaticLayer(r, pass);
+    drawDynamicLayer(r, pass);
+    pass.end();
+  }
 
+  try {
+    r.device.queue.submit([encoder.finish()]);
+  } catch {
+    // Transient D3D swap-chain / device-context mismatch; skip frame.
+    // This can occur during resize or when the window moves between monitors.
+  }
+
+  // Invoke plugin overlay renderers after main render pass
+  if (r.overlayRenderers.length > 0) {
+    const ctx = { device: r.device, canvas: r.overlayCanvas ?? undefined };
+    for (const render of r.overlayRenderers) {
+      try { render(ctx); } catch { /* plugin errors must not crash the render loop */ }
+    }
+  }
+}
+
+/** Everything up to and including the static scene splats and their occluder depth. */
+function drawStaticLayer(r: RendererFrameInternals, pass: GPURenderPassEncoder): void {
   // Draw grid
   if (r.showGrid || r.showAxis) {
     pass.setPipeline(r.gridPipeline);
@@ -311,6 +483,10 @@ export function renderFrame(r: RendererFrameInternals): void {
   // Note: the trajectory-ribbon/bounding-box passes below also depth-test
   // ('greater'), so this depth is load-bearing even with no actor splats.
   if (sceneSplats) r.splatRenderer?.drawDepthOnly(pass);
+}
+
+/** Actor splats, trajectory ribbons, boxes and gizmos: drawn every frame on top of the static layer. */
+function drawDynamicLayer(r: RendererFrameInternals, pass: GPURenderPassEncoder): void {
   r.actorSplatRenderer?.draw(pass);
   r.actorSplatInstancer?.draw(pass);
 
@@ -328,22 +504,6 @@ export function renderFrame(r: RendererFrameInternals): void {
   // they stay visible — and therefore grabbable — through the road surface, the
   // point cloud and the reconstructed splat scene.
   drawBatched(pass, r.actorOverlayMeshes, r.actorOverlayPipeline, r.basicBindGroup, 'basic');
-
-  pass.end();
-  try {
-    r.device.queue.submit([encoder.finish()]);
-  } catch {
-    // Transient D3D swap-chain / device-context mismatch; skip frame.
-    // This can occur during resize or when the window moves between monitors.
-  }
-
-  // Invoke plugin overlay renderers after main render pass
-  if (r.overlayRenderers.length > 0) {
-    const ctx = { device: r.device, canvas: r.overlayCanvas ?? undefined };
-    for (const render of r.overlayRenderers) {
-      try { render(ctx); } catch { /* plugin errors must not crash the render loop */ }
-    }
-  }
 }
 
 /**

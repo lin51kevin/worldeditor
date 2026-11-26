@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PreparedSplatChunk } from '../viewport/gaussian/splatPrepare';
 import {
+  applyShCap,
   decodeSogDataset,
   loadStreamedSog,
   lodChunks,
@@ -144,6 +145,42 @@ describe('decodeSogDataset', () => {
       decodeSogDataset(wasm, 'https://h/meta.json', { fetchImpl, signal: controller.signal }),
     ).rejects.toThrow(/abort/i);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+const SH_N = { count: 4, bands: 3, codebook: [], files: ['c.webp', 'l.webp'] };
+
+describe('applyShCap', () => {
+  const metaJson = JSON.stringify({ count: 10, shN: SH_N });
+
+  it('should keep the meta untouched without a cap', () => {
+    expect(applyShCap(metaJson, undefined)).toBe(metaJson);
+  });
+
+  it('should keep shN while the dataset fits the cap', () => {
+    expect(applyShCap(metaJson, { dropShAbove: 10 })).toBe(metaJson);
+  });
+
+  it('should drop shN for a dataset over the cap', () => {
+    expect(JSON.parse(applyShCap(metaJson, { dropShAbove: 9 }))).toEqual({ count: 10 });
+  });
+
+  it('should judge by the scene count when one is given', () => {
+    expect(JSON.parse(applyShCap(metaJson, { dropShAbove: 100, sceneCount: 101 }))).toEqual({ count: 10 });
+  });
+});
+
+describe('decodeSogDataset with an SH cap', () => {
+  it('should open the session without shN when the dataset is over the cap', async () => {
+    const { wasm } = makeFakeWasm();
+    const { fetchImpl } = makeFetch({
+      'https://h/meta.json': JSON.stringify({ files: ['a.webp'], count: 5, shN: SH_N }),
+      'https://h/a.webp': image,
+    });
+
+    await decodeSogDataset(wasm, 'https://h/meta.json', { fetchImpl, shCap: { dropShAbove: 4 } });
+
+    expect(JSON.parse((wasm.sog_open as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string)).not.toHaveProperty('shN');
   });
 });
 
@@ -299,6 +336,23 @@ describe('loadStreamedSog', () => {
     await expect(loadStreamedSog(wasm, 'https://h/s/lod-meta.json', sink, { fetchImpl })).rejects.toThrow(/SH degrees/);
   });
 
+  it('should drop shN from every chunk when the whole scene is over the cap', async () => {
+    const { wasm } = makeFakeWasm();
+    const { fetchImpl } = makeFetch(
+      streamedFiles({
+        'https://h/s/0_0/meta.json': JSON.stringify({ files: ['x.webp'], count: 600, shN: SH_N }),
+        'https://h/s/0_1/meta.json': JSON.stringify({ files: ['x.webp'], count: 400, shN: SH_N }),
+      }),
+    );
+    const { sink } = recordingSink();
+
+    await loadStreamedSog(wasm, 'https://h/s/lod-meta.json', sink, { fetchImpl, shCap: { dropShAbove: 800 } });
+
+    const opened = (wasm.sog_open as ReturnType<typeof vi.fn>).mock.calls.map((c) => JSON.parse(c[0] as string));
+    expect(opened.length).toBeGreaterThan(0);
+    expect(opened.some((m) => 'shN' in m)).toBe(false);
+  });
+
   it('should stop between chunks when aborted', async () => {
     const { wasm } = makeFakeWasm();
     const { fetchImpl } = makeFetch(streamedFiles());
@@ -326,7 +380,7 @@ describe('off-thread decoder', () => {
 
     const result = await decodeSogDataset(wasm, 'https://h/meta.json', { decoder, origin: [1, 2, 3] });
 
-    expect(decoder).toHaveBeenCalledWith('https://h/meta.json', [1, 2, 3]);
+    expect(decoder).toHaveBeenCalledWith('https://h/meta.json', [1, 2, 3], undefined);
     expect(result.meta.count).toBe(1);
     expect(wasm.sog_open).not.toHaveBeenCalled();
   });

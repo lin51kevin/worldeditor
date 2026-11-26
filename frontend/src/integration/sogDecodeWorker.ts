@@ -12,7 +12,7 @@ import initWasm, {
   sog_open,
   sog_required_files,
 } from '../../wasm/pkg/we_wasm';
-import { decodeFetched, fetchSogFiles, type SogWasm } from './sogLoader';
+import { decodeFetched, fetchSogFiles, type SogShCap, type SogWasm } from './sogLoader';
 import type { SogWorkerRequest, SogWorkerResponse } from './sogDecodePool';
 import { prepareSplatSlices, type PreparedSplatChunk } from '../viewport/gaussian/splatPrepare';
 
@@ -47,7 +47,12 @@ function transferable(view: Uint32Array): ArrayBuffer {
   return (whole ? view.buffer : view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength)) as ArrayBuffer;
 }
 
-async function decode(id: number, url: string, origin: number[] | undefined): Promise<void> {
+async function decode(
+  id: number,
+  url: string,
+  origin: number[] | undefined,
+  shCap: SogShCap | undefined,
+): Promise<void> {
   let wasm: SogWasm;
   try {
     wasm = await (ready ?? Promise.reject(new Error('SOG worker was not initialised')));
@@ -56,7 +61,7 @@ async function decode(id: number, url: string, origin: number[] | undefined): Pr
     return;
   }
   try {
-    const decoded = decodeFetched(wasm, await fetchSogFiles(wasm, url, {}), origin);
+    const decoded = decodeFetched(wasm, await fetchSogFiles(wasm, url, shCap ? { shCap } : {}), origin);
     // Repack for the GPU here so the main thread only has to hand rows to writeTexture.
     const prepared = prepareSplatSlices(decoded.buffer, decoded.meta.shDegree);
     const buffer = transferable(decoded.buffer);
@@ -81,6 +86,6 @@ ctx.onmessage = (event) => {
     // A failed init is reported against the first job rather than as an unhandled rejection.
     ready.catch(() => undefined);
   } else {
-    void decode(request.id, request.url, request.origin);
+    void decode(request.id, request.url, request.origin, request.shCap);
   }
 };

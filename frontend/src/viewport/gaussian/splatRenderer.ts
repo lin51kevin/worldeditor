@@ -600,6 +600,11 @@ export class SplatRenderer {
     return this.resources.count;
   }
 
+  /** Changes every time a GPU sort is encoded, i.e. whenever the drawn order/visible set may differ. */
+  get orderRevision(): number {
+    return this.sortSerial;
+  }
+
   /** Result of the most recent upload attempt. */
   get uploadStatus(): Readonly<SplatUploadStatus> {
     return this._uploadStatus;

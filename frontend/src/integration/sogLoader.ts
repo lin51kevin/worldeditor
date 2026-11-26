@@ -40,11 +40,26 @@ export interface SogSplatMeta {
 export type SogFetch = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 
 /**
+ * Drop the view-dependent SH (`shN`) of a scene with more than `dropShAbove`
+ * splats: it then decodes as SH0, skipping the `shN` downloads and most of the
+ * per-splat GPU memory (SH3 is ~4x the size of SH0). `sceneCount` is the whole
+ * scene's count when the dataset is one chunk of it; default: the dataset's own.
+ */
+export interface SogShCap {
+  dropShAbove: number;
+  sceneCount?: number;
+}
+
+/**
  * Downloads and decodes one unbundled SOG off the calling thread (a worker
  * pool in the SDK). `origin` pins the render origin; `undefined` lets the
  * dataset choose its own.
  */
-export type SogChunkDecoder = (metaUrl: string, origin: readonly number[] | undefined) => Promise<DecodedSog>;
+export type SogChunkDecoder = (
+  metaUrl: string,
+  origin: readonly number[] | undefined,
+  shCap?: SogShCap,
+) => Promise<DecodedSog>;
 
 /** Options shared by the SOG loaders. */
 export interface SogLoadOptions {
@@ -54,6 +69,8 @@ export interface SogLoadOptions {
   concurrency?: number;
   /** Decode off-thread instead of with the local `wasm`; `fetchImpl` is then unused. */
   decoder?: SogChunkDecoder;
+  /** See {@link SogShCap}; default keeps every SH band. */
+  shCap?: SogShCap;
 }
 
 /** A single decoded dataset: packed buffer plus its metadata. */
@@ -103,13 +120,23 @@ export interface FetchedSog {
   images: Map<string, Uint8Array>;
 }
 
+/** `metaJson` without its `shN` block when `cap` says the scene is too large for it. */
+export function applyShCap(metaJson: string, cap: SogShCap | undefined): string {
+  if (!cap) return metaJson;
+  const meta = JSON.parse(metaJson) as { count?: number; shN?: unknown };
+  const count = cap.sceneCount ?? meta.count ?? 0;
+  if (meta.shN === undefined || !(count > cap.dropShAbove)) return metaJson;
+  delete meta.shN;
+  return JSON.stringify(meta);
+}
+
 /** Download `meta.json` and every image it references. */
 export async function fetchSogFiles(
   wasm: SogWasm,
   metaUrl: string,
   options: SogLoadOptions,
 ): Promise<FetchedSog> {
-  const metaJson = await (await fetchChecked(metaUrl, options)).text();
+  const metaJson = applyShCap(await (await fetchChecked(metaUrl, options)).text(), options.shCap);
   // A throwaway session lists the image names; it is discarded right away.
   const probe = wasm.sog_open(metaJson);
   let names: string[];
@@ -153,7 +180,7 @@ export async function decodeSogDataset(
   options: SogLoadOptions & { origin?: readonly number[] } = {},
 ): Promise<DecodedSog> {
   throwIfAborted(options.signal);
-  if (options.decoder) return options.decoder(metaUrl, options.origin);
+  if (options.decoder) return options.decoder(metaUrl, options.origin, options.shCap);
   const files = await fetchSogFiles(wasm, metaUrl, options);
   throwIfAborted(options.signal);
   return decodeFetched(wasm, files, options.origin);
@@ -280,13 +307,13 @@ function chunkProducer(
   options: StreamedLoadOptions,
   getOrigin: () => readonly number[] | undefined,
 ): (i: number) => Promise<DecodedSog> {
-  const { decoder } = options;
+  const { decoder, shCap } = options;
   if (decoder) {
     const ahead = Math.max(1, options.decoderConcurrency ?? 4);
     const pending = new Map<number, Promise<DecodedSog>>();
     const launch = (i: number): void => {
       if (i >= urls.length || pending.has(i)) return;
-      const job = decoder(urls[i]!, getOrigin());
+      const job = decoder(urls[i]!, getOrigin(), shCap);
       // A read-ahead chunk that fails while we wait on an earlier one must not be reported as unhandled.
       job.catch(() => undefined);
       pending.set(i, job);
@@ -353,7 +380,11 @@ export async function loadStreamedSog(
   const min: [number, number, number] = [Infinity, Infinity, Infinity];
   const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
 
-  const next = chunkProducer(wasm, urls, options, () => origin);
+  // Every chunk must agree on the SH degree, so the cap is decided on the whole scene.
+  const chunkOptions: StreamedLoadOptions = options.shCap
+    ? { ...options, shCap: { ...options.shCap, sceneCount: totalCount } }
+    : options;
+  const next = chunkProducer(wasm, urls, chunkOptions, () => origin);
   for (let i = 0; i < chunks.length; i++) {
     throwIfAborted(options.signal);
     const decoded = await next(i);
