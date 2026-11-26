@@ -10,6 +10,7 @@ import { LodStoreFailure, LodStreamer, type ResidentSplatTarget } from './lodStr
 import {
   decodeSogDataset,
   fetchLodMeta,
+  lodChunks,
   loadStreamedSog,
   type SogChunkDecoder,
   type SogShCap,
@@ -301,6 +302,7 @@ export async function loadLodStreamedIntoRenderer(
   ];
   const origin = options.origin ?? (options.worldAligned ? ZERO : center);
   const tuning = typeof options.lodStreaming === 'object' ? options.lodStreaming : {};
+  const { shCap } = requestedShCap(options);
   const streamer = new LodStreamer({
     wasm,
     target,
@@ -308,6 +310,12 @@ export async function loadLodStreamedIntoRenderer(
     meta,
     origin,
     signal: options.signal,
+    ...(shCap ? {
+      shCap: {
+        ...shCap,
+        sceneCount: meta.counts?.[0] ?? lodChunks(meta, 0).reduce((sum, chunk) => sum + chunk.count, 0),
+      },
+    } : {}),
     ...(decoding.decoder ? { decoder: decoding.decoder } : {}),
     options: { maxConcurrentLoads: decoding.decoderConcurrency, ...tuning },
   });

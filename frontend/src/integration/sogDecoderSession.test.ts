@@ -83,6 +83,18 @@ describe('openSogDecoder', () => {
     expect(workers[0]!.requests.at(-1)).toMatchObject({ type: 'decode', url: 'https://h/a/meta.json', origin: [1, 2, 3] });
   });
 
+  it('should preserve the scene SH cap when handing work to the pool', () => {
+    const { session, workers } = open({ workers: 1 });
+    const shCap = { dropShAbove: 20_000_000, sceneCount: 65_000_000 };
+    void session.decoder!('https://h/a/meta.json', [1, 2, 3], shCap).catch(() => undefined);
+    expect(workers[0]!.requests.at(-1)).toMatchObject({
+      type: 'decode',
+      origin: [1, 2, 3],
+      shCap,
+    });
+    session.dispose();
+  });
+
   it('should terminate the workers on dispose', () => {
     const { session, workers } = open();
     session.dispose();
@@ -107,14 +119,20 @@ describe('openSogDecoder', () => {
         throw new Error('local decode used');
       }),
     } as unknown as SogWasm;
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ count: 100, shN: { count: 45 } }), { status: 200 }),
+    );
     const { session, workers } = open({ wasm: localWasm, workers: 1 });
 
-    const job = session.decoder!('https://h/a/meta.json', undefined);
+    const shCap = { dropShAbove: 20_000_000, sceneCount: 65_000_000 };
+    const job = session.decoder!('https://h/a/meta.json', undefined, shCap);
     workers[0]!.onerror?.({ message: 'script failed' });
 
     await expect(job).rejects.toThrow(/local decode used/);
-    expect(localWasm.sog_open).toHaveBeenCalled();
+    expect(JSON.parse(vi.mocked(localWasm.sog_open).mock.calls[0]![0])).toEqual({ count: 100 });
+    await expect(session.decoder!('https://h/b/meta.json', undefined, shCap)).rejects.toThrow(/local decode used/);
+    expect(JSON.parse(vi.mocked(localWasm.sog_open).mock.calls[1]![0])).toEqual({ count: 100 });
+    session.dispose();
     fetchSpy.mockRestore();
     warn.mockRestore();
   });

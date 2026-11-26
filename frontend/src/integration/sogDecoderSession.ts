@@ -74,17 +74,17 @@ export function openSogDecoder(options: OpenSogDecoderOptions): SogDecoderSessio
   }
 
   let degraded = false;
-  const decoder: SogChunkDecoder = async (url, origin) => {
+  const decoder: SogChunkDecoder = async (url, origin, shCap) => {
     if (!degraded) {
       try {
-        return await pool.decode(url, origin);
+        return await pool.decode(url, origin, shCap);
       } catch (error) {
         if (!(error instanceof SogWorkerUnavailable)) throw error;
         degraded = true;
         console.warn('[SOG] decode workers unavailable, decoding on the main thread', error);
       }
     }
-    return decodeSogDataset(wasm, url, { origin, signal });
+    return decodeSogDataset(wasm, url, { origin, signal, shCap });
   };
 
   const onAbort = (): void => pool.dispose(new DOMException('SOG load aborted', 'AbortError'));

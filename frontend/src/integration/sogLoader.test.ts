@@ -459,19 +459,33 @@ describe('off-thread decoder', () => {
     expect(calls.map((c) => c[2])).toEqual([prepared, prepared]);
   });
 
-  it('should keep at most decoderConcurrency chunks ahead of the consumer', async () => {
+  it('should include the current chunk in the decoder concurrency limit', async () => {
     const { wasm } = makeFakeWasm();
     const { fetchImpl } = makeFetch(streamedFiles());
     const { sink } = recordingSink();
-    const decoder = vi.fn(wasmDecoder(wasm, fetchImpl));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const inner = wasmDecoder(wasm, fetchImpl);
+    const decoder = vi.fn<SogChunkDecoder>(async (url, origin) => {
+      await gate;
+      return inner(url, origin);
+    });
 
-    await loadStreamedSog(wasm, 'https://h/s/lod-meta.json', sink, {
+    const load = loadStreamedSog(wasm, 'https://h/s/lod-meta.json', sink, {
       fetchImpl,
       decoder,
       origin: [0, 0, 0],
       decoderConcurrency: 1,
     });
 
+    try {
+      await vi.waitFor(() => expect(decoder).toHaveBeenCalled());
+      expect(decoder).toHaveBeenCalledTimes(1);
+      expect(sink.append).not.toHaveBeenCalled();
+    } finally {
+      release();
+      await load;
+    }
     expect(decoder).toHaveBeenCalledTimes(2);
   });
 

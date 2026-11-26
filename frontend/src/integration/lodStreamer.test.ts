@@ -3,6 +3,7 @@ import type { SplatUploadStatus } from '../viewport/gaussian/splatRenderer';
 import { prepareSplatSlices, type PreparedSplatChunk } from '../viewport/gaussian/splatPrepare';
 import { splatStrideForDegree } from '../viewport/gaussian/splatLayout';
 import { LodStoreFailure, LodStreamer, type LodStreamingOptions, type ResidentSplatTarget } from './lodStreamer';
+import * as sogLoader from './sogLoader';
 import type { DecodedSog, LodMeta, LodNode, SogSplatMeta, SogWasm } from './sogLoader';
 
 const UNIT_SPLATS = 1000;
@@ -104,6 +105,7 @@ function makeStreamer(
   decoder: (url: string, origin: readonly number[] | undefined) => Promise<DecodedSog>,
   options: LodStreamingOptions = {},
   origin: [number, number, number] = [0, 0, 0],
+  signal?: AbortSignal,
 ) {
   return new LodStreamer({
     wasm: {} as SogWasm,
@@ -111,6 +113,7 @@ function makeStreamer(
     lodMetaUrl: 'https://h/s/lod-meta.json',
     meta: sceneMeta(),
     origin,
+    signal,
     decoder,
     options: { budget: 1_000_000, baseDistance: 1, evictAfterMs: 1000, updateIntervalMs: 100, ...options },
   });
@@ -120,6 +123,93 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('LodStreamer start', () => {
+  it('should clean an aborted partial store before the next load and ignore late old decodes', async () => {
+    const { target } = fakeTarget();
+    const { decoder } = fakeDecoder();
+    let reject!: (error: Error) => void;
+    let resolve!: (value: DecodedSog) => void;
+    let enter!: () => void;
+    const entered = new Promise<void>((done) => { enter = done; });
+    const aborted = new Promise<DecodedSog>((_done, fail) => { reject = fail; });
+    const late = new Promise<DecodedSog>((done) => { resolve = done; });
+    const oldDecoder = vi.fn(decoder)
+      .mockImplementationOnce(() => decoder('https://h/a'))
+      .mockImplementationOnce(() => aborted)
+      .mockImplementationOnce(() => { enter(); return late; });
+    const outcome = makeStreamer(target, oldDecoder).start().then(() => null, (error: unknown) => error);
+    await entered;
+    reject(new DOMException('decoder stopped', 'AbortError'));
+    expect(await outcome).toMatchObject({ name: 'AbortError' });
+    expect(target.abortGaussianSplatUpload).toHaveBeenCalledTimes(1);
+
+    const next = await makeStreamer(target, decoder).start();
+    const writes = vi.mocked(target.writeGaussianResident).mock.calls.length;
+    resolve(await decoder('https://h/c'));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(target.writeGaussianResident).toHaveBeenCalledTimes(writes);
+    expect(target.abortGaussianSplatUpload).toHaveBeenCalledTimes(1);
+    expect(next.handle.stats().residentUnits).toBe(4);
+    next.handle.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('should forward the same scene SH cap to every worker decode, including later views', async () => {
+    const { target, pose } = fakeTarget();
+    pose.splice(0, 3, -0.5, -1.5, -2.5);
+    const { decoder } = fakeDecoder();
+    const workerDecoder = vi.fn<sogLoader.SogChunkDecoder>((url) => decoder(url));
+    const shCap = { dropShAbove: 3000, sceneCount: 4000 };
+    const result = await new LodStreamer({
+      wasm: {} as SogWasm,
+      target,
+      lodMetaUrl: 'https://h/s/lod-meta.json',
+      meta: sceneMeta(),
+      origin: [1, 2, 3],
+      shCap,
+      decoder: workerDecoder,
+      options: { budget: 1_000_000, baseDistance: 1, updateIntervalMs: 100 },
+    }).start();
+    const firstViewCalls = workerDecoder.mock.calls.length;
+    pose[0] = 2.5;
+    await vi.advanceTimersByTimeAsync(150);
+    result.handle.dispose();
+
+    expect(workerDecoder.mock.calls.length).toBeGreaterThan(firstViewCalls);
+    for (const call of workerDecoder.mock.calls) {
+      expect(call[1]).toEqual([1, 2, 3]);
+      expect(call[2]).toEqual(shCap);
+    }
+  });
+
+  it('should forward the scene SH cap, origin and signal to every local decode', async () => {
+    const { target } = fakeTarget();
+    const { decoder } = fakeDecoder();
+    const localDecode = vi.spyOn(sogLoader, 'decodeSogDataset').mockImplementation((wasm, url) => decoder(url));
+    const wasm = {} as SogWasm;
+    const signal = new AbortController().signal;
+    const shCap = { dropShAbove: 3000, sceneCount: 4000 };
+    try {
+      const result = await new LodStreamer({
+        wasm,
+        target,
+        lodMetaUrl: 'https://h/s/lod-meta.json',
+        meta: sceneMeta(),
+        origin: [0, 0, 0],
+        signal,
+        shCap,
+        options: { budget: 1_000_000, baseDistance: 1 },
+      }).start();
+      result.handle.dispose();
+
+      expect(localDecode).toHaveBeenCalledTimes(4);
+      for (const call of localDecode.mock.calls) {
+        expect(call).toEqual([wasm, expect.any(String), { signal, origin: [0, 0, 0], shCap }]);
+      }
+    } finally {
+      localDecode.mockRestore();
+    }
+  });
+
   it('should bring the units the first view needs resident and report the scene', async () => {
     const { target, writes } = fakeTarget();
     const { decoder, requested } = fakeDecoder();
@@ -204,6 +294,51 @@ describe('LodStreamer start', () => {
 });
 
 describe('LodStreamer following the camera', () => {
+  it.each([true, false])('should stop a running stream on terminal abort (signal: %s)', async (signalAbort) => {
+    const { target, pose } = fakeTarget();
+    const controller = new AbortController();
+    const removed = vi.spyOn(controller.signal, 'removeEventListener');
+    const { decoder } = fakeDecoder();
+    const streamDecoder = vi.fn(decoder);
+    const result = await makeStreamer(target, streamDecoder, { maxConcurrentLoads: 1 }, [0, 0, 0], controller.signal).start();
+    let resolve!: (value: DecodedSog) => void;
+    let reject!: (error: Error) => void;
+    const pending = new Promise<DecodedSog>((done, fail) => { resolve = done; reject = fail; });
+    streamDecoder.mockImplementationOnce(() => pending);
+    pose[0] = 3.5;
+    await vi.advanceTimersByTimeAsync(100);
+    expect(result.handle.stats().loadingUnits).toBe(1);
+    const writes = vi.mocked(target.writeGaussianResident).mock.calls.length;
+    const calls = streamDecoder.mock.calls.length;
+    if (signalAbort) {
+      controller.abort();
+      resolve(await decoder('https://h/d'));
+    } else {
+      reject(new DOMException('decoder stopped', 'AbortError'));
+    }
+    await vi.advanceTimersByTimeAsync(10_000);
+    await result.handle.whenIdle();
+    expect(streamDecoder).toHaveBeenCalledTimes(calls);
+    expect(target.writeGaussianResident).toHaveBeenCalledTimes(writes);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(removed).toHaveBeenCalledWith('abort', expect.any(Function));
+    expect(target.abortGaussianSplatUpload).not.toHaveBeenCalled();
+    result.handle.dispose();
+  });
+
+  it('should remove the signal listener on normal disposal', async () => {
+    const { target } = fakeTarget();
+    const { decoder } = fakeDecoder();
+    const controller = new AbortController();
+    const added = vi.spyOn(controller.signal, 'addEventListener');
+    const removed = vi.spyOn(controller.signal, 'removeEventListener');
+    const result = await makeStreamer(target, decoder, {}, [0, 0, 0], controller.signal).start();
+    result.handle.dispose();
+    expect(added).toHaveBeenCalledWith('abort', expect.any(Function), { once: true });
+    expect(removed).toHaveBeenCalledWith('abort', added.mock.calls[0]![1]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('should load the units of a new view and release the old ones after the grace period', async () => {
     const { target, pose, releases } = fakeTarget();
     const { decoder, requested } = fakeDecoder();

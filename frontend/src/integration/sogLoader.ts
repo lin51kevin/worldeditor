@@ -320,7 +320,7 @@ function chunkProducer(
     };
     return async (i) => {
       launch(i);
-      if (getOrigin() !== undefined) for (let k = i + 1; k <= i + ahead; k++) launch(k);
+      if (getOrigin() !== undefined) for (let k = i + 1; k < i + ahead; k++) launch(k);
       const decoded = await pending.get(i)!;
       pending.delete(i);
       return decoded;

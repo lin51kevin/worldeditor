@@ -22,7 +22,7 @@ import {
   type SlotRange,
 } from './lodSelection';
 import type { SplatUploadStatus } from '../viewport/gaussian/splatRenderer';
-import { decodeSogDataset, type DecodedSog, type LodMeta, type SogChunkDecoder, type SogWasm } from './sogLoader';
+import { decodeSogDataset, type DecodedSog, type LodMeta, type SogChunkDecoder, type SogShCap, type SogWasm } from './sogLoader';
 
 /** The renderer methods the streamer drives (see `ViewportRenderer`). */
 export interface ResidentSplatTarget {
@@ -105,6 +105,7 @@ export interface LodStreamerDeps {
   options?: LodStreamingOptions;
   /** Off-thread decoder; absent decodes with `wasm` on the calling thread. */
   decoder?: SogChunkDecoder;
+  shCap?: SogShCap;
   signal?: AbortSignal;
   /** Injectable for tests. */
   now?: () => number;
@@ -153,6 +154,8 @@ export class LodStreamer {
   private residentSplats = 0;
   private dirty = true;
   private disposed = false;
+  private abortError: unknown = null;
+  private readonly onAbort = (): void => this.abort(new DOMException('LOD stream aborted', 'AbortError'));
   private timer: ReturnType<typeof setInterval> | null = null;
   private renderTimer: ReturnType<typeof setTimeout> | null = null;
   private lastRenderMs = Number.NEGATIVE_INFINITY;
@@ -185,32 +188,44 @@ export class LodStreamer {
    * following the camera.
    */
   async start(): Promise<LodStartResult> {
-    if (this.leaves.length === 0) throw new Error('lod-meta.json has no leaves with splats');
-    this.replan(true);
-    const first = this.queue.shift();
-    if (!first) throw new Error('LOD plan selected nothing to load');
-    const decoded = await this.decode(first);
-    const { meta } = decoded;
-    const status = this.openStore(decoded);
-    // The store may have shrunk the budget the first plan was made for.
-    this.dirty = true;
-    this.insert(first, decoded);
+    this.deps.signal?.addEventListener('abort', this.onAbort, { once: true });
+    try {
+      this.throwIfStopped();
+      if (this.leaves.length === 0) throw new Error('lod-meta.json has no leaves with splats');
+      this.replan(true);
+      const first = this.queue.shift();
+      if (!first) throw new Error('LOD plan selected nothing to load');
+      const decoded = await this.decode(first);
+      this.throwIfStopped();
+      const { meta } = decoded;
+      const status = this.openStore(decoded);
+      this.dirty = true;
+      this.insert(first, decoded);
 
-    this.pump();
-    await this.whenIdle();
-    this.timer = setInterval(() => this.tick(), this.updateIntervalMs);
-    const bounds = leavesBounds(this.leaves);
-    return {
-      shDegree: meta.shDegree,
-      layoutVersion: meta.layoutVersion,
-      origin: this.origin,
-      min: bounds.min,
-      max: bounds.max,
-      residentSplats: this.residentSplats,
-      capacity: this.allocator!.capacity,
-      uploadStatus: status,
-      handle: this.handle(),
-    };
+      this.pump();
+      await this.whenIdle();
+      this.throwIfStopped();
+      this.timer = setInterval(() => this.tick(), this.updateIntervalMs);
+      const bounds = leavesBounds(this.leaves);
+      return {
+        shDegree: meta.shDegree,
+        layoutVersion: meta.layoutVersion,
+        origin: this.origin,
+        min: bounds.min,
+        max: bounds.max,
+        residentSplats: this.residentSplats,
+        capacity: this.allocator!.capacity,
+        uploadStatus: status,
+        handle: this.handle(),
+      };
+    } catch (error) {
+      this.dispose();
+      if (this.allocator) {
+        this.deps.target.abortGaussianSplatUpload();
+        this.allocator = null;
+      }
+      throw this.abortError ?? error;
+    }
   }
 
   private handle(): LodStreamHandle {
@@ -259,12 +274,25 @@ export class LodStreamer {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.deps.signal?.removeEventListener('abort', this.onAbort);
     if (this.timer) clearInterval(this.timer);
     if (this.renderTimer) clearTimeout(this.renderTimer);
     this.timer = null;
     this.renderTimer = null;
     this.queue = [];
     this.flushIdle();
+  }
+
+  private abort(error: unknown): void {
+    if (this.disposed) return;
+    this.abortError = error;
+    this.dispose();
+  }
+
+  private throwIfStopped(): void {
+    if (this.deps.signal?.aborted) this.onAbort();
+    if (this.abortError) throw this.abortError;
+    if (this.disposed) throw new DOMException('LOD stream disposed', 'AbortError');
   }
 
   // ── Planning ────────────────────────────────────────────────────────────────
@@ -341,7 +369,9 @@ export class LodStreamer {
       if (this.disposed) return;
       this.insert(unit, decoded);
     } catch (error) {
-      if (!this.disposed) {
+      if (this.deps.signal?.aborted || (error as { name?: unknown } | null)?.name === 'AbortError') {
+        this.abort(error);
+      } else if (!this.disposed) {
         console.warn(`[LOD] Unit ${unit.key} failed to load`, error);
         this.units.set(unit.key, { status: 'failed', at: this.now() });
       }
@@ -353,8 +383,8 @@ export class LodStreamer {
 
   private decode(unit: LodUnit): Promise<DecodedSog> {
     const url = this.urls[unit.file]!;
-    if (this.deps.decoder) return this.deps.decoder(url, this.origin);
-    return decodeSogDataset(this.deps.wasm, url, { signal: this.deps.signal, origin: this.origin });
+    if (this.deps.decoder) return this.deps.decoder(url, this.origin, this.deps.shCap);
+    return decodeSogDataset(this.deps.wasm, url, { signal: this.deps.signal, origin: this.origin, shCap: this.deps.shCap });
   }
 
   /** Allocate the store from the first decoded unit's format. */
