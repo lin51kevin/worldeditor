@@ -51,8 +51,8 @@ function device(): GPUDevice {
 
 const idleSorter: SplatSorter = { init() {}, sort() {}, dispose() {} };
 
-function makeRenderer(): SplatRenderer {
-  const r = new SplatRenderer(device(), {} as GPUBindGroupLayout, {} as GPURenderPipeline, idleSorter);
+function makeRenderer(gpu = device()): SplatRenderer {
+  const r = new SplatRenderer(gpu, {} as GPUBindGroupLayout, {} as GPURenderPipeline, idleSorter);
   r.upload(new Uint32Array(4 * splatStrideForDegree(0)), 0, GAUSSIAN_SPLAT_LAYOUT_VERSION);
   r.setGpuSort(true);
   return r;
@@ -105,6 +105,48 @@ describe("SplatRenderer GPU sort frustum culling", () => {
     r.sortGpu({} as GPUCommandEncoder);
 
     expect(await r.readVisibleCount()).toBe(1234);
+  });
+
+  it("should share an unfinished visible-count readback", async () => {
+    const gpu = device();
+    const renderer = makeRenderer(gpu);
+    renderer.onCamera(camera, "3d", 50, 800, 600);
+    renderer.sortGpu({} as GPUCommandEncoder);
+    let finishMapping!: () => void;
+    const mapping = new Promise<void>((resolve) => { finishMapping = resolve; });
+    const staging = {
+      mapAsync: vi.fn(() => mapping),
+      getMappedRange: () => new Uint32Array([4, 1234, 0, 0]).buffer,
+      unmap: vi.fn(),
+      destroy: vi.fn(),
+    };
+    vi.spyOn(gpu, "createBuffer").mockReturnValue(staging as unknown as GPUBuffer);
+
+    const requests = [renderer.readVisibleCount(), renderer.readVisibleCount(), renderer.readVisibleCount()];
+    expect(gpu.queue.submit).toHaveBeenCalledTimes(1);
+    expect(staging.mapAsync).toHaveBeenCalledTimes(1);
+    finishMapping();
+    expect(await Promise.all(requests)).toEqual([1234, 1234, 1234]);
+    expect(staging.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("should destroy failed readback buffers and allow another readback", async () => {
+    const gpu = device();
+    const renderer = makeRenderer(gpu);
+    renderer.onCamera(camera, "3d", 50, 800, 600);
+    renderer.sortGpu({} as GPUCommandEncoder);
+    const staging = {
+      mapAsync: vi.fn().mockRejectedValueOnce(new Error("mapping failed")).mockResolvedValue(undefined),
+      getMappedRange: () => new Uint32Array([4, 1234, 0, 0]).buffer,
+      unmap: vi.fn(),
+      destroy: vi.fn(),
+    };
+    vi.spyOn(gpu, "createBuffer").mockReturnValue(staging as unknown as GPUBuffer);
+
+    await expect(renderer.readVisibleCount()).rejects.toThrow("mapping failed");
+    expect(staging.destroy).toHaveBeenCalledTimes(1);
+    expect(await renderer.readVisibleCount()).toBe(1234);
+    expect(staging.destroy).toHaveBeenCalledTimes(2);
   });
 
   it("sorts without cull inputs once frustum culling is disabled", () => {
@@ -189,6 +231,43 @@ describe("SplatRenderer interactive budget", () => {
     at(r, 1);
     r.sortGpu({} as GPUCommandEncoder);
     expect(tauOf(1)).toBeGreaterThan(tauOf(0));
+  });
+
+  it("should keep only one feedback task and ignore an older moving view", async () => {
+    const { r } = make(2);
+    r.setInteractiveHold(true);
+    let finishReadback!: (count: number) => void;
+    const readback = new Promise<number>((resolve) => { finishReadback = resolve; });
+    const read = vi.spyOn(r, "readVisibleCount").mockReturnValueOnce(readback).mockResolvedValue(2);
+    at(r, 0);
+    r.sortGpu({} as GPUCommandEncoder);
+    await vi.advanceTimersByTimeAsync(0);
+    now += 1000;
+    at(r, 1);
+    r.sortGpu({} as GPUCommandEncoder);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(read).toHaveBeenCalledTimes(1);
+
+    finishReadback(1234);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(read).toHaveBeenCalledTimes(2);
+    now += 1000;
+    at(r, 2);
+    r.sortGpu({} as GPUCommandEncoder);
+    expect(tauOf(2)).toBe(tauOf(0));
+  });
+
+  it("should not read a scheduled budget result after the scene is cleared", async () => {
+    const { r, wake } = make(2);
+    at(r, 0);
+    r.sortGpu({} as GPUCommandEncoder);
+    const read = vi.spyOn(r, "readVisibleCount");
+    r.clear();
+    wake.mockClear();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(read).not.toHaveBeenCalled();
+    expect(wake).not.toHaveBeenCalled();
   });
 
   it("re-sorts at full quality once the camera has settled", async () => {

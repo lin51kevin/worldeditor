@@ -191,6 +191,92 @@ describe('CameraController', () => {
   });
 
   describe('3D perspective mode', () => {
+    describe('left-button ground pan', () => {
+      function drag(start: [number, number], end: [number, number], pixelRatio = 1): void {
+        const canvas = {
+          width: 800 * pixelRatio,
+          height: 600 * pixelRatio,
+          getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
+        } as HTMLCanvasElement;
+        const modifiers = { ctrlKey: false, shiftKey: false, altKey: false };
+        expect(cam.beginPointerDrag(0, { clientX: start[0], clientY: start[1], ...modifiers })).toBe(true);
+        expect(cam.updatePointerDrag(canvas, { buttons: 1, clientX: end[0], clientY: end[1], ...modifiers })).toBe(true);
+        cam.endPointerDrag();
+      }
+
+      it('should pan horizontally at a level camera angle without a ground hit', () => {
+        cam.setFrontCam(0, 0, 0, 0);
+        const before = cam.saveState();
+        const wake = vi.fn();
+        cam.setViewDirtyCallback(wake);
+        expect(cam.unprojectToGround(400, 300)).toBeNull();
+        drag([400, 300], [440, 300]);
+        expect(cam.state.position[1]).toBeGreaterThan(before.camera.position[1]);
+        expect(cam.state.position[2]).toBe(before.camera.position[2]);
+        expect(cam.state.target[2]).toBe(before.camera.target[2]);
+        expect(cam.state.target[1] - before.camera.target[1]).toBeCloseTo(cam.state.position[1] - before.camera.position[1]);
+        expect(wake).toHaveBeenCalled();
+      });
+
+      it('should pan vertically above the horizon without changing height', () => {
+        cam.setFrontCam(0, 0, 0, 0);
+        const before = cam.saveState();
+        expect(cam.unprojectToGround(400, 100)).toBeNull();
+        drag([400, 100], [400, 140]);
+        expect(cam.state.position[0]).toBeGreaterThan(before.camera.position[0]);
+        expect(cam.state.position[2]).toBe(before.camera.position[2]);
+        expect(cam.state.up).toEqual(before.camera.up);
+      });
+
+      it('should preserve the ground anchor when both rays hit the ground', () => {
+        expect(cam.unprojectToGround(400, 300)).not.toBeNull();
+        expect(cam.unprojectToGround(440, 300)).not.toBeNull();
+        const previous = cam.unprojectToGround(400, 300)!;
+        const current = cam.unprojectToGround(440, 300)!;
+        const before = cam.saveState();
+        drag([400, 300], [440, 300]);
+        expect(cam.state.position[0] - before.camera.position[0]).toBeCloseTo(previous.x - current.x);
+        expect(cam.state.position[1] - before.camera.position[1]).toBeCloseTo(previous.y - current.y);
+      });
+
+      it('should use CSS pixels for fallback pan on high-DPI canvases', () => {
+        cam.setFrontCam(0, 0, 0, 0);
+        const before = cam.saveState();
+        drag([400, 300], [440, 300]);
+        const normal = cam.saveState();
+        expect(normal.camera.position).not.toEqual(before.camera.position);
+        cam.restoreState(before);
+        cam.setViewportSize(1600, 1200);
+        drag([400, 300], [440, 300], 2);
+        expect(cam.state.position).toEqual(normal.camera.position);
+        expect(cam.state.target).toEqual(normal.camera.target);
+      });
+
+      it.each([
+        [[400, 200], [440, 400]],
+        [[400, 400], [440, 200]],
+      ] as Array<[[number, number], [number, number]]>)('should pan when only one endpoint hits the ground (%s to %s)', (start, end) => {
+        cam.setFrontCam(0, 0, 0, 0);
+        const before = cam.saveState();
+        expect(cam.unprojectToGround(...start) === null).not.toBe(cam.unprojectToGround(...end) === null);
+        drag(start, end);
+        expect(cam.state.position).not.toEqual(before.camera.position);
+        expect(cam.state.position.every(Number.isFinite)).toBe(true);
+        expect(cam.state.position[2]).toBe(before.camera.position[2]);
+      });
+
+      it('should use the up vector when looking vertically away from the ground', () => {
+        const saved = cam.saveState();
+        cam.restoreState({ ...saved, camera: { ...saved.camera, position: [0, 0, 2], target: [0, 0, 12], up: [0, 1, 0] } });
+        expect(cam.unprojectToGround(400, 300)).toBeNull();
+        drag([400, 300], [440, 300]);
+        expect(cam.state.position[0]).toBeLessThan(0);
+        expect(cam.state.position[2]).toBe(2);
+        expect(cam.state.target[0]).toBe(cam.state.position[0]);
+        expect(cam.state.target[2]).toBe(12);
+      });
+    });
+
     it('getProjectionScale returns the perspective focal terms', () => {
       const [sx, sy] = cam.getProjectionScale();
       const f = 1 / Math.tan(cam.state.fovY / 2);

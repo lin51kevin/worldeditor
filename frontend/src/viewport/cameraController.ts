@@ -1158,7 +1158,8 @@ export class CameraController {
     const [tx, ty, tz] = this.camera.target;
     const previousWorld = this.unprojectClientToGround(canvas, previousMouse);
     const currentWorld = this.unprojectClientToGround(canvas, currentMouse);
-    const offset = computeGroundPanOffset(previousWorld, currentWorld);
+    const offset = computeGroundPanOffset(previousWorld, currentWorld)
+      ?? this.fallbackGroundPanOffset(canvas, previousMouse, currentMouse);
     if (!offset) return;
 
     this.camera.position = [px + offset.x, py + offset.y, pz];
@@ -1166,6 +1167,34 @@ export class CameraController {
     this.viewDirty = true;
     this.onViewBecameDirty?.();
     this.reportScale();
+  }
+
+  private fallbackGroundPanOffset(
+    canvas: HTMLCanvasElement,
+    previousMouse: [number, number],
+    currentMouse: [number, number],
+  ): { x: number; y: number } | null {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    let forwardX = this.camera.target[0] - this.camera.position[0];
+    let forwardY = this.camera.target[1] - this.camera.position[1];
+    let length = Math.hypot(forwardX, forwardY);
+    if (length < 1e-10) {
+      forwardX = this.camera.up[0];
+      forwardY = this.camera.up[1];
+      length = Math.hypot(forwardX, forwardY);
+      if (length < 1e-10) return null;
+    }
+    forwardX /= length;
+    forwardY /= length;
+    const unitsPerPixel = 2 * Math.tan(this.camera.fovY / 2)
+      * Math.max(MIN_CAM_DIST, this.getCameraDistance()) / rect.height;
+    const horizontal = (previousMouse[0] - currentMouse[0]) * unitsPerPixel;
+    const vertical = (currentMouse[1] - previousMouse[1]) * unitsPerPixel;
+    return {
+      x: horizontal * forwardY + vertical * forwardX,
+      y: -horizontal * forwardX + vertical * forwardY,
+    };
   }
 
   private unprojectClientToGround(

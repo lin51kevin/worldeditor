@@ -480,6 +480,10 @@ export class SplatRenderer {
   private gpuSorter: GpuSplatSorter | null = null;
   /** Measures the GPU sort's real duration where the device has timestamp queries. */
   private sortTimer: GpuSortTimer | null = null;
+  private visibleCountReadback: Promise<number | null> | null = null;
+  private budgetFeedbackPending = false;
+  private budgetGeneration = 0;
+  private queuedBudgetFeedback: { budget: number; settled: boolean; serial: number; generation: number } | null = null;
   /** When true and the texture-array path is active, sort on the GPU each frame. */
   private useGpuSort = false;
   /** Latest camera pose, captured by {@link onCamera} for the GPU sort pass. */
@@ -1222,10 +1226,18 @@ export class SplatRenderer {
    */
   private trackInteractiveBudget(budget: number, thinned: boolean, settled: boolean): void {
     const serial = this.sortSerial;
-    setTimeout(() => {
-      void this.readVisibleCount()
+    const generation = this.budgetGeneration;
+    if (this.budgetFeedbackPending) this.queuedBudgetFeedback = { budget, settled, serial, generation };
+    if (!this.budgetFeedbackPending) {
+      this.budgetFeedbackPending = true;
+      setTimeout(() => {
+        if (generation !== this.budgetGeneration) {
+          this.finishBudgetFeedback();
+          return;
+        }
+        void Promise.resolve().then(() => this.readVisibleCount())
         .then((visible) => {
-          if (visible === null) return;
+          if (visible === null || generation !== this.budgetGeneration || serial !== this.sortSerial) return;
           if (settled) {
             this.steerSettled(visible, budget, serial);
             return;
@@ -1242,14 +1254,27 @@ export class SplatRenderer {
             this.onOrderChanged?.();
           }
         })
-        .catch(() => undefined);
-    }, 0);
+        .catch((error) => {
+          if (generation === this.budgetGeneration) console.warn('[Splat] Visible-count feedback failed', error);
+        })
+        .finally(() => this.finishBudgetFeedback());
+      }, 0);
+    }
     if (settled || !thinned || this.interactiveHold) return;
     if (this.refineTimer) clearTimeout(this.refineTimer);
     this.refineTimer = setTimeout(() => {
       this.refineTimer = null;
       this.requestSettledSort();
     }, INTERACTIVE_IDLE_MS);
+  }
+
+  private finishBudgetFeedback(): void {
+    this.budgetFeedbackPending = false;
+    const queued = this.queuedBudgetFeedback;
+    this.queuedBudgetFeedback = null;
+    if (queued && queued.generation === this.budgetGeneration && queued.serial === this.sortSerial) {
+      this.trackInteractiveBudget(queued.budget, false, queued.settled);
+    }
   }
 
   /** Re-sort the still camera at full quality, capped by the settled budget. */
@@ -1282,6 +1307,7 @@ export class SplatRenderer {
   setSettledBudget(maxSplats: number): void {
     const budget = Math.max(0, Math.floor(maxSplats));
     if (budget === this.settledBudget) return;
+    this.budgetGeneration++;
     this.settledBudget = budget;
     this.settledTau = seedSettledTau(this.thinTau, this.interactiveBudget, budget);
     this.gpuSortDirty = true;
@@ -1310,6 +1336,7 @@ export class SplatRenderer {
    */
   setInteractiveHold(hold: boolean): void {
     if (hold === this.interactiveHold) return;
+    this.budgetGeneration++;
     this.interactiveHold = hold;
     if (this.refineTimer) clearTimeout(this.refineTimer);
     this.refineTimer = null;
@@ -1326,6 +1353,7 @@ export class SplatRenderer {
 
   /** Start a cloud at the initial threshold when it exceeds the budget, else unthinned. */
   private resetThinning(): void {
+    this.budgetGeneration++;
     this.holdConvergeLeft = this.interactiveHold ? HOLD_CONVERGE_SORTS : 0;
     this.settledTau = 0;
     this.settledConvergeLeft = 0;
@@ -1347,6 +1375,7 @@ export class SplatRenderer {
     // A cloud too large for the CPU sort cannot go back to it.
     if (!enabled && this.gpuSortForced) return;
     if (this.useGpuSort === enabled) return;
+    this.budgetGeneration++;
     this.useGpuSort = enabled;
     this.gpuSortLogged = false;
     this.gpuSortDirty = true;
@@ -1528,21 +1557,39 @@ export class SplatRenderer {
    * Diagnostic: how many splats the most recent GPU sort kept (the indirect draw's
    * instance count), or `null` when no GPU sort has produced one. Stalls on a GPU readback.
    */
-  async readVisibleCount(): Promise<number | null> {
+  readVisibleCount(): Promise<number | null> {
+    if (this.visibleCountReadback) return this.visibleCountReadback;
     const args = this.gpuSorter?.drawArgsBuffer;
-    if (!args) return null;
+    if (!args) return Promise.resolve(null);
+    this.visibleCountReadback = this.readVisibleCountBuffer(args).finally(() => {
+      this.visibleCountReadback = null;
+    });
+    return this.visibleCountReadback;
+  }
+
+  private async readVisibleCountBuffer(args: GPUBuffer): Promise<number | null> {
+    const generation = this.budgetGeneration;
+    const serial = this.sortSerial;
     const staging = this.device.createBuffer({
       size: 16,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
-    const encoder = this.device.createCommandEncoder();
-    encoder.copyBufferToBuffer(args, 0, staging, 0, 16);
-    this.device.queue.submit([encoder.finish()]);
-    await staging.mapAsync(1 /* GPUMapMode.READ */);
-    const count = new Uint32Array(staging.getMappedRange().slice(0))[1] ?? 0;
-    staging.unmap();
-    staging.destroy();
-    return count;
+    let mapped = false;
+    try {
+      const encoder = this.device.createCommandEncoder();
+      encoder.copyBufferToBuffer(args, 0, staging, 0, 16);
+      this.device.queue.submit([encoder.finish()]);
+      await staging.mapAsync(1 /* GPUMapMode.READ */);
+      mapped = true;
+      if (this.gpuSorter?.drawArgsBuffer !== args || generation !== this.budgetGeneration || serial !== this.sortSerial) return null;
+      return new Uint32Array(staging.getMappedRange().slice(0))[1] ?? 0;
+    } finally {
+      try {
+        if (mapped) staging.unmap();
+      } finally {
+        staging.destroy();
+      }
+    }
   }
 
   /** Permanently fall back to the CPU worker sort after a GPU sort failure. */
@@ -1609,6 +1656,9 @@ export class SplatRenderer {
 
   /** Remove the current cloud. */
   clear(): void {
+    this.budgetGeneration++;
+    if (this.refineTimer) clearTimeout(this.refineTimer);
+    this.refineTimer = null;
     this.abortUpload();
     this.gpuSortForced = false;
     this.resources.clear();
@@ -1633,6 +1683,7 @@ export class SplatRenderer {
 
   /** Release all GPU + worker resources. */
   dispose(): void {
+    this.budgetGeneration++;
     if (this.refineTimer) clearTimeout(this.refineTimer);
     this.refineTimer = null;
     if (this.residentRefreshTimer) clearTimeout(this.residentRefreshTimer);

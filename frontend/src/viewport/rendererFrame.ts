@@ -81,6 +81,7 @@ export interface RendererFrameInternals {
   staticLayerCacheEnabled: boolean;
   staticLayerCache: StaticLayerCache | null;
   markSceneDirty(): void;
+  render?(): void;
 }
 
 /**
@@ -102,6 +103,38 @@ export interface StaticLayerCache {
 
 /** Below this many scene splats a full redraw is cheaper than keeping the cache. */
 export const STATIC_LAYER_CACHE_MIN_SPLATS = 1_000_000;
+
+interface FrameSubmissionState {
+  inFlight: number;
+  requested: boolean;
+  raf: number;
+}
+
+const frameSubmissions = new WeakMap<RendererFrameInternals, FrameSubmissionState>();
+const MAX_IN_FLIGHT_FRAMES = 2;
+
+function trackFrameSubmission(r: RendererFrameInternals, state: FrameSubmissionState): void {
+  state.inFlight++;
+  const failed = () => {
+    state.inFlight--;
+    state.requested = false;
+  };
+  try {
+    void r.device.queue.onSubmittedWorkDone().then(() => {
+      state.inFlight--;
+      if (!state.requested || state.raf || r.disposed || r.deviceLost) return;
+      state.raf = requestAnimationFrame(() => {
+        state.raf = 0;
+        if (state.requested && !r.disposed && !r.deviceLost) {
+          if (r.render) r.render();
+          else renderFrame(r);
+        }
+      });
+    }, failed);
+  } catch {
+    failed();
+  }
+}
 
 export function disposeStaticLayerCache(cache: StaticLayerCache | null): null {
   cache?.color.destroy();
@@ -246,8 +279,29 @@ function drawBatched(
 }
 
 /** Render a single frame to the swap chain (render-on-demand). */
-export function renderFrame(r: RendererFrameInternals): void {
+export function renderFrame(r: RendererFrameInternals, force = false): void {
   if (r.deviceLost || r.disposed) return;
+
+  let submission = frameSubmissions.get(r);
+  if (
+    !submission &&
+    (r.splatRenderer?.count ?? 0) >= STATIC_LAYER_CACHE_MIN_SPLATS &&
+    typeof r.device.queue.onSubmittedWorkDone === 'function'
+  ) {
+    submission = { inFlight: 0, requested: false, raf: 0 };
+    frameSubmissions.set(r, submission);
+  }
+  if (submission) {
+    if (!force && submission.inFlight >= MAX_IN_FLIGHT_FRAMES) {
+      submission.requested = true;
+      return;
+    }
+    if (submission.requested) {
+      r.cameraController.isViewDirty = true;
+      r.sceneDirty = true;
+    }
+    submission.requested = false;
+  }
 
   let texture: GPUTexture;
   try {
@@ -293,7 +347,7 @@ export function renderFrame(r: RendererFrameInternals): void {
   // Refresh the Gaussian splat camera uniform + schedule a depth re-sort. The
   // sort is internally thresholded, so a static camera costs almost nothing.
   // Scene and actor clouds are sorted independently (each owns its order buffer).
-  if (r.splatRenderer?.hasContent) {
+  if (r.staticSceneVisible && r.sceneSplatsVisible && r.splatRenderer?.hasContent) {
     r.splatRenderer.onCamera(
       camera,
       r.cameraController.dimension,
@@ -329,7 +383,7 @@ export function renderFrame(r: RendererFrameInternals): void {
   // Optional GPU compute sort: writes each cloud's order buffer in-encoder,
   // before the render pass reads it. Returns false when disabled or ineligible
   // (packed fallback / no compute), leaving the async CPU worker sort in charge.
-  if (r.splatRenderer?.hasContent) r.splatRenderer.sortGpu(encoder);
+  if (r.staticSceneVisible && r.sceneSplatsVisible && r.splatRenderer?.hasContent) r.splatRenderer.sortGpu(encoder);
   if (r.actorSplatRenderer?.hasContent) r.actorSplatRenderer.sortGpu(encoder);
   // actorSplatInstancer uses its own CPU-worker sort (no GPU compute sort path yet).
 
@@ -361,6 +415,7 @@ export function renderFrame(r: RendererFrameInternals): void {
 
   try {
     r.device.queue.submit([encoder.finish()]);
+    if (submission) trackFrameSubmission(r, submission);
   } catch {
     // Transient D3D swap-chain / device-context mismatch; skip frame.
     // This can occur during resize or when the window moves between monitors.
@@ -548,7 +603,7 @@ export function captureFrame(
   // Force a render
   r.sceneDirty = true;
   r.cameraController.isViewDirty = true;
-  renderFrame(r);
+  renderFrame(r, true);
 
   // Restore state
   r.showGrid = prevShowGrid;

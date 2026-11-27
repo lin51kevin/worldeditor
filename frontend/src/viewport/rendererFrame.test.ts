@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderFrame, STATIC_LAYER_CACHE_MIN_SPLATS, type RendererFrameInternals } from './rendererFrame';
 
 function fakeTexture(width = 800, height = 600) {
@@ -45,7 +45,13 @@ function makeRenderer(options: { cache?: boolean; splats?: number } = {}) {
       computeViewProj: () => viewProj,
       dimension: '3d',
       getMetersPerPixel: () => 1,
+      currentGridSpacing: 1,
+      getGridFadeDistance: () => 100,
     },
+    gridUniformData: new Float32Array(26),
+    basicUniformData: new Float32Array(32),
+    laneRibbonUniformData: new Float32Array(20),
+    gridColor: [1, 1, 1],
     msaaTexture: null,
     depthTexture: fakeTexture(),
     clearColor: { r: 0, g: 0, b: 0, a: 0 },
@@ -158,5 +164,66 @@ describe('renderFrame static layer cache', () => {
     expect(f.r.staticLayerCache).toBeNull();
     expect(cache.color.destroy).toHaveBeenCalled();
     expect(cache.depth.destroy).toHaveBeenCalled();
+  });
+});
+
+describe('renderFrame GPU backpressure', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('should limit unfinished frames and render the latest requested view', async () => {
+    const fixture = makeRenderer();
+    const completions: Array<() => void> = [];
+    const callbacks: FrameRequestCallback[] = [];
+    Object.assign(fixture.raw.device.queue, {
+      onSubmittedWorkDone: vi.fn(() => new Promise<void>((resolve) => completions.push(resolve))),
+    });
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((callback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+
+    renderFrame(fixture.r);
+    renderFrame(fixture.r);
+    fixture.viewProj[0] = 3;
+    renderFrame(fixture.r);
+    renderFrame(fixture.r);
+    expect(fixture.raw.device.queue.submit).toHaveBeenCalledTimes(2);
+
+    fixture.r.cameraController.isViewDirty = false;
+    fixture.r.sceneDirty = false;
+
+    completions[0]!();
+    await Promise.resolve();
+    expect(callbacks).toHaveLength(1);
+    callbacks[0]!(0);
+    expect(fixture.raw.device.queue.submit).toHaveBeenCalledTimes(3);
+    expect(fixture.r.staticLayerCache?.viewProj[0]).toBe(3);
+    expect(fixture.r.cameraController.isViewDirty).toBe(true);
+  });
+
+  it('should not replay a deferred frame after disposal', async () => {
+    const fixture = makeRenderer();
+    let complete!: () => void;
+    Object.assign(fixture.raw.device.queue, {
+      onSubmittedWorkDone: () => new Promise<void>((resolve) => { complete = resolve; }),
+    });
+    const schedule = vi.spyOn(globalThis, 'requestAnimationFrame');
+    renderFrame(fixture.r);
+    renderFrame(fixture.r);
+    renderFrame(fixture.r);
+    fixture.r.disposed = true;
+    complete();
+    await Promise.resolve();
+    expect(fixture.raw.device.queue.submit).toHaveBeenCalledTimes(2);
+    expect(schedule).not.toHaveBeenCalled();
+  });
+
+  it('should not sort or update the camera of hidden scene splats', () => {
+    const fixture = makeRenderer();
+    fixture.raw.sceneSplatsVisible = false;
+    renderFrame(fixture.r);
+    expect(fixture.scene.onCamera).not.toHaveBeenCalled();
+    expect(fixture.scene.sortGpu).not.toHaveBeenCalled();
+    expect(fixture.actors.draw).toHaveBeenCalled();
   });
 });
